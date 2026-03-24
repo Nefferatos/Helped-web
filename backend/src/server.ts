@@ -1,6 +1,9 @@
 import express, { Express, Request, Response, ErrorRequestHandler } from 'express'
 import cors from 'cors'
 import companyRoutes from './routes/companyRoutes'
+import maidRoutes from './routes/maidRoutes'
+import enquiryRoutes from './routes/enquiryRoutes'
+import { initializeStore } from './store'
 
 const app: Express = express()
 const port = process.env.PORT || 3000
@@ -29,6 +32,8 @@ app.get('/api/data', (req: Request, res: Response) => {
 
 // Company management routes
 app.use('/api/company', companyRoutes)
+app.use('/api/maids', maidRoutes)
+app.use('/api/enquiries', enquiryRoutes)
 
 // Error handling middleware
 const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
@@ -37,6 +42,17 @@ const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
 }
 app.use(errorHandler)
 
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`)
-})
+const startServer = async () => {
+  try {
+    await initializeStore()
+
+    app.listen(port, () => {
+      console.log(`Server is running at http://localhost:${port}`)
+    })
+  } catch (error) {
+    console.error('Failed to initialize database:', error)
+    process.exit(1)
+  }
+}
+
+void startServer()

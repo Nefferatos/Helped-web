@@ -1,0 +1,195 @@
+{
+  "companyProfile": {
+    "id": 1,
+    "company_name": "At The Agency (formerly Rinzin Agency Pte. Ltd.)",
+    "short_name": "At The Agencyddd",
+    "license_no": "2503114",
+    "address_line1": "Singapore",
+    "address_line2": "",
+    "postal_code": "000000",
+    "country": "Singapore",
+    "contact_person": "Bala",
+    "contact_phone": "80730757",
+    "contact_email": "info@theagency.sg",
+    "contact_fax": "",
+    "contact_website": "",
+    "office_hours_regular": "Mon-Sat: 9:00am to 7:30pm",
+    "office_hours_other": "",
+    "social_facebook": "",
+    "social_whatsapp_number": "80730757",
+    "social_whatsapp_message": "Hello, I am interested in your agency profile.",
+    "branding_theme_color": "",
+    "branding_button_color": "",
+    "created_at": "2026-03-24T15:04:29.049Z",
+    "updated_at": "2026-03-24T15:07:57.357Z"
+  },
+  "momPersonnel": [],
+  "testimonials": [
+    {
+      "id": 1,
+      "company_id": 1,
+      "message": "ada,dmanadjbvalnv.ava",
+      "author": "HHff",
+      "created_at": "2026-03-24T15:08:12.814Z"
+    }
+  ],
+  "maids": [
+    {
+      "fullName": "Maid",
+      "referenceCode": "dddd",
+      "type": "New maid",
+      "nationality": "Filipino maid",
+      "dateOfBirth": "",
+      "placeOfBirth": "",
+      "height": 150,
+      "weight": 50,
+      "religion": "Catholic",
+      "maritalStatus": "Single",
+      "numberOfChildren": 0,
+      "numberOfSiblings": 0,
+      "homeAddress": "",
+      "airportRepatriation": "",
+      "educationLevel": "High School (10-12 yrs)",
+      "languageSkills": {
+        "English": "Good",
+        "Mandarin/Chinese-Dialect": "Poor",
+        "Indonesian/Malaysian": "Poor",
+        "Hindi": "Poor",
+        "Tamil": "Poor",
+        "Malayalam": "Poor",
+        "Telegu": "Poor",
+        "Karnataka": "Poor"
+      },
+      "skillsPreferences": {
+        "availabilityRemark": "",
+        "privateInfo": "",
+        "offDaysPerMonth": "2",
+        "otherInformation": {
+          "Able to handle pork?": false,
+          "Able to eat pork?": false,
+          "Able to care for dog/cat?": false,
+          "Able to do simple sewing?": false,
+          "Able to do gardening work?": false,
+          "Willing to wash car?": false,
+          "Can work on off-days with compensation?": false
+        }
+      },
+      "workAreas": {
+        "Care of infants/children": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Care of elderly": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Care of disabled": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "General housework": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Cooking": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Language Skill": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Other Skill": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        }
+      },
+      "employmentHistory": [
+        {
+          "from": "",
+          "to": "",
+          "country": "",
+          "employer": "",
+          "duties": "",
+          "remarks": ""
+        }
+      ],
+      "introduction": {
+        "intro": "",
+        "publicIntro": ""
+      },
+      "agencyContact": {
+        "companyName": "At The Agency (formerly Rinzin Agency Pte. Ltd)",
+        "licenseNo": "2503114",
+        "contactPerson": "Bala",
+        "phone": "80730757",
+        "passportNo": ""
+      },
+      "isPublic": false,
+      "hasPhoto": false,
+      "id": 2,
+      "createdAt": "2026-03-24T15:08:40.242Z",
+      "updatedAt": "2026-03-24T15:08:40.242Z"
+    }
+  ],
+  "enquiries": [
+    {
+      "id": 1,
+      "username": "Rajni",
+      "date": "23 March 2026, 12:58",
+      "email": "rajnirose305@gmail.com",
+      "phone": "+918872486884",
+      "message": "M best in cooking.\n\nEmployer Requirement:\nNationality: Indian\nType: Ex-Singapore Maid\nAge: 41 and above\nDuty: Taking care of infant\nLanguage: English",
+      "createdAt": "2026-03-24T15:24:39.780Z"
+    },
+    {
+      "id": 2,
+      "username": "Devina",
+      "date": "23 March 2026, 12:57",
+      "email": "devinachew@gmail.com",
+      "phone": "81381569",
+      "message": "Employer Requirement:\nNationality: Indonesian\nType: Transfer Maid\nAge: 31 to 35",
+      "createdAt": "2026-03-24T15:24:39.780Z"
+    },
+    {
+      "id": 3,
+      "username": "Shaiful",
+      "date": "23 March 2026, 12:00",
+      "email": "hirqa@yahoo.com.sg",
+      "phone": "98214800",
+      "message": "urgently need a helper who is above 1.65m tall. must be strong & hygienic. can take care of elderly & disabled.",
+      "createdAt": "2026-03-24T15:24:39.780Z"
+    },
+    {
+      "id": 4,
+      "username": "Jit",
+      "date": "22 March 2026, 3:59",
+      "email": "jitchu@yahoo.com",
+      "phone": "90275978",
+      "message": "Employer Requirement:\nNationality: Indonesian\nAge: 31 to 35\nDuty: Taking care of elderly / bedridden\nLanguage: English",
+      "createdAt": "2026-03-24T15:24:39.780Z"
+    },
+    {
+      "id": 5,
+      "username": "William Lawton",
+      "date": "22 March 2026, 3:59",
+      "email": "William.Lawton100@gmail.com",
+      "phone": "19107283080",
+      "message": "Live in Spain, will have own apartment, cook, clean, market, massage therapist background as well would be amazing.\n\nEmployer Requirement:\nNationality: Filipino\nAge: 41 and above\nDuty: General Housekeeping\nLanguage: English\nOff-day: No Off-day",
+      "createdAt": "2026-03-24T15:24:39.780Z"
+    }
+  ],
+  "counters": {
+    "momPersonnel": 1,
+    "testimonials": 2,
+    "maids": 3,
+    "enquiries": 6
+  }
+}

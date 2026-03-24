@@ -2,7 +2,15 @@
 // Handles all business logic for company profile, MOM personnel, and testimonials
 
 import { Request, Response } from 'express'
-import { query } from '../db'
+import {
+  addMomPersonnelStore,
+  addTestimonialStore,
+  deleteMomPersonnelStore,
+  deleteTestimonialStore,
+  getCompanyBundle,
+  updateCompanyProfileStore,
+  updateMomPersonnelStore,
+} from '../store'
 
 interface CompanyProfile {
   id?: number
@@ -47,38 +55,7 @@ interface Testimonial {
  */
 export const getCompanyProfile = async (req: Request, res: Response) => {
   try {
-    // Fetch company profile - for now, we'll get the first company (ID 1)
-    // You can modify this to fetch by company_id parameter if you have multiple companies
-    const companyResult = await query(
-      'SELECT * FROM company_profile WHERE id = $1',
-      [1]
-    )
-
-    if (companyResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Company profile not found' })
-    }
-
-    const company = companyResult.rows[0]
-
-    // Fetch all MOM personnel for this company
-    const momResult = await query(
-      'SELECT * FROM mom_personnel WHERE company_id = $1 ORDER BY id ASC',
-      [company.id]
-    )
-
-    // Fetch all testimonials for this company
-    const testimonialResult = await query(
-      'SELECT * FROM testimonials WHERE company_id = $1 ORDER BY created_at DESC',
-      [company.id]
-    )
-
-    // Combine all data into a single response object
-    const response = {
-      companyProfile: company,
-      momPersonnel: momResult.rows,
-      testimonials: testimonialResult.rows,
-    }
-
+    const response = await getCompanyBundle()
     res.status(200).json(response)
   } catch (error) {
     console.error('Error fetching company profile:', error)
@@ -155,15 +132,19 @@ export const updateCompanyProfile = async (req: Request, res: Response) => {
       RETURNING *
     `
 
-    const result = await query(updateQuery, values)
+    const updateMap = Object.fromEntries(
+      allowedFields
+        .map((field) => [field, updates[field as keyof CompanyProfile]])
+        .filter(([, value]) => value !== undefined)
+    )
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Company profile not found' })
-    }
+    const updatedProfile = await updateCompanyProfileStore(
+      updateMap as Partial<CompanyProfile>
+    )
 
     res.status(200).json({
       message: 'Company profile updated successfully',
-      companyProfile: result.rows[0],
+      companyProfile: updatedProfile,
     })
   } catch (error) {
     console.error('Error updating company profile:', error)
@@ -185,16 +166,11 @@ export const addMOMPersonnel = async (req: Request, res: Response) => {
         .json({ error: 'Name and registration number are required' })
     }
 
-    const result = await query(
-      `INSERT INTO mom_personnel (company_id, name, registration_number) 
-       VALUES ($1, $2, $3) 
-       RETURNING *`,
-      [1, name, registration_number] // Company ID = 1
-    )
+    const result = await addMomPersonnelStore(name, registration_number)
 
     res.status(201).json({
       message: 'MOM personnel added successfully',
-      momPersonnel: result.rows[0],
+      momPersonnel: result,
     })
   } catch (error) {
     console.error('Error adding MOM personnel:', error)
@@ -235,21 +211,18 @@ export const updateMOMPersonnel = async (req: Request, res: Response) => {
 
     values.push(id)
 
-    const result = await query(
-      `UPDATE mom_personnel 
-       SET ${fields.join(', ')}
-       WHERE id = $${paramCounter}
-       RETURNING *`,
-      values
-    )
+    const result = await updateMomPersonnelStore(Number(id), {
+      ...(name !== undefined ? { name } : {}),
+      ...(registration_number !== undefined ? { registration_number } : {}),
+    })
 
-    if (result.rows.length === 0) {
+    if (!result) {
       return res.status(404).json({ error: 'MOM personnel not found' })
     }
 
     res.status(200).json({
       message: 'MOM personnel updated successfully',
-      momPersonnel: result.rows[0],
+      momPersonnel: result,
     })
   } catch (error) {
     console.error('Error updating MOM personnel:', error)
@@ -265,18 +238,15 @@ export const deleteMOMPersonnel = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
-    const result = await query(
-      'DELETE FROM mom_personnel WHERE id = $1 RETURNING *',
-      [id]
-    )
+    const result = await deleteMomPersonnelStore(Number(id))
 
-    if (result.rows.length === 0) {
+    if (!result) {
       return res.status(404).json({ error: 'MOM personnel not found' })
     }
 
     res.status(200).json({
       message: 'MOM personnel deleted successfully',
-      deletedMOMPersonnel: result.rows[0],
+      deletedMOMPersonnel: result,
     })
   } catch (error) {
     console.error('Error deleting MOM personnel:', error)
@@ -298,16 +268,11 @@ export const addTestimonial = async (req: Request, res: Response) => {
         .json({ error: 'Message and author are required' })
     }
 
-    const result = await query(
-      `INSERT INTO testimonials (company_id, message, author) 
-       VALUES ($1, $2, $3) 
-       RETURNING *`,
-      [1, message, author] // Company ID = 1
-    )
+    const result = await addTestimonialStore(message, author)
 
     res.status(201).json({
       message: 'Testimonial added successfully',
-      testimonial: result.rows[0],
+      testimonial: result,
     })
   } catch (error) {
     console.error('Error adding testimonial:', error)
@@ -323,18 +288,15 @@ export const deleteTestimonial = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
-    const result = await query(
-      'DELETE FROM testimonials WHERE id = $1 RETURNING *',
-      [id]
-    )
+    const result = await deleteTestimonialStore(Number(id))
 
-    if (result.rows.length === 0) {
+    if (!result) {
       return res.status(404).json({ error: 'Testimonial not found' })
     }
 
     res.status(200).json({
       message: 'Testimonial deleted successfully',
-      deletedTestimonial: result.rows[0],
+      deletedTestimonial: result,
     })
   } catch (error) {
     console.error('Error deleting testimonial:', error)
