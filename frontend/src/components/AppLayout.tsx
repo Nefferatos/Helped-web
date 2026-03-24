@@ -4,10 +4,10 @@ import { LogOut } from "lucide-react";
 const navItems = [
   { label: "HOME", path: "/" },
   { label: "AGENCY PROFILE", path: "/agency-profile" },
-  { label: "ADD MAIDS", path: "/add-maid" },
-  { label: "EDIT/DELETE MAIDS", path: "/edit-maids" },
-  { label: "CHANGE PASSWORD", path: "/change-password" },
-  { label: "ENQUIRY", path: "/enquiry" },
+  { label: "ADD", path: "/add-maid" },
+  { label: "EDIT/DELETE", path: "/edit-maids" },
+  { label: "PASSWORD MANAGEMENT", path: "/change-password" },
+  { label: "INCOMING INQUIRIES", path: "/enquiry" },
 ];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
@@ -18,7 +18,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       {/* Top Header */}
       <header className="bg-nav text-nav-foreground">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold tracking-tight">Maid Agency Account Management</h1>
+          <h1 className="text-lg font-bold tracking-tight">
+            Maid Agency Account Management
+          </h1>
           <button className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity active:scale-[0.97]">
             <span>Log Out</span>
             <LogOut className="w-4 h-4" />
@@ -28,7 +30,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
       {/* Navigation */}
       <nav className="bg-secondary border-b">
-        <div className="max-w-5xl mx-auto px-4 flex flex-wrap gap-1 py-1">
+        <div className="max-w-5xl mx-auto px-4 flex flex-wrap justify-center items-center gap-1 py-1">
           {navItems.map((item) => (
             <Link
               key={item.path}
@@ -47,17 +49,17 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
       {/* Welcome bar */}
       <div className="max-w-5xl mx-auto px-4 w-full">
-        <p className="text-accent font-semibold text-sm pt-4">Welcome! abel</p>
+        <p className="text-accent font-semibold text-sm pt-4">
+          Welcome! abel
+        </p>
       </div>
 
       {/* Main Content */}
-      <main className="flex-1">
-        {children}
-      </main>
+      <main className="flex-1">{children}</main>
 
       {/* Footer */}
       <footer className="border-t py-4 text-center text-xs text-muted-foreground">
-        © Copyright STREET PTE LTD. 2005-2026. All Rights Reserved.
+        © Copyright STREET PTE LTD. 2026. All Rights Reserved.
       </footer>
     </div>
   );

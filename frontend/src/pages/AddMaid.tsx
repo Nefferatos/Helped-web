@@ -357,22 +357,50 @@ const AddMaid = () => {
             </thead>
             <tbody>
               {skillAreas.map((skill) => (
-                <tr key={skill}>
-                  <td className="border px-3 py-2">{skill}</td>
-                  <td className="border px-3 py-2 text-center"><input type="checkbox" checked={workAreas[skill]?.willing ?? false} onChange={(e) => updateWorkArea(skill, "willing", e.target.checked)} /></td>
-                  <td className="border px-3 py-2 text-center"><input type="checkbox" checked={workAreas[skill]?.experience ?? false} onChange={(e) => updateWorkArea(skill, "experience", e.target.checked)} /></td>
-                  <td className="border px-3 py-2 text-center">
-                    <select className="rounded border bg-background px-2 py-1 text-xs" value={workAreas[skill]?.evaluation ?? "-"} onChange={(e) => updateWorkArea(skill, "evaluation", e.target.value)}>
-                      <option>-</option>
-                      <option>*</option>
-                      <option>**</option>
-                      <option>***</option>
-                      <option>****</option>
-                      <option>*****</option>
-                    </select>
-                  </td>
-                </tr>
-              ))}
+                  <tr
+                    key={skill}
+                    className="hover:bg-muted/50 transition-colors">
+                    <td className="border px-4 py-3 font-medium text-sm">
+                      {skill}
+                    </td>
+                    <td className="border px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary cursor-pointer"
+                        checked={workAreas[skill]?.willing ?? false}
+                        onChange={(e) =>
+                          updateWorkArea(skill, "willing", e.target.checked)
+                        }
+                      />
+                    </td>
+                    <td className="border px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary cursor-pointer"
+                        checked={workAreas[skill]?.experience ?? false}
+                        onChange={(e) =>
+                          updateWorkArea(skill, "experience", e.target.checked)
+                        }
+                      />
+                    </td>
+                    <td className="border px-4 py-3 text-center">
+                      <select
+                        className="rounded-md border px-2 py-1 text-xs bg-background shadow-sm hover:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                        value={workAreas[skill]?.evaluation ?? "-"}
+                        onChange={(e) =>
+                          updateWorkArea(skill, "evaluation", e.target.value)
+                        }
+                      >
+                        <option value="-">Select</option>
+                        <option value="*">⭐</option>
+                        <option value="**">⭐⭐</option>
+                        <option value="***">⭐⭐⭐</option>
+                        <option value="****">⭐⭐⭐⭐</option>
+                        <option value="*****">⭐⭐⭐⭐⭐</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
           <div className="flex justify-center pt-4">
@@ -399,12 +427,37 @@ const AddMaid = () => {
             </thead>
             <tbody>
               {employmentHistory.map((row, index) => (
-                <tr key={`${index}-${row.from}-${row.to}`}>
-                  {(["from", "to", "country", "employer", "duties", "remarks"] as const).map((field) => (
-                    <td key={field} className="border px-2 py-1">
-                      <Input className="h-8 text-xs" value={row[field]} onChange={(e) => updateEmploymentRow(index, field, e.target.value)} />
-                    </td>
-                  ))}
+                <tr key={`${index}-${row.from}-${row.to}`} className="hover:bg-muted/50 transition-colors align-top">
+                  {(["from", "to", "country", "employer", "duties", "remarks"] as const).map((field) => {
+                    const isDateField = field === "from" || field === "to";
+                    const isLongText = field === "duties" || field === "remarks";
+
+                    return (
+                      <td key={field} className="border px-2 py-1 align-top">
+                        {isDateField ? (
+                          <input
+                            type="date"
+                            className="h-8 w-full text-xs px-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+                            value={row[field]}
+                            onChange={(e) => updateEmploymentRow(index, field, e.target.value)}
+                          />
+                        ) : isLongText ? (
+                          <textarea
+                            className="w-full text-xs px-2 py-1 border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                            rows={2}
+                            value={row[field]}
+                            onChange={(e) => updateEmploymentRow(index, field, e.target.value)}
+                          />
+                        ) : (
+                          <Input
+                            className="h-8 w-full text-xs px-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+                            value={row[field]}
+                            onChange={(e) => updateEmploymentRow(index, field, e.target.value)}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
