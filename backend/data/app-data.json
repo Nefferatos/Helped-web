@@ -35,6 +35,135 @@
   ],
   "maids": [
     {
+      "fullName": "Nam",
+      "referenceCode": "299923",
+      "type": "New maid",
+      "nationality": "Filipino maid",
+      "dateOfBirth": "",
+      "placeOfBirth": "",
+      "height": 150,
+      "weight": 50,
+      "religion": "Catholic",
+      "maritalStatus": "Single",
+      "numberOfChildren": 0,
+      "numberOfSiblings": 0,
+      "homeAddress": "",
+      "airportRepatriation": "",
+      "educationLevel": "High School (10-12 yrs)",
+      "languageSkills": {
+        "English": "Good",
+        "Mandarin/Chinese-Dialect": "Poor",
+        "Indonesian/Malaysian": "Poor",
+        "Hindi": "Poor",
+        "Tamil": "Poor",
+        "Malayalam": "Poor",
+        "Telegu": "Poor",
+        "Karnataka": "Poor"
+      },
+      "skillsPreferences": {
+        "availabilityRemark": "",
+        "privateInfo": "",
+        "offDaysPerMonth": "2",
+        "otherInformation": {
+          "Able to handle pork?": false,
+          "Able to eat pork?": false,
+          "Able to care for dog/cat?": false,
+          "Able to do simple sewing?": false,
+          "Able to do gardening work?": false,
+          "Willing to wash car?": false,
+          "Can work on off-days with compensation?": false
+        }
+      },
+      "workAreas": {
+        "Care of infants/children": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "*****"
+        },
+        "Care of elderly": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Care of disabled": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "General housework": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Cooking": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Language Skill": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        },
+        "Other Skill": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "-"
+        }
+      },
+      "employmentHistory": [
+        {
+          "from": "",
+          "to": "",
+          "country": "",
+          "employer": "",
+          "duties": "",
+          "remarks": ""
+        }
+      ],
+      "introduction": {
+        "intro": "",
+        "publicIntro": "",
+        "allergies": "",
+        "physicalDisabilities": "",
+        "dietaryRestrictions": "",
+        "foodHandlingPreferences": "",
+        "pastIllnesses": {
+          "Mental illness": false,
+          "Epilepsy": false,
+          "Asthma": false,
+          "Diabetes": false,
+          "Hypertension": false,
+          "Tuberculosis": false,
+          "Heart disease": false,
+          "Malaria": false,
+          "Operations": false
+        },
+        "otherIllnesses": "",
+        "otherRemarks": "",
+        "availability": "",
+        "contractEnds": "",
+        "presentSalary": "",
+        "expectedSalary": "",
+        "offdayCompensation": "",
+        "agesOfChildren": "",
+        "maidLoan": ""
+      },
+      "agencyContact": {
+        "companyName": "At The Agency (formerly Rinzin Agency Pte. Ltd)",
+        "licenseNo": "2503114",
+        "contactPerson": "Bala",
+        "phone": "80730757",
+        "passportNo": "",
+        "homeCountryContactNumber": ""
+      },
+      "isPublic": false,
+      "hasPhoto": false,
+      "id": 3,
+      "createdAt": "2026-03-24T18:23:47.116Z",
+      "updatedAt": "2026-03-24T18:23:47.117Z"
+    },
+    {
       "fullName": "Maid",
       "referenceCode": "dddd",
       "type": "New maid",
@@ -132,11 +261,11 @@
         "phone": "80730757",
         "passportNo": ""
       },
-      "isPublic": false,
+      "isPublic": true,
       "hasPhoto": false,
       "id": 2,
       "createdAt": "2026-03-24T15:08:40.242Z",
-      "updatedAt": "2026-03-24T16:30:29.368Z"
+      "updatedAt": "2026-03-24T18:24:58.054Z"
     }
   ],
   "enquiries": [
@@ -189,7 +318,7 @@
   "counters": {
     "momPersonnel": 1,
     "testimonials": 2,
-    "maids": 3,
+    "maids": 4,
     "enquiries": 6
   }
 }

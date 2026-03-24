@@ -7,6 +7,7 @@ import { Search, Eye, EyeOff, Trash2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 type ViewMode = "menu" | "public" | "hidden";
+const PAGE_SIZE = 15;
 
 const EditMaids = () => {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ const EditMaids = () => {
   const [maids, setMaids] = useState<MaidProfile[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(1);
 
   const visibility = useMemo(() => {
     if (view === "public") return "public";
@@ -47,6 +49,24 @@ const EditMaids = () => {
     void load();
     return () => controller.abort();
   }, [search, visibility]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelected(new Set());
+  }, [search, view]);
+
+  const totalPages = Math.max(1, Math.ceil(maids.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedMaids = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return maids.slice(start, start + PAGE_SIZE);
+  }, [currentPage, maids]);
+
+  useEffect(() => {
+    if (page !== currentPage) {
+      setPage(currentPage);
+    }
+  }, [currentPage, page]);
 
   const toggle = (ref: string) => {
     setSelected((prev) => {
@@ -151,7 +171,7 @@ const EditMaids = () => {
           <div className="py-10 text-center text-muted-foreground">Loading maids...</div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {maids.map((maid, i) => {
+            {paginatedMaids.map((maid, i) => {
               const age = calculateAge(maid.dateOfBirth);
               return (
                 <div
@@ -195,12 +215,33 @@ const EditMaids = () => {
           </Button>
         </div>
 
-        <div className="flex justify-center gap-1 text-sm">
-          {Array.from({ length: 9 }, (_, i) => (
-            <button key={i} className={`h-7 w-7 rounded ${i === 0 ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{i + 1}</button>
-          ))}
-          <button className="h-7 rounded border px-2 text-xs">Next</button>
-        </div>
+        {maids.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-sm">
+            <button
+              className="h-7 rounded border px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={currentPage <= 1}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            >
+              Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button
+                key={i}
+                onClick={() => setPage(i + 1)}
+                className={`h-7 w-7 rounded ${i + 1 === currentPage ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              className="h-7 rounded border px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

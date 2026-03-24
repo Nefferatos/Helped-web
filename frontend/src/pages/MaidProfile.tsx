@@ -61,9 +61,50 @@ const MaidProfilePage = () => {
   const introduction = maid.introduction as Record<string, unknown>;
   const skillsPreferences = maid.skillsPreferences as Record<string, unknown>;
   const otherInformation = (skillsPreferences.otherInformation as Record<string, boolean>) || {};
+  const pastIllnesses = (introduction.pastIllnesses as Record<string, boolean>) || {};
   const workAreas = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string }]>;
   const employment = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
   const languages = Object.entries(maid.languageSkills || {});
+  const detailRows: Array<[string, string]> = [
+    ["Maid Name", maid.fullName],
+    ["Ref. Code", maid.referenceCode],
+    ["Type", maid.type],
+    ["Nationality", maid.nationality],
+    ["Date of Birth", formatDate(maid.dateOfBirth)],
+    ["Place of Birth", maid.placeOfBirth],
+    ["Height/Weight", `${maid.height}cm/${maid.weight}Kg`],
+    ["Religion", maid.religion],
+    ["Marital Status", maid.maritalStatus],
+    ["Number of Children", String(maid.numberOfChildren)],
+    ["Number Of Siblings", String(maid.numberOfSiblings)],
+    ["Address in Home Country", maid.homeAddress],
+    ["Airport To Be Repatriated", maid.airportRepatriation],
+    ["Education", maid.educationLevel],
+    ["Home Country Contact No.", String(agencyContact.homeCountryContactNumber || "N/A")],
+  ];
+  const medicalRows: Array<[string, string]> = [
+    ["Allergies", String(introduction.allergies || "N/A")],
+    ["Physical Disabilities", String(introduction.physicalDisabilities || "N/A")],
+    ["Dietary Restrictions", String(introduction.dietaryRestrictions || "N/A")],
+    ["Food Handling Preferences", String(introduction.foodHandlingPreferences || "N/A")],
+    ["Other Illnesses", String(introduction.otherIllnesses || "N/A")],
+    ["Other Remarks", String(introduction.otherRemarks || "N/A")],
+  ];
+  const availabilityRows: Array<[string, string]> = [
+    ["Available From", String(introduction.availability || "N/A")],
+    ["Contract Ends", String(introduction.contractEnds || "N/A")],
+    ["Present Salary", String(introduction.presentSalary || "N/A")],
+    ["Expected Salary", String(introduction.expectedSalary || "N/A")],
+    ["Offday Compensation", String(introduction.offdayCompensation || "N/A")],
+    ["Off-days Per Month", String(skillsPreferences.offDaysPerMonth || "N/A")],
+    ["Availability Remark", String(skillsPreferences.availabilityRemark || "N/A")],
+  ];
+  const privateRows: Array<[string, string]> = [
+    ["Passport No.", String(agencyContact.passportNo || "N/A")],
+    ["Ages of Children", String(introduction.agesOfChildren || "N/A")],
+    ["Maid Loan", String(introduction.maidLoan || "N/A")],
+    ["Private Info", String(skillsPreferences.privateInfo || "N/A")],
+  ];
 
   return (
     <div className="page-container">
@@ -111,22 +152,7 @@ const MaidProfilePage = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm md:grid-cols-[220px_1fr]">
-          {[
-            ["Maid Name", maid.fullName],
-            ["Ref. Code", maid.referenceCode],
-            ["Type", maid.type],
-            ["Nationality", maid.nationality],
-            ["Date of Birth", formatDate(maid.dateOfBirth)],
-            ["Place of Birth", maid.placeOfBirth],
-            ["Height/Weight", `${maid.height}cm/${maid.weight}Kg`],
-            ["Religion", maid.religion],
-            ["Marital Status", maid.maritalStatus],
-            ["Number of Children", String(maid.numberOfChildren)],
-            ["Number Of Siblings", String(maid.numberOfSiblings)],
-            ["Address in Home Country", maid.homeAddress],
-            ["Airport To Be Repatriated", maid.airportRepatriation],
-            ["Education", maid.educationLevel],
-          ].map(([label, value]) => (
+          {detailRows.map(([label, value]) => (
             <div key={label} className="contents">
               <p className="py-1 font-semibold text-muted-foreground md:text-right">{label}</p>
               <p className="py-1">{value}</p>
@@ -151,7 +177,6 @@ const MaidProfilePage = () => {
               </div>
             ))}
           </div>
-          <p className="pt-2 text-sm">Number of off-days per month: {String(skillsPreferences.offDaysPerMonth || "0")} day(s)/month</p>
         </div>
 
         <div className="space-y-2">
@@ -210,6 +235,45 @@ const MaidProfilePage = () => {
           </div>
         )}
 
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="space-y-2 text-sm">
+            <h3 className="font-semibold text-muted-foreground">Medical History / Dietary Restrictions</h3>
+            <div className="grid grid-cols-[180px_1fr] gap-x-4 gap-y-2">
+              {medicalRows.map(([label, value]) => (
+                <div key={label} className="contents">
+                  <p className="font-semibold text-muted-foreground">{label}</p>
+                  <p className="whitespace-pre-wrap">{value}</p>
+                </div>
+              ))}
+            </div>
+            {Object.keys(pastIllnesses).length > 0 && (
+              <div className="pt-2">
+                <p className="mb-2 font-semibold text-muted-foreground">Past and Existing Illnesses</p>
+                <div className="grid grid-cols-1 gap-y-1 md:grid-cols-[1fr_40px]">
+                  {Object.entries(pastIllnesses).map(([illness, value]) => (
+                    <div key={illness} className="contents">
+                      <p>{illness}</p>
+                      <p className="text-center">{value ? <Check className="inline h-4 w-4 text-primary" /> : "-"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <h3 className="font-semibold text-muted-foreground">Availability / Remark</h3>
+            <div className="grid grid-cols-[180px_1fr] gap-x-4 gap-y-2">
+              {availabilityRows.map(([label, value]) => (
+                <div key={label} className="contents">
+                  <p className="font-semibold text-muted-foreground">{label}</p>
+                  <p className="whitespace-pre-wrap">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-2 text-sm">
           <h3 className="font-semibold text-muted-foreground">Public Introduction (Employer Login is not required)</h3>
           <p className="whitespace-pre-wrap">{String(introduction.publicIntro || "Maid Introduction in Public is empty, please add to have more employers view this bio-data.")}</p>
@@ -218,6 +282,18 @@ const MaidProfilePage = () => {
         <div className="space-y-1 text-sm">
           <h3 className="font-semibold text-muted-foreground">Introduction (Employer login is required to view this Introduction)</h3>
           <p className="whitespace-pre-wrap">{String(introduction.intro || "(Employer login is required to view this Introduction)")}</p>
+        </div>
+
+        <div className="space-y-2 text-sm">
+          <h3 className="font-semibold text-muted-foreground">Private Information</h3>
+          <div className="grid grid-cols-[180px_1fr] gap-x-4 gap-y-2">
+            {privateRows.map(([label, value]) => (
+              <div key={label} className="contents">
+                <p className="font-semibold text-muted-foreground">{label}</p>
+                <p className="whitespace-pre-wrap">{value}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-1 border-t pt-4 text-sm">

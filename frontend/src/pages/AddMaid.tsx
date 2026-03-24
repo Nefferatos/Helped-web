@@ -35,6 +35,17 @@ const yesNoQuestions = [
   "Willing to wash car?",
   "Can work on off-days with compensation?",
 ];
+const medicalQuestions = [
+  "Mental illness",
+  "Epilepsy",
+  "Asthma",
+  "Diabetes",
+  "Hypertension",
+  "Tuberculosis",
+  "Heart disease",
+  "Malaria",
+  "Operations",
+];
 
 const AddMaid = () => {
   const navigate = useNavigate();
@@ -58,6 +69,7 @@ const AddMaid = () => {
     educationLevel: "High School (10-12 yrs)",
     offDaysPerMonth: "2",
     passportNo: "",
+    homeCountryContactNumber: "",
   });
   const [languageSkills, setLanguageSkills] = useState<Record<string, string>>(
     Object.fromEntries(languageOptions.map((lang) => [lang, lang === "English" ? "Good" : "Poor"]))
@@ -75,6 +87,26 @@ const AddMaid = () => {
   const [introduction, setIntroduction] = useState("");
   const [publicIntroduction, setPublicIntroduction] = useState("");
   const [privateInfo, setPrivateInfo] = useState("");
+  const [medicalInfo, setMedicalInfo] = useState({
+    allergies: "",
+    physicalDisabilities: "",
+    dietaryRestrictions: "",
+    foodHandlingPreferences: "",
+    pastIllnesses: Object.fromEntries(medicalQuestions.map((question) => [question, false])) as Record<string, boolean>,
+    otherIllnesses: "",
+    otherRemarks: "",
+  });
+  const [availabilityInfo, setAvailabilityInfo] = useState({
+    availability: "",
+    contractEnds: "",
+    presentSalary: "",
+    expectedSalary: "",
+    offdayCompensation: "",
+  });
+  const [privateDetails, setPrivateDetails] = useState({
+    agesOfChildren: "",
+    maidLoan: "",
+  });
   const [agencyContact, setAgencyContact] = useState({
     companyName: "At The Agency (formerly Rinzin Agency Pte. Ltd)",
     licenseNo: "2503114",
@@ -138,10 +170,25 @@ const AddMaid = () => {
     introduction: {
       intro: introduction,
       publicIntro: publicIntroduction,
+      allergies: medicalInfo.allergies,
+      physicalDisabilities: medicalInfo.physicalDisabilities,
+      dietaryRestrictions: medicalInfo.dietaryRestrictions,
+      foodHandlingPreferences: medicalInfo.foodHandlingPreferences,
+      pastIllnesses: medicalInfo.pastIllnesses,
+      otherIllnesses: medicalInfo.otherIllnesses,
+      otherRemarks: medicalInfo.otherRemarks,
+      availability: availabilityInfo.availability,
+      contractEnds: availabilityInfo.contractEnds,
+      presentSalary: availabilityInfo.presentSalary,
+      expectedSalary: availabilityInfo.expectedSalary,
+      offdayCompensation: availabilityInfo.offdayCompensation,
+      agesOfChildren: privateDetails.agesOfChildren,
+      maidLoan: privateDetails.maidLoan,
     },
     agencyContact: {
       ...agencyContact,
       passportNo: profile.passportNo,
+      homeCountryContactNumber: profile.homeCountryContactNumber,
     },
     isPublic: false,
     hasPhoto: false,
@@ -297,6 +344,11 @@ const AddMaid = () => {
                 </select>
               </div>
             </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs font-medium text-muted-foreground">Contact Number in Home Country</Label>
+              <Input value={profile.homeCountryContactNumber} onChange={(e) => handleProfileChange("homeCountryContactNumber", e.target.value)} />
+            </div>
           </div>
 
           <div className="section-header">Language Skills</div>
@@ -333,6 +385,83 @@ const AddMaid = () => {
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="section-header">A2. Medical History / Dietary Restrictions</div>
+          <div className="space-y-3 pt-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Allergies (if any)</Label>
+                <Input value={medicalInfo.allergies} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, allergies: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Physical disabilities</Label>
+                <Input value={medicalInfo.physicalDisabilities} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, physicalDisabilities: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Dietary restrictions</Label>
+                <Input value={medicalInfo.dietaryRestrictions} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, dietaryRestrictions: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Food handling preferences</Label>
+                <Input value={medicalInfo.foodHandlingPreferences} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, foodHandlingPreferences: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Past and existing illnesses</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {medicalQuestions.map((illness) => (
+                  <div key={illness} className="flex items-center gap-3">
+                    <span className="flex-1 text-sm">{illness}</span>
+                    <div className="flex gap-2">
+                      <label className="flex items-center gap-1 text-xs">
+                        <input
+                          type="radio"
+                          name={illness}
+                          checked={medicalInfo.pastIllnesses[illness] === true}
+                          onChange={() =>
+                            setMedicalInfo((prev) => ({
+                              ...prev,
+                              pastIllnesses: { ...prev.pastIllnesses, [illness]: true },
+                            }))
+                          }
+                        />
+                        Yes
+                      </label>
+                      <label className="flex items-center gap-1 text-xs">
+                        <input
+                          type="radio"
+                          name={illness}
+                          checked={medicalInfo.pastIllnesses[illness] === false}
+                          onChange={() =>
+                            setMedicalInfo((prev) => ({
+                              ...prev,
+                              pastIllnesses: { ...prev.pastIllnesses, [illness]: false },
+                            }))
+                          }
+                        />
+                        No
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Others (please specify)</Label>
+              <Input value={medicalInfo.otherIllnesses} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, otherIllnesses: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="section-header">A3. Others</div>
+          <div className="pt-2">
+            <Label className="text-xs text-muted-foreground">Any other remarks</Label>
+            <Input value={medicalInfo.otherRemarks} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, otherRemarks: e.target.value }))} />
           </div>
 
           <div className="flex justify-center pt-4">
@@ -478,6 +607,26 @@ const AddMaid = () => {
           <h3 className="mb-4 text-center font-bold">Availability / Remark</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
+              <Label className="text-xs font-medium text-muted-foreground">When will this maid be available?</Label>
+              <Input value={availabilityInfo.availability} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, availability: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs font-medium text-muted-foreground">Contract Ends</Label>
+              <Input value={availabilityInfo.contractEnds} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, contractEnds: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs font-medium text-muted-foreground">Present Salary (S$)</Label>
+              <Input value={availabilityInfo.presentSalary} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, presentSalary: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs font-medium text-muted-foreground">Expected Salary</Label>
+              <Input value={availabilityInfo.expectedSalary} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, expectedSalary: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs font-medium text-muted-foreground">Offday Compensation (S$/day)</Label>
+              <Input value={availabilityInfo.offdayCompensation} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, offdayCompensation: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1">
               <Label className="text-xs font-medium text-muted-foreground">Number of off-days per month</Label>
               <Input value={profile.offDaysPerMonth} onChange={(e) => handleProfileChange("offDaysPerMonth", e.target.value)} />
             </div>
@@ -532,6 +681,14 @@ const AddMaid = () => {
             <div className="flex flex-col gap-1">
               <Label className="text-xs font-medium text-muted-foreground">Phone</Label>
               <Input value={agencyContact.phone} onChange={(e) => setAgencyContact((prev) => ({ ...prev, phone: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs font-medium text-muted-foreground">Ages of Children</Label>
+              <Input value={privateDetails.agesOfChildren} onChange={(e) => setPrivateDetails((prev) => ({ ...prev, agesOfChildren: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs font-medium text-muted-foreground">Maid Loan (S$)</Label>
+              <Input value={privateDetails.maidLoan} onChange={(e) => setPrivateDetails((prev) => ({ ...prev, maidLoan: e.target.value }))} />
             </div>
           </div>
           <textarea className="min-h-[200px] w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Enter private information here..." value={privateInfo} onChange={(e) => setPrivateInfo(e.target.value)} />
