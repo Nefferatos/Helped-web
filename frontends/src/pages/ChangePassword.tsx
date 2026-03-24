@@ -4,8 +4,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const ChangePassword = () => {
-  const [form, setForm] = useState({ current: "", newPw: "", confirm: "", captcha: "" });
-  const captchaCode = "4490";
+  const [form, setForm] = useState({ current: "", newPw: "", confirm: "" });
+
+  const handleSave = () => {
+    console.log("Saved password:", form);
+    setForm({ current: "", newPw: "", confirm: "" }); 
+  };
+
+  const handleCancel = () => {
+    setForm({ current: "", newPw: "", confirm: "" });
+  };
 
   return (
     <div className="page-container">
@@ -17,29 +25,44 @@ const ChangePassword = () => {
 
         <div className="space-y-4">
           <div className="space-y-1">
-            <Label className="text-sm font-semibold text-primary">Enter Your Current Password:</Label>
-            <Input type="password" value={form.current} onChange={(e) => setForm({ ...form, current: e.target.value })} />
+            <Label className="text-sm font-semibold text-primary">
+              Enter Your Current Password:
+            </Label>
+            <Input
+              type="password"
+              value={form.current}
+              onChange={(e) => setForm({ ...form, current: e.target.value })}
+            />
           </div>
+
           <div className="space-y-1">
-            <Label className="text-sm font-semibold text-primary">Enter Your New Password:</Label>
-            <Input type="password" value={form.newPw} onChange={(e) => setForm({ ...form, newPw: e.target.value })} />
+            <Label className="text-sm font-semibold text-primary">
+              Enter Your New Password:
+            </Label>
+            <Input
+              type="password"
+              value={form.newPw}
+              onChange={(e) => setForm({ ...form, newPw: e.target.value })}
+            />
           </div>
+
           <div className="space-y-1">
-            <Label className="text-sm font-semibold text-primary">Re-enter Your New Password:</Label>
-            <Input type="password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-sm font-semibold text-primary">Enter the code on the right:</Label>
-            <div className="flex items-center gap-3">
-              <Input value={form.captcha} onChange={(e) => setForm({ ...form, captcha: e.target.value })} className="flex-1" />
-              <span className="bg-primary text-primary-foreground px-4 py-2 rounded font-mono font-bold text-lg">{captchaCode}</span>
-            </div>
+            <Label className="text-sm font-semibold text-primary">
+              Re-enter Your New Password:
+            </Label>
+            <Input
+              type="password"
+              value={form.confirm}
+              onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+            />
           </div>
         </div>
 
         <div className="flex gap-3 justify-center pt-2">
-          <Button>Submit</Button>
-          <Button variant="outline" onClick={() => setForm({ current: "", newPw: "", confirm: "", captcha: "" })}>Reset</Button>
+          <Button onClick={handleSave}>Save</Button>
+          <Button variant="outline" onClick={handleCancel}>
+            Cancel
+          </Button>
         </div>
       </div>
     </div>

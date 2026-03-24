@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Eye, EyeOff, Trash2, Edit, ExternalLink, ArrowUp } from "lucide-react";
+import { Search, Eye, EyeOff, Trash2 } from "lucide-react";
 
 type ViewMode = "menu" | "public" | "hidden";
 
@@ -98,11 +98,6 @@ const EditMaids = () => {
                   <input type="checkbox" checked={selected.has(maid.ref)} onChange={() => toggle(maid.ref)} className="accent-primary" />
                   Select
                 </label>
-                <div className="flex justify-center gap-1">
-                  <Button variant="ghost" size="sm" className="text-[10px] h-6 px-1.5"><Edit className="w-3 h-3" /></Button>
-                  <Button variant="ghost" size="sm" className="text-[10px] h-6 px-1.5"><ExternalLink className="w-3 h-3" /></Button>
-                  <Button variant="ghost" size="sm" className="text-[10px] h-6 px-1.5"><ArrowUp className="w-3 h-3" /></Button>
-                </div>
               </div>
             </div>
           ))}

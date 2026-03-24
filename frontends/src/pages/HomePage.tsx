@@ -41,16 +41,6 @@ const HomePage = () => {
           ))}
         </div>
       </div>
-
-      <div className="content-card mt-6 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
-        <h2 className="text-lg font-bold mb-3">Welcome</h2>
-        <div className="text-sm text-muted-foreground space-y-3 leading-relaxed">
-          <p>This web application allows you to advertise your maid/agency information on the web.</p>
-          <p>The system has two interfaces: one which <strong className="text-foreground">you</strong> see here in this administration area, and one which your <strong className="text-foreground">visitors</strong> see in the public area of the website.</p>
-          <p>The maid database, agency profile and your password are managed here using the tools above.</p>
-          <p className="text-accent italic text-xs">Please note you will be automatically logged out if the application has been idle for 180 minutes after logging in.</p>
-        </div>
-      </div>
     </div>
   );
 };
