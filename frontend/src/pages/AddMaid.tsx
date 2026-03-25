@@ -72,7 +72,7 @@ const AddMaid = () => {
     homeCountryContactNumber: "",
   });
   const [languageSkills, setLanguageSkills] = useState<Record<string, string>>(
-    Object.fromEntries(languageOptions.map((lang) => [lang, lang === "English" ? "Good" : "Poor"]))
+    Object.fromEntries(languageOptions.map((lang) => [lang, lang === "English" ? "Zero" : "Zero"]))
   );
   const [workAreas, setWorkAreas] = useState<Record<string, { willing: boolean; experience: boolean; evaluation: string }>>(
     Object.fromEntries(skillAreas.map((skill) => [skill, { willing: false, experience: false, evaluation: "-" }]))
