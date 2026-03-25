@@ -96,7 +96,7 @@ const Enquiry = () => {
         </div>
 
         {isLoading ? (
-          <div className="py-10 text-center text-muted-foreground">Loading enquiries...</div>
+          <div className="py-10 text-center text-black">Loading enquiries...</div>
         ) : (
           <div className="space-y-3">
             {visibleEnquiries.map((enq, i) => (
@@ -108,7 +108,7 @@ const Enquiry = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2 gap-y-1">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <span className="text-sm font-semibold">{enq.username}</span>
-                    <span className="text-xs text-muted-foreground">{enq.date}</span>
+                    <span className="text-xs text-black">{enq.date}</span>
                   </div>
                   <Button
                     variant="destructive"
@@ -119,7 +119,7 @@ const Enquiry = () => {
                     <Trash2 className="mr-1 h-4 w-4" /> {busyId === enq.id ? "Deleting..." : "Delete"}
                   </Button>
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-black">
                   <span>{enq.email}</span>
                   <span>{enq.phone}</span>
                 </div>
@@ -128,7 +128,7 @@ const Enquiry = () => {
             ))}
 
             {!isLoading && visibleEnquiries.length === 0 && (
-              <div className="py-10 text-center text-muted-foreground">No enquiries found.</div>
+              <div className="py-10 text-center text-black">No enquiries found.</div>
             )}
           </div>
         )}

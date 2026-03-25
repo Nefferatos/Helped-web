@@ -19,7 +19,7 @@ const ChangePassword = () => {
     <div className="page-container">
       <h2 className="text-xl font-bold mb-6">Change Password</h2>
       <div className="content-card animate-fade-in-up max-w-lg mx-auto space-y-6">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-black font-semibold">
           Please enter your existing password first. Then enter your new password and re-confirm it.
         </p>
 

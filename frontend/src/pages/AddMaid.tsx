@@ -13,9 +13,6 @@ const languageOptions = [
   "Indonesian/Malaysian",
   "Hindi",
   "Tamil",
-  "Malayalam",
-  "Telegu",
-  "Karnataka",
 ];
 const skillAreas = [
   "Care of infants/children",
@@ -443,7 +440,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
       </div>
 
       {isLoadingMaid && (
-        <div className="content-card py-10 text-center text-muted-foreground">Loading maid profile...</div>
+        <div className="content-card py-10 text-center text-black">Loading maid profile...</div>
       )}
 
       {!isLoadingMaid && (
@@ -455,7 +452,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
             key={tab}
             onClick={() => setActiveTab(i)}
             className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-              activeTab === i ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-muted/70"
+              activeTab === i ? "bg-primary text-white shadow" : "bg-muted text-black hover:bg-muted/70"
             }`}
           >
             {tab}
@@ -470,7 +467,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
           <div className="section-header">Maid Photos (1-5)</div>
           <div className="pt-2">
             <div className="flex flex-wrap gap-3">
-              <div className="relative flex h-28 w-24 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
+              <div className="relative flex h-28 w-24 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-black">
                 {photoDataUrls[0] ? (
                   <>
                     <img src={photoDataUrls[0]} alt="Primary maid" className="h-full w-full object-cover" />
@@ -519,7 +516,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
             </div>
             {pendingPhotoDataUrl && (
               <div className="mt-3 space-y-2 rounded-md border border-dashed p-2">
-                <p className="text-xs text-muted-foreground">Selected photo preview</p>
+                <p className="text-xs text-black">Selected photo preview</p>
                 <div className="h-24 w-24 overflow-hidden rounded border">
                   <img src={pendingPhotoDataUrl} alt="Pending photo" className="h-full w-full object-cover" />
                 </div>
@@ -546,7 +543,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                 </div>
               </div>
             )}
-            <p className="pt-2 text-xs text-muted-foreground">Upload between 1 and 5 photos.</p>
+            <p className="pt-2 text-xs text-black">Upload between 1 and 5 photos.</p>
           </div>
 
           <div className="section-header">Maid Video</div>
@@ -556,7 +553,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                 Your browser does not support the video tag.
               </video>
             ) : (
-              <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">No video selected yet.</div>
+              <div className="rounded-md border bg-muted/30 p-4 text-sm text-black">No video selected yet.</div>
             )}
             <div className="flex flex-wrap gap-2">
               <label className="cursor-pointer rounded border px-3 py-2 text-sm">
@@ -596,7 +593,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
               <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {row.map((label) => (
                   <div key={label} className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">
+                    <Label className="text-xs font-medium text-black">
                       {label === "Height"
                         ? "Height (cm)"
                         : label === "Weight"
@@ -731,18 +728,18 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-foreground">Number of Children</Label>
+                <Label className="text-xs font-medium text-black">Number of Children</Label>
                 <Input type="number" value={profile.numberOfChildren} onChange={(e) => handleProfileChange("numberOfChildren", e.target.value)} />
               </div>
               <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-foreground">Number of Siblings</Label>
+                <Label className="text-xs font-medium text-black">Number of Siblings</Label>
                 <Input type="number" value={profile.numberOfSiblings} onChange={(e) => handleProfileChange("numberOfSiblings", e.target.value)} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-foreground">Marital Status</Label>
+                <Label className="text-xs font-medium text-muted-black">Marital Status</Label>
                 <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.maritalStatus} onChange={(e) => handleProfileChange("maritalStatus", e.target.value)}>
                   <option>Single</option>
                   <option>Married</option>
@@ -751,7 +748,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-foreground">Religion</Label>
+                <Label className="text-xs font-medium text-black">Religion</Label>
                 <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.religion} onChange={(e) => handleProfileChange("religion", e.target.value)}>
                   <option>Catholic</option>
                   <option>Christian</option>
@@ -763,17 +760,17 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
             </div>
 
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Address in Home Country</Label>
+              <Label className="text-xs font-medium text-black">Address in Home Country</Label>
               <Input value={profile.homeAddress} onChange={(e) => handleProfileChange("homeAddress", e.target.value)} />
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-foreground">Airport To Be Repatriated</Label>
+                <Label className="text-xs font-medium text-black">Airport To Be Repatriated</Label>
                 <Input value={profile.airportRepatriation} onChange={(e) => handleProfileChange("airportRepatriation", e.target.value)} />
               </div>
               <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-foreground">Education</Label>
+                <Label className="text-xs font-medium text-black">Education</Label>
                 <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.educationLevel} onChange={(e) => handleProfileChange("educationLevel", e.target.value)}>
                   <option>College/Degree (&gt;=13 yrs)</option>
                   <option>High School (10-12 yrs)</option>
@@ -783,7 +780,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
             </div>
 
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Contact Number in Home Country</Label>
+              <Label className="text-xs font-medium text-black">Contact Number in Home Country</Label>
               <Input value={profile.homeCountryContactNumber} onChange={(e) => handleProfileChange("homeCountryContactNumber", e.target.value)} />
             </div>
           </div>
@@ -833,22 +830,22 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
           <div className="space-y-3 pt-2">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <Label className="text-xs text-muted-foreground">Allergies (if any)</Label>
+                <Label className="text-xs text-black">Allergies (if any)</Label>
                 <Input value={medicalInfo.allergies} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, allergies: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1">
-                <Label className="text-xs text-muted-foreground">Physical disabilities</Label>
+                <Label className="text-xs text-black">Physical disabilities</Label>
                 <Input value={medicalInfo.physicalDisabilities} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, physicalDisabilities: e.target.value }))} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <Label className="text-xs text-muted-foreground">Dietary restrictions</Label>
+                <Label className="text-xs text-black">Dietary restrictions</Label>
                 <Input value={medicalInfo.dietaryRestrictions} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, dietaryRestrictions: e.target.value }))} />
               </div>
             <div className="flex flex-col gap-2">
-                <Label className="text-xs text-muted-foreground">Food handling preferences</Label>
+                <Label className="text-xs text-black">Food handling preferences</Label>
               <div className="flex flex-wrap items-center gap-4">
                       <label className="flex items-center gap-1 text-sm">
                         <input
@@ -937,14 +934,14 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
             </div>
 
             <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">Others (please specify)</Label>
+              <Label className="text-xs text-black">Others (please specify)</Label>
               <Input value={medicalInfo.otherIllnesses} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, otherIllnesses: e.target.value }))} />
             </div>
           </div>
 
           <div className="section-header">A3. Others</div>
           <div className="pt-2">
-            <Label className="text-xs text-muted-foreground">Any other remarks</Label>
+            <Label className="text-xs text-black">Any other remarks</Label>
             <Input value={medicalInfo.otherRemarks} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, otherRemarks: e.target.value }))} />
           </div>
 
@@ -1090,27 +1087,27 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
           <h3 className="mb-4 text-center font-bold">Availability / Remark</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">When will this maid be available?</Label>
+              <Label className="text-xs font-medium text-black">When will this maid be available?</Label>
               <Input value={availabilityInfo.availability} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, availability: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Contract Ends</Label>
+              <Label className="text-xs font-medium text-black">Contract Ends</Label>
               <Input type="date" value={availabilityInfo.contractEnds} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, contractEnds: e.target.value, })) } />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Present Salary (S$)</Label>
+              <Label className="text-xs font-medium text-black">Present Salary (S$)</Label>
               <Input value={availabilityInfo.presentSalary} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, presentSalary: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Expected Salary</Label>
+              <Label className="text-xs font-medium text-black">Expected Salary</Label>
               <Input value={availabilityInfo.expectedSalary} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, expectedSalary: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Offday Compensation (S$/day)</Label>
+              <Label className="text-xs font-medium text-black">Offday Compensation (S$/day)</Label>
               <Input value={availabilityInfo.offdayCompensation} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, offdayCompensation: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Passport No.</Label>
+              <Label className="text-xs font-medium text-black">Passport No.</Label>
               <Input value={profile.passportNo} onChange={(e) => handleProfileChange("passportNo", e.target.value)} />
             </div>
           </div>
@@ -1146,27 +1143,27 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
           <h3 className="mb-4 text-center font-bold">Private Info</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Agency Name</Label>
+              <Label className="text-xs font-medium text-black">Agency Name</Label>
               <Input value={agencyContact.companyName} onChange={(e) => setAgencyContact((prev) => ({ ...prev, companyName: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">License No.</Label>
+              <Label className="text-xs font-medium text-black">License No.</Label>
               <Input value={agencyContact.licenseNo} onChange={(e) => setAgencyContact((prev) => ({ ...prev, licenseNo: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Contact Person</Label>
+              <Label className="text-xs font-medium text-black">Contact Person</Label>
               <Input value={agencyContact.contactPerson} onChange={(e) => setAgencyContact((prev) => ({ ...prev, contactPerson: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Phone</Label>
+              <Label className="text-xs font-medium text-black">Phone</Label>
               <Input value={agencyContact.phone} onChange={(e) => setAgencyContact((prev) => ({ ...prev, phone: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Ages of Children</Label>
+              <Label className="text-xs font-medium text-black">Ages of Children</Label>
               <Input value={privateDetails.agesOfChildren} onChange={(e) => setPrivateDetails((prev) => ({ ...prev, agesOfChildren: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Maid Loan (S$)</Label>
+              <Label className="text-xs font-medium text-black">Maid Loan (S$)</Label>
               <Input value={privateDetails.maidLoan} onChange={(e) => setPrivateDetails((prev) => ({ ...prev, maidLoan: e.target.value }))} />
             </div>
           </div>

@@ -224,7 +224,7 @@ const EditMaids = () => {
                 event.currentTarget.value = "";
               }}
             />
-            <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground">
+            <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground font-semibold">
               <Upload className="mr-2 h-4 w-4" />
               {isImporting ? "Importing..." : "Import CSV"}
             </span>
@@ -235,12 +235,12 @@ const EditMaids = () => {
             <button onClick={() => setView("public")} className="flex flex-col items-center gap-2 rounded-lg border p-6 transition-all hover:border-primary/30 hover:bg-secondary/50 active:scale-[0.98]">
               <Eye className="h-8 w-8 text-primary" />
               <span className="font-semibold text-primary">Maids In Public</span>
-              <span className="text-xs text-muted-foreground">Click to edit/delete maids in public</span>
+              <span className="text-xs text-black">Click to edit/delete maids in public</span>
             </button>
             <button onClick={() => setView("hidden")} className="flex flex-col items-center gap-2 rounded-lg border p-6 transition-all hover:border-primary/30 hover:bg-secondary/50 active:scale-[0.98]">
               <EyeOff className="h-8 w-8 text-muted-foreground" />
               <span className="font-semibold">Maids Hidden</span>
-              <span className="text-xs text-muted-foreground">Click to edit/delete hidden maids</span>
+              <span className="text-xs text-black">Click to edit/delete hidden maids</span>
             </button>
           </div>
           <p className="text-center text-xs text-accent">Please note: maids without photos will not be displayed in public. After adding photos, you can make them searchable.</p>
@@ -286,7 +286,7 @@ const EditMaids = () => {
         </div>
 
         {isLoading ? (
-          <div className="py-10 text-center text-muted-foreground">Loading maids...</div>
+          <div className="py-10 text-center text-black">Loading maids...</div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {paginatedMaids.map((maid, i) => {
@@ -302,7 +302,7 @@ const EditMaids = () => {
                   style={{ animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards", animationDelay: `${i * 0.04}s`, opacity: 0 }}
                 >
                   <div
-                    className="flex h-28 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs text-muted-foreground transition-all hover:ring-2 hover:ring-primary/40"
+                    className="flex h-28 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs text-black transition-all hover:ring-2 hover:ring-primary/40"
                     onClick={() => navigate(`/maid/${encodeURIComponent(maid.referenceCode)}`)}
                   >
                     {photoPreview ? (
@@ -314,7 +314,7 @@ const EditMaids = () => {
                     )}
                   </div>
                   <p className="cursor-pointer text-xs font-semibold leading-tight transition-colors hover:text-primary" onClick={() => navigate(`/maid/${encodeURIComponent(maid.referenceCode)}`)}>{maid.fullName}</p>
-                  <p className="text-[10px] text-muted-foreground">{maid.referenceCode}</p>
+                  <p className="text-[10px] text-black">{maid.referenceCode}</p>
                   <div className="flex flex-wrap justify-center gap-1">
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px]">{maid.nationality}</span>
                     <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] text-accent-foreground">{maid.type}</span>

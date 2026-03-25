@@ -47,11 +47,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         </div>
       </nav>
 
-      {/* Welcome bar */}
-      <div className="max-w-5xl mx-auto px-4 w-full">
-        <p className="text-accent font-semibold text-sm pt-4">
-          Welcome! abel
-        </p>
+      <div className="max-w-3xl mx-auto px-4 w-full pt-4">
+        <div className="flex items-center justify-between rounded-xl border bg-white px-4 py-3 shadow-sm">
+          <p className="text-sm font-medium">Welcome back, <span className="font-semibold">Abel</span></p>
+            <span className="text-xs text-black"> Dashboard Overview</span>
+        </div>
       </div>
 
       {/* Main Content */}

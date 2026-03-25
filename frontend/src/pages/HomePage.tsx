@@ -15,7 +15,7 @@ const HomePage = () => {
       <div className="content-card space-y-6" style={{ animationDelay: "0.05s" }}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-black font-semibold">
               <span className="text-accent font-bold">86</span> maids in public, and{" "}
               <span className="text-destructive font-bold">10181</span> maids hidden.
             </p>
@@ -35,7 +35,7 @@ const HomePage = () => {
               </div>
               <div>
                 <p className="font-semibold text-sm text-foreground">{item.label}</p>
-                <p className="text-xs text-muted-foreground">{item.desc}</p>
+                <p className="text-sm text-muted-black">{item.desc}</p>
               </div>
             </Link>
           ))}
