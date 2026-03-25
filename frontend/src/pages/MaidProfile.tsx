@@ -65,6 +65,12 @@ const MaidProfilePage = () => {
   const workAreas = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string }]>;
   const employment = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
   const languages = Object.entries(maid.languageSkills || {});
+  const photos =
+    Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
+      ? maid.photoDataUrls
+      : maid.photoDataUrl
+      ? [maid.photoDataUrl]
+      : [];
   const detailRows: Array<[string, string]> = [
     ["Maid Name", maid.fullName],
     ["Ref. Code", maid.referenceCode],
@@ -120,15 +126,20 @@ const MaidProfilePage = () => {
           <button className="flex items-center gap-1 text-primary hover:underline"><ArrowUp className="h-3 w-3" /> Bring to Top</button>
           <button className="text-primary hover:underline" onClick={() => navigate("/edit-maids")}>View All Maids</button>
           <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => navigate(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`)}><Edit className="h-3 w-3" /> Edit This Maid</button>
-          <button className="flex items-center gap-1 text-primary hover:underline"><Image className="h-3 w-3" /> Manage Photos</button>
-          <button className="flex items-center gap-1 text-primary hover:underline"><Youtube className="h-3 w-3" /> YouTube Video</button>
+          <span className="flex items-center gap-1 text-muted-foreground"><Image className="h-3 w-3" /> Manage Photos in Edit Maid</span>
+          <span className="flex items-center gap-1 text-muted-foreground"><Youtube className="h-3 w-3" /> Manage Video in Edit Maid</span>
           <button className="flex items-center gap-1 text-destructive hover:underline" onClick={() => void handleDelete()}><Trash2 className="h-3 w-3" /> {isDeleting ? "Deleting..." : "Delete"}</button>
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-lg border bg-muted/30 p-6 text-center">
-            <p className="text-sm text-muted-foreground">It appears that you do not have a video on-line for this maid. You can upload a video file to accompany this maid.</p>
-            <button className="text-sm text-primary hover:underline">Click here to upload the video file for this maid.</button>
+            {maid.videoDataUrl ? (
+              <video controls className="max-h-[220px] w-full rounded-md border bg-black" src={maid.videoDataUrl}>
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <p className="text-sm text-muted-foreground">No uploaded video yet. Upload via Edit Maid.</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -141,10 +152,23 @@ const MaidProfilePage = () => {
           </div>
 
           <div className="flex flex-col items-center gap-4">
-            <div className="flex gap-3">
-              <div className="flex h-28 w-24 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">{maid.hasPhoto ? "Photo 1" : "No Photo"}</div>
-              <div className="flex h-28 w-24 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">Photo 2</div>
+            <div className="flex h-28 w-24 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
+              {photos[0] ? (
+                <img src={photos[0]} alt={`${maid.fullName} profile`} className="h-full w-full object-cover" />
+              ) : (
+                "No Photo"
+              )}
             </div>
+            {photos.length > 1 && (
+              <div className="grid w-full grid-cols-4 gap-2">
+                {photos.slice(1).map((photo, index) => (
+                  <div key={`${photo}-${index}`} className="h-14 overflow-hidden rounded border">
+                    <img src={photo} alt={`${maid.fullName} ${index + 2}`} className="h-full w-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">{photos.length}/5 photos uploaded</p>
             <button className="flex items-center gap-2 text-sm text-primary hover:underline">
               <FileDown className="h-4 w-4" /> Download Maid Bio-data in PDF
             </button>

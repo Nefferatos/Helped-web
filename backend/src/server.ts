@@ -10,7 +10,8 @@ const port = process.env.PORT || 3000
 
 // Middleware
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '25mb' }))
+app.use(express.urlencoded({ extended: true, limit: '25mb' }))
 
 // Routes
 app.get('/', (req: Request, res: Response) => {
@@ -37,6 +38,16 @@ app.use('/api/enquiries', enquiryRoutes)
 
 // Error handling middleware
 const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  if (
+    err &&
+    typeof err === 'object' &&
+    'type' in err &&
+    (err as { type?: string }).type === 'entity.too.large'
+  ) {
+    return res.status(413).json({
+      error: 'Payload too large. Please upload a smaller file.',
+    })
+  }
   console.error(err.stack)
   res.status(500).json({ error: 'Something went wrong!' })
 }

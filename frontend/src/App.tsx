@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import AppLayout from "@/components/AppLayout";
 import HomePage from "@/pages/HomePage";
 import AgencyProfile from "@/pages/AgencyProfile";
+import AgencyProfileEdit from "@/pages/AgencyProfileEdit";
 import AddMaid from "@/pages/AddMaid";
 import EditMaid from "@/pages/EditMaid";
 import EditMaids from "@/pages/EditMaids";
@@ -27,6 +28,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/agency-profile" element={<AgencyProfile />} />
+            <Route path="/agency-profile/edit" element={<AgencyProfileEdit />} />
             <Route path="/add-maid" element={<AddMaid />} />
             <Route path="/edit-maids" element={<EditMaids />} />
             <Route path="/maid/:refCode" element={<MaidProfile />} />

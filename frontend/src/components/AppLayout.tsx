@@ -36,7 +36,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               key={item.path}
               to={item.path}
               className={`px-3 py-2 text-xs font-bold uppercase tracking-wide rounded-sm transition-colors active:scale-[0.97] ${
-                location.pathname === item.path
+                location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
                   ? "bg-primary text-primary-foreground"
                   : "text-primary hover:bg-primary/10"
               }`}

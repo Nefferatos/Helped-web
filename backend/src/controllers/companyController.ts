@@ -33,6 +33,10 @@ interface CompanyProfile {
   social_whatsapp_message?: string
   branding_theme_color?: string
   branding_button_color?: string
+  about_us?: string
+  logo_data_url?: string
+  gallery_image_data_urls?: string[]
+  intro_video_data_url?: string
 }
 
 interface MOMPersonnel {
@@ -98,6 +102,10 @@ export const updateCompanyProfile = async (req: Request, res: Response) => {
       'social_whatsapp_message',
       'branding_theme_color',
       'branding_button_color',
+      'about_us',
+      'logo_data_url',
+      'gallery_image_data_urls',
+      'intro_video_data_url',
     ]
 
     for (const field of allowedFields) {

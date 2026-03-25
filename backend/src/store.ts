@@ -22,6 +22,10 @@ export interface CompanyProfileRecord {
   social_whatsapp_message?: string
   branding_theme_color?: string
   branding_button_color?: string
+  about_us?: string
+  logo_data_url?: string
+  gallery_image_data_urls?: string[]
+  intro_video_data_url?: string
   created_at: string
   updated_at: string
 }
@@ -65,6 +69,9 @@ export interface MaidRecord {
   employmentHistory: Array<Record<string, unknown>>
   introduction: Record<string, unknown>
   agencyContact: Record<string, unknown>
+  photoDataUrls: string[]
+  photoDataUrl: string
+  videoDataUrl: string
   isPublic: boolean
   hasPhoto: boolean
   createdAt: string
@@ -119,6 +126,10 @@ const defaultData = (): AppData => ({
     social_whatsapp_message: 'Hello, I am interested in your agency profile.',
     branding_theme_color: '',
     branding_button_color: '',
+    about_us: '',
+    logo_data_url: '',
+    gallery_image_data_urls: [],
+    intro_video_data_url: '',
     created_at: now(),
     updated_at: now(),
   },
@@ -197,10 +208,27 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     companyProfile: {
       ...defaults.companyProfile,
       ...raw.companyProfile,
+      gallery_image_data_urls:
+        Array.isArray(raw.companyProfile?.gallery_image_data_urls)
+          ? raw.companyProfile.gallery_image_data_urls
+          : defaults.companyProfile.gallery_image_data_urls,
     },
     momPersonnel: raw.momPersonnel ?? defaults.momPersonnel,
     testimonials: raw.testimonials ?? defaults.testimonials,
-    maids: raw.maids ?? defaults.maids,
+    maids: (raw.maids ?? defaults.maids).map((maid) => {
+      const normalizedPhotos = Array.isArray(maid.photoDataUrls)
+        ? maid.photoDataUrls.filter((item) => typeof item === 'string' && item.trim())
+        : maid.photoDataUrl
+        ? [maid.photoDataUrl]
+        : []
+      return {
+        ...maid,
+        photoDataUrls: normalizedPhotos.slice(0, 5),
+        photoDataUrl: normalizedPhotos[0] ?? maid.photoDataUrl ?? '',
+        videoDataUrl: maid.videoDataUrl ?? '',
+        hasPhoto: normalizedPhotos.length > 0,
+      }
+    }),
     enquiries: raw.enquiries ?? defaults.enquiries,
     counters: {
       momPersonnel:
@@ -422,6 +450,70 @@ export const updateMaidVisibilityStore = async (
   data.maids[index] = {
     ...data.maids[index],
     isPublic,
+    updatedAt: now(),
+  }
+  await saveData(data)
+  return data.maids[index]
+}
+
+export const updateMaidPhotoStore = async (
+  referenceCode: string,
+  photoDataUrl: string
+) => {
+  const data = await loadData()
+  const index = data.maids.findIndex((maid) => maid.referenceCode === referenceCode)
+  if (index === -1) return null
+  data.maids[index] = {
+    ...data.maids[index],
+    photoDataUrls: photoDataUrl ? [photoDataUrl] : [],
+    photoDataUrl,
+    hasPhoto: Boolean(photoDataUrl),
+    updatedAt: now(),
+  }
+  await saveData(data)
+  return data.maids[index]
+}
+
+export const addMaidPhotoStore = async (
+  referenceCode: string,
+  photoDataUrl: string
+) => {
+  const data = await loadData()
+  const index = data.maids.findIndex((maid) => maid.referenceCode === referenceCode)
+  if (index === -1) return null
+  const currentPhotos = Array.isArray(data.maids[index].photoDataUrls)
+    ? data.maids[index].photoDataUrls
+    : data.maids[index].photoDataUrl
+    ? [data.maids[index].photoDataUrl]
+    : []
+  const nextPhotos = [...currentPhotos]
+  if (photoDataUrl) {
+    if (nextPhotos.length >= 5) {
+      throw new Error('PHOTO_LIMIT_REACHED')
+    }
+    nextPhotos.push(photoDataUrl)
+  }
+  data.maids[index] = {
+    ...data.maids[index],
+    photoDataUrls: nextPhotos,
+    photoDataUrl: nextPhotos[0] ?? '',
+    hasPhoto: nextPhotos.length > 0,
+    updatedAt: now(),
+  }
+  await saveData(data)
+  return data.maids[index]
+}
+
+export const updateMaidVideoStore = async (
+  referenceCode: string,
+  videoDataUrl: string
+) => {
+  const data = await loadData()
+  const index = data.maids.findIndex((maid) => maid.referenceCode === referenceCode)
+  if (index === -1) return null
+  data.maids[index] = {
+    ...data.maids[index],
+    videoDataUrl,
     updatedAt: now(),
   }
   await saveData(data)

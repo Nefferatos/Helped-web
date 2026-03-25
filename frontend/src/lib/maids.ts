@@ -21,6 +21,9 @@ export interface MaidProfile {
   employmentHistory: Array<Record<string, unknown>>;
   introduction: Record<string, unknown>;
   agencyContact: Record<string, unknown>;
+  photoDataUrls?: string[];
+  photoDataUrl?: string;
+  videoDataUrl?: string;
   isPublic?: boolean;
   hasPhoto?: boolean;
   createdAt?: string;
@@ -55,6 +58,9 @@ export const defaultMaidProfile: MaidProfile = {
   employmentHistory: [],
   introduction: {},
   agencyContact: {},
+  photoDataUrls: [],
+  photoDataUrl: "",
+  videoDataUrl: "",
   isPublic: false,
   hasPhoto: false,
 };
