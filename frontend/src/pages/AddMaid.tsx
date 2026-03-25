@@ -252,29 +252,52 @@ const AddMaid = () => {
           <div className="section-header">A1. Personal Information</div>
           <div className="space-y-3 pt-2">
             {[
-              ["Maid Name", "Ref Code"],
-              ["Type", "Nationality"],
-              ["Date of Birth", "Place of Birth"],
-              ["Height", "Weight"],
-            ].map((row, i) => (
-              <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {row.map((label) => (
-                  <div key={label} className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
-                    {label === "Maid Name" && <Input value={profile.fullName} onChange={(e) => handleProfileChange("fullName", e.target.value)} />}
-                    {label === "Ref Code" && <Input value={profile.referenceCode} onChange={(e) => handleProfileChange("referenceCode", e.target.value)} />}
-                    {label === "Type" && (
-                      <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.type} onChange={(e) => handleProfileChange("type", e.target.value)}>
-                        <option>New maid</option>
-                        <option>Transfer maid</option>
-                        <option>APS maid</option>
-                        <option>Ex-Singapore maid</option>
-                        <option>Ex-Hong Kong maid</option>
-                        <option>Ex-Taiwan maid</option>
-                        <option>Ex-Malaysia maid</option>
-                        <option>Ex-Middle East maid</option>
-                      </select>
-                    )}
+  ["Maid Name", "Ref Code"],
+  ["Type", "Nationality"],
+  ["Date of Birth", "Place of Birth"],
+  ["Height", "Weight"],
+].map((row, i) => (
+  <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    {row.map((label) => (
+      <div key={label} className="flex flex-col gap-1">
+        <Label className="text-xs font-medium text-muted-foreground">
+          {label === "Height"
+            ? "Height (cm)"
+            : label === "Weight"
+            ? "Weight (kg)"
+            : label}
+        </Label>
+
+        {label === "Maid Name" && (
+          <Input
+            value={profile.fullName}
+            onChange={(e) => handleProfileChange("fullName", e.target.value)}
+          />
+        )}
+
+        {label === "Ref Code" && (
+          <Input
+            value={profile.referenceCode}
+            onChange={(e) => handleProfileChange("referenceCode", e.target.value)}
+          />
+        )}
+
+        {label === "Type" && (
+          <select
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            value={profile.type}
+            onChange={(e) => handleProfileChange("type", e.target.value)}
+          >
+            <option>New maid</option>
+            <option>Transfer maid</option>
+            <option>APS maid</option>
+            <option>Ex-Singapore maid</option>
+            <option>Ex-Hong Kong maid</option>
+            <option>Ex-Taiwan maid</option>
+            <option>Ex-Malaysia maid</option>
+            <option>Ex-Middle East maid</option>
+          </select>
+        )}
                     {label === "Nationality" && (
                       <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.nationality} onChange={(e) => handleProfileChange("nationality", e.target.value)}>
                         <option>Filipino maid</option>
