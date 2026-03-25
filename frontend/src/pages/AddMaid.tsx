@@ -33,7 +33,7 @@ const yesNoQuestions = [
   "Able to do simple sewing?",
   "Able to do gardening work?",
   "Willing to wash car?",
-  "Can work on off-days with compensation?",
+  "Willing to work on off-days with  compensation?",
 ];
 const medicalQuestions = [
   "Mental illness",
@@ -67,7 +67,7 @@ const AddMaid = () => {
     homeAddress: "",
     airportRepatriation: "",
     educationLevel: "High School (10-12 yrs)",
-    offDaysPerMonth: "2",
+    offDaysPerMonth: "0",
     passportNo: "",
     homeCountryContactNumber: "",
   });
@@ -95,6 +95,8 @@ const AddMaid = () => {
     pastIllnesses: Object.fromEntries(medicalQuestions.map((question) => [question, false])) as Record<string, boolean>,
     otherIllnesses: "",
     otherRemarks: "",
+    noPork: false,
+    noBeef: false,
   });
   const [availabilityInfo, setAvailabilityInfo] = useState({
     availability: "",
@@ -486,8 +488,13 @@ const AddMaid = () => {
                 </div>
               </div>
             ))}
+            <div className="flex items-center gap-3">
+              <Label className="text-sm font-medium  whitespace-nowrap">Number of off-days per month</Label>
+              <Input className="w-20 text-end" value={profile.offDaysPerMonth} onChange={(e) => handleProfileChange("offDaysPerMonth", e.target.value)} />
+              <span className="text-sm">rest day(s) per month</span>
+            </div>
           </div>
-
+        
           <div className="section-header">A2. Medical History / Dietary Restrictions</div>
           <div className="space-y-3 pt-2">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -506,14 +513,56 @@ const AddMaid = () => {
                 <Label className="text-xs text-muted-foreground">Dietary restrictions</Label>
                 <Input value={medicalInfo.dietaryRestrictions} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, dietaryRestrictions: e.target.value }))} />
               </div>
-              <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2">
                 <Label className="text-xs text-muted-foreground">Food handling preferences</Label>
-                <Input value={medicalInfo.foodHandlingPreferences} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, foodHandlingPreferences: e.target.value }))} />
-              </div>
-            </div>
+              <div className="flex flex-wrap items-center gap-4">
+                      <label className="flex items-center gap-1 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={medicalInfo.noPork || false}
+                          onChange={(e) =>
+                            setMedicalInfo((prev) => ({
+                              ...prev,
+                              noPork: e.target.checked,
+                            }))
+                          }
+                        />
+                        No Pork
+                      </label>
+
+                      <label className="flex items-center gap-1 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={medicalInfo.noBeef || false}
+                          onChange={(e) =>
+                            setMedicalInfo((prev) => ({
+                              ...prev,
+                              noBeef: e.target.checked,
+                            }))
+                          }
+                        />
+                        No Beef
+                      </label>
+                    
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm">Others</span>
+                        <Input
+                          className="h-7 w-[150px]"
+                          value={medicalInfo.foodHandlingPreferences || ""}
+                          onChange={(e) =>
+                            setMedicalInfo((prev) => ({
+                              ...prev,
+                              foodHandlingPreferences: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
             <div className="space-y-2">
-              <p className="text-sm font-medium">Past and existing illnesses</p>
+              <p className="text-sm font-medium">Past and existing illnesses (including chronic ailments and illnesses requiring medication):</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {medicalQuestions.map((illness) => (
                   <div key={illness} className="flex items-center gap-3">
@@ -619,8 +668,7 @@ const AddMaid = () => {
                         value={workAreas[skill]?.evaluation ?? "-"}
                         onChange={(e) =>
                           updateWorkArea(skill, "evaluation", e.target.value)
-                        }
-                      >
+                        }>
                         <option value="-">Select</option>
                         <option value="*">⭐</option>
                         <option value="**">⭐⭐</option>
@@ -726,10 +774,6 @@ const AddMaid = () => {
             <div className="flex flex-col gap-1">
               <Label className="text-xs font-medium text-muted-foreground">Offday Compensation (S$/day)</Label>
               <Input value={availabilityInfo.offdayCompensation} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, offdayCompensation: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Number of off-days per month</Label>
-              <Input value={profile.offDaysPerMonth} onChange={(e) => handleProfileChange("offDaysPerMonth", e.target.value)} />
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-xs font-medium text-muted-foreground">Passport No.</Label>
