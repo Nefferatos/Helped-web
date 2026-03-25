@@ -252,64 +252,142 @@ const AddMaid = () => {
           <div className="section-header">A1. Personal Information</div>
           <div className="space-y-3 pt-2">
             {[
-  ["Maid Name", "Ref Code"],
-  ["Type", "Nationality"],
-  ["Date of Birth", "Place of Birth"],
-  ["Height", "Weight"],
-].map((row, i) => (
-  <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-    {row.map((label) => (
-      <div key={label} className="flex flex-col gap-1">
-        <Label className="text-xs font-medium text-muted-foreground">
-          {label === "Height"
-            ? "Height (cm)"
-            : label === "Weight"
-            ? "Weight (kg)"
-            : label}
-        </Label>
+              ["Maid Name", "Ref Code"],
+              ["Type", "Nationality"],
+              ["Date of Birth", "Place of Birth"],
+              ["Height", "Weight"],
+            ].map((row, i) => (
+              <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {row.map((label) => (
+                  <div key={label} className="flex flex-col gap-1">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      {label === "Height"
+                        ? "Height (cm)"
+                        : label === "Weight"
+                        ? "Weight (kg)"
+                        : label}
+                    </Label>
 
-        {label === "Maid Name" && (
-          <Input
-            value={profile.fullName}
-            onChange={(e) => handleProfileChange("fullName", e.target.value)}
-          />
-        )}
+                    {label === "Maid Name" && (
+                      <Input
+                        value={profile.fullName}
+                        onChange={(e) =>
+                          handleProfileChange("fullName", e.target.value)
+                        }
+                      />
+                    )}
 
-        {label === "Ref Code" && (
-          <Input
-            value={profile.referenceCode}
-            onChange={(e) => handleProfileChange("referenceCode", e.target.value)}
-          />
-        )}
+                    {label === "Ref Code" && (
+                      <Input
+                        value={profile.referenceCode}
+                        onChange={(e) =>
+                          handleProfileChange("referenceCode", e.target.value)
+                        }
+                      />
+                    )}
 
-        {label === "Type" && (
-          <select
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            value={profile.type}
-            onChange={(e) => handleProfileChange("type", e.target.value)}
-          >
-            <option>New maid</option>
-            <option>Transfer maid</option>
-            <option>APS maid</option>
-            <option>Ex-Singapore maid</option>
-            <option>Ex-Hong Kong maid</option>
-            <option>Ex-Taiwan maid</option>
-            <option>Ex-Malaysia maid</option>
-            <option>Ex-Middle East maid</option>
-          </select>
-        )}
+                    {label === "Type" && (
+                      <select
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={profile.type}
+                        onChange={(e) =>
+                          handleProfileChange("type", e.target.value)
+                        }
+                      >
+                        <option>New maid</option>
+                        <option>Transfer maid</option>
+                        <option>APS maid</option>
+                        <option>Ex-Singapore maid</option>
+                        <option>Ex-Hong Kong maid</option>
+                        <option>Ex-Taiwan maid</option>
+                        <option>Ex-Malaysia maid</option>
+                        <option>Ex-Middle East maid</option>
+                        <option>Applying to work in HongKong</option>
+                        <option>Applying to work in Taiwan</option>
+                        <option>Applying to work in Canada</option>
+                      </select>
+                    )}
+
                     {label === "Nationality" && (
-                      <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.nationality} onChange={(e) => handleProfileChange("nationality", e.target.value)}>
+                      <select
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={profile.nationality}
+                        onChange={(e) =>
+                          handleProfileChange("nationality", e.target.value)
+                        }
+                      >
                         <option>Filipino maid</option>
                         <option>Indonesian maid</option>
                         <option>Indian maid</option>
                         <option>Myanmar maid</option>
+                        <option>Sri Lankan maid</option>
+                        <option>Nepali maid</option>
+                        <option>Cambodian maid</option>
+                        <option>Bandladeshi maid</option>
+                        <option>Others</option>
                       </select>
                     )}
-                    {label === "Date of Birth" && <Input type="date" value={profile.dateOfBirth} onChange={(e) => handleProfileChange("dateOfBirth", e.target.value)} />}
-                    {label === "Place of Birth" && <Input value={profile.placeOfBirth} onChange={(e) => handleProfileChange("placeOfBirth", e.target.value)} />}
-                    {label === "Height" && <Input type="number" value={profile.height} onChange={(e) => handleProfileChange("height", e.target.value)} />}
-                    {label === "Weight" && <Input type="number" value={profile.weight} onChange={(e) => handleProfileChange("weight", e.target.value)} />}
+
+                    {label === "Date of Birth" && (
+                      <Input
+                        type="date"
+                        value={profile.dateOfBirth}
+                        onChange={(e) =>
+                          handleProfileChange("dateOfBirth", e.target.value)
+                        }
+                      />
+                    )}
+
+                    {label === "Place of Birth" && (
+                      <Input
+                        value={profile.placeOfBirth}
+                        onChange={(e) =>
+                          handleProfileChange("placeOfBirth", e.target.value)
+                        }
+                      />
+                    )}
+
+                    {label === "Height" && (
+                      <select
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={profile.height}
+                        onChange={(e) =>
+                          handleProfileChange("height", e.target.value)
+                        }
+                      >
+                        {Array.from({ length: 61 }, (_, i) => {
+                          const cm = 140 + i;
+                          const inches = cm / 2.54;
+                          const feet = Math.floor(inches / 12);
+                          const inch = Math.round(inches % 12);
+                          return (
+                            <option key={cm} value={cm}>
+                              {cm} cm ({feet}'{inch}")
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
+
+                    {label === "Weight" && (
+                      <select
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={profile.weight}
+                        onChange={(e) =>
+                          handleProfileChange("weight", e.target.value)
+                        }
+                      >
+                        {Array.from({ length: 71 }, (_, i) => {
+                          const kg = 30 + i;
+                          const lbs = Math.round(kg * 2.20462);
+                          return (
+                            <option key={kg} value={kg}>
+                              {kg} Kg ({lbs} lbs)
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
                   </div>
                 ))}
               </div>
@@ -635,7 +713,7 @@ const AddMaid = () => {
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-xs font-medium text-muted-foreground">Contract Ends</Label>
-              <Input value={availabilityInfo.contractEnds} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, contractEnds: e.target.value }))} />
+              <Input type="date" value={availabilityInfo.contractEnds} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, contractEnds: e.target.value, })) } />
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-xs font-medium text-muted-foreground">Present Salary (S$)</Label>
