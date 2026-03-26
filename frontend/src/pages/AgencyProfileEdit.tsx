@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
+import { adminPath } from "@/lib/routes";
 
 interface CompanyProfileApi {
   id?: number;
@@ -495,7 +496,7 @@ const AgencyProfileEdit = () => {
     <div className="page-container">
       <div className="mb-6 flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold">Edit Agency Profile</h2>
-        <button className="text-sm text-primary hover:underline" onClick={() => navigate("/agency-profile")}>
+        <button className="text-sm text-primary hover:underline" onClick={() => navigate(adminPath("/agency-profile"))}>
           Back to Agency Profile
         </button>
       </div>

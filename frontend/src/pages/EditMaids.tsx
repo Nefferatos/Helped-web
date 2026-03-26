@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { calculateAge, formatDate, MaidProfile } from "@/lib/maids";
-import { Search, Eye, EyeOff, Trash2, Download, Upload } from "lucide-react";
+import { Search, Eye, EyeOff, Trash2, Download, Upload, Send } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
+import { adminPath } from "@/lib/routes";
+import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 
 type ViewMode = "menu" | "public" | "hidden";
 const PAGE_SIZE = 15;
@@ -19,6 +21,9 @@ const EditMaids = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [page, setPage] = useState(1);
+  const [maidToSendThroughAgency, setMaidToSendThroughAgency] = useState<MaidProfile | null>(null);
+  const [maidToDirectHire, setMaidToDirectHire] = useState<MaidProfile | null>(null);
+  const [maidToReject, setMaidToReject] = useState<MaidProfile | null>(null);
 
   const visibility = useMemo(() => {
     if (view === "public") return "public";
@@ -303,7 +308,7 @@ const EditMaids = () => {
                 >
                   <div
                     className="flex h-28 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs text-black transition-all hover:ring-2 hover:ring-primary/40"
-                    onClick={() => navigate(`/maid/${encodeURIComponent(maid.referenceCode)}`)}
+                    onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))}
                   >
                     {photoPreview ? (
                       <img src={photoPreview} alt={`${maid.fullName}`} className="h-full w-full object-cover" />
@@ -313,15 +318,46 @@ const EditMaids = () => {
                       "No Photo"
                     )}
                   </div>
-                  <p className="cursor-pointer text-xs font-semibold leading-tight transition-colors hover:text-primary" onClick={() => navigate(`/maid/${encodeURIComponent(maid.referenceCode)}`)}>{maid.fullName}</p>
+                  <p className="cursor-pointer text-xs font-semibold leading-tight transition-colors hover:text-primary" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))}>{maid.fullName}</p>
                   <p className="text-[10px] text-black">{maid.referenceCode}</p>
                   <div className="flex flex-wrap justify-center gap-1">
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px]">{maid.nationality}</span>
                     <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] text-accent-foreground">{maid.type}</span>
                   </div>
+                  <p className="text-[10px] text-primary">Status: {maid.status || "available"}</p>
                   <p className="text-[10px] text-muted-foreground">{maid.maritalStatus}{age !== null ? `(${age})` : ""}</p>
                   <p className="text-[10px] text-muted-foreground">Upd: {formatDate(maid.updatedAt)}</p>
                   <div className="mt-auto flex w-full flex-col gap-1 border-t pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[10px]"
+                      disabled={!maid.isPublic}
+                      onClick={() => setMaidToSendThroughAgency(maid)}
+                    >
+                      <Send className="mr-1 h-3 w-3" />
+                      Through Agency
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[10px]"
+                      disabled={!maid.isPublic}
+                      onClick={() => setMaidToDirectHire(maid)}
+                    >
+                      <Send className="mr-1 h-3 w-3" />
+                      Direct Hire
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[10px]"
+                      disabled={!maid.isPublic}
+                      onClick={() => setMaidToReject(maid)}
+                    >
+                      <Send className="mr-1 h-3 w-3" />
+                      Reject
+                    </Button>
                     <label className="flex items-center justify-center gap-1 text-[10px]">
                       <input type="checkbox" checked={selected.has(maid.referenceCode)} onChange={() => toggle(maid.referenceCode)} className="accent-primary" />
                       Select
@@ -371,6 +407,55 @@ const EditMaids = () => {
           </div>
         )}
       </div>
+
+      <SendMaidToClientDialog
+        maid={maidToSendThroughAgency}
+        open={Boolean(maidToSendThroughAgency)}
+        onOpenChange={(open) => {
+          if (!open) setMaidToSendThroughAgency(null);
+        }}
+        actionType="interested"
+        onSuccess={(updatedMaid) => {
+          setMaids((prev) =>
+            prev.map((item) =>
+              item.referenceCode === updatedMaid.referenceCode ? updatedMaid : item
+            )
+          );
+          setMaidToSendThroughAgency(null);
+        }}
+      />
+      <SendMaidToClientDialog
+        maid={maidToDirectHire}
+        open={Boolean(maidToDirectHire)}
+        onOpenChange={(open) => {
+          if (!open) setMaidToDirectHire(null);
+        }}
+        actionType="direct_hire"
+        onSuccess={(updatedMaid) => {
+          setMaids((prev) =>
+            prev.map((item) =>
+              item.referenceCode === updatedMaid.referenceCode ? updatedMaid : item
+            )
+          );
+          setMaidToDirectHire(null);
+        }}
+      />
+      <SendMaidToClientDialog
+        maid={maidToReject}
+        open={Boolean(maidToReject)}
+        onOpenChange={(open) => {
+          if (!open) setMaidToReject(null);
+        }}
+        actionType="rejected"
+        onSuccess={(updatedMaid) => {
+          setMaids((prev) =>
+            prev.map((item) =>
+              item.referenceCode === updatedMaid.referenceCode ? updatedMaid : item
+            )
+          );
+          setMaidToReject(null);
+        }}
+      />
     </div>
   );
 };

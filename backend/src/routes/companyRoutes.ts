@@ -4,6 +4,7 @@
 import express, { Router } from 'express'
 import {
   getCompanyProfile,
+  getCompanySummary,
   updateCompanyProfile,
   addMOMPersonnel,
   updateMOMPersonnel,
@@ -21,6 +22,7 @@ const router: Router = express.Router()
  * Fetch complete company profile including MOM personnel and testimonials
  */
 router.get('/', getCompanyProfile)
+router.get('/summary', getCompanySummary)
 
 /**
  * PUT /api/company

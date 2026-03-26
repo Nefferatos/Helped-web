@@ -1,25 +1,31 @@
 import express, { Express, Request, Response, ErrorRequestHandler } from 'express'
 import cors from 'cors'
+import fs from 'fs'
+import path from 'path'
 import companyRoutes from './routes/companyRoutes'
 import maidRoutes from './routes/maidRoutes'
 import enquiryRoutes from './routes/enquiryRoutes'
+import directSaleRoutes from './routes/directSaleRoutes'
+import clientAuthRoutes from './routes/clientAuthRoutes'
+import clientRoutes from './routes/clientRoutes'
 import { initializeStore } from './store'
 
 const app: Express = express()
 const port = process.env.PORT || 3000
+const frontendDist = path.resolve(__dirname, '../../frontend/dist')
+const hasFrontendSite = fs.existsSync(frontendDist)
 
 // Middleware
 app.use(cors())
 app.use(express.json({ limit: '25mb' }))
 app.use(express.urlencoded({ extended: true, limit: '25mb' }))
 
-// Routes
-app.get('/', (req: Request, res: Response) => {
-  res.json({ message: 'Welcome to Maid Agency Backend API' })
-})
-
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'Server is running' })
+})
+
+app.get('/api', (req: Request, res: Response) => {
+  res.json({ message: 'Welcome to Maid Agency Backend API' })
 })
 
 app.get('/api/data', (req: Request, res: Response) => {
@@ -35,6 +41,17 @@ app.get('/api/data', (req: Request, res: Response) => {
 app.use('/api/company', companyRoutes)
 app.use('/api/maids', maidRoutes)
 app.use('/api/enquiries', enquiryRoutes)
+app.use('/api/direct-sales', directSaleRoutes)
+app.use('/api/direct-sell', directSaleRoutes)
+app.use('/api/client-auth', clientAuthRoutes)
+app.use('/api/client', clientRoutes)
+
+if (hasFrontendSite) {
+  app.use(express.static(frontendDist))
+  app.get(/^(?!\/api(?:\/|$)).*/, (req: Request, res: Response) => {
+    res.sendFile(path.join(frontendDist, 'index.html'))
+  })
+}
 
 // Error handling middleware
 const errorHandler: ErrorRequestHandler = (err, req, res, next) => {

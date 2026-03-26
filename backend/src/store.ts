@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
+import { randomBytes } from 'crypto'
 
 export interface CompanyProfileRecord {
   id: number
@@ -50,6 +51,7 @@ export interface MaidRecord {
   id: number
   fullName: string
   referenceCode: string
+  status?: string
   type: string
   nationality: string
   dateOfBirth: string
@@ -88,17 +90,49 @@ export interface EnquiryRecord {
   createdAt: string
 }
 
+export interface ClientRecord {
+  id: number
+  name: string
+  company?: string
+  email: string
+  password: string
+  createdAt: string
+}
+
+export interface ClientSessionRecord {
+  token: string
+  clientId: number
+  createdAt: string
+}
+
+export interface DirectSaleRecord {
+  id: number
+  maidReferenceCode: string
+  maidName: string
+  clientId: number
+  clientName: string
+  clientEmail: string
+  clientPhone: string
+  status: string
+  createdAt: string
+}
+
 interface AppData {
   companyProfile: CompanyProfileRecord
   momPersonnel: MOMPersonnelRecord[]
   testimonials: TestimonialRecord[]
   maids: MaidRecord[]
   enquiries: EnquiryRecord[]
+  clients: ClientRecord[]
+  clientSessions: ClientSessionRecord[]
+  directSales: DirectSaleRecord[]
   counters: {
     momPersonnel: number
     testimonials: number
     maids: number
     enquiries: number
+    clients: number
+    directSales: number
   }
 }
 
@@ -188,11 +222,16 @@ const defaultData = (): AppData => ({
       createdAt: now(),
     },
   ],
+  clients: [],
+  clientSessions: [],
+  directSales: [],
   counters: {
     momPersonnel: 1,
     testimonials: 1,
     maids: 1,
     enquiries: 6,
+    clients: 1,
+    directSales: 1,
   },
 })
 
@@ -223,6 +262,7 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         : []
       return {
         ...maid,
+        status: maid.status ?? 'available',
         photoDataUrls: normalizedPhotos.slice(0, 5),
         photoDataUrl: normalizedPhotos[0] ?? maid.photoDataUrl ?? '',
         videoDataUrl: maid.videoDataUrl ?? '',
@@ -230,6 +270,9 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       }
     }),
     enquiries: raw.enquiries ?? defaults.enquiries,
+    clients: raw.clients ?? defaults.clients,
+    clientSessions: raw.clientSessions ?? defaults.clientSessions,
+    directSales: raw.directSales ?? defaults.directSales,
     counters: {
       momPersonnel:
         raw.counters?.momPersonnel ??
@@ -244,6 +287,12 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       enquiries:
         raw.counters?.enquiries ??
         ((raw.enquiries?.length ?? defaults.enquiries.length) + 1),
+      clients:
+        raw.counters?.clients ??
+        ((raw.clients?.length ?? 0) + 1 || defaults.counters.clients),
+      directSales:
+        raw.counters?.directSales ??
+        ((raw.directSales?.length ?? 0) + 1 || defaults.counters.directSales),
     },
   }
 }
@@ -405,6 +454,7 @@ export const createMaidStore = async (
 
   const record: MaidRecord = {
     ...maid,
+    status: maid.status ?? 'available',
     id: data.counters.maids++,
     createdAt: now(),
     updatedAt: now(),
@@ -545,6 +595,227 @@ export const getEnquiriesStore = async (search?: string) => {
   }
 
   return enquiries.sort((a, b) => b.id - a.id)
+}
+
+export const getClientsStore = async () => {
+  const data = await loadData()
+  return [...data.clients].sort((a, b) => b.id - a.id)
+}
+
+export const registerClientStore = async (payload: {
+  name: string
+  company?: string
+  email: string
+  password: string
+}) => {
+  const data = await loadData()
+  const existing = data.clients.find(
+    (client) => client.email.toLowerCase() === payload.email.toLowerCase()
+  )
+
+  if (existing) {
+    throw new Error('CLIENT_EMAIL_EXISTS')
+  }
+
+  const record: ClientRecord = {
+    id: data.counters.clients++,
+    name: payload.name,
+    company: payload.company ?? '',
+    email: payload.email,
+    password: payload.password,
+    createdAt: now(),
+  }
+
+  data.clients.unshift(record)
+  await saveData(data)
+  return record
+}
+
+export const authenticateClientStore = async (
+  email: string,
+  password: string
+) => {
+  const data = await loadData()
+  return (
+    data.clients.find(
+      (client) =>
+        client.email.toLowerCase() === email.toLowerCase() &&
+        client.password === password
+    ) ?? null
+  )
+}
+
+export const createClientSessionStore = async (clientId: number) => {
+  const data = await loadData()
+  data.clientSessions = data.clientSessions.filter(
+    (session) => session.clientId !== clientId
+  )
+  const session: ClientSessionRecord = {
+    token: randomBytes(24).toString('hex'),
+    clientId,
+    createdAt: now(),
+  }
+  data.clientSessions.unshift(session)
+  await saveData(data)
+  return session
+}
+
+export const deleteClientSessionStore = async (token: string) => {
+  const data = await loadData()
+  const existing = data.clientSessions.find((session) => session.token === token)
+  if (!existing) return null
+  data.clientSessions = data.clientSessions.filter(
+    (session) => session.token !== token
+  )
+  await saveData(data)
+  return existing
+}
+
+export const getClientByTokenStore = async (token: string) => {
+  const data = await loadData()
+  const session = data.clientSessions.find((item) => item.token === token)
+  if (!session) return null
+  const client = data.clients.find((item) => item.id === session.clientId)
+  if (!client) return null
+  return client
+}
+
+export const getClientOptionsStore = async () => {
+  const clients = await getClientsStore()
+  return clients.map((client) => ({
+    id: client.id,
+    name: client.name,
+    email: client.email,
+    phone: client.company || 'N/A',
+    enquiryDate: client.createdAt,
+  }))
+}
+
+export const createDirectSaleStore = async (
+  maidReferenceCode: string,
+  clientId: number,
+  status: string = 'pending'
+) => {
+  const data = await loadData()
+  const maidIndex = data.maids.findIndex(
+    (maid) => maid.referenceCode === maidReferenceCode
+  )
+  if (maidIndex === -1) {
+    throw new Error('MAID_NOT_FOUND')
+  }
+
+  const client = data.clients.find((item) => item.id === clientId)
+  if (!client) {
+    throw new Error('CLIENT_NOT_FOUND')
+  }
+
+  const record: DirectSaleRecord = {
+    id: data.counters.directSales++,
+    maidReferenceCode,
+    maidName: data.maids[maidIndex].fullName,
+    clientId: client.id,
+    clientName: client.name,
+    clientEmail: client.email,
+    clientPhone: client.company || '',
+    status,
+    createdAt: now(),
+  }
+
+  data.directSales.unshift(record)
+  data.maids[maidIndex] = {
+    ...data.maids[maidIndex],
+    status:
+      status === 'interested'
+        ? 'interested'
+        : status === 'direct_hire'
+        ? 'reserved'
+        : status === 'rejected'
+        ? 'rejected'
+        : 'sent',
+    updatedAt: now(),
+  }
+
+  await saveData(data)
+
+  return {
+    directSale: record,
+    maid: data.maids[maidIndex],
+  }
+}
+
+export const updateDirectSaleStatusStore = async (
+  id: number,
+  status: string
+) => {
+  const data = await loadData()
+  const directSaleIndex = data.directSales.findIndex((item) => item.id === id)
+  if (directSaleIndex === -1) {
+    return null
+  }
+
+  data.directSales[directSaleIndex] = {
+    ...data.directSales[directSaleIndex],
+    status,
+  }
+
+  const maidIndex = data.maids.findIndex(
+    (maid) =>
+      maid.referenceCode === data.directSales[directSaleIndex].maidReferenceCode
+  )
+
+  if (maidIndex !== -1) {
+    data.maids[maidIndex] = {
+      ...data.maids[maidIndex],
+      status:
+        status === 'interested'
+          ? 'interested'
+          : status === 'direct_hire'
+          ? 'reserved'
+          : status === 'rejected'
+          ? 'rejected'
+          : 'sent',
+      updatedAt: now(),
+    }
+  }
+
+  await saveData(data)
+
+  return {
+    directSale: data.directSales[directSaleIndex],
+    maid: maidIndex !== -1 ? data.maids[maidIndex] : null,
+  }
+}
+
+export const getAssignedMaidsForClientStore = async (clientId: number) => {
+  const data = await loadData()
+
+  return data.directSales
+    .filter((sale) => sale.clientId === clientId)
+    .map((sale) => ({
+      directSale: sale,
+      maid:
+        data.maids.find(
+          (maid) => maid.referenceCode === sale.maidReferenceCode
+        ) ?? null,
+    }))
+    .filter(
+      (item): item is { directSale: DirectSaleRecord; maid: MaidRecord } =>
+        Boolean(item.maid)
+    )
+}
+
+export const updateDirectSaleStatusForClientStore = async (
+  id: number,
+  clientId: number,
+  status: string
+) => {
+  const data = await loadData()
+  const sale = data.directSales.find((item) => item.id === id)
+  if (!sale || sale.clientId !== clientId) {
+    return null
+  }
+
+  return updateDirectSaleStatusStore(id, status)
 }
 
 export const addEnquiryStore = async (

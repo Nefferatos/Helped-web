@@ -1,24 +1,85 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { UserCircle, UserPlus, Users, KeyRound, FileText } from "lucide-react";
+import { adminPath } from "@/lib/routes";
+import { toast } from "@/components/ui/sonner";
+
+interface DashboardSummary {
+  publicMaids: number;
+  hiddenMaids: number;
+  totalMaids: number;
+  maidsWithPhotos: number;
+  enquiries: number;
+  momPersonnel: number;
+  testimonials: number;
+  galleryImages: number;
+}
 
 const menuItems = [
-  { icon: UserCircle, label: "Agency Profile", desc: "View and edit your agency details", path: "/agency-profile" },
-  { icon: UserPlus, label: "Add Maids", desc: "Register new maid profiles", path: "/add-maid" },
-  { icon: Users, label: "Edit/Delete Maids", desc: "Manage existing maid records", path: "/edit-maids" },
-  { icon: KeyRound, label: "Change Password", desc: "Update your account password", path: "/change-password" },
-  { icon: FileText, label: "Employment Contracts & Forms", desc: "Access employment documents", path: "/employment-contracts" },
+  { icon: UserCircle, label: "Agency Profile", desc: "View and edit your agency details", path: adminPath("/agency-profile") },
+  { icon: UserPlus, label: "Add Maids", desc: "Register new maid profiles", path: adminPath("/add-maid") },
+  { icon: Users, label: "Edit/Delete Maids", desc: "Manage existing maid records", path: adminPath("/edit-maids") },
+  { icon: KeyRound, label: "Change Password", desc: "Update your account password", path: adminPath("/change-password") },
+  { icon: FileText, label: "Employment Contracts & Forms", desc: "Access employment documents", path: adminPath("/employment-contracts") },
 ];
 
 const HomePage = () => {
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+
+  useEffect(() => {
+    const loadSummary = async () => {
+      try {
+        const response = await fetch("/api/company/summary");
+        const data = (await response.json().catch(() => ({}))) as Partial<DashboardSummary> & { error?: string };
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load dashboard summary");
+        }
+        setSummary({
+          publicMaids: data.publicMaids ?? 0,
+          hiddenMaids: data.hiddenMaids ?? 0,
+          totalMaids: data.totalMaids ?? 0,
+          maidsWithPhotos: data.maidsWithPhotos ?? 0,
+          enquiries: data.enquiries ?? 0,
+          momPersonnel: data.momPersonnel ?? 0,
+          testimonials: data.testimonials ?? 0,
+          galleryImages: data.galleryImages ?? 0,
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to load dashboard summary");
+      }
+    };
+
+    void loadSummary();
+  }, []);
+
   return (
     <div className="page-container">
       <div className="content-card space-y-6" style={{ animationDelay: "0.05s" }}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-black font-semibold">
-              <span className="text-accent font-bold">86</span> maids in public, and{" "}
-              <span className="text-destructive font-bold">10181</span> maids hidden.
+              <span className="text-accent font-bold">{summary?.publicMaids ?? "..."}</span> maids in public, and{" "}
+              <span className="text-destructive font-bold">{summary?.hiddenMaids ?? "..."}</span> maids hidden.
             </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-lg border bg-secondary/30 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Maids</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{summary?.totalMaids ?? "..."}</p>
+          </div>
+          <div className="rounded-lg border bg-secondary/30 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">With Photos</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{summary?.maidsWithPhotos ?? "..."}</p>
+          </div>
+          <div className="rounded-lg border bg-secondary/30 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Enquiries</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{summary?.enquiries ?? "..."}</p>
+          </div>
+          <div className="rounded-lg border bg-secondary/30 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Testimonials</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{summary?.testimonials ?? "..."}</p>
           </div>
         </div>
 
@@ -35,7 +96,13 @@ const HomePage = () => {
               </div>
               <div>
                 <p className="font-semibold text-sm text-foreground">{item.label}</p>
-                <p className="text-sm text-muted-black">{item.desc}</p>
+                <p className="text-sm text-muted-black">
+                  {item.label === "Agency Profile" && summary
+                    ? `${summary.momPersonnel} MOM personnel, ${summary.galleryImages} gallery images`
+                    : item.label === "Edit/Delete Maids" && summary
+                    ? `${summary.publicMaids} public, ${summary.hiddenMaids} hidden`
+                    : item.desc}
+                </p>
               </div>
             </Link>
           ))}

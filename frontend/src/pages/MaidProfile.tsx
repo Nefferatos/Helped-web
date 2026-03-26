@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowUp, Edit, Image, Trash2, Youtube, FileDown, Check } from "lucide-react";
+import { ArrowLeft, ArrowUp, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send } from "lucide-react";
 import { MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
+import { adminPath } from "@/lib/routes";
+import { exportMaidProfileToExcel, exportMaidProfileToPdf, exportMaidProfileToWord } from "@/lib/maidExport";
+import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 
 const formatDate = (value?: string) => {
   if (!value) return "N/A";
@@ -15,6 +18,9 @@ const MaidProfilePage = () => {
   const navigate = useNavigate();
   const [maid, setMaid] = useState<MaidProfile | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isThroughAgencyDialogOpen, setIsThroughAgencyDialogOpen] = useState(false);
+  const [isDirectHireDialogOpen, setIsDirectHireDialogOpen] = useState(false);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
 
   useEffect(() => {
     const loadMaid = async () => {
@@ -26,7 +32,7 @@ const MaidProfilePage = () => {
         setMaid(data.maid);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to load maid");
-        navigate("/edit-maids");
+        navigate(adminPath("/edit-maids"));
       }
     };
 
@@ -41,11 +47,38 @@ const MaidProfilePage = () => {
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Failed to delete maid");
       toast.success("Maid deleted");
-      navigate("/edit-maids");
+      navigate(adminPath("/edit-maids"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete maid");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleExportWord = () => {
+    try {
+      exportMaidProfileToWord(maid);
+      toast.success("Word bio-data downloaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to export Word bio-data");
+    }
+  };
+
+  const handleExportExcel = () => {
+    try {
+      exportMaidProfileToExcel(maid);
+      toast.success("Excel bio-data downloaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to export Excel bio-data");
+    }
+  };
+
+  const handleExportPdf = () => {
+    try {
+      exportMaidProfileToPdf(maid);
+      toast.success("Print dialog opened for PDF export");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to export PDF bio-data");
     }
   };
 
@@ -124,8 +157,8 @@ const MaidProfilePage = () => {
       <div className="content-card animate-fade-in-up space-y-6">
         <div className="flex flex-wrap gap-3 border-b pb-3 text-sm">
           <button className="flex items-center gap-1 text-primary hover:underline"><ArrowUp className="h-3 w-3" /> Bring to Top</button>
-          <button className="text-primary hover:underline" onClick={() => navigate("/edit-maids")}>View All Maids</button>
-          <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => navigate(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`)}><Edit className="h-3 w-3" /> Edit This Maid</button>
+          <button className="text-primary hover:underline" onClick={() => navigate(adminPath("/edit-maids"))}>View All Maids</button>
+          <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))}><Edit className="h-3 w-3" /> Edit This Maid</button>
           <span className="flex items-center gap-1 text-muted-foreground"><Image className="h-3 w-3" /> Manage Photos in Edit Maid</span>
           <span className="flex items-center gap-1 text-muted-foreground"><Youtube className="h-3 w-3" /> Manage Video in Edit Maid</span>
           <button className="flex items-center gap-1 text-destructive hover:underline" onClick={() => void handleDelete()}><Trash2 className="h-3 w-3" /> {isDeleting ? "Deleting..." : "Delete"}</button>
@@ -169,9 +202,27 @@ const MaidProfilePage = () => {
               </div>
             )}
             <p className="text-xs text-muted-foreground">{photos.length}/5 photos uploaded</p>
-            <button className="flex items-center gap-2 text-sm text-primary hover:underline">
-              <FileDown className="h-4 w-4" /> Download Maid Bio-data in PDF
-            </button>
+            <p className="text-xs text-muted-foreground">Status: {maid.status || "available"}</p>
+            <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={() => setIsThroughAgencyDialogOpen(true)}>
+                <Send className="h-4 w-4" /> Through Agency
+              </button>
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={() => setIsDirectHireDialogOpen(true)}>
+                <Send className="h-4 w-4" /> Direct Hire (Fast Process)
+              </button>
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={() => setIsRejectDialogOpen(true)}>
+                <Send className="h-4 w-4" /> Reject
+              </button>
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={handleExportPdf}>
+                <FileDown className="h-4 w-4" /> Export PDF
+              </button>
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={handleExportWord}>
+                <FileText className="h-4 w-4" /> Export Word
+              </button>
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={handleExportExcel}>
+                <Sheet className="h-4 w-4" /> Export Excel
+              </button>
+            </div>
           </div>
         </div>
 
@@ -325,6 +376,28 @@ const MaidProfilePage = () => {
           <p><span className="font-semibold text-muted-foreground">Hits</span> 1</p>
         </div>
       </div>
+
+      <SendMaidToClientDialog
+        maid={maid}
+        open={isThroughAgencyDialogOpen}
+        onOpenChange={setIsThroughAgencyDialogOpen}
+        actionType="interested"
+        onSuccess={(updatedMaid) => setMaid(updatedMaid)}
+      />
+      <SendMaidToClientDialog
+        maid={maid}
+        open={isDirectHireDialogOpen}
+        onOpenChange={setIsDirectHireDialogOpen}
+        actionType="direct_hire"
+        onSuccess={(updatedMaid) => setMaid(updatedMaid)}
+      />
+      <SendMaidToClientDialog
+        maid={maid}
+        open={isRejectDialogOpen}
+        onOpenChange={setIsRejectDialogOpen}
+        actionType="rejected"
+        onSuccess={(updatedMaid) => setMaid(updatedMaid)}
+      />
     </div>
   );
 };

@@ -8,6 +8,8 @@ import {
   deleteMomPersonnelStore,
   deleteTestimonialStore,
   getCompanyBundle,
+  getEnquiriesStore,
+  getMaidsStore,
   updateCompanyProfileStore,
   updateMomPersonnelStore,
 } from '../store'
@@ -64,6 +66,41 @@ export const getCompanyProfile = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching company profile:', error)
     res.status(500).json({ error: 'Failed to fetch company profile' })
+  }
+}
+
+export const getCompanySummary = async (req: Request, res: Response) => {
+  try {
+    const [companyBundle, maids, enquiries] = await Promise.all([
+      getCompanyBundle(),
+      getMaidsStore(),
+      getEnquiriesStore(),
+    ])
+
+    const publicMaids = maids.filter((maid) => maid.isPublic).length
+    const hiddenMaids = maids.length - publicMaids
+    const maidsWithPhotos = maids.filter(
+      (maid) =>
+        maid.hasPhoto ||
+        Boolean(
+          (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) ||
+            maid.photoDataUrl
+        )
+    ).length
+
+    res.status(200).json({
+      publicMaids,
+      hiddenMaids,
+      totalMaids: maids.length,
+      maidsWithPhotos,
+      enquiries: enquiries.length,
+      momPersonnel: companyBundle.momPersonnel.length,
+      testimonials: companyBundle.testimonials.length,
+      galleryImages: companyBundle.companyProfile.gallery_image_data_urls?.length ?? 0,
+    })
+  } catch (error) {
+    console.error('Error fetching company summary:', error)
+    res.status(500).json({ error: 'Failed to fetch company summary' })
   }
 }
 

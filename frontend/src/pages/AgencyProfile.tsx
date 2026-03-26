@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
+import { adminPath } from "@/lib/routes";
 
 interface CompanyProfileApi {
   company_name: string;
@@ -46,11 +47,23 @@ interface CompanyResponse {
   testimonials: TestimonialApi[];
 }
 
+interface AgencySummary {
+  publicMaids: number;
+  hiddenMaids: number;
+  totalMaids: number;
+  maidsWithPhotos: number;
+  enquiries: number;
+  momPersonnel: number;
+  testimonials: number;
+  galleryImages: number;
+}
+
 const AgencyProfile = () => {
   const navigate = useNavigate();
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
   const [momPersonnel, setMomPersonnel] = useState<MomPersonnelApi[]>([]);
   const [testimonials, setTestimonials] = useState<TestimonialApi[]>([]);
+  const [summary, setSummary] = useState<AgencySummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -58,7 +71,10 @@ const AgencyProfile = () => {
     try {
       setIsLoading(true);
       setLoadError(null);
-      const response = await fetch("/api/company");
+      const [response, summaryResponse] = await Promise.all([
+        fetch("/api/company"),
+        fetch("/api/company/summary"),
+      ]);
       const data = (await response.json().catch(() => ({}))) as Partial<CompanyResponse> & { error?: string };
       if (!response.ok || !data.companyProfile) {
         throw new Error(data.error || "Failed to load company profile");
@@ -66,6 +82,19 @@ const AgencyProfile = () => {
       setCompany(data.companyProfile);
       setMomPersonnel(data.momPersonnel ?? []);
       setTestimonials(data.testimonials ?? []);
+      if (summaryResponse.ok) {
+        const summaryData = (await summaryResponse.json().catch(() => ({}))) as Partial<AgencySummary>;
+        setSummary({
+          publicMaids: summaryData.publicMaids ?? 0,
+          hiddenMaids: summaryData.hiddenMaids ?? 0,
+          totalMaids: summaryData.totalMaids ?? 0,
+          maidsWithPhotos: summaryData.maidsWithPhotos ?? 0,
+          enquiries: summaryData.enquiries ?? 0,
+          momPersonnel: summaryData.momPersonnel ?? 0,
+          testimonials: summaryData.testimonials ?? 0,
+          galleryImages: summaryData.galleryImages ?? 0,
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load company profile";
       setLoadError(message);
@@ -123,13 +152,40 @@ const AgencyProfile = () => {
         <h2 className="text-xl font-bold">Agency Profile</h2>
         <button
           className="flex items-center gap-1 text-sm text-primary hover:underline"
-          onClick={() => navigate("/agency-profile/edit")}
+          onClick={() => navigate(adminPath("/agency-profile/edit"))}
         >
           <Edit className="h-4 w-4" /> Edit Agency Profile
         </button>
       </div>
 
       <div className="content-card animate-fade-in-up space-y-6">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Public Maids</p>
+            <p className="mt-1 text-xl font-bold">{summary?.publicMaids ?? 0}</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Hidden Maids</p>
+            <p className="mt-1 text-xl font-bold">{summary?.hiddenMaids ?? 0}</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">With Photos</p>
+            <p className="mt-1 text-xl font-bold">{summary?.maidsWithPhotos ?? 0}</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Enquiries</p>
+            <p className="mt-1 text-xl font-bold">{summary?.enquiries ?? 0}</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Personnel</p>
+            <p className="mt-1 text-xl font-bold">{summary?.momPersonnel ?? momPersonnel.length}</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Testimonials</p>
+            <p className="mt-1 text-xl font-bold">{summary?.testimonials ?? testimonials.length}</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-lg border bg-muted/30 p-6 text-center">
             {company.intro_video_data_url ? (
@@ -160,7 +216,7 @@ const AgencyProfile = () => {
                 "No Logo"
               )}
             </div>
-            <p className="text-xs text-muted-foreground">{gallery.length} gallery images uploaded</p>
+            <p className="text-xs text-muted-foreground">{summary?.galleryImages ?? gallery.length} gallery images uploaded</p>
           </div>
         </div>
 

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { MaidProfile } from "@/lib/maids";
+import { adminPath } from "@/lib/routes";
 
 const tabs = ["PROFILE", "SKILLS", "EMPLOYMENT HISTORY", "AVAILABILITY/REMARK", "INTRODUCTION", "PUBLIC INTRODUCTION", "PRIVATE INFO"];
 const languageOptions = [
@@ -242,7 +243,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
         setVideoDataUrl(String(existing.videoDataUrl || ""));
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to load maid");
-        navigate("/edit-maids");
+        navigate(adminPath("/edit-maids"));
       } finally {
         setIsLoadingMaid(false);
       }
@@ -425,7 +426,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
       }
 
       toast.success(isEditMode ? "Maid updated successfully" : "Maid created successfully");
-      navigate(`/maid/${encodeURIComponent(data.maid.referenceCode)}`);
+      navigate(adminPath(`/maid/${encodeURIComponent(data.maid.referenceCode)}`));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create maid");
     } finally {

@@ -2,6 +2,7 @@ export interface MaidProfile {
   id?: number;
   fullName: string;
   referenceCode: string;
+  status?: string;
   type: string;
   nationality: string;
   dateOfBirth: string;
@@ -33,6 +34,7 @@ export interface MaidProfile {
 export const defaultMaidProfile: MaidProfile = {
   fullName: "",
   referenceCode: "",
+  status: "available",
   type: "",
   nationality: "",
   dateOfBirth: "",

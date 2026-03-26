@@ -15,6 +15,7 @@ import {
 interface MaidProfile {
   fullName: string
   referenceCode: string
+  status?: string
   type: string
   nationality: string
   dateOfBirth: string
@@ -42,6 +43,7 @@ interface MaidProfile {
 }
 
 const defaultMaidProfile = {
+  status: 'available',
   type: 'New maid',
   nationality: 'Filipino maid',
   dateOfBirth: '',
@@ -130,6 +132,7 @@ const toMaidRecord = (
 ): Omit<MaidRecord, 'id' | 'createdAt' | 'updatedAt'> => ({
   fullName: maid.fullName,
   referenceCode: maid.referenceCode,
+  status: maid.status ?? 'available',
   type: maid.type,
   nationality: maid.nationality,
   dateOfBirth: maid.dateOfBirth,
@@ -443,6 +446,7 @@ export const updateMaid = async (req: Request, res: Response) => {
     const payload = maid as MaidProfile
     const merged = {
       ...payload,
+      status: payload.status !== undefined ? payload.status : existing.status,
       photoDataUrl:
         payload.photoDataUrl !== undefined
           ? payload.photoDataUrl
