@@ -202,8 +202,9 @@ const ClientDashboard = () => {
     }
   };
 
-  const interestedCount = assignments.filter((item) => item.directSale.status === "interested").length;
+const interestedCount = assignments.filter((item) => item.directSale.status === "interested").length;
   const directHireCount = assignments.filter((item) => item.directSale.status === "direct_hire").length;
+  const agencyCount = assignments.length - directHireCount;
 
   return (
     <div className="client-page-theme min-h-screen bg-muted">
@@ -248,20 +249,24 @@ const ClientDashboard = () => {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-            <div className="rounded-2xl border bg-card p-4 shadow-sm">
-              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Assigned to You</p>
-              <p className="mt-2 font-display text-3xl font-bold text-foreground">{assignments.length}</p>
+            <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Assigned to You</p>
+                <p className="mt-2 font-display text-3xl font-bold text-foreground">{assignments.length}</p>
+              </div>
+              <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Through Agency</p>
+                <p className="mt-2 font-display text-3xl font-bold text-foreground">{agencyCount}</p>
+              </div>
+              <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Interested</p>
+                <p className="mt-2 font-display text-3xl font-bold text-foreground">{interestedCount}</p>
+              </div>
+              <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Direct Hire Ready</p>
+                <p className="mt-2 font-display text-3xl font-bold text-foreground">{directHireCount}</p>
+              </div>
             </div>
-            <div className="rounded-2xl border bg-card p-4 shadow-sm">
-              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Interested</p>
-              <p className="mt-2 font-display text-3xl font-bold text-foreground">{interestedCount}</p>
-            </div>
-            <div className="rounded-2xl border bg-card p-4 shadow-sm">
-              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Direct Hire Ready</p>
-              <p className="mt-2 font-display text-3xl font-bold text-foreground">{directHireCount}</p>
-            </div>
-          </div>
         </section>
 
         <section className="mb-8 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
