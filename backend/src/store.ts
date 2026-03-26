@@ -105,6 +105,20 @@ export interface ClientSessionRecord {
   createdAt: string
 }
 
+export interface AgencyAdminRecord {
+  id: number
+  username: string
+  password: string
+  agencyName: string
+  createdAt: string
+}
+
+export interface AgencyAdminSessionRecord {
+  token: string
+  adminId: number
+  createdAt: string
+}
+
 export interface DirectSaleRecord {
   id: number
   maidReferenceCode: string
@@ -117,6 +131,20 @@ export interface DirectSaleRecord {
   createdAt: string
 }
 
+export interface ChatMessageRecord {
+  id: number
+  clientId: number
+  conversationType: 'support' | 'agency'
+  agencyId?: number
+  agencyName?: string
+  senderRole: 'client' | 'agency'
+  senderName: string
+  message: string
+  createdAt: string
+  readByAgency: boolean
+  readByClient: boolean
+}
+
 interface AppData {
   companyProfile: CompanyProfileRecord
   momPersonnel: MOMPersonnelRecord[]
@@ -125,14 +153,19 @@ interface AppData {
   enquiries: EnquiryRecord[]
   clients: ClientRecord[]
   clientSessions: ClientSessionRecord[]
+  agencyAdmins: AgencyAdminRecord[]
+  agencyAdminSessions: AgencyAdminSessionRecord[]
   directSales: DirectSaleRecord[]
+  chatMessages: ChatMessageRecord[]
   counters: {
     momPersonnel: number
     testimonials: number
     maids: number
     enquiries: number
     clients: number
+    agencyAdmins: number
     directSales: number
+    chatMessages: number
   }
 }
 
@@ -224,14 +257,27 @@ const defaultData = (): AppData => ({
   ],
   clients: [],
   clientSessions: [],
+  agencyAdmins: [
+    {
+      id: 1,
+      username: 'admin',
+      password: 'admin123',
+      agencyName: 'Main Agency',
+      createdAt: now(),
+    },
+  ],
+  agencyAdminSessions: [],
   directSales: [],
+  chatMessages: [],
   counters: {
     momPersonnel: 1,
     testimonials: 1,
     maids: 1,
     enquiries: 6,
     clients: 1,
+    agencyAdmins: 2,
     directSales: 1,
+    chatMessages: 1,
   },
 })
 
@@ -272,7 +318,17 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     enquiries: raw.enquiries ?? defaults.enquiries,
     clients: raw.clients ?? defaults.clients,
     clientSessions: raw.clientSessions ?? defaults.clientSessions,
+    agencyAdmins: raw.agencyAdmins ?? defaults.agencyAdmins,
+    agencyAdminSessions:
+      raw.agencyAdminSessions ?? defaults.agencyAdminSessions,
     directSales: raw.directSales ?? defaults.directSales,
+    chatMessages:
+      raw.chatMessages?.map((message) => ({
+        ...message,
+        conversationType: message.conversationType ?? 'support',
+        agencyId: message.agencyId,
+        agencyName: message.agencyName ?? '',
+      })) ?? defaults.chatMessages,
     counters: {
       momPersonnel:
         raw.counters?.momPersonnel ??
@@ -290,9 +346,15 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       clients:
         raw.counters?.clients ??
         ((raw.clients?.length ?? 0) + 1 || defaults.counters.clients),
+      agencyAdmins:
+        raw.counters?.agencyAdmins ??
+        ((raw.agencyAdmins?.length ?? 0) + 1 || defaults.counters.agencyAdmins),
       directSales:
         raw.counters?.directSales ??
         ((raw.directSales?.length ?? 0) + 1 || defaults.counters.directSales),
+      chatMessages:
+        raw.counters?.chatMessages ??
+        ((raw.chatMessages?.length ?? 0) + 1 || defaults.counters.chatMessages),
     },
   }
 }
@@ -602,6 +664,84 @@ export const getClientsStore = async () => {
   return [...data.clients].sort((a, b) => b.id - a.id)
 }
 
+export const registerAgencyAdminStore = async (payload: {
+  username: string
+  password: string
+  agencyName: string
+}) => {
+  const data = await loadData()
+  const existing = data.agencyAdmins.find(
+    (admin) => admin.username.toLowerCase() === payload.username.toLowerCase()
+  )
+
+  if (existing) {
+    throw new Error('AGENCY_ADMIN_USERNAME_EXISTS')
+  }
+
+  const record: AgencyAdminRecord = {
+    id: data.counters.agencyAdmins++,
+    username: payload.username,
+    password: payload.password,
+    agencyName: payload.agencyName,
+    createdAt: now(),
+  }
+
+  data.agencyAdmins.unshift(record)
+  await saveData(data)
+  return record
+}
+
+export const authenticateAgencyAdminStore = async (
+  username: string,
+  password: string
+) => {
+  const data = await loadData()
+  return (
+    data.agencyAdmins.find(
+      (admin) =>
+        admin.username.toLowerCase() === username.toLowerCase() &&
+        admin.password === password
+    ) ?? null
+  )
+}
+
+export const createAgencyAdminSessionStore = async (adminId: number) => {
+  const data = await loadData()
+  data.agencyAdminSessions = data.agencyAdminSessions.filter(
+    (session) => session.adminId !== adminId
+  )
+
+  const session: AgencyAdminSessionRecord = {
+    token: randomBytes(24).toString('hex'),
+    adminId,
+    createdAt: now(),
+  }
+
+  data.agencyAdminSessions.unshift(session)
+  await saveData(data)
+  return session
+}
+
+export const deleteAgencyAdminSessionStore = async (token: string) => {
+  const data = await loadData()
+  const existing = data.agencyAdminSessions.find(
+    (session) => session.token === token
+  )
+  if (!existing) return null
+  data.agencyAdminSessions = data.agencyAdminSessions.filter(
+    (session) => session.token !== token
+  )
+  await saveData(data)
+  return existing
+}
+
+export const getAgencyAdminByTokenStore = async (token: string) => {
+  const data = await loadData()
+  const session = data.agencyAdminSessions.find((item) => item.token === token)
+  if (!session) return null
+  return data.agencyAdmins.find((item) => item.id === session.adminId) ?? null
+}
+
 export const registerClientStore = async (payload: {
   name: string
   company?: string
@@ -689,6 +829,170 @@ export const getClientOptionsStore = async () => {
     phone: client.company || 'N/A',
     enquiryDate: client.createdAt,
   }))
+}
+
+export const getDirectSalesStore = async () => {
+  const data = await loadData()
+  return [...data.directSales].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+}
+
+export const getChatMessagesForClientStore = async (
+  clientId: number,
+  conversationType: 'support' | 'agency' = 'support',
+  agencyId?: number
+) => {
+  const data = await loadData()
+  const client = data.clients.find((item) => item.id === clientId)
+  if (!client) {
+    throw new Error('CLIENT_NOT_FOUND')
+  }
+
+  return data.chatMessages
+    .filter(
+      (message) =>
+        message.clientId === clientId &&
+        message.conversationType === conversationType &&
+        (conversationType === 'support' || message.agencyId === agencyId)
+    )
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+}
+
+export const getChatConversationsStore = async () => {
+  const data = await loadData()
+  const conversations = new Map<
+    string,
+    {
+      key: string
+      clientId: number
+      conversationType: 'support' | 'agency'
+      agencyId?: number
+      agencyName?: string
+      clientName: string
+      clientEmail: string
+      clientCompany: string
+      lastMessage: string
+      lastMessageAt: string
+      unreadCount: number
+    }
+  >()
+
+  data.chatMessages.forEach((message) => {
+    const client = data.clients.find((item) => item.id === message.clientId)
+    if (!client) return
+
+    const key = `${message.clientId}:${message.conversationType}:${message.agencyId ?? 0}`
+    const existing = conversations.get(key)
+    const unreadIncrement =
+      message.senderRole === 'client' && !message.readByAgency ? 1 : 0
+
+    if (!existing) {
+      conversations.set(key, {
+        key,
+        clientId: client.id,
+        conversationType: message.conversationType,
+        agencyId: message.agencyId,
+        agencyName: message.agencyName || '',
+        clientName: client.name,
+        clientEmail: client.email,
+        clientCompany: client.company || '',
+        lastMessage: message.message,
+        lastMessageAt: message.createdAt,
+        unreadCount: unreadIncrement,
+      })
+      return
+    }
+
+    existing.unreadCount += unreadIncrement
+    if (
+      new Date(message.createdAt).getTime() >=
+      new Date(existing.lastMessageAt).getTime()
+    ) {
+      existing.lastMessage = message.message
+      existing.lastMessageAt = message.createdAt
+    }
+  })
+
+  return Array.from(conversations.values()).sort(
+    (a, b) =>
+      new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+  )
+}
+
+export const createChatMessageStore = async (payload: {
+  clientId: number
+  conversationType: 'support' | 'agency'
+  agencyId?: number
+  agencyName?: string
+  senderRole: 'client' | 'agency'
+  senderName: string
+  message: string
+}) => {
+  const data = await loadData()
+  const client = data.clients.find((item) => item.id === payload.clientId)
+  if (!client) {
+    throw new Error('CLIENT_NOT_FOUND')
+  }
+
+  const record: ChatMessageRecord = {
+    id: data.counters.chatMessages++,
+    clientId: payload.clientId,
+    conversationType: payload.conversationType,
+    agencyId: payload.agencyId,
+    agencyName: payload.agencyName ?? '',
+    senderRole: payload.senderRole,
+    senderName: payload.senderName,
+    message: payload.message,
+    createdAt: now(),
+    readByAgency: payload.senderRole === 'agency',
+    readByClient: payload.senderRole === 'client',
+  }
+
+  data.chatMessages.push(record)
+  await saveData(data)
+  return record
+}
+
+export const markChatMessagesReadForAgencyStore = async (
+  clientId: number,
+  conversationType: 'support' | 'agency' = 'support',
+  agencyId?: number
+) => {
+  const data = await loadData()
+  data.chatMessages = data.chatMessages.map((message) =>
+    message.clientId === clientId &&
+    message.senderRole === 'client' &&
+    message.conversationType === conversationType &&
+    (conversationType === 'support' || message.agencyId === agencyId)
+      ? { ...message, readByAgency: true }
+      : message
+  )
+  await saveData(data)
+}
+
+export const markChatMessagesReadForClientStore = async (
+  clientId: number,
+  conversationType: 'support' | 'agency' = 'support',
+  agencyId?: number
+) => {
+  const data = await loadData()
+  data.chatMessages = data.chatMessages.map((message) =>
+    message.clientId === clientId &&
+    message.senderRole === 'agency' &&
+    message.conversationType === conversationType &&
+    (conversationType === 'support' || message.agencyId === agencyId)
+      ? { ...message, readByClient: true }
+      : message
+  )
+  await saveData(data)
+}
+
+export const getUnreadAgencyChatCountStore = async () => {
+  const data = await loadData()
+  return data.chatMessages.filter(
+    (message) => message.senderRole === 'client' && !message.readByAgency
+  ).length
 }
 
 export const createDirectSaleStore = async (

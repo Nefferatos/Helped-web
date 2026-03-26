@@ -8,8 +8,10 @@ import {
   deleteMomPersonnelStore,
   deleteTestimonialStore,
   getCompanyBundle,
+  getDirectSalesStore,
   getEnquiriesStore,
   getMaidsStore,
+  getUnreadAgencyChatCountStore,
   updateCompanyProfileStore,
   updateMomPersonnelStore,
 } from '../store'
@@ -71,10 +73,12 @@ export const getCompanyProfile = async (req: Request, res: Response) => {
 
 export const getCompanySummary = async (req: Request, res: Response) => {
   try {
-    const [companyBundle, maids, enquiries] = await Promise.all([
+    const [companyBundle, maids, enquiries, directSales, unreadAgencyChats] = await Promise.all([
       getCompanyBundle(),
       getMaidsStore(),
       getEnquiriesStore(),
+      getDirectSalesStore(),
+      getUnreadAgencyChatCountStore(),
     ])
 
     const publicMaids = maids.filter((maid) => maid.isPublic).length
@@ -94,6 +98,9 @@ export const getCompanySummary = async (req: Request, res: Response) => {
       totalMaids: maids.length,
       maidsWithPhotos,
       enquiries: enquiries.length,
+      requests: directSales.length,
+      pendingRequests: directSales.filter((request) => request.status === 'pending').length,
+      unreadAgencyChats,
       momPersonnel: companyBundle.momPersonnel.length,
       testimonials: companyBundle.testimonials.length,
       galleryImages: companyBundle.companyProfile.gallery_image_data_urls?.length ?? 0,

@@ -78,7 +78,11 @@ const EditMaids = () => {
   const toggle = (ref: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(ref) ? next.delete(ref) : next.add(ref);
+      if (next.has(ref)) {
+        next.delete(ref);
+      } else {
+        next.add(ref);
+      }
       return next;
     });
   };

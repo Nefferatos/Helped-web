@@ -80,6 +80,19 @@ export const formatDate = (value?: string) => {
   return date.toLocaleDateString();
 };
 
+export const getPrimaryPhoto = (maid: MaidProfile) =>
+  Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl || "";
+
+export const getPublicIntro = (maid: MaidProfile) => String((maid.introduction as Record<string, unknown>)?.publicIntro || "").trim();
+
+export const getExperienceBucket = (maid: MaidProfile) => {
+  const count = Array.isArray(maid.employmentHistory) ? maid.employmentHistory.length : 0;
+  if (count >= 5) return "5+ Years";
+  if (count >= 3) return "3-5 Years";
+  if (count >= 1) return "1-2 Years";
+  return "No Experience";
+};
+
 export const calculateAge = (dateOfBirth?: string) => {
   if (!dateOfBirth) {
     return null;
@@ -100,3 +113,4 @@ export const calculateAge = (dateOfBirth?: string) => {
 
   return age;
 };
+

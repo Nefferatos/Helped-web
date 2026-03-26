@@ -1,5 +1,10 @@
 import { Request } from 'express'
-import { ClientRecord, getClientByTokenStore } from './store'
+import {
+  AgencyAdminRecord,
+  ClientRecord,
+  getAgencyAdminByTokenStore,
+  getClientByTokenStore,
+} from './store'
 
 const getBearerToken = (req: Request) => {
   const header = req.headers.authorization
@@ -19,6 +24,17 @@ export const getAuthenticatedClient = async (
   }
 
   return getClientByTokenStore(token)
+}
+
+export const getAuthenticatedAgencyAdmin = async (
+  req: Request
+): Promise<AgencyAdminRecord | null> => {
+  const token = getBearerToken(req)
+  if (!token) {
+    return null
+  }
+
+  return getAgencyAdminByTokenStore(token)
 }
 
 export const getRequestToken = (req: Request) => getBearerToken(req)

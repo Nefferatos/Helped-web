@@ -7,7 +7,9 @@ import maidRoutes from './routes/maidRoutes'
 import enquiryRoutes from './routes/enquiryRoutes'
 import directSaleRoutes from './routes/directSaleRoutes'
 import clientAuthRoutes from './routes/clientAuthRoutes'
+import agencyAuthRoutes from './routes/agencyAuthRoutes'
 import clientRoutes from './routes/clientRoutes'
+import chatRoutes from './routes/chatRoutes'
 import { initializeStore } from './store'
 
 const app: Express = express()
@@ -44,7 +46,9 @@ app.use('/api/enquiries', enquiryRoutes)
 app.use('/api/direct-sales', directSaleRoutes)
 app.use('/api/direct-sell', directSaleRoutes)
 app.use('/api/client-auth', clientAuthRoutes)
+app.use('/api/agency-auth', agencyAuthRoutes)
 app.use('/api/client', clientRoutes)
+app.use('/api/chats', chatRoutes)
 
 if (hasFrontendSite) {
   app.use(express.static(frontendDist))
