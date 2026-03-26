@@ -300,58 +300,94 @@ const ClientDashboard = () => {
               {isLoading ? "Loading public maid profiles..." : `${filteredPublicMaids.length} public maids matched your dashboard search.`}
             </p>
 
-            <div id="discover-maids" className="grid gap-4 md:grid-cols-2">
-              {isLoading ? (
-                <div className="md:col-span-2 rounded-2xl border bg-muted/40 p-8 text-center font-body text-muted-foreground">
-                  Loading public maid profiles...
-                </div>
-              ) : filteredPublicMaids.length === 0 ? (
-                <div className="md:col-span-2 rounded-2xl border bg-muted/40 p-8 text-center">
-                  <p className="font-display text-xl font-semibold text-foreground">No matching public maids found</p>
-                  <p className="mt-2 font-body text-sm text-muted-foreground">Try a broader search or another nationality/type filter.</p>
-                </div>
-              ) : (
-                filteredPublicMaids.slice(0, 6).map((maid) => {
-                  const age = calculateAge(maid.dateOfBirth);
-                  const photo = getPrimaryPhoto(maid);
+            <div id="discover-maids" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
+                {isLoading ? (
+                  <div className="col-span-full rounded-2xl border bg-muted/40 p-4 text-center font-body text-muted-foreground">
+                    Loading public maid profiles...
+                  </div>
+                ) : filteredPublicMaids.length === 0 ? (
+                  <div className="col-span-full rounded-2xl border bg-muted/40 p-4 text-center">
+                    <p className="font-display text-lg font-semibold text-foreground">
+                      No matching public maids found
+                    </p>
+                    <p className="mt-1 font-body text-sm text-muted-foreground">
+                      Try a broader search or another filter.
+                    </p>
+                  </div>
+                ) : (
+                  filteredPublicMaids.slice(0, 6).map((maid) => {
+                    const age = calculateAge(maid.dateOfBirth);
+                    const photo = getPrimaryPhoto(maid);
 
-                  return (
-                    <article key={maid.referenceCode} className="overflow-hidden rounded-2xl border bg-muted/20">
-                      <div className="grid min-h-[210px] gap-0 sm:grid-cols-[120px_1fr]">
-                        <div className="flex items-center justify-center bg-muted">
+                    return (
+                      <article
+                        key={maid.referenceCode}
+                        className="w-full max-w-xs overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition flex flex-col">
+                        <div className="h-36 w-full bg-muted overflow-hidden">
                           {photo ? (
-                            <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
+                            <img
+                              src={photo}
+                              alt={maid.fullName}
+                              className="h-full w-full object-cover"
+                            />
                           ) : (
-                            <div className="px-3 text-center font-body text-xs text-muted-foreground">No photo</div>
+                            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                              No photo
+                            </div>
                           )}
                         </div>
-                        <div className="p-4">
-                          <h3 className="font-display text-xl font-bold text-foreground">{maid.fullName}</h3>
-                          <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="rounded-full bg-accent px-2.5 py-1 font-body text-xs font-medium text-accent-foreground">{maid.nationality || "N/A"}</span>
-                            <span className="rounded-full bg-secondary/20 px-2.5 py-1 font-body text-xs font-medium text-foreground">{maid.type || "N/A"}</span>
-                            <span className="rounded-full bg-muted px-2.5 py-1 font-body text-xs font-medium text-foreground">{getExperienceBucket(maid)}</span>
+
+                        <div className="flex flex-col p-3 space-y-2 flex-1">
+                          <div className="text-center">
+                            <h3 className="font-semibold text-base text-foreground">
+                              {maid.fullName}
+                            </h3>
+                            <p className="text-[10px] text-muted-foreground">
+                              {maid.referenceCode}
+                            </p>
                           </div>
-                          <div className="mt-3 grid grid-cols-2 gap-2 font-body text-sm text-foreground">
-                            <p><span className="text-muted-foreground">Age:</span> {age ?? "N/A"}</p>
-                            <p><span className="text-muted-foreground">Education:</span> {maid.educationLevel || "N/A"}</p>
+
+                          <div className="flex flex-wrap justify-center gap-1">
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-accent text-accent-foreground">
+                              {maid.nationality || "N/A"}
+                            </span>
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-secondary/20">
+                              {maid.type || "N/A"}
+                            </span>
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-muted">
+                              {getExperienceBucket(maid)}
+                            </span>
                           </div>
-                          <p className="mt-3 line-clamp-3 font-body text-sm leading-6 text-muted-foreground">
-                            {getPublicIntro(maid) || "Public introduction will be available soon for this profile."}
+
+                          <div className="text-[12px] text-foreground space-y-0.5 text-center">
+                            <p>
+                              <span className="text-muted-foreground">Age:</span>{" "}
+                              {age ?? "N/A"}
+                            </p>
+                            <p>
+                              <span className="text-muted-foreground">Education:</span>{" "}
+                              {maid.educationLevel || "N/A"}
+                            </p>
+                          </div>
+
+                          <p className="text-[12px] text-muted-foreground line-clamp-2 text-center">
+                            {getPublicIntro(maid) ||
+                              "Public introduction will be available soon."}
                           </p>
-                          <div className="mt-4">
-                            <Button variant="outline" size="sm" asChild>
-                              <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Profile</Link>
+
+                          <div className="mt-auto">
+                            <Button variant="outline" size="sm" className="w-full" asChild>
+                              <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                                View Profile
+                              </Link>
                             </Button>
                           </div>
                         </div>
-                      </div>
-                    </article>
-                  );
-                })
-              )}
-            </div>
+                      </article>
+                    );
+                  })
+                )}
+              </div>
           </div>
 
           <div className="grid gap-6">
