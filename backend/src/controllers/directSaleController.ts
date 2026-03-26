@@ -2,8 +2,19 @@ import { Request, Response } from 'express'
 import {
   createDirectSaleStore,
   getClientOptionsStore,
+  getDirectSalesStore,
   updateDirectSaleStatusStore,
 } from '../store'
+
+export const getDirectSales = async (req: Request, res: Response) => {
+  try {
+    const directSales = await getDirectSalesStore()
+    res.status(200).json({ directSales })
+  } catch (error) {
+    console.error('Error fetching direct sales:', error)
+    res.status(500).json({ error: 'Failed to fetch direct sales' })
+  }
+}
 
 export const getClientOptions = async (req: Request, res: Response) => {
   try {

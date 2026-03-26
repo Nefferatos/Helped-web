@@ -493,12 +493,14 @@ const AgencyProfileEdit = () => {
   };
 
   return (
-    <div className="page-container">
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">Edit Agency Profile</h2>
-        <button className="text-sm text-primary hover:underline" onClick={() => navigate(adminPath("/agency-profile"))}>
-          Back to Agency Profile
-        </button>
+    <div className="container mx-auto py-10 px-4 lg:px-8 max-w-7xl space-y-8">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">Edit Agency Profile</h1>
+        <Button variant="outline" asChild>
+          <button onClick={() => navigate(adminPath("/agency-profile"))}>
+            ← Back to Profile
+          </button>
+        </Button>
       </div>
 
       <div className="content-card animate-fade-in-up">

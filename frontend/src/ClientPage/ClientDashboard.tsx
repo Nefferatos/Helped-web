@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, BriefcaseBusiness, CheckCircle2, LogOut, Mail, Phone, Search, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, CheckCircle2, LogOut, Mail, MessageCircle, Phone, Search, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
@@ -176,7 +176,7 @@ const ClientDashboard = () => {
           action === "interested"
             ? "Marked as interested."
             : action === "direct-hire"
-            ? "Marked for direct hire."
+            ? "Marked as accepted."
             : "Marked as rejected.",
       });
     } catch (error) {
@@ -228,6 +228,11 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
             <Button variant="outline" onClick={() => void handleLogout()}>
               <LogOut className="mr-2 h-4 w-4" /> Logout
             </Button>
+            <Button variant="outline" asChild>
+              <Link to="/client/support-chat">
+                <MessageCircle className="mr-2 h-4 w-4" /> Chat Support
+              </Link>
+            </Button>
           </div>
         </div>
 
@@ -263,7 +268,7 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                 <p className="mt-2 font-display text-3xl font-bold text-foreground">{interestedCount}</p>
               </div>
               <div className="rounded-2xl border bg-card p-4 shadow-sm">
-                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Direct Hire Ready</p>
+                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Accepted</p>
                 <p className="mt-2 font-display text-3xl font-bold text-foreground">{directHireCount}</p>
               </div>
             </div>
@@ -392,6 +397,11 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                 <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-primary" /> {company?.contact_email || "N/A"}</p>
                 <p className="font-body text-sm text-muted-foreground">{company?.office_hours_regular || "Office hours will be updated soon."}</p>
                 <p className="font-body text-sm leading-6 text-muted-foreground">{company?.about_us || "The agency will assist with matching, shortlisting, and follow-up support."}</p>
+                <Button variant="outline" asChild>
+                  <Link to="/client/support-chat">
+                    <MessageCircle className="mr-2 h-4 w-4" /> Open Support Chat
+                  </Link>
+                </Button>
               </div>
             </section>
           </div>
@@ -480,7 +490,7 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                             disabled={actioningId === directSale.id}
                             onClick={() => void updateAssignmentStatus(directSale.id, "direct-hire")}
                           >
-                            Direct Hire
+                            Accept
                           </Button>
                           <Button
                             variant="destructive"

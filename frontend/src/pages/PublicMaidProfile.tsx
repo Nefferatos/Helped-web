@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getClientToken } from "@/lib/clientAuth";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
+import HireConfirmationDialog from "@/components/HireConfirmationDialog";
 
 interface CompanyProfileApi {
   company_name?: string;
@@ -32,6 +35,8 @@ const PublicMaidProfile = () => {
   const [maid, setMaid] = useState<MaidProfile | null>(null);
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isHireDialogOpen, setIsHireDialogOpen] = useState(false);
+  const isLoggedIn = Boolean(getClientToken());
 
   useEffect(() => {
     const loadData = async () => {
@@ -119,12 +124,13 @@ const PublicMaidProfile = () => {
   const age = calculateAge(maid.dateOfBirth);
   const photo = getPrimaryPhoto(maid);
   const publicIntro = getPublicIntro(maid);
+  const agencyChatName = company?.company_name || company?.short_name || "Agency";
 
   return (
     <div className="client-page-theme min-h-screen bg-card">
       <div className="container py-10 md:py-14">
-        <Link to="/" className="mb-6 inline-flex items-center gap-2 font-body text-sm text-primary hover:underline">
-          <ArrowLeft className="h-4 w-4" /> Back to Home
+        <Link to="/agencies" className="mb-6 inline-flex items-center gap-2 font-body text-sm text-primary hover:underline">
+          <ArrowLeft className="h-4 w-4" /> Back to Agencies
         </Link>
 
         <div className="grid gap-6 xl:grid-cols-[1.1fr_1.4fr]">
@@ -180,7 +186,7 @@ const PublicMaidProfile = () => {
 
           <article className="rounded-2xl border bg-card p-6 shadow-sm">
             <div className="grid gap-6 md:grid-cols-[220px_1fr]">
-              <div className="overflow-hidden rounded-2xl border bg-muted">
+              <div className={`overflow-hidden rounded-2xl border bg-muted ${!isLoggedIn ? "blur-md" : ""}`}>
                 {photo ? (
                   <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
                 ) : (
@@ -190,7 +196,7 @@ const PublicMaidProfile = () => {
                 )}
               </div>
 
-              <div>
+              <div className={!isLoggedIn ? "select-none blur-sm" : ""}>
                 <div className="mb-4">
                   <h1 className="font-display text-3xl font-bold text-foreground">{maid.fullName}</h1>
                   <p className="mt-1 font-body text-sm uppercase tracking-wide text-muted-foreground">
@@ -225,7 +231,7 @@ const PublicMaidProfile = () => {
               </div>
             </div>
 
-            <div className="mt-8 grid gap-6 lg:grid-cols-2">
+            <div className={`mt-8 grid gap-6 lg:grid-cols-2 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
               <div>
                 <h3 className="mb-3 font-display text-xl font-semibold text-foreground">Language Skills</h3>
                 <div className="space-y-2 font-body text-sm text-foreground">
@@ -259,7 +265,7 @@ const PublicMaidProfile = () => {
             </div>
 
             {employment.length > 0 ? (
-              <div className="mt-8">
+              <div className={`mt-8 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
                 <h3 className="mb-3 font-display text-xl font-semibold text-foreground">Employment History</h3>
                 <div className="overflow-x-auto rounded-2xl border">
                   <table className="w-full min-w-[640px] text-sm">
@@ -291,7 +297,47 @@ const PublicMaidProfile = () => {
                 </div>
               </div>
             ) : null}
+            {isLoggedIn ? (
+              <div className="mt-8 p-6 bg-accent/10 rounded-xl">
+                <h3 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
+                  <Check className="h-5 w-5 text-accent-foreground" />
+                  Ready to Accept?
+                </h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  This maid matches your requirements. Accept to move into the hiring process, review terms, and send your request.
+                </p>
+                <div className="flex flex-col gap-3 md:flex-row">
+                  <Button size="lg" className="w-full" onClick={() => setIsHireDialogOpen(true)}>
+                    Accept and Start Hiring Process
+                  </Button>
+                  <Button size="lg" variant="outline" className="w-full" asChild>
+                    <Link to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(agencyChatName)}`}>
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      Chat with Agency
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-8 rounded-xl border bg-muted/30 p-6 text-center">
+                <h3 className="font-display text-xl font-bold text-foreground">Login Required</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Photos, biodata, search access, and hiring actions are hidden until employer login.
+                </p>
+                <div className="mt-4">
+                  <Button asChild>
+                    <Link to="/employer-login">Employer Login</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
           </article>
+
+          <HireConfirmationDialog
+            maid={maid}
+            open={isHireDialogOpen}
+            onOpenChange={setIsHireDialogOpen}
+          />
         </div>
       </div>
     </div>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Edit } from "lucide-react";
+import { Edit, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 
@@ -147,15 +148,26 @@ const AgencyProfile = () => {
   ];
 
   return (
-    <div className="page-container">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">Agency Profile</h2>
-        <button
-          className="flex items-center gap-1 text-sm text-primary hover:underline"
-          onClick={() => navigate(adminPath("/agency-profile/edit"))}
-        >
-          <Edit className="h-4 w-4" /> Edit Agency Profile
-        </button>
+    <div className="container mx-auto py-10 px-4 lg:px-8 max-w-7xl space-y-8">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">Agency Profile</h1>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link to={adminPath("/agency-profile/edit")}>
+              <Edit className="h-4 w-4 mr-1" />
+              Edit Profile
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={adminPath("/employment-contracts")}>Contracts</Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={adminPath("/chat-support")}>
+              <MessageCircle className="mr-1 h-4 w-4" />
+              Chat
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="content-card animate-fade-in-up space-y-6">

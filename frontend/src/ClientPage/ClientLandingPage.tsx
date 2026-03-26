@@ -110,6 +110,7 @@ const ClientLandingPage = () => {
     experience: "Any Experience",
     ageGroup: "Any Age",
   });
+  const isLoggedIn = Boolean(clientUser);
 
   useEffect(() => {
     const loadLandingData = async () => {
@@ -231,6 +232,11 @@ const ClientLandingPage = () => {
   }, [allPublicMaids, submittedFilters]);
 
   const handleSearch = () => {
+    if (!isLoggedIn) {
+      toast.error("Please log in to search maid profiles");
+      navigate("/employer-login");
+      return;
+    }
     setSubmittedFilters({ keyword, nationality, experience, ageGroup });
     window.setTimeout(() => {
       document.getElementById("maid-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -260,27 +266,25 @@ const ClientLandingPage = () => {
           <Link to="/" className="font-display text-xl font-bold text-foreground">
             MaidAgency
           </Link>
-          <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
-            <button
-              type="button"
-              onClick={() => setIsAgencyModalOpen(true)}
-              className="transition-colors hover:text-primary"
-            >
-              Through Agency
-            </button>
-            <a href="#services" className="transition-colors hover:text-primary">
-              Services
-            </a>
-            <a href="#search" className="transition-colors hover:text-primary">
-              Search Maids
-            </a>
-            <a href="#why" className="transition-colors hover:text-primary">
-              About
-            </a>
-            <a href="#contact" className="transition-colors hover:text-primary">
-              Contact
-            </a>
-          </nav>
+          {clientUser ? (
+            <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
+              <Link to="/agencies" className="transition-colors hover:text-primary">
+                Browse Agencies
+              </Link>
+              <a href="#services" className="transition-colors hover:text-primary">
+                Services
+              </a>
+              <a href="#search" className="transition-colors hover:text-primary">
+                Search Maids
+              </a>
+              <a href="#why" className="transition-colors hover:text-primary">
+                About
+              </a>
+              <a href="#contact" className="transition-colors hover:text-primary">
+                Contact
+              </a>
+            </nav>
+          ) : null}
           {clientUser ? (
             <div className="flex items-center gap-2">
               <div className="hidden rounded-full border bg-muted px-3 py-1 text-right md:block">
@@ -330,15 +334,19 @@ const ClientLandingPage = () => {
               </div>
             ) : null}
             <div className="flex flex-wrap gap-3">
-              <Button size="lg" className="font-body" onClick={() => setIsAgencyModalOpen(true)}>
-                Through Agency
+              <Button size="lg" className="font-body" asChild>
+                <Link to="/agencies">Browse Agencies</Link>
               </Button>
-              <Button variant="outline" size="lg" className="font-body">
-                Direct Hire
-              </Button>
-              <Button variant="outline" size="lg" className="font-body">
-                Bio Data Direct Sell
-              </Button>
+              {clientUser ? (
+                <>
+                  <Button variant="outline" size="lg" className="font-body">
+                    Direct Hire
+                  </Button>
+                  <Button variant="outline" size="lg" className="font-body">
+                    Bio Data Direct Sell
+                  </Button>
+                </>
+              ) : null}
             </div>
           </div>
           <div className="relative">
@@ -358,181 +366,7 @@ const ClientLandingPage = () => {
         </div>
       </section>
 
-      <Dialog open={isAgencyModalOpen} onOpenChange={setIsAgencyModalOpen}>
-        <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto p-0">
-          <div className="p-6 md:p-8">
-            <DialogHeader className="mb-6 pr-8">
-              <DialogTitle className="font-display text-3xl font-bold text-foreground">Through Agency</DialogTitle>
-              <DialogDescription className="font-body text-sm text-muted-foreground">
-                View the agency details and browse public maid profiles available through the agency in one place.
-              </DialogDescription>
-            </DialogHeader>
 
-            <div className="grid gap-6 xl:grid-cols-[1.05fr_1.35fr]">
-              <article className="rounded-2xl border bg-muted/40 p-6">
-                <div className="mb-5 flex items-center gap-4">
-                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border bg-card">
-                    {company?.logo_data_url ? (
-                      <img src={company.logo_data_url} alt={company.company_name || "Agency logo"} className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="font-display text-lg font-bold text-primary">MA</span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-display text-2xl font-bold text-foreground">
-                      {company?.company_name || company?.short_name || "Agency Profile"}
-                    </h3>
-                    <p className="font-body text-sm text-muted-foreground">License No: {company?.license_no || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 font-body text-sm text-foreground sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground">Contact Person</p>
-                    <p className="mt-1">{company?.contact_person || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground">Phone</p>
-                    <p className="mt-1">{company?.contact_phone || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground">Email</p>
-                    <p className="mt-1 break-all">{company?.contact_email || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground">Website</p>
-                    <p className="mt-1 break-all">{company?.contact_website || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="mt-5 space-y-4">
-                  <div>
-                    <p className="font-body text-xs uppercase tracking-wider text-muted-foreground">Address</p>
-                    <p className="mt-1 font-body text-sm text-foreground">
-                      {[company?.address_line1, company?.address_line2, company?.postal_code, company?.country].filter(Boolean).join(", ") || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-body text-xs uppercase tracking-wider text-muted-foreground">Office Hours</p>
-                    <p className="mt-1 font-body text-sm text-foreground">{company?.office_hours_regular || "N/A"}</p>
-                    {company?.office_hours_other ? (
-                      <p className="mt-1 font-body text-sm text-muted-foreground">{company.office_hours_other}</p>
-                    ) : null}
-                  </div>
-                  <div>
-                    <p className="font-body text-xs uppercase tracking-wider text-muted-foreground">About the Agency</p>
-                    <p className="mt-1 font-body text-sm leading-6 text-muted-foreground">
-                      {company?.about_us || "Agency information will be updated soon."}
-                    </p>
-                  </div>
-                </div>
-              </article>
-
-              <article className="rounded-2xl border bg-card p-6 shadow-sm">
-                <div className="mb-5 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-display text-2xl font-bold text-foreground">Public Maids Through Agency</h3>
-                    <p className="mt-1 font-body text-sm text-muted-foreground">
-                      {isLoading ? "Loading public profiles..." : `${agencyFilteredMaids.length} profiles found`}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <input
-                    value={agencyKeyword}
-                    onChange={(event) => setAgencyKeyword(event.target.value)}
-                    className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground"
-                    placeholder="Search name, code, type"
-                  />
-                  <select
-                    value={agencyNationality}
-                    onChange={(event) => setAgencyNationality(event.target.value)}
-                    className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground"
-                  >
-                    {nationalityOptions.map((option) => (
-                      <option key={option}>{option}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={agencyType}
-                    onChange={(event) => setAgencyType(event.target.value)}
-                    className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground"
-                  >
-                    {typeOptions.map((option) => (
-                      <option key={option}>{option}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {isLoading ? (
-                  <div className="rounded-2xl border bg-muted/50 p-6 text-center font-body text-muted-foreground">
-                    Loading maid profiles...
-                  </div>
-                ) : agencyFilteredMaids.length === 0 ? (
-                  <div className="rounded-2xl border bg-muted/50 p-6 text-center">
-                    <p className="font-display text-xl font-semibold text-foreground">No public maids found</p>
-                    <p className="mt-2 font-body text-sm text-muted-foreground">
-                      Try a different keyword, nationality, or maid type.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {agencyFilteredMaids.slice(0, 4).map((maid) => {
-                      const age = calculateAge(maid.dateOfBirth);
-                      const photo = getPrimaryPhoto(maid);
-
-                      return (
-                        <article key={maid.referenceCode} className="grid gap-4 rounded-2xl border bg-muted/30 p-4 md:grid-cols-[96px_1fr]">
-                          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl bg-muted">
-                            {photo ? (
-                              <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
-                            ) : (
-                              <span className="px-2 text-center font-body text-xs text-muted-foreground">No photo</span>
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <p className="font-display text-xl font-bold text-foreground">{maid.fullName}</p>
-                                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <span className="rounded-full bg-accent px-2.5 py-1 font-body text-xs font-medium text-accent-foreground">
-                                  {maid.nationality || "N/A"}
-                                </span>
-                                <span className="rounded-full bg-secondary/20 px-2.5 py-1 font-body text-xs font-medium text-foreground">
-                                  {maid.type || "N/A"}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="mt-3 grid gap-2 font-body text-sm text-foreground sm:grid-cols-3">
-                              <p><span className="text-muted-foreground">Age:</span> {age ?? "N/A"}</p>
-                              <p><span className="text-muted-foreground">Experience:</span> {getExperienceBucket(maid)}</p>
-                              <p><span className="text-muted-foreground">Education:</span> {maid.educationLevel || "N/A"}</p>
-                            </div>
-
-                            <p className="mt-3 font-body text-sm leading-6 text-muted-foreground">
-                              {getPublicIntro(maid) || "Public introduction will be available soon for this profile."}
-                            </p>
-                          </div>
-                        </article>
-                      );
-                    })}
-
-                    {agencyFilteredMaids.length > 4 ? (
-                      <p className="font-body text-sm text-muted-foreground">
-                        Showing 4 of {agencyFilteredMaids.length} matching public maids. Use the full search below to explore more profiles.
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </article>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <section id="search" className="bg-muted py-8">
         <div className="container">
@@ -540,12 +374,26 @@ const ClientLandingPage = () => {
             <Users className="h-5 w-5 text-primary" />
             <h3 className="font-display text-lg font-semibold text-foreground">Find Your Ideal Match</h3>
           </div>
-          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {!isLoggedIn ? (
+            <div className="mb-4 rounded-2xl border bg-card p-6">
+              <p className="font-display text-xl font-semibold text-foreground">Login Required for Maid Search</p>
+              <p className="mt-2 font-body text-sm text-muted-foreground">
+                Maid photos, profile details, and search tools are only available after employer login.
+              </p>
+              <div className="mt-4">
+                <Button asChild>
+                  <Link to="/employer-login">Employer Login</Link>
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          <div className={`mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5 ${!isLoggedIn ? "opacity-50" : ""}`}>
             <div className="xl:col-span-1">
               <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Keyword</label>
               <input
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
+                disabled={!isLoggedIn}
                 className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground"
                 placeholder="Name, code, type"
               />
@@ -555,6 +403,7 @@ const ClientLandingPage = () => {
               <select
                 value={nationality}
                 onChange={(event) => setNationality(event.target.value)}
+                disabled={!isLoggedIn}
                 className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground"
               >
                 {nationalityOptions.map((option) => (
@@ -567,6 +416,7 @@ const ClientLandingPage = () => {
               <select
                 value={experience}
                 onChange={(event) => setExperience(event.target.value)}
+                disabled={!isLoggedIn}
                 className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground"
               >
                 <option>Any Experience</option>
@@ -580,6 +430,7 @@ const ClientLandingPage = () => {
               <select
                 value={ageGroup}
                 onChange={(event) => setAgeGroup(event.target.value)}
+                disabled={!isLoggedIn}
                 className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground"
               >
                 <option>Any Age</option>
@@ -589,13 +440,17 @@ const ClientLandingPage = () => {
               </select>
             </div>
             <div className="flex items-end">
-              <Button className="w-full gap-2 font-body" onClick={handleSearch}>
+              <Button className="w-full gap-2 font-body" onClick={handleSearch} disabled={!isLoggedIn}>
                 <Search className="h-4 w-4" /> Search Maids
               </Button>
             </div>
           </div>
           <p className="font-body text-sm text-muted-foreground">
-            {isLoading ? "Loading available public maids..." : `${filteredMaids.length} public maids matched your search.`}
+            {!isLoggedIn
+              ? "Login to search and unlock maid profile details."
+              : isLoading
+              ? "Loading available public maids..."
+              : `${filteredMaids.length} public maids matched your search.`}
           </p>
         </div>
       </section>
@@ -619,22 +474,36 @@ const ClientLandingPage = () => {
               <p className="mt-2 font-body text-muted-foreground">Try a different nationality, age group, or a broader keyword search.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {filteredMaids.map((maid) => {
+            <>
+              {!isLoggedIn ? (
+                <div className="mb-6 rounded-2xl border bg-muted/30 p-5 text-center">
+                  <p className="font-display text-xl font-semibold text-foreground">Login to Unlock Maid Profiles</p>
+                  <p className="mt-2 font-body text-sm text-muted-foreground">
+                    Guests can preview available public maids in blurred mode. Login to search, view full biodata, and continue hiring.
+                  </p>
+                  <div className="mt-4">
+                    <Button asChild>
+                      <Link to="/employer-login">Employer Login</Link>
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {filteredMaids.map((maid) => {
                 const age = calculateAge(maid.dateOfBirth);
                 const photo = getPrimaryPhoto(maid);
                 const publicIntro = getPublicIntro(maid);
                 return (
                   <article key={maid.referenceCode} className="overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
                     <div className="grid gap-0 sm:grid-cols-[170px_1fr]">
-                      <div className="flex h-full min-h-[220px] items-center justify-center bg-muted">
+                      <div className={`flex h-full min-h-[220px] items-center justify-center bg-muted ${!isLoggedIn ? "blur-md" : ""}`}>
                         {photo ? (
                           <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
                         ) : (
                           <div className="px-4 text-center font-body text-sm text-muted-foreground">No photo available</div>
                         )}
                       </div>
-                      <div className="space-y-3 p-5">
+                      <div className={`space-y-3 p-5 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
                         <div>
                           <p className="font-display text-2xl font-bold text-foreground">{maid.fullName}</p>
                           <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
@@ -666,8 +535,9 @@ const ClientLandingPage = () => {
                     </div>
                   </article>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            </>
           )}
         </div>
       </section>

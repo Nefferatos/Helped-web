@@ -1,6 +1,7 @@
 import express, { Router } from 'express'
 import {
   createDirectSale,
+  getDirectSales,
   getClientOptions,
   markDirectSaleDirectHire,
   markDirectSaleInterested,
@@ -9,6 +10,7 @@ import {
 
 const router: Router = express.Router()
 
+router.get('/', getDirectSales)
 router.get('/clients', getClientOptions)
 router.post('/', createDirectSale)
 router.post('/:referenceCode', createDirectSale)
