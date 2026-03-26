@@ -13,6 +13,11 @@ import heroImage from "./assets/hero-maid.jpg";
 import housekeepingImg from "./assets/housekeeping.jpg";
 import infantImg from "./assets/infant-care.jpg";
 import "./ClientTheme.css";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
+import { Menu } from "lucide-react";
+
+
+
 
 const services = [
   {
@@ -31,7 +36,7 @@ const services = [
     image: infantImg,
   },
   {
-    title: "Culinary Service",
+    title: "Child Care",
     description: "Personalized culinary experiences for your dietary preferences and nutrition needs.",
     image: culinaryImg,
   },
@@ -104,12 +109,20 @@ const ClientLandingPage = () => {
   const [agencyKeyword, setAgencyKeyword] = useState("");
   const [agencyNationality, setAgencyNationality] = useState("All Nationalities");
   const [agencyType, setAgencyType] = useState("All Types");
+  const [open, setOpen] = useState(false);
   const [submittedFilters, setSubmittedFilters] = useState({
     keyword: "",
     nationality: "All Nationalities",
     experience: "Any Experience",
     ageGroup: "Any Age",
   });
+
+  const navLinks = [
+  { label: "Services", href: "#services" },
+  { label: "Search Maids", href: "#search" },
+  { label: "About", href: "#why" },
+  { label: "Contact", href: "#contact" },
+];
 
   useEffect(() => {
     const loadLandingData = async () => {
@@ -255,52 +268,84 @@ const ClientLandingPage = () => {
 
   return (
     <div className="client-page-theme min-h-screen">
-      <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
-        <div className="container flex h-16 items-center justify-between">
+      <header className="sticky top-0 z-50 bg-card/95 backdrop-blur border-b border-border">
+        <div className="container flex items-center justify-between h-16">
           <Link to="/" className="font-display text-xl font-bold text-foreground">
             MaidAgency
           </Link>
-          <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
+
+          <nav className="hidden md:flex items-center gap-8 font-body text-sm font-medium">
             <button
               type="button"
               onClick={() => setIsAgencyModalOpen(true)}
-              className="transition-colors hover:text-primary"
+              className="transition-colors hover:text-primary text-foreground"
             >
               Through Agency
             </button>
-            <a href="#services" className="transition-colors hover:text-primary">
-              Services
-            </a>
-            <a href="#search" className="transition-colors hover:text-primary">
-              Search Maids
-            </a>
-            <a href="#why" className="transition-colors hover:text-primary">
-              About
-            </a>
-            <a href="#contact" className="transition-colors hover:text-primary">
-              Contact
-            </a>
+
+            {navLinks
+              .filter(link => link.label !== "Home")
+              .map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-foreground hover:text-primary transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))}
           </nav>
-          {clientUser ? (
-            <div className="flex items-center gap-2">
-              <div className="hidden rounded-full border bg-muted px-3 py-1 text-right md:block">
-                <p className="font-body text-xs font-semibold text-foreground">{clientUser.name}</p>
-                <p className="font-body text-[11px] text-muted-foreground">{clientUser.email}</p>
-              </div>
-              <Button size="sm" variant="outline" className="font-body" asChild>
-                <Link to="/client/dashboard">Client Dashboard</Link>
+
+          <Link to="/employer-login" className="hidden md:inline-flex">
+            <Button variant="default" size="sm" className="font-body">
+              Employer Login
+            </Button>
+          </Link>
+
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
               </Button>
-              <Button size="sm" className="font-body" onClick={() => void handleLogout()}>
-                Logout
-              </Button>
-            </div>
-          ) : (
-            <Link to="/employer-login">
-              <Button size="sm" className="font-body">
-                Employer Login
-              </Button>
-            </Link>
-          )}
+            </SheetTrigger>
+
+            <SheetContent side="right" className="w-64">
+              <SheetTitle className="font-display text-lg">Menu</SheetTitle>
+
+              <nav className="flex flex-col gap-4 mt-6 font-body text-base">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAgencyModalOpen(true);
+                    setOpen(false);
+                  }}
+                  className="text-left text-foreground hover:text-primary transition-colors py-1"
+                >
+                  Through Agency
+                </button>
+
+                {/* Other links (excluding Home) */}
+                {navLinks
+                  .filter(link => link.label !== "Home")
+                  .map((link) => (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setOpen(false)}
+                      className="text-foreground hover:text-primary transition-colors py-1"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
+
+                <Link to="/employer-login" onClick={() => setOpen(false)} className="mt-2">
+                  <Button variant="default" className="w-full font-body">
+                    Employer Login
+                  </Button>
+                </Link>
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </header>
 
@@ -610,65 +655,73 @@ const ClientLandingPage = () => {
           </div>
 
           {isLoading ? (
-            <div className="rounded-2xl border bg-muted/50 p-8 text-center font-body text-muted-foreground">
-              Loading maid profiles...
-            </div>
-          ) : filteredMaids.length === 0 ? (
-            <div className="rounded-2xl border bg-muted/50 p-8 text-center">
-              <p className="font-display text-2xl font-semibold text-foreground">No matching maids found</p>
-              <p className="mt-2 font-body text-muted-foreground">Try a different nationality, age group, or a broader keyword search.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {filteredMaids.map((maid) => {
-                const age = calculateAge(maid.dateOfBirth);
-                const photo = getPrimaryPhoto(maid);
-                const publicIntro = getPublicIntro(maid);
-                return (
-                  <article key={maid.referenceCode} className="overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
-                    <div className="grid gap-0 sm:grid-cols-[170px_1fr]">
-                      <div className="flex h-full min-h-[220px] items-center justify-center bg-muted">
-                        {photo ? (
-                          <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="px-4 text-center font-body text-sm text-muted-foreground">No photo available</div>
-                        )}
-                      </div>
-                      <div className="space-y-3 p-5">
-                        <div>
-                          <p className="font-display text-2xl font-bold text-foreground">{maid.fullName}</p>
-                          <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
-                        </div>
+  <div className="rounded-2xl border bg-muted/50 p-6 text-center font-body text-muted-foreground">
+    Loading maid profiles...
+  </div>
+) : filteredMaids.length === 0 ? (
+  <div className="rounded-2xl border bg-muted/50 p-6 text-center">
+    <p className="font-display text-xl font-semibold text-foreground">No matching maids found</p>
+    <p className="mt-2 font-body text-sm text-muted-foreground">
+      Try a different nationality, age group, or a broader keyword search.
+    </p>
+  </div>
+) : (
+  <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 justify-items-center">
+    {filteredMaids.map((maid) => {
+      const age = calculateAge(maid.dateOfBirth);
+      const photo = getPrimaryPhoto(maid);
+      const publicIntro = getPublicIntro(maid);
+      return (
+        <article
+          key={maid.referenceCode}
+          className="w-72 overflow-hidden rounded-2xl border bg-card shadow-sm transition-transform hover:scale-[1.02] hover:shadow-lg"
+        >
+          {/* Image Top */}
+          <div className="relative h-44 w-full overflow-hidden rounded-t-2xl bg-muted">
+            {photo ? (
+              <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center font-body text-sm text-muted-foreground">
+                No photo available
+              </div>
+            )}
+          </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full bg-accent px-2.5 py-1 font-body text-xs font-medium text-accent-foreground">
-                            {maid.nationality}
-                          </span>
-                          <span className="rounded-full bg-secondary/20 px-2.5 py-1 font-body text-xs font-medium text-foreground">
-                            {maid.type}
-                          </span>
-                          <span className="rounded-full bg-muted px-2.5 py-1 font-body text-xs font-medium text-foreground">
-                            {getExperienceBucket(maid)}
-                          </span>
-                        </div>
+          {/* Details */}
+          <div className="p-4 space-y-3 text-center">
+            <p className="font-display text-xl font-bold text-foreground">{maid.fullName}</p>
+            <p className="font-body text-[10px] uppercase tracking-wide text-muted-foreground">
+              {maid.referenceCode}
+            </p>
 
-                        <div className="grid grid-cols-2 gap-3 font-body text-sm text-foreground">
-                          <p><span className="text-muted-foreground">Age:</span> {age ?? "N/A"}</p>
-                          <p><span className="text-muted-foreground">Religion:</span> {maid.religion || "N/A"}</p>
-                          <p><span className="text-muted-foreground">Marital:</span> {maid.maritalStatus || "N/A"}</p>
-                          <p><span className="text-muted-foreground">Education:</span> {maid.educationLevel || "N/A"}</p>
-                        </div>
-
-                        <p className="font-body text-sm leading-6 text-muted-foreground">
-                          {publicIntro || "Public introduction will be available soon for this profile."}
-                        </p>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+            <div className="flex flex-wrap justify-center gap-1.5">
+              <span className="rounded-full bg-accent px-2 py-0.5 font-body text-[10px] font-medium text-accent-foreground">
+                {maid.nationality}
+              </span>
+              <span className="rounded-full bg-secondary/20 px-2 py-0.5 font-body text-[10px] font-medium text-foreground">
+                {maid.type}
+              </span>
+              <span className="rounded-full bg-muted px-2 py-0.5 font-body text-[10px] font-medium text-foreground">
+                {getExperienceBucket(maid)}
+              </span>
             </div>
-          )}
+
+            <div className="grid grid-cols-2 gap-2 text-left text-[12px] font-body text-foreground">
+              <p><span className="text-muted-foreground">Age:</span> {age ?? "N/A"}</p>
+              <p><span className="text-muted-foreground">Religion:</span> {maid.religion || "N/A"}</p>
+              <p><span className="text-muted-foreground">Marital:</span> {maid.maritalStatus || "N/A"}</p>
+              <p><span className="text-muted-foreground">Education:</span> {maid.educationLevel || "N/A"}</p>
+            </div>
+
+            <p className="font-body text-sm leading-5 text-muted-foreground mt-2">
+              {publicIntro || "Public introduction will be available soon for this profile."}
+            </p>
+          </div>
+        </article>
+      );
+    })}
+  </div>
+)}
         </div>
       </section>
 
@@ -763,7 +816,7 @@ const ClientLandingPage = () => {
                   <option>Housekeeping</option>
                   <option>Elderly Care</option>
                   <option>Infant Care</option>
-                  <option>Culinary Service</option>
+                  <option>Child Care</option>
                 </select>
               </div>
             </div>
