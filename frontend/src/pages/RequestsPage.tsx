@@ -229,7 +229,7 @@ const RequestsPage = () => {
             <p className="mt-2 text-2xl font-bold">{summary.active}</p>
           </div>
           <div className="rounded-xl border bg-amber-50 p-4 text-sm">
-            <p className="text-muted-foreground">Pending Review</p>
+            <p className="text-muted-foreground">Pending</p>
             <p className="mt-2 text-2xl font-bold">{summary.pending}</p>
           </div>
           <div className="rounded-xl border bg-emerald-50 p-4 text-sm">
