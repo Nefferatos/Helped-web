@@ -70,7 +70,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="min-h-screen flex flex-col bg-background">
       <header className="bg-nav text-nav-foreground">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold tracking-tight">Maid Agency Account Management</h1>
+          <h1 className="text-lg font-bold tracking-tight">Find Maids – Maid Agency Account Management</h1>
           <div className="flex items-center gap-3">
             <Link
               to={adminPath("/requests")}
