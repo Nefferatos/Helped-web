@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/sonner";
 import type { AgencySummary } from "@/lib/agencies";
 import { fetchAgencies } from "@/lib/agencies";
 import "../ClientPage/ClientTheme.css";
+import { ArrowLeft } from "lucide-react";
 
 const AgenciesPage = () => {
   const [agencies, setAgencies] = useState<AgencySummary[]>([]);
@@ -84,19 +85,27 @@ const AgenciesPage = () => {
   }
 
   return (
-    <div className="client-page-theme min-h-screen">
-      <div className="container py-12">
-        <div className="mb-8 space-y-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <h1 className="font-display text-4xl font-bold text-foreground">Browse Agencies</h1>
-            <Link to="/" className="text-sm font-medium text-primary hover:underline">
-              Back to Home
-            </Link>
-          </div>
-          <p className="max-w-3xl font-body text-lg text-muted-foreground">
-            Start as a client here. Compare agencies, review their available maids, and follow a clear path from discovery to acceptance.
-          </p>
-        </div>
+  <div className="client-page-theme min-h-screen">
+    <div className="container py-12">
+      <div className="mb-8 space-y-2">
+
+        <Link
+          to="/"
+          className="mb-3 inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Home
+        </Link>
+
+        <h1 className="font-display text-4xl font-bold text-foreground">
+          Browse Agencies
+        </h1>
+
+        <p className="max-w-3xl font-body text-lg text-muted-foreground">
+          Start as a client here. Compare agencies, review their available maids, and follow a clear path from discovery to acceptance.
+        </p>
+
+      </div>
 
         <Card className="mb-8 border-none bg-card/80 shadow-sm">
           <CardHeader>

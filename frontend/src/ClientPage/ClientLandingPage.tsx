@@ -6,12 +6,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from "@/components/ui/sonner";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { calculateAge, MaidProfile } from "@/lib/maids";
-import culinaryImg from "./assets/culinary.jpg";
-import elderlyImg from "./assets/elderly-care.jpg";
+import culinaryImg from "./assets/culinary.png";
+import elderlyImg from "./assets/elderly-care.png";
 import familyImg from "./assets/family.jpg";
-import heroImage from "./assets/hero-maid.jpg";
+import heroImage from "./assets/maid1.png";
 import housekeepingImg from "./assets/housekeeping.jpg";
-import infantImg from "./assets/infant-care.jpg";
+import infantImg from "./assets/infant-care.png";
 import "./ClientTheme.css";
 
 const services = [
@@ -31,8 +31,8 @@ const services = [
     image: infantImg,
   },
   {
-    title: "Culinary Service",
-    description: "Personalized culinary experiences for your dietary preferences and nutrition needs.",
+    title: "Kid Care",
+    description: "Providing a safe, nurturing, and engaging environment where children can learn, play, and grow.",
     image: culinaryImg,
   },
 ];
@@ -264,7 +264,7 @@ const ClientLandingPage = () => {
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
           <Link to="/" className="font-display text-xl font-bold text-foreground">
-            MaidAgency
+            "Find Maids" At The Agency
           </Link>
           {clientUser ? (
             <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
@@ -459,27 +459,38 @@ const ClientLandingPage = () => {
         <div className="container">
           <div className="mb-8 flex items-end justify-between gap-4">
             <div>
-              <h2 className="font-display text-3xl font-bold text-foreground">Available Public Maids</h2>
-              <p className="mt-2 font-body text-muted-foreground">Browse currently available public profiles from your search filters.</p>
+              <h2 className="font-display text-3xl font-bold text-foreground">
+                Available Public Maids
+              </h2>
+              <p className="mt-2 font-body text-muted-foreground">
+                Browse currently available public profiles from your search filters.
+              </p>
             </div>
           </div>
 
           {isLoading ? (
-            <div className="rounded-2xl border bg-muted/50 p-8 text-center font-body text-muted-foreground">
+            <div className="rounded-2xl border bg-muted/40 p-4 text-center font-body text-muted-foreground">
               Loading maid profiles...
             </div>
           ) : filteredMaids.length === 0 ? (
-            <div className="rounded-2xl border bg-muted/50 p-8 text-center">
-              <p className="font-display text-2xl font-semibold text-foreground">No matching maids found</p>
-              <p className="mt-2 font-body text-muted-foreground">Try a different nationality, age group, or a broader keyword search.</p>
+            <div className="rounded-2xl border bg-muted/40 p-4 text-center">
+              <p className="font-display text-lg font-semibold text-foreground">
+                No matching maids found
+              </p>
+              <p className="mt-1 font-body text-sm text-muted-foreground">
+                Try a different nationality, age group, or a broader keyword search.
+              </p>
             </div>
           ) : (
             <>
               {!isLoggedIn ? (
                 <div className="mb-6 rounded-2xl border bg-muted/30 p-5 text-center">
-                  <p className="font-display text-xl font-semibold text-foreground">Login to Unlock Maid Profiles</p>
+                  <p className="font-display text-xl font-semibold text-foreground">
+                    Login to Unlock Maid Profiles
+                  </p>
                   <p className="mt-2 font-body text-sm text-muted-foreground">
-                    Guests can preview available public maids in blurred mode. Login to search, view full biodata, and continue hiring.
+                    Guests can preview available public maids in blurred mode. Login
+                    to search, view full biodata, and continue hiring.
                   </p>
                   <div className="mt-4">
                     <Button asChild>
@@ -488,53 +499,83 @@ const ClientLandingPage = () => {
                   </div>
                 </div>
               ) : null}
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 justify-items-start">
                 {filteredMaids.map((maid) => {
-                const age = calculateAge(maid.dateOfBirth);
-                const photo = getPrimaryPhoto(maid);
-                const publicIntro = getPublicIntro(maid);
-                return (
-                  <article key={maid.referenceCode} className="overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-lg">
-                    <div className="grid gap-0 sm:grid-cols-[170px_1fr]">
-                      <div className={`flex h-full min-h-[220px] items-center justify-center bg-muted ${!isLoggedIn ? "blur-md" : ""}`}>
+                  const age = calculateAge(maid.dateOfBirth);
+                  const photo = getPrimaryPhoto(maid);
+                  const publicIntro = getPublicIntro(maid);
+
+                  return (
+                    <article
+                      key={maid.referenceCode}
+                      className="w-full max-w-[220px] overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition flex flex-col h-full" >
+                      <div
+                        className={`h-40 w-full bg-muted overflow-hidden flex-shrink-0 ${
+                          !isLoggedIn ? "blur-md" : ""
+                        }`} >
                         {photo ? (
-                          <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
+                          <img
+                            src={photo}
+                            alt={maid.fullName}
+                            className="h-full w-full object-cover" />
                         ) : (
-                          <div className="px-4 text-center font-body text-sm text-muted-foreground">No photo available</div>
+                          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                            No photo
+                          </div>
                         )}
                       </div>
-                      <div className={`space-y-3 p-5 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
-                        <div>
-                          <p className="font-display text-2xl font-bold text-foreground">{maid.fullName}</p>
-                          <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
+
+                      <div
+                        className={`flex flex-col p-2 space-y-1 flex-1 ${
+                          !isLoggedIn ? "blur-sm select-none" : ""
+                        }`} >
+                        <div className="text-center">
+                          <h3 className="font-semibold text-sm text-foreground">
+                            {maid.fullName}
+                          </h3>
+                          <p className="text-[9px] text-muted-foreground">
+                            {maid.referenceCode}
+                          </p>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full bg-accent px-2.5 py-1 font-body text-xs font-medium text-accent-foreground">
-                            {maid.nationality}
+                        <div className="flex flex-wrap justify-center gap-1">
+                          <span className="px-2 py-0.5 text-[9px] rounded-full bg-accent text-accent-foreground">
+                            {maid.nationality || "N/A"}
                           </span>
-                          <span className="rounded-full bg-secondary/20 px-2.5 py-1 font-body text-xs font-medium text-foreground">
-                            {maid.type}
+                          <span className="px-2 py-0.5 text-[9px] rounded-full bg-secondary/20">
+                            {maid.type || "N/A"}
                           </span>
-                          <span className="rounded-full bg-muted px-2.5 py-1 font-body text-xs font-medium text-foreground">
+                          <span className="px-2 py-0.5 text-[9px] rounded-full bg-muted">
                             {getExperienceBucket(maid)}
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 font-body text-sm text-foreground">
-                          <p><span className="text-muted-foreground">Age:</span> {age ?? "N/A"}</p>
-                          <p><span className="text-muted-foreground">Religion:</span> {maid.religion || "N/A"}</p>
-                          <p><span className="text-muted-foreground">Marital:</span> {maid.maritalStatus || "N/A"}</p>
-                          <p><span className="text-muted-foreground">Education:</span> {maid.educationLevel || "N/A"}</p>
+                        <div className="text-[11px] text-foreground space-y-0.5 text-center">
+                          <p>
+                            <span className="text-muted-foreground">Age:</span> {age ?? "N/A"}
+                          </p>
+                          <p>
+                            <span className="text-muted-foreground">Education:</span>{" "}
+                            {maid.educationLevel || "N/A"}
+                          </p>
                         </div>
 
-                        <p className="font-body text-sm leading-6 text-muted-foreground">
-                          {publicIntro || "Public introduction will be available soon for this profile."}
+                        <p className="text-[11px] text-muted-foreground text-center line-clamp-2 min-h-[30px]">
+                          {publicIntro || "Public introduction will be available soon."}
                         </p>
+
+                        <div className="mt-auto">
+                          <Button variant="outline" size="sm" className="w-full" asChild>
+                            <Link
+                              to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                              View Profile
+                            </Link>
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                );
+                    </article>
+                  );
                 })}
               </div>
             </>
@@ -588,7 +629,7 @@ const ClientLandingPage = () => {
           <div>
             <h2 className="mb-8 font-display text-3xl font-bold text-foreground md:text-4xl">
               Why Choose <br />
-              <span className="text-primary">MaidAgency?</span>
+              <span className="text-primary">"Find Maids" At The Agency?</span>
             </h2>
             <div className="space-y-6">
               {features.map((feature) => (
@@ -652,7 +693,7 @@ const ClientLandingPage = () => {
         <div className="container">
           <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4">
             <div>
-              <h4 className="mb-3 font-display text-lg font-bold">MaidAgency</h4>
+              <h4 className="mb-3 font-display text-lg font-bold">"Find Maids" At The Agency</h4>
               <p className="font-body text-sm opacity-70">Matching trusted domestic professionals with families since 2009.</p>
             </div>
             <div>
@@ -681,7 +722,7 @@ const ClientLandingPage = () => {
             </div>
           </div>
           <div className="border-t border-primary-foreground/20 pt-6 text-center font-body text-xs opacity-50">
-            Copyright 2025 MaidAgency. All rights reserved.
+            Copyright 2026 "Find Maids" At The Agency. All rights reserved.
           </div>
         </div>
       </footer>

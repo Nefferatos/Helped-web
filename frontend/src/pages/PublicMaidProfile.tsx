@@ -129,8 +129,12 @@ const PublicMaidProfile = () => {
   return (
     <div className="client-page-theme min-h-screen bg-card">
       <div className="container py-10 md:py-14">
-        <Link to="/agencies" className="mb-6 inline-flex items-center gap-2 font-body text-sm text-primary hover:underline">
-          <ArrowLeft className="h-4 w-4" /> Back to Agencies
+        <Link
+          to="/"
+          className="mb-3 inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Home
         </Link>
 
         <div className="grid gap-6 xl:grid-cols-[1.1fr_1.4fr]">

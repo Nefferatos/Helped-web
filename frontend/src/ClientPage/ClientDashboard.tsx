@@ -333,7 +333,7 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                       <article
                         key={maid.referenceCode}
                         className="w-full max-w-xs overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition flex flex-col">
-                        <div className="h-36 w-full bg-muted overflow-hidden">
+                        <div className="h-56 w-full bg-muted overflow-hidden">
                           {photo ? (
                             <img
                               src={photo}

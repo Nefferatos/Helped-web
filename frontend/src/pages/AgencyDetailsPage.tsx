@@ -235,32 +235,45 @@ const AgencyDetailsPage = () => {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredMaids.map((maid) => {
-            const age = calculateAge(maid.dateOfBirth);
-            const photo = getPrimaryPhoto(maid);
-            const isAvailable = !maid.status || maid.status === "available";
+            {filteredMaids.map((maid) => {
+              const age = calculateAge(maid.dateOfBirth);
+              const photo = getPrimaryPhoto(maid);
+              const isAvailable = !maid.status || maid.status === "available";
 
-            return (
-              <Card key={maid.referenceCode} className="overflow-hidden">
-                <div className="p-6">
-                  <div className={`mb-4 overflow-hidden rounded-xl border bg-muted ${!isLoggedIn ? "blur-md" : ""}`}>
+              return (
+                <Card
+                  key={maid.referenceCode}
+                  className="overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition flex flex-col w-full max-w-[260px] h-[500px]" >
+                  <div className={`overflow-hidden ${!isLoggedIn ? "blur-md" : ""}`}>
                     {photo ? (
-                      <img src={photo} alt={maid.fullName} className="h-36 w-full object-cover" />
+                      <img
+                        src={photo}
+                        alt={maid.fullName}
+                        className="h-44 w-full object-cover rounded-t-xl" />
                     ) : (
-                      <div className="flex h-36 items-center justify-center text-sm text-muted-foreground">No photo available</div>
+                      <div className="flex h-44 items-center justify-center text-sm text-muted-foreground bg-muted rounded-t-xl">
+                        No photo available
+                      </div>
                     )}
                   </div>
-                  <div className={!isLoggedIn ? "select-none blur-sm" : ""}>
-                    <CardTitle className="mb-2 font-display text-xl">{maid.fullName}</CardTitle>
-                    <p className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
-                    <div className="mb-4 flex flex-wrap gap-2">
+
+                  <div className={`p-4 flex flex-col flex-1 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
+                    <CardTitle className="text-lg font-semibold text-foreground mb-1">
+                      {maid.fullName}
+                    </CardTitle>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">
+                      {maid.referenceCode}
+                    </p>
+
+                    <div className="flex flex-wrap gap-2 mb-4">
                       <Badge>{maid.nationality || "N/A"}</Badge>
                       <Badge variant="secondary">{maid.type || "N/A"}</Badge>
                       <Badge variant={isAvailable ? "outline" : "secondary"}>
                         {isAvailable ? "Available" : maid.status}
                       </Badge>
                     </div>
-                    <div className="mb-4 space-y-1 text-sm">
+
+                    <div className="mb-2 space-y-1 text-sm text-foreground">
                       <p>
                         <span className="font-medium">Age:</span> {age ?? "N/A"}
                       </p>
@@ -268,27 +281,30 @@ const AgencyDetailsPage = () => {
                         <span className="font-medium">Experience:</span> {getExperienceBucket(maid)}
                       </p>
                     </div>
-                    <p className="mb-6 line-clamp-3 text-sm text-muted-foreground">{getPublicIntro(maid) || "Profile introduction coming soon."}</p>
+
+                    <p className="mb-4 line-clamp-3 text-sm text-muted-foreground">
+                      {getPublicIntro(maid) || "Profile introduction coming soon."}
+                    </p>
+
+                    {isLoggedIn ? (
+                      <div className="flex gap-2 mt-auto">
+                        <Button asChild className="flex-1">
+                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Profile</Link>
+                        </Button>
+                        <Button asChild variant="outline" className="flex-1">
+                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>Accept</Link>
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button asChild className="w-full mt-auto">
+                        <Link to="/employer-login">Login to View</Link>
+                      </Button>
+                    )}
                   </div>
-                  {isLoggedIn ? (
-                    <div className="flex gap-2">
-                      <Button asChild className="flex-1">
-                        <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Profile</Link>
-                      </Button>
-                      <Button asChild variant="outline" className="flex-1">
-                        <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>Accept</Link>
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button asChild className="w-full">
-                      <Link to="/employer-login">Login to View</Link>
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+                </Card>
+              );
+            })}
+          </div>
 
         {filteredMaids.length === 0 ? (
           <Card>
