@@ -212,7 +212,7 @@ const RequestsPage = () => {
   };
 
   return (
-    <div className="page-container">
+    <div className="w-full max-w-[1500px] mx-auto px-6 py-6">
       <div className="mb-6 flex items-center gap-3">
         <Bell className="h-5 w-5 text-primary" />
         <h2 className="text-xl font-bold">Request Workflow</h2>

@@ -311,7 +311,7 @@ const EditMaids = () => {
                   style={{ animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards", animationDelay: `${i * 0.04}s`, opacity: 0 }}
                 >
                   <div
-                    className="flex h-28 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs text-black transition-all hover:ring-2 hover:ring-primary/40"
+                    className="flex h-28 w-27 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs text-black transition-all hover:ring-2 hover:ring-primary/40"
                     onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))}
                   >
                     {photoPreview ? (
@@ -332,36 +332,6 @@ const EditMaids = () => {
                   <p className="text-[10px] text-muted-foreground">{maid.maritalStatus}{age !== null ? `(${age})` : ""}</p>
                   <p className="text-[10px] text-muted-foreground">Upd: {formatDate(maid.updatedAt)}</p>
                   <div className="mt-auto flex w-full flex-col gap-1 border-t pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-[10px]"
-                      disabled={!maid.isPublic}
-                      onClick={() => setMaidToSendThroughAgency(maid)}
-                    >
-                      <Send className="mr-1 h-3 w-3" />
-                      Through Agency
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-[10px]"
-                      disabled={!maid.isPublic}
-                      onClick={() => setMaidToDirectHire(maid)}
-                    >
-                      <Send className="mr-1 h-3 w-3" />
-                      Direct Hire
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-[10px]"
-                      disabled={!maid.isPublic}
-                      onClick={() => setMaidToReject(maid)}
-                    >
-                      <Send className="mr-1 h-3 w-3" />
-                      Reject
-                    </Button>
                     <label className="flex items-center justify-center gap-1 text-[10px]">
                       <input type="checkbox" checked={selected.has(maid.referenceCode)} onChange={() => toggle(maid.referenceCode)} className="accent-primary" />
                       Select

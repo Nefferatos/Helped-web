@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowUp, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send } from "lucide-react";
+import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send } from "lucide-react";
 import { MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
@@ -156,7 +156,6 @@ const MaidProfilePage = () => {
 
       <div className="content-card animate-fade-in-up space-y-6">
         <div className="flex flex-wrap gap-3 border-b pb-3 text-sm">
-          <button className="flex items-center gap-1 text-primary hover:underline"><ArrowUp className="h-3 w-3" /> Bring to Top</button>
           <button className="text-primary hover:underline" onClick={() => navigate(adminPath("/edit-maids"))}>View All Maids</button>
           <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))}><Edit className="h-3 w-3" /> Edit This Maid</button>
           <span className="flex items-center gap-1 text-muted-foreground"><Image className="h-3 w-3" /> Manage Photos in Edit Maid</span>
@@ -165,13 +164,18 @@ const MaidProfilePage = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-lg border bg-muted/30 p-6 text-center">
+          <div className="relative min-h-[200px] w-full overflow-hidden rounded-lg border bg-muted/30">
             {maid.videoDataUrl ? (
-              <video controls className="max-h-[220px] w-full rounded-md border bg-black" src={maid.videoDataUrl}>
+              <video
+                controls
+                className="absolute top-0 left-0 h-full w-full object-cover"
+                src={maid.videoDataUrl} >
                 Your browser does not support the video tag.
               </video>
             ) : (
-              <p className="text-sm text-muted-foreground">No uploaded video yet. Upload via Edit Maid.</p>
+              <div className="flex h-full w-full items-center justify-center text-center p-4">
+                <p className="text-sm text-muted-foreground">No uploaded video yet. Upload via Edit Maid.</p>
+              </div>
             )}
           </div>
 
