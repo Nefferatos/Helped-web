@@ -128,6 +128,7 @@ export interface DirectSaleRecord {
   clientEmail: string
   clientPhone: string
   status: string
+  requestDetails?: Record<string, string>
   createdAt: string
 }
 
@@ -286,6 +287,8 @@ const dataFile = path.join(dataDir, 'app-data.json')
 
 let cache: AppData | null = null
 
+const stripBom = (value: string) => value.replace(/^\uFEFF/, '')
+
 const mergeAppData = (raw: Partial<AppData>): AppData => {
   const defaults = defaultData()
 
@@ -376,7 +379,7 @@ const loadData = async (): Promise<AppData> => {
 
   await ensureDataFile()
   const raw = await readFile(dataFile, 'utf8')
-  cache = mergeAppData(JSON.parse(raw) as Partial<AppData>)
+  cache = mergeAppData(JSON.parse(stripBom(raw)) as Partial<AppData>)
   await writeFile(dataFile, JSON.stringify(cache, null, 2), 'utf8')
   return cache
 }
@@ -998,7 +1001,8 @@ export const getUnreadAgencyChatCountStore = async () => {
 export const createDirectSaleStore = async (
   maidReferenceCode: string,
   clientId: number,
-  status: string = 'pending'
+  status: string = 'pending',
+  requestDetails?: Record<string, string>
 ) => {
   const data = await loadData()
   const maidIndex = data.maids.findIndex(
@@ -1022,6 +1026,7 @@ export const createDirectSaleStore = async (
     clientEmail: client.email,
     clientPhone: client.company || '',
     status,
+    requestDetails,
     createdAt: now(),
   }
 

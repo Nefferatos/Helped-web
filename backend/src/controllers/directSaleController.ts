@@ -29,10 +29,11 @@ export const getClientOptions = async (req: Request, res: Response) => {
 export const createDirectSale = async (req: Request, res: Response) => {
   try {
     const { referenceCode: routeReferenceCode } = req.params
-    const { referenceCode: bodyReferenceCode, clientId, status } = req.body as {
+    const { referenceCode: bodyReferenceCode, clientId, status, formData } = req.body as {
       referenceCode?: string
       clientId?: number
       status?: string
+      formData?: Record<string, string>
     }
     const referenceCode = routeReferenceCode || bodyReferenceCode
 
@@ -55,7 +56,8 @@ export const createDirectSale = async (req: Request, res: Response) => {
     const result = await createDirectSaleStore(
       referenceCode,
       Number(clientId),
-      normalizedStatus
+      normalizedStatus,
+      formData
     )
 
     res.status(201).json(result)

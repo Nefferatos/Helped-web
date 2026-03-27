@@ -43,20 +43,6 @@ interface CompanyProfile {
   intro_video_data_url?: string
 }
 
-interface MOMPersonnel {
-  id?: number
-  company_id: number
-  name: string
-  registration_number: string
-}
-
-interface Testimonial {
-  id?: number
-  company_id: number
-  message: string
-  author: string
-}
-
 /**
  * GET /api/company
  * Fetch complete company profile including MOM personnel and testimonials
@@ -176,14 +162,6 @@ export const updateCompanyProfile = async (req: Request, res: Response) => {
     // Add company ID to where clause
     values.push(1) // Company ID = 1 (first company)
 
-    // Build and execute the UPDATE query
-    const updateQuery = `
-      UPDATE company_profile 
-      SET ${fields.join(', ')}
-      WHERE id = $${paramCounter}
-      RETURNING *
-    `
-
     const updateMap = Object.fromEntries(
       allowedFields
         .map((field) => [field, updates[field as keyof CompanyProfile]])
@@ -244,24 +222,6 @@ export const updateMOMPersonnel = async (req: Request, res: Response) => {
         error: 'At least one field (name or registration_number) is required',
       })
     }
-
-    const fields: string[] = []
-    const values: unknown[] = []
-    let paramCounter = 1
-
-    if (name !== undefined) {
-      fields.push(`name = $${paramCounter}`)
-      values.push(name)
-      paramCounter++
-    }
-
-    if (registration_number !== undefined) {
-      fields.push(`registration_number = $${paramCounter}`)
-      values.push(registration_number)
-      paramCounter++
-    }
-
-    values.push(id)
 
     const result = await updateMomPersonnelStore(Number(id), {
       ...(name !== undefined ? { name } : {}),

@@ -58,7 +58,7 @@ if (hasFrontendSite) {
 }
 
 // Error handling middleware
-const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (
     err &&
     typeof err === 'object' &&
