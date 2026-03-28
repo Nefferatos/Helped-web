@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Filter, Search } from "lucide-react";
+import { ArrowLeft, Filter, Search } from "lucide-react";
 import AgencyCard from "@/components/AgencyCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,6 @@ import { toast } from "@/components/ui/sonner";
 import type { AgencySummary } from "@/lib/agencies";
 import { fetchAgencies } from "@/lib/agencies";
 import "../ClientPage/ClientTheme.css";
-import { ArrowLeft } from "lucide-react";
 
 const AgenciesPage = () => {
   const [agencies, setAgencies] = useState<AgencySummary[]>([]);
@@ -52,13 +51,7 @@ const AgenciesPage = () => {
     return agencies.filter((agency) => {
       const matchesKeyword =
         !term ||
-        [
-          agency.name,
-          agency.contactPerson,
-          agency.contactPhone,
-          agency.about,
-          agency.featuredSkills.join(" "),
-        ]
+        [agency.name, agency.contactPerson, agency.contactPhone, agency.about, agency.featuredSkills.join(" ")]
           .join(" ")
           .toLowerCase()
           .includes(term);
@@ -85,37 +78,32 @@ const AgenciesPage = () => {
   }
 
   return (
-  <div className="client-page-theme min-h-screen">
-    <div className="container py-12">
-      <div className="mb-8 space-y-2">
+    <div className="client-page-theme min-h-screen">
+      <div className="container py-8 md:py-12">
+        <div className="mb-8 space-y-3">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Home
+          </Link>
 
-        <Link
-          to="/"
-          className="mb-3 inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Home
-        </Link>
+          <h1 className="font-display text-3xl font-bold text-foreground md:text-4xl">Browse Agencies</h1>
+          <p className="max-w-3xl font-body text-base text-muted-foreground md:text-lg">
+            Compare agencies, review their available maids, and move into requests or messaging without leaving the main flow.
+          </p>
+        </div>
 
-        <h1 className="font-display text-4xl font-bold text-foreground">
-          Browse Agencies
-        </h1>
-
-        <p className="max-w-3xl font-body text-lg text-muted-foreground">
-          Start as a client here. Compare agencies, review their available maids, and follow a clear path from discovery to acceptance.
-        </p>
-
-      </div>
-
-        <Card className="mb-8 border-none bg-card/80 shadow-sm">
+        <Card className="mb-6 rounded-3xl border bg-card/90 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
               <Filter className="h-5 w-5" />
               Agency Filters
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 md:col-span-2 xl:col-span-2">
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <div className="flex items-center gap-2 rounded-2xl border bg-background px-3 py-3 md:col-span-2">
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
                 value={keyword}
@@ -171,7 +159,7 @@ const AgenciesPage = () => {
           </CardContent>
         </Card>
 
-        <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-body text-sm text-muted-foreground">
             {filteredAgencies.length} {filteredAgencies.length === 1 ? "agency" : "agencies"} matched your filters.
           </p>
@@ -190,9 +178,9 @@ const AgenciesPage = () => {
           </Button>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-4">
           {filteredAgencies.length === 0 ? (
-            <Card className="md:col-span-2 xl:col-span-3">
+            <Card className="rounded-3xl">
               <CardHeader>
                 <CardTitle>No agencies found</CardTitle>
               </CardHeader>

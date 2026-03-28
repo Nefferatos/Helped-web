@@ -3,6 +3,7 @@ export interface ClientUser {
   name: string;
   company?: string;
   email: string;
+  profileImageUrl?: string;
   createdAt: string;
 }
 

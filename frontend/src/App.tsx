@@ -8,7 +8,10 @@ import AppLayout from "@/components/AppLayout";
 import ClientEmployerLogin from "@/ClientPage/ClientEmployerLogin";
 import ClientSupportChat from "@/ClientPage/ClientSupportChat";
 import ClientDashboard from "@/ClientPage/ClientDashboard";
+import ClientHistoryPage from "@/ClientPage/ClientHistoryPage";
 import ClientLandingPage from "@/ClientPage/ClientLandingPage";
+import ClientMaidsPage from "@/ClientPage/ClientMaidsPage";
+import ClientProfilePage from "@/ClientPage/ClientProfilePage";
 import AgenciesPage from "@/pages/AgenciesPage";
 import AgencyDetailsPage from "@/pages/AgencyDetailsPage";
 import HiringProcessPage from "@/pages/HiringProcessPage";
@@ -28,6 +31,7 @@ import AdminSupportChat from "@/pages/AdminSupportChat";
 import RequestsPage from "@/pages/RequestsPage";
 import NotFound from "@/pages/NotFound";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
+import { getClientToken } from "@/lib/clientAuth";
 import { adminPath } from "@/lib/routes";
 
 const queryClient = new QueryClient();
@@ -110,17 +114,25 @@ const AdminIndexRedirect = () => {
   return <Navigate to={token ? adminPath("/dashboard") : adminPath("/login")} replace />;
 };
 
+const ClientHomeRedirect = () => {
+  const token = getClientToken();
+  return token ? <Navigate to="/client/dashboard" replace /> : <ClientLandingPage />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-          <Route path="/" element={<ClientLandingPage />} />
+          <Route path="/" element={<ClientHomeRedirect />} />
           <Route path="/employer-login" element={<ClientEmployerLogin />} />
           <Route path={adminPath("/login")} element={<AgencyAdminLogin />} />
           <Route path="/client/dashboard" element={<ClientDashboard />} />
+          <Route path="/client/maids" element={<ClientMaidsPage />} />
+          <Route path="/client/profile" element={<ClientProfilePage />} />
+          <Route path="/client/history" element={<ClientHistoryPage />} />
           <Route path="/client/support-chat" element={<ClientSupportChat />} />
           <Route path="/agencies" element={<AgenciesPage />} />
           <Route path="/agencies/:id" element={<AgencyDetailsPage />} />

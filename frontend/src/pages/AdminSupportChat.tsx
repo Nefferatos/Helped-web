@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
+import { useNavigate } from "react-router-dom";
+import { adminPath } from "@/lib/routes";
+import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
 
 interface Conversation {
   key: string;
@@ -38,6 +41,7 @@ const formatMessageTime = (timestamp: string) =>
   });
 
 const AdminSupportChat = () => {
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationKey, setActiveConversationKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -46,7 +50,9 @@ const AdminSupportChat = () => {
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const admin = getStoredAgencyAdmin();
 
   const buildQueryString = (conversation: Pick<Conversation, "conversationType" | "agencyId" | "agencyName">) => {
     const params = new URLSearchParams();
@@ -61,25 +67,42 @@ const AdminSupportChat = () => {
   };
 
   const loadConversations = useCallback(async () => {
+    const token = getAgencyAdminToken();
+    if (!token) {
+      clearAgencyAdminAuth();
+      navigate(adminPath("/login"), { replace: true });
+      return;
+    }
+
     try {
-      const response = await fetch("/api/chats/admin");
+      setErrorMessage("");
+      const response = await fetch("/api/chats/admin", {
+        headers: { ...getAgencyAdminAuthHeaders() },
+      });
       const data = (await response.json().catch(() => ({}))) as {
         conversations?: Conversation[];
         error?: string;
       };
 
       if (!response.ok || !data.conversations) {
+        if (response.status === 401) {
+          clearAgencyAdminAuth();
+          navigate(adminPath("/login"), { replace: true });
+          return;
+        }
         throw new Error(data.error || "Failed to load conversations");
       }
 
       setConversations(data.conversations);
       setActiveConversationKey((prev) => prev ?? data.conversations?.[0]?.key ?? null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load conversations");
+      const message = error instanceof Error ? error.message : "Failed to load conversations";
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setIsLoadingConversations(false);
     }
-  }, []);
+  }, [navigate]);
 
   const filteredConversations = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -107,13 +130,21 @@ const AdminSupportChat = () => {
   const loadMessages = useCallback(async (conversation: Conversation) => {
     try {
       setIsLoadingMessages(true);
-      const response = await fetch(`/api/chats/admin/${conversation.clientId}?${buildQueryString(conversation)}`);
+      setErrorMessage("");
+      const response = await fetch(`/api/chats/admin/${conversation.clientId}?${buildQueryString(conversation)}`, {
+        headers: { ...getAgencyAdminAuthHeaders() },
+      });
       const data = (await response.json().catch(() => ({}))) as {
         messages?: ChatMessage[];
         error?: string;
       };
 
       if (!response.ok || !data.messages) {
+        if (response.status === 401) {
+          clearAgencyAdminAuth();
+          navigate(adminPath("/login"), { replace: true });
+          return;
+        }
         throw new Error(data.error || "Failed to load messages");
       }
 
@@ -122,11 +153,13 @@ const AdminSupportChat = () => {
         prev.map((item) => (item.key === conversation.key ? { ...item, unreadCount: 0 } : item)),
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load messages");
+      const message = error instanceof Error ? error.message : "Failed to load messages";
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setIsLoadingMessages(false);
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     void loadConversations();
@@ -158,11 +191,15 @@ const AdminSupportChat = () => {
 
     try {
       setIsSending(true);
+      setErrorMessage("");
       const response = await fetch(
         `/api/chats/admin/${activeConversation.clientId}?${buildQueryString(activeConversation)}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...getAgencyAdminAuthHeaders(),
+          },
           body: JSON.stringify({ message: draft.trim() }),
         },
       );
@@ -172,6 +209,11 @@ const AdminSupportChat = () => {
       };
 
       if (!response.ok || !data.message) {
+        if (response.status === 401) {
+          clearAgencyAdminAuth();
+          navigate(adminPath("/login"), { replace: true });
+          return;
+        }
         throw new Error(data.error || "Failed to send message");
       }
 
@@ -179,7 +221,9 @@ const AdminSupportChat = () => {
       setDraft("");
       await loadConversations();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send message");
+      const message = error instanceof Error ? error.message : "Failed to send message";
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setIsSending(false);
     }
@@ -235,7 +279,14 @@ const AdminSupportChat = () => {
             <Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats" />
           </div>
 
-          {isLoadingConversations ? (
+          {errorMessage ? (
+            <div className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <p>{errorMessage}</p>
+              <Button variant="outline" onClick={() => void loadConversations()}>
+                Retry Inbox
+              </Button>
+            </div>
+          ) : isLoadingConversations ? (
             <div className="py-10 text-center text-muted-foreground">Loading conversations...</div>
           ) : filteredConversations.length === 0 ? (
             <div className="py-10 text-center text-muted-foreground">No chat conversations yet.</div>
@@ -267,7 +318,7 @@ const AdminSupportChat = () => {
                       </div>
                       <p className="mt-1 text-[11px] uppercase tracking-wide text-primary">
                         {conversation.conversationType === "agency"
-                          ? `Agency chat${conversation.agencyName ? ` • ${conversation.agencyName}` : ""}`
+                          ? `Agency chat${conversation.agencyName ? ` - ${conversation.agencyName}` : ""}`
                           : "Main support"}
                       </p>
                       <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{conversation.lastMessage}</p>
@@ -305,7 +356,7 @@ const AdminSupportChat = () => {
                 </div>
 
                 <div className="rounded-2xl border bg-muted/20 px-4 py-3 text-sm">
-                  <p className="font-medium">Agency side</p>
+                  <p className="font-medium">{admin?.agencyName || "Agency side"}</p>
                   <p className="text-muted-foreground">Replying as support</p>
                 </div>
               </div>

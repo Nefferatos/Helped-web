@@ -1,7 +1,11 @@
 import { Request, Response } from 'express'
-import { getAuthenticatedClient } from '../auth'
+import {
+  getAuthenticatedAgencyAdmin,
+  getAuthenticatedClient,
+} from '../auth'
 import {
   createChatMessageStore,
+  getChatConversationsForClientStore,
   getChatConversationsStore,
   getChatMessagesForClientStore,
   markChatMessagesReadForAgencyStore,
@@ -56,6 +60,21 @@ export const getMyChatMessages = async (req: Request, res: Response) => {
   }
 }
 
+export const getMyChatConversations = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const conversations = await getChatConversationsForClientStore(client.id)
+    res.status(200).json({ conversations })
+  } catch (error) {
+    console.error('Error fetching client chat conversations:', error)
+    res.status(500).json({ error: 'Failed to fetch chat conversations' })
+  }
+}
+
 export const sendMyChatMessage = async (req: Request, res: Response) => {
   try {
     const client = await getAuthenticatedClient(req)
@@ -88,6 +107,11 @@ export const sendMyChatMessage = async (req: Request, res: Response) => {
 
 export const getAdminChatConversations = async (req: Request, res: Response) => {
   try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
     const conversations = await getChatConversationsStore()
     res.status(200).json({ conversations })
   } catch (error) {
@@ -98,6 +122,11 @@ export const getAdminChatConversations = async (req: Request, res: Response) => 
 
 export const getAdminChatMessages = async (req: Request, res: Response) => {
   try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
     const clientId = Number(req.params.clientId)
     if (!Number.isInteger(clientId)) {
       return res.status(400).json({ error: 'Valid client id is required' })
@@ -123,6 +152,11 @@ export const getAdminChatMessages = async (req: Request, res: Response) => {
 
 export const sendAdminChatMessage = async (req: Request, res: Response) => {
   try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
     const clientId = Number(req.params.clientId)
     if (!Number.isInteger(clientId)) {
       return res.status(400).json({ error: 'Valid client id is required' })
@@ -138,12 +172,12 @@ export const sendAdminChatMessage = async (req: Request, res: Response) => {
       clientId,
       conversationType: context.conversationType,
       agencyId: context.agencyId,
-      agencyName: context.agencyName,
+      agencyName: context.agencyName ?? admin.agencyName,
       senderRole: 'agency',
       senderName:
-        context.conversationType === 'agency' && context.agencyName
-          ? `${context.agencyName} Team`
-          : 'Agency Support',
+        context.conversationType === 'agency'
+          ? `${context.agencyName ?? admin.agencyName} Team`
+          : `${admin.agencyName} Support`,
       message: message.trim(),
     })
 

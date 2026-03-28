@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { getAuthenticatedClient } from '../auth'
 import {
   getAssignedMaidsForClientStore,
+  getClientHistoryStore,
   updateDirectSaleStatusForClientStore,
 } from '../store'
 
@@ -17,6 +18,21 @@ export const getMyAssignedMaids = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching assigned maids:', error)
     res.status(500).json({ error: 'Failed to fetch assigned maids' })
+  }
+}
+
+export const getMyHistory = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const history = await getClientHistoryStore(client.id)
+    res.status(200).json({ history })
+  } catch (error) {
+    console.error('Error fetching client history:', error)
+    res.status(500).json({ error: 'Failed to fetch client history' })
   }
 }
 

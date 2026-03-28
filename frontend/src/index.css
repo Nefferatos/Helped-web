@@ -76,9 +76,9 @@
     @apply text-sm font-medium text-foreground whitespace-nowrap text-right;
   }
   .page-container {
-    @apply max-w-3xl mx-auto px-4 py-6;
+    @apply mx-auto w-full max-w-[900px] px-4 py-5 md:px-6 md:py-6;
   }
   .content-card {
-    @apply bg-card rounded-lg border shadow-sm p-6;
+    @apply rounded-2xl border bg-card p-4 shadow-sm md:p-6;
   }
 }

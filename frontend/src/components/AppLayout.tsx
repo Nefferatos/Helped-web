@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, LogOut } from "lucide-react";
+import { Bell, LogOut, Settings, UserRound } from "lucide-react";
 import { adminPath } from "@/lib/routes";
 import { toast } from "@/components/ui/sonner";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getStoredAgencyAdmin, type AgencyAdminUser } from "@/lib/agencyAdminAuth";
 
 const navItems = [
@@ -22,11 +24,12 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [pendingRequests, setPendingRequests] = useState<number>(0);
   const [unreadAgencyChats, setUnreadAgencyChats] = useState<number>(0);
   const [agencyAdmin, setAgencyAdmin] = useState<AgencyAdminUser | null>(getStoredAgencyAdmin());
+  const [agencyLogoUrl, setAgencyLogoUrl] = useState("");
 
   useEffect(() => {
     const loadSummary = async () => {
       try {
-        const response = await fetch("/api/company/summary");
+        const [response, companyResponse] = await Promise.all([fetch("/api/company/summary"), fetch("/api/company")]);
         const data = (await response.json().catch(() => ({}))) as {
           pendingRequests?: number;
           unreadAgencyChats?: number;
@@ -37,6 +40,13 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         }
         setPendingRequests(data.pendingRequests ?? 0);
         setUnreadAgencyChats(data.unreadAgencyChats ?? 0);
+
+        if (companyResponse.ok) {
+          const companyData = (await companyResponse.json().catch(() => ({}))) as {
+            companyProfile?: { logo_data_url?: string };
+          };
+          setAgencyLogoUrl(companyData.companyProfile?.logo_data_url || "");
+        }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to load notifications");
       }
@@ -70,7 +80,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="min-h-screen flex flex-col bg-background">
       <header className="bg-nav text-nav-foreground">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold tracking-tight">Find Maids – Maid Agency Account Management</h1>
+          <h1 className="text-lg font-bold tracking-tight">Find Maids - Maid Agency Account Management</h1>
           <div className="flex items-center gap-3">
             <Link
               to={adminPath("/requests")}
@@ -84,14 +94,47 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 </span>
               ) : null}
             </Link>
-            <button
-              type="button"
-              onClick={() => void handleLogout()}
-              className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity active:scale-[0.97]"
-            >
-              <span>Log Out</span>
-              <LogOut className="w-4 h-4" />
-            </button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-3 rounded-full border border-white/20 bg-white/10 px-2 py-1 pr-3 text-sm transition hover:bg-white/15"
+                >
+                  <Avatar className="h-9 w-9 border border-white/20">
+                    <AvatarImage src={agencyLogoUrl || agencyAdmin?.profileImageUrl} alt={agencyAdmin?.agencyName || "Agency"} />
+                    <AvatarFallback className="bg-white/20 text-white">
+                      {(agencyAdmin?.agencyName || "A").slice(0, 1).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden text-left md:block">
+                    <p className="text-sm font-semibold text-white">{agencyAdmin?.agencyName || "Agency Portal"}</p>
+                    <p className="text-xs text-white/70">{agencyAdmin?.username || "Agency Admin"}</p>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Agency Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to={adminPath("/agency-profile")}>
+                    <UserRound className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={adminPath("/change-password")}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => void handleLogout()}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

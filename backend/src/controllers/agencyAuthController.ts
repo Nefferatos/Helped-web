@@ -11,11 +11,13 @@ const toSafeAgencyAdmin = (admin: {
   id: number
   username: string
   agencyName: string
+  profileImageUrl?: string
   createdAt: string
 }) => ({
   id: admin.id,
   username: admin.username,
   agencyName: admin.agencyName,
+  profileImageUrl: admin.profileImageUrl ?? '',
   createdAt: admin.createdAt,
 })
 

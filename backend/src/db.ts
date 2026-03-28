@@ -11,15 +11,26 @@ const { Pool } = pkg
 // Load environment variables from .env file
 dotenv.config()
 
+const connectionString = process.env.DATABASE_URL
+const sslEnabled = process.env.DB_SSL === 'true' || connectionString?.includes('supabase.co')
+
 // Create a connection pool for better performance
 // The pool manages multiple connections to the database automatically
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'maid_agency_db',
-})
+const pool = new Pool(
+  connectionString
+    ? {
+        connectionString,
+        ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
+      }
+    : {
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || 'postgres',
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        database: process.env.DB_NAME || 'maid_agency_db',
+        ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
+      }
+)
 
 // Handle connection errors
 pool.on('error', (err) => {

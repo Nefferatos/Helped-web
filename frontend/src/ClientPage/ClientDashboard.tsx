@@ -1,8 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, BriefcaseBusiness, CheckCircle2, LogOut, Mail, MessageCircle, Phone, Search, Sparkles, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Bell,
+  BriefcaseBusiness,
+  Building2,
+  CheckCircle2,
+  Clock3,
+  Home,
+  LogOut,
+  Mail,
+  MessageCircle,
+  Phone,
+  Search,
+  Settings,
+  Sparkles,
+  UserRound,
+  Users,
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { calculateAge, MaidProfile } from "@/lib/maids";
+import { fetchAgencies, type AgencySummary } from "@/lib/agencies";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { useToast } from "@/hooks/use-toast";
 import "./ClientTheme.css";
@@ -44,12 +67,39 @@ const getExperienceBucket = (maid: MaidProfile) => {
   return "No Experience";
 };
 
+const getDisplayStatus = (status: string) => {
+  if (status === "direct_hire" || status === "accepted") {
+    return { label: "Accepted", className: "border-emerald-200 bg-emerald-100 text-emerald-700" };
+  }
+  if (status === "reject" || status === "rejected" || status === "declined") {
+    return { label: "Declined", className: "border-rose-200 bg-rose-100 text-rose-700" };
+  }
+
+  return { label: "Pending", className: "border-amber-200 bg-amber-100 text-amber-700" };
+};
+
+const getAgencyName = (maid: MaidProfile, company: CompanyProfileApi | null) => {
+  const agencyContact = maid.agencyContact as Record<string, unknown>;
+  return String(agencyContact.companyName || company?.company_name || company?.short_name || "Agency");
+};
+
+const navItems = [
+  { label: "Dashboard", href: "/client/dashboard", icon: Home },
+  { label: "Maids", href: "/client/maids", icon: Users },
+  { label: "Agencies", href: "/agencies", icon: Building2 },
+  { label: "Requests", href: "/client/dashboard#requests", icon: BriefcaseBusiness },
+  { label: "Messages", href: "/client/support-chat", icon: MessageCircle },
+  { label: "Profile", href: "/client/profile", icon: UserRound },
+  { label: "History", href: "/client/history", icon: Clock3 },
+];
+
 const ClientDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [client, setClient] = useState<ClientUser | null>(getStoredClient());
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
+  const [agencies, setAgencies] = useState<AgencySummary[]>([]);
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [actioningId, setActioningId] = useState<number | null>(null);
@@ -95,6 +145,11 @@ const ClientDashboard = () => {
         setAssignments(maidData.assignments);
         setAllPublicMaids(publicData.maids.filter((maid) => maid.isPublic));
         setCompany(companyData.companyProfile ?? null);
+        try {
+          setAgencies(await fetchAgencies());
+        } catch {
+          setAgencies([]);
+        }
       } catch (error) {
         clearClientAuth();
         toast({
@@ -202,95 +257,172 @@ const ClientDashboard = () => {
     }
   };
 
-const interestedCount = assignments.filter((item) => item.directSale.status === "interested").length;
+  const interestedCount = assignments.filter((item) => item.directSale.status === "interested").length;
   const directHireCount = assignments.filter((item) => item.directSale.status === "direct_hire").length;
-  const agencyCount = assignments.length - directHireCount;
+  const pendingCount = assignments.filter(
+    (item) => !["direct_hire", "accepted", "reject", "rejected", "declined"].includes(item.directSale.status),
+  ).length;
+  const featuredMaids = filteredPublicMaids.slice(0, 8);
 
   return (
-    <div className="client-page-theme min-h-screen bg-muted">
-      <div className="container py-8 md:py-12">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <Link to="/" className="mb-3 inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground">
-              <ArrowLeft className="h-4 w-4" /> Back to Home
-            </Link>
-            <h1 className="font-display text-3xl font-bold text-foreground">Client Dashboard</h1>
-            <p className="mt-2 font-body text-sm text-muted-foreground">
-              {client ? `Welcome, ${client.name}. Review your assigned maids and discover more public profiles.` : "Loading your account..."}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <div className="rounded-2xl border bg-card px-4 py-3 text-sm text-foreground shadow-sm">
-              <p className="font-semibold">{client?.name || "Client"}</p>
-              <p className="text-muted-foreground">{client?.email || ""}</p>
-              {client?.company ? <p className="text-muted-foreground">{client.company}</p> : null}
-            </div>
-            <Button variant="outline" onClick={() => void handleLogout()}>
-              <LogOut className="mr-2 h-4 w-4" /> Logout
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to="/client/support-chat">
-                <MessageCircle className="mr-2 h-4 w-4" /> Chat Support
+    <div className="client-page-theme min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
+      <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-6">
+            <div>
+              <Link to="/" className="font-display text-xl font-bold text-foreground">
+                "Find Maids" At The Agency
               </Link>
+            </div>
+            <nav className="hidden items-center gap-6 font-body text-sm font-medium md:flex">
+              {navItems.map((item) => (
+                <Link key={item.label} to={item.href} className="transition-colors hover:text-primary">
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" className="rounded-2xl">
+              <Bell className="h-5 w-5" />
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 transition hover:border-primary/40">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={client?.profileImageUrl} alt={client?.name || "Client"} />
+                    <AvatarFallback className="bg-primary/10 text-primary">
+                      {(client?.name || "C").slice(0, 1).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden text-left md:block">
+                    <p className="text-sm font-semibold text-foreground">{client?.name || "Client"}</p>
+                    <p className="text-xs text-muted-foreground">{client?.email || ""}</p>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/client/profile">
+                    <UserRound className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/client/history">History</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/client/support-chat">
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Messages
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/client/profile">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => void handleLogout()}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 md:py-8">
+        <div className="mb-8 overflow-hidden rounded-[28px] border bg-card shadow-sm">
+          <div className="flex flex-col gap-5 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_40%),linear-gradient(135deg,rgba(255,255,255,0.96),rgba(245,247,243,0.94))] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                  <ArrowLeft className="h-4 w-4" /> Back to Home
+                </Link>
+                <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                  <Sparkles className="h-3.5 w-3.5" /> Request Center
+                </p>
+                <h2 className="mt-3 font-display text-3xl font-bold text-foreground sm:text-4xl">Review agency suggestions with a cleaner flow.</h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                  Requests stay front and center here, while maid discovery, agency browsing, and chat remain close by.
+                </p>
+              </div>
+              <div className="min-w-[220px] rounded-[24px] border bg-background/80 p-4 shadow-sm">
+                <p className="font-semibold text-foreground">{client?.name || "Client"}</p>
+                <p className="text-sm text-muted-foreground">{client?.email || ""}</p>
+                {client?.company ? <p className="text-sm text-muted-foreground">{client.company}</p> : null}
+                <div className="mt-4 flex flex-col gap-2">
+                  <Button asChild className="w-full rounded-2xl">
+                    <Link to="/client/support-chat">
+                      <MessageCircle className="mr-2 h-4 w-4" /> Messages
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full rounded-2xl">
+                    <Link to="/client/profile">Profile</Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full rounded-2xl">
+                    <Link to="/client/history">History</Link>
+                  </Button>
+                  <Button variant="outline" onClick={() => void handleLogout()} className="w-full rounded-2xl">
+                    <LogOut className="mr-2 h-4 w-4" /> Logout
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <section className="mb-8 grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
-          <div className="rounded-3xl border bg-card p-6 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 font-body text-xs font-semibold uppercase tracking-wide text-accent-foreground">
-                  <Sparkles className="h-3.5 w-3.5" /> Personal Hiring Space
-                </p>
-                <h2 className="font-display text-3xl font-bold text-foreground">Plan your next helper search with confidence</h2>
-                <p className="mt-3 max-w-2xl font-body text-sm leading-6 text-muted-foreground">
-                  Use this dashboard to compare assigned maids, explore more public profiles, and keep your hiring conversation with the agency moving smoothly.
-                </p>
-              </div>
-              <Button asChild>
-                <a href="#discover-maids">Browse Public Maids</a>
-              </Button>
-            </div>
-          </div>
-
-            <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-              <div className="rounded-2xl border bg-card p-4 shadow-sm">
-                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Assigned to You</p>
-                <p className="mt-2 font-display text-3xl font-bold text-foreground">{assignments.length}</p>
-              </div>
-              <div className="rounded-2xl border bg-card p-4 shadow-sm">
-                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Through Agency</p>
-                <p className="mt-2 font-display text-3xl font-bold text-foreground">{agencyCount}</p>
-              </div>
-              <div className="rounded-2xl border bg-card p-4 shadow-sm">
-                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Interested</p>
-                <p className="mt-2 font-display text-3xl font-bold text-foreground">{interestedCount}</p>
-              </div>
-              <div className="rounded-2xl border bg-card p-4 shadow-sm">
-                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Accepted</p>
-                <p className="mt-2 font-display text-3xl font-bold text-foreground">{directHireCount}</p>
-              </div>
-            </div>
+        <section className="mb-8 grid gap-3 sm:grid-cols-3">
+          <Card className="rounded-[24px] border bg-card shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pending Requests</p>
+              <p className="mt-2 font-display text-3xl font-bold text-foreground">{pendingCount}</p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-[24px] border bg-card shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Accepted</p>
+              <p className="mt-2 font-display text-3xl font-bold text-foreground">{directHireCount}</p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-[24px] border bg-card shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Interested</p>
+              <p className="mt-2 font-display text-3xl font-bold text-foreground">{interestedCount}</p>
+            </CardContent>
+          </Card>
         </section>
 
-        <section className="mb-8 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border bg-card p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-2">
-              <Search className="h-5 w-5 text-primary" />
-              <h2 className="font-display text-2xl font-bold text-foreground">Discover Public Maids</h2>
+        <section id="best-maids" className="mb-8 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-[28px] border bg-card p-5 shadow-sm sm:p-6">
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Best Maids</p>
+              <div className="mt-2 flex items-center gap-2">
+                <Search className="h-5 w-5 text-primary" />
+                <h2 className="font-display text-2xl font-bold text-foreground">Quick public maid shortlist</h2>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">Filter once, then browse a cleaner set of public maid cards.</p>
             </div>
             <div className="mb-5 grid gap-3 md:grid-cols-3">
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground"
-                placeholder="Search name, code, type"
-              />
+              <div className="flex items-center gap-3 rounded-[22px] border bg-background px-4 py-3 md:col-span-3">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+                  placeholder="Search name, code, type, or introduction"
+                />
+              </div>
               <select
                 value={nationality}
                 onChange={(event) => setNationality(event.target.value)}
-                className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+                className="h-12 w-full rounded-[18px] border bg-background px-3 text-sm text-foreground"
               >
                 {nationalityOptions.map((option) => (
                   <option key={option}>{option}</option>
@@ -299,40 +431,41 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
               <select
                 value={maidType}
                 onChange={(event) => setMaidType(event.target.value)}
-                className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+                className="h-12 w-full rounded-[18px] border bg-background px-3 text-sm text-foreground"
               >
                 {maidTypeOptions.map((option) => (
                   <option key={option}>{option}</option>
                 ))}
               </select>
             </div>
-            <p className="mb-5 font-body text-sm text-muted-foreground">
+            <p className="mb-5 text-sm text-muted-foreground">
               {isLoading ? "Loading public maid profiles..." : `${filteredPublicMaids.length} public maids matched your dashboard search.`}
             </p>
 
-            <div id="discover-maids" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
+            <div id="discover-maids" className="flex snap-x gap-4 overflow-x-auto pb-2">
                 {isLoading ? (
-                  <div className="col-span-full rounded-2xl border bg-muted/40 p-4 text-center font-body text-muted-foreground">
+                  <div className="w-full rounded-[24px] border bg-muted/40 p-8 text-center text-muted-foreground">
                     Loading public maid profiles...
                   </div>
-                ) : filteredPublicMaids.length === 0 ? (
-                  <div className="col-span-full rounded-2xl border bg-muted/40 p-4 text-center">
+                ) : featuredMaids.length === 0 ? (
+                  <div className="w-full rounded-[24px] border bg-muted/40 p-8 text-center">
                     <p className="font-display text-lg font-semibold text-foreground">
                       No matching public maids found
                     </p>
-                    <p className="mt-1 font-body text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       Try a broader search or another filter.
                     </p>
                   </div>
                 ) : (
-                  filteredPublicMaids.slice(0, 6).map((maid) => {
+                  featuredMaids.map((maid) => {
                     const age = calculateAge(maid.dateOfBirth);
                     const photo = getPrimaryPhoto(maid);
+                    const agencyName = getAgencyName(maid, company);
 
                     return (
                       <article
                         key={maid.referenceCode}
-                        className="w-full max-w-xs overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition flex flex-col">
+                        className="flex min-w-[280px] max-w-[280px] snap-start flex-col overflow-hidden rounded-[24px] border bg-background shadow-sm transition hover:shadow-md">
                         <div className="h-56 w-full bg-muted overflow-hidden">
                           {photo ? (
                             <img
@@ -347,48 +480,40 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                           )}
                         </div>
 
-                        <div className="flex flex-col p-3 space-y-2 flex-1">
-                          <div className="text-center">
-                            <h3 className="font-semibold text-base text-foreground">
+                        <div className="flex flex-1 flex-col gap-3 p-4">
+                          <div>
+                            <h3 className="font-display text-xl font-semibold text-foreground">
                               {maid.fullName}
                             </h3>
-                            <p className="text-[10px] text-muted-foreground">
+                            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                               {maid.referenceCode}
                             </p>
                           </div>
 
-                          <div className="flex flex-wrap justify-center gap-1">
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-accent text-accent-foreground">
-                              {maid.nationality || "N/A"}
-                            </span>
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-secondary/20">
-                              {maid.type || "N/A"}
-                            </span>
-                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-muted">
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="secondary" className="rounded-full">
                               {getExperienceBucket(maid)}
-                            </span>
+                            </Badge>
+                            <Badge variant="outline" className="rounded-full">
+                              Age {age ?? "N/A"}
+                            </Badge>
                           </div>
 
-                          <div className="text-[12px] text-foreground space-y-0.5 text-center">
-                            <p>
-                              <span className="text-muted-foreground">Age:</span>{" "}
-                              {age ?? "N/A"}
-                            </p>
-                            <p>
-                              <span className="text-muted-foreground">Education:</span>{" "}
-                              {maid.educationLevel || "N/A"}
-                            </p>
-                          </div>
-
-                          <p className="text-[12px] text-muted-foreground line-clamp-2 text-center">
+                          <p className="text-sm text-muted-foreground">{maid.nationality || "N/A"} • {maid.type || "N/A"}</p>
+                          <p className="line-clamp-3 text-sm text-muted-foreground">
                             {getPublicIntro(maid) ||
                               "Public introduction will be available soon."}
                           </p>
 
-                          <div className="mt-auto">
-                            <Button variant="outline" size="sm" className="w-full" asChild>
+                          <div className="mt-auto flex flex-col gap-2">
+                            <Button size="sm" className="w-full rounded-2xl" asChild>
                               <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
-                                View Profile
+                                View Details
+                              </Link>
+                            </Button>
+                            <Button variant="outline" size="sm" className="w-full rounded-2xl" asChild>
+                              <Link to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(agencyName)}`}>
+                                Message
                               </Link>
                             </Button>
                           </div>
@@ -443,12 +568,62 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
           </div>
         </section>
 
-        <section className="rounded-2xl border bg-card p-6 shadow-sm">
+        <section className="mb-8">
+          <div className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Agencies</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Browse agencies in the same flow</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Review agencies, then continue into details or messages without leaving the portal.</p>
+          </div>
+
+          <div className="flex snap-x gap-4 overflow-x-auto pb-2">
+            {agencies.length === 0 ? (
+              <Card className="w-full rounded-[24px] border bg-card shadow-sm">
+                <CardContent className="p-8 text-center text-muted-foreground">No agencies available right now.</CardContent>
+              </Card>
+            ) : (
+              agencies.map((agency) => (
+                <Card key={agency.id} className="min-w-[300px] max-w-[300px] snap-start rounded-[24px] border bg-card shadow-sm">
+                  <CardContent className="flex h-full flex-col gap-4 p-5">
+                    <div className="flex items-start gap-4">
+                      {agency.logoUrl ? (
+                        <img src={agency.logoUrl} alt={agency.name} className="h-16 w-16 rounded-[20px] object-cover" />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-muted text-lg font-bold">
+                          {agency.shortName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h3 className="font-display text-xl font-semibold text-foreground">{agency.name}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">{agency.location}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="secondary" className="rounded-full">{agency.rating.toFixed(1)} rating</Badge>
+                      <Badge variant="outline" className="rounded-full">{agency.availableMaidsCount} available</Badge>
+                    </div>
+                    <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{agency.about || "Agency overview will be updated soon."}</p>
+                    <div className="mt-auto flex flex-col gap-2">
+                      <Button asChild className="w-full rounded-2xl">
+                        <Link to={`/agencies/${agency.id}`}>View Agency</Link>
+                      </Button>
+                      <Button variant="outline" asChild className="w-full rounded-2xl">
+                        <Link to={`/client/support-chat?type=agency&agencyId=${agency.id}&agencyName=${encodeURIComponent(agency.name)}`}>Message</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section id="requests" className="rounded-[28px] border bg-card p-5 shadow-sm sm:p-6">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <h2 className="font-display text-2xl font-bold text-foreground">Maids Assigned to You</h2>
-              <p className="mt-1 font-body text-sm text-muted-foreground">
-                Only the maids assigned to your account appear in this section.
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Requests</p>
+              <h2 className="mt-2 font-display text-2xl font-bold text-foreground sm:text-3xl">Agency-submitted maid suggestions</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This is the main request area. Review each maid suggestion and respond quickly.
               </p>
             </div>
           </div>
@@ -472,7 +647,7 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                 const agencyContact = maid.agencyContact as Record<string, unknown>;
 
                 return (
-                  <article key={directSale.id} className="rounded-2xl border bg-muted/15 p-6">
+                  <article key={directSale.id} className="rounded-[24px] border bg-muted/15 p-5 transition hover:shadow-sm sm:p-6">
                     <div className="grid gap-6 lg:grid-cols-[180px_1fr]">
                       <div className="overflow-hidden rounded-2xl border bg-muted">
                         {photo ? (
@@ -487,6 +662,7 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                       <div>
                         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
                           <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{getAgencyName(maid, company)}</p>
                             <h3 className="font-display text-2xl font-bold text-foreground">{maid.fullName}</h3>
                             <p className="mt-1 font-body text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
                           </div>
@@ -497,9 +673,14 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                             <span className="rounded-full bg-secondary/20 px-2.5 py-1 font-body text-xs font-medium text-foreground">
                               {maid.type || "N/A"}
                             </span>
-                            <span className="rounded-full bg-muted px-2.5 py-1 font-body text-xs font-medium text-foreground">
-                              Assignment: {directSale.status}
-                            </span>
+                            {(() => {
+                              const status = getDisplayStatus(directSale.status);
+                              return (
+                                <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${status.className}`}>
+                                  {status.label}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -510,19 +691,16 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                           <p><span className="text-muted-foreground">Assigned On:</span> {new Date(directSale.createdAt).toLocaleDateString()}</p>
                         </div>
 
-                        <p className="mt-4 font-body text-sm leading-6 text-muted-foreground">
-                          {getPublicIntro(maid) || "Public introduction will be available soon for this profile."}
-                        </p>
+                        <div className="mt-4 rounded-[20px] bg-background p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Agency Message</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                            {String(agencyContact.message || "").trim() || getPublicIntro(maid) || "No additional message was included with this request."}
+                          </p>
+                        </div>
 
-                        <div className="mt-5 flex flex-wrap gap-3">
+                        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                           <Button
-                            variant="outline"
-                            disabled={actioningId === directSale.id}
-                            onClick={() => void updateAssignmentStatus(directSale.id, "interested")}
-                          >
-                            Interested
-                          </Button>
-                          <Button
+                            className="h-12 w-full rounded-2xl sm:flex-1"
                             disabled={actioningId === directSale.id}
                             onClick={() => void updateAssignmentStatus(directSale.id, "direct-hire")}
                           >
@@ -530,18 +708,33 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
                           </Button>
                           <Button
                             variant="destructive"
+                            className="h-12 w-full rounded-2xl sm:flex-1"
                             disabled={actioningId === directSale.id}
                             onClick={() => void updateAssignmentStatus(directSale.id, "reject")}
                           >
-                            Reject
+                            Decline
                           </Button>
-                          <Button variant="outline" asChild>
-                            <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Public Profile</Link>
+                          <Button variant="outline" className="h-12 w-full rounded-2xl sm:flex-1" asChild>
+                            <Link to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(getAgencyName(maid, company))}`}>Message</Link>
+                          </Button>
+                        </div>
+
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                          <Button
+                            variant="outline"
+                            className="w-full rounded-2xl sm:flex-1"
+                            disabled={actioningId === directSale.id}
+                            onClick={() => void updateAssignmentStatus(directSale.id, "interested")}
+                          >
+                            Mark Interested
+                          </Button>
+                          <Button variant="ghost" className="w-full rounded-2xl sm:flex-1" asChild>
+                            <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Details</Link>
                           </Button>
                         </div>
 
                         <div className="mt-6 grid gap-3 rounded-2xl border bg-card p-4 font-body text-sm text-foreground md:grid-cols-3">
-                          <p className="flex items-center gap-2"><BriefcaseBusiness className="h-4 w-4 text-primary" /> {String(agencyContact.companyName || company?.company_name || "Agency")}</p>
+                          <p className="flex items-center gap-2"><BriefcaseBusiness className="h-4 w-4 text-primary" /> {getAgencyName(maid, company)}</p>
                           <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> {String(agencyContact.phone || company?.contact_phone || "N/A")}</p>
                           <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-primary" /> {String(agencyContact.contactEmail || agencyContact.email || company?.contact_email || "N/A")}</p>
                         </div>
@@ -554,6 +747,14 @@ const interestedCount = assignments.filter((item) => item.directSale.status === 
           )}
         </section>
       </div>
+
+      <Button asChild className="fixed bottom-5 right-5 h-14 rounded-full px-5 shadow-lg">
+        <Link to="/client/support-chat">
+          <MessageCircle className="mr-2 h-5 w-5" />
+          Chat
+        </Link>
+      </Button>
+
     </div>
   );
 };

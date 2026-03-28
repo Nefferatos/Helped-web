@@ -1,8 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle, HeartHandshake, Search, Users } from "lucide-react";
+import { ArrowRight, CheckCircle, HeartHandshake, Search, Settings, UserRound, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/sonner";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { calculateAge, MaidProfile } from "@/lib/maids";
@@ -287,16 +289,49 @@ const ClientLandingPage = () => {
           ) : null}
           {clientUser ? (
             <div className="flex items-center gap-2">
-              <div className="hidden rounded-full border bg-muted px-3 py-1 text-right md:block">
-                <p className="font-body text-xs font-semibold text-foreground">{clientUser.name}</p>
-                <p className="font-body text-[11px] text-muted-foreground">{clientUser.email}</p>
-              </div>
-              <Button size="sm" variant="outline" className="font-body" asChild>
-                <Link to="/client/dashboard">Client Dashboard</Link>
-              </Button>
-              <Button size="sm" className="font-body" onClick={() => void handleLogout()}>
-                Logout
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 transition hover:border-primary/40">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={clientUser.profileImageUrl} alt={clientUser.name} />
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {clientUser.name.slice(0, 1).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="hidden text-left md:block">
+                      <p className="text-sm font-semibold text-foreground">{clientUser.name}</p>
+                      <p className="text-xs text-muted-foreground">{clientUser.email}</p>
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/dashboard">Dashboard</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/profile">
+                      <UserRound className="mr-2 h-4 w-4" />
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/history">History</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/support-chat">Messages</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/profile">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => void handleLogout()}>Logout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ) : (
             <Link to="/employer-login">

@@ -96,6 +96,7 @@ export interface ClientRecord {
   company?: string
   email: string
   password: string
+  profileImageUrl?: string
   createdAt: string
 }
 
@@ -110,6 +111,7 @@ export interface AgencyAdminRecord {
   username: string
   password: string
   agencyName: string
+  profileImageUrl?: string
   createdAt: string
 }
 
@@ -766,6 +768,7 @@ export const registerClientStore = async (payload: {
     company: payload.company ?? '',
     email: payload.email,
     password: payload.password,
+    profileImageUrl: '',
     createdAt: now(),
   }
 
@@ -821,6 +824,61 @@ export const getClientByTokenStore = async (token: string) => {
   const client = data.clients.find((item) => item.id === session.clientId)
   if (!client) return null
   return client
+}
+
+export const updateClientStore = async (
+  clientId: number,
+  updates: {
+    name?: string
+    company?: string
+    email?: string
+    profileImageUrl?: string
+  }
+) => {
+  const data = await loadData()
+  const index = data.clients.findIndex((client) => client.id === clientId)
+  if (index === -1) {
+    return null
+  }
+
+  if (
+    updates.email?.trim() &&
+    data.clients.some(
+      (client) =>
+        client.id !== clientId &&
+        client.email.toLowerCase() === updates.email!.trim().toLowerCase()
+    )
+  ) {
+    throw new Error('CLIENT_EMAIL_EXISTS')
+  }
+
+  data.clients[index] = {
+    ...data.clients[index],
+    name: updates.name?.trim() || data.clients[index].name,
+    company:
+      typeof updates.company === 'string'
+        ? updates.company.trim()
+        : data.clients[index].company,
+    email: updates.email?.trim() || data.clients[index].email,
+    profileImageUrl:
+      typeof updates.profileImageUrl === 'string'
+        ? updates.profileImageUrl
+        : data.clients[index].profileImageUrl,
+  }
+
+  data.directSales = data.directSales.map((sale) =>
+    sale.clientId === clientId
+      ? {
+          ...sale,
+          clientName: data.clients[index].name,
+          clientEmail: data.clients[index].email,
+          clientPhone: data.clients[index].company || '',
+        }
+      : sale
+  )
+
+  await saveData(data)
+  return data.clients[index]
 }
 
 export const getClientOptionsStore = async () => {
@@ -1110,6 +1168,109 @@ export const getAssignedMaidsForClientStore = async (clientId: number) => {
     .filter(
       (item): item is { directSale: DirectSaleRecord; maid: MaidRecord } =>
         Boolean(item.maid)
+    )
+}
+
+export const getChatConversationsForClientStore = async (clientId: number) => {
+  const data = await loadData()
+  const client = data.clients.find((item) => item.id === clientId)
+  if (!client) {
+    throw new Error('CLIENT_NOT_FOUND')
+  }
+
+  const conversations = new Map<
+    string,
+    {
+      key: string
+      clientId: number
+      conversationType: 'support' | 'agency'
+      agencyId?: number
+      agencyName?: string
+      title: string
+      description: string
+      lastMessage: string
+      lastMessageAt: string
+      unreadCount: number
+    }
+  >()
+
+  data.chatMessages
+    .filter((message) => message.clientId === clientId)
+    .forEach((message) => {
+      const key = `${message.conversationType}:${message.agencyId ?? 0}`
+      const existing = conversations.get(key)
+      const unreadIncrement =
+        message.senderRole === 'agency' && !message.readByClient ? 1 : 0
+      const title =
+        message.conversationType === 'agency'
+          ? message.agencyName || 'Agency'
+          : 'Agency Support'
+      const description =
+        message.conversationType === 'agency'
+          ? 'Direct chat with agency'
+          : 'General help, follow-up, and request support'
+
+      if (!existing) {
+        conversations.set(key, {
+          key,
+          clientId,
+          conversationType: message.conversationType,
+          agencyId: message.agencyId,
+          agencyName: message.agencyName || '',
+          title,
+          description,
+          lastMessage: message.message,
+          lastMessageAt: message.createdAt,
+          unreadCount: unreadIncrement,
+        })
+        return
+      }
+
+      existing.unreadCount += unreadIncrement
+      if (
+        new Date(message.createdAt).getTime() >=
+        new Date(existing.lastMessageAt).getTime()
+      ) {
+        existing.lastMessage = message.message
+        existing.lastMessageAt = message.createdAt
+      }
+    })
+
+  if (!conversations.has('support:0')) {
+    conversations.set('support:0', {
+      key: 'support:0',
+      clientId,
+      conversationType: 'support',
+      title: 'Agency Support',
+      description: 'General help, follow-up, and request support',
+      lastMessage: '',
+      lastMessageAt: client.createdAt,
+      unreadCount: 0,
+    })
+  }
+
+  return Array.from(conversations.values()).sort(
+    (a, b) =>
+      new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+  )
+}
+
+export const getClientHistoryStore = async (clientId: number) => {
+  const data = await loadData()
+
+  return data.directSales
+    .filter((sale) => sale.clientId === clientId)
+    .map((sale) => ({
+      directSale: sale,
+      maid:
+        data.maids.find(
+          (maid) => maid.referenceCode === sale.maidReferenceCode
+        ) ?? null,
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.directSale.createdAt).getTime() -
+        new Date(a.directSale.createdAt).getTime()
     )
 }
 

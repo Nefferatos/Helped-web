@@ -2,6 +2,7 @@ import express, { Router } from 'express'
 import {
   getAdminChatConversations,
   getAdminChatMessages,
+  getMyChatConversations,
   getMyChatMessages,
   sendAdminChatMessage,
   sendMyChatMessage,
@@ -9,6 +10,7 @@ import {
 
 const router: Router = express.Router()
 
+router.get('/client/conversations', getMyChatConversations)
 router.get('/client', getMyChatMessages)
 router.post('/client', sendMyChatMessage)
 router.get('/admin', getAdminChatConversations)

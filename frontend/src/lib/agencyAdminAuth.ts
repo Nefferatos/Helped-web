@@ -2,6 +2,7 @@ export interface AgencyAdminUser {
   id: number;
   username: string;
   agencyName: string;
+  profileImageUrl?: string;
   createdAt: string;
 }
 

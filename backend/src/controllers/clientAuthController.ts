@@ -5,6 +5,7 @@ import {
   createClientSessionStore,
   deleteClientSessionStore,
   registerClientStore,
+  updateClientStore,
 } from '../store'
 
 const toSafeClient = (client: {
@@ -12,12 +13,14 @@ const toSafeClient = (client: {
   name: string
   company?: string
   email: string
+  profileImageUrl?: string
   createdAt: string
 }) => ({
   id: client.id,
   name: client.name,
   company: client.company ?? '',
   email: client.email,
+  profileImageUrl: client.profileImageUrl ?? '',
   createdAt: client.createdAt,
 })
 
@@ -96,6 +99,46 @@ export const getClientMe = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching client profile:', error)
     res.status(500).json({ error: 'Failed to fetch client profile' })
+  }
+}
+
+export const updateClientMe = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { name, company, email, profileImageUrl } = req.body as {
+      name?: string
+      company?: string
+      email?: string
+      profileImageUrl?: string
+    }
+
+    if (!name?.trim() || !email?.trim()) {
+      return res.status(400).json({ error: 'name and email are required' })
+    }
+
+    const updated = await updateClientStore(client.id, {
+      name,
+      company,
+      email,
+      profileImageUrl,
+    })
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Client not found' })
+    }
+
+    res.status(200).json({ client: toSafeClient(updated) })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'CLIENT_EMAIL_EXISTS') {
+      return res.status(409).json({ error: 'Client email already exists' })
+    }
+
+    console.error('Error updating client profile:', error)
+    res.status(500).json({ error: 'Failed to update client profile' })
   }
 }
 

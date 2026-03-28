@@ -95,14 +95,14 @@ const AgencyDetailsPage = () => {
 
   return (
     <div className="client-page-theme min-h-screen">
-      <div className="container py-12">
-        <Link to="/agencies" className="mb-8 inline-flex items-center gap-2 font-body text-sm text-primary hover:underline">
+      <div className="container py-8 md:py-12">
+        <Link to="/agencies" className="mb-6 inline-flex items-center gap-2 font-body text-sm text-primary hover:underline">
           <ArrowLeft className="h-4 w-4" />
           All Agencies
         </Link>
 
-        <section className="mb-10 grid gap-6 xl:grid-cols-[1fr_1.2fr]">
-          <Card className="overflow-hidden">
+        <section className="mb-8 space-y-5">
+          <Card className="overflow-hidden rounded-3xl">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 {agency.logoUrl ? (
@@ -118,6 +118,7 @@ const AgencyDetailsPage = () => {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge variant="secondary">{agency.publicMaidsCount} public maids</Badge>
                     <Badge variant="outline">{agency.availableMaidsCount} available now</Badge>
+                    <Badge variant="outline">{agency.rating.toFixed(1)} rating</Badge>
                   </div>
                 </div>
               </div>
@@ -145,7 +146,7 @@ const AgencyDetailsPage = () => {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden rounded-3xl">
             <CardHeader>
               <CardTitle>Agency Overview</CardTitle>
             </CardHeader>
@@ -162,12 +163,9 @@ const AgencyDetailsPage = () => {
                   ))}
                 </div>
               ) : null}
-              <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-                Maids are grouped under this agency so clients can browse, compare, and move into the Accept flow without switching between unrelated screens.
-              </div>
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" className="w-full rounded-2xl sm:w-auto">
                 <Link to={`/client/support-chat?type=agency&agencyId=${agency.id}&agencyName=${encodeURIComponent(agency.name)}`}>
-                  Chat with {agency.name}
+                  Message {agency.name}
                 </Link>
               </Button>
             </CardContent>
@@ -175,21 +173,21 @@ const AgencyDetailsPage = () => {
         </section>
 
         {!isLoggedIn ? (
-          <div className="mb-6 rounded-2xl border bg-card p-5">
+          <div className="mb-6 rounded-3xl border bg-card p-5">
             <p className="font-display text-xl font-semibold text-foreground">Login Required</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Maid photos, biodata, search, and action buttons are hidden until employer login.
+              Maid photos, biodata, search, and actions are hidden until employer login.
             </p>
             <div className="mt-4">
-              <Button asChild>
+              <Button asChild className="w-full rounded-2xl sm:w-auto">
                 <Link to="/employer-login">Employer Login</Link>
               </Button>
             </div>
           </div>
         ) : null}
 
-        <section className={`mb-6 grid gap-3 md:grid-cols-3 ${!isLoggedIn ? "opacity-50" : ""}`}>
-          <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 md:col-span-2">
+        <section className={`mb-6 grid gap-3 ${!isLoggedIn ? "opacity-50" : ""}`}>
+          <div className="flex items-center gap-2 rounded-2xl border bg-background px-3 py-3">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
               value={keyword}
@@ -199,7 +197,7 @@ const AgencyDetailsPage = () => {
               className="h-auto border-none bg-transparent p-0 shadow-none"
             />
           </div>
-          <div className="flex gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Select value={nationality} onValueChange={setNationality}>
               <SelectTrigger>
                 <SelectValue />
@@ -227,53 +225,52 @@ const AgencyDetailsPage = () => {
           </div>
         </section>
 
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-display text-2xl font-bold">Available Maids</h2>
           <p className="text-sm text-muted-foreground">
             {isLoggedIn ? `${filteredMaids.length} profiles shown` : "Login to unlock maid profiles"}
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {filteredMaids.length === 0 ? (
+          <Card className="rounded-3xl">
+            <CardContent className="p-10 text-center">
+              <Phone className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
+              <p className="text-muted-foreground">No maids matched the current filters for this agency.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
             {filteredMaids.map((maid) => {
               const age = calculateAge(maid.dateOfBirth);
               const photo = getPrimaryPhoto(maid);
               const isAvailable = !maid.status || maid.status === "available";
 
               return (
-                <Card
-                  key={maid.referenceCode}
-                  className="overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition flex flex-col w-full max-w-[260px] h-[500px]" >
+                <Card key={maid.referenceCode} className="overflow-hidden rounded-3xl border bg-card shadow-sm transition hover:shadow-md">
                   <div className={`overflow-hidden ${!isLoggedIn ? "blur-md" : ""}`}>
                     {photo ? (
-                      <img
-                        src={photo}
-                        alt={maid.fullName}
-                        className="h-44 w-full object-cover rounded-t-xl" />
+                      <img src={photo} alt={maid.fullName} className="h-56 w-full object-cover" />
                     ) : (
-                      <div className="flex h-44 items-center justify-center text-sm text-muted-foreground bg-muted rounded-t-xl">
+                      <div className="flex h-56 items-center justify-center bg-muted text-sm text-muted-foreground">
                         No photo available
                       </div>
                     )}
                   </div>
 
-                  <div className={`p-4 flex flex-col flex-1 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
-                    <CardTitle className="text-lg font-semibold text-foreground mb-1">
-                      {maid.fullName}
-                    </CardTitle>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">
-                      {maid.referenceCode}
-                    </p>
-
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      <Badge>{maid.nationality || "N/A"}</Badge>
-                      <Badge variant="secondary">{maid.type || "N/A"}</Badge>
-                      <Badge variant={isAvailable ? "outline" : "secondary"}>
-                        {isAvailable ? "Available" : maid.status}
-                      </Badge>
+                  <div className={`flex flex-col gap-4 p-5 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
+                    <div>
+                      <CardTitle className="mb-1 text-xl font-semibold text-foreground">{maid.fullName}</CardTitle>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
                     </div>
 
-                    <div className="mb-2 space-y-1 text-sm text-foreground">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge>{maid.nationality || "N/A"}</Badge>
+                      <Badge variant="secondary">{maid.type || "N/A"}</Badge>
+                      <Badge variant={isAvailable ? "outline" : "secondary"}>{isAvailable ? "Available" : maid.status}</Badge>
+                    </div>
+
+                    <div className="grid gap-2 text-sm text-foreground sm:grid-cols-2">
                       <p>
                         <span className="font-medium">Age:</span> {age ?? "N/A"}
                       </p>
@@ -282,21 +279,23 @@ const AgencyDetailsPage = () => {
                       </p>
                     </div>
 
-                    <p className="mb-4 line-clamp-3 text-sm text-muted-foreground">
+                    <p className="line-clamp-3 text-sm text-muted-foreground">
                       {getPublicIntro(maid) || "Profile introduction coming soon."}
                     </p>
 
                     {isLoggedIn ? (
-                      <div className="flex gap-2 mt-auto">
-                        <Button asChild className="flex-1">
-                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Profile</Link>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Button asChild className="w-full rounded-2xl">
+                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Details</Link>
                         </Button>
-                        <Button asChild variant="outline" className="flex-1">
-                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>Accept</Link>
+                        <Button asChild variant="outline" className="w-full rounded-2xl">
+                          <Link to={`/client/support-chat?type=agency&agencyId=${agency.id}&agencyName=${encodeURIComponent(agency.name)}`}>
+                            Message
+                          </Link>
                         </Button>
                       </div>
                     ) : (
-                      <Button asChild className="w-full mt-auto">
+                      <Button asChild className="w-full rounded-2xl">
                         <Link to="/employer-login">Login to View</Link>
                       </Button>
                     )}
@@ -305,15 +304,7 @@ const AgencyDetailsPage = () => {
               );
             })}
           </div>
-
-        {filteredMaids.length === 0 ? (
-          <Card>
-            <CardContent className="p-10 text-center">
-              <Phone className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
-              <p className="text-muted-foreground">No maids matched the current filters for this agency.</p>
-            </CardContent>
-          </Card>
-        ) : null}
+        )}
       </div>
     </div>
   );
