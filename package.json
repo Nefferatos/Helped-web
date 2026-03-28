@@ -6,13 +6,33 @@
   "scripts": {
     "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "frontend:build": "npm run build --prefix frontend",
+    "frontend:build:dev": "npm run build:dev --prefix frontend",
     "start": "npm start --prefix backend",
-    "install-all": "npm install && cd frontend && npm install && cd ../backend && npm install"
+    "install-all": "npm install && cd frontend && npm install && cd ../backend && npm install",
+    "deploy:cf": "npm run frontend:build && wrangler deploy",
+    "worker:dev": "npm run frontend:build:dev && wrangler dev",
+    "pages:dev": "npm run worker:dev",
+    "kv:create": "wrangler kv:namespace create \"APP_DATA\"",
+    "kv:migrate": "type backend\\data\\app-data.json | wrangler kv:key put \"app-data.json\" --namespace-id=APP_DATA_ID",
+    "worker:deploy": "wrangler deploy"
   },
-  "keywords": ["react", "typescript", "nodejs", "express"],
+  "keywords": [
+    "react",
+    "typescript",
+    "nodejs",
+    "express"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@cloudflare/kv-asset-handler": "^0.4.2",
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "@hono/zod-validator": "^0.7.6",
+    "@types/node": "^25.5.0",
+    "concurrently": "^8.2.2",
+    "hono": "^4.12.9",
+    "typesafe-i18n": "^5.27.1",
+    "wrangler": "^4.78.0"
   }
 }

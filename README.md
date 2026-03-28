@@ -79,6 +79,49 @@ npm run build
 npm start
 ```
 
+## Cloudflare Deployment
+
+This project can be deployed as one Cloudflare Worker that serves the built frontend and handles the API on `/api/*`.
+
+Important:
+`backend/schema.sql` and `DATABASE_URL` are for the legacy Node/Express backend. The Cloudflare deployment path in this repo does not read Supabase/Postgres. It stores app data in the `APP_DATA` Cloudflare KV namespace.
+
+### 1. Build the frontend assets
+
+```bash
+npm run frontend:build
+```
+
+### 2. Create the KV namespace
+
+```bash
+npm run kv:create
+```
+
+Put the returned KV ids into [wrangler.toml](c:\hb\Helped-web\wrangler.toml) for `id` and `preview_id`.
+
+### 3. Seed the KV data
+
+```bash
+npm run kv:migrate
+```
+
+Replace `APP_DATA_ID` in that command with the real namespace id if needed.
+
+### 4. Run locally with Wrangler
+
+```bash
+npm run worker:dev
+```
+
+### 5. Deploy to Cloudflare
+
+```bash
+npm run deploy:cf
+```
+
+After deploy, the SPA is served from `frontend/dist` and the backend runs inside the same Worker.
+
 ## Available Scripts
 
 ### Frontend

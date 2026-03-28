@@ -1,0 +1,13 @@
+name = "helped-web"
+main = "functions/api/[[...path]].ts"
+compatibility_date = "2024-10-01"
+
+[assets]
+directory = "./frontend/dist"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "APP_DATA"
+id = ""  # Create with: wrangler kv:namespace create "APP_DATA"
+preview_id = ""
+
