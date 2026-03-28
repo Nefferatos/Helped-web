@@ -22,10 +22,5 @@
       "src": "/(.*)",
       "dest": "frontend/dist/index.html"
     }
-  ],
-  "functions": {
-    "backend/src/server.js": {
-      "runtime": "nodejs18.x"
-    }
-  }
+  ]
 }
