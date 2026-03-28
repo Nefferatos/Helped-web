@@ -2059,12 +2059,40 @@ export default {
       }
     }
 
+    if (url.pathname === '/agencyadmin') {
+      return Response.redirect(new URL('/agencyadmin/login', url), 302)
+    }
+
+    if (url.pathname === '/agency-admin-portal' || url.pathname === '/agencyadminportal') {
+      return Response.redirect(new URL('/agencyadmin/login', url), 302)
+    }
+
+    if (url.pathname === '/agency-portal' || url.pathname === '/agencyportal') {
+      return Response.redirect(new URL('/agencies', url), 302)
+    }
+
+    if (url.pathname === '/user-portal' || url.pathname === '/userportal') {
+      return Response.redirect(new URL('/employer-login', url), 302)
+    }
+
+    const isAssetRequest =
+      url.pathname.startsWith('/assets/') ||
+      url.pathname.startsWith('/favicon') ||
+      url.pathname.startsWith('/robots.txt') ||
+      url.pathname.startsWith('/maid_agency_logo_81.jpg') ||
+      /\.[a-zA-Z0-9]+$/.test(url.pathname)
+
+    if (!isAssetRequest) {
+      const spaRequest = new Request(new URL('/', url).toString(), request)
+      return env.ASSETS.fetch(spaRequest)
+    }
+
     const assetResponse = await env.ASSETS.fetch(request)
     if (assetResponse.status !== 404) {
       return assetResponse
     }
 
-    const spaRequest = new Request(new URL('/index.html', url).toString(), request)
+    const spaRequest = new Request(new URL('/', url).toString(), request)
     return env.ASSETS.fetch(spaRequest)
   },
 }

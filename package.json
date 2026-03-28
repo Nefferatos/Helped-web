@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
-    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "build:full": "npm run build --prefix backend && npm run build --prefix frontend",
     "frontend:build": "npm run build --prefix frontend",
     "frontend:build:dev": "npm run build:dev --prefix frontend",
     "start": "npm start --prefix backend",

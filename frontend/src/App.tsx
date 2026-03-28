@@ -126,32 +126,37 @@ const App = () => (
       <Sonner />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-          <Route path="/" element={<ClientHomeRedirect />} />
           <Route path="/employer-login" element={<ClientEmployerLogin />} />
-          <Route path={adminPath("/login")} element={<AgencyAdminLogin />} />
+          <Route path="/agencies" element={<AgenciesPage />} />
+          <Route path="/agencies/:id" element={<AgencyDetailsPage />} />
+          <Route path="/agencyadmin/login" element={<AgencyAdminLogin />} />
+          <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
+          <Route path="/agencyadmin/dashboard" element={<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/agency-profile" element={<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/agency-profile/edit" element={<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/add-maid" element={<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/edit-maids" element={<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/maid/:refCode" element={<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/maid/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditMaid /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/change-password" element={<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/enquiry" element={<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
           <Route path="/client/dashboard" element={<ClientDashboard />} />
           <Route path="/client/maids" element={<ClientMaidsPage />} />
           <Route path="/client/profile" element={<ClientProfilePage />} />
           <Route path="/client/history" element={<ClientHistoryPage />} />
           <Route path="/client/support-chat" element={<ClientSupportChat />} />
-          <Route path="/agencies" element={<AgenciesPage />} />
-          <Route path="/agencies/:id" element={<AgencyDetailsPage />} />
           <Route path="/hire/:refCode" element={<HiringProcessPage />} />
           <Route path="/maids/:refCode" element={<PublicMaidProfile />} />
-
-          <Route path={adminPath()} element={<AdminIndexRedirect />} />
-          <Route path={adminPath("/dashboard")} element={<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/agency-profile")} element={<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/agency-profile/edit")} element={<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/add-maid")} element={<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/edit-maids")} element={<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/maid/:refCode")} element={<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/maid/:refCode/edit")} element={<ProtectedAdminRoute><AdminShell><EditMaid /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/change-password")} element={<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/enquiry")} element={<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/requests")} element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/chat-support")} element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
-          <Route path={adminPath("/employment-contracts")} element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
+          <Route path="/agency-portal" element={<AgenciesPage />} />
+          <Route path="/agencyportal" element={<AgenciesPage />} />
+          <Route path="/agency-admin-portal" element={<Navigate to="/agencyadmin/login" replace />} />
+          <Route path="/agencyadminportal" element={<Navigate to="/agencyadmin/login" replace />} />
+          <Route path="/user-portal" element={<ClientHomeRedirect />} />
+          <Route path="/userportal" element={<ClientHomeRedirect />} />
+          <Route path="/" element={<ClientHomeRedirect />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

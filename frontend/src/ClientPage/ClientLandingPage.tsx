@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle, HeartHandshake, Search, Settings, UserRound, Users } from "lucide-react";
+import { ArrowRight, CheckCircle, HeartHandshake, Search, Settings, ShieldCheck, UserRound, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,24 @@ const features = [
     icon: HeartHandshake,
     title: "Ongoing Support",
     description: "Our dedicated service doesn't end with a hire. We provide continued mediation and after-placement care.",
+  },
+];
+
+const portalLinks = [
+  {
+    title: "User Portal",
+    description: "Employer login, client dashboard, profile, history, and support chat.",
+    path: "/employer-login",
+  },
+  {
+    title: "Agency Portal",
+    description: "Browse public agencies and agency details.",
+    path: "/agencies",
+  },
+  {
+    title: "Agency Admin Portal",
+    description: "Agency admin login and full management dashboard.",
+    path: "/agencyadmin/login",
   },
 ];
 
@@ -397,6 +415,28 @@ const ClientLandingPage = () => {
                 <p className="font-body text-xs text-muted-foreground">Background checked and verified</p>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y bg-background py-10">
+        <div className="container">
+          <div className="mb-6 flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            <h2 className="font-display text-2xl font-bold text-foreground">Portal Access</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {portalLinks.map((portal) => (
+              <Link
+                key={portal.path}
+                to={portal.path}
+                className="rounded-2xl border bg-card p-5 transition hover:border-primary/40 hover:shadow-sm"
+              >
+                <p className="font-display text-lg font-semibold text-foreground">{portal.title}</p>
+                <p className="mt-2 font-body text-sm text-muted-foreground">{portal.description}</p>
+                <p className="mt-4 font-mono text-xs text-primary">{portal.path}</p>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

@@ -6,8 +6,8 @@ compatibility_date = "2024-10-01"
 directory = "./frontend/dist"
 binding = "ASSETS"
 
+
 [[kv_namespaces]]
 binding = "APP_DATA"
-id = ""  # Create with: wrangler kv:namespace create "APP_DATA"
-preview_id = ""
-
+id = "9a6fc0298f484dffaa60904b991c40df"
+preview_id = "c67516e8b2b84599a140ced04dc0be16"
