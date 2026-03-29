@@ -12,7 +12,7 @@ import culinaryImg from "./assets/culinary.png";
 import elderlyImg from "./assets/elderly-care.png";
 import familyImg from "./assets/family.jpg";
 import heroImage from "./assets/maid1.png";
-import housekeepingImg from "./assets/housekeeping.jpg";
+import housekeepingImg from "./assets/housekeeping.png";
 import infantImg from "./assets/infant-care.png";
 import "./ClientTheme.css";
 

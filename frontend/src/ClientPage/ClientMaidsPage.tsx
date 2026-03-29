@@ -151,55 +151,93 @@ const ClientMaidsPage = () => {
 
         {isLoading ? (
           <Card className="rounded-[28px] border bg-card shadow-sm">
-            <CardContent className="p-10 text-center text-muted-foreground">Loading maids...</CardContent>
+            <CardContent className="p-10 text-center text-muted-foreground">
+              Loading maids...
+            </CardContent>
           </Card>
         ) : filteredMaids.length === 0 ? (
           <Card className="rounded-[28px] border bg-card shadow-sm">
             <CardContent className="p-10 text-center">
-              <p className="font-display text-2xl font-semibold text-foreground">No matching maids found</p>
-              <p className="mt-2 text-sm text-muted-foreground">Try changing the filters or broadening the search.</p>
+              <p className="font-display text-2xl font-semibold text-foreground">
+                No matching maids found
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Try changing the filters or broadening the search.
+              </p>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {filteredMaids.map((maid) => {
               const age = calculateAge(maid.dateOfBirth);
               const photo = getPrimaryPhoto(maid);
               const agencyName = getAgencyName(maid, company);
 
               return (
-                <article key={maid.referenceCode} className="flex flex-col overflow-hidden rounded-[24px] border bg-card shadow-sm">
-                  <div className="h-56 overflow-hidden bg-muted">
+                <article
+                  key={maid.referenceCode}
+                  className="flex flex-col overflow-hidden rounded-xl border bg-background shadow-sm hover:shadow-md transition" >
+                  <div className="h-36 w-full bg-muted overflow-hidden">
                     {photo ? (
-                      <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
+                      <img
+                        src={photo}
+                        alt={maid.fullName}
+                        className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No photo</div>
+                      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                        No photo
+                      </div>
                     )}
                   </div>
-                  <div className="flex flex-1 flex-col gap-3 p-4">
+
+                  <div className="p-3 flex flex-col gap-2 text-xs">
+                    
                     <div>
-                      <h2 className="font-display text-xl font-semibold text-foreground">{maid.fullName}</h2>
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{maid.referenceCode}</p>
+                      <h2 className="text-sm font-semibold text-foreground line-clamp-1">
+                        {maid.fullName}
+                      </h2>
+                      <p className="text-[10px] text-muted-foreground">
+                        {maid.referenceCode}
+                      </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="secondary" className="rounded-full">
+
+                    <div className="flex flex-wrap gap-1">
+                      <span className="px-2 py-[2px] text-[10px] rounded-full bg-muted">
                         {getExperienceBucket(maid)}
-                      </Badge>
-                      <Badge variant="outline" className="rounded-full">
+                      </span>
+                      <span className="px-2 py-[2px] text-[10px] rounded-full border">
                         Age {age ?? "N/A"}
-                      </Badge>
+                      </span>
                     </div>
-                    <p className="text-sm text-muted-foreground">{maid.nationality || "N/A"} • {maid.type || "N/A"}</p>
-                    <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
-                      {getPublicIntro(maid) || "Public introduction will be available soon."}
+
+                    <p className="text-[11px] text-muted-foreground">
+                      {maid.nationality || "N/A"} • {maid.type || "N/A"}
                     </p>
-                    <div className="mt-auto flex flex-col gap-2">
-                      <Button asChild className="w-full rounded-2xl">
-                        <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Details</Link>
+
+                    <p className="text-[11px] text-muted-foreground line-clamp-2">
+                      {getPublicIntro(maid) || "No intro yet"}
+                    </p>
+
+                    <div className="flex gap-1 mt-auto">
+                      <Button
+                        size="sm"
+                        className="flex-1 h-7 text-xs rounded-md"
+                        asChild >
+                        <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                          View
+                        </Link>
                       </Button>
-                      <Button variant="outline" asChild className="w-full rounded-2xl">
-                        <Link to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(agencyName)}`}>
-                          Message
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-7 text-xs rounded-md"
+                        asChild >
+                        <Link
+                          to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(
+                            agencyName
+                          )}`} >
+                          Msg
                         </Link>
                       </Button>
                     </div>
