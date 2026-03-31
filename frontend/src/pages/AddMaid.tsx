@@ -746,6 +746,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                   <option>Married</option>
                   <option>Divorced</option>
                   <option>Widowed</option>
+                  <option>Single Parent</option>
                 </select>
               </div>
               <div className="flex flex-col gap-1">
@@ -756,6 +757,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                   <option>Muslim</option>
                   <option>Hindu</option>
                   <option>Buddhist</option>
+                  <option>Others</option>
                 </select>
               </div>
             </div>
@@ -776,6 +778,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                   <option>College/Degree (&gt;=13 yrs)</option>
                   <option>High School (10-12 yrs)</option>
                   <option>Primary (&lt;=6 yrs)</option>
+                  <option>Vocational Course</option>
                 </select>
               </div>
             </div>

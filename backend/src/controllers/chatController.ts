@@ -7,6 +7,8 @@ import {
   createChatMessageStore,
   getChatConversationsForClientStore,
   getChatConversationsStore,
+  getUnreadChatCountForAdminStore,
+  getUnreadChatCountForClientStore,
   getChatMessagesForClientStore,
   markChatMessagesReadForAgencyStore,
   markChatMessagesReadForClientStore,
@@ -75,6 +77,21 @@ export const getMyChatConversations = async (req: Request, res: Response) => {
   }
 }
 
+export const getMyChatSummary = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const unreadCount = await getUnreadChatCountForClientStore(client.id)
+    res.status(200).json({ unreadCount })
+  } catch (error) {
+    console.error('Error fetching client chat summary:', error)
+    res.status(500).json({ error: 'Failed to fetch chat summary' })
+  }
+}
+
 export const sendMyChatMessage = async (req: Request, res: Response) => {
   try {
     const client = await getAuthenticatedClient(req)
@@ -117,6 +134,21 @@ export const getAdminChatConversations = async (req: Request, res: Response) => 
   } catch (error) {
     console.error('Error fetching admin chat conversations:', error)
     res.status(500).json({ error: 'Failed to fetch chat conversations' })
+  }
+}
+
+export const getAdminChatSummary = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const unreadCount = await getUnreadChatCountForAdminStore()
+    res.status(200).json({ unreadCount })
+  } catch (error) {
+    console.error('Error fetching admin chat summary:', error)
+    res.status(500).json({ error: 'Failed to fetch chat summary' })
   }
 }
 

@@ -1255,6 +1255,22 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
   )
 }
 
+export const getUnreadChatCountForAdminStore = async () => {
+  const conversations = await getChatConversationsStore()
+  return conversations.reduce(
+    (sum, conversation) => sum + conversation.unreadCount,
+    0
+  )
+}
+
+export const getUnreadChatCountForClientStore = async (clientId: number) => {
+  const conversations = await getChatConversationsForClientStore(clientId)
+  return conversations.reduce(
+    (sum, conversation) => sum + conversation.unreadCount,
+    0
+  )
+}
+
 export const getClientHistoryStore = async (clientId: number) => {
   const data = await loadData()
 

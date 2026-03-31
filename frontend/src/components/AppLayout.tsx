@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getStoredAgencyAdmin, type AgencyAdminUser } from "@/lib/agencyAdminAuth";
+import { fetchAdminUnreadChatCount } from "@/lib/chat";
 
 const navItems = [
   { label: "HOME", path: adminPath("/dashboard") },
@@ -27,7 +28,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [agencyLogoUrl, setAgencyLogoUrl] = useState("");
 
   useEffect(() => {
-    const loadSummary = async () => {
+    let active = true;
+
+    const loadSummary = async (silent = false) => {
       try {
         const [response, companyResponse] = await Promise.all([fetch("/api/company/summary"), fetch("/api/company")]);
         const data = (await response.json().catch(() => ({}))) as {
@@ -38,6 +41,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         if (!response.ok) {
           throw new Error(data.error || "Failed to load notifications");
         }
+        if (!active) return;
         setPendingRequests(data.pendingRequests ?? 0);
         setUnreadAgencyChats(data.unreadAgencyChats ?? 0);
 
@@ -45,14 +49,41 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           const companyData = (await companyResponse.json().catch(() => ({}))) as {
             companyProfile?: { logo_data_url?: string };
           };
-          setAgencyLogoUrl(companyData.companyProfile?.logo_data_url || "");
+          if (active) {
+            setAgencyLogoUrl(companyData.companyProfile?.logo_data_url || "");
+          }
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load notifications");
+        if (!silent) {
+          toast.error(error instanceof Error ? error.message : "Failed to load notifications");
+        }
       }
     };
 
-    void loadSummary();
+    const loadUnreadChats = async (silent = false) => {
+      try {
+        const unreadCount = await fetchAdminUnreadChatCount();
+        if (active) {
+          setUnreadAgencyChats(unreadCount);
+        }
+      } catch (error) {
+        if (!silent) {
+          toast.error(error instanceof Error ? error.message : "Failed to load unread chats");
+        }
+      }
+    };
+
+    void loadSummary(false);
+    void loadUnreadChats(false);
+    const interval = window.setInterval(() => {
+      void loadSummary(true);
+      void loadUnreadChats(true);
+    }, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, [location.pathname]);
 
   useEffect(() => {
@@ -145,13 +176,18 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             <Link
               key={item.path}
               to={item.path}
-              className={`px-3 py-2 text-xs font-bold uppercase tracking-wide rounded-sm transition-colors active:scale-[0.97] ${
+              className={`relative px-3 py-2 text-xs font-bold uppercase tracking-wide rounded-sm transition-colors active:scale-[0.97] ${
                 location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
                   ? "bg-primary text-primary-foreground"
                   : "text-primary hover:bg-primary/10"
               }`}
             >
               {item.label}
+              {item.path === adminPath("/chat-support") && unreadAgencyChats > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {unreadAgencyChats}
+                </span>
+              ) : null}
             </Link>
           ))}
         </div>

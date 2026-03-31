@@ -26,6 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Input } from "@/components/ui/input";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { fetchAgencies, type AgencySummary } from "@/lib/agencies";
+import { fetchClientUnreadChatCount } from "@/lib/chat";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { useToast } from "@/hooks/use-toast";
 import "./ClientTheme.css";
@@ -106,6 +107,7 @@ const ClientDashboard = () => {
   const [search, setSearch] = useState("");
   const [nationality, setNationality] = useState("All Nationalities");
   const [maidType, setMaidType] = useState("All Types");
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   useEffect(() => {
     const token = getClientToken();
@@ -117,11 +119,12 @@ const ClientDashboard = () => {
     const loadDashboard = async () => {
       try {
         setIsLoading(true);
-        const [meResponse, maidsResponse, publicMaidsResponse, companyResponse] = await Promise.all([
+        const [meResponse, maidsResponse, publicMaidsResponse, companyResponse, unreadChats] = await Promise.all([
           fetch("/api/client-auth/me", { headers: { ...getClientAuthHeaders() } }),
           fetch("/api/client/my-maids", { headers: { ...getClientAuthHeaders() } }),
           fetch("/api/maids?visibility=public"),
           fetch("/api/company"),
+          fetchClientUnreadChatCount().catch(() => 0),
         ]);
 
         const meData = (await meResponse.json().catch(() => ({}))) as { error?: string; client?: ClientUser };
@@ -145,6 +148,7 @@ const ClientDashboard = () => {
         setAssignments(maidData.assignments);
         setAllPublicMaids(publicData.maids.filter((maid) => maid.isPublic));
         setCompany(companyData.companyProfile ?? null);
+        setUnreadChatCount(unreadChats);
         try {
           setAgencies(await fetchAgencies());
         } catch {
@@ -164,6 +168,14 @@ const ClientDashboard = () => {
     };
 
     void loadDashboard();
+
+    const interval = window.setInterval(() => {
+      void fetchClientUnreadChatCount()
+        .then((count) => setUnreadChatCount(count))
+        .catch(() => undefined);
+    }, 5000);
+
+    return () => window.clearInterval(interval);
   }, [navigate, toast]);
 
   const nationalityOptions = useMemo(() => {
@@ -276,16 +288,26 @@ const ClientDashboard = () => {
             </div>
             <nav className="hidden items-center gap-6 font-body text-sm font-medium md:flex">
               {navItems.map((item) => (
-                <Link key={item.label} to={item.href} className="transition-colors hover:text-primary">
+                <Link key={item.label} to={item.href} className="relative transition-colors hover:text-primary">
                   {item.label}
+                  {item.href === "/client/support-chat" && unreadChatCount > 0 ? (
+                    <span className="absolute -right-4 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {unreadChatCount}
+                    </span>
+                  ) : null}
                 </Link>
               ))}
             </nav>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" className="rounded-2xl">
+            <Button variant="outline" size="icon" className="relative rounded-2xl">
               <Bell className="h-5 w-5" />
+              {unreadChatCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {unreadChatCount}
+                </span>
+              ) : null}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -317,7 +339,7 @@ const ClientDashboard = () => {
                 <DropdownMenuItem asChild>
                   <Link to="/client/support-chat">
                     <MessageCircle className="mr-2 h-4 w-4" />
-                    Messages
+                    Messages {unreadChatCount > 0 ? `(${unreadChatCount})` : ""}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
@@ -360,7 +382,7 @@ const ClientDashboard = () => {
                 <div className="mt-4 flex flex-col gap-2">
                   <Button asChild className="w-full rounded-2xl">
                     <Link to="/client/support-chat">
-                      <MessageCircle className="mr-2 h-4 w-4" /> Messages
+                      <MessageCircle className="mr-2 h-4 w-4" /> Messages {unreadChatCount > 0 ? `(${unreadChatCount})` : ""}
                     </Link>
                   </Button>
                   <Button asChild variant="outline" className="w-full rounded-2xl">
@@ -587,7 +609,7 @@ const ClientDashboard = () => {
                 <p className="font-body text-sm leading-6 text-muted-foreground">{company?.about_us || "The agency will assist with matching, shortlisting, and follow-up support."}</p>
                 <Button variant="outline" asChild>
                   <Link to="/client/support-chat">
-                    <MessageCircle className="mr-2 h-4 w-4" /> Open Support Chat
+                    <MessageCircle className="mr-2 h-4 w-4" /> Open Support Chat {unreadChatCount > 0 ? `(${unreadChatCount})` : ""}
                   </Link>
                 </Button>
               </div>
@@ -778,7 +800,7 @@ const ClientDashboard = () => {
       <Button asChild className="fixed bottom-5 right-5 h-14 rounded-full px-5 shadow-lg">
         <Link to="/client/support-chat">
           <MessageCircle className="mr-2 h-5 w-5" />
-          Chat
+          Chat {unreadChatCount > 0 ? `(${unreadChatCount})` : ""}
         </Link>
       </Button>
 
