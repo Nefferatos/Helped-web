@@ -7,6 +7,8 @@ import { Search, Eye, EyeOff, Trash2, Download, Upload, Send } from "lucide-reac
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
+import { ArrowLeft } from "lucide-react";
+
 
 type ViewMode = "menu" | "public" | "hidden";
 const PAGE_SIZE = 15;
@@ -124,6 +126,7 @@ const EditMaids = () => {
       toast.error(error instanceof Error ? error.message : "Failed to delete maids");
     }
   };
+  
 
   const handleToggleSelected = async () => {
     try {
@@ -261,7 +264,10 @@ const EditMaids = () => {
   return (
     <div className="page-container">
       <div className="mb-6 flex items-center gap-3">
-        <button onClick={() => setView("menu")} className="text-sm text-primary hover:underline">Back</button>
+        <button onClick={() => setView("menu")} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-100 hover:text-black" >
+          <ArrowLeft size={16} />
+          Back
+        </button>
         <h2 className="text-xl font-bold">{view === "public" ? "Maids in Public" : "Maids Hidden"}</h2>
       </div>
 
@@ -307,33 +313,69 @@ const EditMaids = () => {
               return (
                 <div
                   key={maid.referenceCode}
-                  className="flex flex-col items-center gap-2 rounded-lg border p-3 text-center transition-all hover:border-primary/30 hover:shadow-md"
-                  style={{ animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards", animationDelay: `${i * 0.04}s`, opacity: 0 }}
+                  className="flex flex-col items-center gap-2 rounded-lg border p-2 text-center text-[11px] leading-tight transition-all hover:border-primary/30 hover:shadow-md"
+                  style={{
+                    animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards",
+                    animationDelay: `${i * 0.04}s`,
+                    opacity: 0,
+                  }}
                 >
                   <div
-                    className="flex h-28 w-27 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs text-black transition-all hover:ring-2 hover:ring-primary/40"
-                    onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))}
+                    className="flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs"
+                    onClick={() =>
+                      navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))
+                    }
                   >
                     {photoPreview ? (
-                      <img src={photoPreview} alt={`${maid.fullName}`} className="h-full w-full object-cover" />
+                      <img
+                        src={photoPreview}
+                        alt={maid.fullName}
+                        className="h-full w-full object-cover"
+                      />
                     ) : maid.hasPhoto ? (
                       "Photo"
                     ) : (
                       "No Photo"
                     )}
                   </div>
-                  <p className="cursor-pointer text-xs font-semibold leading-tight transition-colors hover:text-primary" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))}>{maid.fullName}</p>
-                  <p className="text-[10px] text-black">{maid.referenceCode}</p>
-                  <div className="flex flex-wrap justify-center gap-1">
-                    <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px]">{maid.nationality}</span>
-                    <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] text-accent-foreground">{maid.type}</span>
+
+                  <p
+                    className="cursor-pointer font-semibold hover:text-primary"
+                    onClick={() =>
+                      navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))
+                    }
+                  >
+                    {maid.fullName}
+                  </p>
+
+                  <div className="font-medium space-y-[2px]">
+                    <p>
+                      {maid.maritalStatus}
+                      {age !== null ? `(${age})` : ""}
+                    </p>
+
+                    <p>
+                      {maid.nationality} {maid.type}
+                    </p>
+
+                    <p className="font-bold">Rinzin Maids</p>
+
+                    <p className="font-semibold">
+                      Ref: {maid.referenceCode}
+                    </p>
+
+                    <p className="text-gray-500">
+                      Upd on {formatDate(maid.updatedAt)}
+                    </p>
                   </div>
-                  <p className="text-[10px] text-primary">Status: {maid.status || "available"}</p>
-                  <p className="text-[10px] text-muted-foreground">{maid.maritalStatus}{age !== null ? `(${age})` : ""}</p>
-                  <p className="text-[10px] text-muted-foreground">Upd: {formatDate(maid.updatedAt)}</p>
-                  <div className="mt-auto flex w-full flex-col gap-1 border-t pt-2">
+
+                  <div className="mt-1 w-full border-t pt-1">
                     <label className="flex items-center justify-center gap-1 text-[10px]">
-                      <input type="checkbox" checked={selected.has(maid.referenceCode)} onChange={() => toggle(maid.referenceCode)} className="accent-primary" />
+                      <input
+                        type="checkbox"
+                        checked={selected.has(maid.referenceCode)}
+                        onChange={() => toggle(maid.referenceCode)}
+                        className="accent-primary" />
                       Select
                     </label>
                   </div>
