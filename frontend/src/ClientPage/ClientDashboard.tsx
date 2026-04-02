@@ -85,7 +85,6 @@ const getAgencyName = (maid: MaidProfile, company: CompanyProfileApi | null) => 
 };
 
 const navItems = [
-  { label: "Dashboard", href: "/client/dashboard", icon: Home },
   { label: "Maids", href: "/client/maids", icon: Users },
   { label: "Agencies", href: "/agencies", icon: Building2 },
   { label: "Requests", href: "/client/dashboard#requests", icon: BriefcaseBusiness },
@@ -503,69 +502,72 @@ const ClientDashboard = () => {
                   return (
                     <article
                       key={maid.referenceCode}
-                      className="flex flex-col overflow-hidden rounded-xl border bg-background shadow-sm hover:shadow-md transition" >
-                      <div className="h-36 w-full bg-muted overflow-hidden">
+                      className="w-36 flex flex-col overflow-hidden rounded-lg border bg-background shadow-sm hover:shadow-md transition text-xs"
+                    >
+                      <div className="h-26 w-full bg-muted overflow-hidden">
                         {photo ? (
                           <img
                             src={photo}
                             alt={maid.fullName}
-                            className="h-full w-full object-cover" />
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                          <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
                             No photo
                           </div>
                         )}
                       </div>
 
-                      <div className="p-3 flex flex-col gap-2 text-xs">
-                        
-                        <div>
-                          <h3 className="text-sm font-semibold text-foreground line-clamp-1">
-                            {maid.fullName}
-                          </h3>
-                          <p className="text-[10px] text-muted-foreground">
-                            {maid.referenceCode}
-                          </p>
-                        </div>
+                      <div className="p-2 flex flex-col items-center text-center">
+                        <h3 className="text-[12px] font-medium text-foreground line-clamp-1">
+                          {maid.fullName}
+                        </h3>
 
-                        <div className="flex flex-wrap gap-1">
-                          <span className="px-2 py-[2px] text-[10px] rounded-full bg-muted">
-                            {getExperienceBucket(maid)}
-                          </span>
-                          <span className="px-2 py-[2px] text-[10px] rounded-full border">
-                            Age {age ?? "N/A"}
-                          </span>
-                        </div>
+                        <p className="text-[10px] text-muted-foreground">{maid.referenceCode}</p>
 
-                        <p className="text-[11px] text-muted-foreground">
-                          {maid.nationality || "N/A"} • {maid.type || "N/A"}
+                        <p className="text-[10px]">
+                          <span className="font-semibold">Nationality:</span>{" "}
+                          {maid.nationality || "N/A"}
                         </p>
 
-                        <p className="text-[11px] text-muted-foreground line-clamp-2">
-                          {getPublicIntro(maid) || "No intro yet"}
+                        <p className="text-[10px]">
+                          <span className="font-semibold">Type:</span> {maid.type || "N/A"}
                         </p>
 
-                        <div className="flex gap-1 mt-auto">
-                          <Button size="sm" className="flex-1 h-7 text-xs rounded-md" asChild>
-                            <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
-                              View
-                            </Link>
-                          </Button>
+                        <p className="text-[10px]">
+                          <span className="font-semibold">Experience:</span>{" "}
+                          {getExperienceBucket(maid)}
+                        </p>
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 h-7 text-xs rounded-md"
-                            asChild >
-                            <Link
-                              to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(
-                                agencyName
-                              )}`}
-                            >
-                              Msg
-                            </Link>
-                          </Button>
-                        </div>
+                        <p className="text-[10px]">
+                          <span className="font-semibold">Age:</span> {age ?? "N/A"}
+                        </p>
+
+                  
+                      </div>
+
+                      {/* Buttons */}
+                      <div className="flex flex-col gap-1 p-2">
+                        <Button size="sm" className="h-7 text-xs rounded-md" asChild>
+                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                            View
+                          </Link>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs rounded-md"
+                          asChild
+                        >
+                          <Link
+                            to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(
+                              agencyName
+                            )}`}
+                          >
+                            Message
+                          </Link>
+                        </Button>
                       </div>
                     </article>
                   );

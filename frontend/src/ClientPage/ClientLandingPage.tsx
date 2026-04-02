@@ -308,6 +308,7 @@ const ClientLandingPage = () => {
             Contact Us
           </a>
         </nav>
+        
 
         {clientUser ? (
           <div className="flex items-center gap-2">
@@ -593,57 +594,33 @@ const ClientLandingPage = () => {
                   return (
                     <article
                       key={maid.referenceCode}
-                      className="w-full max-w-[220px] overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition flex flex-col h-full" >
+                      className="w-36 flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm hover:shadow-md transition text-xs" >
                       <div
-                        className={`h-40 w-full bg-muted overflow-hidden flex-shrink-0 ${
+                        className={`h-26 w-full bg-muted overflow-hidden flex-shrink-0 ${
                           !isLoggedIn ? "blur-md" : ""
                         }`} >
                         {photo ? (
                           <img
                             src={photo}
                             alt={maid.fullName}
-                            className="h-full w-full object-cover" />
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                          <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
                             No photo
                           </div>
                         )}
                       </div>
 
                       <div
-                        className={`flex flex-col p-2 space-y-1 flex-1 ${
+                        className={`flex flex-col p-2 gap-1 flex-1 items-center text-center ${
                           !isLoggedIn ? "blur-sm select-none" : ""
-                        }`} >
-                        <div className="text-center">
-                          <h3 className="font-semibold text-sm text-foreground">
-                            {maid.fullName}
-                          </h3>
-                          <p className="text-[9px] text-muted-foreground">
-                            {maid.referenceCode}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap justify-center gap-1">
-                          <span className="px-2 py-0.5 text-[9px] rounded-full bg-accent text-accent-foreground">
-                            {maid.nationality || "N/A"}
-                          </span>
-                          <span className="px-2 py-0.5 text-[9px] rounded-full bg-secondary/20">
-                            {maid.type || "N/A"}
-                          </span>
-                          <span className="px-2 py-0.5 text-[9px] rounded-full bg-muted">
-                            {getExperienceBucket(maid)}
-                          </span>
-                        </div>
-
-                        <div className="text-[11px] text-foreground space-y-0.5 text-center">
-                          <p>
-                            <span className="text-muted-foreground">Age:</span> {age ?? "N/A"}
-                          </p>
-                          <p>
-                            <span className="text-muted-foreground">Education:</span>{" "}
-                            {maid.educationLevel || "N/A"}
-                          </p>
-                        </div>
+                        }`}
+                      >
+                        <h3 className="text-[12px] font-medium text-foreground line-clamp-1">
+                          {maid.fullName}
+                        </h3>
+                        <p className="text-[10px] text-muted-foreground">{maid.referenceCode}</p>
 
                         <p className="text-[11px] text-muted-foreground text-center line-clamp-2 min-h-[30px]">
                           {publicIntro || "Public introduction will be available soon."}
@@ -651,8 +628,7 @@ const ClientLandingPage = () => {
 
                         <div className="mt-auto">
                           <Button variant="outline" size="sm" className="w-full" asChild>
-                            <Link
-                              to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                            <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
                               View Profile
                             </Link>
                           </Button>
