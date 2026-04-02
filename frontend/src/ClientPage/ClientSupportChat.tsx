@@ -5,6 +5,7 @@ import { ChatWorkspace, type ChatWorkspaceConversation, type ChatWorkspaceMessag
 import { toast } from "@/components/ui/sonner";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import type { ChatMessage, ClientConversation, ConversationType } from "@/lib/chat";
+import { streamSse } from "@/lib/sse";
 import "./ClientTheme.css";
 
 const defaultConversation: ClientConversation = {
@@ -155,15 +156,71 @@ const ClientSupportChat = () => {
     lastSignatureRef.current = "";
     void loadConversations(false);
     void loadMessages(false);
+  }, [loadConversations, loadMessages, navigate]);
 
-    const interval = window.setInterval(() => {
-      void loadConversations(true);
-      if (activeConversationRef.current) {
-        void loadMessages(true);
+  useEffect(() => {
+    const token = getClientToken();
+    if (!token) {
+      navigate("/employer-login");
+      return;
+    }
+
+    const controller = new AbortController();
+    let lastId = 0;
+
+    const run = async () => {
+      try {
+        const response = await fetch("/api/chats/client/last-id", {
+          headers: { ...getClientAuthHeaders() },
+          signal: controller.signal,
+        });
+        const data = (await response.json().catch(() => ({}))) as { lastId?: number };
+        if (response.ok && typeof data.lastId === "number") {
+          lastId = data.lastId;
+        }
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
       }
-    }, 5000);
 
-    return () => window.clearInterval(interval);
+      while (!controller.signal.aborted) {
+        try {
+          await streamSse(`/api/chats/client/stream?all=1&afterId=${lastId}`, {
+            headers: { ...getClientAuthHeaders() },
+            signal: controller.signal,
+            onEvent: (event) => {
+              if (event.event !== "message" || !event.data) return;
+              const payload = JSON.parse(event.data) as { message?: ChatMessage };
+              const next = payload.message;
+              if (!next) return;
+
+              lastId = Math.max(lastId, next.id);
+
+              const current = activeConversationRef.current;
+              const isActive =
+                current.conversationType === next.conversationType &&
+                (current.conversationType === "support" || current.agencyId === next.agencyId);
+
+              if (isActive) {
+                setMessages((prev) => (prev.some((item) => item.id === next.id) ? prev : [...prev, next]));
+                if (next.senderRole === "agency") {
+                  void loadMessages(true);
+                }
+              }
+
+              void loadConversations(true);
+            },
+          });
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        }
+      }
+    };
+
+    void run();
+    return () => controller.abort();
   }, [loadConversations, loadMessages, navigate]);
 
   useEffect(() => {

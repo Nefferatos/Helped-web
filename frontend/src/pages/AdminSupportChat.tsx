@@ -6,6 +6,7 @@ import { ChatWorkspace, type ChatWorkspaceConversation, type ChatWorkspaceMessag
 import { adminPath } from "@/lib/routes";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
 import type { AdminConversation, ChatMessage } from "@/lib/chat";
+import { streamSse } from "@/lib/sse";
 
 const AdminSupportChat = () => {
   const navigate = useNavigate();
@@ -172,16 +173,76 @@ const AdminSupportChat = () => {
   }, [navigate]);
 
   useEffect(() => {
-    void loadConversations(false);
-    const interval = window.setInterval(() => {
-      void loadConversations(true);
-      if (activeConversationRef.current) {
-        void loadMessages(activeConversationRef.current, true);
-      }
-    }, 5000);
+    const token = getAgencyAdminToken();
+    if (!token) {
+      clearAgencyAdminAuth();
+      navigate(adminPath("/login"), { replace: true });
+      return;
+    }
 
-    return () => window.clearInterval(interval);
-  }, [loadConversations, loadMessages]);
+    const controller = new AbortController();
+    let lastId = 0;
+
+    const run = async () => {
+      try {
+        const response = await fetch("/api/chats/admin/last-id", {
+          headers: { ...getAgencyAdminAuthHeaders() },
+          signal: controller.signal,
+        });
+        const data = (await response.json().catch(() => ({}))) as { lastId?: number };
+        if (response.ok && typeof data.lastId === "number") {
+          lastId = data.lastId;
+        }
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+      }
+
+      while (!controller.signal.aborted) {
+        try {
+          await streamSse(`/api/chats/admin/stream?afterId=${lastId}`, {
+            headers: { ...getAgencyAdminAuthHeaders() },
+            signal: controller.signal,
+            onEvent: (event) => {
+              if (event.event !== "message" || !event.data) return;
+              const payload = JSON.parse(event.data) as { message?: ChatMessage };
+              const next = payload.message;
+              if (!next) return;
+
+              lastId = Math.max(lastId, next.id);
+
+              const current = activeConversationRef.current;
+              const isActive =
+                !!current &&
+                current.clientId === next.clientId &&
+                current.conversationType === next.conversationType &&
+                (current.conversationType === "support" || current.agencyId === next.agencyId);
+
+              if (isActive) {
+                setMessages((prev) => (prev.some((item) => item.id === next.id) ? prev : [...prev, next]));
+                if (next.senderRole === "client") {
+                  void loadMessages(current, true);
+                }
+              }
+
+              void loadConversations(true);
+            },
+          });
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        }
+      }
+    };
+
+    void run();
+    return () => controller.abort();
+  }, [loadConversations, loadMessages, navigate]);
+
+  useEffect(() => {
+    void loadConversations(false);
+  }, [loadConversations]);
 
   useEffect(() => {
     if (activeConversation) {

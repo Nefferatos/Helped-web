@@ -271,12 +271,14 @@ export const ChatWorkspace = ({
                   }
                 }}
               />
-              <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-muted-foreground">Press Enter to send. Use Shift+Enter for a new line.</p>
-                <Button onClick={onSend} disabled={isSending || !draft.trim()} className="rounded-full px-5">
-                  <Send className="mr-2 h-4 w-4" />
-                  {isSending ? "Sending..." : "Send"}
-                </Button>
+                <div className="flex items-center justify-end gap-2">
+                  <Button onClick={onSend} disabled={isSending || !draft.trim()} className="rounded-full px-5">
+                    <Send className="mr-2 h-4 w-4" />
+                    {isSending ? "Sending..." : "Send"}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

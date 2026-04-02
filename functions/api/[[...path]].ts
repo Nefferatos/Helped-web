@@ -616,6 +616,60 @@ const parseBody = async <T>(request: Request): Promise<T | null> => {
   }
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const sseEncoder = new TextEncoder()
+
+const createSseResponse = (
+  request: Request,
+  handler: (controller: ReadableStreamDefaultController<Uint8Array>) => Promise<void>
+) => {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const abortListener = () => controller.close()
+      request.signal.addEventListener('abort', abortListener, { once: true })
+      handler(controller)
+        .catch((error) => {
+          console.error('SSE stream error', error)
+        })
+        .finally(() => {
+          request.signal.removeEventListener('abort', abortListener)
+          try {
+            controller.close()
+          } catch {
+            // ignore
+          }
+        })
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    },
+  })
+}
+
+const writeSseEvent = (
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  eventName: string,
+  payload: unknown
+) => {
+  controller.enqueue(
+    sseEncoder.encode(`event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`)
+  )
+}
+
+const writeSseComment = (
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  comment: string
+) => {
+  controller.enqueue(sseEncoder.encode(`: ${comment}\n\n`))
+}
+
 const csvColumns = [
   'referenceCode',
   'fullName',
@@ -2206,6 +2260,152 @@ app.post('/api/chats/admin/:clientId', requireAgencyAdminAuth, async (c) => {
   data.chatMessages.push(message)
   await saveData(c.env, data)
   return c.json({ message }, 201)
+})
+
+app.get('/api/chats/client/stream', requireClientAuth, async (c) => {
+  const client = c.get('client')
+  const url = new URL(c.req.url)
+  const afterId = Number(url.searchParams.get('afterId') ?? 0)
+  if (!Number.isFinite(afterId) || afterId < 0) {
+    return c.json({ error: 'afterId must be a non-negative number' }, 400)
+  }
+
+  const streamAll = url.searchParams.get('all') === '1'
+  const { conversationType, agencyId } = getConversationContext(url)
+  const startedAt = Date.now()
+
+  return createSseResponse(c.req.raw, async (controller) => {
+    let lastId = afterId
+    let lastHeartbeat = Date.now()
+    writeSseEvent(controller, 'ready', { ok: true })
+
+    while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
+      const data = await loadData(c.env)
+      const nextMessages = data.chatMessages
+        .filter(
+          (message) =>
+            message.clientId === client.id &&
+            message.id > lastId &&
+            (streamAll
+              ? true
+              : message.conversationType === conversationType &&
+                (conversationType === 'support' || message.agencyId === agencyId))
+        )
+        .sort((left, right) => left.id - right.id)
+
+      for (const message of nextMessages) {
+        writeSseEvent(controller, 'message', { message })
+        lastId = Math.max(lastId, message.id)
+      }
+
+      const nowTime = Date.now()
+      if (nowTime - lastHeartbeat > 15_000) {
+        writeSseComment(controller, 'keep-alive')
+        lastHeartbeat = nowTime
+      }
+
+      await sleep(1200)
+    }
+  })
+})
+
+app.get('/api/chats/client/last-id', requireClientAuth, async (c) => {
+  const client = c.get('client')
+  const data = await loadData(c.env)
+  const lastId = data.chatMessages
+    .filter((message) => message.clientId === client.id)
+    .reduce((maxId, message) => Math.max(maxId, message.id), 0)
+
+  return c.json({ lastId })
+})
+
+app.get('/api/chats/admin/stream', requireAgencyAdminAuth, async (c) => {
+  const url = new URL(c.req.url)
+  const afterId = Number(url.searchParams.get('afterId') ?? 0)
+  if (!Number.isFinite(afterId) || afterId < 0) {
+    return c.json({ error: 'afterId must be a non-negative number' }, 400)
+  }
+
+  const startedAt = Date.now()
+  return createSseResponse(c.req.raw, async (controller) => {
+    let lastId = afterId
+    let lastHeartbeat = Date.now()
+    writeSseEvent(controller, 'ready', { ok: true })
+
+    while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
+      const data = await loadData(c.env)
+      const nextMessages = data.chatMessages
+        .filter((message) => message.id > lastId)
+        .sort((left, right) => left.id - right.id)
+
+      for (const message of nextMessages) {
+        writeSseEvent(controller, 'message', { message })
+        lastId = Math.max(lastId, message.id)
+      }
+
+      const nowTime = Date.now()
+      if (nowTime - lastHeartbeat > 15_000) {
+        writeSseComment(controller, 'keep-alive')
+        lastHeartbeat = nowTime
+      }
+
+      await sleep(1200)
+    }
+  })
+})
+
+app.get('/api/chats/admin/last-id', requireAgencyAdminAuth, async (c) => {
+  const data = await loadData(c.env)
+  const lastId = data.chatMessages.reduce((maxId, message) => Math.max(maxId, message.id), 0)
+  return c.json({ lastId })
+})
+
+app.get('/api/chats/admin/stream/:clientId', requireAgencyAdminAuth, async (c) => {
+  const clientId = Number(c.req.param('clientId'))
+  if (!Number.isInteger(clientId)) {
+    return c.json({ error: 'Valid client id is required' }, 400)
+  }
+
+  const url = new URL(c.req.url)
+  const afterId = Number(url.searchParams.get('afterId') ?? 0)
+  if (!Number.isFinite(afterId) || afterId < 0) {
+    return c.json({ error: 'afterId must be a non-negative number' }, 400)
+  }
+
+  const { conversationType, agencyId } = getConversationContext(url)
+  const startedAt = Date.now()
+
+  return createSseResponse(c.req.raw, async (controller) => {
+    let lastId = afterId
+    let lastHeartbeat = Date.now()
+    writeSseEvent(controller, 'ready', { ok: true })
+
+    while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
+      const data = await loadData(c.env)
+      const nextMessages = data.chatMessages
+        .filter(
+          (message) =>
+            message.clientId === clientId &&
+            message.conversationType === conversationType &&
+            message.id > lastId &&
+            (conversationType === 'support' || message.agencyId === agencyId)
+        )
+        .sort((left, right) => left.id - right.id)
+
+      for (const message of nextMessages) {
+        writeSseEvent(controller, 'message', { message })
+        lastId = Math.max(lastId, message.id)
+      }
+
+      const nowTime = Date.now()
+      if (nowTime - lastHeartbeat > 15_000) {
+        writeSseComment(controller, 'keep-alive')
+        lastHeartbeat = nowTime
+      }
+
+      await sleep(1200)
+    }
+  })
 })
 
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404))
