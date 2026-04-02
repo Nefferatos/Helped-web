@@ -280,86 +280,95 @@ const ClientLandingPage = () => {
   };
 
   return (
-    <div className="client-page-theme min-h-screen">
-      <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
-        <div className="container flex h-16 items-center justify-between">
-          <Link to="/" className="font-display text-xl font-bold text-foreground">
-            "Find Maids" At The Agency
+  <div className="client-page-theme min-h-screen">
+    <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
+      <div className="container flex h-16 items-center justify-between">
+        
+        {/* LOGO */}
+        <Link to="/" className="font-display text-xl font-bold text-foreground">
+          Find Maids At The Agency
+        </Link>
+
+        {/* NAVIGATION (ALWAYS VISIBLE) */}
+        <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
+          <Link to="/agencies" className="transition-colors hover:text-primary">
+            Browse Agencies
           </Link>
-          {clientUser ? (
-            <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
-              <Link to="/agencies" className="transition-colors hover:text-primary">
-                Browse Agencies
-              </Link>
-              <a href="#services" className="transition-colors hover:text-primary">
-                Services
-              </a>
-              <a href="#search" className="transition-colors hover:text-primary">
-                Search Maids
-              </a>
-              <a href="#why" className="transition-colors hover:text-primary">
-                About
-              </a>
-              <a href="#contact" className="transition-colors hover:text-primary">
-                Contact
-              </a>
-            </nav>
-          ) : null}
-          {clientUser ? (
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 transition hover:border-primary/40">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={clientUser.profileImageUrl} alt={clientUser.name} />
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {clientUser.name.slice(0, 1).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="hidden text-left md:block">
-                      <p className="text-sm font-semibold text-foreground">{clientUser.name}</p>
-                      <p className="text-xs text-muted-foreground">{clientUser.email}</p>
-                    </div>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/client/dashboard">Dashboard</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/client/profile">
-                      <UserRound className="mr-2 h-4 w-4" />
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/client/history">History</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/client/support-chat">Messages</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/client/profile">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => void handleLogout()}>Logout</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ) : (
-            <Link to="/employer-login">
-              <Button size="sm" className="font-body">
-                Employer Login
-              </Button>
-            </Link>
-          )}
-        </div>
-      </header>
+          <a href="#services" className="transition-colors hover:text-primary">
+            Services
+          </a>
+          <a href="#search" className="transition-colors hover:text-primary">
+            Search Maids
+          </a>
+          <a href="/about" className="transition-colors hover:text-primary">
+            About Us
+          </a>
+          <a href="/contact" className="transition-colors hover:text-primary">
+            Contact Us
+          </a>
+        </nav>
+
+        {/* RIGHT SIDE */}
+        {clientUser ? (
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 transition hover:border-primary/40">
+                  
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={clientUser.profileImageUrl} alt={clientUser.name} />
+                    <AvatarFallback className="bg-primary/10 text-primary">
+                      {clientUser.name.slice(0, 1).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  <div className="hidden text-left md:block">
+                    <p className="text-sm font-semibold text-foreground">
+                      {clientUser.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {clientUser.email}
+                    </p>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem asChild>
+                  <Link to="/client/dashboard">Dashboard</Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <Link to="/client/profile">Profile</Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <Link to="/client/history">History</Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <Link to="/client/support-chat">Messages</Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => void handleLogout()}>
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <Link to="/employer-login">
+            <Button size="sm" className="font-body">
+              Employer Login
+            </Button>
+          </Link>
+        )}
+      </div>
+    </header>
 
       <section className="bg-card">
         <div className="container grid items-center gap-10 py-12 md:grid-cols-2 md:py-20">

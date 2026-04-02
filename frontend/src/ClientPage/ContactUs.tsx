@@ -1,34 +1,161 @@
-
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { MapPin, Mail, Phone, Globe, Clock, Send } from "lucide-react";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+import {
+  getStoredClient,
+  clearClientAuth,
+  getClientAuthHeaders,
+  type ClientUser,
+} from "@/lib/clientAuth";
+
 const ContactUs = () => {
+  const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
+  const navigate = useNavigate();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
   const [message, setMessage] = useState("");
   const { toast } = useToast();
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/client-auth/logout", {
+        method: "POST",
+        headers: { ...getClientAuthHeaders() },
+      });
+    } catch {}
+
+    clearClientAuth();
+    setClientUser(null);
+    navigate("/");
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !mobile.trim()) {
-      toast({ title: "Missing Fields", description: "Please fill in all required fields.", variant: "destructive" });
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
       return;
     }
     toast({ title: "Message Sent", description: "We will get back to you shortly." });
-    setName(""); setEmail(""); setMobile(""); setMessage("");
+    setName("");
+    setEmail("");
+    setMobile("");
+    setMessage("");
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="client-page-theme min-h-screen flex flex-col">
+
+      <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
+        <div className="container flex h-16 items-center justify-between">
+
+          <Link to="/" className="font-display text-xl font-bold text-foreground">
+            Find Maids At The Agency
+          </Link>
+
+          <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
+            <Link to="/agencies" className="hover:text-primary">
+              Browse Agencies
+            </Link>
+
+            <a href="/#services" className="hover:text-primary">
+              Services
+            </a>
+
+            <Link to="/#search" className="hover:text-primary">
+              Search Maids
+            </Link>
+
+            <Link to="/about" className="text-primary font-semibold">
+              About Us
+            </Link>
+
+            <a href="/contact" className="hover:text-primary">
+              Contact Us
+            </a>
+          </nav>
+
+          {clientUser ? (
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 hover:border-primary/40">
+
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={clientUser.profileImageUrl} />
+                      <AvatarFallback>
+                        {clientUser.name.slice(0, 1).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    <div className="hidden md:block text-left">
+                      <p className="text-sm font-semibold">{clientUser.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {clientUser.email}
+                      </p>
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/dashboard">Dashboard</Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/profile">Profile</Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/history">History</Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/support-chat">Messages</Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => void handleLogout()}>
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : (
+            <Link to="/employer-login">
+              <Button size="sm">Employer Login</Button>
+            </Link>
+          )}
+        </div>
+      </header>
+
       <main className="flex-1 py-12 md:py-20">
         <div className="container max-w-5xl">
           <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-10 text-center">
             Contact <span className="text-primary">Us</span>
           </h1>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
             <form onSubmit={handleSubmit} className="lg:col-span-2 bg-card rounded-2xl shadow-sm p-8">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -127,6 +254,43 @@ const ContactUs = () => {
           </div>
         </div>
       </main>
+      <footer className="bg-foreground py-12 text-primary-foreground">
+        <div className="container">
+          <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4">
+            <div>
+              <h4 className="mb-3 font-display text-lg font-bold">"Find Maids" At The Agency</h4>
+              <p className="font-body text-sm opacity-70">Matching trusted domestic professionals with families since 2009.</p>
+            </div>
+            <div>
+              <h5 className="mb-3 font-body text-sm font-semibold uppercase tracking-wider">Company</h5>
+              <ul className="space-y-2 font-body text-sm opacity-70">
+                <li><a href="#why" className="transition-opacity hover:opacity-100">About Us</a></li>
+                <li><a href="#services" className="transition-opacity hover:opacity-100">Our Services</a></li>
+                <li><a href="#contact" className="transition-opacity hover:opacity-100">Contact</a></li>
+              </ul>
+            </div>
+            <div>
+              <h5 className="mb-3 font-body text-sm font-semibold uppercase tracking-wider">Legal</h5>
+              <ul className="space-y-2 font-body text-sm opacity-70">
+                <li><a href="#contact" className="transition-opacity hover:opacity-100">Legal Information</a></li>
+                <li><a href="#contact" className="transition-opacity hover:opacity-100">Privacy Policy</a></li>
+                <li><a href="#contact" className="transition-opacity hover:opacity-100">Terms of Service</a></li>
+              </ul>
+            </div>
+            <div>
+              <h5 className="mb-3 font-body text-sm font-semibold uppercase tracking-wider">Join Our Newsletter</h5>
+              <p className="mb-3 font-body text-sm opacity-70">Stay updated on care tips, industry news, and agency updates.</p>
+              <div className="flex gap-2">
+                <input className="flex-1 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2 font-body text-sm placeholder:opacity-50" placeholder="Email" />
+                <button className="rounded-lg bg-primary px-4 py-2 font-body text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90">Join</button>
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-primary-foreground/20 pt-6 text-center font-body text-xs opacity-50">
+            Copyright 2026 "Find Maids" At The Agency. All rights reserved.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

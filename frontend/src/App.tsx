@@ -33,6 +33,8 @@ import NotFound from "@/pages/NotFound";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
 import { getClientToken } from "@/lib/clientAuth";
 import { adminPath } from "@/lib/routes";
+import AboutUs from "./ClientPage/AboutUs";
+import ContactUS from "./ClientPage/ContactUs";
 
 const queryClient = new QueryClient();
 
@@ -158,6 +160,8 @@ const App = () => (
           <Route path="/userportal" element={<ClientHomeRedirect />} />
           <Route path="/" element={<ClientHomeRedirect />} />
           <Route path="*" element={<NotFound />} />
+          <Route path="/about" element={<AboutUs />} />
+          <Route path="/contact" element={<ContactUS />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
