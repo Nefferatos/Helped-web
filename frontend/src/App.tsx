@@ -35,6 +35,7 @@ import { getClientToken } from "@/lib/clientAuth";
 import { adminPath } from "@/lib/routes";
 import AboutUs from "./ClientPage/AboutUs";
 import ContactUS from "./ClientPage/ContactUs";
+import Enquiry2 from "./ClientPage/Enquiry";
 
 const queryClient = new QueryClient();
 
@@ -162,6 +163,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<ContactUS />} />
+          <Route path="/enquiry2" element={<Enquiry2 />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

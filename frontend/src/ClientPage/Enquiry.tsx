@@ -1,13 +1,33 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { NavLink, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Send, User, Mail, Phone, MessageSquare } from "lucide-react";
 
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage
+} from "@/components/ui/avatar";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+
+import {
+  getStoredClient,
+  clearClientAuth,
+  getClientAuthHeaders,
+  type ClientUser
+} from "@/lib/clientAuth";
 
 const agencies = [
   "Target Maid Rinzin At The Agency",
-  
 ];
 
 const Enquiry = () => {
@@ -17,6 +37,21 @@ const Enquiry = () => {
   const [email, setEmail] = useState("");
   const [contactNumber, setContactNumber] = useState("");
   const { toast } = useToast();
+
+  const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/client-auth/logout", {
+        method: "POST",
+        headers: { ...getClientAuthHeaders() },
+      });
+    } catch {}
+    clearClientAuth();
+    setClientUser(null);
+    navigate("/");
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,105 +75,160 @@ const Enquiry = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="client-page-theme min-h-screen flex flex-col">
+
+      <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
+        <div className="container flex h-16 items-center justify-between">
+
+          <Link to="/" className="font-display text-xl font-bold text-foreground">
+            Find Maids At The Agency
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+            <NavLink
+              to="/agencies"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
+              Browse Agencies
+            </NavLink>
+
+            <NavLink
+              to="/#services"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
+              Services
+            </NavLink>
+
+            <NavLink
+              to="/#search"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
+              Search Maids
+            </NavLink>
+
+            <NavLink
+              to="/about"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
+              About Us
+            </NavLink>
+
+            <NavLink
+              to="/enquiry2"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
+              Enquiry
+            </NavLink>
+
+            <NavLink
+              to="/contact"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
+              Contact Us
+            </NavLink>
+          </nav>
+
+          {clientUser ? (
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 hover:border-primary/40">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={clientUser.profileImageUrl} />
+                      <AvatarFallback>{clientUser.name.slice(0, 1).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="hidden md:block text-left">
+                      <p className="text-sm font-semibold">{clientUser.name}</p>
+                      <p className="text-xs text-muted-foreground">{clientUser.email}</p>
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/dashboard">Dashboard</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/profile">Profile</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/history">History</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/client/support-chat">Messages</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => void handleLogout()}>Logout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : (
+            <Link to="/employer-login">
+              <Button size="sm">Employer Login</Button>
+            </Link>
+          )}
+        </div>
+      </header>
+
       <main className="flex-1 py-12 md:py-20">
         <div className="container max-w-2xl">
           <div className="text-center mb-10">
-            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-3">
+            <h1 className="text-3xl md:text-4xl font-bold mb-3">
               Submit Your <span className="text-primary">Enquiry</span>
             </h1>
-            <p className="font-body text-muted-foreground">
-              Please leave your contacts and maid requirements, we will match maids for you.
+            <p className="text-muted-foreground">
+              Please leave your contacts and maid requirements.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="bg-card rounded-2xl shadow-lg p-8">
             <div className="space-y-5">
-              <div>
-                <label className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">
-                  To Agency
-                </label>
-                <select
-                  value={agency}
-                  onChange={(e) => setAgency(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {agencies.map((a) => (
-                    <option key={a}>{a}</option>
-                  ))}
-                </select>
-              </div>
 
-              <div>
-                <label className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">
-                  Your Requirements on Hiring a Maid
-                </label>
-                <div className="relative">
-                  <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <textarea
-                    value={requirements}
-                    onChange={(e) => setRequirements(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background pl-10 pr-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring h-36 resize-none"
-                    placeholder="Describe your requirements — e.g. nationality, skills, duties, schedule preferences..."
-                    required
-                  />
-                </div>
-              </div>
+              <select
+                value={agency}
+                onChange={(e) => setAgency(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              >
+                {agencies.map((a) => (
+                  <option key={a}>{a}</option>
+                ))}
+              </select>
 
-              <div>
-                <label className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">
-                  Your Name
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background pl-10 pr-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="John Doe"
-                    required
-                  />
-                </div>
-              </div>
+              <textarea
+                value={requirements}
+                onChange={(e) => setRequirements(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 h-32"
+                placeholder="Your requirements..."
+              />
 
-              <div>
-                <label className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">
-                  Your Email
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background pl-10 pr-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="john@example.com"
-                    required
-                  />
-                </div>
-              </div>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="Name"
+              />
 
-              <div>
-                <label className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">
-                  Contact Number
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="tel"
-                    value={contactNumber}
-                    onChange={(e) => setContactNumber(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background pl-10 pr-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="+65 9123 4567"
-                    required
-                  />
-                </div>
-              </div>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="Email"
+              />
 
-              <Button type="submit" size="lg" className="w-full font-body gap-2">
-                <Send className="w-4 h-4" /> Submit Enquiry
+              <input
+                value={contactNumber}
+                onChange={(e) => setContactNumber(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="Contact Number"
+              />
+
+              <Button className="w-full">
+                <Send className="w-4 h-4 mr-2" />
+                Submit Enquiry
               </Button>
+
             </div>
           </form>
         </div>

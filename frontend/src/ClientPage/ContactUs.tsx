@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { MapPin, Mail, Phone, Globe, Clock, Send } from "lucide-react";
@@ -64,6 +64,7 @@ const ContactUs = () => {
   return (
     <div className="client-page-theme min-h-screen flex flex-col">
 
+      {/* ================= HEADER / NAVBAR ================= */}
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
 
@@ -71,26 +72,48 @@ const ContactUs = () => {
             Find Maids At The Agency
           </Link>
 
-          <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
-            <Link to="/agencies" className="hover:text-primary">
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+            <NavLink
+              to="/agencies"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
               Browse Agencies
-            </Link>
+            </NavLink>
 
-            <a href="/#services" className="hover:text-primary">
+            <NavLink
+              to="/#services"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
               Services
-            </a>
+            </NavLink>
 
-            <Link to="/#search" className="hover:text-primary">
+            <NavLink
+              to="/#search"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
               Search Maids
-            </Link>
+            </NavLink>
 
-            <Link to="/about" className="text-primary font-semibold">
+            <NavLink
+              to="/about"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
               About Us
-            </Link>
+            </NavLink>
 
-            <a href="/contact" className="hover:text-primary">
+            <NavLink
+              to="/enquiry2"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
+              Enquiry
+            </NavLink>
+
+            <NavLink
+              to="/contact"
+              className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+            >
               Contact Us
-            </a>
+            </NavLink>
           </nav>
 
           {clientUser ? (
@@ -98,19 +121,13 @@ const ContactUs = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 hover:border-primary/40">
-
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={clientUser.profileImageUrl} />
-                      <AvatarFallback>
-                        {clientUser.name.slice(0, 1).toUpperCase()}
-                      </AvatarFallback>
+                      <AvatarFallback>{clientUser.name.slice(0, 1).toUpperCase()}</AvatarFallback>
                     </Avatar>
-
                     <div className="hidden md:block text-left">
                       <p className="text-sm font-semibold">{clientUser.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {clientUser.email}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{clientUser.email}</p>
                     </div>
                   </button>
                 </DropdownMenuTrigger>
@@ -118,27 +135,20 @@ const ContactUs = () => {
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-
                   <DropdownMenuItem asChild>
                     <Link to="/client/dashboard">Dashboard</Link>
                   </DropdownMenuItem>
-
                   <DropdownMenuItem asChild>
                     <Link to="/client/profile">Profile</Link>
                   </DropdownMenuItem>
-
                   <DropdownMenuItem asChild>
                     <Link to="/client/history">History</Link>
                   </DropdownMenuItem>
-
                   <DropdownMenuItem asChild>
                     <Link to="/client/support-chat">Messages</Link>
                   </DropdownMenuItem>
-
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => void handleLogout()}>
-                    Logout
-                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void handleLogout()}>Logout</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

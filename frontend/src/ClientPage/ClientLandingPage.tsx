@@ -284,12 +284,10 @@ const ClientLandingPage = () => {
     <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between">
         
-        {/* LOGO */}
         <Link to="/" className="font-display text-xl font-bold text-foreground">
           Find Maids At The Agency
         </Link>
 
-        {/* NAVIGATION (ALWAYS VISIBLE) */}
         <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
           <Link to="/agencies" className="transition-colors hover:text-primary">
             Browse Agencies
@@ -303,12 +301,14 @@ const ClientLandingPage = () => {
           <a href="/about" className="transition-colors hover:text-primary">
             About Us
           </a>
+          <a href="/Enquiry2" className="transition-colors hover:text-primary">
+            Enquiry
+          </a>
           <a href="/contact" className="transition-colors hover:text-primary">
             Contact Us
           </a>
         </nav>
 
-        {/* RIGHT SIDE */}
         {clientUser ? (
           <div className="flex items-center gap-2">
             <DropdownMenu>

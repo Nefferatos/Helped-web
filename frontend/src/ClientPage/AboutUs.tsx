@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { NavLink, Link, useNavigate } from "react-router-dom";
 import { MapPin, Phone, Mail, Globe, Clock, Facebook } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -42,36 +42,58 @@ const AboutUs = () => {
   };
 
   return (
-    <div className="client-page-theme min-h-screen flex flex-col">
-
-      <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
-        <div className="container flex h-16 items-center justify-between">
-          
-          <Link to="/" className="font-display text-xl font-bold text-foreground">
-            Find Maids At The Agency
-          </Link>
-
-          <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
-            <Link to="/agencies" className="transition-colors hover:text-primary">
-              Browse Agencies
+      <div className="client-page-theme min-h-screen flex flex-col">
+  
+        <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
+          <div className="container flex h-16 items-center justify-between">
+  
+            <Link to="/" className="font-display text-xl font-bold text-foreground">
+              Find Maids At The Agency
             </Link>
-
-            <a href="#services" className="transition-colors hover:text-primary">
-              Services
-            </a>
-
-            <a href="/#search" className="transition-colors hover:text-primary">
-              Search Maids
-            </a>
-
-            <Link to="/about" className="text-primary font-semibold">
-              About Us
-            </Link>
-
-            <a href="/contact" className="transition-colors hover:text-primary">
-              Contact Us
-            </a>
-          </nav>
+  
+            <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+              <NavLink
+                to="/agencies"
+                className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+              >
+                Browse Agencies
+              </NavLink>
+  
+              <NavLink
+                to="/#services"
+                className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+              >
+                Services
+              </NavLink>
+  
+              <NavLink
+                to="/#search"
+                className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+              >
+                Search Maids
+              </NavLink>
+  
+              <NavLink
+                to="/about"
+                className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+              >
+                About Us
+              </NavLink>
+  
+              <NavLink
+                to="/enquiry2"
+                className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+              >
+                Enquiry
+              </NavLink>
+  
+              <NavLink
+                to="/contact"
+                className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}
+              >
+                Contact Us
+              </NavLink>
+            </nav>
 
           {clientUser ? (
             <DropdownMenu>
