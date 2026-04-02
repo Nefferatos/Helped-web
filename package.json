@@ -14,8 +14,6 @@
     "deploy:cf": "npm run frontend:build && wrangler deploy",
     "worker:dev": "npm run frontend:build:dev && wrangler dev",
     "pages:dev": "npm run worker:dev",
-    "kv:create": "wrangler kv:namespace create \"APP_DATA\"",
-    "kv:migrate": "type backend\\data\\app-data.json | wrangler kv:key put \"app-data.json\" --namespace-id=APP_DATA_ID",
     "worker:deploy": "wrangler deploy"
   },
   "keywords": [

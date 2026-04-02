@@ -1,0 +1,7 @@
+# Wrangler local dev vars for `wrangler dev`.
+# Copy to `.dev.vars` (do not commit real secrets).
+
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_APP_DATA_TABLE=app_data
+SUPABASE_APP_DATA_ID=default

@@ -178,8 +178,12 @@ interface AppData {
 }
 
 type Bindings = {
-  APP_DATA: KVNamespace
+  APP_DATA?: KVNamespace
   ASSETS: AssetsBinding
+  SUPABASE_URL?: string
+  SUPABASE_SERVICE_ROLE_KEY?: string
+  SUPABASE_APP_DATA_TABLE?: string
+  SUPABASE_APP_DATA_ID?: string
 }
 
 type Variables = {
@@ -295,8 +299,8 @@ const defaultData = (): AppData => ({
   agencyAdmins: [
     {
       id: 1,
-      username: 'admin',
-      password: 'admin123',
+      username: 'attheagency',
+      password: '@atagency2026',
       agencyName: 'Main Agency',
       createdAt: now(),
     },
@@ -344,7 +348,15 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
   const maids = (raw.maids ?? defaults.maids).map(normalizeMaid)
   const enquiries = raw.enquiries ?? defaults.enquiries
   const clients = raw.clients ?? defaults.clients
-  const agencyAdmins = raw.agencyAdmins ?? defaults.agencyAdmins
+  let agencyAdmins = raw.agencyAdmins ?? defaults.agencyAdmins
+  const hasMainAgency = agencyAdmins.some((admin) => admin.username === 'attheagency')
+  if (!hasMainAgency) {
+    agencyAdmins = agencyAdmins.map((admin) =>
+      admin.username === 'admin' && admin.password === 'admin123'
+        ? { ...admin, username: 'attheagency', password: '@atagency2026' }
+        : admin
+    )
+  }
   const directSales = raw.directSales ?? defaults.directSales
   const chatMessages = raw.chatMessages ?? defaults.chatMessages
 
@@ -383,7 +395,7 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
   }
 }
 
-const loadData = async (kv: KVNamespace): Promise<AppData> => {
+const loadDataFromKv = async (kv: KVNamespace): Promise<AppData> => {
   const raw = await kv.get('app-data.json')
   if (!raw) {
     const initial = defaultData()
@@ -396,8 +408,133 @@ const loadData = async (kv: KVNamespace): Promise<AppData> => {
   return merged
 }
 
-const saveData = async (kv: KVNamespace, data: AppData) => {
+const saveDataToKv = async (kv: KVNamespace, data: AppData) => {
   await kv.put('app-data.json', JSON.stringify(data))
+}
+
+type SupabaseAppDataConfig = {
+  baseUrl: string
+  serviceRoleKey: string
+  table: string
+  rowId: string
+}
+
+const getSupabaseAppDataConfig = (env: Bindings): SupabaseAppDataConfig | null => {
+  const baseUrl = env.SUPABASE_URL?.trim().replace(/\/$/, '')
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (!baseUrl || !serviceRoleKey) return null
+
+  return {
+    baseUrl,
+    serviceRoleKey,
+    table: env.SUPABASE_APP_DATA_TABLE?.trim() || 'app_data',
+    rowId: env.SUPABASE_APP_DATA_ID?.trim() || 'default',
+  }
+}
+
+const supabaseHeaders = (config: SupabaseAppDataConfig, extra?: HeadersInit): HeadersInit => ({
+  apikey: config.serviceRoleKey,
+  authorization: `Bearer ${config.serviceRoleKey}`,
+  ...extra,
+})
+
+const readSupabaseError = async (response: Response) => {
+  const contentType = response.headers.get('content-type') ?? ''
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.stringify(await response.json())
+    } catch {
+      return await response.text()
+    }
+  }
+  return await response.text()
+}
+
+const loadDataFromSupabase = async (config: SupabaseAppDataConfig): Promise<AppData> => {
+  const table = encodeURIComponent(config.table)
+  const rowId = encodeURIComponent(config.rowId)
+  const url = `${config.baseUrl}/rest/v1/${table}?id=eq.${rowId}&select=data&limit=1`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: supabaseHeaders(config, { accept: 'application/json' }),
+  })
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response)
+    throw new Error(`Supabase read failed (${response.status}): ${details}`)
+  }
+
+  const rows = (await response.json()) as Array<{ data?: Partial<AppData> }>
+  const raw = rows[0]?.data
+  if (!raw) {
+    const initial = defaultData()
+    await saveDataToSupabase(config, initial)
+    return initial
+  }
+
+  const merged = mergeAppData(raw)
+  if (JSON.stringify(raw) !== JSON.stringify(merged)) {
+    await saveDataToSupabase(config, merged)
+  }
+  return merged
+}
+
+const saveDataToSupabase = async (config: SupabaseAppDataConfig, data: AppData) => {
+  const table = encodeURIComponent(config.table)
+  const url = `${config.baseUrl}/rest/v1/${table}?on_conflict=id`
+  const payload = [
+    {
+      id: config.rowId,
+      data,
+      updated_at: now(),
+    },
+  ]
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: supabaseHeaders(config, {
+      'content-type': 'application/json',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+    }),
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response)
+    throw new Error(`Supabase write failed (${response.status}): ${details}`)
+  }
+}
+
+const loadData = async (env: Bindings): Promise<AppData> => {
+  const supabase = getSupabaseAppDataConfig(env)
+  if (supabase) {
+    return await loadDataFromSupabase(supabase)
+  }
+
+  if (!env.APP_DATA) {
+    throw new Error(
+      'No storage configured: set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, or bind APP_DATA KV.'
+    )
+  }
+
+  return await loadDataFromKv(env.APP_DATA)
+}
+
+const saveData = async (env: Bindings, data: AppData) => {
+  const supabase = getSupabaseAppDataConfig(env)
+  if (supabase) {
+    await saveDataToSupabase(supabase, data)
+    return
+  }
+
+  if (!env.APP_DATA) {
+    throw new Error(
+      'No storage configured: set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, or bind APP_DATA KV.'
+    )
+  }
+
+  await saveDataToKv(env.APP_DATA, data)
 }
 
 const jsonError = (message: string, status = 400) =>
@@ -418,7 +555,7 @@ const requireClientAuth = async (c: any, next: () => Promise<void>) => {
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const session = data.clientSessions.find((item) => item.token === token)
   if (!session) {
     return c.json({ error: 'Unauthorized' }, 401)
@@ -439,7 +576,7 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const session = data.agencyAdminSessions.find((item) => item.token === token)
   if (!session) {
     return c.json({ error: 'Unauthorized' }, 401)
@@ -702,11 +839,37 @@ const getConversationContext = (url: URL) => {
   } as const
 }
 
-app.get('/api/health', (c) => c.json({ status: 'Server is running' }))
+const getStorageMode = (env: Bindings) => {
+  const hasSupabase = Boolean(getSupabaseAppDataConfig(env))
+  if (hasSupabase) return 'supabase'
+  if (env.APP_DATA) return 'kv'
+  return 'none'
+}
+
+app.get('/api/health', (c) =>
+  c.json({ status: 'Server is running', storage: getStorageMode(c.env) })
+)
+
+app.get('/api/diagnostics', (c) => {
+  const config = getSupabaseAppDataConfig(c.env)
+  return c.json({
+    storage: getStorageMode(c.env),
+    supabase: {
+      enabled: Boolean(config),
+      urlHost: config ? new URL(config.baseUrl).host : null,
+      table: config?.table ?? null,
+      rowId: config?.rowId ?? null,
+      hasServiceRoleKey: Boolean(c.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
+    },
+    kv: {
+      enabled: Boolean(c.env.APP_DATA),
+    },
+  })
+})
 app.get('/api', (c) => c.json({ message: 'Welcome to Helped Cloudflare API' }))
 
 app.get('/api/company', async (c) => {
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   return c.json({
     companyProfile: data.companyProfile,
     momPersonnel: data.momPersonnel,
@@ -715,7 +878,7 @@ app.get('/api/company', async (c) => {
 })
 
 app.get('/api/company/summary', async (c) => {
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const publicMaids = data.maids.filter((maid) => maid.isPublic).length
   const hiddenMaids = data.maids.length - publicMaids
   const maidsWithPhotos = data.maids.filter((maid) => maid.hasPhoto).length
@@ -775,13 +938,13 @@ app.put('/api/company', async (c) => {
     return c.json({ error: 'No valid fields provided for update' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   data.companyProfile = {
     ...data.companyProfile,
     ...Object.fromEntries(entries.map((field) => [field, body[field]])),
     updated_at: now(),
   }
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
 
   return c.json({
     message: 'Company profile updated successfully',
@@ -795,7 +958,7 @@ app.post('/api/company/mom-personnel', async (c) => {
     return c.json({ error: 'Name and registration number are required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const momPersonnel: MOMPersonnelRecord = {
     id: data.counters.momPersonnel++,
     company_id: 1,
@@ -804,7 +967,7 @@ app.post('/api/company/mom-personnel', async (c) => {
     created_at: now(),
   }
   data.momPersonnel.push(momPersonnel)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ message: 'MOM personnel added successfully', momPersonnel }, 201)
 })
 
@@ -819,7 +982,7 @@ app.put('/api/company/mom-personnel/:id', async (c) => {
     return c.json({ error: 'At least one field (name or registration_number) is required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const index = data.momPersonnel.findIndex((item) => item.id === id)
   if (index === -1) {
     return c.json({ error: 'MOM personnel not found' }, 404)
@@ -832,7 +995,7 @@ app.put('/api/company/mom-personnel/:id', async (c) => {
       ? { registration_number: body.registration_number }
       : {}),
   }
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({
     message: 'MOM personnel updated successfully',
     momPersonnel: data.momPersonnel[index],
@@ -841,14 +1004,14 @@ app.put('/api/company/mom-personnel/:id', async (c) => {
 
 app.delete('/api/company/mom-personnel/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const existing = data.momPersonnel.find((item) => item.id === id)
   if (!existing) {
     return c.json({ error: 'MOM personnel not found' }, 404)
   }
 
   data.momPersonnel = data.momPersonnel.filter((item) => item.id !== id)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({
     message: 'MOM personnel deleted successfully',
     deletedMOMPersonnel: existing,
@@ -861,7 +1024,7 @@ app.post('/api/company/testimonials', async (c) => {
     return c.json({ error: 'Message and author are required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const testimonial: TestimonialRecord = {
     id: data.counters.testimonials++,
     company_id: 1,
@@ -870,20 +1033,20 @@ app.post('/api/company/testimonials', async (c) => {
     created_at: now(),
   }
   data.testimonials.unshift(testimonial)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ message: 'Testimonial added successfully', testimonial }, 201)
 })
 
 app.delete('/api/company/testimonials/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const existing = data.testimonials.find((item) => item.id === id)
   if (!existing) {
     return c.json({ error: 'Testimonial not found' }, 404)
   }
 
   data.testimonials = data.testimonials.filter((item) => item.id !== id)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({
     message: 'Testimonial deleted successfully',
     deletedTestimonial: existing,
@@ -893,7 +1056,7 @@ app.delete('/api/company/testimonials/:id', async (c) => {
 app.get('/api/maids', async (c) => {
   const search = c.req.query('search')?.trim().toLowerCase()
   const visibility = c.req.query('visibility')
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
 
   let maids = [...data.maids]
   if (search) {
@@ -918,7 +1081,7 @@ app.get('/api/maids', async (c) => {
 })
 
 app.get('/api/maids/export.csv', async (c) => {
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const rows = data.maids.map((maid) =>
     [
       maid.referenceCode,
@@ -973,7 +1136,7 @@ app.post('/api/maids/import.csv', async (c) => {
     return c.json({ error: 'CSV must include referenceCode and fullName columns' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   let created = 0
   let updated = 0
   const errors: string[] = []
@@ -1044,7 +1207,7 @@ app.post('/api/maids/import.csv', async (c) => {
     }
   }
 
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json(
     { message: 'CSV import completed', created, updated, failed: errors.length, errors },
     errors.length > 0 ? 207 : 200
@@ -1052,7 +1215,7 @@ app.post('/api/maids/import.csv', async (c) => {
 })
 
 app.get('/api/maids/:referenceCode', async (c) => {
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const maid = data.maids.find((item) => item.referenceCode === c.req.param('referenceCode'))
   if (!maid) {
     return c.json({ error: 'Maid not found' }, 404)
@@ -1071,7 +1234,7 @@ app.post('/api/maids', async (c) => {
     return c.json({ error: validationError }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const recordPayload = toMaidRecordPayload(body)
   if (data.maids.some((maid) => maid.referenceCode === recordPayload.referenceCode)) {
     return c.json({ error: 'Reference code already exists' }, 409)
@@ -1084,7 +1247,7 @@ app.post('/api/maids', async (c) => {
     updatedAt: now(),
   }
   data.maids.unshift(maid)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ maid }, 201)
 })
 
@@ -1099,7 +1262,7 @@ app.put('/api/maids/:referenceCode', async (c) => {
     return c.json({ error: validationError }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const referenceCode = c.req.param('referenceCode')
   const index = data.maids.findIndex((maid) => maid.referenceCode === referenceCode)
   if (index === -1) {
@@ -1132,7 +1295,7 @@ app.put('/api/maids/:referenceCode', async (c) => {
     ...payload,
     updatedAt: now(),
   }
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
 })
 
@@ -1142,7 +1305,7 @@ app.patch('/api/maids/:referenceCode/visibility', async (c) => {
     return c.json({ error: 'isPublic boolean is required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const index = data.maids.findIndex((maid) => maid.referenceCode === c.req.param('referenceCode'))
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
@@ -1153,7 +1316,7 @@ app.patch('/api/maids/:referenceCode/visibility', async (c) => {
     isPublic: body.isPublic,
     updatedAt: now(),
   }
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
 })
 
@@ -1163,7 +1326,7 @@ app.patch('/api/maids/:referenceCode/photo', async (c) => {
     return c.json({ error: 'photoDataUrl string is required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const index = data.maids.findIndex((maid) => maid.referenceCode === c.req.param('referenceCode'))
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
@@ -1176,7 +1339,7 @@ app.patch('/api/maids/:referenceCode/photo', async (c) => {
     hasPhoto: Boolean(body.photoDataUrl),
     updatedAt: now(),
   }
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
 })
 
@@ -1186,7 +1349,7 @@ app.patch('/api/maids/:referenceCode/photos', async (c) => {
     return c.json({ error: 'photoDataUrl string is required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const index = data.maids.findIndex((maid) => maid.referenceCode === c.req.param('referenceCode'))
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
@@ -1210,7 +1373,7 @@ app.patch('/api/maids/:referenceCode/photos', async (c) => {
     hasPhoto: photos.length > 0,
     updatedAt: now(),
   }
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
 })
 
@@ -1220,7 +1383,7 @@ app.patch('/api/maids/:referenceCode/video', async (c) => {
     return c.json({ error: 'videoDataUrl string is required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const index = data.maids.findIndex((maid) => maid.referenceCode === c.req.param('referenceCode'))
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
@@ -1231,25 +1394,25 @@ app.patch('/api/maids/:referenceCode/video', async (c) => {
     videoDataUrl: body.videoDataUrl,
     updatedAt: now(),
   }
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
 })
 
 app.delete('/api/maids/:referenceCode', async (c) => {
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const existing = data.maids.find((maid) => maid.referenceCode === c.req.param('referenceCode'))
   if (!existing) {
     return c.json({ error: 'Maid not found' }, 404)
   }
 
   data.maids = data.maids.filter((maid) => maid.referenceCode !== c.req.param('referenceCode'))
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ message: 'Maid deleted successfully' })
 })
 
 app.get('/api/enquiries', async (c) => {
   const search = c.req.query('search')?.trim().toLowerCase()
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   let enquiries = [...data.enquiries]
   if (search) {
     enquiries = enquiries.filter((item) =>
@@ -1276,7 +1439,7 @@ app.post('/api/enquiries', async (c) => {
     return c.json({ error: 'username, email, phone, and message are required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const enquiry: EnquiryRecord = {
     id: data.counters.enquiries++,
     username: body.username,
@@ -1287,20 +1450,20 @@ app.post('/api/enquiries', async (c) => {
     createdAt: now(),
   }
   data.enquiries.unshift(enquiry)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ enquiry }, 201)
 })
 
 app.delete('/api/enquiries/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const existing = data.enquiries.find((item) => item.id === id)
   if (!existing) {
     return c.json({ error: 'Enquiry not found' }, 404)
   }
 
   data.enquiries = data.enquiries.filter((item) => item.id !== id)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ message: 'Enquiry deleted successfully' })
 })
 
@@ -1316,7 +1479,7 @@ app.post('/api/client-auth/register', async (c) => {
     return c.json({ error: 'name, email, and password are required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const existing = data.clients.find(
     (client) => client.email.toLowerCase() === body.email!.trim().toLowerCase()
   )
@@ -1342,7 +1505,7 @@ app.post('/api/client-auth/register', async (c) => {
   data.clients.unshift(client)
   data.clientSessions = data.clientSessions.filter((item) => item.clientId !== client.id)
   data.clientSessions.unshift(session)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ token: session.token, client: toSafeClient(client) }, 201)
 })
 
@@ -1352,7 +1515,7 @@ app.post('/api/client-auth/login', async (c) => {
     return c.json({ error: 'email and password are required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const client = data.clients.find(
     (item) =>
       item.email.toLowerCase() === body.email!.trim().toLowerCase() &&
@@ -1370,7 +1533,7 @@ app.post('/api/client-auth/login', async (c) => {
 
   data.clientSessions = data.clientSessions.filter((item) => item.clientId !== client.id)
   data.clientSessions.unshift(session)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ token: session.token, client: toSafeClient(client) })
 })
 
@@ -1391,7 +1554,7 @@ app.put('/api/client-auth/me', requireClientAuth, async (c) => {
   }
 
   const currentClient = c.get('client')
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const duplicate = data.clients.find(
     (item) =>
       item.id !== currentClient.id &&
@@ -1424,15 +1587,15 @@ app.put('/api/client-auth/me', requireClientAuth, async (c) => {
       : sale
   )
 
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ client: toSafeClient(data.clients[index]) })
 })
 
 app.post('/api/client-auth/logout', requireClientAuth, async (c) => {
   const token = parseAuthorizationToken(c.req.raw)
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   data.clientSessions = data.clientSessions.filter((item) => item.token !== token)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ message: 'Logged out successfully' })
 })
 
@@ -1447,7 +1610,7 @@ app.post('/api/agency-auth/register', async (c) => {
     return c.json({ error: 'username, password, and agencyName are required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const existing = data.agencyAdmins.find(
     (admin) => admin.username.toLowerCase() === body.username!.trim().toLowerCase()
   )
@@ -1471,7 +1634,7 @@ app.post('/api/agency-auth/register', async (c) => {
   data.agencyAdmins.unshift(admin)
   data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.adminId !== admin.id)
   data.agencyAdminSessions.unshift(session)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 201)
 })
 
@@ -1481,7 +1644,7 @@ app.post('/api/agency-auth/login', async (c) => {
     return c.json({ error: 'username and password are required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const admin = data.agencyAdmins.find(
     (item) =>
       item.username.toLowerCase() === body.username!.trim().toLowerCase() &&
@@ -1499,7 +1662,7 @@ app.post('/api/agency-auth/login', async (c) => {
 
   data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.adminId !== admin.id)
   data.agencyAdminSessions.unshift(session)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) })
 })
 
@@ -1509,15 +1672,15 @@ app.get('/api/agency-auth/me', requireAgencyAdminAuth, async (c) => {
 
 app.post('/api/agency-auth/logout', requireAgencyAdminAuth, async (c) => {
   const token = parseAuthorizationToken(c.req.raw)
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.token !== token)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ message: 'Logged out successfully' })
 })
 
 app.get('/api/client/my-maids', requireClientAuth, async (c) => {
   const client = c.get('client')
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const assignments = data.directSales
     .filter((sale) => sale.clientId === client.id)
     .map((sale) => ({
@@ -1531,7 +1694,7 @@ app.get('/api/client/my-maids', requireClientAuth, async (c) => {
 
 app.get('/api/client/history', requireClientAuth, async (c) => {
   const client = c.get('client')
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const history = data.directSales
     .filter((sale) => sale.clientId === client.id)
     .map((sale) => ({
@@ -1560,7 +1723,7 @@ app.patch('/api/client/direct-sales/:id/:action', requireClientAuth, async (c) =
   const status =
     action === 'direct-hire' ? 'direct_hire' : action === 'reject' ? 'rejected' : 'interested'
   const client = c.get('client')
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const saleIndex = data.directSales.findIndex(
     (sale) => sale.id === id && sale.clientId === client.id
   )
@@ -1589,7 +1752,7 @@ app.patch('/api/client/direct-sales/:id/:action', requireClientAuth, async (c) =
           updatedAt: now(),
         })
 
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({
     directSale: data.directSales[saleIndex],
     maid,
@@ -1597,7 +1760,7 @@ app.patch('/api/client/direct-sales/:id/:action', requireClientAuth, async (c) =
 })
 
 app.get('/api/direct-sales', async (c) => {
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const directSales = [...data.directSales].sort(
     (left, right) =>
       new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
@@ -1606,7 +1769,7 @@ app.get('/api/direct-sales', async (c) => {
 })
 
 app.get('/api/direct-sales/clients', async (c) => {
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const clients = [...data.clients]
     .sort((left, right) => right.id - left.id)
     .map((client) => ({
@@ -1668,7 +1831,7 @@ app.post('/api/direct-sales/:referenceCode', async (c) => {
     return c.json({ error: 'referenceCode is required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const maidIndex = data.maids.findIndex((maid) => maid.referenceCode === referenceCode)
   if (maidIndex === -1) {
     return c.json({ error: 'Maid not found' }, 404)
@@ -1714,7 +1877,7 @@ app.post('/api/direct-sales/:referenceCode', async (c) => {
             : 'sent',
     updatedAt: now(),
   }
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ directSale, maid: data.maids[maidIndex] }, 201)
 })
 
@@ -1723,7 +1886,7 @@ app.patch('/api/direct-sales/:id/interested', async (c) => {
   if (!Number.isInteger(id)) {
     return c.json({ error: 'Valid direct sale id is required' }, 400)
   }
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const saleIndex = data.directSales.findIndex((sale) => sale.id === id)
   if (saleIndex === -1) {
     return c.json({ error: 'Direct sale not found' }, 404)
@@ -1740,7 +1903,7 @@ app.patch('/api/direct-sales/:id/interested', async (c) => {
           status: 'interested',
           updatedAt: now(),
         })
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ directSale: data.directSales[saleIndex], maid })
 })
 
@@ -1749,7 +1912,7 @@ app.patch('/api/direct-sales/:id/direct-hire', async (c) => {
   if (!Number.isInteger(id)) {
     return c.json({ error: 'Valid direct sale id is required' }, 400)
   }
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const saleIndex = data.directSales.findIndex((sale) => sale.id === id)
   if (saleIndex === -1) {
     return c.json({ error: 'Direct sale not found' }, 404)
@@ -1766,7 +1929,7 @@ app.patch('/api/direct-sales/:id/direct-hire', async (c) => {
           status: 'reserved',
           updatedAt: now(),
         })
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ directSale: data.directSales[saleIndex], maid })
 })
 
@@ -1775,7 +1938,7 @@ app.patch('/api/direct-sales/:id/reject', async (c) => {
   if (!Number.isInteger(id)) {
     return c.json({ error: 'Valid direct sale id is required' }, 400)
   }
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const saleIndex = data.directSales.findIndex((sale) => sale.id === id)
   if (saleIndex === -1) {
     return c.json({ error: 'Direct sale not found' }, 404)
@@ -1792,13 +1955,13 @@ app.patch('/api/direct-sales/:id/reject', async (c) => {
           status: 'rejected',
           updatedAt: now(),
         })
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ directSale: data.directSales[saleIndex], maid })
 })
 
 app.get('/api/chats/client/conversations', requireClientAuth, async (c) => {
   const client = c.get('client')
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const conversations = new Map<
     string,
     {
@@ -1878,7 +2041,7 @@ app.get('/api/chats/client/conversations', requireClientAuth, async (c) => {
 app.get('/api/chats/client', requireClientAuth, async (c) => {
   const client = c.get('client')
   const { conversationType, agencyId } = getConversationContext(new URL(c.req.url))
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const messages = data.chatMessages
     .filter(
       (message) =>
@@ -1899,7 +2062,7 @@ app.get('/api/chats/client', requireClientAuth, async (c) => {
       ? { ...message, readByClient: true }
       : message
   )
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ client: toSafeClient(client), messages })
 })
 
@@ -1911,7 +2074,7 @@ app.post('/api/chats/client', requireClientAuth, async (c) => {
 
   const client = c.get('client')
   const { conversationType, agencyId, agencyName } = getConversationContext(new URL(c.req.url))
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const message: ChatMessageRecord = {
     id: data.counters.chatMessages++,
     clientId: client.id,
@@ -1926,12 +2089,12 @@ app.post('/api/chats/client', requireClientAuth, async (c) => {
     readByClient: true,
   }
   data.chatMessages.push(message)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ message }, 201)
 })
 
 app.get('/api/chats/admin', requireAgencyAdminAuth, async (c) => {
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const conversations = new Map<string, any>()
 
   data.chatMessages.forEach((message) => {
@@ -1980,7 +2143,7 @@ app.get('/api/chats/admin/:clientId', requireAgencyAdminAuth, async (c) => {
   }
 
   const { conversationType, agencyId } = getConversationContext(new URL(c.req.url))
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const messages = data.chatMessages
     .filter(
       (message) =>
@@ -2001,7 +2164,7 @@ app.get('/api/chats/admin/:clientId', requireAgencyAdminAuth, async (c) => {
       ? { ...message, readByAgency: true }
       : message
   )
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ messages })
 })
 
@@ -2016,7 +2179,7 @@ app.post('/api/chats/admin/:clientId', requireAgencyAdminAuth, async (c) => {
     return c.json({ error: 'message is required' }, 400)
   }
 
-  const data = await loadData(c.env.APP_DATA)
+  const data = await loadData(c.env)
   const client = data.clients.find((item) => item.id === clientId)
   if (!client) {
     return c.json({ error: 'Client not found' }, 404)
@@ -2041,7 +2204,7 @@ app.post('/api/chats/admin/:clientId', requireAgencyAdminAuth, async (c) => {
     readByClient: false,
   }
   data.chatMessages.push(message)
-  await saveData(c.env.APP_DATA, data)
+  await saveData(c.env, data)
   return c.json({ message }, 201)
 })
 
@@ -2055,7 +2218,16 @@ export default {
         return await app.fetch(request, env, executionContext)
       } catch (error) {
         console.error('Unhandled worker error', error)
-        return jsonError('Something went wrong!', 500)
+        const publicMessage =
+          error instanceof Error && error.message.startsWith('No storage configured:')
+            ? error.message
+            : error instanceof Error &&
+                (error.message.startsWith('Supabase read failed') ||
+                  error.message.startsWith('Supabase write failed'))
+              ? error.message
+              : null
+
+        return jsonError(publicMessage ?? 'Something went wrong!', 500)
       }
     }
 

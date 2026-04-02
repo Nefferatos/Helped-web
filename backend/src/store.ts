@@ -263,8 +263,8 @@ const defaultData = (): AppData => ({
   agencyAdmins: [
     {
       id: 1,
-      username: 'admin',
-      password: 'admin123',
+      username: 'attheagency',
+      password: '@atagency2026',
       agencyName: 'Main Agency',
       createdAt: now(),
     },

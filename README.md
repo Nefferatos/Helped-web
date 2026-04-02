@@ -89,8 +89,12 @@ npm run build:full
 
 This project can be deployed as one Cloudflare Worker that serves the built frontend and handles the API on `/api/*`.
 
-Important:
-`backend/schema.sql` and `DATABASE_URL` are for the legacy Node/Express backend. The Cloudflare deployment path in this repo does not read Supabase/Postgres. It stores app data in the `APP_DATA` Cloudflare KV namespace.
+The Worker API persists application data to Supabase (as a single `jsonb` blob row in `public.app_data`) when you set:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Supabase table setup SQL is in `supabase/app_data.sql`.
 
 ## App Details
 
@@ -111,20 +115,16 @@ Main live routes:
 - `/agencyadmin/login` - Agency admin portal login
 - `/agencyadmin/dashboard` - Agency admin dashboard
 - `/api/health` - API health check
+- `/api/diagnostics` - Deployment diagnostics (storage mode + config presence)
 
 Default seeded admin account:
 
-- Username: `admin`
-- Password: `admin123`
+- Username: `attheagency`
+- Password: `@atagency2026`
 
 ## Important Data Storage Note
 
-Important for beginners:
-
-- The current live Cloudflare deployment does **not** save application data to Supabase.
-- The current live Cloudflare deployment saves application data to **Cloudflare KV** through the Worker in [functions/api/[[...path]].ts](c:\hb\Helped-web\functions\api\[[...path]].ts).
-
-That means the following data is currently stored in Cloudflare KV, not Supabase:
+In the Cloudflare Worker deployment, the following app data is stored in Supabase (inside `public.app_data.data`):
 
 - maid records
 - user/client accounts
@@ -134,35 +134,7 @@ That means the following data is currently stored in Cloudflare KV, not Supabase
 - chat messages
 - company profile data
 
-Files related to the old Supabase/Postgres path:
-
-- [backend/schema.sql](c:\hb\Helped-web\backend\schema.sql)
-- [backend/src/db.ts](c:\hb\Helped-web\backend\src\db.ts)
-- [backend/src/server.ts](c:\hb\Helped-web\backend\src\server.ts)
-
-These backend files are part of the legacy Node/Express setup and are **not** used by the current live Cloudflare Worker deployment.
-
-Simple answer:
-
-- If you add a maid on the live site now, it is saved to Cloudflare KV.
-- If you create a user account on the live site now, it is saved to Cloudflare KV.
-- If you submit other app data on the live site now, it is saved to Cloudflare KV.
-- It is **not** automatically saved to Supabase.
-
-## If You Want Data Stored In Supabase
-
-If your goal is:
-
-- every maid
-- every user account
-- every request
-- every enquiry
-- every chat
-- every profile change
-
-to be stored in Supabase, then the live backend must be changed from Cloudflare KV storage to Supabase/Postgres storage.
-
-This is a separate migration task. It has not been done yet in the current live deployment.
+Legacy note: `backend/` contains an old Node/Express server and is not used in the Cloudflare Worker deployment.
 
 ## Beginner Troubleshooting
 
@@ -170,13 +142,12 @@ This is a separate migration task. It has not been done yet in the current live 
 
 Reason:
 
-- The live Worker is not using Supabase right now.
-- It is using Cloudflare KV.
+- The Cloudflare Worker deployment uses `supabase/app_data.sql` (a single `jsonb` blob row), not `backend/schema.sql`.
 
 What to do:
 
-- Do not expect new live data to appear in Supabase yet.
-- If you want that behavior, migrate the Worker API to Supabase first.
+- Run `supabase/app_data.sql` in the Supabase SQL editor.
+- Set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` and redeploy.
 
 ### Problem: "I updated the site but changes are not showing live"
 
@@ -206,19 +177,13 @@ If the wrong page still opens:
 npm run deploy:cf
 ```
 
-### Problem: "I changed local app data and want the live KV data updated"
+### Problem: "Worker API says Supabase read/write failed"
 
-Use:
+Common causes:
 
-```bash
-npx wrangler kv key put "app-data.json" --binding APP_DATA --path backend\data\app-data.json --preview false
-```
-
-Then redeploy if needed:
-
-```bash
-npm run deploy:cf
-```
+- `SUPABASE_URL` is wrong (it must look like `https://<project-ref>.supabase.co`)
+- `SUPABASE_SERVICE_ROLE_KEY` is missing/incorrect
+- You did not run `supabase/app_data.sql` yet
 
 ### Problem: "Wrangler gives login, auth, or permission errors"
 
@@ -236,41 +201,30 @@ npx wrangler ...
 
 instead of calling `wrangler` directly.
 
-## Recommended Next Step If You Want Supabase
+## Supabase + Cloudflare Worker Setup
 
-If you want all live app data to be stored in Supabase, the recommended next task is:
+### 1. Create the Supabase table
 
-- migrate the live Cloudflare Worker backend from KV to Supabase/Postgres for all app data
+Run `supabase/app_data.sql` in the Supabase SQL editor.
 
-### 1. Build the frontend assets
+### 2. Configure Wrangler secrets/vars
 
-```bash
-npm run frontend:build
-```
-
-### 2. Create the KV namespace
+- Set `SUPABASE_URL` in `wrangler.toml` under `[vars]`.
+- Set the secret (do not commit it):
 
 ```bash
-npm run kv:create
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
 
-Put the returned KV ids into [wrangler.toml](c:\hb\Helped-web\wrangler.toml) for `id` and `preview_id`.
+### 3. Run locally with Wrangler
 
-### 3. Seed the KV data
-
-```bash
-npm run kv:migrate
-```
-
-Replace `APP_DATA_ID` in that command with the real namespace id if needed.
-
-### 4. Run locally with Wrangler
+Copy `.dev.vars.example` to `.dev.vars`, then run:
 
 ```bash
 npm run worker:dev
 ```
 
-### 5. Deploy to Cloudflare
+### 4. Deploy to Cloudflare
 
 ```bash
 npm run deploy:cf
@@ -303,16 +257,7 @@ npm run deploy:cf
 ```
 
 If you change KV data and want the live site to use the new data, upload it with:
-
-```bash
-npx wrangler kv key put "app-data.json" --binding APP_DATA --path backend\data\app-data.json --preview false
-```
-
-Then redeploy if needed:
-
-```bash
-npm run deploy:cf
-```
+Data is persisted in Supabase, so redeploying does not reset it.
 
 ## Available Scripts
 
