@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Menu, X} from "lucide-react";
 import {
   ArrowLeft,
   Bell,
@@ -107,6 +108,7 @@ const ClientDashboard = () => {
   const [nationality, setNationality] = useState("All Nationalities");
   const [maidType, setMaidType] = useState("All Types");
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const token = getClientToken();
@@ -276,88 +278,135 @@ const ClientDashboard = () => {
   const featuredMaids = filteredPublicMaids.slice(0, 8);
 
   return (
-    <div className="client-page-theme min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
-      <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-6">
-            <div>
-              <Link to="/" className="font-display text-xl font-bold text-foreground">
-                "Find Maids" At The Agency
-              </Link>
-            </div>
-            <nav className="hidden items-center gap-6 font-body text-sm font-medium md:flex">
-              {navItems.map((item) => (
-                <Link key={item.label} to={item.href} className="relative transition-colors hover:text-primary">
-                  {item.label}
-                  {item.href === "/client/support-chat" && unreadChatCount > 0 ? (
-                    <span className="absolute -right-4 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                      {unreadChatCount}
-                    </span>
-                  ) : null}
-                </Link>
-              ))}
-            </nav>
-          </div>
+  <div className="client-page-theme min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
+    
+    <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        
+        <div className="flex items-center gap-3 md:gap-6">
+          
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="md:hidden rounded-xl border p-2 hover:bg-muted transition"
+          >
+            {isMenuOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
+          </button>
 
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" className="relative rounded-2xl">
-              <Bell className="h-5 w-5" />
-              {unreadChatCount > 0 ? (
-                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+          <Link to="/" className="font-display text-lg sm:text-xl font-bold text-foreground whitespace-nowrap">
+            "Find Maids" At The Agency
+          </Link>
+
+          <nav className="hidden items-center gap-6 font-body text-sm font-medium md:flex">
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                to={item.href}
+                className="relative transition-colors hover:text-primary"
+              >
+                {item.label}
+                {item.href === "/client/support-chat" && unreadChatCount > 0 && (
+                  <span className="absolute -right-4 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                    {unreadChatCount}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-2">
+          
+          <Button variant="outline" size="icon" className="relative rounded-2xl">
+            <Bell className="h-5 w-5" />
+            {unreadChatCount > 0 && (
+              <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {unreadChatCount}
+              </span>
+            )}
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 sm:gap-3 rounded-full border bg-background px-2 py-1 pr-2 sm:pr-3 transition hover:border-primary/40">
+                <Avatar className="h-9 w-9 sm:h-10 sm:w-10">
+                  <AvatarImage src={client?.profileImageUrl} alt={client?.name || "Client"} />
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {(client?.name || "C").slice(0, 1).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="hidden text-left md:block">
+                  <p className="text-sm font-semibold text-foreground">{client?.name || "Client"}</p>
+                  <p className="text-xs text-muted-foreground">{client?.email || ""}</p>
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem asChild>
+                <Link to="/client/profile">
+                  <UserRound className="mr-2 h-4 w-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link to="/client/history">History</Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link to="/client/support-chat">
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                  Messages {unreadChatCount > 0 ? `(${unreadChatCount})` : ""}
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link to="/client/profile">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem onClick={() => void handleLogout()}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {isMenuOpen && (
+        <div className="md:hidden border-t bg-background px-4 py-3 space-y-2">
+          {navItems.map((item) => (
+            <Link
+              key={item.label}
+              to={item.href}
+              onClick={() => setIsMenuOpen(false)}
+              className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium hover:bg-muted transition"
+            >
+              {item.label}
+
+              {item.href === "/client/support-chat" && unreadChatCount > 0 && (
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                   {unreadChatCount}
                 </span>
-              ) : null}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 transition hover:border-primary/40">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={client?.profileImageUrl} alt={client?.name || "Client"} />
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      {(client?.name || "C").slice(0, 1).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="hidden text-left md:block">
-                    <p className="text-sm font-semibold text-foreground">{client?.name || "Client"}</p>
-                    <p className="text-xs text-muted-foreground">{client?.email || ""}</p>
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/client/profile">
-                    <UserRound className="mr-2 h-4 w-4" />
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/client/history">History</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/client/support-chat">
-                    <MessageCircle className="mr-2 h-4 w-4" />
-                    Messages {unreadChatCount > 0 ? `(${unreadChatCount})` : ""}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/client/profile">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => void handleLogout()}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+              )}
+            </Link>
+          ))}
         </div>
-      </header>
-
+      )}
+    </header>
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 md:py-8">
         <div className="mb-8 overflow-hidden rounded-[28px] border bg-card shadow-sm">
           <div className="flex flex-col gap-5 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_40%),linear-gradient(135deg,rgba(255,255,255,0.96),rgba(245,247,243,0.94))] p-5 sm:p-6">
@@ -546,7 +595,6 @@ const ClientDashboard = () => {
                   
                       </div>
 
-                      {/* Buttons */}
                       <div className="flex flex-col gap-1 p-2">
                         <Button size="sm" className="h-7 text-xs rounded-md" asChild>
                           <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>

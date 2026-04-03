@@ -247,60 +247,51 @@ const AgencyDetailsPage = () => {
               const isAvailable = !maid.status || maid.status === "available";
 
               return (
-                <Card key={maid.referenceCode} className="overflow-hidden rounded-3xl border bg-card shadow-sm transition hover:shadow-md">
-                  <div className={`overflow-hidden ${!isLoggedIn ? "blur-md" : ""}`}>
+                <article
+                  key={maid.referenceCode}
+                  className="w-36 flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm hover:shadow-md transition text-xs">
+                  <div
+                    className={`h-26 w-full bg-muted overflow-hidden flex-shrink-0 ${
+                      !isLoggedIn ? "blur-md" : ""
+                    }`}>
                     {photo ? (
-                      <img src={photo} alt={maid.fullName} className="h-56 w-full object-cover" />
+                      <img
+                        src={photo}
+                        alt={maid.fullName}
+                        className="h-full w-full object-cover"/>
                     ) : (
-                      <div className="flex h-56 items-center justify-center bg-muted text-sm text-muted-foreground">
-                        No photo available
+                      <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
+                        No photo
                       </div>
                     )}
                   </div>
 
-                  <div className={`flex flex-col gap-4 p-5 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
-                    <div>
-                      <CardTitle className="mb-1 text-xl font-semibold text-foreground">{maid.fullName}</CardTitle>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{maid.referenceCode}</p>
-                    </div>
+                  <div
+                    className={`flex flex-col p-2 gap-1 flex-1 items-center text-center ${
+                      !isLoggedIn ? "blur-sm select-none" : ""
+                    }`}>
+                    <h3 className="text-[12px] font-medium text-foreground line-clamp-1">
+                      {maid.fullName}
+                    </h3>
 
-                    <div className="flex flex-wrap gap-2">
-                      <Badge>{maid.nationality || "N/A"}</Badge>
-                      <Badge variant="secondary">{maid.type || "N/A"}</Badge>
-                      <Badge variant={isAvailable ? "outline" : "secondary"}>{isAvailable ? "Available" : maid.status}</Badge>
-                    </div>
-
-                    <div className="grid gap-2 text-sm text-foreground sm:grid-cols-2">
-                      <p>
-                        <span className="font-medium">Age:</span> {age ?? "N/A"}
-                      </p>
-                      <p>
-                        <span className="font-medium">Experience:</span> {getExperienceBucket(maid)}
-                      </p>
-                    </div>
-
-                    <p className="line-clamp-3 text-sm text-muted-foreground">
-                      {getPublicIntro(maid) || "Profile introduction coming soon."}
-                    </p>
-
-                    {isLoggedIn ? (
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Button asChild className="w-full rounded-2xl">
-                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View Details</Link>
-                        </Button>
-                        <Button asChild variant="outline" className="w-full rounded-2xl">
-                          <Link to={`/client/support-chat?type=agency&agencyId=${agency.id}&agencyName=${encodeURIComponent(agency.name)}`}>
-                            Message
+                    <p className="text-[10px] text-muted-foreground">
+                      {maid.referenceCode}
+                    </p> 
+                    <div className="mt-auto w-full">
+                      {isLoggedIn ? (
+                        <Button size="sm" className="w-full h-7 text-[10px]" asChild>
+                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                            View Profile
                           </Link>
                         </Button>
-                      </div>
-                    ) : (
-                      <Button asChild className="w-full rounded-2xl">
-                        <Link to="/employer-login">Login to View</Link>
-                      </Button>
-                    )}
+                      ) : (
+                        <Button size="sm" className="w-full h-7 text-[10px]" asChild>
+                          <Link to="/employer-login">Login</Link>
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </Card>
+                </article>
               );
             })}
           </div>

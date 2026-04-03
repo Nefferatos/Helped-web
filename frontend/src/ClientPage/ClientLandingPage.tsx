@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle, HeartHandshake, Search, Settings, ShieldCheck, UserRound, Users } from "lucide-react";
+import { ArrowRight, CheckCircle, HeartHandshake, Search, Settings, ShieldCheck, UserRound, Users, Menu } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -115,6 +115,7 @@ const ClientLandingPage = () => {
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
@@ -270,7 +271,7 @@ const ClientLandingPage = () => {
         headers: { ...getClientAuthHeaders() },
       });
     } catch {
-      // Best-effort logout; local auth will still be cleared.
+
     } finally {
       clearClientAuth();
       setClientUser(null);
@@ -280,96 +281,113 @@ const ClientLandingPage = () => {
   };
 
   return (
-  <div className="client-page-theme min-h-screen">
-    <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
-      <div className="container flex h-16 items-center justify-between">
-        
-        <Link to="/" className="font-display text-xl font-bold text-foreground">
-          Find Maids At The Agency
-        </Link>
+    <div className="client-page-theme min-h-screen">
 
-        <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
-          <Link to="/agencies" className="transition-colors hover:text-primary">
-            Browse Agencies
+      <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
+        <div className="container flex h-16 items-center justify-between">
+          
+          <Link to="/" className="font-display text-xl font-bold text-foreground">
+            Find Maids At The Agency
           </Link>
-          <a href="#services" className="transition-colors hover:text-primary">
-            Services
-          </a>
-          <a href="#search" className="transition-colors hover:text-primary">
-            Search Maids
-          </a>
-          <a href="/about" className="transition-colors hover:text-primary">
-            About Us
-          </a>
-          <a href="/Enquiry2" className="transition-colors hover:text-primary">
-            Enquiry
-          </a>
-          <a href="/contact" className="transition-colors hover:text-primary">
-            Contact Us
-          </a>
-        </nav>
-        
 
-        {clientUser ? (
+          <nav className="hidden items-center gap-8 font-body text-sm font-medium md:flex">
+
+            <a href="/">Home</a>
+            <a href="#services">Services</a>
+            <a href="#search">Search Maids</a>
+            <a href="/about">About Us</a>
+            <a href="/Enquiry2">Enquiry</a>
+            <a href="/contact">Contact Us</a>
+          </nav>
+
           <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-full border bg-background px-2 py-1 pr-3 transition hover:border-primary/40">
-                  
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={clientUser.profileImageUrl} alt={clientUser.name} />
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      {clientUser.name.slice(0, 1).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
 
-                  <div className="hidden text-left md:block">
-                    <p className="text-sm font-semibold text-foreground">
-                      {clientUser.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {clientUser.email}
-                    </p>
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
+            <div className="hidden md:flex">
+              {clientUser ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-2 border px-2 py-1 rounded-full">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={clientUser.profileImageUrl} />
+                        <AvatarFallback>
+                          {clientUser.name.slice(0, 1)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{clientUser.name}</span>
+                    </button>
+                  </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link to="/client/dashboard">Dashboard</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void handleLogout()}>
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Link to="/employer-login">
+                  <Button size="sm">Employer Login</Button>
+                </Link>
+              )}
+            </div>
 
-                <DropdownMenuItem asChild>
-                  <Link to="/client/dashboard">Dashboard</Link>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem asChild>
-                  <Link to="/client/profile">Profile</Link>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem asChild>
-                  <Link to="/client/history">History</Link>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem asChild>
-                  <Link to="/client/support-chat">Messages</Link>
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => void handleLogout()}>
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              className="md:hidden"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              <Menu />
+            </button>
           </div>
-        ) : (
-          <Link to="/employer-login">
-            <Button size="sm" className="font-body">
-              Employer Login
-            </Button>
-          </Link>
+        </div>
+
+        {isMobileMenuOpen && (
+          <div className="md:hidden absolute top-16 left-0 w-full bg-white shadow-lg border-t animate-in slide-in-from-top duration-200">
+
+            <div className="flex flex-col p-4 space-y-3 text-sm font-medium">
+
+              <Link to="/" className="py-2 px-3 rounded-lg hover:bg-muted">
+                  Home
+                </Link>
+
+                <a href="#services" className="py-2 px-3 rounded-lg hover:bg-muted">
+                  Services
+                </a>
+
+                <a href="#search" className="py-2 px-3 rounded-lg hover:bg-muted">
+                  Search Maids
+                </a>
+
+                <Link to="/about" className="py-2 px-3 rounded-lg hover:bg-muted">
+                  About Us
+                </Link>
+
+                <Link to="/Enquiry2" className="py-2 px-3 rounded-lg hover:bg-muted">
+                  Enquiry
+                </Link>
+                
+                <Link to="/contact" className="py-2 px-3 rounded-lg hover:bg-muted">
+                  Contact
+                </Link>
+
+              <div className="border-t pt-3">
+                {!clientUser ? (
+                  <Button className="w-40 mx-auto rounded-lg text-sm font-semibold shadow-sm">
+                    <Link to="/employer-login" className="w-full block text-center">
+                      Employer Login
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button variant="destructive" className="w-full" onClick={handleLogout}>
+                    Logout
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
         )}
-      </div>
-    </header>
+      </header>
 
       <section className="bg-card">
         <div className="container grid items-center gap-10 py-12 md:grid-cols-2 md:py-20">
@@ -622,9 +640,6 @@ const ClientLandingPage = () => {
                         </h3>
                         <p className="text-[10px] text-muted-foreground">{maid.referenceCode}</p>
 
-                        <p className="text-[11px] text-muted-foreground text-center line-clamp-2 min-h-[30px]">
-                          {publicIntro || "Public introduction will be available soon."}
-                        </p>
 
                         <div className="mt-auto">
                           <Button variant="outline" size="sm" className="w-full" asChild>
