@@ -43,7 +43,7 @@ const Enquiry = () => {
           throw new Error(data.error || "Failed to load enquiries");
         }
 
-        setEnquiries(data.enquiries);
+        setEnquiries([...data.enquiries].sort((a, b) => b.id - a.id));
         setPage(1);
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -88,7 +88,7 @@ const Enquiry = () => {
 
   return (
     <div className="page-container">
-      <h2 className="mb-6 text-xl font-bold">Employer Enquiry</h2>
+      <h2 className="mb-6 text-xl font-bold">Incoming Enquiries</h2>
       <div className="content-card animate-fade-in-up space-y-4">
         <div className="flex gap-2">
           <Input placeholder="Search enquiry" value={search} onChange={(e) => setSearch(e.target.value)} />

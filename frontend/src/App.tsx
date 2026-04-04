@@ -22,6 +22,7 @@ import AgencyAdminLogin from "@/pages/AgencyAdminLogin";
 import AddMaid from "@/pages/AddMaid";
 import EditMaids from "@/pages/EditMaids";
 import MaidProfile from "@/pages/MaidProfile";
+import EditMaid from "@/pages/EditMaid";
 import PublicMaidProfile from "@/pages/PublicMaidProfile";
 import ChangePassword from "@/pages/ChangePassword";
 import Enquiry from "@/pages/Enquiry";
@@ -141,6 +142,7 @@ const App = () => {
             <Route path="/agencyadmin/add-maid" element={<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/edit-maids" element={<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/maid/:refCode" element={<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/maid/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditMaid /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/change-password" element={<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/enquiry" element={<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />

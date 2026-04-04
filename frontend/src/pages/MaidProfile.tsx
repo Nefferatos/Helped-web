@@ -3,6 +3,16 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send } from "lucide-react";
 import { MaidProfile, formatDate } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { adminPath } from "@/lib/routes";
 import { exportMaidProfileToExcel, exportMaidProfileToPdf, exportMaidProfileToWord } from "@/lib/maidExport";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
@@ -10,6 +20,50 @@ import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 type LocationState = {
   fromView?: "public" | "hidden";
 };
+
+const getYouTubeEmbedUrl = (value?: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (host === "youtu.be") {
+      const id = url.pathname.replace(/^\//, "").split("/")[0];
+      return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+    }
+
+    if (host.endsWith("youtube.com")) {
+      if (url.pathname.startsWith("/watch")) {
+        const id = url.searchParams.get("v");
+        return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+      }
+
+      if (url.pathname.startsWith("/embed/")) {
+        const id = url.pathname.split("/embed/")[1]?.split("/")[0];
+        return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+      }
+
+      if (url.pathname.startsWith("/shorts/")) {
+        const id = url.pathname.split("/shorts/")[1]?.split("/")[0];
+        return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+      }
+    }
+  } catch {
+    // Not a URL -> ignore
+  }
+
+  return null;
+};
+
+const fileToDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  });
 
 const MaidProfilePage = () => {
   const location = useLocation();
@@ -22,6 +76,10 @@ const MaidProfilePage = () => {
   const [isThroughAgencyDialogOpen, setIsThroughAgencyDialogOpen] = useState(false);
   const [isDirectHireDialogOpen, setIsDirectHireDialogOpen] = useState(false);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [isManagePhotosOpen, setIsManagePhotosOpen] = useState(false);
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [isMediaSaving, setIsMediaSaving] = useState(false);
+  const [videoLinkDraft, setVideoLinkDraft] = useState("");
 
   const handleBack = () => {
     if (fromView) {
@@ -41,6 +99,7 @@ const MaidProfilePage = () => {
         const data = (await response.json()) as { error?: string; maid?: MaidProfile };
         if (!response.ok || !data.maid) throw new Error(data.error || "Failed to load maid");
         setMaid(data.maid);
+        setVideoLinkDraft(data.maid.videoDataUrl || "");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to load maid");
         navigate(adminPath("/edit-maids"));
@@ -116,6 +175,85 @@ const MaidProfilePage = () => {
       : maid.photoDataUrl
       ? [maid.photoDataUrl]
       : [];
+  const passportOrTwoByTwoPhoto = photos[0] ?? "";
+  const fullBodyPhoto = photos[1] ?? "";
+  const extraPhotos = photos.slice(2);
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(maid.videoDataUrl);
+
+  const savePhotos = async (nextPhotos: string[]) => {
+    const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
+    try {
+      setIsMediaSaving(true);
+      const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...maid,
+          photoDataUrls: cleaned,
+          photoDataUrl: cleaned[0] || "",
+          hasPhoto: cleaned.length > 0,
+        } satisfies MaidProfile),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+      if (!response.ok || !data.maid) {
+        throw new Error(data.error || "Failed to update photos");
+      }
+      setMaid(data.maid);
+      toast.success("Photos updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update photos");
+    } finally {
+      setIsMediaSaving(false);
+    }
+  };
+
+  const replacePhotoAt = async (index: number, file?: File) => {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const next = [...photos];
+      next[index] = dataUrl;
+      await savePhotos(next);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to read photo");
+    }
+  };
+
+  const addExtraPhoto = async (file?: File) => {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      await savePhotos([...photos, dataUrl]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to read photo");
+    }
+  };
+
+  const removePhotoAt = async (index: number) => {
+    await savePhotos(photos.filter((_, i) => i !== index));
+  };
+
+  const saveVideoLink = async () => {
+    try {
+      setIsMediaSaving(true);
+      const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/video`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoDataUrl: videoLinkDraft.trim() }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+      if (!response.ok || !data.maid) {
+        throw new Error(data.error || "Failed to update video link");
+      }
+      setMaid(data.maid);
+      toast.success("Video link updated");
+      setIsVideoModalOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update video link");
+    } finally {
+      setIsMediaSaving(false);
+    }
+  };
   const detailRows: Array<[string, string]> = [
     ["Maid Name", maid.fullName],
     ["Ref. Code", maid.referenceCode],
@@ -173,19 +311,30 @@ const MaidProfilePage = () => {
       <div className="content-card animate-fade-in-up space-y-6">
         <div className="flex flex-wrap items-center gap-4 border-b pb-4 text-sm">
           <button className="text-primary hover:underline" onClick={handleBack} >View All Maids</button>
-          <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))}><Edit className="h-3 w-3" /> Edit This Maid</button>
-          <span className="flex items-center gap-1 text-muted-foreground"><Image className="h-3 w-3" /> Manage Photos</span>
-          <span className="flex items-center gap-1 text-muted-foreground"><Youtube className="h-3 w-3" /> Youtube Video</span>
+          <button
+            className="flex items-center gap-1 text-primary hover:underline"
+            onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))}
+          >
+            <Edit className="h-3 w-3" /> Edit This Maid
+          </button>
+          <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => setIsManagePhotosOpen(true)}><Image className="h-3 w-3" /> Manage Photos</button>
+          <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => setIsVideoModalOpen(true)}><Youtube className="h-3 w-3" /> Video Link</button>
           <button className="flex items-center gap-1 text-destructive hover:underline" onClick={() => void handleDelete()}><Trash2 className="h-3 w-3" /> {isDeleting ? "Deleting..." : "Delete"}</button>
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="relative min-h-[200px] w-full overflow-hidden rounded-lg border bg-muted/30">
-            {maid.videoDataUrl ? (
-              <video
-                controls
-                className="absolute top-0 left-0 h-full w-full object-cover"
-                src={maid.videoDataUrl} >
+            {youtubeEmbedUrl ? (
+              <iframe
+                className="absolute top-0 left-0 h-full w-full"
+                src={youtubeEmbedUrl}
+                title="YouTube video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            ) : maid.videoDataUrl ? (
+              <video controls className="absolute top-0 left-0 h-full w-full object-cover" src={maid.videoDataUrl}>
                 Your browser does not support the video tag.
               </video>
             ) : (
@@ -205,18 +354,34 @@ const MaidProfilePage = () => {
           </div>
 
           <div className="flex flex-col items-center gap-4">
-            <div className="flex h-28 w-24 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
-              {photos[0] ? (
-                <img src={photos[0]} alt={`${maid.fullName} profile`} className="h-full w-full object-cover" />
-              ) : (
-                "No Photo"
-              )}
+            <div className="grid w-full grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground text-center">Passport / 2x2</p>
+                <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
+                  {passportOrTwoByTwoPhoto ? (
+                    <img src={passportOrTwoByTwoPhoto} alt={`${maid.fullName} passport`} className="h-full w-full object-cover" />
+                  ) : (
+                    "No Photo"
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground text-center">Full body</p>
+                <div className="mx-auto flex h-44 w-28 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
+                  {fullBodyPhoto ? (
+                    <img src={fullBodyPhoto} alt={`${maid.fullName} full body`} className="h-full w-full object-cover" />
+                  ) : (
+                    "No Photo"
+                  )}
+                </div>
+              </div>
             </div>
-            {photos.length > 1 && (
+
+            {extraPhotos.length > 0 && (
               <div className="grid w-full grid-cols-4 gap-2">
-                {photos.slice(1).map((photo, index) => (
+                {extraPhotos.map((photo, index) => (
                   <div key={`${photo}-${index}`} className="h-14 overflow-hidden rounded border">
-                    <img src={photo} alt={`${maid.fullName} ${index + 2}`} className="h-full w-full object-cover" />
+                    <img src={photo} alt={`${maid.fullName} extra ${index + 1}`} className="h-full w-full object-cover" />
                   </div>
                 ))}
               </div>
@@ -440,6 +605,138 @@ const MaidProfilePage = () => {
         actionType="rejected"
         onSuccess={(updatedMaid) => setMaid(updatedMaid)}
       />
+
+      <Dialog open={isManagePhotosOpen} onOpenChange={setIsManagePhotosOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Manage Photos</DialogTitle>
+            <DialogDescription>
+              Slot 1: Passport/2x2, Slot 2: Full body, then up to 3 extra photos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="space-y-3">
+              <p className="text-sm font-semibold">Passport / 2x2</p>
+              <div className="h-40 w-40 overflow-hidden rounded border bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+                {passportOrTwoByTwoPhoto ? (
+                  <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-cover" />
+                ) : (
+                  "No photo"
+                )}
+              </div>
+              <input type="file" accept="image/*" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
+              <Button type="button" variant="outline" disabled={isMediaSaving || !passportOrTwoByTwoPhoto} onClick={() => void removePhotoAt(0)}>
+                Remove
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-semibold">Full body</p>
+              <div className="h-64 w-44 overflow-hidden rounded border bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+                {fullBodyPhoto ? (
+                  <img src={fullBodyPhoto} alt="full body" className="h-full w-full object-cover" />
+                ) : (
+                  "No photo"
+                )}
+              </div>
+              <input type="file" accept="image/*" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
+              <Button type="button" variant="outline" disabled={isMediaSaving || !fullBodyPhoto} onClick={() => void removePhotoAt(1)}>
+                Remove
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-semibold">Extra photos ({extraPhotos.length}/3)</p>
+              <div className="grid grid-cols-3 gap-2">
+                {extraPhotos.map((photo, index) => (
+                  <div key={`${photo}-${index}`} className="relative h-20 overflow-hidden rounded border bg-muted/30">
+                    <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1 rounded bg-background/80 px-2 py-0.5 text-xs"
+                      onClick={() => void removePhotoAt(index + 2)}
+                      disabled={isMediaSaving}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <input type="file" accept="image/*" disabled={isMediaSaving || photos.length >= 5} onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
+              <p className="text-xs text-muted-foreground">Max 5 total photos.</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsManagePhotosOpen(false)} disabled={isMediaSaving}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isVideoModalOpen}
+        onOpenChange={(next) => {
+          setIsVideoModalOpen(next);
+          if (next) setVideoLinkDraft(maid.videoDataUrl || "");
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Video Link</DialogTitle>
+            <DialogDescription>Paste a YouTube link or a direct video URL. Preview and update it here.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <Input value={videoLinkDraft} onChange={(e) => setVideoLinkDraft(e.target.value)} placeholder="https://youtube.com/watch?v=... or https://..." />
+              <Button type="button" onClick={() => void saveVideoLink()} disabled={isMediaSaving}>
+                {isMediaSaving ? "Saving..." : "Save"}
+              </Button>
+              {videoLinkDraft.trim() && !getYouTubeEmbedUrl(videoLinkDraft) && (
+                <a
+                  className="inline-flex h-10 items-center justify-center rounded-md border px-3 text-sm hover:bg-muted"
+                  href={videoLinkDraft.trim()}
+                  download
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Download
+                </a>
+              )}
+            </div>
+
+            <div className="relative min-h-[220px] w-full overflow-hidden rounded-lg border bg-muted/30">
+              {getYouTubeEmbedUrl(videoLinkDraft) ? (
+                <iframe
+                  className="absolute top-0 left-0 h-full w-full"
+                  src={getYouTubeEmbedUrl(videoLinkDraft) ?? undefined}
+                  title="YouTube video"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              ) : videoLinkDraft.trim() ? (
+                <video controls className="absolute top-0 left-0 h-full w-full object-cover" src={videoLinkDraft.trim()}>
+                  Your browser does not support the video tag.
+                </video>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-center p-4">
+                  <p className="text-sm text-muted-foreground">No video link yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsVideoModalOpen(false)} disabled={isMediaSaving}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
