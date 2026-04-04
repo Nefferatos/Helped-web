@@ -51,7 +51,9 @@ const Enquiry = () => {
         method: "POST",
         headers: { ...getClientAuthHeaders() },
       });
-    } catch {}
+    } catch {
+      // Ignore logout errors; we'll clear local session regardless.
+    }
     clearClientAuth();
     setClientUser(null);
     navigate("/");

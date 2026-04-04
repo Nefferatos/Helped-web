@@ -12,6 +12,7 @@ const toSafeClient = (client: {
   id: number
   name: string
   company?: string
+  phone?: string
   email: string
   profileImageUrl?: string
   createdAt: string
@@ -19,6 +20,7 @@ const toSafeClient = (client: {
   id: client.id,
   name: client.name,
   company: client.company ?? '',
+  phone: client.phone ?? '',
   email: client.email,
   profileImageUrl: client.profileImageUrl ?? '',
   createdAt: client.createdAt,
@@ -26,9 +28,10 @@ const toSafeClient = (client: {
 
 export const registerClient = async (req: Request, res: Response) => {
   try {
-    const { name, company, email, password } = req.body as {
+    const { name, company, phone, email, password } = req.body as {
       name?: string
       company?: string
+      phone?: string
       email?: string
       password?: string
     }
@@ -42,6 +45,7 @@ export const registerClient = async (req: Request, res: Response) => {
     const client = await registerClientStore({
       name: name.trim(),
       company: company?.trim() || '',
+      phone: phone?.trim() || '',
       email: email.trim(),
       password: password.trim(),
     })
@@ -109,9 +113,10 @@ export const updateClientMe = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    const { name, company, email, profileImageUrl } = req.body as {
+    const { name, company, phone, email, profileImageUrl } = req.body as {
       name?: string
       company?: string
+      phone?: string
       email?: string
       profileImageUrl?: string
     }
@@ -123,6 +128,7 @@ export const updateClientMe = async (req: Request, res: Response) => {
     const updated = await updateClientStore(client.id, {
       name,
       company,
+      phone,
       email,
       profileImageUrl,
     })

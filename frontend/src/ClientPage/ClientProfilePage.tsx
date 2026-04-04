@@ -15,6 +15,7 @@ const ClientProfilePage = () => {
   const [form, setForm] = useState({
     name: "",
     company: "",
+    phone: "",
     email: "",
     profileImageUrl: "",
   });
@@ -53,6 +54,7 @@ const ClientProfilePage = () => {
         setForm({
           name: data.client.name || "",
           company: data.client.company || "",
+          phone: data.client.phone || "",
           email: data.client.email || "",
           profileImageUrl: data.client.profileImageUrl || "",
         });
@@ -167,6 +169,11 @@ const ClientProfilePage = () => {
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-foreground">Company</label>
                 <Input value={form.company} onChange={(event) => setForm((prev) => ({ ...prev, company: event.target.value }))} placeholder="Optional" />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Phone</label>
+                <Input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Optional" />
               </div>
 
               <div className="grid gap-2">

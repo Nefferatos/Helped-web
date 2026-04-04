@@ -5,3 +5,14 @@ SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_APP_DATA_TABLE=app_data
 SUPABASE_APP_DATA_ID=default
+
+# Supabase Auth (JWT verification for social/phone login)
+SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+
+# Email delivery (optional, recommended for signup confirmations)
+# Uses Resend (https://resend.com). In production set RESEND_API_KEY with:
+#   npx wrangler secret put RESEND_API_KEY
+RESEND_FROM="Helped <no-reply@yourdomain.com>"
+
+# Dev-only: include confirmation code in API JSON responses (never enable in production).
+DEV_EXPOSE_CONFIRMATION_CODE=false

@@ -4,6 +4,7 @@ import {
   ClientRecord,
   getAgencyAdminByTokenStore,
   getClientByTokenStore,
+  getOrCreateClientBySupabaseUserStore,
 } from './store'
 
 const getBearerToken = (req: Request) => {
@@ -23,7 +24,46 @@ export const getAuthenticatedClient = async (
     return null
   }
 
-  return getClientByTokenStore(token)
+  const existing = await getClientByTokenStore(token)
+  if (existing) {
+    return existing
+  }
+
+  // Supabase JWT support for social/phone login.
+  if (!token.includes('.')) {
+    return null
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/$/, '')
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY?.trim()
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return null
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        authorization: `Bearer ${token}`,
+        accept: 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const user = (await response.json()) as {
+      id: string
+      email?: string
+      phone?: string
+      user_metadata?: Record<string, unknown>
+    }
+
+    return await getOrCreateClientBySupabaseUserStore(user)
+  } catch {
+    return null
+  }
 }
 
 export const getAuthenticatedAgencyAdmin = async (

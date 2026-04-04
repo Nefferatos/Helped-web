@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Check, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getClientToken } from "@/lib/clientAuth";
-import { calculateAge, MaidProfile } from "@/lib/maids";
+import { calculateAge, formatDate, MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import HireConfirmationDialog from "@/components/HireConfirmationDialog";
 
@@ -124,6 +124,9 @@ const PublicMaidProfile = () => {
   const age = calculateAge(maid.dateOfBirth);
   const photo = getPrimaryPhoto(maid);
   const publicIntro = getPublicIntro(maid);
+  const workAreaNotes =
+    (((maid.skillsPreferences as Record<string, unknown>)?.workAreaNotes as Record<string, string>) ??
+      {}) as Record<string, string>;
   const agencyChatName = company?.company_name || company?.short_name || "Agency";
 
   return (
@@ -265,6 +268,15 @@ const PublicMaidProfile = () => {
                     <p className="text-muted-foreground">No work-area details available.</p>
                   )}
                 </div>
+
+                {workAreaNotes["Cooking"] ? (
+                  <div className="mt-4 rounded-2xl border bg-muted/15 p-4">
+                    <p className="font-body text-sm font-semibold text-foreground">Cooking feedback</p>
+                    <p className="mt-2 whitespace-pre-wrap font-body text-sm text-muted-foreground">
+                      {workAreaNotes["Cooking"]}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -287,8 +299,8 @@ const PublicMaidProfile = () => {
                         const row = item as Record<string, string>;
                         return (
                           <tr key={`${maid.referenceCode}-${index}`} className="border-t">
-                            <td className="px-3 py-2">{row.from || "-"}</td>
-                            <td className="px-3 py-2">{row.to || "-"}</td>
+                            <td className="px-3 py-2">{formatDate(row.from) === "N/A" ? "-" : formatDate(row.from)}</td>
+                            <td className="px-3 py-2">{formatDate(row.to) === "N/A" ? "-" : formatDate(row.to)}</td>
                             <td className="px-3 py-2">{row.country || "-"}</td>
                             <td className="px-3 py-2">{row.employer || "-"}</td>
                             <td className="px-3 py-2">{row.duties || "-"}</td>

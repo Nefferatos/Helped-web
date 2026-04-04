@@ -9,11 +9,17 @@ import "./ClientTheme.css";
 interface AuthResponse {
   error?: string;
   token?: string;
+  requiresConfirmation?: boolean;
+  email?: string;
+  delivery?: "sent" | "not_configured";
+  devConfirmationCode?: string;
   client?: {
     id: number;
     name: string;
     company?: string;
+    phone?: string;
     email: string;
+    emailVerified?: boolean;
     createdAt: string;
   };
 }
@@ -21,12 +27,17 @@ interface AuthResponse {
 const ClientEmployerLogin = () => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  const [step, setStep] = useState<"auth" | "confirm">("auth");
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
+  const [phone, setPhone] = useState("");
+  const [confirmationEmail, setConfirmationEmail] = useState("");
+  const [confirmationCode, setConfirmationCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const { toast } = useToast();
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -37,7 +48,7 @@ const ClientEmployerLogin = () => {
       const endpoint = isLogin ? "/api/client-auth/login" : "/api/client-auth/register";
       const payload = isLogin
         ? { email, password }
-        : { name, company, email, password };
+        : { name, company, phone, email, password };
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -45,6 +56,27 @@ const ClientEmployerLogin = () => {
         body: JSON.stringify(payload),
       });
       const data = (await response.json().catch(() => ({}))) as AuthResponse;
+
+      if (data.requiresConfirmation) {
+        const targetEmail = data.email || email;
+        setConfirmationEmail(targetEmail);
+        setStep("confirm");
+        setConfirmationCode("");
+        toast({
+          title: "Confirm your email",
+          description:
+            data.delivery === "not_configured"
+              ? "Email delivery is not configured on the server. Ask your admin to configure email sending, or enable dev code exposure."
+              : `We sent a 6-digit code to ${targetEmail}.`,
+        });
+        if (data.devConfirmationCode) {
+          toast({
+            title: "Dev confirmation code",
+            description: data.devConfirmationCode,
+          });
+        }
+        return;
+      }
 
       if (!response.ok || !data.token || !data.client) {
         throw new Error(data.error || "Authentication failed");
@@ -67,6 +99,73 @@ const ClientEmployerLogin = () => {
     }
   };
 
+  const handleConfirm = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!confirmationEmail.trim() || !confirmationCode.trim()) {
+      toast({
+        title: "Missing fields",
+        description: "Enter the email and the 6-digit code.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsConfirming(true);
+      const response = await fetch("/api/client-auth/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: confirmationEmail, code: confirmationCode }),
+      });
+      const data = (await response.json().catch(() => ({}))) as AuthResponse;
+      if (!response.ok || !data.token || !data.client) {
+        throw new Error(data.error || "Confirmation failed");
+      }
+      saveClientAuth(data.token, data.client);
+      toast({
+        title: "Email confirmed",
+        description: "Your client account is now active.",
+      });
+      navigate("/client/dashboard");
+    } catch (error) {
+      toast({
+        title: "Confirmation failed",
+        description: error instanceof Error ? error.message : "Unable to continue",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!confirmationEmail.trim()) return;
+    try {
+      const response = await fetch("/api/client-auth/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: confirmationEmail }),
+      });
+      const data = (await response.json().catch(() => ({}))) as AuthResponse;
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to resend code");
+      }
+      toast({
+        title: "Code resent",
+        description: `We sent a new code to ${confirmationEmail}.`,
+      });
+      if (data.devConfirmationCode) {
+        toast({ title: "Dev confirmation code", description: data.devConfirmationCode });
+      }
+    } catch (error) {
+      toast({
+        title: "Resend failed",
+        description: error instanceof Error ? error.message : "Unable to resend",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="client-page-theme flex min-h-screen items-center justify-center bg-muted p-4">
       <div className="w-full max-w-md">
@@ -77,15 +176,58 @@ const ClientEmployerLogin = () => {
         <div className="rounded-2xl bg-card p-8 shadow-lg">
           <div className="mb-8 text-center">
             <h1 className="mb-1 font-display text-2xl font-bold text-foreground">
-              {isLogin ? "Employer Login" : "Create Client Account"}
+              {step === "confirm" ? "Confirm Email" : isLogin ? "Employer Login" : "Create Client Account"}
             </h1>
             <p className="font-body text-sm text-muted-foreground">
-              {isLogin ? "Sign in to view only the maids assigned to you." : "Register as a client to receive assigned maid profiles."}
+              {step === "confirm"
+                ? "Enter the 6-digit code we sent to your email."
+                : isLogin
+                  ? "Sign in to view only the maids assigned to you."
+                  : "Register as a client to receive assigned maid profiles."}
             </p>
           </div>
 
-          <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
-            {!isLogin && (
+          {step === "confirm" ? (
+            <form onSubmit={(event) => void handleConfirm(event)} className="space-y-4">
+              <div>
+                <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Email Address</label>
+                <input
+                  type="email"
+                  value={confirmationEmail}
+                  onChange={(event) => setConfirmationEmail(event.target.value)}
+                  className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="employer@company.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Confirmation Code</label>
+                <input
+                  inputMode="numeric"
+                  value={confirmationCode}
+                  onChange={(event) => setConfirmationCode(event.target.value)}
+                  className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="6-digit code"
+                  required
+                />
+              </div>
+
+              <Button type="submit" size="lg" className="w-full font-body" disabled={isConfirming}>
+                {isConfirming ? "Verifying..." : "Confirm & Sign In"}
+              </Button>
+
+              <Button type="button" variant="outline" size="lg" className="w-full font-body" onClick={() => void handleResend()}>
+                Resend Code
+              </Button>
+
+              <Button type="button" variant="ghost" size="lg" className="w-full font-body" onClick={() => setStep("auth")}>
+                Back
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
+              {!isLogin && (
               <>
                 <div>
                   <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Full Name</label>
@@ -108,8 +250,18 @@ const ClientEmployerLogin = () => {
                     placeholder="Your company"
                   />
                 </div>
+                <div>
+                  <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="+65 9123 4567"
+                  />
+                </div>
               </>
-            )}
+              )}
 
             <div>
               <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Email Address</label>
@@ -147,7 +299,8 @@ const ClientEmployerLogin = () => {
             <Button type="submit" size="lg" className="w-full font-body" disabled={isSubmitting}>
               {isSubmitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
             </Button>
-          </form>
+            </form>
+          )}
 
           <div className="mt-6 text-center">
             <p className="font-body text-sm text-muted-foreground">

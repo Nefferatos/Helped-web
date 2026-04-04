@@ -9,6 +9,13 @@ binding = "ASSETS"
 [vars]
 # Supabase project URL, e.g. "https://xxxx.supabase.co"
 SUPABASE_URL = "https://etdbexgrsenjznxbbnbd.supabase.co"
+# Supabase anon key (used to verify Supabase Auth JWTs for social/phone login)
+SUPABASE_ANON_KEY = ""
 # Defaults: app_data / default
 SUPABASE_APP_DATA_TABLE = "app_data"
 SUPABASE_APP_DATA_ID = "default"
+
+# Email confirmations (optional)
+# RESEND_API_KEY should be set as a Wrangler secret, not committed.
+RESEND_FROM = "Helped <no-reply@yourdomain.com>"
+DEV_EXPOSE_CONFIRMATION_CODE = "false"

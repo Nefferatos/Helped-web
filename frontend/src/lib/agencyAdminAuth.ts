@@ -1,6 +1,8 @@
 export interface AgencyAdminUser {
   id: number;
   username: string;
+  email?: string;
+  emailVerified?: boolean;
   agencyName: string;
   profileImageUrl?: string;
   createdAt: string;

@@ -92,8 +92,10 @@ export interface EnquiryRecord {
 
 export interface ClientRecord {
   id: number
+  supabaseUserId?: string
   name: string
   company?: string
+  phone?: string
   email: string
   password: string
   profileImageUrl?: string
@@ -108,6 +110,7 @@ export interface ClientSessionRecord {
 
 export interface AgencyAdminRecord {
   id: number
+  supabaseUserId?: string
   username: string
   password: string
   agencyName: string
@@ -321,9 +324,21 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       }
     }),
     enquiries: raw.enquiries ?? defaults.enquiries,
-    clients: raw.clients ?? defaults.clients,
+    clients: (raw.clients ?? defaults.clients).map((client) => ({
+      ...client,
+      supabaseUserId: client.supabaseUserId || undefined,
+      name: client.name ?? '',
+      company: client.company ?? '',
+      phone: client.phone ?? '',
+      email: client.email ?? '',
+      profileImageUrl: client.profileImageUrl ?? '',
+      createdAt: client.createdAt ?? now(),
+    })),
     clientSessions: raw.clientSessions ?? defaults.clientSessions,
-    agencyAdmins: raw.agencyAdmins ?? defaults.agencyAdmins,
+    agencyAdmins: (raw.agencyAdmins ?? defaults.agencyAdmins).map((admin) => ({
+      ...admin,
+      supabaseUserId: admin.supabaseUserId || undefined,
+    })),
     agencyAdminSessions:
       raw.agencyAdminSessions ?? defaults.agencyAdminSessions,
     directSales: raw.directSales ?? defaults.directSales,
@@ -750,6 +765,7 @@ export const getAgencyAdminByTokenStore = async (token: string) => {
 export const registerClientStore = async (payload: {
   name: string
   company?: string
+  phone?: string
   email: string
   password: string
 }) => {
@@ -766,6 +782,7 @@ export const registerClientStore = async (payload: {
     id: data.counters.clients++,
     name: payload.name,
     company: payload.company ?? '',
+    phone: payload.phone ?? '',
     email: payload.email,
     password: payload.password,
     profileImageUrl: '',
@@ -826,11 +843,65 @@ export const getClientByTokenStore = async (token: string) => {
   return client
 }
 
+// Supabase Auth bridge:
+// When frontend uses Supabase social/phone login, it sends Supabase JWT as Bearer token.
+// This helper maps the Supabase user to a local client record (creating one if needed).
+export const getOrCreateClientBySupabaseUserStore = async (user: {
+  id: string
+  email?: string
+  phone?: string
+  user_metadata?: Record<string, unknown>
+}) => {
+  const data = await loadData()
+  const normalizedEmail = (user.email ?? '').trim().toLowerCase()
+
+  const existing =
+    data.clients.find((item) => item.supabaseUserId === user.id) ??
+    (normalizedEmail
+      ? data.clients.find(
+          (item) => (item.email ?? '').trim().toLowerCase() === normalizedEmail
+        )
+      : null) ??
+    (user.phone
+      ? data.clients.find((item) => (item.phone ?? '').trim() === user.phone!.trim())
+      : null)
+
+  if (existing) {
+    if (!existing.supabaseUserId) {
+      existing.supabaseUserId = user.id
+      await saveData(data)
+    }
+    return existing
+  }
+
+  const nameFromMeta =
+    (user.user_metadata?.full_name as string | undefined) ??
+    (user.user_metadata?.name as string | undefined) ??
+    ''
+
+  const client: ClientRecord = {
+    id: data.counters.clients++,
+    supabaseUserId: user.id,
+    name: nameFromMeta || (user.email ? user.email.split('@')[0] : 'Client'),
+    company: '',
+    phone: user.phone ?? '',
+    email: user.email ?? '',
+    password: '',
+    profileImageUrl: '',
+    createdAt: now(),
+  }
+
+  data.clients.unshift(client)
+  await saveData(data)
+  return client
+}
+
 export const updateClientStore = async (
   clientId: number,
   updates: {
     name?: string
     company?: string
+    phone?: string
     email?: string
     profileImageUrl?: string
   }
@@ -859,6 +930,10 @@ export const updateClientStore = async (
       typeof updates.company === 'string'
         ? updates.company.trim()
         : data.clients[index].company,
+    phone:
+      typeof updates.phone === 'string'
+        ? updates.phone.trim()
+        : (data.clients[index].phone ?? ''),
     email: updates.email?.trim() || data.clients[index].email,
     profileImageUrl:
       typeof updates.profileImageUrl === 'string'
@@ -872,7 +947,7 @@ export const updateClientStore = async (
           ...sale,
           clientName: data.clients[index].name,
           clientEmail: data.clients[index].email,
-          clientPhone: data.clients[index].company || '',
+          clientPhone: data.clients[index].phone || '',
         }
       : sale
   )
@@ -887,7 +962,8 @@ export const getClientOptionsStore = async () => {
     id: client.id,
     name: client.name,
     email: client.email,
-    phone: client.company || 'N/A',
+    company: client.company || '',
+    phone: client.phone || '',
     enquiryDate: client.createdAt,
   }))
 }
@@ -1082,7 +1158,7 @@ export const createDirectSaleStore = async (
     clientId: client.id,
     clientName: client.name,
     clientEmail: client.email,
-    clientPhone: client.company || '',
+    clientPhone: client.phone || '',
     status,
     requestDetails,
     createdAt: now(),

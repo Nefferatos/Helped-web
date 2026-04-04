@@ -238,10 +238,13 @@ const EditMaids = () => {
             />
             <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground font-semibold">
               <Upload className="mr-2 h-4 w-4" />
-              {isImporting ? "Importing..." : "Import CSV"}
+              {isImporting ? "Importing..." : "Import CSV (Maids)"}
             </span>
           </label>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Import supports <span className="font-semibold">.csv</span> files exported from "Export Maids CSV" (not CV/PDF/DOC).
+        </p>
           <hr />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <button onClick={() => setView("public")} className="flex flex-col items-center gap-2 rounded-lg border p-6 transition-all hover:border-primary/30 hover:bg-secondary/50 active:scale-[0.98]">
@@ -295,10 +298,13 @@ const EditMaids = () => {
             />
             <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground">
               <Upload className="mr-2 h-4 w-4" />
-              {isImporting ? "Importing..." : "Import CSV"}
+              {isImporting ? "Importing..." : "Import CSV (Maids)"}
             </span>
           </label>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Import supports <span className="font-semibold">.csv</span> files exported from "Export Maids CSV" (not CV/PDF/DOC).
+        </p>
 
         {isLoading ? (
           <div className="py-10 text-center text-black">Loading maids...</div>

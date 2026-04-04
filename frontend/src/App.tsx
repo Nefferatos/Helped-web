@@ -122,17 +122,18 @@ const ClientHomeRedirect = () => {
   return token ? <Navigate to="/client/dashboard" replace /> : <ClientLandingPage />;
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          <Route path="/employer-login" element={<ClientEmployerLogin />} />
-          <Route path="/agencies" element={<AgenciesPage />} />
-          <Route path="/agencies/:id" element={<AgencyDetailsPage />} />
-          <Route path="/agencyadmin/login" element={<AgencyAdminLogin />} />
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Routes>
+            <Route path="/employer-login" element={<ClientEmployerLogin />} />
+            <Route path="/agencies" element={<AgenciesPage />} />
+            <Route path="/agencies/:id" element={<AgencyDetailsPage />} />
+            <Route path="/agencyadmin/login" element={<AgencyAdminLogin />} />
           <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
           <Route path="/agencyadmin/dashboard" element={<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>} />
           <Route path="/agencyadmin/agency-profile" element={<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>} />
@@ -164,10 +165,11 @@ const App = () => (
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<ContactUS />} />
           <Route path="/enquiry2" element={<Enquiry2 />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

@@ -130,8 +130,8 @@ const validateMaidPayload = (maid: Partial<MaidProfile>) => {
 const toMaidRecord = (
   maid: MaidProfile
 ): Omit<MaidRecord, 'id' | 'createdAt' | 'updatedAt'> => ({
-  fullName: maid.fullName,
-  referenceCode: maid.referenceCode,
+  fullName: maid.fullName.trim(),
+  referenceCode: maid.referenceCode.trim(),
   status: maid.status ?? 'available',
   type: maid.type,
   nationality: maid.nationality,
@@ -394,7 +394,7 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
 
 export const getMaidByReferenceCode = async (req: Request, res: Response) => {
   try {
-    const { referenceCode } = req.params
+    const referenceCode = String(req.params.referenceCode ?? '').trim()
     const result = await getMaidByReferenceCodeStore(referenceCode)
 
     if (!result) {

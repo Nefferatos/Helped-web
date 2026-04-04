@@ -96,6 +96,43 @@ The Worker API persists application data to Supabase (as a single `jsonb` blob r
 
 Supabase table setup SQL is in `supabase/app_data.sql`.
 
+## Email Confirmation (Client + Agency Admin Signup)
+
+Signup flows now require email confirmation via a 6-digit code:
+
+- Client: `/api/client-auth/register` -> `/api/client-auth/confirm`
+- Agency admin: `/api/agency-auth/register` -> `/api/agency-auth/confirm`
+
+To send emails in the Cloudflare Worker deployment, configure Resend:
+
+- Set `RESEND_FROM` under `[vars]` in `wrangler.toml`
+- Set the secret (do not commit it):
+
+```bash
+npx wrangler secret put RESEND_API_KEY
+```
+
+Dev-only fallback: set `DEV_EXPOSE_CONFIRMATION_CODE=true` to return the code in JSON responses (never enable in production).
+
+## Supabase Social + Phone Login (Client Portal)
+
+The client login page (`/employer-login`) supports:
+
+- Google OAuth (`supabase.auth.signInWithOAuth({ provider: "google" })`)
+- Facebook OAuth (`supabase.auth.signInWithOAuth({ provider: "facebook" })`)
+- Phone OTP via SMS (`supabase.auth.signInWithOtp` + `supabase.auth.verifyOtp`)
+
+Setup steps in Supabase Dashboard:
+
+1. Enable providers: Authentication → Providers → enable Google and/or Facebook.
+2. Add redirect URL: Authentication → URL Configuration → add `https://<your-domain>/auth/callback`.
+3. Enable Phone: Authentication → Providers → Phone, and configure an SMS provider (Twilio, etc.).
+
+Worker/Backend requirements:
+
+- The API accepts Supabase JWTs by calling `GET <SUPABASE_URL>/auth/v1/user` using `SUPABASE_ANON_KEY`.
+- Set `SUPABASE_ANON_KEY` in `wrangler.toml` (or `.dev.vars` for local `wrangler dev`).
+
 ## App Details
 
 This application currently includes three main portal flows:

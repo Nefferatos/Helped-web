@@ -1,0 +1,55 @@
+import type { NextFunction, Request, Response } from "express";
+
+export type SupabaseAuthUser = {
+  id: string;
+  email?: string;
+  phone?: string;
+  user_metadata?: Record<string, unknown>;
+};
+
+const getBearerToken = (req: Request) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return null;
+  return header.slice("Bearer ".length).trim() || null;
+};
+
+// Express middleware: verifies a Supabase access token (JWT) by calling Supabase Auth.
+// This avoids implementing JWKS signature verification and works reliably for OAuth + phone OTP.
+export const requireSupabaseAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const token = getBearerToken(req);
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY?.trim();
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return res.status(500).json({
+      error: "Server is missing SUPABASE_URL or SUPABASE_ANON_KEY",
+    });
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        authorization: `Bearer ${token}`,
+        accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const user = (await response.json()) as SupabaseAuthUser;
+    (req as Request & { supabaseUser?: SupabaseAuthUser }).supabaseUser = user;
+    next();
+  } catch (error) {
+    console.error("Supabase auth verify failed:", error);
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+};
+

@@ -10,6 +10,7 @@ import clientAuthRoutes from './routes/clientAuthRoutes'
 import agencyAuthRoutes from './routes/agencyAuthRoutes'
 import clientRoutes from './routes/clientRoutes'
 import chatRoutes from './routes/chatRoutes'
+import dashboardRoutes from './routes/dashboardRoutes'
 import { initializeStore } from './store'
 
 const app: Express = express()
@@ -49,6 +50,7 @@ app.use('/api/client-auth', clientAuthRoutes)
 app.use('/api/agency-auth', agencyAuthRoutes)
 app.use('/api/client', clientRoutes)
 app.use('/api/chats', chatRoutes)
+app.use('/api', dashboardRoutes)
 
 if (hasFrontendSite) {
   app.use(express.static(frontendDist))

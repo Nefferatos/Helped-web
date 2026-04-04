@@ -2,6 +2,7 @@ export interface ClientUser {
   id: number;
   name: string;
   company?: string;
+  phone?: string;
   email: string;
   profileImageUrl?: string;
   createdAt: string;

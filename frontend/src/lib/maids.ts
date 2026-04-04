@@ -72,12 +72,22 @@ export const formatDate = (value?: string) => {
     return "N/A";
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
+  const trimmed = value.trim();
+
+  // Prefer correct handling for date-only strings to avoid timezone shifts.
+  const isoDateOnly = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDateOnly) {
+    const [, y, m, d] = isoDateOnly;
+    return `${d}/${m}/${y}`;
   }
 
-  return date.toLocaleDateString();
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(date.getFullYear());
+  return `${dd}/${mm}/${yyyy}`;
 };
 
 export const getPrimaryPhoto = (maid: MaidProfile) =>

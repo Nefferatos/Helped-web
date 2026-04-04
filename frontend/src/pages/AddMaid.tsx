@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { MaidProfile } from "@/lib/maids";
 import { adminPath } from "@/lib/routes";
+import DateInput from "@/components/DateInput";
 
 const tabs = ["PROFILE", "SKILLS", "EMPLOYMENT HISTORY", "AVAILABILITY/REMARK", "INTRODUCTION", "PUBLIC INTRODUCTION", "PRIVATE INFO"];
 const languageOptions = [
@@ -52,6 +53,16 @@ interface AddMaidProps {
   editRefCode?: string;
 }
 
+const createEmploymentRow = () => ({
+  _id: crypto.randomUUID(),
+  from: "",
+  to: "",
+  country: "",
+  employer: "",
+  duties: "",
+  remarks: "",
+});
+
 const AddMaid = ({ editRefCode }: AddMaidProps) => {
   const navigate = useNavigate();
   const isEditMode = Boolean(editRefCode);
@@ -90,8 +101,11 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
     Object.fromEntries(yesNoQuestions.map((question) => [question, false]))
   );
   const [employmentHistory, setEmploymentHistory] = useState<Array<Record<string, string>>>([
-    { from: "", to: "", country: "", employer: "", duties: "", remarks: "" },
+    createEmploymentRow(),
   ]);
+  const [workAreaNotes, setWorkAreaNotes] = useState<Record<string, string>>(
+    Object.fromEntries(skillAreas.map((skill) => [skill, ""]))
+  );
   const [availabilityRemark, setAvailabilityRemark] = useState("");
   const [introduction, setIntroduction] = useState("");
   const [publicIntroduction, setPublicIntroduction] = useState("");
@@ -189,13 +203,28 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
         const skillsPrefs = (existing.skillsPreferences as Record<string, unknown>) || {};
         setAvailabilityRemark(String(skillsPrefs.availabilityRemark || ""));
         setPrivateInfo(String(skillsPrefs.privateInfo || ""));
+        setWorkAreaNotes(
+          ((skillsPrefs.workAreaNotes as Record<string, string>) ??
+            Object.fromEntries(skillAreas.map((skill) => [skill, ""]))) as Record<string, string>
+        );
         setOtherInformation(
           ((skillsPrefs.otherInformation as Record<string, boolean>) ??
             Object.fromEntries(yesNoQuestions.map((question) => [question, false]))) as Record<string, boolean>
         );
 
         if (Array.isArray(existing.employmentHistory) && existing.employmentHistory.length > 0) {
-          setEmploymentHistory(existing.employmentHistory as Array<Record<string, string>>);
+          const rows = existing.employmentHistory as Array<Record<string, string>>;
+          setEmploymentHistory(
+            rows.map((row) => ({
+              _id: crypto.randomUUID(),
+              from: String(row.from || ""),
+              to: String(row.to || ""),
+              country: String(row.country || ""),
+              employer: String(row.employer || ""),
+              duties: String(row.duties || ""),
+              remarks: String(row.remarks || ""),
+            }))
+          );
         }
 
         const intro = (existing.introduction as Record<string, unknown>) || {};
@@ -271,7 +300,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
   };
 
   const addEmploymentRow = () => {
-    setEmploymentHistory((prev) => [...prev, { from: "", to: "", country: "", employer: "", duties: "", remarks: "" }]);
+    setEmploymentHistory((prev) => [...prev, createEmploymentRow()]);
   };
 
   const removeLastEmploymentRow = () => {
@@ -338,8 +367,8 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
   };
 
   const buildPayload = (): MaidProfile => ({
-    fullName: profile.fullName,
-    referenceCode: profile.referenceCode,
+    fullName: profile.fullName.trim(),
+    referenceCode: profile.referenceCode.trim(),
     type: profile.type,
     nationality: profile.nationality,
     dateOfBirth: profile.dateOfBirth,
@@ -358,10 +387,11 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
       availabilityRemark,
       privateInfo,
       offDaysPerMonth: profile.offDaysPerMonth,
+      workAreaNotes,
       otherInformation,
     },
     workAreas,
-    employmentHistory,
+    employmentHistory: employmentHistory.map(({ _id, ...rest }) => rest),
     introduction: {
       intro: introduction,
       publicIntro: publicIntroduction,
@@ -663,12 +693,9 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                     )}
 
                     {label === "Date of Birth" && (
-                      <Input
-                        type="date"
+                      <DateInput
                         value={profile.dateOfBirth}
-                        onChange={(e) =>
-                          handleProfileChange("dateOfBirth", e.target.value)
-                        }
+                        onChange={(next) => handleProfileChange("dateOfBirth", next)}
                       />
                     )}
 
@@ -1016,6 +1043,37 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                 ))}
             </tbody>
           </table>
+
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <h4 className="text-sm font-semibold text-foreground">Skill Feedback</h4>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add short notes to explain the rating (especially important for Cooking).
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-black">Cooking feedback</Label>
+                <textarea
+                  className="min-h-[100px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  placeholder="Example: Can cook Chinese stir-fry, soups, pasta, baking; handles pork; follows recipes well..."
+                  value={workAreaNotes["Cooking"] || ""}
+                  onChange={(e) =>
+                    setWorkAreaNotes((prev) => ({ ...prev, Cooking: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-black">Other notes (optional)</Label>
+                <textarea
+                  className="min-h-[100px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  placeholder="Any extra notes you want employers to see."
+                  value={workAreaNotes["Other Skill"] || ""}
+                  onChange={(e) =>
+                    setWorkAreaNotes((prev) => ({ ...prev, "Other Skill": e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
           <div className="flex justify-center pt-4">
             <Button className="bg-accent px-8 text-accent-foreground hover:bg-accent/90" disabled={isSubmitting} onClick={handleContinue}>
               {nextLabel}
@@ -1040,7 +1098,7 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
             </thead>
             <tbody>
               {employmentHistory.map((row, index) => (
-                <tr key={`${index}-${row.from}-${row.to}`} className="hover:bg-muted/50 transition-colors align-top">
+                <tr key={row._id || String(index)} className="hover:bg-muted/50 transition-colors align-top">
                   {(["from", "to", "country", "employer", "duties", "remarks"] as const).map((field) => {
                     const isDateField = field === "from" || field === "to";
                     const isLongText = field === "duties" || field === "remarks";
@@ -1048,11 +1106,10 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
                     return (
                       <td key={field} className="border px-2 py-1 align-top">
                         {isDateField ? (
-                          <input
-                            type="date"
+                          <DateInput
                             className="h-8 w-full text-xs px-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
                             value={row[field]}
-                            onChange={(e) => updateEmploymentRow(index, field, e.target.value)}
+                            onChange={(next) => updateEmploymentRow(index, field, next)}
                           />
                         ) : isLongText ? (
                           <textarea
@@ -1096,7 +1153,10 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-xs font-medium text-black">Contract Ends</Label>
-              <Input type="date" value={availabilityInfo.contractEnds} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, contractEnds: e.target.value, })) } />
+              <DateInput
+                value={availabilityInfo.contractEnds}
+                onChange={(next) => setAvailabilityInfo((prev) => ({ ...prev, contractEnds: next }))}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-xs font-medium text-black">Present Salary (S$)</Label>

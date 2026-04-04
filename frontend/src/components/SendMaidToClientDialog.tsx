@@ -8,6 +8,7 @@ interface ClientOption {
   id: number;
   name: string;
   email: string;
+  company?: string;
   phone: string;
   enquiryDate: string;
 }
@@ -161,7 +162,7 @@ const SendMaidToClientDialog = ({
               <option value="">Select a client</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
-                  {client.name} | {client.email} | {client.phone}
+                  {client.name} | {client.email} | {client.phone || "N/A"}
                 </option>
               ))}
             </select>
@@ -176,7 +177,8 @@ const SendMaidToClientDialog = ({
                   <>
                     <p><span className="font-semibold text-foreground">Client:</span> {client.name}</p>
                     <p><span className="font-semibold text-foreground">Email:</span> {client.email}</p>
-                    <p><span className="font-semibold text-foreground">Company:</span> {client.phone}</p>
+                    <p><span className="font-semibold text-foreground">Company:</span> {client.company || "N/A"}</p>
+                    <p><span className="font-semibold text-foreground">Phone:</span> {client.phone || "N/A"}</p>
                     <p><span className="font-semibold text-foreground">Joined:</span> {new Date(client.enquiryDate).toLocaleDateString()}</p>
                   </>
                 );

@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send } from "lucide-react";
-import { MaidProfile } from "@/lib/maids";
+import { MaidProfile, formatDate } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import { exportMaidProfileToExcel, exportMaidProfileToPdf, exportMaidProfileToWord } from "@/lib/maidExport";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
-
-const formatDate = (value?: string) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
-};
 
 const MaidProfilePage = () => {
   const { refCode } = useParams();
@@ -94,6 +88,7 @@ const MaidProfilePage = () => {
   const introduction = maid.introduction as Record<string, unknown>;
   const skillsPreferences = maid.skillsPreferences as Record<string, unknown>;
   const otherInformation = (skillsPreferences.otherInformation as Record<string, boolean>) || {};
+  const workAreaNotes = (skillsPreferences.workAreaNotes as Record<string, string>) || {};
   const pastIllnesses = (introduction.pastIllnesses as Record<string, boolean>) || {};
   const workAreas = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string }]>;
   const employment = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
@@ -282,6 +277,28 @@ const MaidProfilePage = () => {
           </table>
         </div>
 
+        {(workAreaNotes["Cooking"] || workAreaNotes["Other Skill"]) ? (
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">Skill Feedback</h3>
+            {workAreaNotes["Cooking"] ? (
+              <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+                <p className="font-semibold">Cooking</p>
+                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                  {workAreaNotes["Cooking"]}
+                </p>
+              </div>
+            ) : null}
+            {workAreaNotes["Other Skill"] ? (
+              <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+                <p className="font-semibold">Other</p>
+                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                  {workAreaNotes["Other Skill"]}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {employment.length > 0 && (
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-muted-foreground">Employment History</h3>
@@ -299,8 +316,8 @@ const MaidProfilePage = () => {
                     const row = e as Record<string, string>;
                     return (
                       <tr key={i} className="hover:bg-muted/30">
-                        <td className="border px-3 py-1.5">{row.from || ""}</td>
-                        <td className="border px-3 py-1.5">{row.to || ""}</td>
+                        <td className="border px-3 py-1.5">{formatDate(row.from) === "N/A" ? "" : formatDate(row.from)}</td>
+                        <td className="border px-3 py-1.5">{formatDate(row.to) === "N/A" ? "" : formatDate(row.to)}</td>
                         <td className="border px-3 py-1.5">{row.country || ""}</td>
                         <td className="border px-3 py-1.5">{row.employer || ""}</td>
                         <td className="border px-3 py-1.5">{row.duties || ""}</td>

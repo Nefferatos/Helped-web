@@ -96,11 +96,16 @@ interface EnquiryRecord {
 
 interface ClientRecord {
   id: number
+  supabaseUserId?: string
   name: string
   company?: string
   email: string
   password: string
   phone?: string
+  emailVerified?: boolean
+  emailVerificationCodeHash?: string
+  emailVerificationExpiresAt?: string
+  emailVerificationSentAt?: string
   profileImageUrl?: string
   createdAt: string
 }
@@ -113,9 +118,15 @@ interface ClientSessionRecord {
 
 interface AgencyAdminRecord {
   id: number
+  supabaseUserId?: string
   username: string
+  email?: string
   password: string
   agencyName: string
+  emailVerified?: boolean
+  emailVerificationCodeHash?: string
+  emailVerificationExpiresAt?: string
+  emailVerificationSentAt?: string
   profileImageUrl?: string
   createdAt: string
 }
@@ -181,9 +192,13 @@ type Bindings = {
   APP_DATA?: KVNamespace
   ASSETS: AssetsBinding
   SUPABASE_URL?: string
+  SUPABASE_ANON_KEY?: string
   SUPABASE_SERVICE_ROLE_KEY?: string
   SUPABASE_APP_DATA_TABLE?: string
   SUPABASE_APP_DATA_ID?: string
+  RESEND_API_KEY?: string
+  RESEND_FROM?: string
+  DEV_EXPOSE_CONFIRMATION_CODE?: string
 }
 
 type Variables = {
@@ -347,8 +362,27 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
   const defaults = defaultData()
   const maids = (raw.maids ?? defaults.maids).map(normalizeMaid)
   const enquiries = raw.enquiries ?? defaults.enquiries
-  const clients = raw.clients ?? defaults.clients
-  let agencyAdmins = raw.agencyAdmins ?? defaults.agencyAdmins
+  const clients = (raw.clients ?? defaults.clients).map((client) => ({
+    ...client,
+    supabaseUserId: client.supabaseUserId || undefined,
+    name: client.name ?? '',
+    company: client.company ?? '',
+    phone: client.phone ?? '',
+    email: client.email ?? '',
+    profileImageUrl: client.profileImageUrl ?? '',
+    createdAt: client.createdAt ?? now(),
+    // Back-compat: treat pre-existing clients as verified.
+    emailVerified: typeof client.emailVerified === 'boolean' ? client.emailVerified : true,
+  }))
+  let agencyAdmins = (raw.agencyAdmins ?? defaults.agencyAdmins).map((admin) => ({
+    ...admin,
+    supabaseUserId: admin.supabaseUserId || undefined,
+    email: admin.email ?? '',
+    profileImageUrl: admin.profileImageUrl ?? '',
+    createdAt: admin.createdAt ?? now(),
+    // Back-compat: treat pre-existing admins as verified (or no-email).
+    emailVerified: typeof admin.emailVerified === 'boolean' ? admin.emailVerified : true,
+  }))
   const hasMainAgency = agencyAdmins.some((admin) => admin.username === 'attheagency')
   if (!hasMainAgency) {
     agencyAdmins = agencyAdmins.map((admin) =>
@@ -557,16 +591,64 @@ const requireClientAuth = async (c: any, next: () => Promise<void>) => {
 
   const data = await loadData(c.env)
   const session = data.clientSessions.find((item) => item.token === token)
-  if (!session) {
+  if (session) {
+    const client = data.clients.find((item) => item.id === session.clientId)
+    if (!client) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    c.set('client', client)
+    await next()
+    return
+  }
+
+  // Supabase Auth JWT support (Google/Facebook/Phone).
+  const supabaseUser = await getSupabaseAuthUser(c.env, token)
+  if (!supabaseUser) {
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
-  const client = data.clients.find((item) => item.id === session.clientId)
-  if (!client) {
-    return c.json({ error: 'Unauthorized' }, 401)
+  const normalizedEmail = supabaseUser.email ? normalizeEmail(supabaseUser.email) : ''
+  const client =
+    data.clients.find((item) => item.supabaseUserId && item.supabaseUserId === supabaseUser.id) ??
+    (normalizedEmail
+      ? data.clients.find((item) => normalizeEmail(item.email) === normalizedEmail)
+      : null) ??
+    (supabaseUser.phone
+      ? data.clients.find((item) => (item.phone ?? '').trim() === supabaseUser.phone!.trim())
+      : null)
+
+  if (client) {
+    if (!client.supabaseUserId) {
+      client.supabaseUserId = supabaseUser.id
+      await saveData(c.env, data)
+    }
+    c.set('client', client)
+    await next()
+    return
   }
 
-  c.set('client', client)
+  // First-time Supabase login: create an app client record.
+  const nameFromMeta =
+    (supabaseUser.user_metadata?.full_name as string | undefined) ??
+    (supabaseUser.user_metadata?.name as string | undefined) ??
+    ''
+  const created: ClientRecord = {
+    id: data.counters.clients++,
+    supabaseUserId: supabaseUser.id,
+    name: nameFromMeta || (supabaseUser.email ? supabaseUser.email.split('@')[0] : 'Client'),
+    company: '',
+    phone: supabaseUser.phone ?? '',
+    email: supabaseUser.email ?? '',
+    password: '',
+    profileImageUrl: '',
+    createdAt: now(),
+    emailVerified: true,
+  }
+
+  data.clients.unshift(created)
+  await saveData(c.env, data)
+  c.set('client', created)
   await next()
 }
 
@@ -578,13 +660,42 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
 
   const data = await loadData(c.env)
   const session = data.agencyAdminSessions.find((item) => item.token === token)
-  if (!session) {
+  if (session) {
+    const admin = data.agencyAdmins.find((item) => item.id === session.adminId)
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    c.set('agencyAdmin', admin)
+    await next()
+    return
+  }
+
+  // Supabase Auth JWT support (optional).
+  // Security: we only allow JWT auth for agency admins that already exist in app data.
+  const supabaseUser = await getSupabaseAuthUser(c.env, token)
+  if (!supabaseUser) {
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
-  const admin = data.agencyAdmins.find((item) => item.id === session.adminId)
+  const normalizedEmail = supabaseUser.email ? normalizeEmail(supabaseUser.email) : ''
+  const admin =
+    data.agencyAdmins.find(
+      (item) => item.supabaseUserId && item.supabaseUserId === supabaseUser.id
+    ) ??
+    (normalizedEmail
+      ? data.agencyAdmins.find(
+          (item) => normalizeEmail(item.email ?? '') === normalizedEmail
+        )
+      : null)
+
   if (!admin) {
     return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  if (!admin.supabaseUserId) {
+    admin.supabaseUserId = supabaseUser.id
+    await saveData(c.env, data)
   }
 
   c.set('agencyAdmin', admin)
@@ -595,7 +706,9 @@ const toSafeClient = (client: ClientRecord) => ({
   id: client.id,
   name: client.name,
   company: client.company ?? '',
+  phone: client.phone ?? '',
   email: client.email,
+  emailVerified: Boolean(client.emailVerified),
   profileImageUrl: client.profileImageUrl ?? '',
   createdAt: client.createdAt,
 })
@@ -603,6 +716,8 @@ const toSafeClient = (client: ClientRecord) => ({
 const toSafeAgencyAdmin = (admin: AgencyAdminRecord) => ({
   id: admin.id,
   username: admin.username,
+  email: admin.email ?? '',
+  emailVerified: Boolean(admin.emailVerified),
   agencyName: admin.agencyName,
   profileImageUrl: admin.profileImageUrl ?? '',
   createdAt: admin.createdAt,
@@ -619,6 +734,109 @@ const parseBody = async <T>(request: Request): Promise<T | null> => {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const sseEncoder = new TextEncoder()
+
+const normalizeEmail = (value: string) => value.trim().toLowerCase()
+
+const isEmailLike = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+
+const generateSixDigitCode = () => {
+  const buf = new Uint32Array(1)
+  crypto.getRandomValues(buf)
+  return String(buf[0] % 1000000).padStart(6, '0')
+}
+
+const sha256Hex = async (value: string) => {
+  const bytes = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+const shouldExposeDevConfirmationCode = (env: Bindings) =>
+  env.DEV_EXPOSE_CONFIRMATION_CODE?.trim().toLowerCase() === 'true'
+
+const sendEmailViaResend = async (env: Bindings, to: string, subject: string, text: string) => {
+  const apiKey = env.RESEND_API_KEY?.trim()
+  const from = env.RESEND_FROM?.trim()
+  if (!apiKey || !from) {
+    return { ok: false as const, error: 'RESEND_NOT_CONFIGURED' as const }
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to,
+      subject,
+      text,
+    }),
+  })
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    console.error('Resend email failed', response.status, body)
+    return { ok: false as const, error: 'RESEND_FAILED' as const }
+  }
+
+  return { ok: true as const }
+}
+
+const sendConfirmationCodeEmail = async (
+  env: Bindings,
+  params: { to: string; code: string; purpose: 'client' | 'agency' }
+) => {
+  const subject =
+    params.purpose === 'client' ? 'Confirm your client account' : 'Confirm your agency admin account'
+  const text =
+    params.purpose === 'client'
+      ? `Your Helped client verification code is: ${params.code}\n\nThis code expires in 15 minutes.`
+      : `Your Helped agency admin verification code is: ${params.code}\n\nThis code expires in 15 minutes.`
+
+  return await sendEmailViaResend(env, params.to, subject, text)
+}
+
+type SupabaseAuthUser = {
+  id: string
+  email?: string
+  phone?: string
+  user_metadata?: Record<string, unknown>
+}
+
+const supabaseUserCache = new Map<
+  string,
+  { user: SupabaseAuthUser; expiresAt: number }
+>()
+
+const getSupabaseAuthUser = async (env: Bindings, accessToken: string) => {
+  const cached = supabaseUserCache.get(accessToken)
+  if (cached && cached.expiresAt > Date.now()) return cached.user
+
+  const baseUrl = env.SUPABASE_URL?.trim().replace(/\/$/, '')
+  const anonKey = env.SUPABASE_ANON_KEY?.trim()
+  if (!baseUrl || !anonKey) return null
+
+  const response = await fetch(`${baseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: anonKey,
+      authorization: `Bearer ${accessToken}`,
+      accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    return null
+  }
+
+  const user = (await response.json()) as SupabaseAuthUser
+  // Cache for 5 minutes to reduce Supabase Auth calls.
+  supabaseUserCache.set(accessToken, { user, expiresAt: Date.now() + 5 * 60 * 1000 })
+  return user
+}
 
 const createSseResponse = (
   request: Request,
@@ -817,6 +1035,8 @@ const validateMaidPayload = (maid: Record<string, unknown>) => {
   return null
 }
 
+const normalizeReferenceCode = (value: unknown) => String(value ?? '').trim()
+
 const toMaidRecordPayload = (
   maid: Record<string, unknown>
 ): Omit<MaidRecord, 'id' | 'createdAt' | 'updatedAt'> => {
@@ -829,8 +1049,8 @@ const toMaidRecordPayload = (
       : []
 
   return {
-    fullName: String(maid.fullName),
-    referenceCode: String(maid.referenceCode),
+    fullName: String(maid.fullName).trim(),
+    referenceCode: normalizeReferenceCode(maid.referenceCode),
     status: typeof maid.status === 'string' ? maid.status : 'available',
     type: String(maid.type),
     nationality: String(maid.nationality),
@@ -877,6 +1097,36 @@ const toMaidRecordPayload = (
         ? maid.hasPhoto
         : photoDataUrls.length > 0 || Boolean(photoDataUrl),
   }
+}
+
+const ensureMaidPresent = async (
+  env: Bindings,
+  referenceCode: string,
+  fallback: Omit<MaidRecord, 'id' | 'createdAt' | 'updatedAt'>
+) => {
+  const ref = normalizeReferenceCode(referenceCode)
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const latest = await loadData(env)
+    const exists = latest.maids.find((item) => item.referenceCode === ref)
+    if (exists) {
+      return exists
+    }
+
+    // Concurrency safety: if a concurrent write overwrote our change, re-apply it.
+    latest.maids = latest.maids.filter((item) => item.referenceCode !== ref)
+    latest.maids.unshift({
+      ...fallback,
+      referenceCode: ref,
+      id: latest.counters.maids++,
+      createdAt: now(),
+      updatedAt: now(),
+    })
+    await saveData(env, latest)
+    await sleep(40 * (attempt + 1))
+  }
+
+  return null
 }
 
 const getConversationContext = (url: URL) => {
@@ -1270,7 +1520,9 @@ app.post('/api/maids/import.csv', async (c) => {
 
 app.get('/api/maids/:referenceCode', async (c) => {
   const data = await loadData(c.env)
-  const maid = data.maids.find((item) => item.referenceCode === c.req.param('referenceCode'))
+  const maid = data.maids.find(
+    (item) => item.referenceCode === normalizeReferenceCode(c.req.param('referenceCode'))
+  )
   if (!maid) {
     return c.json({ error: 'Maid not found' }, 404)
   }
@@ -1302,7 +1554,10 @@ app.post('/api/maids', async (c) => {
   }
   data.maids.unshift(maid)
   await saveData(c.env, data)
-  return c.json({ maid }, 201)
+
+  // Reliability: verify record exists after save (guards against rare concurrent blob overwrites).
+  const ensured = await ensureMaidPresent(c.env, maid.referenceCode, recordPayload)
+  return c.json({ maid: ensured ?? maid }, 201)
 })
 
 app.put('/api/maids/:referenceCode', async (c) => {
@@ -1317,7 +1572,7 @@ app.put('/api/maids/:referenceCode', async (c) => {
   }
 
   const data = await loadData(c.env)
-  const referenceCode = c.req.param('referenceCode')
+  const referenceCode = normalizeReferenceCode(c.req.param('referenceCode'))
   const index = data.maids.findIndex((maid) => maid.referenceCode === referenceCode)
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
@@ -1350,7 +1605,8 @@ app.put('/api/maids/:referenceCode', async (c) => {
     updatedAt: now(),
   }
   await saveData(c.env, data)
-  return c.json({ maid: data.maids[index] })
+  const ensured = await ensureMaidPresent(c.env, referenceCode, payload)
+  return c.json({ maid: ensured ?? data.maids[index] })
 })
 
 app.patch('/api/maids/:referenceCode/visibility', async (c) => {
@@ -1360,7 +1616,9 @@ app.patch('/api/maids/:referenceCode/visibility', async (c) => {
   }
 
   const data = await loadData(c.env)
-  const index = data.maids.findIndex((maid) => maid.referenceCode === c.req.param('referenceCode'))
+  const index = data.maids.findIndex(
+    (maid) => maid.referenceCode === normalizeReferenceCode(c.req.param('referenceCode'))
+  )
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
   }
@@ -1381,7 +1639,9 @@ app.patch('/api/maids/:referenceCode/photo', async (c) => {
   }
 
   const data = await loadData(c.env)
-  const index = data.maids.findIndex((maid) => maid.referenceCode === c.req.param('referenceCode'))
+  const index = data.maids.findIndex(
+    (maid) => maid.referenceCode === normalizeReferenceCode(c.req.param('referenceCode'))
+  )
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
   }
@@ -1404,7 +1664,9 @@ app.patch('/api/maids/:referenceCode/photos', async (c) => {
   }
 
   const data = await loadData(c.env)
-  const index = data.maids.findIndex((maid) => maid.referenceCode === c.req.param('referenceCode'))
+  const index = data.maids.findIndex(
+    (maid) => maid.referenceCode === normalizeReferenceCode(c.req.param('referenceCode'))
+  )
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
   }
@@ -1438,7 +1700,9 @@ app.patch('/api/maids/:referenceCode/video', async (c) => {
   }
 
   const data = await loadData(c.env)
-  const index = data.maids.findIndex((maid) => maid.referenceCode === c.req.param('referenceCode'))
+  const index = data.maids.findIndex(
+    (maid) => maid.referenceCode === normalizeReferenceCode(c.req.param('referenceCode'))
+  )
   if (index === -1) {
     return c.json({ error: 'Maid not found' }, 404)
   }
@@ -1454,12 +1718,13 @@ app.patch('/api/maids/:referenceCode/video', async (c) => {
 
 app.delete('/api/maids/:referenceCode', async (c) => {
   const data = await loadData(c.env)
-  const existing = data.maids.find((maid) => maid.referenceCode === c.req.param('referenceCode'))
+  const referenceCode = normalizeReferenceCode(c.req.param('referenceCode'))
+  const existing = data.maids.find((maid) => maid.referenceCode === referenceCode)
   if (!existing) {
     return c.json({ error: 'Maid not found' }, 404)
   }
 
-  data.maids = data.maids.filter((maid) => maid.referenceCode !== c.req.param('referenceCode'))
+  data.maids = data.maids.filter((maid) => maid.referenceCode !== referenceCode)
   await saveData(c.env, data)
   return c.json({ message: 'Maid deleted successfully' })
 })
@@ -1525,6 +1790,7 @@ app.post('/api/client-auth/register', async (c) => {
   const body = await parseBody<{
     name?: string
     company?: string
+    phone?: string
     email?: string
     password?: string
   }>(c.req.raw)
@@ -1534,33 +1800,150 @@ app.post('/api/client-auth/register', async (c) => {
   }
 
   const data = await loadData(c.env)
-  const existing = data.clients.find(
-    (client) => client.email.toLowerCase() === body.email!.trim().toLowerCase()
-  )
+  const email = body.email.trim()
+  const normalizedEmail = normalizeEmail(email)
+  const existing = data.clients.find((client) => normalizeEmail(client.email) === normalizedEmail)
   if (existing) {
-    return c.json({ error: 'Client email already exists' }, 409)
+    if (existing.emailVerified !== false) {
+      return c.json({ error: 'Client email already exists' }, 409)
+    }
+
+    const code = generateSixDigitCode()
+    existing.emailVerificationCodeHash = await sha256Hex(`${normalizedEmail}:${code}`)
+    existing.emailVerificationSentAt = now()
+    existing.emailVerificationExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    const emailResult = await sendConfirmationCodeEmail(c.env, { to: email, code, purpose: 'client' })
+    await saveData(c.env, data)
+
+    return c.json(
+      {
+        requiresConfirmation: true,
+        email: existing.email,
+        delivery: emailResult.ok ? 'sent' : 'not_configured',
+        devConfirmationCode: shouldExposeDevConfirmationCode(c.env) ? code : undefined,
+      },
+      202
+    )
   }
 
+  const code = generateSixDigitCode()
   const client: ClientRecord = {
     id: data.counters.clients++,
     name: body.name.trim(),
     company: body.company?.trim() ?? '',
-    email: body.email.trim(),
+    phone: body.phone?.trim() ?? '',
+    email,
     password: body.password.trim(),
     profileImageUrl: '',
     createdAt: now(),
+    emailVerified: false,
+    emailVerificationCodeHash: await sha256Hex(`${normalizedEmail}:${code}`),
+    emailVerificationSentAt: now(),
+    emailVerificationExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
   }
+
+  data.clients.unshift(client)
+  const emailResult = await sendConfirmationCodeEmail(c.env, { to: email, code, purpose: 'client' })
+  await saveData(c.env, data)
+  return c.json(
+    {
+      requiresConfirmation: true,
+      email: client.email,
+      delivery: emailResult.ok ? 'sent' : 'not_configured',
+      devConfirmationCode: shouldExposeDevConfirmationCode(c.env) ? code : undefined,
+    },
+    202
+  )
+})
+
+app.post('/api/client-auth/confirm', async (c) => {
+  const body = await parseBody<{ email?: string; code?: string }>(c.req.raw)
+  if (!body?.email?.trim() || !body.code?.trim()) {
+    return c.json({ error: 'email and code are required' }, 400)
+  }
+
+  const email = body.email.trim()
+  const normalizedEmail = normalizeEmail(email)
+  const code = body.code.trim()
+
+  const data = await loadData(c.env)
+  const client = data.clients.find((item) => normalizeEmail(item.email) === normalizedEmail)
+  if (!client) {
+    return c.json({ error: 'Client not found' }, 404)
+  }
+
+  if (client.emailVerified !== false) {
+    // Already verified: issue a session.
+    const session: ClientSessionRecord = {
+      token: crypto.randomUUID(),
+      clientId: client.id,
+      createdAt: now(),
+    }
+    data.clientSessions = data.clientSessions.filter((item) => item.clientId !== client.id)
+    data.clientSessions.unshift(session)
+    await saveData(c.env, data)
+    return c.json({ token: session.token, client: toSafeClient(client) }, 200)
+  }
+
+  if (!client.emailVerificationCodeHash || !client.emailVerificationExpiresAt) {
+    return c.json({ error: 'No confirmation code requested yet' }, 400)
+  }
+
+  if (Date.now() > new Date(client.emailVerificationExpiresAt).getTime()) {
+    return c.json({ error: 'Confirmation code expired' }, 400)
+  }
+
+  const expected = await sha256Hex(`${normalizedEmail}:${code}`)
+  if (expected !== client.emailVerificationCodeHash) {
+    return c.json({ error: 'Invalid confirmation code' }, 400)
+  }
+
+  client.emailVerified = true
+  client.emailVerificationCodeHash = undefined
+  client.emailVerificationExpiresAt = undefined
+  client.emailVerificationSentAt = undefined
+
   const session: ClientSessionRecord = {
     token: crypto.randomUUID(),
     clientId: client.id,
     createdAt: now(),
   }
-
-  data.clients.unshift(client)
   data.clientSessions = data.clientSessions.filter((item) => item.clientId !== client.id)
   data.clientSessions.unshift(session)
   await saveData(c.env, data)
-  return c.json({ token: session.token, client: toSafeClient(client) }, 201)
+  return c.json({ token: session.token, client: toSafeClient(client) }, 200)
+})
+
+app.post('/api/client-auth/resend', async (c) => {
+  const body = await parseBody<{ email?: string }>(c.req.raw)
+  if (!body?.email?.trim()) {
+    return c.json({ error: 'email is required' }, 400)
+  }
+
+  const email = body.email.trim()
+  const normalizedEmail = normalizeEmail(email)
+  const data = await loadData(c.env)
+  const client = data.clients.find((item) => normalizeEmail(item.email) === normalizedEmail)
+  if (!client) {
+    return c.json({ error: 'Client not found' }, 404)
+  }
+  if (client.emailVerified !== false) {
+    return c.json({ error: 'Client already verified' }, 400)
+  }
+
+  const code = generateSixDigitCode()
+  client.emailVerificationCodeHash = await sha256Hex(`${normalizedEmail}:${code}`)
+  client.emailVerificationSentAt = now()
+  client.emailVerificationExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+
+  const emailResult = await sendConfirmationCodeEmail(c.env, { to: email, code, purpose: 'client' })
+  await saveData(c.env, data)
+  return c.json({
+    requiresConfirmation: true,
+    email: client.email,
+    delivery: emailResult.ok ? 'sent' : 'not_configured',
+    devConfirmationCode: shouldExposeDevConfirmationCode(c.env) ? code : undefined,
+  })
 })
 
 app.post('/api/client-auth/login', async (c) => {
@@ -1570,13 +1953,25 @@ app.post('/api/client-auth/login', async (c) => {
   }
 
   const data = await loadData(c.env)
+  const normalizedEmail = normalizeEmail(body.email)
   const client = data.clients.find(
     (item) =>
-      item.email.toLowerCase() === body.email!.trim().toLowerCase() &&
+      normalizeEmail(item.email) === normalizedEmail &&
       item.password === body.password!.trim()
   )
   if (!client) {
     return c.json({ error: 'Invalid email or password' }, 401)
+  }
+
+  if (client.emailVerified === false) {
+    return c.json(
+      {
+        error: 'EMAIL_NOT_VERIFIED',
+        requiresConfirmation: true,
+        email: client.email,
+      },
+      403
+    )
   }
 
   const session: ClientSessionRecord = {
@@ -1599,6 +1994,7 @@ app.put('/api/client-auth/me', requireClientAuth, async (c) => {
   const body = await parseBody<{
     name?: string
     company?: string
+    phone?: string
     email?: string
     profileImageUrl?: string
   }>(c.req.raw)
@@ -1623,6 +2019,7 @@ app.put('/api/client-auth/me', requireClientAuth, async (c) => {
     ...data.clients[index],
     name: body.name.trim(),
     company: typeof body.company === 'string' ? body.company.trim() : data.clients[index].company,
+    phone: typeof body.phone === 'string' ? body.phone.trim() : (data.clients[index].phone ?? ''),
     email: body.email.trim(),
     profileImageUrl:
       typeof body.profileImageUrl === 'string'
@@ -1636,7 +2033,7 @@ app.put('/api/client-auth/me', requireClientAuth, async (c) => {
           ...sale,
           clientName: data.clients[index].name,
           clientEmail: data.clients[index].email,
-          clientPhone: data.clients[index].company || '',
+          clientPhone: data.clients[index].phone || '',
         }
       : sale
   )
@@ -1656,6 +2053,7 @@ app.post('/api/client-auth/logout', requireClientAuth, async (c) => {
 app.post('/api/agency-auth/register', async (c) => {
   const body = await parseBody<{
     username?: string
+    email?: string
     password?: string
     agencyName?: string
   }>(c.req.raw)
@@ -1664,32 +2062,163 @@ app.post('/api/agency-auth/register', async (c) => {
     return c.json({ error: 'username, password, and agencyName are required' }, 400)
   }
 
-  const data = await loadData(c.env)
-  const existing = data.agencyAdmins.find(
-    (admin) => admin.username.toLowerCase() === body.username!.trim().toLowerCase()
-  )
-  if (existing) {
-    return c.json({ error: 'Agency admin username already exists' }, 409)
+  const emailFromBody = body.email?.trim() ?? ''
+  const fallbackEmail = isEmailLike(body.username) ? body.username.trim() : ''
+  const email = emailFromBody || fallbackEmail
+  if (!email) {
+    return c.json({ error: 'email is required for agency signup' }, 400)
   }
 
+  const data = await loadData(c.env)
+  const normalizedEmail = normalizeEmail(email)
+  const normalizedUsername = body.username.trim().toLowerCase()
+
+  const existingByUsername = data.agencyAdmins.find(
+    (admin) => admin.username.toLowerCase() === normalizedUsername
+  )
+  const existingByEmail = data.agencyAdmins.find(
+    (admin) => normalizeEmail(admin.email ?? '') === normalizedEmail
+  )
+
+  const existing = existingByUsername ?? existingByEmail
+  if (existing) {
+    if (existing.emailVerified !== false) {
+      return c.json({ error: 'Agency admin already exists' }, 409)
+    }
+
+    const code = generateSixDigitCode()
+    existing.email = email
+    existing.emailVerificationCodeHash = await sha256Hex(`${normalizedEmail}:${code}`)
+    existing.emailVerificationSentAt = now()
+    existing.emailVerificationExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    const emailResult = await sendConfirmationCodeEmail(c.env, { to: email, code, purpose: 'agency' })
+    await saveData(c.env, data)
+    return c.json(
+      {
+        requiresConfirmation: true,
+        email,
+        delivery: emailResult.ok ? 'sent' : 'not_configured',
+        devConfirmationCode: shouldExposeDevConfirmationCode(c.env) ? code : undefined,
+      },
+      202
+    )
+  }
+
+  const code = generateSixDigitCode()
   const admin: AgencyAdminRecord = {
     id: data.counters.agencyAdmins++,
     username: body.username.trim(),
+    email,
     password: body.password.trim(),
     agencyName: body.agencyName.trim(),
     createdAt: now(),
+    emailVerified: false,
+    emailVerificationCodeHash: await sha256Hex(`${normalizedEmail}:${code}`),
+    emailVerificationSentAt: now(),
+    emailVerificationExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
   }
+
+  data.agencyAdmins.unshift(admin)
+  const emailResult = await sendConfirmationCodeEmail(c.env, { to: email, code, purpose: 'agency' })
+  await saveData(c.env, data)
+  return c.json(
+    {
+      requiresConfirmation: true,
+      email,
+      delivery: emailResult.ok ? 'sent' : 'not_configured',
+      devConfirmationCode: shouldExposeDevConfirmationCode(c.env) ? code : undefined,
+    },
+    202
+  )
+})
+
+app.post('/api/agency-auth/confirm', async (c) => {
+  const body = await parseBody<{ email?: string; code?: string }>(c.req.raw)
+  if (!body?.email?.trim() || !body.code?.trim()) {
+    return c.json({ error: 'email and code are required' }, 400)
+  }
+
+  const email = body.email.trim()
+  const normalizedEmail = normalizeEmail(email)
+  const code = body.code.trim()
+
+  const data = await loadData(c.env)
+  const admin = data.agencyAdmins.find((item) => normalizeEmail(item.email ?? '') === normalizedEmail)
+  if (!admin) {
+    return c.json({ error: 'Agency admin not found' }, 404)
+  }
+
+  if (admin.emailVerified !== false) {
+    const session: AgencyAdminSessionRecord = {
+      token: crypto.randomUUID(),
+      adminId: admin.id,
+      createdAt: now(),
+    }
+    data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.adminId !== admin.id)
+    data.agencyAdminSessions.unshift(session)
+    await saveData(c.env, data)
+    return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 200)
+  }
+
+  if (!admin.emailVerificationCodeHash || !admin.emailVerificationExpiresAt) {
+    return c.json({ error: 'No confirmation code requested yet' }, 400)
+  }
+
+  if (Date.now() > new Date(admin.emailVerificationExpiresAt).getTime()) {
+    return c.json({ error: 'Confirmation code expired' }, 400)
+  }
+
+  const expected = await sha256Hex(`${normalizedEmail}:${code}`)
+  if (expected !== admin.emailVerificationCodeHash) {
+    return c.json({ error: 'Invalid confirmation code' }, 400)
+  }
+
+  admin.emailVerified = true
+  admin.emailVerificationCodeHash = undefined
+  admin.emailVerificationExpiresAt = undefined
+  admin.emailVerificationSentAt = undefined
+
   const session: AgencyAdminSessionRecord = {
     token: crypto.randomUUID(),
     adminId: admin.id,
     createdAt: now(),
   }
-
-  data.agencyAdmins.unshift(admin)
   data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.adminId !== admin.id)
   data.agencyAdminSessions.unshift(session)
   await saveData(c.env, data)
-  return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 201)
+  return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 200)
+})
+
+app.post('/api/agency-auth/resend', async (c) => {
+  const body = await parseBody<{ email?: string }>(c.req.raw)
+  if (!body?.email?.trim()) {
+    return c.json({ error: 'email is required' }, 400)
+  }
+
+  const email = body.email.trim()
+  const normalizedEmail = normalizeEmail(email)
+  const data = await loadData(c.env)
+  const admin = data.agencyAdmins.find((item) => normalizeEmail(item.email ?? '') === normalizedEmail)
+  if (!admin) {
+    return c.json({ error: 'Agency admin not found' }, 404)
+  }
+  if (admin.emailVerified !== false) {
+    return c.json({ error: 'Agency admin already verified' }, 400)
+  }
+
+  const code = generateSixDigitCode()
+  admin.emailVerificationCodeHash = await sha256Hex(`${normalizedEmail}:${code}`)
+  admin.emailVerificationSentAt = now()
+  admin.emailVerificationExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+
+  const emailResult = await sendConfirmationCodeEmail(c.env, { to: email, code, purpose: 'agency' })
+  await saveData(c.env, data)
+  return c.json({
+    requiresConfirmation: true,
+    email,
+    delivery: emailResult.ok ? 'sent' : 'not_configured',
+    devConfirmationCode: shouldExposeDevConfirmationCode(c.env) ? code : undefined,
+  })
 })
 
 app.post('/api/agency-auth/login', async (c) => {
@@ -1706,6 +2235,17 @@ app.post('/api/agency-auth/login', async (c) => {
   )
   if (!admin) {
     return c.json({ error: 'Invalid username or password' }, 401)
+  }
+
+  if (admin.email && admin.emailVerified === false) {
+    return c.json(
+      {
+        error: 'EMAIL_NOT_VERIFIED',
+        requiresConfirmation: true,
+        email: admin.email,
+      },
+      403
+    )
   }
 
   const session: AgencyAdminSessionRecord = {
@@ -1830,7 +2370,8 @@ app.get('/api/direct-sales/clients', async (c) => {
       id: client.id,
       name: client.name,
       email: client.email,
-      phone: client.company || 'N/A',
+      company: client.company || '',
+      phone: client.phone || '',
       enquiryDate: client.createdAt,
     }))
 
@@ -1912,7 +2453,7 @@ app.post('/api/direct-sales/:referenceCode', async (c) => {
     clientId: client.id,
     clientName: client.name,
     clientEmail: client.email,
-    clientPhone: client.company || '',
+    clientPhone: client.phone || '',
     status: normalizedStatus,
     requestDetails: body.formData,
     createdAt: now(),

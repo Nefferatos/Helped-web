@@ -271,7 +271,7 @@ const ClientLandingPage = () => {
         headers: { ...getClientAuthHeaders() },
       });
     } catch {
-
+      // Ignore logout errors; we'll clear local session regardless.
     } finally {
       clearClientAuth();
       setClientUser(null);
