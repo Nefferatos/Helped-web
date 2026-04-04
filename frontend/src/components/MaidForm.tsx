@@ -93,6 +93,36 @@ const MaidForm = ({ initialValue, mode, isSubmitting, onSubmit }: MaidFormProps)
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (!form.fullName.trim() || !form.referenceCode.trim()) {
+      toast.error("Full name and reference code are required");
+      return;
+    }
+
+    const height = Number(form.height);
+    const weight = Number(form.weight);
+    const numberOfChildren = Number(form.numberOfChildren);
+    const numberOfSiblings = Number(form.numberOfSiblings);
+
+    if (!Number.isFinite(height) || height <= 0) {
+      toast.error("Height must be a positive number");
+      return;
+    }
+
+    if (!Number.isFinite(weight) || weight <= 0) {
+      toast.error("Weight must be a positive number");
+      return;
+    }
+
+    if (!Number.isFinite(numberOfChildren) || numberOfChildren < 0) {
+      toast.error("Number of children must be 0 or more");
+      return;
+    }
+
+    if (!Number.isFinite(numberOfSiblings) || numberOfSiblings < 0) {
+      toast.error("Number of siblings must be 0 or more");
+      return;
+    }
+
     const languageSkills = parseJson<Record<string, string>>("Language skills", form.languageSkillsText);
     const skillsPreferences = parseJson<Record<string, unknown>>("Skills preferences", form.skillsPreferencesText);
     const workAreas = parseJson<Record<string, unknown>>("Work areas", form.workAreasText);
@@ -111,12 +141,12 @@ const MaidForm = ({ initialValue, mode, isSubmitting, onSubmit }: MaidFormProps)
       nationality: form.nationality.trim(),
       dateOfBirth: form.dateOfBirth,
       placeOfBirth: form.placeOfBirth.trim(),
-      height: Number(form.height),
-      weight: Number(form.weight),
+      height,
+      weight,
       religion: form.religion.trim(),
       maritalStatus: form.maritalStatus.trim(),
-      numberOfChildren: Number(form.numberOfChildren),
-      numberOfSiblings: Number(form.numberOfSiblings),
+      numberOfChildren,
+      numberOfSiblings,
       homeAddress: form.homeAddress.trim(),
       airportRepatriation: form.airportRepatriation.trim(),
       educationLevel: form.educationLevel.trim(),

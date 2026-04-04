@@ -22,7 +22,7 @@ import AgencyAdminLogin from "@/pages/AgencyAdminLogin";
 import AddMaid from "@/pages/AddMaid";
 import EditMaids from "@/pages/EditMaids";
 import MaidProfile from "@/pages/MaidProfile";
-import EditMaid from "@/pages/EditMaid";
+import EditMaid from "@/pages/EditMaidProfile";
 import PublicMaidProfile from "@/pages/PublicMaidProfile";
 import ChangePassword from "@/pages/ChangePassword";
 import Enquiry from "@/pages/Enquiry";

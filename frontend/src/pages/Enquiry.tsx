@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { Trash2 } from "lucide-react";
+import { streamSse } from "@/lib/sse";
 
 interface EnquiryRecord {
   id: number;
@@ -22,6 +23,16 @@ const Enquiry = () => {
   const [enquiries, setEnquiries] = useState<EnquiryRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const enquiriesRef = useRef<EnquiryRecord[]>([]);
+  const searchRef = useRef("");
+
+  useEffect(() => {
+    enquiriesRef.current = enquiries;
+  }, [enquiries]);
+
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -57,6 +68,94 @@ const Enquiry = () => {
     void loadEnquiries();
     return () => controller.abort();
   }, [search]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let lastId = 0;
+    let pollTimer: number | null = null;
+
+    const computeLocalLastId = () =>
+      enquiriesRef.current.reduce((maxId, enquiry) => Math.max(maxId, enquiry.id), 0);
+
+    const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    const loadLastId = async () => {
+      try {
+        const response = await fetch("/api/enquiries/last-id", { signal: controller.signal });
+        const data = (await response.json().catch(() => ({}))) as { lastId?: number };
+        if (response.ok && typeof data.lastId === "number") {
+          lastId = Math.max(lastId, data.lastId);
+        }
+      } catch {
+        // ignore; endpoint may not exist in local dev
+      } finally {
+        lastId = Math.max(lastId, computeLocalLastId());
+      }
+    };
+
+    const run = async () => {
+      await loadLastId();
+
+      while (!controller.signal.aborted) {
+        try {
+          await streamSse(`/api/enquiries/stream?afterId=${lastId}`, {
+            signal: controller.signal,
+            onEvent: (event) => {
+              if (event.event !== "enquiry" || !event.data) return;
+              const payload = JSON.parse(event.data) as { enquiry?: EnquiryRecord };
+              const next = payload.enquiry;
+              if (!next) return;
+
+              lastId = Math.max(lastId, next.id);
+
+              if (searchRef.current.trim()) {
+                return;
+              }
+
+              setEnquiries((prev) => {
+                if (prev.some((item) => item.id === next.id)) return prev;
+                return [...prev, next].sort((a, b) => b.id - a.id);
+              });
+            },
+          });
+        } catch (error) {
+          if (controller.signal.aborted) return;
+
+          if (error instanceof Error && /Stream failed \\((404|405)\\)/.test(error.message)) {
+            if (pollTimer !== null) return;
+            pollTimer = window.setInterval(async () => {
+              if (controller.signal.aborted) return;
+              if (searchRef.current.trim()) return;
+              try {
+                const response = await fetch("/api/enquiries", { signal: controller.signal });
+                const data = (await response.json().catch(() => ({}))) as { enquiries?: EnquiryRecord[] };
+                if (response.ok && data.enquiries) {
+                  setEnquiries([...data.enquiries].sort((a, b) => b.id - a.id));
+                  setPage(1);
+                  lastId = Math.max(lastId, data.enquiries.reduce((max, item) => Math.max(max, item.id), 0));
+                }
+              } catch {
+                // ignore polling errors
+              }
+            }, 5000);
+
+            await sleep(10);
+            continue;
+          }
+
+          await sleep(1200);
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      controller.abort();
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+      }
+    };
+  }, []);
 
   const totalPages = Math.max(1, Math.ceil(enquiries.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);

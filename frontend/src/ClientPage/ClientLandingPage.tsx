@@ -312,7 +312,7 @@ const ClientLandingPage = () => {
             <a href="#services">Services</a>
             <a href="#search">Search Maids</a>
             <a href="/about">About Us</a>
-            <a href="/Enquiry2">Enquiry</a>
+            <a href="/enquiry2">Enquiry</a>
             <a href="/contact">Contact Us</a>
           </nav>
 
@@ -379,7 +379,7 @@ const ClientLandingPage = () => {
                   About Us
                 </Link>
 
-                <Link to="/Enquiry2" className="py-2 px-3 rounded-lg hover:bg-muted">
+                <Link to="/enquiry2" className="py-2 px-3 rounded-lg hover:bg-muted">
                   Enquiry
                 </Link>
                 

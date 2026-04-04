@@ -126,6 +126,9 @@ const MaidProfilePage = () => {
   };
 
   const handleExportWord = () => {
+    if (!window.confirm(`Export Word bio-data for ${maid.fullName} (${maid.referenceCode})?`)) {
+      return;
+    }
     try {
       exportMaidProfileToWord(maid);
       toast.success("Word bio-data downloaded");
@@ -135,6 +138,9 @@ const MaidProfilePage = () => {
   };
 
   const handleExportExcel = () => {
+    if (!window.confirm(`Export Excel bio-data for ${maid.fullName} (${maid.referenceCode})?`)) {
+      return;
+    }
     try {
       exportMaidProfileToExcel(maid);
       toast.success("Excel bio-data downloaded");
@@ -144,6 +150,9 @@ const MaidProfilePage = () => {
   };
 
   const handleExportPdf = () => {
+    if (!window.confirm(`Export PDF bio-data for ${maid.fullName} (${maid.referenceCode})?\n\nThis will open the print dialog.`)) {
+      return;
+    }
     try {
       exportMaidProfileToPdf(maid);
       toast.success("Print dialog opened for PDF export");

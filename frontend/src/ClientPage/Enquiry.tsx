@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +29,7 @@ import {
 } from "@/lib/clientAuth";
 
 const agencies = [
+  "All Agencies",
   "Target Maid Rinzin At The Agency",
 ];
 
@@ -40,6 +41,7 @@ const Enquiry = () => {
   const [contactNumber, setContactNumber] = useState("");
   const { toast } = useToast();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
 
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
@@ -59,7 +61,7 @@ const Enquiry = () => {
     navigate("/");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!requirements.trim() || !name.trim() || !email.trim() || !contactNumber.trim()) {
       toast({
@@ -69,15 +71,48 @@ const Enquiry = () => {
       });
       return;
     }
-    toast({
-      title: "Enquiry Submitted",
-      description: "We will match from 2000+ maids and get back to you shortly.",
-    });
-    setRequirements("");
-    setName("");
-    setEmail("");
-    setContactNumber("");
-    setAgency("All Agencies");
+
+    const messageParts: string[] = [];
+    if (agency && agency !== "All Agencies") {
+      messageParts.push(`Agency: ${agency}`);
+    }
+    messageParts.push(requirements.trim());
+
+    try {
+      setIsSubmitting(true);
+      const response = await fetch("/api/enquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: name.trim(),
+          email: email.trim(),
+          phone: contactNumber.trim(),
+          message: messageParts.join("\n\n"),
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to submit enquiry");
+      }
+
+      toast({
+        title: "Enquiry Submitted",
+        description: "Your enquiry has been sent to the agency inbox.",
+      });
+      setRequirements("");
+      setName("");
+      setEmail("");
+      setContactNumber("");
+      setAgency("All Agencies");
+    } catch (error) {
+      toast({
+        title: "Submission Failed",
+        description: error instanceof Error ? error.message : "Failed to submit enquiry",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -222,18 +257,18 @@ const Enquiry = () => {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="bg-card rounded-2xl shadow-lg p-8">
-            <div className="space-y-5">
-
-              <select
-                value={agency}
-                onChange={(e) => setAgency(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
-              >
-                {agencies.map((a) => (
-                  <option key={a}>{a}</option>
-                ))}
-              </select>
+           <form onSubmit={(e) => void handleSubmit(e)} className="bg-card rounded-2xl shadow-lg p-8">
+             <div className="space-y-5">
+ 
+               <select
+                 value={agency}
+                 onChange={(e) => setAgency(e.target.value)}
+                 className="w-full border rounded-lg px-3 py-2"
+               >
+                 {agencies.map((a) => (
+                   <option key={a}>{a}</option>
+                 ))}
+               </select>
 
               <textarea
                 value={requirements}
@@ -263,14 +298,14 @@ const Enquiry = () => {
                 placeholder="Contact Number"
               />
 
-              <Button className="w-full">
-                <Send className="w-4 h-4 mr-2" />
-                Submit Enquiry
-              </Button>
-
-            </div>
-          </form>
-        </div>
+               <Button className="w-full" disabled={isSubmitting}>
+                 <Send className="w-4 h-4 mr-2" />
+                 {isSubmitting ? "Submitting..." : "Submit Enquiry"}
+               </Button>
+ 
+             </div>
+           </form>
+         </div>
       </main>
       <footer className="bg-foreground py-12 text-primary-foreground">
         <div className="container">

@@ -1745,6 +1745,47 @@ app.get('/api/enquiries', async (c) => {
   return c.json({ enquiries })
 })
 
+app.get('/api/enquiries/last-id', async (c) => {
+  const data = await loadData(c.env)
+  const lastId = data.enquiries.reduce((maxId, enquiry) => Math.max(maxId, enquiry.id), 0)
+  return c.json({ lastId })
+})
+
+app.get('/api/enquiries/stream', async (c) => {
+  const url = new URL(c.req.url)
+  const afterId = Number(url.searchParams.get('afterId') ?? 0)
+  if (!Number.isFinite(afterId) || afterId < 0) {
+    return c.json({ error: 'afterId must be a non-negative number' }, 400)
+  }
+
+  const startedAt = Date.now()
+  return createSseResponse(c.req.raw, async (controller) => {
+    let lastId = afterId
+    let lastHeartbeat = Date.now()
+    writeSseEvent(controller, 'ready', { ok: true })
+
+    while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
+      const data = await loadData(c.env)
+      const nextEnquiries = data.enquiries
+        .filter((enquiry) => enquiry.id > lastId)
+        .sort((left, right) => left.id - right.id)
+
+      for (const enquiry of nextEnquiries) {
+        writeSseEvent(controller, 'enquiry', { enquiry })
+        lastId = Math.max(lastId, enquiry.id)
+      }
+
+      const nowTime = Date.now()
+      if (nowTime - lastHeartbeat > 15_000) {
+        writeSseComment(controller, 'keep-alive')
+        lastHeartbeat = nowTime
+      }
+
+      await sleep(1200)
+    }
+  })
+})
+
 app.post('/api/enquiries', async (c) => {
   const body = await parseBody<{
     username?: string

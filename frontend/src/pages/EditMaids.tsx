@@ -156,6 +156,9 @@ const EditMaids = () => {
   };
 
   const handleExportCsv = async () => {
+    if (!window.confirm("Export all maids to a CSV file now?")) {
+      return;
+    }
     try {
       setIsExporting(true);
       const response = await fetch("/api/maids/export.csv");
@@ -183,6 +186,9 @@ const EditMaids = () => {
 
   const handleImportCsv = async (file?: File) => {
     if (!file) return;
+    if (!window.confirm(`Import maids from "${file.name}"?\n\nSupported: .csv exported from "Export Maids CSV".\nRequired columns: referenceCode, fullName.\nThis will create new maids and update existing ones (matched by referenceCode).`)) {
+      return;
+    }
     try {
       setIsImporting(true);
       const csvText = await file.text();
@@ -257,7 +263,7 @@ const EditMaids = () => {
             </label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Import supports <span className="font-semibold">.csv</span> files exported from "Export Maids CSV" (not CV/PDF/DOC).
+            Import supports <span className="font-semibold">.csv</span> exported from "Export Maids CSV". Required columns: <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Photos &amp; history are not imported.
           </p>
           <hr />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -321,7 +327,7 @@ const EditMaids = () => {
           </label>
         </div>
         <p className="text-xs text-muted-foreground">
-          Import supports <span className="font-semibold">.csv</span> files exported from "Export Maids CSV" (not CV/PDF/DOC).
+          Import supports <span className="font-semibold">.csv</span> exported from "Export Maids CSV". Required columns: <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Photos &amp; history are not imported.
         </p>
 
         {isLoading ? (
