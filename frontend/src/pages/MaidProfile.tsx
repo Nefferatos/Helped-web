@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send } from "lucide-react";
 import { MaidProfile, formatDate } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
@@ -7,7 +7,14 @@ import { adminPath } from "@/lib/routes";
 import { exportMaidProfileToExcel, exportMaidProfileToPdf, exportMaidProfileToWord } from "@/lib/maidExport";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 
+type LocationState = {
+  fromView?: "public" | "hidden";
+};
+
 const MaidProfilePage = () => {
+  const location = useLocation();
+  const fromView = (location.state as LocationState | null)?.fromView;
+
   const { refCode } = useParams();
   const navigate = useNavigate();
   const [maid, setMaid] = useState<MaidProfile | null>(null);
@@ -15,6 +22,16 @@ const MaidProfilePage = () => {
   const [isThroughAgencyDialogOpen, setIsThroughAgencyDialogOpen] = useState(false);
   const [isDirectHireDialogOpen, setIsDirectHireDialogOpen] = useState(false);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+
+  const handleBack = () => {
+    if (fromView) {
+      navigate(adminPath("/edit-maids"), {
+        state: { fromView },
+      });
+    } else {
+      navigate(adminPath("/edit-maids"));
+    }
+  };
 
   useEffect(() => {
     const loadMaid = async () => {
@@ -143,18 +160,22 @@ const MaidProfilePage = () => {
   return (
     <div className="page-container">
       <div className="mb-4 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary hover:underline">
-          <ArrowLeft className="h-4 w-4" /> Back
+        <button
+          onClick={handleBack}
+          className="group inline-flex items-center gap-1 text-sm font-medium text-primary
+                    transition-colors hover:text-primary/80 active:scale-95
+                    focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-md">
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+          Back
         </button>
-        <h2 className="text-xl font-bold">Edit/Delete Maid</h2>
       </div>
 
       <div className="content-card animate-fade-in-up space-y-6">
-        <div className="flex flex-wrap gap-3 border-b pb-3 text-sm">
-          <button className="text-primary hover:underline" onClick={() => navigate(adminPath("/edit-maids"))}>View All Maids</button>
+        <div className="flex flex-wrap items-center gap-4 border-b pb-4 text-sm">
+          <button className="text-primary hover:underline" onClick={handleBack} >View All Maids</button>
           <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))}><Edit className="h-3 w-3" /> Edit This Maid</button>
-          <span className="flex items-center gap-1 text-muted-foreground"><Image className="h-3 w-3" /> Manage Photos in Edit Maid</span>
-          <span className="flex items-center gap-1 text-muted-foreground"><Youtube className="h-3 w-3" /> Manage Video in Edit Maid</span>
+          <span className="flex items-center gap-1 text-muted-foreground"><Image className="h-3 w-3" /> Manage Photos</span>
+          <span className="flex items-center gap-1 text-muted-foreground"><Youtube className="h-3 w-3" /> Youtube Video</span>
           <button className="flex items-center gap-1 text-destructive hover:underline" onClick={() => void handleDelete()}><Trash2 className="h-3 w-3" /> {isDeleting ? "Deleting..." : "Delete"}</button>
         </div>
 

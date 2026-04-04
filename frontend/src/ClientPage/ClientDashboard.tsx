@@ -5,10 +5,8 @@ import {
   ArrowLeft,
   Bell,
   BriefcaseBusiness,
-  Building2,
   CheckCircle2,
   Clock3,
-  Home,
   LogOut,
   Mail,
   MessageCircle,
@@ -26,7 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { calculateAge, MaidProfile } from "@/lib/maids";
-import { fetchAgencies, type AgencySummary } from "@/lib/agencies";
+// import { fetchAgencies, type AgencySummary } from "@/lib/agencies";
 import { fetchClientUnreadChatCount } from "@/lib/chat";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -87,7 +85,7 @@ const getAgencyName = (maid: MaidProfile, company: CompanyProfileApi | null) => 
 
 const navItems = [
   { label: "Maids", href: "/client/maids", icon: Users },
-  { label: "Agencies", href: "/agencies", icon: Building2 },
+  // { label: "Agencies", href: "/agencies", icon: Building2 },
   { label: "Requests", href: "/client/dashboard#requests", icon: BriefcaseBusiness },
   { label: "Messages", href: "/client/support-chat", icon: MessageCircle },
   { label: "Profile", href: "/client/profile", icon: UserRound },
@@ -100,7 +98,7 @@ const ClientDashboard = () => {
   const [client, setClient] = useState<ClientUser | null>(getStoredClient());
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
-  const [agencies, setAgencies] = useState<AgencySummary[]>([]);
+  // const [agencies, setAgencies] = useState<AgencySummary[]>([]);
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [actioningId, setActioningId] = useState<number | null>(null);
@@ -150,11 +148,11 @@ const ClientDashboard = () => {
         setAllPublicMaids(publicData.maids.filter((maid) => maid.isPublic));
         setCompany(companyData.companyProfile ?? null);
         setUnreadChatCount(unreadChats);
-        try {
-          setAgencies(await fetchAgencies());
-        } catch {
-          setAgencies([]);
-        }
+        // try {
+        //   setAgencies(await fetchAgencies());
+        // } catch {
+        //   setAgencies([]);
+        // }
       } catch (error) {
         clearClientAuth();
         toast({
@@ -281,14 +279,12 @@ const ClientDashboard = () => {
   <div className="client-page-theme min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
     
     <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
         
         <div className="flex items-center gap-3 md:gap-6">
-          
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden rounded-xl border p-2 hover:bg-muted transition"
-          >
+            className="md:hidden rounded-xl border p-2 hover:bg-muted transition">
             {isMenuOpen ? (
               <X className="h-5 w-5" />
             ) : (
@@ -296,17 +292,20 @@ const ClientDashboard = () => {
             )}
           </button>
 
-          <Link to="/" className="font-display text-lg sm:text-xl font-bold text-foreground whitespace-nowrap">
+          <Link
+            to="/"
+            className="font-display text-lg sm:text-xl font-bold text-foreground whitespace-nowrap">
             "Find Maids" At The Agency
           </Link>
+        </div>
 
-          <nav className="hidden items-center gap-6 font-body text-sm font-medium md:flex">
+        <div className="flex-1 flex justify-center">
+          <nav className="hidden md:flex items-center gap-6 font-body text-sm font-medium">
             {navItems.map((item) => (
               <Link
                 key={item.label}
                 to={item.href}
-                className="relative transition-colors hover:text-primary"
-              >
+                className="relative transition-colors hover:text-primary">
                 {item.label}
                 {item.href === "/client/support-chat" && unreadChatCount > 0 && (
                   <span className="absolute -right-4 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
@@ -319,7 +318,6 @@ const ClientDashboard = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          
           <Button variant="outline" size="icon" className="relative rounded-2xl">
             <Bell className="h-5 w-5" />
             {unreadChatCount > 0 && (
@@ -393,8 +391,7 @@ const ClientDashboard = () => {
               key={item.label}
               to={item.href}
               onClick={() => setIsMenuOpen(false)}
-              className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium hover:bg-muted transition"
-            >
+              className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium hover:bg-muted transition">
               {item.label}
 
               {item.href === "/client/support-chat" && unreadChatCount > 0 && (
@@ -667,7 +664,7 @@ const ClientDashboard = () => {
           </div>
         </section>
 
-        <section className="mb-8">
+        {/* <section className="mb-8">
           <div className="mb-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Agencies</p>
             <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Browse agencies in the same flow</h2>
@@ -714,7 +711,7 @@ const ClientDashboard = () => {
               ))
             )}
           </div>
-        </section>
+        </section> */}
 
         <section id="requests" className="rounded-[28px] border bg-card p-5 shadow-sm sm:p-6">
           <div className="mb-6 flex items-center justify-between gap-4">

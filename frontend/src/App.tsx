@@ -20,7 +20,6 @@ import AgencyProfile from "@/pages/AgencyProfile";
 import AgencyProfileEdit from "@/pages/AgencyProfileEdit";
 import AgencyAdminLogin from "@/pages/AgencyAdminLogin";
 import AddMaid from "@/pages/AddMaid";
-import EditMaid from "@/pages/EditMaid";
 import EditMaids from "@/pages/EditMaids";
 import MaidProfile from "@/pages/MaidProfile";
 import PublicMaidProfile from "@/pages/PublicMaidProfile";
@@ -36,6 +35,7 @@ import { adminPath } from "@/lib/routes";
 import AboutUs from "./ClientPage/AboutUs";
 import ContactUS from "./ClientPage/ContactUs";
 import Enquiry2 from "./ClientPage/Enquiry";
+import ServiceDetail from "./ClientPage/ServiceDetails";
 
 const queryClient = new QueryClient();
 
@@ -134,37 +134,37 @@ const App = () => {
             <Route path="/agencies" element={<AgenciesPage />} />
             <Route path="/agencies/:id" element={<AgencyDetailsPage />} />
             <Route path="/agencyadmin/login" element={<AgencyAdminLogin />} />
-          <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
-          <Route path="/agencyadmin/dashboard" element={<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/agency-profile" element={<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/agency-profile/edit" element={<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/add-maid" element={<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/edit-maids" element={<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/maid/:refCode" element={<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/maid/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditMaid /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/change-password" element={<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/enquiry" element={<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
-          <Route path="/client/dashboard" element={<ClientDashboard />} />
-          <Route path="/client/maids" element={<ClientMaidsPage />} />
-          <Route path="/client/profile" element={<ClientProfilePage />} />
-          <Route path="/client/history" element={<ClientHistoryPage />} />
-          <Route path="/client/support-chat" element={<ClientSupportChat />} />
-          <Route path="/hire/:refCode" element={<HiringProcessPage />} />
-          <Route path="/maids/:refCode" element={<PublicMaidProfile />} />
-          <Route path="/agency-portal" element={<AgenciesPage />} />
-          <Route path="/agencyportal" element={<AgenciesPage />} />
-          <Route path="/agency-admin-portal" element={<Navigate to="/agencyadmin/login" replace />} />
-          <Route path="/agencyadminportal" element={<Navigate to="/agencyadmin/login" replace />} />
-          <Route path="/user-portal" element={<ClientHomeRedirect />} />
-          <Route path="/userportal" element={<ClientHomeRedirect />} />
-          <Route path="/" element={<ClientHomeRedirect />} />
-          <Route path="*" element={<NotFound />} />
-          <Route path="/about" element={<AboutUs />} />
-          <Route path="/contact" element={<ContactUS />} />
-          <Route path="/enquiry2" element={<Enquiry2 />} />
+            <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
+            <Route path="/agencyadmin/dashboard" element={<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/agency-profile" element={<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/agency-profile/edit" element={<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/add-maid" element={<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/edit-maids" element={<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/maid/:refCode" element={<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/change-password" element={<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/enquiry" element={<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/client/dashboard" element={<ClientDashboard />} />
+            <Route path="/client/maids" element={<ClientMaidsPage />} />
+            <Route path="/client/profile" element={<ClientProfilePage />} />
+            <Route path="/client/history" element={<ClientHistoryPage />} />
+            <Route path="/client/support-chat" element={<ClientSupportChat />} />
+            <Route path="/hire/:refCode" element={<HiringProcessPage />} />
+            <Route path="/maids/:refCode" element={<PublicMaidProfile />} />
+            <Route path="/agency-portal" element={<AgenciesPage />} />
+            <Route path="/agencyportal" element={<AgenciesPage />} />
+            <Route path="/agency-admin-portal" element={<Navigate to="/agencyadmin/login" replace />} />
+            <Route path="/agencyadminportal" element={<Navigate to="/agencyadmin/login" replace />} />
+            <Route path="/user-portal" element={<ClientHomeRedirect />} />
+            <Route path="/userportal" element={<ClientHomeRedirect />} />
+            <Route path="/" element={<ClientHomeRedirect />} />
+            <Route path="*" element={<NotFound />} />
+            <Route path="/about" element={<AboutUs />} />
+            <Route path="/contact" element={<ContactUS />} />
+            <Route path="/enquiry2" element={<Enquiry2 />} />
+            <Route path="/services/:slug" element={<ServiceDetail />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle, HeartHandshake, Search, Settings, ShieldCheck, UserRound, Users, Menu } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,22 +19,26 @@ import "./ClientTheme.css";
 const services = [
   {
     title: "Housekeeping",
+    slug: "housekeeping",
     description: "Meticulous cleaning, organization, and care to keep your living space immaculate and inviting.",
     image: housekeepingImg,
   },
   {
     title: "Elderly Care",
+    slug: "elderly-care",
     description: "Compassionate and professional support for your loved ones. Ensuring dignity and well-being.",
     image: elderlyImg,
   },
   {
     title: "Infant Care",
+    slug: "infant-care",
     description: "Expert caregivers providing nurturing, developmental support for your little ones.",
     image: infantImg,
   },
   {
     title: "Kid Care",
-    description: "Providing a safe, nurturing, and engaging environment where children can learn, play, and grow.",
+    slug: "kid-care",
+    description: "Safe, engaging, and developmental care for your growing children by trained professionals.",
     image: culinaryImg,
   },
 ];
@@ -63,11 +67,11 @@ const portalLinks = [
     description: "Employer login, client dashboard, profile, history, and support chat.",
     path: "/employer-login",
   },
-  {
-    title: "Agency Portal",
-    description: "Browse public agencies and agency details.",
-    path: "/agencies",
-  },
+  // {
+  //   title: "Agency Portal",
+  //   description: "Browse public agencies and agency details.",
+  //   path: "/agencies",
+  // },
   {
     title: "Agency Admin Portal",
     description: "Agency admin login and full management dashboard.",
@@ -132,6 +136,18 @@ const ClientLandingPage = () => {
     ageGroup: "Any Age",
   });
   const isLoggedIn = Boolean(clientUser);
+  
+  const location = useLocation();
+    useEffect(() => {
+      if (location.hash === "#services") {
+        const el = document.getElementById("services");
+        if (el) {
+          setTimeout(() => {
+            el.scrollIntoView({ behavior: "smooth" });
+          }, 100);
+        }
+      }
+    }, [location]);
 
   useEffect(() => {
     const loadLandingData = async () => {
@@ -415,9 +431,9 @@ const ClientLandingPage = () => {
               </div>
             ) : null}
             <div className="flex flex-wrap gap-3">
-              <Button size="lg" className="font-body" asChild>
+              {/* <Button size="lg" className="font-body" asChild>
                 <Link to="/agencies">Browse Agencies</Link>
-              </Button>
+              </Button> */}
               {clientUser ? (
                 <>
                   <Button variant="outline" size="lg" className="font-body">
@@ -678,11 +694,11 @@ const ClientLandingPage = () => {
                   <img src={service.image} alt={service.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                 </div>
                 <div className="p-5">
-                  <h3 className="mb-2 font-display text-lg font-semibold text-foreground">{service.title}</h3>
-                  <p className="mb-3 font-body text-sm text-muted-foreground">{service.description}</p>
-                  <a href="#contact" className="inline-flex items-center gap-1 font-body text-sm font-medium text-primary hover:underline">
-                    Learn More <ArrowRight className="h-3.5 w-3.5" />
-                  </a>
+                <h3 className="font-display text-lg font-semibold text-foreground mb-2">{service.title}</h3>
+                <p className="font-body text-sm text-muted-foreground mb-3">{service.description}</p>
+                <Link to={`/services/${service.slug}`} className="inline-flex items-center gap-1 font-body text-sm text-primary font-medium hover:underline">
+                  Learn More <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
                 </div>
               </div>
             ))}

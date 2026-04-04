@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { calculateAge, formatDate, MaidProfile } from "@/lib/maids";
-import { Search, Eye, EyeOff, Trash2, Download, Upload, Send } from "lucide-react";
+import { Search, Eye, EyeOff, Trash2, Download, Upload } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 import { ArrowLeft } from "lucide-react";
-
 
 type ViewMode = "menu" | "public" | "hidden";
 const PAGE_SIZE = 15;
 
 const EditMaids = () => {
   const navigate = useNavigate();
+  const location = useLocation(); // <-- Added for back navigation
   const [view, setView] = useState<ViewMode>("menu");
   const [search, setSearch] = useState("");
   const [maids, setMaids] = useState<MaidProfile[]>([]);
@@ -26,6 +26,22 @@ const EditMaids = () => {
   const [maidToSendThroughAgency, setMaidToSendThroughAgency] = useState<MaidProfile | null>(null);
   const [maidToDirectHire, setMaidToDirectHire] = useState<MaidProfile | null>(null);
   const [maidToReject, setMaidToReject] = useState<MaidProfile | null>(null);
+
+
+  useEffect(() => {
+    if (location.state?.fromView) {
+      setView(location.state.fromView);
+    }
+  }, [location.state]);
+
+  const handleBack = () => {
+  if (view !== "menu") {
+    setView("menu");
+    return;
+  }
+
+  navigate(adminPath("/")); 
+};
 
   const visibility = useMemo(() => {
     if (view === "public") return "public";
@@ -126,7 +142,6 @@ const EditMaids = () => {
       toast.error(error instanceof Error ? error.message : "Failed to delete maids");
     }
   };
-  
 
   const handleToggleSelected = async () => {
     try {
@@ -213,38 +228,37 @@ const EditMaids = () => {
   if (view === "menu") {
     return (
       <div className="page-container">
-        <h2 className="mb-6 text-xl font-bold">Edit/Delete Maid</h2>
         <div className="content-card animate-fade-in-up space-y-6">
-        <div className="flex gap-2">
-          <Input placeholder="Maid name or Code" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <Button variant="outline"><Search className="mr-2 h-4 w-4" /> Search</Button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => void handleExportCsv()} disabled={isExporting}>
-            <Download className="mr-2 h-4 w-4" />
-            {isExporting ? "Exporting..." : "Export Maids CSV"}
-          </Button>
-          <label className="inline-flex cursor-pointer">
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              disabled={isImporting}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                void handleImportCsv(file);
-                event.currentTarget.value = "";
-              }}
-            />
-            <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground font-semibold">
-              <Upload className="mr-2 h-4 w-4" />
-              {isImporting ? "Importing..." : "Import CSV (Maids)"}
-            </span>
-          </label>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Import supports <span className="font-semibold">.csv</span> files exported from "Export Maids CSV" (not CV/PDF/DOC).
-        </p>
+          <div className="flex gap-2">
+            <Input placeholder="Maid name or Code" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Button variant="outline"><Search className="mr-2 h-4 w-4" /> Search</Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void handleExportCsv()} disabled={isExporting}>
+              <Download className="mr-2 h-4 w-4" />
+              {isExporting ? "Exporting..." : "Export Maids CSV"}
+            </Button>
+            <label className="inline-flex cursor-pointer">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                disabled={isImporting}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  void handleImportCsv(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground font-semibold">
+                <Upload className="mr-2 h-4 w-4" />
+                {isImporting ? "Importing..." : "Import CSV (Maids)"}
+              </span>
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Import supports <span className="font-semibold">.csv</span> files exported from "Export Maids CSV" (not CV/PDF/DOC).
+          </p>
           <hr />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <button onClick={() => setView("public")} className="flex flex-col items-center gap-2 rounded-lg border p-6 transition-all hover:border-primary/30 hover:bg-secondary/50 active:scale-[0.98]">
@@ -266,13 +280,17 @@ const EditMaids = () => {
 
   return (
     <div className="page-container">
-      <div className="mb-6 flex items-center gap-3">
-        <button onClick={() => setView("menu")} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-100 hover:text-black" >
-          <ArrowLeft size={16} />
+      <button
+        onClick={handleBack}
+        className="group inline-flex items-center gap-1 text-sm font-medium text-primary
+                  focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-md">
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+        <span className="relative">
           Back
-        </button>
-        <h2 className="text-xl font-bold">{view === "public" ? "Maids in Public" : "Maids Hidden"}</h2>
-      </div>
+          <span className="absolute left-0 -bottom-0.5 h-px w-0 bg-primary transition-all group-hover:w-full" />
+        </span>
+      </button>
+   
 
       <div className="content-card animate-fade-in-up space-y-4">
         <div className="flex gap-2">
@@ -329,7 +347,9 @@ const EditMaids = () => {
                   <div
                     className="flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs"
                     onClick={() =>
-                      navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))
+                      navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
+                        state: { fromView: view } // <-- pass current view for back button
+                      })
                     }
                   >
                     {photoPreview ? (
@@ -348,7 +368,9 @@ const EditMaids = () => {
                   <p
                     className="cursor-pointer font-semibold hover:text-primary"
                     onClick={() =>
-                      navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))
+                      navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
+                        state: { fromView: view } // <-- pass current view for back button
+                      })
                     }
                   >
                     {maid.fullName}

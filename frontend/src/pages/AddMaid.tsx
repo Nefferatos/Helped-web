@@ -1,489 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "@/components/ui/sonner";
-import { MaidProfile } from "@/lib/maids";
-import { adminPath } from "@/lib/routes";
-import DateInput from "@/components/DateInput";
 
 const tabs = ["PROFILE", "SKILLS", "EMPLOYMENT HISTORY", "AVAILABILITY/REMARK", "INTRODUCTION", "PUBLIC INTRODUCTION", "PRIVATE INFO"];
-const languageOptions = [
-  "English",
-  "Mandarin/Chinese-Dialect",
-  "Indonesian/Malaysian",
-  "Hindi",
-  "Tamil",
-];
-const skillAreas = [
-  "Care of infants/children",
-  "Care of elderly",
-  "Care of disabled",
-  "General housework",
-  "Cooking",
-  "Language Skill",
-  "Other Skill",
-];
-const yesNoQuestions = [
-  "Able to handle pork?",
-  "Able to eat pork?",
-  "Able to care for dog/cat?",
-  "Able to do simple sewing?",
-  "Able to do gardening work?",
-  "Willing to wash car?",
-  "Willing to work on off-days with  compensation?",
-];
-const medicalQuestions = [
-  "Mental illness",
-  "Epilepsy",
-  "Asthma",
-  "Diabetes",
-  "Hypertension",
-  "Tuberculosis",
-  "Heart disease",
-  "Malaria",
-  "Operations",
-];
-const MAX_PHOTOS = 5;
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-const MAX_VIDEO_UPLOAD_BYTES = 12 * 1024 * 1024;
 
-interface AddMaidProps {
-  editRefCode?: string;
-}
-
-const createEmploymentRow = () => ({
-  _id: crypto.randomUUID(),
-  from: "",
-  to: "",
-  country: "",
-  employer: "",
-  duties: "",
-  remarks: "",
-});
-
-const AddMaid = ({ editRefCode }: AddMaidProps) => {
-  const navigate = useNavigate();
-  const isEditMode = Boolean(editRefCode);
+const AddMaid = () => {
   const [activeTab, setActiveTab] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingMaid, setIsLoadingMaid] = useState(false);
-  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
-  const [isProcessingVideo, setIsProcessingVideo] = useState(false);
-  const [profile, setProfile] = useState({
-    fullName: "",
-    referenceCode: "",
-    type: "New maid",
-    nationality: "Filipino maid",
-    dateOfBirth: "",
-    placeOfBirth: "",
-    height: "150",
-    weight: "50",
-    religion: "Catholic",
-    maritalStatus: "Single",
-    numberOfChildren: "0",
-    numberOfSiblings: "0",
-    homeAddress: "",
-    airportRepatriation: "",
-    educationLevel: "High School (10-12 yrs)",
-    offDaysPerMonth: "0",
-    passportNo: "",
-    homeCountryContactNumber: "",
-  });
-  const [languageSkills, setLanguageSkills] = useState<Record<string, string>>(
-    Object.fromEntries(languageOptions.map((lang) => [lang, lang === "English" ? "Zero" : "Zero"]))
-  );
-  const [workAreas, setWorkAreas] = useState<Record<string, { willing: boolean; experience: boolean; evaluation: string }>>(
-    Object.fromEntries(skillAreas.map((skill) => [skill, { willing: false, experience: false, evaluation: "-" }]))
-  );
-  const [otherInformation, setOtherInformation] = useState<Record<string, boolean>>(
-    Object.fromEntries(yesNoQuestions.map((question) => [question, false]))
-  );
-  const [employmentHistory, setEmploymentHistory] = useState<Array<Record<string, string>>>([
-    createEmploymentRow(),
-  ]);
-  const [workAreaNotes, setWorkAreaNotes] = useState<Record<string, string>>(
-    Object.fromEntries(skillAreas.map((skill) => [skill, ""]))
-  );
-  const [availabilityRemark, setAvailabilityRemark] = useState("");
-  const [introduction, setIntroduction] = useState("");
-  const [publicIntroduction, setPublicIntroduction] = useState("");
-  const [privateInfo, setPrivateInfo] = useState("");
-  const [medicalInfo, setMedicalInfo] = useState({
-    allergies: "",
-    physicalDisabilities: "",
-    dietaryRestrictions: "",
-    foodHandlingPreferences: "",
-    pastIllnesses: Object.fromEntries(medicalQuestions.map((question) => [question, false])) as Record<string, boolean>,
-    otherIllnesses: "",
-    otherRemarks: "",
-    noPork: false,
-    noBeef: false,
-  });
-  const [availabilityInfo, setAvailabilityInfo] = useState({
-    availability: "",
-    contractEnds: "",
-    presentSalary: "",
-    expectedSalary: "",
-    offdayCompensation: "",
-  });
-  const [privateDetails, setPrivateDetails] = useState({
-    agesOfChildren: "",
-    maidLoan: "",
-  });
-  const [agencyContact, setAgencyContact] = useState({
-    companyName: "At The Agency (formerly Rinzin Agency Pte. Ltd)",
-    licenseNo: "2503114",
-    contactPerson: "Bala",
-    phone: "80730757",
-  });
-  const [photoDataUrls, setPhotoDataUrls] = useState<string[]>([]);
-  const [pendingPhotoDataUrl, setPendingPhotoDataUrl] = useState<string | null>(null);
-  const [videoDataUrl, setVideoDataUrl] = useState("");
-
-  const nextLabel = useMemo(
-    () => (activeTab < tabs.length - 1 ? "Save and Continue" : isEditMode ? "Update Maid" : "Save Maid"),
-    [activeTab, isEditMode]
-  );
-
-  const validateBeforeSubmit = () => {
-    const missing: string[] = [];
-
-    if (!profile.fullName.trim()) missing.push("Maid Name");
-    if (!profile.referenceCode.trim()) missing.push("Ref Code");
-    if (!profile.dateOfBirth.trim()) missing.push("Date of Birth");
-    if (!profile.placeOfBirth.trim()) missing.push("Place of Birth");
-    if (!profile.homeAddress.trim()) missing.push("Address in Home Country");
-    if (!profile.airportRepatriation.trim()) missing.push("Airport To Be Repatriated");
-    if (photoDataUrls.length === 0) missing.push("At least 1 Photo");
-
-    return missing;
-  };
-
-  useEffect(() => {
-    const loadForEdit = async () => {
-      if (!editRefCode) return;
-      try {
-        setIsLoadingMaid(true);
-        const response = await fetch(`/api/maids/${encodeURIComponent(editRefCode)}`);
-        const data = (await response.json()) as { error?: string; maid?: MaidProfile };
-        if (!response.ok || !data.maid) throw new Error(data.error || "Failed to load maid");
-        const existing = data.maid;
-
-        setProfile((prev) => ({
-          ...prev,
-          fullName: existing.fullName || "",
-          referenceCode: existing.referenceCode || "",
-          type: existing.type || prev.type,
-          nationality: existing.nationality || prev.nationality,
-          dateOfBirth: existing.dateOfBirth || "",
-          placeOfBirth: existing.placeOfBirth || "",
-          height: String(existing.height || prev.height),
-          weight: String(existing.weight || prev.weight),
-          religion: existing.religion || prev.religion,
-          maritalStatus: existing.maritalStatus || prev.maritalStatus,
-          numberOfChildren: String(existing.numberOfChildren ?? 0),
-          numberOfSiblings: String(existing.numberOfSiblings ?? 0),
-          homeAddress: existing.homeAddress || "",
-          airportRepatriation: existing.airportRepatriation || "",
-          educationLevel: existing.educationLevel || prev.educationLevel,
-          offDaysPerMonth: String(
-            (existing.skillsPreferences as Record<string, unknown>)?.offDaysPerMonth ?? prev.offDaysPerMonth
-          ),
-          passportNo: String((existing.agencyContact as Record<string, unknown>)?.passportNo || ""),
-          homeCountryContactNumber: String(
-            (existing.agencyContact as Record<string, unknown>)?.homeCountryContactNumber || ""
-          ),
-        }));
-
-        if (existing.languageSkills) setLanguageSkills(existing.languageSkills);
-        if (existing.workAreas) setWorkAreas(existing.workAreas as Record<string, { willing: boolean; experience: boolean; evaluation: string }>);
-
-        const skillsPrefs = (existing.skillsPreferences as Record<string, unknown>) || {};
-        setAvailabilityRemark(String(skillsPrefs.availabilityRemark || ""));
-        setPrivateInfo(String(skillsPrefs.privateInfo || ""));
-        setWorkAreaNotes(
-          ((skillsPrefs.workAreaNotes as Record<string, string>) ??
-            Object.fromEntries(skillAreas.map((skill) => [skill, ""]))) as Record<string, string>
-        );
-        setOtherInformation(
-          ((skillsPrefs.otherInformation as Record<string, boolean>) ??
-            Object.fromEntries(yesNoQuestions.map((question) => [question, false]))) as Record<string, boolean>
-        );
-
-        if (Array.isArray(existing.employmentHistory) && existing.employmentHistory.length > 0) {
-          const rows = existing.employmentHistory as Array<Record<string, string>>;
-          setEmploymentHistory(
-            rows.map((row) => ({
-              _id: crypto.randomUUID(),
-              from: String(row.from || ""),
-              to: String(row.to || ""),
-              country: String(row.country || ""),
-              employer: String(row.employer || ""),
-              duties: String(row.duties || ""),
-              remarks: String(row.remarks || ""),
-            }))
-          );
-        }
-
-        const intro = (existing.introduction as Record<string, unknown>) || {};
-        setIntroduction(String(intro.intro || ""));
-        setPublicIntroduction(String(intro.publicIntro || ""));
-        setMedicalInfo((prev) => ({
-          ...prev,
-          allergies: String(intro.allergies || ""),
-          physicalDisabilities: String(intro.physicalDisabilities || ""),
-          dietaryRestrictions: String(intro.dietaryRestrictions || ""),
-          foodHandlingPreferences: String(intro.foodHandlingPreferences || ""),
-          pastIllnesses: (intro.pastIllnesses as Record<string, boolean>) || prev.pastIllnesses,
-          otherIllnesses: String(intro.otherIllnesses || ""),
-          otherRemarks: String(intro.otherRemarks || ""),
-          noPork: Boolean(intro.noPork),
-          noBeef: Boolean(intro.noBeef),
-        }));
-        setAvailabilityInfo({
-          availability: String(intro.availability || ""),
-          contractEnds: String(intro.contractEnds || ""),
-          presentSalary: String(intro.presentSalary || ""),
-          expectedSalary: String(intro.expectedSalary || ""),
-          offdayCompensation: String(intro.offdayCompensation || ""),
-        });
-        setPrivateDetails({
-          agesOfChildren: String(intro.agesOfChildren || ""),
-          maidLoan: String(intro.maidLoan || ""),
-        });
-
-        const agency = (existing.agencyContact as Record<string, unknown>) || {};
-        setAgencyContact({
-          companyName: String(agency.companyName || ""),
-          licenseNo: String(agency.licenseNo || ""),
-          contactPerson: String(agency.contactPerson || ""),
-          phone: String(agency.phone || ""),
-        });
-
-        const photos =
-          Array.isArray(existing.photoDataUrls) && existing.photoDataUrls.length > 0
-            ? existing.photoDataUrls
-            : existing.photoDataUrl
-            ? [existing.photoDataUrl]
-            : [];
-        setPhotoDataUrls(photos);
-        setVideoDataUrl(String(existing.videoDataUrl || ""));
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load maid");
-        navigate(adminPath("/edit-maids"));
-      } finally {
-        setIsLoadingMaid(false);
-      }
-    };
-
-    void loadForEdit();
-  }, [editRefCode, navigate]);
-
-  const handleProfileChange = (field: keyof typeof profile, value: string) => {
-    setProfile((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const updateWorkArea = (skill: string, field: "willing" | "experience" | "evaluation", value: boolean | string) => {
-    setWorkAreas((prev) => ({
-      ...prev,
-      [skill]: {
-        ...prev[skill],
-        [field]: value,
-      },
-    }));
-  };
-
-  const updateEmploymentRow = (index: number, field: string, value: string) => {
-    setEmploymentHistory((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
-  };
-
-  const addEmploymentRow = () => {
-    setEmploymentHistory((prev) => [...prev, createEmploymentRow()]);
-  };
-
-  const removeLastEmploymentRow = () => {
-    setEmploymentHistory((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
-  };
-
-  const handleAddPhoto = async (file?: File) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
-      return;
-    }
-    if (file.size > MAX_PHOTO_BYTES) {
-      toast.error("Image is too large. Please use files under 5MB.");
-      return;
-    }
-    if (photoDataUrls.length >= MAX_PHOTOS) {
-      toast.error("Maximum 5 photos allowed");
-      return;
-    }
-
-    try {
-      setIsProcessingPhoto(true);
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("Failed to read image"));
-        reader.readAsDataURL(file);
-      });
-      setPendingPhotoDataUrl(dataUrl);
-    } catch {
-      toast.error("Failed to process image");
-    } finally {
-      setIsProcessingPhoto(false);
-    }
-  };
-
-  const handleVideoUpload = async (file?: File) => {
-    if (!file) return;
-    if (!file.type.startsWith("video/")) {
-      toast.error("Please select a video file");
-      return;
-    }
-    if (file.size > MAX_VIDEO_UPLOAD_BYTES) {
-      toast.error("Video is too large. Please use a file smaller than 12MB.");
-      return;
-    }
-
-    try {
-      setIsProcessingVideo(true);
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("Failed to read video"));
-        reader.readAsDataURL(file);
-      });
-      setVideoDataUrl(dataUrl);
-      toast.success(videoDataUrl ? "Video updated in form" : "Video added to form");
-    } catch {
-      toast.error("Failed to process video");
-    } finally {
-      setIsProcessingVideo(false);
-    }
-  };
-
-  const buildPayload = (): MaidProfile => ({
-    fullName: profile.fullName.trim(),
-    referenceCode: profile.referenceCode.trim(),
-    type: profile.type,
-    nationality: profile.nationality,
-    dateOfBirth: profile.dateOfBirth,
-    placeOfBirth: profile.placeOfBirth,
-    height: Number(profile.height) || 0,
-    weight: Number(profile.weight) || 0,
-    religion: profile.religion,
-    maritalStatus: profile.maritalStatus,
-    numberOfChildren: Number(profile.numberOfChildren) || 0,
-    numberOfSiblings: Number(profile.numberOfSiblings) || 0,
-    homeAddress: profile.homeAddress,
-    airportRepatriation: profile.airportRepatriation,
-    educationLevel: profile.educationLevel,
-    languageSkills,
-    skillsPreferences: {
-      availabilityRemark,
-      privateInfo,
-      offDaysPerMonth: profile.offDaysPerMonth,
-      workAreaNotes,
-      otherInformation,
-    },
-    workAreas,
-    employmentHistory: employmentHistory.map(({ _id, ...rest }) => rest),
-    introduction: {
-      intro: introduction,
-      publicIntro: publicIntroduction,
-      allergies: medicalInfo.allergies,
-      physicalDisabilities: medicalInfo.physicalDisabilities,
-      dietaryRestrictions: medicalInfo.dietaryRestrictions,
-      foodHandlingPreferences: medicalInfo.foodHandlingPreferences,
-      noPork: medicalInfo.noPork,
-      noBeef: medicalInfo.noBeef,
-      pastIllnesses: medicalInfo.pastIllnesses,
-      otherIllnesses: medicalInfo.otherIllnesses,
-      otherRemarks: medicalInfo.otherRemarks,
-      availability: availabilityInfo.availability,
-      contractEnds: availabilityInfo.contractEnds,
-      presentSalary: availabilityInfo.presentSalary,
-      expectedSalary: availabilityInfo.expectedSalary,
-      offdayCompensation: availabilityInfo.offdayCompensation,
-      agesOfChildren: privateDetails.agesOfChildren,
-      maidLoan: privateDetails.maidLoan,
-    },
-    agencyContact: {
-      ...agencyContact,
-      passportNo: profile.passportNo,
-      homeCountryContactNumber: profile.homeCountryContactNumber,
-    },
-    photoDataUrls,
-    photoDataUrl: photoDataUrls[0] || "",
-    videoDataUrl,
-    isPublic: false,
-    hasPhoto: photoDataUrls.length > 0,
-  });
-
-  const handleContinue = () => {
-    if (activeTab < tabs.length - 1) {
-      setActiveTab((prev) => prev + 1);
-      return;
-    }
-    void handleSubmit();
-  };
-
-  const handleSubmit = async () => {
-    if (isSubmitting) return;
-
-    const missingFields = validateBeforeSubmit();
-    if (missingFields.length > 0) {
-      toast.error(`Please fill required fields: ${missingFields.join(", ")}`);
-      setActiveTab(0);
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      const payload = buildPayload();
-      const response = await fetch(isEditMode ? `/api/maids/${encodeURIComponent(editRefCode as string)}` : "/api/maids", {
-        method: isEditMode ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
-      if (!response.ok || !data.maid) {
-        throw new Error(data.error || "Failed to create maid");
-      }
-
-      toast.success(isEditMode ? "Maid updated successfully" : "Maid created successfully");
-      navigate(adminPath(`/maid/${encodeURIComponent(data.maid.referenceCode)}`));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create maid");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div className="page-container">
-      <div className="mb-6 flex items-center gap-3">
-        <h2 className="text-xl font-bold">{isEditMode ? "Edit Maid" : "Add Maid"}</h2>
+      <div className="flex items-center gap-3 mb-6">
+        <h2 className="text-xl font-bold">Add Maid</h2>
       </div>
 
-      {isLoadingMaid && (
-        <div className="content-card py-10 text-center text-black">Loading maid profile...</div>
-      )}
-
-      {!isLoadingMaid && (
-      <>
-
-      <div className="mb-6 flex flex-wrap gap-2 border-b pb-2">
+      <div className="flex flex-wrap gap-1 mb-6">
         {tabs.map((tab, i) => (
           <button
             key={tab}
             onClick={() => setActiveTab(i)}
-            className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-              activeTab === i ? "bg-primary text-white shadow" : "bg-muted text-black hover:bg-muted/70"
+            className={`px-3 py-2 text-xs font-medium rounded-t-md border border-b-0 transition-colors active:scale-[0.97] ${
+              activeTab === i
+                ? "bg-card text-primary border-border"
+                : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
             {tab}
@@ -491,758 +30,548 @@ const AddMaid = ({ editRefCode }: AddMaidProps) => {
         ))}
       </div>
 
-      {activeTab === 0 && (
-        <div className="content-card animate-fade-in-up space-y-6">
-          <h3 className="text-center text-lg font-bold">(A) PROFILE OF FDW</h3>
-
-          <div className="section-header">Maid Photos (1-5)</div>
-          <div className="pt-2">
-            <div className="flex flex-wrap gap-3">
-              <div className="relative flex h-28 w-24 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-black">
-                {photoDataUrls[0] ? (
-                  <>
-                    <img src={photoDataUrls[0]} alt="Primary maid" className="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      className="absolute right-1 top-1 rounded bg-black/70 px-1 text-[10px] text-white"
-                      onClick={() => setPhotoDataUrls((prev) => prev.slice(1))}
-                    >
-                      X
-                    </button>
-                  </>
-                ) : (
-                  "No Photo"
-                )}
-              </div>
-              {photoDataUrls.slice(1).map((src, index) => (
-                <div key={src} className="relative h-28 w-24 overflow-hidden rounded border">
-                  <img src={src} alt={`Maid ${index + 2}`} className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    className="absolute right-1 top-1 rounded bg-black/70 px-1 text-[10px] text-white"
-                    onClick={() =>
-                      setPhotoDataUrls((prev) => prev.filter((_, photoIndex) => photoIndex !== index + 1))
-                    }
-                  >
-                    X
-                  </button>
-                </div>
-              ))}
-              {photoDataUrls.length < MAX_PHOTOS && (
-                <label className="flex h-28 w-24 cursor-pointer items-center justify-center rounded border border-dashed text-center text-xs text-primary hover:bg-muted/40">
-                  {isProcessingPhoto ? "Adding..." : "Add Photo"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={isProcessingPhoto}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      void handleAddPhoto(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
-              )}
-            </div>
-            {pendingPhotoDataUrl && (
-              <div className="mt-3 space-y-2 rounded-md border border-dashed p-2">
-                <p className="text-xs text-black">Selected photo preview</p>
-                <div className="h-24 w-24 overflow-hidden rounded border">
-                  <img src={pendingPhotoDataUrl} alt="Pending photo" className="h-full w-full object-cover" />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="rounded border px-2 py-1 text-xs"
-                    onClick={() => {
-                      setPendingPhotoDataUrl(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground"
-                    onClick={() => {
-                      setPhotoDataUrls((prev) => [...prev, pendingPhotoDataUrl]);
-                      setPendingPhotoDataUrl(null);
-                    }}
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            )}
-            <p className="pt-2 text-xs text-black">Upload between 1 and 5 photos.</p>
-          </div>
-
-          <div className="section-header">Maid Video</div>
-          <div className="space-y-2 pt-2">
-            {videoDataUrl ? (
-              <video controls className="max-h-[220px] w-full rounded-md border bg-black" src={videoDataUrl}>
-                Your browser does not support the video tag.
-              </video>
-            ) : (
-              <div className="rounded-md border bg-muted/30 p-4 text-sm text-black">No video selected yet.</div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <label className="cursor-pointer rounded border px-3 py-2 text-sm">
-                {isProcessingVideo ? "Processing Video..." : videoDataUrl ? "Replace Video" : "Upload Video"}
-                <input
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  disabled={isProcessingVideo}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    void handleVideoUpload(file);
-                    event.currentTarget.value = "";
-                  }}
-                />
-              </label>
-              {videoDataUrl && (
-                <button
-                  type="button"
-                  className="rounded border border-destructive px-3 py-2 text-sm text-destructive"
-                  onClick={() => setVideoDataUrl("")}
-                >
-                  Delete Video
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="section-header">A1. Personal Information</div>
-          <div className="space-y-3 pt-2">
-            {[
-              ["Maid Name", "Ref Code"],
-              ["Type", "Nationality"],
-              ["Date of Birth", "Place of Birth"],
-              ["Height", "Weight"],
-            ].map((row, i) => (
-              <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {row.map((label) => (
-                  <div key={label} className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-black">
-                      {label === "Height"
-                        ? "Height (cm)"
-                        : label === "Weight"
-                        ? "Weight (kg)"
-                        : label}
-                    </Label>
-
-                    {label === "Maid Name" && (
-                      <Input
-                        value={profile.fullName}
-                        onChange={(e) =>
-                          handleProfileChange("fullName", e.target.value)
-                        }
-                      />
-                    )}
-
-                    {label === "Ref Code" && (
-                      <Input
-                        value={profile.referenceCode}
-                        onChange={(e) =>
-                          handleProfileChange("referenceCode", e.target.value)
-                        }
-                      />
-                    )}
-
-                    {label === "Type" && (
-                      <select
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={profile.type}
-                        onChange={(e) =>
-                          handleProfileChange("type", e.target.value)
-                        }
-                      >
-                        <option>New maid</option>
-                        <option>Transfer maid</option>
-                        <option>APS maid</option>
-                        <option>Ex-Singapore maid</option>
-                        <option>Ex-Hong Kong maid</option>
-                        <option>Ex-Taiwan maid</option>
-                        <option>Ex-Malaysia maid</option>
-                        <option>Ex-Middle East maid</option>
-                        <option>Applying to work in HongKong</option>
-                        <option>Applying to work in Taiwan</option>
-                        <option>Applying to work in Canada</option>
-                      </select>
-                    )}
-
-                    {label === "Nationality" && (
-                      <select
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={profile.nationality}
-                        onChange={(e) =>
-                          handleProfileChange("nationality", e.target.value)
-                        }
-                      >
-                        <option>Filipino maid</option>
-                        <option>Indonesian maid</option>
-                        <option>Indian maid</option>
-                        <option>Myanmar maid</option>
-                        <option>Sri Lankan maid</option>
-                        <option>Nepali maid</option>
-                        <option>Cambodian maid</option>
-                        <option>Bandladeshi maid</option>
-                        <option>Others</option>
-                      </select>
-                    )}
-
-                    {label === "Date of Birth" && (
-                      <DateInput
-                        value={profile.dateOfBirth}
-                        onChange={(next) => handleProfileChange("dateOfBirth", next)}
-                      />
-                    )}
-
-                    {label === "Place of Birth" && (
-                      <Input
-                        value={profile.placeOfBirth}
-                        onChange={(e) =>
-                          handleProfileChange("placeOfBirth", e.target.value)
-                        }
-                      />
-                    )}
-
-                    {label === "Height" && (
-                      <select
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={profile.height}
-                        onChange={(e) =>
-                          handleProfileChange("height", e.target.value)
-                        }
-                      >
-                        {Array.from({ length: 61 }, (_, i) => {
-                          const cm = 140 + i;
-                          const inches = cm / 2.54;
-                          const feet = Math.floor(inches / 12);
-                          const inch = Math.round(inches % 12);
-                          return (
-                            <option key={cm} value={cm}>
-                              {cm} cm ({feet}'{inch}")
-                            </option>
-                          );
-                        })}
-                      </select>
-                    )}
-
-                    {label === "Weight" && (
-                      <select
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={profile.weight}
-                        onChange={(e) =>
-                          handleProfileChange("weight", e.target.value)
-                        }
-                      >
-                        {Array.from({ length: 71 }, (_, i) => {
-                          const kg = 30 + i;
-                          const lbs = Math.round(kg * 2.20462);
-                          return (
-                            <option key={kg} value={kg}>
-                              {kg} Kg ({lbs} lbs)
-                            </option>
-                          );
-                        })}
-                      </select>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))}
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-black">Number of Children</Label>
-                <Input type="number" value={profile.numberOfChildren} onChange={(e) => handleProfileChange("numberOfChildren", e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-black">Number of Siblings</Label>
-                <Input type="number" value={profile.numberOfSiblings} onChange={(e) => handleProfileChange("numberOfSiblings", e.target.value)} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-black">Marital Status</Label>
-                <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.maritalStatus} onChange={(e) => handleProfileChange("maritalStatus", e.target.value)}>
-                  <option>Single</option>
-                  <option>Married</option>
-                  <option>Divorced</option>
-                  <option>Widowed</option>
-                  <option>Single Parent</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-black">Religion</Label>
-                <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.religion} onChange={(e) => handleProfileChange("religion", e.target.value)}>
-                  <option>Catholic</option>
-                  <option>Christian</option>
-                  <option>Muslim</option>
-                  <option>Hindu</option>
-                  <option>Buddhist</option>
-                  <option>Others</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Address in Home Country</Label>
-              <Input value={profile.homeAddress} onChange={(e) => handleProfileChange("homeAddress", e.target.value)} />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-black">Airport To Be Repatriated</Label>
-                <Input value={profile.airportRepatriation} onChange={(e) => handleProfileChange("airportRepatriation", e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-black">Education</Label>
-                <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={profile.educationLevel} onChange={(e) => handleProfileChange("educationLevel", e.target.value)}>
-                  <option>College/Degree (&gt;=13 yrs)</option>
-                  <option>High School (10-12 yrs)</option>
-                  <option>Primary (&lt;=6 yrs)</option>
-                  <option>Vocational Course</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Contact Number in Home Country</Label>
-              <Input value={profile.homeCountryContactNumber} onChange={(e) => handleProfileChange("homeCountryContactNumber", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="section-header">Language Skills</div>
-          <div className="space-y-3 pt-2">
-            {languageOptions.map((lang) => (
-              <div key={lang} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Label className="w-56 text-sm">{lang}:</Label>
-                <div className="flex flex-wrap gap-4">
-                  {["Zero", "Poor", "Little", "Fair", "Good"].map((level) => (
-                    <label key={level} className="flex items-center gap-1 text-sm">
-                      <input
-                        type="radio"
-                        name={lang}
-                        checked={languageSkills[lang] === level}
-                        onChange={() => setLanguageSkills((prev) => ({ ...prev, [lang]: level }))}
-                        className="accent-primary"
-                      />
-                      {level}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="section-header">Other Information</div>
-          <div className="space-y-2 pt-2">
-            {yesNoQuestions.map((question) => (
-              <div key={question} className="flex items-center gap-4">
-                <span className="flex-1 text-sm">{question}</span>
-                <div className="flex gap-3">
-                  <label className="flex items-center gap-1 text-sm"><input type="radio" name={question} checked={otherInformation[question] === true} onChange={() => setOtherInformation((prev) => ({ ...prev, [question]: true }))} /> Yes</label>
-                  <label className="flex items-center gap-1 text-sm"><input type="radio" name={question} checked={otherInformation[question] === false} onChange={() => setOtherInformation((prev) => ({ ...prev, [question]: false }))} /> No</label>
-                </div>
-              </div>
-            ))}
-            <div className="flex items-center gap-3">
-              <Label className="text-sm font-medium  whitespace-nowrap">Number of off-days per month</Label>
-              <Input className="w-20 text-end" value={profile.offDaysPerMonth} onChange={(e) => handleProfileChange("offDaysPerMonth", e.target.value)} />
-              <span className="text-sm">rest day(s) per month</span>
-            </div>
-          </div>
-        
-          <div className="section-header">A2. Medical History / Dietary Restrictions</div>
-          <div className="space-y-3 pt-2">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs text-black">Allergies (if any)</Label>
-                <Input value={medicalInfo.allergies} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, allergies: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs text-black">Physical disabilities</Label>
-                <Input value={medicalInfo.physicalDisabilities} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, physicalDisabilities: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs text-black">Dietary restrictions</Label>
-                <Input value={medicalInfo.dietaryRestrictions} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, dietaryRestrictions: e.target.value }))} />
-              </div>
-            <div className="flex flex-col gap-2">
-                <Label className="text-xs text-black">Food handling preferences</Label>
-              <div className="flex flex-wrap items-center gap-4">
-                      <label className="flex items-center gap-1 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={medicalInfo.noPork || false}
-                          onChange={(e) =>
-                            setMedicalInfo((prev) => ({
-                              ...prev,
-                              noPork: e.target.checked,
-                            }))
-                          }
-                        />
-                        No Pork
-                      </label>
-
-                      <label className="flex items-center gap-1 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={medicalInfo.noBeef || false}
-                          onChange={(e) =>
-                            setMedicalInfo((prev) => ({
-                              ...prev,
-                              noBeef: e.target.checked,
-                            }))
-                          }
-                        />
-                        No Beef
-                      </label>
-                    
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm">Others</span>
-                        <Input
-                          className="h-7 w-[150px]"
-                          value={medicalInfo.foodHandlingPreferences || ""}
-                          onChange={(e) =>
-                            setMedicalInfo((prev) => ({
-                              ...prev,
-                              foodHandlingPreferences: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Past and existing illnesses (including chronic ailments and illnesses requiring medication):</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {medicalQuestions.map((illness) => (
-                  <div key={illness} className="flex items-center gap-3">
-                    <span className="flex-1 text-sm">{illness}</span>
-                    <div className="flex gap-2">
-                      <label className="flex items-center gap-1 text-xs">
-                        <input
-                          type="radio"
-                          name={illness}
-                          checked={medicalInfo.pastIllnesses[illness] === true}
-                          onChange={() =>
-                            setMedicalInfo((prev) => ({
-                              ...prev,
-                              pastIllnesses: { ...prev.pastIllnesses, [illness]: true },
-                            }))
-                          }
-                        />
-                        Yes
-                      </label>
-                      <label className="flex items-center gap-1 text-xs">
-                        <input
-                          type="radio"
-                          name={illness}
-                          checked={medicalInfo.pastIllnesses[illness] === false}
-                          onChange={() =>
-                            setMedicalInfo((prev) => ({
-                              ...prev,
-                              pastIllnesses: { ...prev.pastIllnesses, [illness]: false },
-                            }))
-                          }
-                        />
-                        No
-                      </label>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-black">Others (please specify)</Label>
-              <Input value={medicalInfo.otherIllnesses} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, otherIllnesses: e.target.value }))} />
-            </div>
-          </div>
-
-          <div className="section-header">A3. Others</div>
-          <div className="pt-2">
-            <Label className="text-xs text-black">Any other remarks</Label>
-            <Input value={medicalInfo.otherRemarks} onChange={(e) => setMedicalInfo((prev) => ({ ...prev, otherRemarks: e.target.value }))} />
-          </div>
-
-          <div className="flex justify-center pt-4">
-            <Button className="bg-accent px-8 text-accent-foreground hover:bg-accent/90" disabled={isSubmitting} onClick={handleContinue}>
-              {isSubmitting ? "Saving..." : nextLabel}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 1 && (
-        <div className="content-card animate-fade-in-up space-y-4">
-          <h3 className="text-center font-bold">Maid Skills</h3>
-          <table className="w-full border text-sm">
-            <thead>
-              <tr className="bg-muted">
-                <th className="border px-3 py-2 text-left">Areas of Work</th>
-                <th className="border px-3 py-2">Willingness</th>
-                <th className="border px-3 py-2">Experience</th>
-                <th className="border px-3 py-2">Evaluation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {skillAreas.map((skill) => (
-                  <tr
-                    key={skill}
-                    className="hover:bg-muted/50 transition-colors">
-                    <td className="border px-4 py-3 font-medium text-sm">
-                      {skill}
-                    </td>
-                    <td className="border px-4 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-primary cursor-pointer"
-                        checked={workAreas[skill]?.willing ?? false}
-                        onChange={(e) =>
-                          updateWorkArea(skill, "willing", e.target.checked)
-                        }
-                      />
-                    </td>
-                    <td className="border px-4 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-primary cursor-pointer"
-                        checked={workAreas[skill]?.experience ?? false}
-                        onChange={(e) =>
-                          updateWorkArea(skill, "experience", e.target.checked)
-                        }
-                      />
-                    </td>
-                    <td className="border px-4 py-3 text-center">
-                      <select
-                        className="rounded-md border px-2 py-1 text-xs bg-background shadow-sm hover:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-                        value={workAreas[skill]?.evaluation ?? "-"}
-                        onChange={(e) =>
-                          updateWorkArea(skill, "evaluation", e.target.value)
-                        }>
-                        <option value="-">Select</option>
-                        <option value="*">⭐</option>
-                        <option value="**">⭐⭐</option>
-                        <option value="***">⭐⭐⭐</option>
-                        <option value="****">⭐⭐⭐⭐</option>
-                        <option value="*****">⭐⭐⭐⭐⭐</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-
-          <div className="rounded-xl border bg-muted/20 p-4">
-            <h4 className="text-sm font-semibold text-foreground">Skill Feedback</h4>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Add short notes to explain the rating (especially important for Cooking).
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-black">Cooking feedback</Label>
-                <textarea
-                  className="min-h-[100px] w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  placeholder="Example: Can cook Chinese stir-fry, soups, pasta, baking; handles pork; follows recipes well..."
-                  value={workAreaNotes["Cooking"] || ""}
-                  onChange={(e) =>
-                    setWorkAreaNotes((prev) => ({ ...prev, Cooking: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-black">Other notes (optional)</Label>
-                <textarea
-                  className="min-h-[100px] w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  placeholder="Any extra notes you want employers to see."
-                  value={workAreaNotes["Other Skill"] || ""}
-                  onChange={(e) =>
-                    setWorkAreaNotes((prev) => ({ ...prev, "Other Skill": e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-center pt-4">
-            <Button className="bg-accent px-8 text-accent-foreground hover:bg-accent/90" disabled={isSubmitting} onClick={handleContinue}>
-              {nextLabel}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 2 && (
-        <div className="content-card animate-fade-in-up space-y-4">
-          <h3 className="text-center font-bold">Employment History</h3>
-          <table className="w-full border border-collapse text-sm">
-            <thead>
-              <tr className="bg-muted">
-                <th className="border px-3 py-2">From</th>
-                <th className="border px-3 py-2">To</th>
-                <th className="border px-3 py-2">Country</th>
-                <th className="border px-3 py-2">Employer</th>
-                <th className="border px-3 py-2">Maid Duties</th>
-                <th className="border px-3 py-2">Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employmentHistory.map((row, index) => (
-                <tr key={row._id || String(index)} className="hover:bg-muted/50 transition-colors align-top">
-                  {(["from", "to", "country", "employer", "duties", "remarks"] as const).map((field) => {
-                    const isDateField = field === "from" || field === "to";
-                    const isLongText = field === "duties" || field === "remarks";
-
-                    return (
-                      <td key={field} className="border px-2 py-1 align-top">
-                        {isDateField ? (
-                          <DateInput
-                            className="h-8 w-full text-xs px-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
-                            value={row[field]}
-                            onChange={(next) => updateEmploymentRow(index, field, next)}
-                          />
-                        ) : isLongText ? (
-                          <textarea
-                            className="w-full text-xs px-2 py-1 border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-                            rows={2}
-                            value={row[field]}
-                            onChange={(e) => updateEmploymentRow(index, field, e.target.value)}
-                          />
-                        ) : (
-                          <Input
-                            className="h-8 w-full text-xs px-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
-                            value={row[field]}
-                            onChange={(e) => updateEmploymentRow(index, field, e.target.value)}
-                          />
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="flex justify-center gap-4 pt-4">
-            <Button className="bg-green-600 px-4 text-white hover:bg-green-700" onClick={addEmploymentRow}>Add Row</Button>
-            <Button className="bg-red-500 px-4 text-white hover:bg-red-600" onClick={removeLastEmploymentRow}>Remove Last Row</Button>
-            <Button className="bg-accent px-8 text-accent-foreground hover:bg-accent/90" disabled={isSubmitting} onClick={handleContinue}>
-              {nextLabel}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 3 && (
-        <div className="content-card animate-fade-in-up space-y-4">
-          <h3 className="mb-4 text-center font-bold">Availability / Remark</h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">When will this maid be available?</Label>
-              <Input value={availabilityInfo.availability} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, availability: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Contract Ends</Label>
-              <DateInput
-                value={availabilityInfo.contractEnds}
-                onChange={(next) => setAvailabilityInfo((prev) => ({ ...prev, contractEnds: next }))}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Present Salary (S$)</Label>
-              <Input value={availabilityInfo.presentSalary} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, presentSalary: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Expected Salary</Label>
-              <Input value={availabilityInfo.expectedSalary} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, expectedSalary: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Offday Compensation (S$/day)</Label>
-              <Input value={availabilityInfo.offdayCompensation} onChange={(e) => setAvailabilityInfo((prev) => ({ ...prev, offdayCompensation: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Passport No.</Label>
-              <Input value={profile.passportNo} onChange={(e) => handleProfileChange("passportNo", e.target.value)} />
-            </div>
-          </div>
-          <textarea className="min-h-[200px] w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Enter availability / remark here..." value={availabilityRemark} onChange={(e) => setAvailabilityRemark(e.target.value)} />
-          <div className="flex justify-center pt-4">
-            <Button className="bg-accent px-8 text-accent-foreground hover:bg-accent/90" disabled={isSubmitting} onClick={handleContinue}>{nextLabel}</Button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 4 && (
-        <div className="content-card animate-fade-in-up space-y-4">
-          <h3 className="mb-4 text-center font-bold">Introduction</h3>
-          <textarea className="min-h-[260px] w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Enter employer-login introduction here..." value={introduction} onChange={(e) => setIntroduction(e.target.value)} />
-          <div className="flex justify-center pt-4">
-            <Button className="bg-accent px-8 text-accent-foreground hover:bg-accent/90" disabled={isSubmitting} onClick={handleContinue}>{nextLabel}</Button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 5 && (
-        <div className="content-card animate-fade-in-up space-y-4">
-          <h3 className="mb-4 text-center font-bold">Public Introduction</h3>
-          <textarea className="min-h-[260px] w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Enter public introduction here..." value={publicIntroduction} onChange={(e) => setPublicIntroduction(e.target.value)} />
-          <div className="flex justify-center pt-4">
-            <Button className="bg-accent px-8 text-accent-foreground hover:bg-accent/90" disabled={isSubmitting} onClick={handleContinue}>{nextLabel}</Button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 6 && (
-        <div className="content-card animate-fade-in-up space-y-4">
-          <h3 className="mb-4 text-center font-bold">Private Info</h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Agency Name</Label>
-              <Input value={agencyContact.companyName} onChange={(e) => setAgencyContact((prev) => ({ ...prev, companyName: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">License No.</Label>
-              <Input value={agencyContact.licenseNo} onChange={(e) => setAgencyContact((prev) => ({ ...prev, licenseNo: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Contact Person</Label>
-              <Input value={agencyContact.contactPerson} onChange={(e) => setAgencyContact((prev) => ({ ...prev, contactPerson: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Phone</Label>
-              <Input value={agencyContact.phone} onChange={(e) => setAgencyContact((prev) => ({ ...prev, phone: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Ages of Children</Label>
-              <Input value={privateDetails.agesOfChildren} onChange={(e) => setPrivateDetails((prev) => ({ ...prev, agesOfChildren: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-black">Maid Loan (S$)</Label>
-              <Input value={privateDetails.maidLoan} onChange={(e) => setPrivateDetails((prev) => ({ ...prev, maidLoan: e.target.value }))} />
-            </div>
-          </div>
-          <textarea className="min-h-[200px] w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Enter private information here..." value={privateInfo} onChange={(e) => setPrivateInfo(e.target.value)} />
-          <div className="flex justify-center pt-4">
-            <Button className="bg-accent px-8 text-accent-foreground hover:bg-accent/90" disabled={isSubmitting} onClick={handleContinue}>
-              {isSubmitting ? "Saving..." : nextLabel}
-            </Button>
-          </div>
-        </div>
-      )}
-      </>
-      )}
+      {activeTab === 0 && <ProfileTab />}
+      {activeTab === 1 && <SkillsTab />}
+      {activeTab === 2 && <EmploymentHistoryTab />}
+      {activeTab === 3 && <AvailabilityRemarkTab />}
+      {activeTab === 4 && <IntroductionTab />}
+      {activeTab === 5 && <PublicIntroductionTab />}
+      {activeTab === 6 && <PrivateInfoTab />}
     </div>
   );
 };
+
+
+const FormRow = ({ label, children }: { label: string; children: React.ReactNode; fullWidth?: boolean }) => (
+  <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
+    <Label className="text-xs font-medium text-right whitespace-nowrap">{label}</Label>
+    <div className="min-w-0">{children}</div>
+  </div>
+);
+
+const FormRow2Col = ({ left, right }: { left: React.ReactNode; right?: React.ReactNode }) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+    <div>{left}</div>
+    {right ? <div>{right}</div> : <div />}
+  </div>
+);
+
+const RadioGroup = ({ name, options }: { name: string; options: string[] }) => (
+  <div className="flex gap-4">
+    {options.map((opt) => (
+      <label key={opt} className="flex items-center gap-1 text-sm">
+        <input type="radio" name={name} className="accent-primary" />
+        {opt}
+      </label>
+    ))}
+  </div>
+);
+
+const YesNo = ({ name }: { name: string }) => (
+  <div className="flex gap-3">
+    <label className="flex items-center gap-1 text-sm"><input type="radio" name={name} className="accent-primary" /> Yes</label>
+    <label className="flex items-center gap-1 text-sm"><input type="radio" name={name} className="accent-primary" /> No</label>
+  </div>
+);
+
+const SelectInput = ({ options, className }: { options: string[]; className?: string }) => (
+  <select className={`rounded-md border bg-background px-3 py-2 text-sm ${className || "w-full"}`}>
+    {options.map((o) => <option key={o}>{o}</option>)}
+  </select>
+);
+
+const SaveButtons = () => (
+  <div className="flex justify-center gap-4 pt-6">
+    <Button className="px-8 bg-success text-success-foreground hover:bg-success/90">Save &amp; Continue</Button>
+  </div>
+);
+
+
+const ProfileTab = () => {
+  const currentYear = new Date().getFullYear(); 
+  const futureYears = 10; 
+  const years = Array.from(
+    { length: currentYear - 1960 + 1 + futureYears }, 
+    (_, i) => String(1960 + i)
+  );
+
+console.log(years);
+  const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
+  const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
+  
+  
+
+  return (
+    <div className="content-card animate-fade-in-up space-y-6">
+      <h3 className="text-center font-bold text-lg">(A) PROFILE OF FDW</h3>
+
+      <div className="section-header">A1. Personal Information</div>
+      <div className="space-y-3 pt-2">
+        <FormRow2Col
+          left={<FormRow label="Maid Name:"><Input /></FormRow>}
+          right={<FormRow label="Ref Code:"><Input /></FormRow>}
+        />
+        <FormRow2Col
+          left={<FormRow label="Type:"><SelectInput options={["New maid", "Transfer maid","APS maid", "Ex-Singapore maid", "Ex-Hong Kong maid", "Ex-Middle East maid", "Ex-Taiwan maid", "Applying to work in Hong Kong", "Applying to work in Canada", "Applying to work in Taiwan"]} /></FormRow>}
+          right={<FormRow label="Nationality:"><SelectInput options={["Filipino maid", "Indonesian maid", "Indian maid", "Myanmar maid", "Sri Lankan maid", "Bangladeshi maid", "Nepali maid", "Cambodian maid", "Others"]} /></FormRow>}
+        />
+        <FormRow2Col
+          left={<div />}
+          right={<FormRow label="Indian Maid Category:"><SelectInput options={["Select", "Mizoram maid", "Darjeeling maid", "Manipur maid", "Punjabi maid", "Others"]} /></FormRow>}
+        />
+        <FormRow2Col
+          left={<FormRow label="Date of Birth:"><div className="flex gap-1"><SelectInput options={days} className="w-16" /><SelectInput options={months} className="w-16" /><SelectInput options={years} className="w-24" /></div></FormRow>}
+          right={<FormRow label="Place Of Birth:"><Input /></FormRow>}
+        />
+        <FormRow2Col
+          left={<FormRow label="Height:"><SelectInput options={["150cm (4'11\")", "152cm (5'0\")", "155cm (5'1\")", "156cm (5'1\")", "157cm (5'2\")", "160cm (5'3\")", "163cm (5'4\")", "165cm (5'5\")", "168cm (5'6\")", "170cm (5'7\")", "173cm (5'8\")", "175cm (5'9\")", "178cm (5'10\")", "180cm (5'11\")"]} /></FormRow>}
+          right={<FormRow label="Weight:"><SelectInput options={["40Kg (88 lbs)", "42Kg (93 lbs)", "45Kg (99 lbs)", "48Kg (106 lbs)", "50Kg (110 lbs)", "52Kg (115 lbs)", "55Kg (121 lbs)", "58Kg (128 lbs)", "60Kg (132 lbs)", "63Kg (139 lbs)", "65Kg (143 lbs)", "68Kg (150 lbs)", "70Kg (154 lbs)"]} /></FormRow>}
+        />
+
+        <FormRow label="Residential Address in Home Country:"><Input /></FormRow>
+        <FormRow label="Name of Port/Airport to be Repatriated:"><Input /></FormRow>
+        <FormRow label="Contact Number in Home Country:"><Input /></FormRow>
+
+        <FormRow2Col
+          left={<FormRow label="Education:"><SelectInput options={["Primary Level(<=6 yrs)", "Secondary Level(7~9 yrs)", "High School(10~12 yrs)", "College/Degree (>=13 yrs)", "Diploma", "Undergraduate", "Others" ]} /></FormRow>}
+          right={<FormRow label="Religion:"><SelectInput options={["Catholic", "Christian", "Muslim", "Hindu", "Buddhist", "Sikh", "Free Thinker", "Others"]} /></FormRow>}
+        />
+        <FormRow2Col
+          left={<FormRow label="Number of Siblings:"><Input /></FormRow>}
+          right={<FormRow label="Marital Status:"><SelectInput options={["Single", "Married", "Divorced", "Widowed", "Separated", "Others"]} /></FormRow>}
+        />
+        <FormRow2Col
+          left={<FormRow label="Number of Children:"><SelectInput options={["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]} /></FormRow>}
+          right={<FormRow label="Ages of Children:"><Input /></FormRow>}
+        />
+        <FormRow2Col
+          left={<FormRow label="Present Salary (S$):"><Input /></FormRow>}
+          right={<FormRow label="Expected Salary:"><Input /></FormRow>}
+        />
+        <FormRow2Col
+          left={<FormRow label="When will this maid be Available?"><Input /></FormRow>}
+          right={<FormRow label="Contract Ends:"><div className="flex gap-1"><SelectInput options={["--", ...days]} className="w-16" /><SelectInput options={["--", ...months]} className="w-16" /><SelectInput options={["--", ...years.slice(0)]} className="w-24" /></div></FormRow>}
+        />
+        <FormRow2Col
+          left={<FormRow label="Maid Loan (S$):"><Input /></FormRow>}
+          right={<FormRow label="Offday Compensation (S$/day):"><Input defaultValue="0" /></FormRow>}
+        />
+      </div>
+
+      <div className="section-header">Language Skills:</div>
+      <div className="space-y-3 pt-2">
+        {["English", "Mandarin/Chinese-Dialect", "Bahasa Indonesia/Malaysia", "Hindi", "Tamil", "Malayalam", "Telegu", "Karnataka"].map((lang) => (
+          <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
+            <RadioGroup name={`lang_${lang}`} options={["Poor", "Little", "Fair", "Good"]} />
+          </div>
+        ))}
+      </div>
+
+      <div className="section-header">Other Information:</div>
+      <div className="space-y-2 pt-2">
+        {[
+          "Able to handle pork?",
+          "Able to eat pork?",
+          "Able to care for dog/cat?",
+          "Able to do simple sewing?",
+          "Able to do gardening work?",
+          "Willing to wash car?",
+          "Willing to work on off-days with  compensation?",
+        ].map((q) => (
+          <div key={q} className="flex items-center gap-4">
+            <span className="text-sm flex-1 text-right">{q}</span>
+            <YesNo name={`other_${q}`} />
+          </div>
+        ))}
+        <div className="flex items-center gap-4">
+          <span className="text-sm flex-1 text-right">Number of off-days per month</span>
+          <div className="flex items-center gap-2">
+            <Input className="w-20" defaultValue="02" />
+            <span className="text-sm">rest day(s) per month.</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="section-header">A2. Medical History/Dietary Restrictions</div>
+      <div className="space-y-3 pt-2">
+        <FormRow label="Allergies (if any):"><Input /></FormRow>
+
+        <p className="text-sm font-medium">Past and existing illnesses (including chronic ailments and illnesses requiring medication):</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+          {[
+            ["(I) Mental illness", "illness_mental"],
+            ["(II) Epilepsy", "illness_epilepsy"],
+            ["(III) Asthma", "illness_asthma"],
+            ["(IV) Diabetes", "illness_diabetes"],
+            ["(V) Hypertension", "illness_hypertension"],
+            ["(VI) Tuberculosis", "illness_tuberculosis"],
+            ["(VII) Heart disease", "illness_heart"],
+            ["(VIII) Malaria", "illness_malaria"],
+            ["(IX) Operations", "illness_operations"],
+          ].map(([label, name]) => (
+            <div key={name} className="flex items-center gap-3">
+              <span className="text-sm flex-1">{label}</span>
+              <YesNo name={name} />
+            </div>
+          ))}
+          <div className="flex items-center gap-3">
+            <span className="text-sm flex-1">(X) Others:</span>
+            <Input className="w-32" />
+          </div>
+        </div>
+
+        <FormRow label="Physical disabilities:"><Input /></FormRow>
+        <FormRow label="Dietary restrictions:"><Input /></FormRow>
+
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="text-sm font-medium">Food handling preferences:</span>
+          <label className="flex items-center gap-1 text-sm">
+            <input type="checkbox" className="accent-primary" /> No Pork
+          </label>
+          <label className="flex items-center gap-1 text-sm">
+            <input type="checkbox" className="accent-primary" /> No Beef
+          </label>
+          <div className="flex items-center gap-1">
+            <span className="text-sm">Others</span>
+            <Input className="w-32" />
+          </div>
+        </div>
+      </div>
+
+      <div className="section-header">A3. Others</div>
+      <div className="pt-2">
+        <FormRow label="Any other remarks:"><Input /></FormRow>
+      </div>
+
+      <SaveButtons />
+    </div>
+  );
+};
+
+
+const skillRows = [
+  { no: 1, label: "Care of infants/children", sub: "Please specify age range:", subField: true },
+  { no: 2, label: "Care of elderly" },
+  { no: 3, label: "Care of disabled" },
+  { no: 4, label: "General housework" },
+  { no: 5, label: "Cooking", sub: "Please specify cuisines:", subField: true },
+  { no: 6, label: "Language abilities (spoken)", sub: "Please specify:", subField: true },
+  { no: 7, label: "Other skills, if any", sub: "Please specify:", subField: true },
+];
+
+const SkillsTab = () => (
+  <div className="content-card animate-fade-in-up space-y-6">
+    <h3 className="text-center font-bold text-lg">(B) MAID's SKILLS</h3>
+
+    <div className="section-header">B1. Method of Evaluation of Skills</div>
+    <p className="text-sm pt-2">Please indicate the method(s) used to evaluate the FDW's skills (can tick more than one):</p>
+    <div className="space-y-2 pl-2">
+      {[
+        "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA",
+        "Interviewed by Singapore EA",
+      ].map((opt) => (
+        <label key={opt} className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="accent-primary mt-0.5" />
+          {opt}
+        </label>
+      ))}
+      <div className="pl-6 space-y-2">
+        {[
+          "Interviewed via telephone/teleconference",
+          "Interviewed via videoconference",
+          "Interviewed in person",
+          "Interviewed in person and also made observation of FDW in the areas of work listed in table",
+        ].map((opt) => (
+          <label key={opt} className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="accent-primary mt-0.5" />
+            {opt}
+          </label>
+        ))}
+      </div>
+    </div>
+
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border border-border">
+        <thead>
+          <tr className="bg-muted">
+            <th className="border border-border px-2 py-2 text-center w-12">S/No</th>
+            <th className="border border-border px-3 py-2 text-center">Areas of Work</th>
+            <th className="border border-border px-2 py-2 text-center w-24">Willingness<br />Yes/No</th>
+            <th className="border border-border px-2 py-2 text-center w-40">
+              Experience<br />Yes/No<br />
+              <span className="font-normal text-xs">If yes, state the no. of years</span>
+            </th>
+            <th className="border border-border px-2 py-2 text-center w-64">
+              Assessment/Observation<br />
+              <span className="font-normal text-xs">Please state qualitative observations of FDW and/or rate the FDW<br />(indicate N.A. if no evaluation was done)<br />1 2 3 4 5 N.A.</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {skillRows.map((row) => (
+            <tr key={row.no}>
+              <td className="border border-border px-2 py-3 text-center align-top">{row.no}</td>
+              <td className="border border-border px-3 py-3 align-top">
+                <span className="font-bold">{row.label}</span>
+                {row.sub && (
+                  <div className="mt-1">
+                    <span className="text-xs">{row.sub}</span>
+                    {row.subField && <Input className="mt-1 w-48 h-7 text-xs" />}
+                  </div>
+                )}
+              </td>
+              <td className="border border-border px-2 py-3 text-center align-top">
+                <div className="flex items-center justify-center gap-2">
+                  <label className="flex items-center gap-1 text-xs"><input type="radio" name={`will_${row.no}`} className="accent-primary" />Yes</label>
+                  <label className="flex items-center gap-1 text-xs"><input type="radio" name={`will_${row.no}`} className="accent-primary" />No</label>
+                </div>
+              </td>
+              <td className="border border-border px-2 py-3 text-center align-top">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <label className="flex items-center gap-1 text-xs"><input type="radio" name={`exp_${row.no}`} className="accent-primary" />Yes</label>
+                  <label className="flex items-center gap-1 text-xs"><input type="radio" name={`exp_${row.no}`} className="accent-primary" />No</label>
+                </div>
+                <div className="flex items-center justify-center gap-1">
+                  <Input className="w-16 h-7 text-xs" />
+                  <span className="text-xs">(years)</span>
+                </div>
+              </td>
+              <td className="border border-border px-2 py-3 align-top">
+                <div className="flex items-center justify-center gap-1 mb-2 flex-wrap">
+                  {["1", "2", "3", "4", "5", "N.A."].map((v) => (
+                    <label key={v} className="flex items-center gap-0.5 text-xs">
+                      <input type="radio" name={`assess_${row.no}`} className="accent-primary" />{v}
+                    </label>
+                  ))}
+                </div>
+                <textarea className="w-full min-h-[50px] rounded border bg-background px-2 py-1 text-xs" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <SaveButtons />
+  </div>
+);
+
+
+const EmploymentHistoryTab = () => {
+  const years = ["--", ...Array.from({ length: 30 }, (_, i) => String(2000 + i))];
+  const countries = ["--", "Singapore", "Hong Kong", "Taiwan", "Malaysia", "Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan", "Lebanon", "Brunei", "Others"];
+
+  const [employers, setEmployers] = useState([0]);
+
+  const addEmployer = () => {
+    setEmployers([...employers, employers.length]);
+  };
+
+  const removeEmployer = (index: number) => {
+    setEmployers(employers.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="content-card animate-fade-in-up space-y-6">
+      <h3 className="text-center font-bold text-lg">(C) EMPLOYMENT HISTORY OF THE FDW</h3>
+
+      <div className="section-header">C1. Employment History</div>
+
+      <div className="space-y-6 pt-2">
+        {employers.map((_, idx) => (
+          <div key={idx} className="space-y-2 border p-4 rounded-md relative">
+
+            {employers.length > 1 && (
+              <button
+                onClick={() => removeEmployer(idx)}
+                className="absolute top-2 right-2 text-red-500 text-xs">
+                Remove
+              </button>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2">
+              <Label className="form-label text-sm font-bold sm:text-right">
+                Employer {idx + 1}:
+              </Label>
+              <div />
+            </div>
+
+            {[
+              { label: "From Year", type: "select" as const, options: years },
+              { label: "To Year", type: "select" as const, options: years },
+              { label: "Country", type: "select" as const, options: countries },
+              { label: "Employer's Name", type: "input" as const },
+              { label: "Main Duties", type: "textarea" as const },
+              { label: "Remarks", type: "textarea" as const },
+            ].map((field) => (
+              <div
+                key={field.label}
+                className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-start"
+              >
+                <Label className="form-label text-xs sm:text-right pt-1">
+                  {field.label}
+                </Label>
+
+                {field.type === "select" ? (
+                  <SelectInput options={field.options!} className="w-48" />
+                ) : field.type === "textarea" ? (
+                  <textarea className="w-full max-w-md min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm" />
+                ) : (
+                  <Input className="max-w-md" />
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Add Employer Button */}
+      <div className="flex justify-center">
+        <button
+          onClick={addEmployer}
+          className="px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary/90"
+        >
+          + Add Employer
+        </button>
+      </div>
+
+      {/* C2 Section */}
+      <div className="section-header">C2. Employment History in Singapore</div>
+      <div className="space-y-2 pt-2">
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium">
+            Previous working experience in Singapore
+          </span>
+          <YesNo name="sg_experience" />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          (The EA is required to obtain the FDW&apos;s employment history from MOM and furnish the employer with the employment history of the FDW. The employer may also verify the FDW&apos;s employment history in Singapore through WPOL using SingPass)
+        </p>
+      </div>
+
+      {/* C3 Section */}
+      <div className="section-header">
+        C3. Feedback from previous employers in Singapore
+      </div>
+      <div className="space-y-3 pt-2">
+        <p className="text-sm">
+          If feedback was obtained by the EA from the previous employers,
+          please indicate the feedback in the table below:
+        </p>
+        <FormRow label="Feedback from Singapore Employer 1:">
+          <Input />
+        </FormRow>
+        <FormRow label="Feedback from Singapore Employer 2:">
+          <Input />
+        </FormRow>
+      </div>
+
+      <SaveButtons />
+    </div>
+  );
+};
+
+
+const AvailabilityRemarkTab = () => (
+  <div className="content-card animate-fade-in-up space-y-6">
+    <h3 className="text-center font-bold text-lg">(D) MAID&apos;s AVAILABILITY and REMARK</h3>
+
+    <div className="space-y-3">
+      {[
+        "FDW is not available for interview",
+        "FDW can be interviewed by phone",
+        "FDW can be interviewed by video-conference",
+        "FDW can be interviewed in person",
+      ].map((opt) => (
+        <label key={opt} className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="accent-primary" />
+          {opt}
+        </label>
+      ))}
+    </div>
+
+    <h3 className="font-bold text-lg">(E) OTHER REMARKS</h3>
+    <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
+      <Label className="form-label text-sm font-bold sm:text-right pt-2">OTHER REMARKS:</Label>
+      <textarea className="w-full min-h-[100px] rounded-md border bg-background px-3 py-2 text-sm" />
+    </div>
+
+    <SaveButtons />
+  </div>
+);
+
+
+const IntroductionTab = () => (
+  <div className="content-card animate-fade-in-up space-y-4">
+    <h3 className="text-center font-bold text-lg">MAID&apos;s INTRODUCTION</h3>
+    <p className="text-center text-sm text-muted-foreground">
+      This Introduction will be hidden from public. Employers need to login to view this introduction.
+    </p>
+
+    <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
+      <Label className="form-label text-sm font-bold sm:text-right pt-2">MAID INTRODUCTION:</Label>
+      <textarea className="w-full min-h-[250px] rounded-md border bg-background px-3 py-2 text-sm" />
+    </div>
+
+    <SaveButtons />
+  </div>
+);
+
+
+const PublicIntroductionTab = () => (
+  <div className="content-card animate-fade-in-up space-y-4">
+    <h3 className="text-center font-bold text-lg">PUBLIC INTRODUCTION</h3>
+    <p className="text-center text-sm text-muted-foreground">
+      This is maid introduction for public, employers can view this without login.
+    </p>
+
+    <div className="text-sm space-y-2 border rounded-lg p-4 bg-muted/30">
+      <p>
+        EAs must comply with MOM&apos;s{" "}
+        <a href="https://www.mom.gov.sg/employment-practices/employment-agencies/ealc" className="text-primary underline" target="_blank" rel="noopener noreferrer">
+          EALC #17
+        </a>{" "}
+        and only disclose the following list of the FDW&apos;s personal information publicly: FDW Name, FDW Nationality, FDW skills and experience in said skills, Food handling preferences, Previous employment history (as stated in MOM&apos;s work permit application system), Language abilities.
+      </p>
+      <p>
+        EAs must not cast FDWs in an insensitive and undignified light. This includes avoiding transactional terms that liken FDWs to commodities, e.g. &quot;condition new&quot;, &quot;chat to buy&quot;.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
+      <Label className="form-label text-sm font-bold sm:text-right pt-2">MAID INTRODUCTION:</Label>
+      <textarea className="w-full min-h-[250px] rounded-md border bg-background px-3 py-2 text-sm" />
+    </div>
+
+    <SaveButtons />
+  </div>
+);
+
+
+const PrivateInfoTab = () => (
+  <div className="content-card animate-fade-in-up space-y-4">
+    <h3 className="text-center font-bold text-lg">MAID&apos;s PRIVATE INFORMATION</h3>
+
+    <div className="space-y-3">
+      <FormRow label="This maid was interviewed by:"><Input /></FormRow>
+      <FormRow label="Who Referred This Maid?"><Input /></FormRow>
+      <FormRow label="Passport Number of the Maid"><Input placeholder="e.g. R8833831 Expiry: 28/01/2028" /></FormRow>
+      <FormRow label="Telephone Number of Maid/Foreign Agency">
+        <div className="flex items-center gap-2">
+          <Input />
+          <span className="text-sm text-muted-foreground whitespace-nowrap">WhatsApp</span>
+        </div>
+      </FormRow>
+
+      <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
+        <Label className="form-label text-sm sm:text-right pt-2">Agency&apos;s Historical Record of the Maid</Label>
+        <textarea className="w-full min-h-[200px] rounded-md border bg-background px-3 py-2 text-sm" />
+      </div>
+    </div>
+
+    <SaveButtons />
+  </div>
+);
 
 export default AddMaid;
