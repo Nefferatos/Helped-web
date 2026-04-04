@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { calculateAge, formatDate, MaidProfile } from "@/lib/maids";
 import { Search, Eye, EyeOff, Trash2, Download, Upload } from "lucide-react";
@@ -26,6 +27,9 @@ const EditMaids = () => {
   const [maidToSendThroughAgency, setMaidToSendThroughAgency] = useState<MaidProfile | null>(null);
   const [maidToDirectHire, setMaidToDirectHire] = useState<MaidProfile | null>(null);
   const [maidToReject, setMaidToReject] = useState<MaidProfile | null>(null);
+  const [confirmExportOpen, setConfirmExportOpen] = useState(false);
+  const [confirmImportOpen, setConfirmImportOpen] = useState(false);
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
 
 
   useEffect(() => {
@@ -156,9 +160,6 @@ const EditMaids = () => {
   };
 
   const handleExportCsv = async () => {
-    if (!window.confirm("Export all maids to a CSV file now?")) {
-      return;
-    }
     try {
       setIsExporting(true);
       const response = await fetch("/api/maids/export.csv");
@@ -184,14 +185,20 @@ const EditMaids = () => {
     }
   };
 
-  const handleImportCsv = async (file?: File) => {
-    if (!file) return;
-    if (!window.confirm(`Import maids from "${file.name}"?\n\nSupported: .csv exported from "Export Maids CSV".\nRequired columns: referenceCode, fullName.\nThis will create new maids and update existing ones (matched by referenceCode).`)) {
-      return;
-    }
+  const decodeBase64Utf8 = (value: string) => {
+    const binary = atob(value);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  };
+
+  const extractBase64Marker = (content: string, marker: string) => {
+    const match = content.match(new RegExp(`<!--${marker}:([A-Za-z0-9+/=]+)-->`));
+    return match?.[1] ?? null;
+  };
+
+  const importCsvText = async (csvText: string) => {
     try {
       setIsImporting(true);
-      const csvText = await file.text();
       const response = await fetch("/api/maids/import.csv", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -231,6 +238,130 @@ const EditMaids = () => {
     }
   };
 
+  const handleExportXls = async () => {
+    try {
+      setIsExporting(true);
+      const response = await fetch("/api/maids/export.xls");
+      if (!response.ok) {
+        if (response.status === 404) {
+          await handleExportCsv();
+          return;
+        }
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || "Failed to export Excel");
+      }
+      const html = await response.text();
+      const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `maids-${new Date().toISOString().slice(0, 10)}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Excel exported");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to export Excel");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const importSingleMaidProfile = async (payload: MaidProfile) => {
+    const referenceCode = String(payload.referenceCode || "").trim();
+    if (!referenceCode) {
+      throw new Error("referenceCode is required in the imported file");
+    }
+
+    try {
+      setIsImporting(true);
+      const probe = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`);
+      const exists = probe.ok;
+
+      const response = await fetch(exists ? `/api/maids/${encodeURIComponent(referenceCode)}` : "/api/maids", {
+        method: exists ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+      if (!response.ok || !data.maid) {
+        throw new Error(data.error || "Failed to import maid profile");
+      }
+
+      toast.success(exists ? "Maid profile updated" : "Maid profile created");
+
+      if (visibility) {
+        const params = new URLSearchParams({ visibility });
+        if (search.trim()) params.set("search", search.trim());
+        const reload = await fetch(`/api/maids?${params.toString()}`);
+        const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[] };
+        if (reload.ok && reloadData.maids) setMaids(reloadData.maids);
+      }
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleImportFile = async (file: File) => {
+    const name = file.name.toLowerCase();
+    const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
+
+    if (ext === "csv") {
+      await importCsvText(await file.text());
+      return;
+    }
+
+    if (ext === "xls" || ext === "doc") {
+      const content = await file.text();
+      const maidsCsvBase64 = extractBase64Marker(content, "MAIDS_CSV_BASE64");
+      if (maidsCsvBase64) {
+        await importCsvText(decodeBase64Utf8(maidsCsvBase64));
+        return;
+      }
+
+      const maidProfileBase64 = extractBase64Marker(content, "MAID_PROFILE_JSON_BASE64");
+      if (maidProfileBase64) {
+        await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile);
+        return;
+      }
+
+      throw new Error('This file is missing import data. Please import files exported from "Export Maids" or from a maid bio-data export.');
+    }
+
+    throw new Error("Unsupported file type. Supported: .csv, .xls, .doc");
+  };
+
+  const requestExport = () => {
+    if (isExporting) return;
+    setConfirmExportOpen(true);
+  };
+
+  const confirmExportCsv = () => {
+    setConfirmExportOpen(false);
+    void handleExportCsv();
+  };
+
+  const confirmExportXls = () => {
+    setConfirmExportOpen(false);
+    void handleExportXls();
+  };
+
+  const requestImportFile = (file?: File) => {
+    if (!file || isImporting) return;
+    setPendingImportFile(file);
+    setConfirmImportOpen(true);
+  };
+
+  const confirmImportFile = () => {
+    const file = pendingImportFile;
+    setConfirmImportOpen(false);
+    setPendingImportFile(null);
+    if (file) {
+      void handleImportFile(file);
+    }
+  };
+
   if (view === "menu") {
     return (
       <div className="page-container">
@@ -240,31 +371,80 @@ const EditMaids = () => {
             <Button variant="outline"><Search className="mr-2 h-4 w-4" /> Search</Button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void handleExportCsv()} disabled={isExporting}>
+            <Button variant="outline" onClick={requestExport} disabled={isExporting}>
               <Download className="mr-2 h-4 w-4" />
-              {isExporting ? "Exporting..." : "Export Maids CSV"}
+              {isExporting ? "Exporting..." : "Export Maids"}
             </Button>
             <label className="inline-flex cursor-pointer">
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xls,.doc,text/csv,application/vnd.ms-excel,application/msword"
                 className="hidden"
                 disabled={isImporting}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-                  void handleImportCsv(file);
+                  requestImportFile(file);
                   event.currentTarget.value = "";
                 }}
               />
               <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground font-semibold">
                 <Upload className="mr-2 h-4 w-4" />
-                {isImporting ? "Importing..." : "Import CSV (Maids)"}
+                {isImporting ? "Importing..." : "Import File (Maids)"}
               </span>
             </label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Import supports <span className="font-semibold">.csv</span> exported from "Export Maids CSV". Required columns: <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Photos &amp; history are not imported.
+            Import supports <span className="font-semibold">.csv</span> (recommended), or <span className="font-semibold">.xls</span>/<span className="font-semibold">.doc</span> exported from this system. Required columns (CSV): <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Photos &amp; history are not imported.
           </p>
+
+          <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Export maids file?</DialogTitle>
+                <DialogDescription>
+                  Download as an easy-to-read Excel table (<span className="font-semibold">.xls</span>) or as a raw CSV (<span className="font-semibold">.csv</span>).
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>
+                  Cancel
+                </Button>
+                <Button variant="outline" onClick={confirmExportCsv} disabled={isExporting}>
+                  {isExporting ? "Exporting..." : "Download CSV"}
+                </Button>
+                <Button onClick={confirmExportXls} disabled={isExporting}>
+                  {isExporting ? "Exporting..." : "Download Excel (.xls)"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={confirmImportOpen} onOpenChange={(open) => {
+            setConfirmImportOpen(open);
+            if (!open) setPendingImportFile(null);
+          }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Import maids file?</DialogTitle>
+                <DialogDescription>
+                  Supported: <span className="font-semibold">.csv</span>, <span className="font-semibold">.xls</span>, <span className="font-semibold">.doc</span> exported from this system.
+                  <br />
+                  For CSV: required columns <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Existing maids are updated by <span className="font-semibold">referenceCode</span>.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                <span className="font-semibold">Selected file:</span> {pendingImportFile?.name ?? "None"}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>
+                  Cancel
+                </Button>
+                <Button onClick={confirmImportFile} disabled={isImporting || !pendingImportFile}>
+                  {isImporting ? "Importing..." : "Import"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <hr />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <button onClick={() => setView("public")} className="flex flex-col items-center gap-2 rounded-lg border p-6 transition-all hover:border-primary/30 hover:bg-secondary/50 active:scale-[0.98]">
@@ -304,31 +484,80 @@ const EditMaids = () => {
           <Button variant="outline"><Search className="mr-2 h-4 w-4" /> Search</Button>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => void handleExportCsv()} disabled={isExporting}>
+          <Button variant="outline" onClick={requestExport} disabled={isExporting}>
             <Download className="mr-2 h-4 w-4" />
-            {isExporting ? "Exporting..." : "Export Maids CSV"}
+            {isExporting ? "Exporting..." : "Export Maids"}
           </Button>
           <label className="inline-flex cursor-pointer">
             <input
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xls,.doc,text/csv,application/vnd.ms-excel,application/msword"
               className="hidden"
               disabled={isImporting}
               onChange={(event) => {
                 const file = event.target.files?.[0];
-                void handleImportCsv(file);
+                requestImportFile(file);
                 event.currentTarget.value = "";
               }}
             />
             <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground">
               <Upload className="mr-2 h-4 w-4" />
-              {isImporting ? "Importing..." : "Import CSV (Maids)"}
+              {isImporting ? "Importing..." : "Import File (Maids)"}
             </span>
           </label>
         </div>
         <p className="text-xs text-muted-foreground">
-          Import supports <span className="font-semibold">.csv</span> exported from "Export Maids CSV". Required columns: <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Photos &amp; history are not imported.
+          Import supports <span className="font-semibold">.csv</span> (recommended), or <span className="font-semibold">.xls</span>/<span className="font-semibold">.doc</span> exported from this system. Required columns (CSV): <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Photos &amp; history are not imported.
         </p>
+
+        <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Export maids file?</DialogTitle>
+              <DialogDescription>
+                Download as an easy-to-read Excel table (<span className="font-semibold">.xls</span>) or as a raw CSV (<span className="font-semibold">.csv</span>).
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>
+                Cancel
+              </Button>
+              <Button variant="outline" onClick={confirmExportCsv} disabled={isExporting}>
+                {isExporting ? "Exporting..." : "Download CSV"}
+              </Button>
+              <Button onClick={confirmExportXls} disabled={isExporting}>
+                {isExporting ? "Exporting..." : "Download Excel (.xls)"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={confirmImportOpen} onOpenChange={(open) => {
+          setConfirmImportOpen(open);
+          if (!open) setPendingImportFile(null);
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Import maids file?</DialogTitle>
+              <DialogDescription>
+                Supported: <span className="font-semibold">.csv</span>, <span className="font-semibold">.xls</span>, <span className="font-semibold">.doc</span> exported from this system.
+                <br />
+                For CSV: required columns <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Existing maids are updated by <span className="font-semibold">referenceCode</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-md border bg-muted/30 p-3 text-sm">
+              <span className="font-semibold">Selected file:</span> {pendingImportFile?.name ?? "None"}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>
+                Cancel
+              </Button>
+              <Button onClick={confirmImportFile} disabled={isImporting || !pendingImportFile}>
+                {isImporting ? "Importing..." : "Import"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {isLoading ? (
           <div className="py-10 text-center text-black">Loading maids...</div>

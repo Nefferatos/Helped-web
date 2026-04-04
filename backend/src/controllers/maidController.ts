@@ -279,6 +279,114 @@ export const exportMaidsCsv = async (req: Request, res: Response) => {
   }
 }
 
+export const exportMaidsXls = async (req: Request, res: Response) => {
+  try {
+    const maids = await getMaidsStore()
+    const header = csvColumns.join(',')
+    const rows = maids.map((maid) =>
+      [
+        maid.referenceCode,
+        maid.fullName,
+        maid.type,
+        maid.nationality,
+        maid.dateOfBirth,
+        maid.placeOfBirth,
+        maid.height,
+        maid.weight,
+        maid.religion,
+        maid.maritalStatus,
+        maid.numberOfChildren,
+        maid.numberOfSiblings,
+        maid.homeAddress,
+        maid.airportRepatriation,
+        maid.educationLevel,
+        maid.isPublic,
+        maid.hasPhoto,
+      ]
+        .map(csvEscape)
+        .join(',')
+    )
+
+    const csv = [header, ...rows].join('\n')
+    const csvBase64 = Buffer.from(csv, 'utf8').toString('base64')
+
+    const fileDate = new Date().toISOString().slice(0, 10)
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Maids Export</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111827; margin: 18px; }
+            h1 { font-size: 18px; margin: 0 0 10px; }
+            table { width: 100%; border-collapse: collapse; }
+            thead th { background: #f3f4f6; font-weight: 700; }
+            th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; }
+            tbody tr:nth-child(even) { background: #fafafa; }
+            .meta { color: #6b7280; font-size: 12px; margin-bottom: 12px; }
+          </style>
+        </head>
+        <body>
+          <!--MAIDS_CSV_BASE64:${csvBase64}-->
+          <h1>Maids Export</h1>
+          <div class="meta">Generated: ${fileDate}</div>
+          <table>
+            <thead>
+              <tr>
+                ${csvColumns.map((col) => `<th>${col}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${maids
+                .map((maid) => {
+                  const values = [
+                    maid.referenceCode,
+                    maid.fullName,
+                    maid.type,
+                    maid.nationality,
+                    maid.dateOfBirth,
+                    maid.placeOfBirth,
+                    String(maid.height),
+                    String(maid.weight),
+                    maid.religion,
+                    maid.maritalStatus,
+                    String(maid.numberOfChildren),
+                    String(maid.numberOfSiblings),
+                    maid.homeAddress,
+                    maid.airportRepatriation,
+                    maid.educationLevel,
+                    String(Boolean(maid.isPublic)),
+                    String(Boolean(maid.hasPhoto)),
+                  ]
+                  const escape = (value: unknown) =>
+                    String(value ?? '')
+                      .replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&#39;')
+                  return `<tr>${values.map((value) => `<td>${escape(value)}</td>`).join('')}</tr>`
+                })
+                .join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `.trim()
+
+    res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="maids-${fileDate}.xls"`
+    )
+    res.status(200).send(html)
+  } catch (error) {
+    console.error('Error exporting maids Excel:', error)
+    res.status(500).json({ error: 'Failed to export maids Excel' })
+  }
+}
+
 export const importMaidsCsv = async (req: Request, res: Response) => {
   try {
     const { csv } = req.body as { csv?: string }

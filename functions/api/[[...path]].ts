@@ -920,6 +920,15 @@ const csvEscape = (value: unknown) => {
   return stringValue
 }
 
+const toBase64Utf8 = (value: string) => {
+  const bytes = new TextEncoder().encode(value)
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  return btoa(binary)
+}
+
 const parseCsvRow = (line: string) => {
   const values: string[] = []
   let current = ''
@@ -1414,6 +1423,103 @@ app.get('/api/maids/export.csv', async (c) => {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': `attachment; filename="maids-${new Date().toISOString().slice(0, 10)}.csv"`,
+    },
+  })
+})
+
+app.get('/api/maids/export.xls', async (c) => {
+  const data = await loadData(c.env)
+  const rows = data.maids.map((maid) =>
+    [
+      maid.referenceCode,
+      maid.fullName,
+      maid.type,
+      maid.nationality,
+      maid.dateOfBirth,
+      maid.placeOfBirth,
+      String(maid.height),
+      String(maid.weight),
+      maid.religion,
+      maid.maritalStatus,
+      String(maid.numberOfChildren),
+      String(maid.numberOfSiblings),
+      maid.homeAddress,
+      maid.airportRepatriation,
+      maid.educationLevel,
+      String(Boolean(maid.isPublic)),
+      String(Boolean(maid.hasPhoto)),
+    ].map((value) =>
+      String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+    )
+  )
+
+  const csvHeader = csvColumns.join(',')
+  const csvRows = data.maids.map((maid) =>
+    [
+      maid.referenceCode,
+      maid.fullName,
+      maid.type,
+      maid.nationality,
+      maid.dateOfBirth,
+      maid.placeOfBirth,
+      maid.height,
+      maid.weight,
+      maid.religion,
+      maid.maritalStatus,
+      maid.numberOfChildren,
+      maid.numberOfSiblings,
+      maid.homeAddress,
+      maid.airportRepatriation,
+      maid.educationLevel,
+      maid.isPublic,
+      maid.hasPhoto,
+    ]
+      .map(csvEscape)
+      .join(',')
+  )
+  const csv = [csvHeader, ...csvRows].join('\n')
+  const csvBase64 = toBase64Utf8(csv)
+  const fileDate = new Date().toISOString().slice(0, 10)
+
+  const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Maids Export</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #111827; margin: 18px; }
+      h1 { font-size: 18px; margin: 0 0 10px; }
+      table { width: 100%; border-collapse: collapse; }
+      thead th { background: #f3f4f6; font-weight: 700; }
+      th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; }
+      tbody tr:nth-child(even) { background: #fafafa; }
+      .meta { color: #6b7280; font-size: 12px; margin-bottom: 12px; }
+    </style>
+  </head>
+  <body>
+    <!--MAIDS_CSV_BASE64:${csvBase64}-->
+    <h1>Maids Export</h1>
+    <div class="meta">Generated: ${fileDate}</div>
+    <table>
+      <thead>
+        <tr>${csvColumns.map((col) => `<th>${col}</th>`).join('')}</tr>
+      </thead>
+      <tbody>
+        ${rows.map((cells) => `<tr>${cells.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>
+  </body>
+</html>`
+
+  return new Response(html, {
+    headers: {
+      'content-type': 'application/vnd.ms-excel; charset=utf-8',
+      'content-disposition': `attachment; filename="maids-${fileDate}.xls"`,
     },
   })
 })

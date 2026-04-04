@@ -4,6 +4,7 @@ import {
   createMaid,
   deleteMaid,
   exportMaidsCsv,
+  exportMaidsXls,
   getMaidByReferenceCode,
   getMaidList,
   importMaidsCsv,
@@ -17,6 +18,7 @@ const router: Router = express.Router()
 
 router.get('/', getMaidList)
 router.get('/export.csv', exportMaidsCsv)
+router.get('/export.xls', exportMaidsXls)
 router.post('/import.csv', importMaidsCsv)
 router.get('/:referenceCode', getMaidByReferenceCode)
 router.post('/', createMaid)

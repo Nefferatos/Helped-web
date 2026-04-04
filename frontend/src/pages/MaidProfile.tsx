@@ -80,6 +80,8 @@ const MaidProfilePage = () => {
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [isMediaSaving, setIsMediaSaving] = useState(false);
   const [videoLinkDraft, setVideoLinkDraft] = useState("");
+  const [confirmExportOpen, setConfirmExportOpen] = useState(false);
+  const [pendingExportType, setPendingExportType] = useState<"pdf" | "word" | "excel" | null>(null);
 
   const handleBack = () => {
     if (fromView) {
@@ -126,9 +128,6 @@ const MaidProfilePage = () => {
   };
 
   const handleExportWord = () => {
-    if (!window.confirm(`Export Word bio-data for ${maid.fullName} (${maid.referenceCode})?`)) {
-      return;
-    }
     try {
       exportMaidProfileToWord(maid);
       toast.success("Word bio-data downloaded");
@@ -138,9 +137,6 @@ const MaidProfilePage = () => {
   };
 
   const handleExportExcel = () => {
-    if (!window.confirm(`Export Excel bio-data for ${maid.fullName} (${maid.referenceCode})?`)) {
-      return;
-    }
     try {
       exportMaidProfileToExcel(maid);
       toast.success("Excel bio-data downloaded");
@@ -150,15 +146,27 @@ const MaidProfilePage = () => {
   };
 
   const handleExportPdf = () => {
-    if (!window.confirm(`Export PDF bio-data for ${maid.fullName} (${maid.referenceCode})?\n\nThis will open the print dialog.`)) {
-      return;
-    }
     try {
       exportMaidProfileToPdf(maid);
       toast.success("Print dialog opened for PDF export");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to export PDF bio-data");
     }
+  };
+
+  const requestExport = (type: "pdf" | "word" | "excel") => {
+    setPendingExportType(type);
+    setConfirmExportOpen(true);
+  };
+
+  const confirmExport = () => {
+    const type = pendingExportType;
+    setConfirmExportOpen(false);
+    setPendingExportType(null);
+    if (!type) return;
+    if (type === "pdf") handleExportPdf();
+    if (type === "word") handleExportWord();
+    if (type === "excel") handleExportExcel();
   };
 
   if (!maid) {
@@ -407,16 +415,45 @@ const MaidProfilePage = () => {
               <button className="flex items-center gap-2 text-primary hover:underline" onClick={() => setIsRejectDialogOpen(true)}>
                 <Send className="h-4 w-4" /> Reject
               </button>
-              <button className="flex items-center gap-2 text-primary hover:underline" onClick={handleExportPdf}>
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={() => requestExport("pdf")}>
                 <FileDown className="h-4 w-4" /> Export PDF
               </button>
-              <button className="flex items-center gap-2 text-primary hover:underline" onClick={handleExportWord}>
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={() => requestExport("word")}>
                 <FileText className="h-4 w-4" /> Export Word
               </button>
-              <button className="flex items-center gap-2 text-primary hover:underline" onClick={handleExportExcel}>
+              <button className="flex items-center gap-2 text-primary hover:underline" onClick={() => requestExport("excel")}>
                 <Sheet className="h-4 w-4" /> Export Excel
               </button>
             </div>
+
+            <Dialog open={confirmExportOpen} onOpenChange={(open) => {
+              setConfirmExportOpen(open);
+              if (!open) setPendingExportType(null);
+            }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>
+                    {pendingExportType === "pdf"
+                      ? "Export PDF bio-data?"
+                      : pendingExportType === "word"
+                      ? "Export Word bio-data?"
+                      : "Export Excel bio-data?"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Export for <span className="font-semibold">{maid.fullName}</span> ({maid.referenceCode}).{" "}
+                    {pendingExportType === "pdf" ? "This will open the print dialog." : "A file will be downloaded to your device."}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setConfirmExportOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={confirmExport}>
+                    {pendingExportType === "pdf" ? "Export PDF" : pendingExportType === "word" ? "Export Word" : "Export Excel"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 

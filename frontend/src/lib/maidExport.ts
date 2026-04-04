@@ -91,6 +91,25 @@ const renderMatrixTable = (
   </table>
 `;
 
+const encodeBase64Utf8 = (value: string) => {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+};
+
+const buildImportPayload = (maid: MaidProfile) => {
+  const { id, createdAt, updatedAt, photoDataUrl, photoDataUrls, videoDataUrl, ...rest } = maid;
+  return {
+    ...rest,
+    photoDataUrl: "",
+    photoDataUrls: [],
+    videoDataUrl: "",
+  } satisfies MaidProfile;
+};
+
 const buildMaidProfileHtml = (maid: MaidProfile) => {
   const agencyContact = maid.agencyContact as Record<string, unknown>;
   const introduction = maid.introduction as Record<string, unknown>;
@@ -159,6 +178,8 @@ const buildMaidProfileHtml = (maid: MaidProfile) => {
     ["Private Info", String(skillsPreferences.privateInfo || "N/A")],
   ];
 
+  const importPayloadBase64 = encodeBase64Utf8(JSON.stringify(buildImportPayload(maid)));
+
   return `
     <!DOCTYPE html>
     <html>
@@ -166,7 +187,7 @@ const buildMaidProfileHtml = (maid: MaidProfile) => {
         <meta charset="utf-8" />
         <title>${escapeHtml(maid.fullName)} Bio-data</title>
         <style>
-          body { font-family: Arial, sans-serif; color: #1f2937; margin: 24px; line-height: 1.45; }
+          body { font-family: Arial, sans-serif; color: #111827; margin: 24px; line-height: 1.45; }
           h1 { font-size: 28px; margin-bottom: 4px; }
           h2 { font-size: 18px; margin: 24px 0 10px; border-bottom: 1px solid #d1d5db; padding-bottom: 6px; }
           p.meta { color: #6b7280; margin-top: 0; }
@@ -176,12 +197,14 @@ const buildMaidProfileHtml = (maid: MaidProfile) => {
           .gallery img { width: 100%; height: 110px; object-fit: cover; border: 1px solid #d1d5db; border-radius: 6px; }
           table { width: 100%; border-collapse: collapse; margin-top: 8px; }
           th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; vertical-align: top; }
-          th { width: 240px; background: #f3f4f6; }
+          th { width: 240px; background: #f3f4f6; font-weight: 700; }
+          tbody tr:nth-child(even) { background: #fafafa; }
           .section { margin-top: 18px; }
           .text-block { border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
         </style>
       </head>
       <body>
+        <!--MAID_PROFILE_JSON_BASE64:${importPayloadBase64}-->
         <h1>${escapeHtml(maid.fullName)}</h1>
         <p class="meta">Reference Code: ${escapeHtml(maid.referenceCode)} | Last updated: ${escapeHtml(formatDate(maid.updatedAt))}</p>
 
