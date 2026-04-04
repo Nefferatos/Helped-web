@@ -160,10 +160,10 @@ console.log(years);
 
       <div className="section-header">Language Skills:</div>
       <div className="space-y-3 pt-2">
-        {["English", "Mandarin/Chinese-Dialect", "Bahasa Indonesia/Malaysia", "Hindi", "Tamil", "Malayalam", "Telegu", "Karnataka"].map((lang) => (
+        {["English", "Mandarin/Chinese-Dialect", "Bahasa Indonesia/Malaysia", "Hindi", "Tamil"].map((lang) => (
           <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
-            <RadioGroup name={`lang_${lang}`} options={["Poor", "Little", "Fair", "Good"]} />
+            <RadioGroup name={`lang_${lang}`} options={["Zero","Poor", "Little", "Fair", "Good"]} />
           </div>
         ))}
       </div>
