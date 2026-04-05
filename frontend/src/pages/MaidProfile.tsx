@@ -5,6 +5,7 @@ import { MaidProfile, formatDate } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getClientToken, getStoredClient } from "@/lib/clientAuth";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,23 @@ import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 type LocationState = {
   fromView?: "public" | "hidden";
 };
+
+const availabilityRemarkItems = [
+  { label: "Able to handle pork", keys: ["Able to handle pork?"] },
+  { label: "Able to eat pork", keys: ["Able to eat pork?"] },
+  { label: "Able to care for pets", keys: ["Able to care for dog/cat?"] },
+  { label: "Able to do sewing", keys: ["Able to do simple sewing?"] },
+  { label: "Able to do gardening", keys: ["Able to do gardening work?"] },
+  { label: "Willing to wash car", keys: ["Willing to wash car?"] },
+  {
+    label: "Can work on off-days",
+    keys: [
+      "Can work on off-days with compensation?",
+      "Willing to work on off-days with compensation?",
+      "Willing to work on off-days with  compensation?",
+    ],
+  },
+] as const;
 
 const getYouTubeEmbedUrl = (value?: string) => {
   const raw = String(value || "").trim();
@@ -196,6 +214,8 @@ const MaidProfilePage = () => {
   const fullBodyPhoto = photos[1] ?? "";
   const extraPhotos = photos.slice(2);
   const youtubeEmbedUrl = getYouTubeEmbedUrl(maid.videoDataUrl);
+  const storedClient = getStoredClient() as (ReturnType<typeof getStoredClient> & { emailVerified?: boolean }) | null;
+  const canViewPrivateIntro = Boolean(getClientToken() && storedClient?.emailVerified === true);
 
   const savePhotos = async (nextPhotos: string[]) => {
     const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
@@ -276,6 +296,15 @@ const MaidProfilePage = () => {
     ["Ref. Code", maid.referenceCode],
     ["Type", maid.type],
     ["Nationality", maid.nationality],
+    [
+      "Category",
+      String(
+        (agencyContact["indianMaidCategory"] ?? introduction["indianMaidCategory"] ?? skillsPreferences["indianMaidCategory"] ?? "N/A") as
+          | string
+          | number
+          | boolean,
+      ),
+    ],
     ["Date of Birth", formatDate(maid.dateOfBirth)],
     ["Place of Birth", maid.placeOfBirth],
     ["Height/Weight", `${maid.height}cm/${maid.weight}Kg`],
@@ -476,10 +505,13 @@ const MaidProfilePage = () => {
         <div className="space-y-1">
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Other Information</h3>
           <div className="grid max-w-2xl grid-cols-1 gap-y-1 text-sm md:grid-cols-[1fr_40px]">
-            {Object.entries(otherInformation).map(([question, value]) => (
-              <div key={question} className="contents">
-                <p>{question}</p>
-                <p className="text-center">{value ? <Check className="inline h-4 w-4 text-primary" /> : "-"}</p>
+            {/* Render the full Availability/Remarks checklist (YES/NO) */}
+            {availabilityRemarkItems.map((item) => (
+              <div key={item.label} className="contents">
+                <p>{item.label}</p>
+                <p className="text-center">
+                  {item.keys.some((key) => Boolean(otherInformation[key])) ? "YES" : "NO"}
+                </p>
               </div>
             ))}
           </div>
@@ -607,10 +639,13 @@ const MaidProfilePage = () => {
           <p className="whitespace-pre-wrap">{String(introduction.publicIntro || "Maid Introduction in Public is empty, please add to have more employers view this bio-data.")}</p>
         </div>
 
-        <div className="space-y-1 text-sm">
-          <h3 className="font-semibold text-muted-foreground">Introduction (Employer login is required to view this Introduction)</h3>
-          <p className="whitespace-pre-wrap">{String(introduction.intro || "(Employer login is required to view this Introduction)")}</p>
-        </div>
+        {/* Only show private introduction if client is authenticated AND emailVerified === true */}
+        {canViewPrivateIntro && (
+          <div className="space-y-1 text-sm">
+            <h3 className="font-semibold text-muted-foreground">Introduction (Employer login is required to view this Introduction)</h3>
+            <p className="whitespace-pre-wrap">{String(introduction.intro || "")}</p>
+          </div>
+        )}
 
         <div className="space-y-2 text-sm">
           <h3 className="font-semibold text-muted-foreground">Private Information</h3>

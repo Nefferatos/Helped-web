@@ -110,10 +110,15 @@ const AddMaid = () => {
   };
 
   // NEW: clicking Save opens confirmation modal (does not save immediately)
-  const handleSubmit = () => {
-    if (isSaving) return;
-    setIsConfirmOpen(true);
-  };
+const handleSubmit = () => {
+  if (isSaving) return;
+
+  if (activeTab === tabs.length - 1) {
+    setIsConfirmOpen(true); // only last tab
+  } else {
+    void performSave(); // skip dialog for other tabs
+  }
+};
 
   // NEW: actual save logic (POST/PUT) runs only after user confirms
   const performSave = async () => {
@@ -162,7 +167,7 @@ const AddMaid = () => {
       // Last step: stay put and finish message + label handled by props
       if (activeTab >= tabs.length - 1) {
         toast.success("Maid profile completed successfully"); // UPDATED message
-        navigate("/maidprofile"); // NEW: redirect after final tab
+        navigate("/agencyadmin/edit-maids");// NEW: redirect after final tab
         return;
       }
 
