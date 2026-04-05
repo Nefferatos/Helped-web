@@ -4,6 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { saveClientAuth } from "@/lib/clientAuth";
+import { supabase, requireSupabase } from "@/lib/supabaseClient";
+import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import "./ClientTheme.css";
 
 interface AuthResponse {
@@ -45,49 +47,80 @@ const ClientEmployerLogin = () => {
 
     try {
       setIsSubmitting(true);
-      const endpoint = isLogin ? "/api/client-auth/login" : "/api/client-auth/register";
-      const payload = isLogin
-        ? { email, password }
-        : { name, company, phone, email, password };
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await response.json().catch(() => ({}))) as AuthResponse;
+      // Supabase setup:
+      // Authentication -> Providers -> Email -> ENABLE
+      // Confirm Email must be ON
+      // URL Configuration must include production domain
+      //
+      // Supabase automatically sends verification email
+      // No SMTP or manual confirmation code needed
+      const sb = requireSupabase();
+      const emailRedirectTo = `${window.location.origin}/employer-login`;
 
-      if (data.requiresConfirmation) {
-        const targetEmail = data.email || email;
-        setConfirmationEmail(targetEmail);
-        setStep("confirm");
-        setConfirmationCode("");
-        toast({
-          title: "Confirm your email",
-          description:
-            data.delivery === "not_configured"
-              ? "Email delivery is not configured on the server. Ask your admin to configure email sending, or enable dev code exposure."
-              : `We sent a 6-digit code to ${targetEmail}.`,
+      if (isLogin) {
+        const { data, error } = await sb.auth.signInWithPassword({
+          email,
+          password,
         });
-        if (data.devConfirmationCode) {
+        if (error) throw error;
+
+        // prevent login until email is verified
+        if (data?.user && !data.user.email_confirmed_at) {
           toast({
-            title: "Dev confirmation code",
-            description: data.devConfirmationCode,
+            title: "Email not verified",
+            description: "Please verify your email before logging in.",
+            variant: "destructive",
           });
+          await sb.auth.signOut();
+          return;
         }
+
+        const accessToken = data.session?.access_token || (await sb.auth.getSession()).data.session?.access_token;
+        if (!accessToken) {
+          throw new Error("No session returned from Supabase");
+        }
+
+        await finalizeClientLoginFromSupabase(accessToken);
+        toast({
+          title: "Login Successful",
+          description: "You can now view your assigned maids.",
+        });
+        navigate("/client/dashboard");
         return;
       }
 
-      if (!response.ok || !data.token || !data.client) {
-        throw new Error(data.error || "Authentication failed");
-      }
-
-      saveClientAuth(data.token, data.client);
-      toast({
-        title: isLogin ? "Login Successful" : "Account Created",
-        description: isLogin ? "You can now view your assigned maids." : "Your client account is ready.",
+      const { error } = await sb.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo,
+        },
       });
-      navigate("/client/dashboard");
+      if (error) throw error;
+
+      toast({
+        title: "Check your Gmail for verification",
+        description: "We sent a verification email. Please verify before logging in.",
+      });
+      setIsLogin(true);
+      return;
+
+      // Disabled: replaced with Supabase email verification
+      // const endpoint = isLogin ? "/api/client-auth/login" : "/api/client-auth/register";
+      // const payload = isLogin
+      //   ? { email, password }
+      //   : { name, company, phone, email, password };
+      // const response = await fetch(endpoint, {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify(payload),
+      // });
+      // const data = (await response.json().catch(() => ({}))) as AuthResponse;
+      // if (data.requiresConfirmation) { ... }
+      // if (!response.ok || !data.token || !data.client) { ... }
+      // saveClientAuth(data.token, data.client);
+      // navigate("/client/dashboard");
     } catch (error) {
       toast({
         title: "Authentication Failed",
@@ -101,32 +134,29 @@ const ClientEmployerLogin = () => {
 
   const handleConfirm = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!confirmationEmail.trim() || !confirmationCode.trim()) {
-      toast({
-        title: "Missing fields",
-        description: "Enter the email and the 6-digit code.",
-        variant: "destructive",
-      });
-      return;
-    }
+
+    // Disabled: replaced with Supabase email verification
+    toast({
+      title: "Email verification",
+      description: "Please verify via the email link from Supabase, then log in.",
+    });
+    setStep("auth");
+    setIsLogin(true);
+    return;
 
     try {
       setIsConfirming(true);
-      const response = await fetch("/api/client-auth/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: confirmationEmail, code: confirmationCode }),
-      });
-      const data = (await response.json().catch(() => ({}))) as AuthResponse;
-      if (!response.ok || !data.token || !data.client) {
-        throw new Error(data.error || "Confirmation failed");
-      }
-      saveClientAuth(data.token, data.client);
-      toast({
-        title: "Email confirmed",
-        description: "Your client account is now active.",
-      });
-      navigate("/client/dashboard");
+      // const response = await fetch("/api/client-auth/confirm", {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({ email: confirmationEmail, code: confirmationCode }),
+      // });
+      // const data = (await response.json().catch(() => ({}))) as AuthResponse;
+      // if (!response.ok || !data.token || !data.client) {
+      //   throw new Error(data.error || "Confirmation failed");
+      // }
+      // saveClientAuth(data.token, data.client);
+      // navigate("/client/dashboard");
     } catch (error) {
       toast({
         title: "Confirmation failed",
@@ -141,22 +171,23 @@ const ClientEmployerLogin = () => {
   const handleResend = async () => {
     if (!confirmationEmail.trim()) return;
     try {
-      const response = await fetch("/api/client-auth/resend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: confirmationEmail }),
+      // Disabled: replaced with Supabase email verification
+      const { error } = await requireSupabase().auth.resend({
+        type: "signup",
+        email: confirmationEmail.trim(),
       });
-      const data = (await response.json().catch(() => ({}))) as AuthResponse;
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to resend code");
-      }
+      if (error) throw error;
       toast({
-        title: "Code resent",
-        description: `We sent a new code to ${confirmationEmail}.`,
+        title: "Verification email resent",
+        description: `We resent the verification email to ${confirmationEmail.trim()}.`,
       });
-      if (data.devConfirmationCode) {
-        toast({ title: "Dev confirmation code", description: data.devConfirmationCode });
-      }
+
+      // const response = await fetch("/api/client-auth/resend", {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({ email: confirmationEmail }),
+      // });
+      // const data = (await response.json().catch(() => ({}))) as AuthResponse;
     } catch (error) {
       toast({
         title: "Resend failed",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send } from "lucide-react";
 import { MaidProfile, formatDate } from "@/lib/maids";
@@ -37,6 +37,14 @@ const availabilityRemarkItems = [
       "Willing to work on off-days with  compensation?",
     ],
   },
+] as const;
+
+const fixedLanguageKeyMap = [
+  { label: "ENGLISH", keys: ["English"] },
+  { label: "MANDARIN/CHINESE dialect", keys: ["Mandarin/Chinese-Dialect", "Mandarin / Chinese Dialect", "Mandarin/Chinese Dialect", "Mandarin"] },
+  { label: "Hindi", keys: ["Hindi"] },
+  { label: "Tamil", keys: ["Tamil"] },
+  { label: "Bahasa Indonesia/Malaysia", keys: ["Bahasa Indonesia/Malaysia", "Bahasa Indonesia / Malaysia", "Bahasa"] },
 ] as const;
 
 const getYouTubeEmbedUrl = (value?: string) => {
@@ -100,6 +108,18 @@ const MaidProfilePage = () => {
   const [videoLinkDraft, setVideoLinkDraft] = useState("");
   const [confirmExportOpen, setConfirmExportOpen] = useState(false);
   const [pendingExportType, setPendingExportType] = useState<"pdf" | "word" | "excel" | null>(null);
+  const [showOtherLanguages, setShowOtherLanguages] = useState(false);
+
+  const otherLanguages = useMemo(() => {
+    const allowedKeys = new Set<string>(fixedLanguageKeyMap.flatMap((item) => item.keys).map(String));
+    return Object.entries(maid?.languageSkills || {})
+      .map(([language, level]) => [language, String(level || "")] as const)
+      .filter(([language, level]) => !allowedKeys.has(language) && level.trim());
+  }, [maid?.languageSkills]);
+
+  useEffect(() => {
+    setShowOtherLanguages(false);
+  }, [maid?.referenceCode]);
 
   const handleBack = () => {
     if (fromView) {
@@ -216,14 +236,8 @@ const MaidProfilePage = () => {
     .map((area) => rawWorkAreas.find(([key]) => key === area) ?? null)
     .filter(Boolean) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string; rating?: number | null; note?: string }]>;
   const employment = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
-  const languageKeyMap = [
-    { label: "English", keys: ["English"] },
-    { label: "Hindi", keys: ["Hindi"] },
-    { label: "Tamil", keys: ["Tamil"] },
-    { label: "Mandarin / Chinese Dialect", keys: ["Mandarin / Chinese Dialect", "Mandarin/Chinese-Dialect"] },
-    { label: "Bahasa Indonesia / Malaysia", keys: ["Bahasa Indonesia / Malaysia", "Bahasa Indonesia/Malaysia"] },
-  ] as const;
-  const languages = languageKeyMap
+
+  const fixedLanguages = fixedLanguageKeyMap
     .map((item) => {
       const level = item.keys.map((key) => (maid.languageSkills || {})[key]).find((val) => String(val || "").trim());
       return level ? [item.label, String(level)] as const : null;
@@ -527,9 +541,24 @@ const MaidProfilePage = () => {
 
           <p className="py-1 font-semibold text-muted-foreground md:text-right">Language Skill</p>
           <div className="py-1 space-y-1">
-            {languages.map(([lang, level]) => (
+            {fixedLanguages.map(([lang, level]) => (
               <p key={lang}>{lang} ({String(level)})</p>
             ))}
+            {otherLanguages.length > 0 && (
+              <button
+                type="button"
+                className="text-primary hover:underline text-sm"
+                onClick={() => setShowOtherLanguages((prev) => !prev)}
+              >
+                {showOtherLanguages ? "Hide other languages" : "Show other languages"}
+              </button>
+            )}
+            {showOtherLanguages &&
+              otherLanguages.map(([lang, level]) => (
+                <p key={lang}>
+                  {lang} ({String(level)})
+                </p>
+              ))}
           </div>
         </div>
 

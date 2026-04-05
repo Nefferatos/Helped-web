@@ -15,13 +15,10 @@ const tabs = ["PROFILE", "SKILLS", "EMPLOYMENT HISTORY", "AVAILABILITY/REMARK", 
  
 const defaultLanguages = [
   "English",
-  "Mandarin / Chinese Dialect",
-  "Bahasa Indonesia / Malaysia",
+  "Mandarin/Chinese-Dialect",
+  "Bahasa Indonesia/Malaysia",
   "Hindi",
   "Tamil",
-  "Malayalam",
-  "Telegu",
-  "Karnataka",
 ] as const;
  
 const otherInformationQuestionGroups = [

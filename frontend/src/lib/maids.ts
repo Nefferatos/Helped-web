@@ -50,8 +50,8 @@ export const defaultMaidProfile: MaidProfile = {
   educationLevel: "",
   languageSkills: {
     English: "",
-    Mandarin: "",
-    Bahasa: "",
+    "Mandarin/Chinese-Dialect": "",
+    "Bahasa Indonesia/Malaysia": "",
     Hindi: "",
     Tamil: "",
   },

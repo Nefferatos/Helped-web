@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { getAuthenticatedClient, getRequestToken } from '../auth'
+import { sendClientConfirmationCodeEmail } from '../email'
 import {
   authenticateClientStore,
   confirmClientEmailStore,
@@ -30,8 +31,15 @@ const toSafeClient = (client: {
   createdAt: client.createdAt,
 })
 
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+
 export const registerClient = async (req: Request, res: Response) => {
   try {
+    // Disabled: replaced with Supabase email verification
+    // (Signup & verification handled by Supabase Auth.)
+    return res.status(410).json({ error: 'Disabled: replaced with Supabase email verification' })
+
+    /*
     const { name, company, phone, email, password } = req.body as {
       name?: string
       company?: string
@@ -46,6 +54,10 @@ export const registerClient = async (req: Request, res: Response) => {
         .json({ error: 'name, email, and password are required' })
     }
 
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' })
+    }
+
     const client = await registerClientStore({
       name: name.trim(),
       company: company?.trim() || '',
@@ -58,12 +70,14 @@ export const registerClient = async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Failed to generate confirmation code' })
     }
 
+    const sendResult = await sendClientConfirmationCodeEmail(client.email, confirmation.code)
     res.status(200).json({
       requiresConfirmation: true,
       email: client.email,
-      delivery: 'not_configured',
-      devConfirmationCode: confirmation.code,
+      delivery: sendResult.ok ? 'sent' : 'not_configured',
+      devConfirmationCode: sendResult.ok ? undefined : confirmation.code,
     })
+    */
   } catch (error) {
     if (error instanceof Error && error.message === 'CLIENT_EMAIL_EXISTS') {
       return res.status(409).json({ error: 'Client email already exists' })
@@ -76,6 +90,11 @@ export const registerClient = async (req: Request, res: Response) => {
 
 export const loginClient = async (req: Request, res: Response) => {
   try {
+    // Disabled: replaced with Supabase email verification
+    // (Login handled by Supabase Auth.)
+    return res.status(410).json({ error: 'Disabled: replaced with Supabase email verification' })
+
+    /*
     const { email, password } = req.body as {
       email?: string
       password?: string
@@ -85,6 +104,10 @@ export const loginClient = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'email and password are required' })
     }
 
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' })
+    }
+
     const client = await authenticateClientStore(email.trim(), password.trim())
     if (!client) {
       return res.status(401).json({ error: 'Invalid email or password' })
@@ -92,11 +115,15 @@ export const loginClient = async (req: Request, res: Response) => {
 
     if (client.emailVerified === false) {
       const confirmation = await setClientEmailConfirmationCodeStore(client.email)
+      const code = confirmation?.code
+      const sendResult = code
+        ? await sendClientConfirmationCodeEmail(client.email, code)
+        : { ok: false as const, error: 'not_configured' as const }
       return res.status(200).json({
         requiresConfirmation: true,
         email: client.email,
-        delivery: 'not_configured',
-        devConfirmationCode: confirmation?.code,
+        delivery: sendResult.ok ? 'sent' : 'not_configured',
+        devConfirmationCode: sendResult.ok ? undefined : code,
       })
     }
 
@@ -105,6 +132,7 @@ export const loginClient = async (req: Request, res: Response) => {
       token: session.token,
       client: toSafeClient(client),
     })
+    */
   } catch (error) {
     console.error('Error logging in client:', error)
     res.status(500).json({ error: 'Failed to login client' })
@@ -113,6 +141,10 @@ export const loginClient = async (req: Request, res: Response) => {
 
 export const confirmClientEmail = async (req: Request, res: Response) => {
   try {
+    // Disabled: replaced with Supabase email verification
+    return res.status(410).json({ error: 'Disabled: replaced with Supabase email verification' })
+
+    /*
     const { email, code } = req.body as { email?: string; code?: string }
     if (!email?.trim() || !code?.trim()) {
       return res.status(400).json({ error: 'email and code are required' })
@@ -128,6 +160,7 @@ export const confirmClientEmail = async (req: Request, res: Response) => {
       token: session.token,
       client: toSafeClient(result.client),
     })
+    */
   } catch (error) {
     console.error('Error confirming client email:', error)
     res.status(500).json({ error: 'Failed to confirm email' })
@@ -136,9 +169,17 @@ export const confirmClientEmail = async (req: Request, res: Response) => {
 
 export const resendClientEmailConfirmation = async (req: Request, res: Response) => {
   try {
+    // Disabled: replaced with Supabase email verification
+    return res.status(410).json({ error: 'Disabled: replaced with Supabase email verification' })
+
+    /*
     const { email } = req.body as { email?: string }
     if (!email?.trim()) {
       return res.status(400).json({ error: 'email is required' })
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' })
     }
 
     const confirmation = await setClientEmailConfirmationCodeStore(email.trim())
@@ -146,12 +187,14 @@ export const resendClientEmailConfirmation = async (req: Request, res: Response)
       return res.status(404).json({ error: 'Client not found' })
     }
 
+    const sendResult = await sendClientConfirmationCodeEmail(confirmation.client.email, confirmation.code)
     res.status(200).json({
       requiresConfirmation: true,
       email: confirmation.client.email,
-      delivery: 'not_configured',
-      devConfirmationCode: confirmation.code,
+      delivery: sendResult.ok ? 'sent' : 'not_configured',
+      devConfirmationCode: sendResult.ok ? undefined : confirmation.code,
     })
+    */
   } catch (error) {
     console.error('Error resending confirmation code:', error)
     res.status(500).json({ error: 'Failed to resend confirmation code' })

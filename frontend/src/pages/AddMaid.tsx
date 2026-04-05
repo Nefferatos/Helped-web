@@ -565,6 +565,42 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
       },
     }));
 
+  const [newLanguageName, setNewLanguageName] = useState("");
+
+  const fixedLanguages = [
+    { label: "English", key: "English" },
+    { label: "Mandarin/Chinese Dialect", key: "Mandarin/Chinese-Dialect" },
+    { label: "Hindi", key: "Hindi" },
+    { label: "Tamil", key: "Tamil" },
+    { label: "Bahasa Indonesia/Malaysia", key: "Bahasa Indonesia/Malaysia" },
+  ] as const;
+
+  const extraLanguageKeys = Object.keys(formData.languageSkills || {}).filter(
+    (key) => !fixedLanguages.some((item) => item.key === key),
+  );
+
+  const addLanguage = () => {
+    const name = newLanguageName.trim();
+    if (!name) return;
+    setFormData((prev) => {
+      const next = { ...(prev.languageSkills || {}) };
+      if (next[name] !== undefined) {
+        return prev;
+      }
+      next[name] = "";
+      return { ...prev, languageSkills: next };
+    });
+    setNewLanguageName("");
+  };
+
+  const removeLanguage = (language: string) => {
+    setFormData((prev) => {
+      const next = { ...(prev.languageSkills || {}) };
+      delete next[language];
+      return { ...prev, languageSkills: next };
+    });
+  };
+
   return (
     <div className="content-card animate-fade-in-up space-y-6">
       <h3 className="text-center font-bold text-lg">(A) PROFILE OF FDW</h3>
@@ -921,25 +957,61 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
 
       <div className="section-header">Language Skills:</div>
       <div className="space-y-3 pt-2">
-        {["English", "Mandarin / Chinese Dialect", "Bahasa Indonesia / Malaysia", "Hindi", "Tamil"].map((lang) => (
-          <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
+        {fixedLanguages.map((lang) => (
+          <div key={lang.key} className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <Label className="text-sm w-52 text-right font-medium">{lang.label}:</Label>
             <RadioGroup
-              name={`lang_${lang}`}
+              name={`lang_${lang.key}`}
               options={["Zero", "Poor", "Little", "Fair", "Good"]}
-              value={String((formData.languageSkills || {})[lang] || "")}
+              value={String((formData.languageSkills || {})[lang.key] || "")}
               onValueChange={(next) =>
                 setFormData((prev) => ({
                   ...prev,
                   languageSkills: {
                     ...(prev.languageSkills || {}),
-                    [lang]: next,
+                    [lang.key]: next,
                   },
                 }))
               }
             />
           </div>
         ))}
+
+        {extraLanguageKeys.length > 0 && (
+          <div className="space-y-2 pt-2">
+            {extraLanguageKeys.map((lang) => (
+              <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <RadioGroup
+                    name={`lang_${lang}`}
+                    options={["Zero", "Poor", "Little", "Fair", "Good"]}
+                    value={String((formData.languageSkills || {})[lang] || "")}
+                    onValueChange={(next) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        languageSkills: {
+                          ...(prev.languageSkills || {}),
+                          [lang]: next,
+                        },
+                      }))
+                    }
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={() => removeLanguage(lang)}>
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 pt-2 md:flex-row md:items-center">
+          <Input value={newLanguageName} onChange={(e) => setNewLanguageName(e.target.value)} placeholder="Add other language (optional)" />
+          <Button type="button" variant="outline" onClick={addLanguage} disabled={!newLanguageName.trim()}>
+            Add
+          </Button>
+        </div>
       </div>
 
       <div className="section-header">Other Information:</div>

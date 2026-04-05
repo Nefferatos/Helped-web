@@ -39,10 +39,19 @@ const interviewAvailabilityOptions = [
   "FDW can be interviewed in person",
 ] as const;
 
+const fixedLanguageKeyMap = [
+  { label: "ENGLISH", keys: ["English"] },
+  { label: "MANDARIN/CHINESE dialect", keys: ["Mandarin/Chinese-Dialect", "Mandarin / Chinese Dialect", "Mandarin/Chinese Dialect", "Mandarin"] },
+  { label: "Hindi", keys: ["Hindi"] },
+  { label: "Tamil", keys: ["Tamil"] },
+  { label: "Bahasa Indonesia/Malaysia", keys: ["Bahasa Indonesia/Malaysia", "Bahasa Indonesia / Malaysia", "Bahasa"] },
+] as const;
+
 const MaidProfileFullView = () => {
   const { refCode } = useParams<{ refCode: string }>();
   const navigate = useNavigate();
   const [maid, setMaid] = useState<MaidProfile | null>(null);
+  const [showOtherLanguages, setShowOtherLanguages] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -61,9 +70,19 @@ const MaidProfileFullView = () => {
     void load();
   }, [navigate, refCode]);
 
+  useEffect(() => {
+    setShowOtherLanguages(false);
+  }, [maid?.referenceCode]);
+
   const skillsPreferences = useMemo(() => (maid?.skillsPreferences as Record<string, unknown>) || {}, [maid]);
   const introduction = useMemo(() => (maid?.introduction as Record<string, unknown>) || {}, [maid]);
   const agencyContact = useMemo(() => (maid?.agencyContact as Record<string, unknown>) || {}, [maid]);
+  const otherLanguages = useMemo(() => {
+    const allowedKeys = new Set(fixedLanguageKeyMap.flatMap((item) => item.keys));
+    return Object.entries(maid?.languageSkills || {})
+      .map(([language, level]) => [language, String(level || "")] as const)
+      .filter(([language, level]) => !allowedKeys.has(language) && level.trim());
+  }, [maid?.languageSkills]);
 
   if (!maid) {
     return (
@@ -172,13 +191,36 @@ const MaidProfileFullView = () => {
           <div className="space-y-2">
             <p className="text-sm font-semibold text-muted-foreground">Language Skills</p>
             <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-              {Object.entries(maid.languageSkills || {}).map(([language, level]) => (
-                <div key={language} className="contents">
-                  <p className="py-1 font-semibold text-muted-foreground md:text-right">{language}</p>
-                  <p className="py-1">{String(level)}</p>
-                </div>
-              ))}
+              {fixedLanguageKeyMap.map((item) => {
+                const level = item.keys.map((key) => (maid.languageSkills || {})[key]).find((val) => String(val || "").trim());
+                if (!level) return null;
+                return (
+                  <div key={item.label} className="contents">
+                    <p className="py-1 font-semibold text-muted-foreground md:text-right">{item.label}</p>
+                    <p className="py-1">{String(level)}</p>
+                  </div>
+                );
+              })}
             </div>
+            {otherLanguages.length > 0 && (
+              <button
+                type="button"
+                className="text-primary hover:underline text-sm"
+                onClick={() => setShowOtherLanguages((prev) => !prev)}
+              >
+                {showOtherLanguages ? "Hide other languages" : "Show other languages"}
+              </button>
+            )}
+            {showOtherLanguages && (
+              <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
+                {otherLanguages.map(([language, level]) => (
+                  <div key={language} className="contents">
+                    <p className="py-1 font-semibold text-muted-foreground md:text-right">{language}</p>
+                    <p className="py-1">{level}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">
