@@ -34,6 +34,9 @@ import NotFound from "@/pages/NotFound";
 import EditEmployer from "@/pages/EditEmployer";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
 import { getClientToken } from "@/lib/clientAuth";
+import { clearClientAuth } from "@/lib/clientAuth";
+import { supabase } from "@/lib/supabaseClient";
+import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import { adminPath } from "@/lib/routes";
 import AboutUs from "./ClientPage/AboutUs";
 import ContactUS from "./ClientPage/ContactUs";
@@ -127,6 +130,90 @@ const ClientHomeRedirect = () => {
 };
 
 const App = () => {
+  useEffect(() => {
+    if (!supabase) return;
+
+    // On app load, fetch session (important after email confirmation redirect).
+    void (async () => {
+      // 1) Restore session from URL (email confirmation / implicit flow)
+      // Supabase may return tokens in the URL fragment: #access_token=...&refresh_token=...
+      try {
+        const hash = window.location.hash?.startsWith("#") ? window.location.hash.slice(1) : "";
+        const hashParams = new URLSearchParams(hash);
+        const accessToken = hashParams.get("access_token") || "";
+        const refreshToken = hashParams.get("refresh_token") || "";
+
+        if (accessToken && refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) {
+            console.error("Error getting session from URL:", error);
+          } else if (data?.session) {
+            console.log("Session restored from URL:", data.session);
+          }
+
+          // Clean up URL after extracting session (do not remove hash before extracting).
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch (error) {
+        console.error("Error getting session from URL:", error);
+      }
+
+      // Also support PKCE redirects that return `?code=...`.
+      try {
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error("Error getting session from URL:", error);
+          } else if (data?.session) {
+            console.log("Session restored from URL:", data.session);
+          }
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch (error) {
+        console.error("Error getting session from URL:", error);
+      }
+
+      // 2) Fallback: existing session check
+      const { data: { session } = { session: null } } = await supabase.auth.getSession();
+      if (session?.user) {
+        console.log("Existing session:", session.user);
+        if (session.access_token) {
+          try {
+            await finalizeClientLoginFromSupabase(session.access_token);
+          } catch (error) {
+            console.error("Failed to mirror Supabase session into app auth:", error);
+          }
+        }
+      }
+    })();
+
+    // Keep app auth in sync with Supabase auth state changes.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        console.log("User logged in:", session.user);
+        if (session.access_token) {
+          void finalizeClientLoginFromSupabase(session.access_token).catch((error) => {
+            console.error("Failed to mirror Supabase session into app auth:", error);
+          });
+        }
+        return;
+      }
+
+      if (event === "SIGNED_OUT") {
+        clearClientAuth();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

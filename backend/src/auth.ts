@@ -37,6 +37,7 @@ export const getAuthenticatedClient = async (
   const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/$/, '')
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY?.trim()
   if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Missing Supabase env vars')
     return null
   }
 
@@ -61,7 +62,8 @@ export const getAuthenticatedClient = async (
     }
 
     return await getOrCreateClientBySupabaseUserStore(user)
-  } catch {
+  } catch (err) {
+    console.error('Supabase auth error:', err)
     return null
   }
 }

@@ -56,7 +56,6 @@ const ClientEmployerLogin = () => {
       // Supabase automatically sends verification email
       // No SMTP or manual confirmation code needed
       const sb = requireSupabase();
-      const emailRedirectTo = `${window.location.origin}/employer-login`;
 
       if (isLogin) {
         const { data, error } = await sb.auth.signInWithPassword({
@@ -90,14 +89,22 @@ const ClientEmployerLogin = () => {
         return;
       }
 
-      const { error } = await sb.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo,
-        },
-      });
-      if (error) throw error;
+      try {
+        const { data, error } = await sb.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          console.error("Supabase signup error:", error);
+          throw error;
+        }
+
+        console.log("Signup success:", data);
+      } catch (err) {
+        console.error("Signup failed:", err);
+        throw err;
+      }
 
       toast({
         title: "Check your Gmail for verification",

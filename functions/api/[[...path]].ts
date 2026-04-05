@@ -577,6 +577,34 @@ const jsonError = (message: string, status = 400) =>
     headers: { 'content-type': 'application/json; charset=utf-8' },
   })
 
+const requireSupabaseConfig = (env: Bindings) => {
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+    return jsonError('Missing Supabase config', 500)
+  }
+  return null
+}
+
+const safeApi =
+  (handler: (c: any) => Promise<Response> | Response) => async (c: any) => {
+    const missing = requireSupabaseConfig(c.env)
+    if (missing) return missing
+
+    try {
+      return await handler(c)
+    } catch (error) {
+      console.error('API handler error', c.req.method, c.req.path, error)
+      const message =
+        error instanceof Error ? error.message : 'Internal Server Error'
+      return jsonError(message, 500)
+    }
+  }
+
+app.onError((error, c) => {
+  console.error('Unhandled API error', c.req.method, c.req.path, error)
+  const message = error instanceof Error ? error.message : 'Internal Server Error'
+  return jsonError(message, 500)
+})
+
 const parseAuthorizationToken = (request: Request) => {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) return null
@@ -1181,16 +1209,16 @@ app.get('/api/diagnostics', (c) => {
 })
 app.get('/api', (c) => c.json({ message: 'Welcome to Helped Cloudflare API' }))
 
-app.get('/api/company', async (c) => {
+app.get('/api/company', safeApi(async (c) => {
   const data = await loadData(c.env)
   return c.json({
     companyProfile: data.companyProfile,
     momPersonnel: data.momPersonnel,
     testimonials: data.testimonials,
   })
-})
+}))
 
-app.get('/api/company/summary', async (c) => {
+app.get('/api/company/summary', safeApi(async (c) => {
   const data = await loadData(c.env)
   const publicMaids = data.maids.filter((maid) => maid.isPublic).length
   const hiddenMaids = data.maids.length - publicMaids
@@ -1212,9 +1240,9 @@ app.get('/api/company/summary', async (c) => {
     testimonials: data.testimonials.length,
     galleryImages: data.companyProfile.gallery_image_data_urls?.length ?? 0,
   })
-})
+}))
 
-app.put('/api/company', async (c) => {
+app.put('/api/company', safeApi(async (c) => {
   const body = await parseBody<Partial<CompanyProfileRecord>>(c.req.raw)
   if (!body) {
     return c.json({ error: 'Invalid JSON body' }, 400)
@@ -1263,9 +1291,9 @@ app.put('/api/company', async (c) => {
     message: 'Company profile updated successfully',
     companyProfile: data.companyProfile,
   })
-})
+}))
 
-app.post('/api/company/mom-personnel', async (c) => {
+app.post('/api/company/mom-personnel', safeApi(async (c) => {
   const body = await parseBody<{ name?: string; registration_number?: string }>(c.req.raw)
   if (!body?.name?.trim() || !body.registration_number?.trim()) {
     return c.json({ error: 'Name and registration number are required' }, 400)
@@ -1282,9 +1310,9 @@ app.post('/api/company/mom-personnel', async (c) => {
   data.momPersonnel.push(momPersonnel)
   await saveData(c.env, data)
   return c.json({ message: 'MOM personnel added successfully', momPersonnel }, 201)
-})
+}))
 
-app.put('/api/company/mom-personnel/:id', async (c) => {
+app.put('/api/company/mom-personnel/:id', safeApi(async (c) => {
   const id = Number(c.req.param('id'))
   if (!Number.isInteger(id)) {
     return c.json({ error: 'Valid id is required' }, 400)
@@ -1313,9 +1341,9 @@ app.put('/api/company/mom-personnel/:id', async (c) => {
     message: 'MOM personnel updated successfully',
     momPersonnel: data.momPersonnel[index],
   })
-})
+}))
 
-app.delete('/api/company/mom-personnel/:id', async (c) => {
+app.delete('/api/company/mom-personnel/:id', safeApi(async (c) => {
   const id = Number(c.req.param('id'))
   const data = await loadData(c.env)
   const existing = data.momPersonnel.find((item) => item.id === id)
@@ -1329,9 +1357,9 @@ app.delete('/api/company/mom-personnel/:id', async (c) => {
     message: 'MOM personnel deleted successfully',
     deletedMOMPersonnel: existing,
   })
-})
+}))
 
-app.post('/api/company/testimonials', async (c) => {
+app.post('/api/company/testimonials', safeApi(async (c) => {
   const body = await parseBody<{ message?: string; author?: string }>(c.req.raw)
   if (!body?.message?.trim() || !body.author?.trim()) {
     return c.json({ error: 'Message and author are required' }, 400)
@@ -1348,9 +1376,9 @@ app.post('/api/company/testimonials', async (c) => {
   data.testimonials.unshift(testimonial)
   await saveData(c.env, data)
   return c.json({ message: 'Testimonial added successfully', testimonial }, 201)
-})
+}))
 
-app.delete('/api/company/testimonials/:id', async (c) => {
+app.delete('/api/company/testimonials/:id', safeApi(async (c) => {
   const id = Number(c.req.param('id'))
   const data = await loadData(c.env)
   const existing = data.testimonials.find((item) => item.id === id)
@@ -1364,9 +1392,9 @@ app.delete('/api/company/testimonials/:id', async (c) => {
     message: 'Testimonial deleted successfully',
     deletedTestimonial: existing,
   })
-})
+}))
 
-app.get('/api/maids', async (c) => {
+app.get('/api/maids', safeApi(async (c) => {
   const search = c.req.query('search')?.trim().toLowerCase()
   const visibility = c.req.query('visibility')
   const data = await loadData(c.env)
@@ -1391,9 +1419,9 @@ app.get('/api/maids', async (c) => {
   )
 
   return c.json({ maids })
-})
+}))
 
-app.get('/api/maids/export.csv', async (c) => {
+app.get('/api/maids/export.csv', safeApi(async (c) => {
   const data = await loadData(c.env)
   const rows = data.maids.map((maid) =>
     [
@@ -1425,9 +1453,9 @@ app.get('/api/maids/export.csv', async (c) => {
       'content-disposition': `attachment; filename="maids-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   })
-})
+}))
 
-app.get('/api/maids/export.xls', async (c) => {
+app.get('/api/maids/export.xls', safeApi(async (c) => {
   const data = await loadData(c.env)
   const rows = data.maids.map((maid) =>
     [
@@ -1522,9 +1550,9 @@ app.get('/api/maids/export.xls', async (c) => {
       'content-disposition': `attachment; filename="maids-${fileDate}.xls"`,
     },
   })
-})
+}))
 
-app.post('/api/maids/import.csv', async (c) => {
+app.post('/api/maids/import.csv', safeApi(async (c) => {
   const body = await parseBody<{ csv?: string }>(c.req.raw)
   if (!body?.csv?.trim()) {
     return c.json({ error: 'CSV content is required' }, 400)
@@ -1622,9 +1650,9 @@ app.post('/api/maids/import.csv', async (c) => {
     { message: 'CSV import completed', created, updated, failed: errors.length, errors },
     errors.length > 0 ? 207 : 200
   )
-})
+}))
 
-app.get('/api/maids/:referenceCode', async (c) => {
+app.get('/api/maids/:referenceCode', safeApi(async (c) => {
   const data = await loadData(c.env)
   const maid = data.maids.find(
     (item) => item.referenceCode === normalizeReferenceCode(c.req.param('referenceCode'))
@@ -1633,9 +1661,9 @@ app.get('/api/maids/:referenceCode', async (c) => {
     return c.json({ error: 'Maid not found' }, 404)
   }
   return c.json({ maid })
-})
+}))
 
-app.post('/api/maids', async (c) => {
+app.post('/api/maids', safeApi(async (c) => {
   const body = await parseBody<Record<string, unknown>>(c.req.raw)
   if (!body) {
     return c.json({ error: 'Invalid JSON body' }, 400)
@@ -1664,9 +1692,9 @@ app.post('/api/maids', async (c) => {
   // Reliability: verify record exists after save (guards against rare concurrent blob overwrites).
   const ensured = await ensureMaidPresent(c.env, maid.referenceCode, recordPayload)
   return c.json({ maid: ensured ?? maid }, 201)
-})
+}))
 
-app.put('/api/maids/:referenceCode', async (c) => {
+app.put('/api/maids/:referenceCode', safeApi(async (c) => {
   const body = await parseBody<Record<string, unknown>>(c.req.raw)
   if (!body) {
     return c.json({ error: 'Invalid JSON body' }, 400)
@@ -1713,9 +1741,9 @@ app.put('/api/maids/:referenceCode', async (c) => {
   await saveData(c.env, data)
   const ensured = await ensureMaidPresent(c.env, referenceCode, payload)
   return c.json({ maid: ensured ?? data.maids[index] })
-})
+}))
 
-app.patch('/api/maids/:referenceCode/visibility', async (c) => {
+app.patch('/api/maids/:referenceCode/visibility', safeApi(async (c) => {
   const body = await parseBody<{ isPublic?: boolean }>(c.req.raw)
   if (typeof body?.isPublic !== 'boolean') {
     return c.json({ error: 'isPublic boolean is required' }, 400)
@@ -1736,9 +1764,9 @@ app.patch('/api/maids/:referenceCode/visibility', async (c) => {
   }
   await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
-})
+}))
 
-app.patch('/api/maids/:referenceCode/photo', async (c) => {
+app.patch('/api/maids/:referenceCode/photo', safeApi(async (c) => {
   const body = await parseBody<{ photoDataUrl?: string }>(c.req.raw)
   if (typeof body?.photoDataUrl !== 'string') {
     return c.json({ error: 'photoDataUrl string is required' }, 400)
@@ -1761,9 +1789,9 @@ app.patch('/api/maids/:referenceCode/photo', async (c) => {
   }
   await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
-})
+}))
 
-app.patch('/api/maids/:referenceCode/photos', async (c) => {
+app.patch('/api/maids/:referenceCode/photos', safeApi(async (c) => {
   const body = await parseBody<{ photoDataUrl?: string }>(c.req.raw)
   if (typeof body?.photoDataUrl !== 'string' || !body.photoDataUrl.trim()) {
     return c.json({ error: 'photoDataUrl string is required' }, 400)
@@ -1797,9 +1825,9 @@ app.patch('/api/maids/:referenceCode/photos', async (c) => {
   }
   await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
-})
+}))
 
-app.patch('/api/maids/:referenceCode/video', async (c) => {
+app.patch('/api/maids/:referenceCode/video', safeApi(async (c) => {
   const body = await parseBody<{ videoDataUrl?: string }>(c.req.raw)
   if (typeof body?.videoDataUrl !== 'string') {
     return c.json({ error: 'videoDataUrl string is required' }, 400)
@@ -1820,9 +1848,9 @@ app.patch('/api/maids/:referenceCode/video', async (c) => {
   }
   await saveData(c.env, data)
   return c.json({ maid: data.maids[index] })
-})
+}))
 
-app.delete('/api/maids/:referenceCode', async (c) => {
+app.delete('/api/maids/:referenceCode', safeApi(async (c) => {
   const data = await loadData(c.env)
   const referenceCode = normalizeReferenceCode(c.req.param('referenceCode'))
   const existing = data.maids.find((maid) => maid.referenceCode === referenceCode)
@@ -1833,7 +1861,7 @@ app.delete('/api/maids/:referenceCode', async (c) => {
   data.maids = data.maids.filter((maid) => maid.referenceCode !== referenceCode)
   await saveData(c.env, data)
   return c.json({ message: 'Maid deleted successfully' })
-})
+}))
 
 app.get('/api/enquiries', async (c) => {
   const search = c.req.query('search')?.trim().toLowerCase()
