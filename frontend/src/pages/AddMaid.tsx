@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -214,12 +215,12 @@ const handleSubmit = () => {
       {/* Dynamic primary label for last step */}
       {/* UPDATED: Save button now opens confirm modal first */}
       {activeTab === 0 && <ProfileTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 1 && <SkillsTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 2 && <EmploymentHistoryTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 3 && <AvailabilityRemarkTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 4 && <IntroductionTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 5 && <PublicIntroductionTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 6 && <PrivateInfoTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 1 && <SkillsTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 2 && <EmploymentHistoryTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 3 && <AvailabilityRemarkTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 4 && <IntroductionTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 5 && <PublicIntroductionTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 6 && <PrivateInfoTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
 
       {/* NEW: Confirmation dialog shown before POST/PUT */}
       <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
@@ -334,6 +335,11 @@ type TabSaveProps = {
   primaryLabel?: string;
 };
 
+type FormTabProps = TabSaveProps & {
+  formData: MaidProfile;
+  setFormData: React.Dispatch<React.SetStateAction<MaidProfile>>;
+};
+
 const FormRow = ({ label, children }: { label: string; children: React.ReactNode; fullWidth?: boolean }) => (
   <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
     <Label className="text-xs font-medium text-right whitespace-nowrap">{label}</Label>
@@ -348,23 +354,67 @@ const FormRow2Col = ({ left, right }: { left: React.ReactNode; right?: React.Rea
   </div>
 );
 
-const RadioGroup = ({ name, options }: { name: string; options: string[] }) => (
+const RadioGroup = ({
+  name,
+  options,
+  value,
+  onValueChange,
+}: {
+  name: string;
+  options: string[];
+  value?: string;
+  onValueChange?: (next: string) => void;
+}) => (
   <div className="flex gap-4">
     {options.map((opt) => (
       <label key={opt} className="flex items-center gap-1 text-sm">
-        <input type="radio" name={name} className="accent-primary" />
+        <input
+          type="radio"
+          name={name}
+          className="accent-primary"
+          checked={value === opt}
+          onChange={() => onValueChange?.(opt)}
+        />
         {opt}
       </label>
     ))}
   </div>
 );
 
-const YesNo = ({ name }: { name: string }) => (
+const YesNo = ({
+  name,
+  value,
+  onValueChange,
+}: {
+  name: string;
+  value?: boolean;
+  onValueChange?: (next: boolean) => void;
+}) => (
   <div className="flex gap-3">
-    <label className="flex items-center gap-1 text-sm"><input type="radio" name={name} className="accent-primary" /> Yes</label>
-    <label className="flex items-center gap-1 text-sm"><input type="radio" name={name} className="accent-primary" /> No</label>
+    <label className="flex items-center gap-1 text-sm">
+      <input
+        type="radio"
+        name={name}
+        className="accent-primary"
+        checked={value === true}
+        onChange={() => onValueChange?.(true)}
+      />{" "}
+      Yes
+    </label>
+    <label className="flex items-center gap-1 text-sm">
+      <input
+        type="radio"
+        name={name}
+        className="accent-primary"
+        checked={value === false}
+        onChange={() => onValueChange?.(false)}
+      />{" "}
+      No
+    </label>
   </div>
 );
+
+type SelectOption = string | { value: string; label: string; disabled?: boolean };
 
 const SelectInput = ({
   options,
@@ -373,7 +423,7 @@ const SelectInput = ({
   onChange,
   name,
 }: {
-  options: string[];
+  options: SelectOption[];
   className?: string;
   value?: string;
   onChange?: (event: React.ChangeEvent<HTMLSelectElement>) => void;
@@ -383,10 +433,59 @@ const SelectInput = ({
     name={name}
     value={value}
     onChange={onChange}
-    className={`rounded-md border bg-background px-3 py-2 text-sm ${className || "w-full"}`}
+    className={`h-10 rounded-md border bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 ${className || "w-full"}`}
   >
-    {options.map((o) => <option key={o}>{o}</option>)}
+    {options.map((option) => {
+      if (typeof option === "string") {
+        return (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        );
+      }
+      return (
+        <option key={option.value} value={option.value} disabled={option.disabled}>
+          {option.label}
+        </option>
+      );
+    })}
   </select>
+);
+
+const StarRating = ({
+  value,
+  onChange,
+  name,
+}: {
+  value: number | null;
+  onChange: (next: number | null) => void;
+  name: string;
+}) => (
+  <div className="flex items-center justify-center gap-1">
+    <input type="hidden" name={name} value={value === null ? "" : String(value)} />
+    {Array.from({ length: 5 }, (_, index) => {
+      const starValue = index + 1;
+      const active = value !== null && starValue <= value;
+      return (
+        <button
+          key={starValue}
+          type="button"
+          className="p-1"
+          onClick={() => onChange(value === starValue ? null : starValue)}
+          aria-label={`Rate ${starValue} star${starValue === 1 ? "" : "s"}`}
+        >
+          <Star className={`h-4 w-4 ${active ? "fill-primary text-primary" : "text-muted-foreground"}`} />
+        </button>
+      );
+    })}
+    <button
+      type="button"
+      className={`ml-1 rounded border px-2 py-1 text-[11px] ${value === null ? "bg-muted" : "bg-background hover:bg-muted"}`}
+      onClick={() => onChange(null)}
+    >
+      N.A.
+    </button>
+  </div>
 );
 
 const SaveButtons = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto, primaryLabel }: TabSaveProps) => (
@@ -412,15 +511,55 @@ const SaveButtons = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto, primar
 );
 
 
-type ProfileTabProps = TabSaveProps & {
-  formData: MaidProfile;
-  setFormData: React.Dispatch<React.SetStateAction<MaidProfile>>;
-};
+const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+  const years: SelectOption[] = ["--", ...Array.from({ length: 60 }, (_, i) => String(1960 + i))];
+  const days: SelectOption[] = ["--", ...Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"))];
+  const months: SelectOption[] = ["--", ...Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))];
 
-const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: ProfileTabProps) => {
-  const years = Array.from({ length: 60 }, (_, i) => String(1960 + i));
-  const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
-  const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
+  const agencyContact = (formData.agencyContact as Record<string, unknown>) || {};
+  const introduction = (formData.introduction as Record<string, unknown>) || {};
+  const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
+  const otherInformation = (skillsPreferences.otherInformation as Record<string, boolean>) || {};
+  const pastIllnesses = (introduction.pastIllnesses as Record<string, boolean>) || {};
+
+  const dobMatch = String(formData.dateOfBirth || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const dobYear = dobMatch?.[1] ?? "--";
+  const dobMonth = dobMatch?.[2] ?? "--";
+  const dobDay = dobMatch?.[3] ?? "--";
+
+  const contractMatch = String(introduction.contractEnds || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const contractYear = contractMatch?.[1] ?? "--";
+  const contractMonth = contractMatch?.[2] ?? "--";
+  const contractDay = contractMatch?.[3] ?? "--";
+
+  const [dobDraft, setDobDraft] = useState(() => ({ day: dobDay, month: dobMonth, year: dobYear }));
+  const [contractDraft, setContractDraft] = useState(() => ({ day: contractDay, month: contractMonth, year: contractYear }));
+
+  useEffect(() => {
+    setDobDraft({ day: dobDay, month: dobMonth, year: dobYear });
+  }, [dobDay, dobMonth, dobYear]);
+
+  useEffect(() => {
+    setContractDraft({ day: contractDay, month: contractMonth, year: contractYear });
+  }, [contractDay, contractMonth, contractYear]);
+
+  const setIntroductionField = (key: string, value: unknown) =>
+    setFormData((prev) => ({
+      ...prev,
+      introduction: {
+        ...((prev.introduction as Record<string, unknown>) || {}),
+        [key]: value,
+      },
+    }));
+
+  const setSkillsPreferencesField = (key: string, value: unknown) =>
+    setFormData((prev) => ({
+      ...prev,
+      skillsPreferences: {
+        ...((prev.skillsPreferences as Record<string, unknown>) || {}),
+        [key]: value,
+      },
+    }));
 
   return (
     <div className="content-card animate-fade-in-up space-y-6">
@@ -438,44 +577,276 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
         />
         <FormRow2Col
           left={<div />}
-          right={<FormRow label="Indian Maid Category:"><SelectInput options={["Select","Mizoram maid","Darjeeling maid","Manipur maid","Punjabi maid", "Others"]} /></FormRow>}
+          right={
+            <FormRow label="Indian Maid Category:">
+              <SelectInput
+                options={["Select", "Mizoram maid", "Darjeeling maid", "Manipur maid", "Punjabi maid", "Others"]}
+                value={String(skillsPreferences.indianMaidCategory || "Select")}
+                onChange={(e) => setSkillsPreferencesField("indianMaidCategory", e.target.value === "Select" ? "" : e.target.value)}
+              />
+            </FormRow>
+          }
         />
         <FormRow2Col
-          left={<FormRow label="Date of Birth:"><div className="flex gap-1"><SelectInput options={days} className="w-16" /><SelectInput options={months} className="w-16" /><SelectInput options={years} className="w-24" /></div></FormRow>}
+          left={
+            <FormRow label="Date of Birth:">
+              <div className="flex gap-1">
+                <SelectInput
+                  options={days}
+                  className="w-16"
+                  value={dobDraft.day}
+                  onChange={(e) => {
+                    const nextDay = e.target.value;
+                    const next = { ...dobDraft, day: nextDay };
+                    setDobDraft(next);
+                    if (next.day === "--" || next.month === "--" || next.year === "--") {
+                      setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
+                      return;
+                    }
+                    setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
+                  }}
+                />
+                <SelectInput
+                  options={months}
+                  className="w-16"
+                  value={dobDraft.month}
+                  onChange={(e) => {
+                    const nextMonth = e.target.value;
+                    const next = { ...dobDraft, month: nextMonth };
+                    setDobDraft(next);
+                    if (next.day === "--" || next.month === "--" || next.year === "--") {
+                      setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
+                      return;
+                    }
+                    setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
+                  }}
+                />
+                <SelectInput
+                  options={years}
+                  className="w-24"
+                  value={dobDraft.year}
+                  onChange={(e) => {
+                    const nextYear = e.target.value;
+                    const next = { ...dobDraft, year: nextYear };
+                    setDobDraft(next);
+                    if (next.day === "--" || next.month === "--" || next.year === "--") {
+                      setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
+                      return;
+                    }
+                    setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
+                  }}
+                />
+              </div>
+            </FormRow>
+          }
           right={<FormRow label="Place Of Birth:"><Input value={formData.placeOfBirth} onChange={(e) => setFormData((prev) => ({ ...prev, placeOfBirth: e.target.value }))} /></FormRow>}
         />
         <FormRow2Col
-          left={<FormRow label="Height:"><SelectInput options={["150cm (4'11\")", "152cm (5'0\")", "155cm (5'1\")", "156cm (5'1\")", "157cm (5'2\")", "160cm (5'3\")", "163cm (5'4\")", "165cm (5'5\")", "168cm (5'6\")", "170cm (5'7\")", "173cm (5'8\")", "175cm (5'9\")", "178cm (5'10\")", "180cm (5'11\")"]} /></FormRow>}
-          right={<FormRow label="Weight:"><SelectInput options={["40Kg (88 lbs)", "42Kg (93 lbs)", "45Kg (99 lbs)", "48Kg (106 lbs)", "50Kg (110 lbs)", "52Kg (115 lbs)", "55Kg (121 lbs)", "58Kg (128 lbs)", "60Kg (132 lbs)", "63Kg (139 lbs)", "65Kg (143 lbs)", "68Kg (150 lbs)", "70Kg (154 lbs)"]} /></FormRow>}
+          left={
+            <FormRow label="Height:">
+              <SelectInput
+                value={formData.height ? String(formData.height) : ""}
+                onChange={(e) => setFormData((prev) => ({ ...prev, height: Number(e.target.value || 0) }))}
+                options={[
+                  { value: "", label: "Select", disabled: true },
+                  { value: "150", label: "150cm (4'11\")" },
+                  { value: "152", label: "152cm (5'0\")" },
+                  { value: "155", label: "155cm (5'1\")" },
+                  { value: "156", label: "156cm (5'1\")" },
+                  { value: "157", label: "157cm (5'2\")" },
+                  { value: "160", label: "160cm (5'3\")" },
+                  { value: "163", label: "163cm (5'4\")" },
+                  { value: "165", label: "165cm (5'5\")" },
+                  { value: "168", label: "168cm (5'6\")" },
+                  { value: "170", label: "170cm (5'7\")" },
+                  { value: "173", label: "173cm (5'8\")" },
+                  { value: "175", label: "175cm (5'9\")" },
+                  { value: "178", label: "178cm (5'10\")" },
+                  { value: "180", label: "180cm (5'11\")" },
+                ]}
+              />
+            </FormRow>
+          }
+          right={
+            <FormRow label="Weight:">
+              <SelectInput
+                value={formData.weight ? String(formData.weight) : ""}
+                onChange={(e) => setFormData((prev) => ({ ...prev, weight: Number(e.target.value || 0) }))}
+                options={[
+                  { value: "", label: "Select", disabled: true },
+                  { value: "40", label: "40Kg (88 lbs)" },
+                  { value: "42", label: "42Kg (93 lbs)" },
+                  { value: "45", label: "45Kg (99 lbs)" },
+                  { value: "48", label: "48Kg (106 lbs)" },
+                  { value: "50", label: "50Kg (110 lbs)" },
+                  { value: "52", label: "52Kg (115 lbs)" },
+                  { value: "55", label: "55Kg (121 lbs)" },
+                  { value: "58", label: "58Kg (128 lbs)" },
+                  { value: "60", label: "60Kg (132 lbs)" },
+                  { value: "63", label: "63Kg (139 lbs)" },
+                  { value: "65", label: "65Kg (143 lbs)" },
+                  { value: "68", label: "68Kg (150 lbs)" },
+                  { value: "70", label: "70Kg (154 lbs)" },
+                ]}
+              />
+            </FormRow>
+          }
         />
 
         <FormRow label="Residential Address in Home Country:"><Input value={formData.homeAddress} onChange={(e) => setFormData((prev) => ({ ...prev, homeAddress: e.target.value }))} /></FormRow>
-        <FormRow label="Name of Port/Airport to be Repatriated:"><Input /></FormRow>
-        <FormRow label="Contact Number in Home Country:"><Input /></FormRow>
+        <FormRow label="Name of Port/Airport to be Repatriated:"><Input value={formData.airportRepatriation} onChange={(e) => setFormData((prev) => ({ ...prev, airportRepatriation: e.target.value }))} /></FormRow>
+        <FormRow label="Contact Number in Home Country:">
+          <Input
+            value={String(agencyContact.homeCountryContactNumber || "")}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                agencyContact: {
+                  ...((prev.agencyContact as Record<string, unknown>) || {}),
+                  homeCountryContactNumber: e.target.value,
+                },
+              }))
+            }
+          />
+        </FormRow>
 
         <FormRow2Col
-          left={<FormRow label="Education:"><SelectInput options={["Primary Level(<=6 yrs)", "Secondary Level(7~9 yrs)", "High School(10~12 yrs)", "College/Degree (>=13 yrs)"]} /></FormRow>}
-          right={<FormRow label="Religion:"><SelectInput options={["Catholic", "Christian", "Muslim", "Hindu", "Buddhist", "Sikh", "Free Thinker", "Others"]} /></FormRow>}
+          left={
+            <FormRow label="Education:">
+              <SelectInput
+                options={["Primary Level(<=6 yrs)", "Secondary Level(7~9 yrs)", "High School(10~12 yrs)", "Vocational Course", "College/Degree (>=13 yrs)"]}
+                value={formData.educationLevel}
+                onChange={(e) => setFormData((prev) => ({ ...prev, educationLevel: e.target.value }))}
+              />
+            </FormRow>
+          }
+          right={
+            <FormRow label="Religion:">
+              <SelectInput
+                options={["Catholic", "Christian", "Muslim", "Hindu", "Buddhist", "Sikh", "Free Thinker", "Others"]}
+                value={formData.religion}
+                onChange={(e) => setFormData((prev) => ({ ...prev, religion: e.target.value }))}
+              />
+            </FormRow>
+          }
         />
         <FormRow2Col
-          left={<FormRow label="Number of Siblings:"><Input /></FormRow>}
-          right={<FormRow label="Marital Status:"><SelectInput options={["Single", "Married", "Divorced", "Widowed", "Separated"]} /></FormRow>}
+          left={
+            <FormRow label="Number of Siblings:">
+              <Input
+                type="number"
+                value={String(formData.numberOfSiblings ?? "")}
+                onChange={(e) => setFormData((prev) => ({ ...prev, numberOfSiblings: Number(e.target.value || 0) }))}
+              />
+            </FormRow>
+          }
+          right={
+            <FormRow label="Marital Status:">
+              <SelectInput
+                options={["Single", "Single Parent", "Married", "Divorced", "Widowed", "Separated"]}
+                value={formData.maritalStatus}
+                onChange={(e) => setFormData((prev) => ({ ...prev, maritalStatus: e.target.value }))}
+              />
+            </FormRow>
+          }
         />
         <FormRow2Col
-          left={<FormRow label="Number of Children:"><SelectInput options={["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]} /></FormRow>}
-          right={<FormRow label="Ages of Children:"><Input /></FormRow>}
+          left={
+            <FormRow label="Number of Children:">
+              <SelectInput
+                options={["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]}
+                value={String(formData.numberOfChildren ?? 0)}
+                onChange={(e) => setFormData((prev) => ({ ...prev, numberOfChildren: Number(e.target.value || 0) }))}
+              />
+            </FormRow>
+          }
+          right={
+            <FormRow label="Ages of Children:">
+              <Input value={String(introduction.agesOfChildren || "")} onChange={(e) => setIntroductionField("agesOfChildren", e.target.value)} />
+            </FormRow>
+          }
         />
         <FormRow2Col
-          left={<FormRow label="Present Salary (S$):"><Input /></FormRow>}
-          right={<FormRow label="Expected Salary:"><Input /></FormRow>}
+          left={
+            <FormRow label="Present Salary (S$):">
+              <Input value={String(introduction.presentSalary || "")} onChange={(e) => setIntroductionField("presentSalary", e.target.value)} />
+            </FormRow>
+          }
+          right={
+            <FormRow label="Expected Salary:">
+              <Input value={String(introduction.expectedSalary || "")} onChange={(e) => setIntroductionField("expectedSalary", e.target.value)} />
+            </FormRow>
+          }
         />
         <FormRow2Col
-          left={<FormRow label="When will this maid be Available?"><Input /></FormRow>}
-          right={<FormRow label="Contract Ends:"><div className="flex gap-1"><SelectInput options={["--", ...days]} className="w-16" /><SelectInput options={["--", ...months]} className="w-16" /><SelectInput options={["--", ...years.slice(40)]} className="w-24" /></div></FormRow>}
+          left={
+            <FormRow label="When will this maid be Available?">
+              <Input value={String(introduction.availability || "")} onChange={(e) => setIntroductionField("availability", e.target.value)} />
+            </FormRow>
+          }
+          right={
+            <FormRow label="Contract Ends:">
+              <div className="flex gap-1">
+                <SelectInput
+                  options={days}
+                  className="w-16"
+                  value={contractDraft.day}
+                  onChange={(e) => {
+                    const nextDay = e.target.value;
+                    const next = { ...contractDraft, day: nextDay };
+                    setContractDraft(next);
+                    if (next.day === "--" || next.month === "--" || next.year === "--") {
+                      setIntroductionField("contractEnds", "");
+                      return;
+                    }
+                    setIntroductionField("contractEnds", `${next.year}-${next.month}-${next.day}`);
+                  }}
+                />
+                <SelectInput
+                  options={months}
+                  className="w-16"
+                  value={contractDraft.month}
+                  onChange={(e) => {
+                    const nextMonth = e.target.value;
+                    const next = { ...contractDraft, month: nextMonth };
+                    setContractDraft(next);
+                    if (next.day === "--" || next.month === "--" || next.year === "--") {
+                      setIntroductionField("contractEnds", "");
+                      return;
+                    }
+                    setIntroductionField("contractEnds", `${next.year}-${next.month}-${next.day}`);
+                  }}
+                />
+                <SelectInput
+                  options={years}
+                  className="w-24"
+                  value={contractDraft.year}
+                  onChange={(e) => {
+                    const nextYear = e.target.value;
+                    const next = { ...contractDraft, year: nextYear };
+                    setContractDraft(next);
+                    if (next.day === "--" || next.month === "--" || next.year === "--") {
+                      setIntroductionField("contractEnds", "");
+                      return;
+                    }
+                    setIntroductionField("contractEnds", `${next.year}-${next.month}-${next.day}`);
+                  }}
+                />
+              </div>
+            </FormRow>
+          }
         />
         <FormRow2Col
-          left={<FormRow label="Maid Loan (S$):"><Input /></FormRow>}
-          right={<FormRow label="Offday Compensation (S$/day):"><Input defaultValue="0" /></FormRow>}
+          left={
+            <FormRow label="Maid Loan (S$):">
+              <Input value={String(introduction.maidLoan || "")} onChange={(e) => setIntroductionField("maidLoan", e.target.value)} />
+            </FormRow>
+          }
+          right={
+            <FormRow label="Offday Compensation (S$/day):">
+              <Input value={String(introduction.offdayCompensation || "0")} onChange={(e) => setIntroductionField("offdayCompensation", e.target.value)} />
+            </FormRow>
+          }
         />
       </div>
 
@@ -484,7 +855,20 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
         {["English", "Mandarin/Chinese-Dialect", "Bahasa Indonesia/Malaysia", "Hindi", "Tamil"].map((lang) => (
           <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
-            <RadioGroup name={`lang_${lang}`} options={["Zero","Poor", "Little", "Fair", "Good"]} />
+            <RadioGroup
+              name={`lang_${lang}`}
+              options={["Zero", "Poor", "Little", "Fair", "Good"]}
+              value={String((formData.languageSkills || {})[lang] || "")}
+              onValueChange={(next) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  languageSkills: {
+                    ...(prev.languageSkills || {}),
+                    [lang]: next,
+                  },
+                }))
+              }
+            />
           </div>
         ))}
       </div>
@@ -502,13 +886,32 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
         ].map((q) => (
           <div key={q} className="flex items-center gap-4">
             <span className="text-sm flex-1 text-right">{q}</span>
-            <YesNo name={`other_${q}`} />
+            <YesNo
+              name={`other_${q}`}
+              value={otherInformation[q]}
+              onValueChange={(next) =>
+                setFormData((prev) => {
+                  const prevSkills = (prev.skillsPreferences as Record<string, unknown>) || {};
+                  const prevOther = (prevSkills.otherInformation as Record<string, boolean>) || {};
+                  return {
+                    ...prev,
+                    skillsPreferences: {
+                      ...prevSkills,
+                      otherInformation: {
+                        ...prevOther,
+                        [q]: next,
+                      },
+                    },
+                  };
+                })
+              }
+            />
           </div>
         ))}
         <div className="flex items-center gap-4">
           <span className="text-sm flex-1 text-right">Number of off-days per month</span>
           <div className="flex items-center gap-2">
-            <Input className="w-20" defaultValue="02" />
+            <Input className="w-20" value={String(skillsPreferences.offDaysPerMonth || "")} onChange={(e) => setSkillsPreferencesField("offDaysPerMonth", e.target.value)} />
             <span className="text-sm">rest day(s) per month.</span>
           </div>
         </div>
@@ -516,7 +919,7 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
 
       <div className="section-header">A2. Medical History/Dietary Restrictions</div>
       <div className="space-y-3 pt-2">
-        <FormRow label="Allergies (if any):"><Input /></FormRow>
+        <FormRow label="Allergies (if any):"><Input value={String(introduction.allergies || "")} onChange={(e) => setIntroductionField("allergies", e.target.value)} /></FormRow>
 
         <p className="text-sm font-medium">Past and existing illnesses (including chronic ailments and illnesses requiring medication):</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
@@ -533,37 +936,88 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
           ].map(([label, name]) => (
             <div key={name} className="flex items-center gap-3">
               <span className="text-sm flex-1">{label}</span>
-              <YesNo name={name} />
+              <YesNo
+                name={name}
+                value={pastIllnesses[label]}
+                onValueChange={(next) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    introduction: {
+                      ...((prev.introduction as Record<string, unknown>) || {}),
+                      pastIllnesses: {
+                        ...((((prev.introduction as Record<string, unknown>) || {}).pastIllnesses as Record<string, boolean>) || {}),
+                        [label]: next,
+                      },
+                    },
+                  }))
+                }
+              />
             </div>
           ))}
           <div className="flex items-center gap-3">
             <span className="text-sm flex-1">(X) Others:</span>
-            <Input className="w-32" />
+            <Input className="w-32" value={String(introduction.otherIllnesses || "")} onChange={(e) => setIntroductionField("otherIllnesses", e.target.value)} />
           </div>
         </div>
 
-        <FormRow label="Physical disabilities:"><Input /></FormRow>
-        <FormRow label="Dietary restrictions:"><Input /></FormRow>
+        <FormRow label="Physical disabilities:"><Input value={String(introduction.physicalDisabilities || "")} onChange={(e) => setIntroductionField("physicalDisabilities", e.target.value)} /></FormRow>
+        <FormRow label="Dietary restrictions:"><Input value={String(introduction.dietaryRestrictions || "")} onChange={(e) => setIntroductionField("dietaryRestrictions", e.target.value)} /></FormRow>
 
         <div className="flex items-center gap-4 flex-wrap">
           <span className="text-sm font-medium">Food handling preferences:</span>
-          <label className="flex items-center gap-1 text-sm">
-            <input type="checkbox" className="accent-primary" /> No Pork
-          </label>
-          <label className="flex items-center gap-1 text-sm">
-            <input type="checkbox" className="accent-primary" /> No Beef
-          </label>
-          <div className="flex items-center gap-1">
-            <span className="text-sm">Others</span>
-            <Input className="w-32" />
-          </div>
+          {(() => {
+            const raw = String(introduction.foodHandlingPreferences || "");
+            const parts = raw
+              .split(",")
+              .map((p) => p.trim())
+              .filter(Boolean);
+            const hasNoPork = parts.includes("No Pork");
+            const hasNoBeef = parts.includes("No Beef");
+            const other = parts.filter((p) => p !== "No Pork" && p !== "No Beef").join(", ");
+
+            const setFoodPrefs = (nextNoPork: boolean, nextNoBeef: boolean, nextOther: string) => {
+              const nextParts = [
+                ...(nextNoPork ? ["No Pork"] : []),
+                ...(nextNoBeef ? ["No Beef"] : []),
+                ...(nextOther.trim() ? [nextOther.trim()] : []),
+              ];
+              setIntroductionField("foodHandlingPreferences", nextParts.join(", "));
+            };
+
+            return (
+              <>
+                <label className="flex items-center gap-1 text-sm">
+                  <input
+                    type="checkbox"
+                    className="accent-primary"
+                    checked={hasNoPork}
+                    onChange={(e) => setFoodPrefs(e.target.checked, hasNoBeef, other)}
+                  />{" "}
+                  No Pork
+                </label>
+                <label className="flex items-center gap-1 text-sm">
+                  <input
+                    type="checkbox"
+                    className="accent-primary"
+                    checked={hasNoBeef}
+                    onChange={(e) => setFoodPrefs(hasNoPork, e.target.checked, other)}
+                  />{" "}
+                  No Beef
+                </label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm">Others</span>
+                  <Input className="w-32" value={other} onChange={(e) => setFoodPrefs(hasNoPork, hasNoBeef, e.target.value)} />
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
 
       {/* A3. Others */}
       <div className="section-header">A3. Others</div>
       <div className="pt-2">
-        <FormRow label="Any other remarks:"><Input /></FormRow>
+        <FormRow label="Any other remarks:"><Input value={String(introduction.otherRemarks || "")} onChange={(e) => setIntroductionField("otherRemarks", e.target.value)} /></FormRow>
       </div>
 
       <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
@@ -582,177 +1036,272 @@ const skillRows = [
   { no: 7, label: "Other skills, if any", sub: "Please specify:", subField: true },
 ];
 
-const SkillsTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
-  <div className="content-card animate-fade-in-up space-y-6">
-    <h3 className="text-center font-bold text-lg">(B) MAID's SKILLS</h3>
+const SkillsTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+  const workAreas = (formData.workAreas as Record<string, unknown>) || {};
+  const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
+  const workAreaNotes = (skillsPreferences.workAreaNotes as Record<string, string>) || {};
 
-    <div className="section-header">B1. Method of Evaluation of Skills</div>
-    <p className="text-sm pt-2">Please indicate the method(s) used to evaluate the FDW's skills (can tick more than one):</p>
-    <div className="space-y-2 pl-2">
-      {[
-        "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA",
-        "Interviewed by Singapore EA",
-      ].map((opt) => (
-        <label key={opt} className="flex items-start gap-2 text-sm">
-          <input type="checkbox" className="accent-primary mt-0.5" />
-          {opt}
-        </label>
-      ))}
-      <div className="pl-6 space-y-2">
+  const setWorkArea = (area: string, patch: Record<string, unknown>) =>
+    setFormData((prev) => {
+      const prevWorkAreas = (prev.workAreas as Record<string, unknown>) || {};
+      const current = (prevWorkAreas[area] as Record<string, unknown>) || {};
+      return {
+        ...prev,
+        workAreas: {
+          ...prevWorkAreas,
+          [area]: {
+            ...current,
+            ...patch,
+          },
+        },
+      };
+    });
+
+  const setWorkAreaNote = (key: string, value: string) =>
+    setFormData((prev) => {
+      const prevSkills = (prev.skillsPreferences as Record<string, unknown>) || {};
+      const prevNotes = (prevSkills.workAreaNotes as Record<string, string>) || {};
+      return {
+        ...prev,
+        skillsPreferences: {
+          ...prevSkills,
+          workAreaNotes: {
+            ...prevNotes,
+            [key]: value,
+          },
+        },
+      };
+    });
+
+  const buildEvaluation = (rating: number | null, note: string) => {
+    const trimmed = note.trim();
+    if (rating === null) return trimmed || "N.A.";
+    return trimmed ? `${rating}/5 - ${trimmed}` : `${rating}/5`;
+  };
+
+  return (
+    <div className="content-card animate-fade-in-up space-y-6">
+      <h3 className="text-center font-bold text-lg">(B) MAID's SKILLS</h3>
+
+      <div className="section-header">B1. Method of Evaluation of Skills</div>
+      <p className="text-sm pt-2">Please indicate the method(s) used to evaluate the FDW's skills (can tick more than one):</p>
+      <div className="space-y-2 pl-2">
         {[
-          "Interviewed via telephone/teleconference",
-          "Interviewed via videoconference",
-          "Interviewed in person",
-          "Interviewed in person and also made observation of FDW in the areas of work listed in table",
+          "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA",
+          "Interviewed by Singapore EA",
         ].map((opt) => (
           <label key={opt} className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="accent-primary mt-0.5" />
             {opt}
           </label>
         ))}
-      </div>
-    </div>
-
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border border-border">
-        <thead>
-          <tr className="bg-muted">
-            <th className="border border-border px-2 py-2 text-center w-12">S/No</th>
-            <th className="border border-border px-3 py-2 text-center">Areas of Work</th>
-            <th className="border border-border px-2 py-2 text-center w-24">Willingness<br />Yes/No</th>
-            <th className="border border-border px-2 py-2 text-center w-40">
-              Experience<br />Yes/No<br />
-              <span className="font-normal text-xs">If yes, state the no. of years</span>
-            </th>
-            <th className="border border-border px-2 py-2 text-center w-64">
-              Assessment/Observation<br />
-              <span className="font-normal text-xs">Please state qualitative observations of FDW and/or rate the FDW<br />(indicate N.A. if no evaluation was done)<br />1 2 3 4 5 N.A.</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {skillRows.map((row) => (
-            <tr key={row.no}>
-              <td className="border border-border px-2 py-3 text-center align-top">{row.no}</td>
-              <td className="border border-border px-3 py-3 align-top">
-                <span className="font-bold">{row.label}</span>
-                {row.sub && (
-                  <div className="mt-1">
-                    <span className="text-xs">{row.sub}</span>
-                    {row.subField && <Input className="mt-1 w-48 h-7 text-xs" />}
-                  </div>
-                )}
-              </td>
-              <td className="border border-border px-2 py-3 text-center align-top">
-                <div className="flex items-center justify-center gap-2">
-                  <label className="flex items-center gap-1 text-xs"><input type="radio" name={`will_${row.no}`} className="accent-primary" />Yes</label>
-                  <label className="flex items-center gap-1 text-xs"><input type="radio" name={`will_${row.no}`} className="accent-primary" />No</label>
-                </div>
-              </td>
-              <td className="border border-border px-2 py-3 text-center align-top">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <label className="flex items-center gap-1 text-xs"><input type="radio" name={`exp_${row.no}`} className="accent-primary" />Yes</label>
-                  <label className="flex items-center gap-1 text-xs"><input type="radio" name={`exp_${row.no}`} className="accent-primary" />No</label>
-                </div>
-                <div className="flex items-center justify-center gap-1">
-                  <Input className="w-16 h-7 text-xs" />
-                  <span className="text-xs">(years)</span>
-                </div>
-              </td>
-              <td className="border border-border px-2 py-3 align-top">
-                <div className="flex items-center justify-center gap-1 mb-2 flex-wrap">
-                  {["1", "2", "3", "4", "5", "N.A."].map((v) => (
-                    <label key={v} className="flex items-center gap-0.5 text-xs">
-                      <input type="radio" name={`assess_${row.no}`} className="accent-primary" />{v}
-                    </label>
-                  ))}
-                </div>
-                <textarea className="w-full min-h-[50px] rounded border bg-background px-2 py-1 text-xs" />
-              </td>
-            </tr>
+        <div className="pl-6 space-y-2">
+          {[
+            "Interviewed via telephone/teleconference",
+            "Interviewed via videoconference",
+            "Interviewed in person",
+            "Interviewed in person and also made observation of FDW in the areas of work listed in table",
+          ].map((opt) => (
+            <label key={opt} className="flex items-start gap-2 text-sm">
+              <input type="checkbox" className="accent-primary mt-0.5" />
+              {opt}
+            </label>
           ))}
-        </tbody>
-      </table>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border border-border">
+          <thead>
+            <tr className="bg-muted">
+              <th className="border border-border px-2 py-2 text-center w-12">S/No</th>
+              <th className="border border-border px-3 py-2 text-center">Areas of Work</th>
+              <th className="border border-border px-2 py-2 text-center w-24">Willingness<br />Yes/No</th>
+              <th className="border border-border px-2 py-2 text-center w-40">
+                Experience<br />Yes/No<br />
+                <span className="font-normal text-xs">If yes, state the no. of years</span>
+              </th>
+              <th className="border border-border px-2 py-2 text-center w-64">
+                Assessment/Observation<br />
+                <span className="font-normal text-xs">Click to rate (stars) and/or add notes (N.A. if none).</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {skillRows.map((row) => {
+              const config = (workAreas[row.label] as Record<string, unknown>) || {};
+              const willing = config.willing as boolean | undefined;
+              const experience = config.experience as boolean | undefined;
+              const yearsOfExperience = String(config.yearsOfExperience || "");
+              const rating = typeof config.rating === "number" ? (config.rating as number) : null;
+              const note = String(config.note || "");
+
+              const subKey =
+                row.label === "Other skills, if any"
+                  ? "Other Skill"
+                  : row.label;
+
+              const updateEvaluation = (nextRating: number | null, nextNote: string) => {
+                setWorkArea(row.label, {
+                  rating: nextRating,
+                  note: nextNote,
+                  evaluation: buildEvaluation(nextRating, nextNote),
+                });
+              };
+
+              return (
+                <tr key={row.no}>
+                  <td className="border border-border px-2 py-3 text-center align-top">{row.no}</td>
+                  <td className="border border-border px-3 py-3 align-top">
+                    <span className="font-bold">{row.label}</span>
+                    {row.sub && (
+                      <div className="mt-1">
+                        <span className="text-xs">{row.sub}</span>
+                        {row.subField && (
+                          <Input
+                            className="mt-1 w-48 h-7 text-xs"
+                            value={String(workAreaNotes[subKey] || "")}
+                            onChange={(e) => setWorkAreaNote(subKey, e.target.value)}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="border border-border px-2 py-3 text-center align-top">
+                    <YesNo
+                      name={`will_${row.no}`}
+                      value={willing}
+                      onValueChange={(next) => setWorkArea(row.label, { willing: next })}
+                    />
+                  </td>
+                  <td className="border border-border px-2 py-3 text-center align-top">
+                    <div className="mb-2 flex items-center justify-center">
+                      <YesNo
+                        name={`exp_${row.no}`}
+                        value={experience}
+                        onValueChange={(next) =>
+                          setWorkArea(row.label, {
+                            experience: next,
+                            yearsOfExperience: next ? String(config.yearsOfExperience || "") : "",
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center justify-center gap-1">
+                      <Input
+                        className="w-16 h-7 text-xs"
+                        value={yearsOfExperience}
+                        onChange={(e) => setWorkArea(row.label, { yearsOfExperience: e.target.value })}
+                        disabled={experience !== true}
+                      />
+                      <span className="text-xs">(years)</span>
+                    </div>
+                  </td>
+                  <td className="border border-border px-2 py-3 align-top">
+                    <div className="mb-2">
+                      <StarRating
+                        name={`assess_${row.no}`}
+                        value={rating}
+                        onChange={(nextRating) => updateEvaluation(nextRating, note)}
+                      />
+                    </div>
+                    <textarea
+                      className="w-full min-h-[50px] rounded border bg-background px-2 py-1 text-xs"
+                      value={note}
+                      onChange={(e) => updateEvaluation(rating, e.target.value)}
+                      placeholder="Notes (optional)"
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
-
-    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
-  </div>
-);
+  );
+};
 
 
-const EmploymentHistoryTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => {
-  const years = ["--", ...Array.from({ length: 30 }, (_, i) => String(2000 + i))];
-  const countries = ["--", "Singapore", "Hong Kong", "Taiwan", "Malaysia", "Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan", "Lebanon", "Brunei", "Others"];
+const EmploymentHistoryTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+  const years: SelectOption[] = ["--", ...Array.from({ length: 30 }, (_, i) => String(2000 + i))];
+  const countries: SelectOption[] = ["--", "Singapore", "Hong Kong", "Taiwan", "Malaysia", "Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan", "Lebanon", "Brunei", "Others"];
 
-  const [employers, setEmployers] = useState([{}]);
+  const employment = Array.isArray(formData.employmentHistory) && formData.employmentHistory.length > 0 ? formData.employmentHistory : [{}];
+  const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
+  const sgExperience = typeof skillsPreferences.sgExperience === "boolean" ? skillsPreferences.sgExperience : undefined;
 
-  const addEmployer = () => {
-    setEmployers([...employers, {}]);
+  const setEmployment = (next: Array<Record<string, unknown>>) =>
+    setFormData((prev) => ({
+      ...prev,
+      employmentHistory: next,
+    }));
+
+  const updateEmployer = (index: number, key: string, value: unknown) => {
+    const next = employment.map((row, i) => (i === index ? { ...(row as Record<string, unknown>), [key]: value } : row));
+    setEmployment(next);
   };
 
-  const removeEmployer = (index: number) => {
-    setEmployers(employers.filter((_, i) => i !== index));
-  };
+  const addEmployer = () => setEmployment([...employment, {}]);
+  const removeEmployer = (index: number) => setEmployment(employment.filter((_, i) => i !== index));
 
   return (
     <div className="content-card animate-fade-in-up space-y-6">
-      <h3 className="text-center font-bold text-lg">
-        (C) EMPLOYMENT HISTORY OF THE FDW
-      </h3>
+      <h3 className="text-center font-bold text-lg">(C) EMPLOYMENT HISTORY OF THE FDW</h3>
 
       <div className="section-header">C1. Employment History</div>
       <div className="space-y-6 pt-2">
-        {employers.map((_, idx) => (
-          <div key={idx} className="space-y-2 border p-4 rounded-xl">
-
-            <div className="flex justify-between items-center">
-              <Label className="form-label text-sm font-bold">
-                Employer #{idx + 1}
-              </Label>
-
-              {employers.length > 1 && (
-                <button
-                  onClick={() => removeEmployer(idx)}
-                  className="text-red-500 text-xs">
-                  Remove
-                </button>
-              )}
-            </div>
-
-            {[
-              { label: "From Year", type: "select" as const, options: years },
-              { label: "To Year", type: "select" as const, options: years },
-              { label: "Country", type: "select" as const, options: countries },
-              { label: "Employer's Name", type: "input" as const },
-              { label: "Main Duties", type: "textarea" as const },
-              { label: "Remarks", type: "textarea" as const },
-            ].map((field) => (
-              <div
-                key={field.label}
-                className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-start"
-              >
-                <Label className="form-label text-xs sm:text-right pt-1">
-                  {field.label}
-                </Label>
-
-                {field.type === "select" ? (
-                  <SelectInput options={field.options!} className="w-48" />
-                ) : field.type === "textarea" ? (
-                  <textarea className="w-full max-w-md min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm" />
-                ) : (
-                  <Input className="max-w-md" />
+        {employment.map((row, idx) => {
+          const r = row as Record<string, unknown>;
+          return (
+            <div key={idx} className="space-y-2 border p-4 rounded-xl">
+              <div className="flex justify-between items-center">
+                <Label className="form-label text-sm font-bold">Employer #{idx + 1}</Label>
+                {employment.length > 1 && (
+                  <button type="button" onClick={() => removeEmployer(idx)} className="text-red-500 text-xs">
+                    Remove
+                  </button>
                 )}
               </div>
-            ))}
-          </div>
-        ))}
+
+              <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-start">
+                <Label className="form-label text-xs sm:text-right pt-1">From Year</Label>
+                <SelectInput options={years} className="w-48" value={String(r.from || "--")} onChange={(e) => updateEmployer(idx, "from", e.target.value === "--" ? "" : e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-start">
+                <Label className="form-label text-xs sm:text-right pt-1">To Year</Label>
+                <SelectInput options={years} className="w-48" value={String(r.to || "--")} onChange={(e) => updateEmployer(idx, "to", e.target.value === "--" ? "" : e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-start">
+                <Label className="form-label text-xs sm:text-right pt-1">Country</Label>
+                <SelectInput options={countries} className="w-48" value={String(r.country || "--")} onChange={(e) => updateEmployer(idx, "country", e.target.value === "--" ? "" : e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-start">
+                <Label className="form-label text-xs sm:text-right pt-1">Employer&apos;s Name</Label>
+                <Input className="max-w-md" value={String(r.employer || "")} onChange={(e) => updateEmployer(idx, "employer", e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-start">
+                <Label className="form-label text-xs sm:text-right pt-1">Main Duties</Label>
+                <textarea className="w-full max-w-md min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm" value={String(r.duties || "")} onChange={(e) => updateEmployer(idx, "duties", e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-start">
+                <Label className="form-label text-xs sm:text-right pt-1">Remarks</Label>
+                <textarea className="w-full max-w-md min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm" value={String(r.remarks || "")} onChange={(e) => updateEmployer(idx, "remarks", e.target.value)} />
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex justify-center">
-        <button
-          onClick={addEmployer}
-          className="px-4 py-2 bg-primary text-white rounded-lg text-sm"
-        >
+        <button type="button" onClick={addEmployer} className="px-4 py-2 bg-primary text-white rounded-lg text-sm">
           + Add Employer
         </button>
       </div>
@@ -763,7 +1312,19 @@ const EmploymentHistoryTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhot
           <span className="text-sm font-medium">
             Previous working experience in Singapore
           </span>
-          <YesNo name="sg_experience" />
+          <YesNo
+            name="sg_experience"
+            value={sgExperience}
+            onValueChange={(next) =>
+              setFormData((prev) => ({
+                ...prev,
+                skillsPreferences: {
+                  ...((prev.skillsPreferences as Record<string, unknown>) || {}),
+                  sgExperience: next,
+                },
+              }))
+            }
+          />
         </div>
         <p className="text-xs text-muted-foreground">
           (The EA is required to obtain the FDW&apos;s employment history from MOM and furnish the employer with the employment history of the FDW. The employer may also verify the FDW&apos;s employment history in Singapore through WPOL using SingPass)
@@ -792,105 +1353,240 @@ const EmploymentHistoryTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhot
 };
 
 
-const AvailabilityRemarkTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
-  <div className="content-card animate-fade-in-up space-y-6">
-    <h3 className="text-center font-bold text-lg">(D) MAID&apos;s AVAILABILITY and REMARK</h3>
+const AvailabilityRemarkTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+  const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
+  const interviewOptions = (skillsPreferences.availabilityInterviewOptions as string[]) || [];
+  const availabilityRemark = String(skillsPreferences.availabilityRemark || "");
 
-    <div className="space-y-3">
-      {[
-        "FDW is not available for interview",
-        "FDW can be interviewed by phone",
-        "FDW can be interviewed by video-conference",
-        "FDW can be interviewed in person",
-      ].map((opt) => (
-        <label key={opt} className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="accent-primary" />
-          {opt}
-        </label>
-      ))}
+  const toggleOption = (opt: string, checked: boolean) =>
+    setFormData((prev) => {
+      const prevSkills = (prev.skillsPreferences as Record<string, unknown>) || {};
+      const current = (prevSkills.availabilityInterviewOptions as string[]) || [];
+      const next = checked ? Array.from(new Set([...current, opt])) : current.filter((v) => v !== opt);
+      return {
+        ...prev,
+        skillsPreferences: {
+          ...prevSkills,
+          availabilityInterviewOptions: next,
+        },
+      };
+    });
+
+  return (
+    <div className="content-card animate-fade-in-up space-y-6">
+      <h3 className="text-center font-bold text-lg">(D) MAID&apos;s AVAILABILITY and REMARK</h3>
+
+      <div className="space-y-3">
+        {[
+          "FDW is not available for interview",
+          "FDW can be interviewed by phone",
+          "FDW can be interviewed by video-conference",
+          "FDW can be interviewed in person",
+        ].map((opt) => (
+          <label key={opt} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="accent-primary"
+              checked={interviewOptions.includes(opt)}
+              onChange={(e) => toggleOption(opt, e.target.checked)}
+            />
+            {opt}
+          </label>
+        ))}
+      </div>
+
+      <h3 className="font-bold text-lg">(E) OTHER REMARKS</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
+        <Label className="form-label text-sm font-bold sm:text-right pt-2">OTHER REMARKS:</Label>
+        <textarea
+          className="w-full min-h-[100px] rounded-md border bg-background px-3 py-2 text-sm"
+          value={availabilityRemark}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              skillsPreferences: {
+                ...((prev.skillsPreferences as Record<string, unknown>) || {}),
+                availabilityRemark: e.target.value,
+              },
+            }))
+          }
+        />
+      </div>
+
+      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
-
-    <h3 className="font-bold text-lg">(E) OTHER REMARKS</h3>
-    <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
-      <Label className="form-label text-sm font-bold sm:text-right pt-2">OTHER REMARKS:</Label>
-      <textarea className="w-full min-h-[100px] rounded-md border bg-background px-3 py-2 text-sm" />
-    </div>
-
-    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
-  </div>
-);
+  );
+};
 
 
-const IntroductionTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
-  <div className="content-card animate-fade-in-up space-y-4">
-    <h3 className="text-center font-bold text-lg">MAID&apos;s INTRODUCTION</h3>
-    <p className="text-center text-sm text-muted-foreground">
-      This Introduction will be hidden from public. Employers need to login to view this introduction.
-    </p>
-
-    <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
-      <Label className="form-label text-sm font-bold sm:text-right pt-2">MAID INTRODUCTION:</Label>
-      <textarea className="w-full min-h-[250px] rounded-md border bg-background px-3 py-2 text-sm" />
-    </div>
-
-    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
-  </div>
-);
-
-
-const PublicIntroductionTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
-  <div className="content-card animate-fade-in-up space-y-4">
-    <h3 className="text-center font-bold text-lg">PUBLIC INTRODUCTION</h3>
-    <p className="text-center text-sm text-muted-foreground">
-      This is maid introduction for public, employers can view this without login.
-    </p>
-
-    <div className="text-sm space-y-2 border rounded-lg p-4 bg-muted/30">
-      <p>
-        EAs must comply with MOM&apos;s{" "}
-        <a href="https://www.mom.gov.sg/employment-practices/employment-agencies/ealc" className="text-primary underline" target="_blank" rel="noopener noreferrer">
-          EALC #17
-        </a>{" "}
-        and only disclose the following list of the FDW&apos;s personal information publicly: FDW Name, FDW Nationality, FDW skills and experience in said skills, Food handling preferences, Previous employment history (as stated in MOM&apos;s work permit application system), Language abilities.
+const IntroductionTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+  const introduction = (formData.introduction as Record<string, unknown>) || {};
+  return (
+    <div className="content-card animate-fade-in-up space-y-4">
+      <h3 className="text-center font-bold text-lg">MAID&apos;s INTRODUCTION</h3>
+      <p className="text-center text-sm text-muted-foreground">
+        This Introduction will be hidden from public. Employers need to login to view this introduction.
       </p>
-      <p>
-        EAs must not cast FDWs in an insensitive and undignified light. This includes avoiding transactional terms that liken FDWs to commodities, e.g. &quot;condition new&quot;, &quot;chat to buy&quot;.
-      </p>
-    </div>
-
-    <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
-      <Label className="form-label text-sm font-bold sm:text-right pt-2">MAID INTRODUCTION:</Label>
-      <textarea className="w-full min-h-[250px] rounded-md border bg-background px-3 py-2 text-sm" />
-    </div>
-
-    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
-  </div>
-);
-
-
-const PrivateInfoTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
-  <div className="content-card animate-fade-in-up space-y-4">
-    <h3 className="text-center font-bold text-lg">MAID&apos;s PRIVATE INFORMATION</h3>
-
-    <div className="space-y-3">
-      <FormRow label="This maid was interviewed by:"><Input /></FormRow>
-      <FormRow label="Who Referred This Maid?"><Input /></FormRow>
-      <FormRow label="Passport Number of the Maid"><Input placeholder="e.g. R8833831 Expiry: 28/01/2028" /></FormRow>
-      <FormRow label="Telephone Number of Maid/Foreign Agency">
-        <div className="flex items-center gap-2">
-          <Input />
-          <span className="text-sm text-muted-foreground whitespace-nowrap">WhatsApp</span>
-        </div>
-      </FormRow>
 
       <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
-        <Label className="form-label text-sm sm:text-right pt-2">Agency&apos;s Historical Record of the Maid</Label>
-        <textarea className="w-full min-h-[200px] rounded-md border bg-background px-3 py-2 text-sm" />
+        <Label className="form-label text-sm font-bold sm:text-right pt-2">MAID INTRODUCTION:</Label>
+        <textarea
+          className="w-full min-h-[250px] rounded-md border bg-background px-3 py-2 text-sm"
+          value={String(introduction.intro || "")}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              introduction: {
+                ...((prev.introduction as Record<string, unknown>) || {}),
+                intro: e.target.value,
+              },
+            }))
+          }
+        />
       </div>
-    </div>
 
-    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
-  </div>
-);
+      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
+    </div>
+  );
+};
+
+
+const PublicIntroductionTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+  const introduction = (formData.introduction as Record<string, unknown>) || {};
+  return (
+    <div className="content-card animate-fade-in-up space-y-4">
+      <h3 className="text-center font-bold text-lg">PUBLIC INTRODUCTION</h3>
+      <p className="text-center text-sm text-muted-foreground">
+        This is maid introduction for public, employers can view this without login.
+      </p>
+
+      <div className="text-sm space-y-2 border rounded-lg p-4 bg-muted/30">
+        <p>
+          EAs must comply with MOM&apos;s{" "}
+          <a href="https://www.mom.gov.sg/employment-practices/employment-agencies/ealc" className="text-primary underline" target="_blank" rel="noopener noreferrer">
+            EALC #17
+          </a>{" "}
+          and only disclose the following list of the FDW&apos;s personal information publicly: FDW Name, FDW Nationality, FDW skills and experience in said skills, Food handling preferences, Previous employment history (as stated in MOM&apos;s work permit application system), Language abilities.
+        </p>
+        <p>
+          EAs must not cast FDWs in an insensitive and undignified light. This includes avoiding transactional terms that liken FDWs to commodities, e.g. &quot;condition new&quot;, &quot;chat to buy&quot;.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
+        <Label className="form-label text-sm font-bold sm:text-right pt-2">MAID INTRODUCTION:</Label>
+        <textarea
+          className="w-full min-h-[250px] rounded-md border bg-background px-3 py-2 text-sm"
+          value={String(introduction.publicIntro || "")}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              introduction: {
+                ...((prev.introduction as Record<string, unknown>) || {}),
+                publicIntro: e.target.value,
+              },
+            }))
+          }
+        />
+      </div>
+
+      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
+    </div>
+  );
+};
+
+
+const PrivateInfoTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+  const agencyContact = (formData.agencyContact as Record<string, unknown>) || {};
+  const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
+
+  return (
+    <div className="content-card animate-fade-in-up space-y-4">
+      <h3 className="text-center font-bold text-lg">MAID&apos;s PRIVATE INFORMATION</h3>
+
+      <div className="space-y-3">
+        <FormRow label="This maid was interviewed by:">
+          <Input
+            value={String(skillsPreferences.interviewedBy || "")}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                skillsPreferences: {
+                  ...((prev.skillsPreferences as Record<string, unknown>) || {}),
+                  interviewedBy: e.target.value,
+                },
+              }))
+            }
+          />
+        </FormRow>
+        <FormRow label="Who Referred This Maid?">
+          <Input
+            value={String(skillsPreferences.referredBy || "")}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                skillsPreferences: {
+                  ...((prev.skillsPreferences as Record<string, unknown>) || {}),
+                  referredBy: e.target.value,
+                },
+              }))
+            }
+          />
+        </FormRow>
+        <FormRow label="Passport Number of the Maid">
+          <Input
+            placeholder="e.g. R8833831 Expiry: 28/01/2028"
+            value={String(agencyContact.passportNo || "")}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                agencyContact: {
+                  ...((prev.agencyContact as Record<string, unknown>) || {}),
+                  passportNo: e.target.value,
+                },
+              }))
+            }
+          />
+        </FormRow>
+        <FormRow label="Telephone Number of Maid/Foreign Agency">
+          <div className="flex items-center gap-2">
+            <Input
+              value={String(agencyContact.phone || "")}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  agencyContact: {
+                    ...((prev.agencyContact as Record<string, unknown>) || {}),
+                    phone: e.target.value,
+                  },
+                }))
+              }
+            />
+            <span className="text-sm text-muted-foreground whitespace-nowrap">WhatsApp</span>
+          </div>
+        </FormRow>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
+          <Label className="form-label text-sm sm:text-right pt-2">Agency&apos;s Historical Record of the Maid</Label>
+          <textarea
+            className="w-full min-h-[200px] rounded-md border bg-background px-3 py-2 text-sm"
+            value={String(skillsPreferences.privateInfo || "")}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                skillsPreferences: {
+                  ...((prev.skillsPreferences as Record<string, unknown>) || {}),
+                  privateInfo: e.target.value,
+                },
+              }))
+            }
+          />
+        </div>
+      </div>
+
+      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
+    </div>
+  );
+};
 
 export default AddMaid;

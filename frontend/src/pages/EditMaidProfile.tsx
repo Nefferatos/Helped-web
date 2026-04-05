@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Star } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +18,21 @@ const defaultLanguages = [
   "Karnataka",
 ] as const;
 
-const otherInformationQuestions = [
-  "Able to handle pork?",
-  "Able to eat pork?",
-  "Able to care for dog/cat?",
-  "Able to do simple sewing?",
-  "Able to do gardening work?",
-  "Willing to wash car?",
-  "Can work on off-days with compensation?",
+const otherInformationQuestionGroups = [
+  { label: "Able to handle pork?", keys: ["Able to handle pork?"] },
+  { label: "Able to eat pork?", keys: ["Able to eat pork?"] },
+  { label: "Able to care for dog/cat?", keys: ["Able to care for dog/cat?"] },
+  { label: "Able to do simple sewing?", keys: ["Able to do simple sewing?"] },
+  { label: "Able to do gardening work?", keys: ["Able to do gardening work?"] },
+  { label: "Willing to wash car?", keys: ["Willing to wash car?"] },
+  {
+    label: "Willing to work on off-days with  compensation?",
+    keys: [
+      "Can work on off-days with compensation?",
+      "Willing to work on off-days with compensation?",
+      "Willing to work on off-days with  compensation?",
+    ],
+  },
 ] as const;
 
 const defaultWorkAreas = [
@@ -33,30 +41,42 @@ const defaultWorkAreas = [
   "Care of disabled",
   "General housework",
   "Cooking",
-  "Language Skill",
-  "Other Skill",
+  "Language abilities (spoken)",
+  "Other skills, if any",
 ] as const;
 
 const pastIllnessKeys = [
-  "Mental illness",
-  "Epilepsy",
-  "Asthma",
-  "Diabetes",
-  "Hypertension",
-  "Tuberculosis",
-  "Heart disease",
-  "Malaria",
-  "Operations",
+  "(I) Mental illness",
+  "(II) Epilepsy",
+  "(III) Asthma",
+  "(IV) Diabetes",
+  "(V) Hypertension",
+  "(VI) Tuberculosis",
+  "(VII) Heart disease",
+  "(VIII) Malaria",
+  "(IX) Operations",
 ] as const;
 
 type SkillsPreferencesForm = {
+  indianMaidCategory: string;
   availabilityRemark: string;
   privateInfo: string;
   offDaysPerMonth: string;
+  availabilityInterviewOptions: string[];
+  workAreaNotes: Record<string, string>;
   otherInformation: Record<string, boolean>;
 };
 
-type WorkAreasForm = Record<string, { willing: boolean; experience: boolean; evaluation: string }>;
+type WorkAreaFormItem = {
+  willing: boolean;
+  experience: boolean;
+  evaluation: string;
+  yearsOfExperience?: string;
+  rating?: number | null;
+  note?: string;
+};
+
+type WorkAreasForm = Record<string, WorkAreaFormItem>;
 
 type EmploymentHistoryRow = {
   from: string;
@@ -74,8 +94,6 @@ type IntroductionForm = {
   physicalDisabilities: string;
   dietaryRestrictions: string;
   foodHandlingPreferences: string;
-  noPork: boolean;
-  noBeef: boolean;
   pastIllnesses: Record<string, boolean>;
   otherIllnesses: string;
   otherRemarks: string;
@@ -139,17 +157,63 @@ const toBooleanRecord = (value: unknown) => {
   return Object.fromEntries(entries) as Record<string, boolean>;
 };
 
+const buildWorkAreaEvaluation = (rating: number | null, note: string) => {
+  const trimmed = note.trim();
+  if (rating === null) return trimmed || "N.A.";
+  return trimmed ? `${rating}/5 - ${trimmed}` : `${rating}/5`;
+};
+
+const StarRating = ({
+  value,
+  onChange,
+}: {
+  value: number | null;
+  onChange: (next: number | null) => void;
+}) => (
+  <div className="flex items-center justify-center gap-1">
+    {Array.from({ length: 5 }, (_, index) => {
+      const starValue = index + 1;
+      const active = value !== null && starValue <= value;
+      return (
+        <button
+          key={starValue}
+          type="button"
+          className="p-1"
+          onClick={() => onChange(value === starValue ? null : starValue)}
+          aria-label={`Rate ${starValue} star${starValue === 1 ? "" : "s"}`}
+        >
+          <Star className={`h-4 w-4 ${active ? "fill-primary text-primary" : "text-muted-foreground"}`} />
+        </button>
+      );
+    })}
+    <button
+      type="button"
+      className={`ml-1 rounded border px-2 py-1 text-[11px] ${value === null ? "bg-muted" : "bg-background hover:bg-muted"}`}
+      onClick={() => onChange(null)}
+    >
+      N.A.
+    </button>
+  </div>
+);
+
 const toSkillsPreferences = (value: unknown): SkillsPreferencesForm => {
   const obj = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const otherInformation = toBooleanRecord(obj.otherInformation);
-  for (const question of otherInformationQuestions) {
-    if (otherInformation[question] === undefined) otherInformation[question] = false;
+  for (const group of otherInformationQuestionGroups) {
+    for (const key of group.keys) {
+      if (otherInformation[key] === undefined) otherInformation[key] = false;
+    }
   }
 
   return {
+    indianMaidCategory: typeof obj.indianMaidCategory === "string" ? obj.indianMaidCategory : "",
     availabilityRemark: typeof obj.availabilityRemark === "string" ? obj.availabilityRemark : "",
     privateInfo: typeof obj.privateInfo === "string" ? obj.privateInfo : "",
     offDaysPerMonth: typeof obj.offDaysPerMonth === "string" ? obj.offDaysPerMonth : "2",
+    availabilityInterviewOptions: Array.isArray(obj.availabilityInterviewOptions)
+      ? (obj.availabilityInterviewOptions as unknown[]).filter((item): item is string => typeof item === "string")
+      : [],
+    workAreaNotes: toStringRecord(obj.workAreaNotes),
     otherInformation,
   };
 };
@@ -160,17 +224,32 @@ const toWorkAreas = (value: unknown): WorkAreasForm => {
     for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
       if (!raw || typeof raw !== "object") continue;
       const item = raw as Record<string, unknown>;
-      result[key] = {
+      const normalizedKey =
+        key === "Language Skill"
+          ? "Language abilities (spoken)"
+          : key === "Other Skill"
+          ? "Other skills, if any"
+          : key;
+      const rating = typeof item.rating === "number" ? item.rating : null;
+      const note = typeof item.note === "string" ? item.note : "";
+      const evaluation =
+        typeof item.evaluation === "string" && item.evaluation.trim()
+          ? item.evaluation
+          : buildWorkAreaEvaluation(rating, note);
+      result[normalizedKey] = {
         willing: Boolean(item.willing),
         experience: Boolean(item.experience),
-        evaluation: typeof item.evaluation === "string" ? item.evaluation : "-",
+        evaluation,
+        yearsOfExperience: typeof item.yearsOfExperience === "string" ? item.yearsOfExperience : "",
+        rating,
+        note,
       };
     }
   }
 
   for (const key of defaultWorkAreas) {
     if (!result[key]) {
-      result[key] = { willing: false, experience: false, evaluation: "-" };
+      result[key] = { willing: false, experience: false, evaluation: "N.A.", yearsOfExperience: "", rating: null, note: "" };
     }
   }
 
@@ -201,6 +280,22 @@ const toEmploymentHistory = (value: unknown): EmploymentHistoryRow[] => {
 const toIntroduction = (value: unknown): IntroductionForm => {
   const obj = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const pastIllnesses = toBooleanRecord(obj.pastIllnesses);
+  const legacyPastIllnessKeyMap: Record<string, (typeof pastIllnessKeys)[number]> = {
+    "Mental illness": "(I) Mental illness",
+    Epilepsy: "(II) Epilepsy",
+    Asthma: "(III) Asthma",
+    Diabetes: "(IV) Diabetes",
+    Hypertension: "(V) Hypertension",
+    Tuberculosis: "(VI) Tuberculosis",
+    "Heart disease": "(VII) Heart disease",
+    Malaria: "(VIII) Malaria",
+    Operations: "(IX) Operations",
+  };
+  for (const [legacyKey, nextKey] of Object.entries(legacyPastIllnessKeyMap)) {
+    if (pastIllnesses[nextKey] === undefined && pastIllnesses[legacyKey] !== undefined) {
+      pastIllnesses[nextKey] = pastIllnesses[legacyKey];
+    }
+  }
   for (const key of pastIllnessKeys) {
     if (pastIllnesses[key] === undefined) pastIllnesses[key] = false;
   }
@@ -212,8 +307,6 @@ const toIntroduction = (value: unknown): IntroductionForm => {
     physicalDisabilities: typeof obj.physicalDisabilities === "string" ? obj.physicalDisabilities : "",
     dietaryRestrictions: typeof obj.dietaryRestrictions === "string" ? obj.dietaryRestrictions : "",
     foodHandlingPreferences: typeof obj.foodHandlingPreferences === "string" ? obj.foodHandlingPreferences : "",
-    noPork: Boolean(obj.noPork),
-    noBeef: Boolean(obj.noBeef),
     pastIllnesses,
     otherIllnesses: typeof obj.otherIllnesses === "string" ? obj.otherIllnesses : "",
     otherRemarks: typeof obj.otherRemarks === "string" ? obj.otherRemarks : "",
@@ -588,12 +681,46 @@ const EditMaid = () => {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2">
+              <label className="text-sm font-medium">Indian Maid Category</label>
+              <Input
+                value={form.skillsPreferences.indianMaidCategory}
+                onChange={(e) => setForm({ ...form, skillsPreferences: { ...form.skillsPreferences, indianMaidCategory: e.target.value } })}
+                placeholder="e.g. Mizoram maid"
+              />
+            </div>
+            <div className="space-y-2">
               <label className="text-sm font-medium">Off-days Per Month</label>
               <Input value={form.skillsPreferences.offDaysPerMonth} onChange={(e) => setForm({ ...form, skillsPreferences: { ...form.skillsPreferences, offDaysPerMonth: e.target.value } })} />
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2 md:col-span-3">
               <label className="text-sm font-medium">Availability Remark</label>
               <Input value={form.skillsPreferences.availabilityRemark} onChange={(e) => setForm({ ...form, skillsPreferences: { ...form.skillsPreferences, availabilityRemark: e.target.value } })} />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Interview Availability</label>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              {[
+                "FDW is not available for interview",
+                "FDW can be interviewed by phone",
+                "FDW can be interviewed by video-conference",
+                "FDW can be interviewed in person",
+              ].map((opt) => (
+                <label key={opt} className="flex items-center gap-2 rounded-md border p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.skillsPreferences.availabilityInterviewOptions.includes(opt)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? Array.from(new Set([...form.skillsPreferences.availabilityInterviewOptions, opt]))
+                        : form.skillsPreferences.availabilityInterviewOptions.filter((v) => v !== opt);
+                      setForm({ ...form, skillsPreferences: { ...form.skillsPreferences, availabilityInterviewOptions: next } });
+                    }}
+                  />
+                  {opt}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -605,25 +732,18 @@ const EditMaid = () => {
           <div className="space-y-2">
             <label className="text-sm font-medium">Other Information</label>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {otherInformationQuestions.map((question) => (
-                <label key={question} className="flex items-center gap-2 rounded-md border p-3 text-sm">
+              {otherInformationQuestionGroups.map((group) => (
+                <label key={group.label} className="flex items-center gap-2 rounded-md border p-3 text-sm">
                   <input
                     type="checkbox"
-                    checked={Boolean(form.skillsPreferences.otherInformation[question])}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        skillsPreferences: {
-                          ...form.skillsPreferences,
-                          otherInformation: {
-                            ...form.skillsPreferences.otherInformation,
-                            [question]: e.target.checked,
-                          },
-                        },
-                      })
-                    }
+                    checked={group.keys.some((key) => Boolean(form.skillsPreferences.otherInformation[key]))}
+                    onChange={(e) => {
+                      const nextOther = { ...form.skillsPreferences.otherInformation };
+                      for (const key of group.keys) nextOther[key] = e.target.checked;
+                      setForm({ ...form, skillsPreferences: { ...form.skillsPreferences, otherInformation: nextOther } });
+                    }}
                   />
-                  {question}
+                  {group.label}
                 </label>
               ))}
             </div>
@@ -643,6 +763,9 @@ const EditMaid = () => {
                   <th className="px-3 py-2 text-left">Area</th>
                   <th className="px-3 py-2 text-center w-28">Willing</th>
                   <th className="px-3 py-2 text-center w-32">Experience</th>
+                  <th className="px-3 py-2 text-center w-28">Years</th>
+                  <th className="px-3 py-2 text-center w-48">Rating</th>
+                  <th className="px-3 py-2 text-left">Notes</th>
                   <th className="px-3 py-2 text-left w-40">Evaluation</th>
                 </tr>
               </thead>
@@ -651,18 +774,135 @@ const EditMaid = () => {
                   <tr key={area} className="border-t">
                     <td className="px-3 py-2 font-medium">{area}</td>
                     <td className="px-3 py-2 text-center">
-                      <input type="checkbox" checked={Boolean(value.willing)} onChange={(e) => setForm({ ...form, workAreas: { ...form.workAreas, [area]: { ...form.workAreas[area], willing: e.target.checked } } })} />
+                      <input
+                        type="checkbox"
+                        checked={Boolean(value.willing)}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            workAreas: {
+                              ...form.workAreas,
+                              [area]: { ...form.workAreas[area], willing: e.target.checked },
+                            },
+                          })
+                        }
+                      />
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <input type="checkbox" checked={Boolean(value.experience)} onChange={(e) => setForm({ ...form, workAreas: { ...form.workAreas, [area]: { ...form.workAreas[area], experience: e.target.checked } } })} />
+                      <input
+                        type="checkbox"
+                        checked={Boolean(value.experience)}
+                        onChange={(e) => {
+                          const nextExperience = e.target.checked;
+                          const nextYears = nextExperience ? String(value.yearsOfExperience || "") : "";
+                          setForm({
+                            ...form,
+                            workAreas: {
+                              ...form.workAreas,
+                              [area]: {
+                                ...form.workAreas[area],
+                                experience: nextExperience,
+                                yearsOfExperience: nextYears,
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <Input
+                        className="h-9"
+                        value={String(value.yearsOfExperience || "")}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            workAreas: {
+                              ...form.workAreas,
+                              [area]: { ...form.workAreas[area], yearsOfExperience: e.target.value },
+                            },
+                          })
+                        }
+                        disabled={!value.experience}
+                      />
                     </td>
                     <td className="px-3 py-2">
-                      <Input value={value.evaluation} onChange={(e) => setForm({ ...form, workAreas: { ...form.workAreas, [area]: { ...form.workAreas[area], evaluation: e.target.value } } })} />
+                      <StarRating
+                        value={value.rating ?? null}
+                        onChange={(nextRating) => {
+                          const nextNote = String(value.note || "");
+                          setForm({
+                            ...form,
+                            workAreas: {
+                              ...form.workAreas,
+                              [area]: {
+                                ...form.workAreas[area],
+                                rating: nextRating,
+                                evaluation: buildWorkAreaEvaluation(nextRating, nextNote),
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <textarea
+                        className="min-h-[44px] w-full rounded-md border bg-background px-2 py-1 text-sm"
+                        value={String(value.note || "")}
+                        onChange={(e) => {
+                          const nextNote = e.target.value;
+                          const nextRating = value.rating ?? null;
+                          setForm({
+                            ...form,
+                            workAreas: {
+                              ...form.workAreas,
+                              [area]: {
+                                ...form.workAreas[area],
+                                note: nextNote,
+                                evaluation: buildWorkAreaEvaluation(nextRating, nextNote),
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input value={value.evaluation} readOnly />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Skill Notes (from Add Maid form)</label>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {[
+                ["Care of infants/children", "Care of infants/children"],
+                ["Cooking", "Cooking"],
+                ["Language abilities (spoken)", "Language abilities (spoken)"],
+                ["Other skills, if any", "Other Skill"],
+              ].map(([label, key]) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-sm font-medium">{label}</label>
+                  <Input
+                    value={String(form.skillsPreferences.workAreaNotes[key] || "")}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        skillsPreferences: {
+                          ...form.skillsPreferences,
+                          workAreaNotes: {
+                            ...form.skillsPreferences.workAreaNotes,
+                            [key]: e.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -737,7 +977,6 @@ const EditMaid = () => {
               ["Allergies", "allergies"],
               ["Physical Disabilities", "physicalDisabilities"],
               ["Dietary Restrictions", "dietaryRestrictions"],
-              ["Food Handling Preferences", "foodHandlingPreferences"],
               ["Other Illnesses", "otherIllnesses"],
               ["Other Remarks", "otherRemarks"],
               ["Availability", "availability"],
@@ -755,15 +994,58 @@ const EditMaid = () => {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-              <input type="checkbox" checked={form.introduction.noPork} onChange={(e) => setForm({ ...form, introduction: { ...form.introduction, noPork: e.target.checked } })} />
-              No Pork
-            </label>
-            <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-              <input type="checkbox" checked={form.introduction.noBeef} onChange={(e) => setForm({ ...form, introduction: { ...form.introduction, noBeef: e.target.checked } })} />
-              No Beef
-            </label>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Food Handling Preferences</label>
+            {(() => {
+              const raw = String(form.introduction.foodHandlingPreferences || "");
+              const parts = raw
+                .split(",")
+                .map((p) => p.trim())
+                .filter(Boolean);
+              const hasNoPork = parts.includes("No Pork");
+              const hasNoBeef = parts.includes("No Beef");
+              const other = parts.filter((p) => p !== "No Pork" && p !== "No Beef").join(", ");
+
+              const setFoodPrefs = (nextNoPork: boolean, nextNoBeef: boolean, nextOther: string) => {
+                const nextParts = [
+                  ...(nextNoPork ? ["No Pork"] : []),
+                  ...(nextNoBeef ? ["No Beef"] : []),
+                  ...(nextOther.trim() ? [nextOther.trim()] : []),
+                ];
+                setForm({
+                  ...form,
+                  introduction: {
+                    ...form.introduction,
+                    foodHandlingPreferences: nextParts.join(", "),
+                  },
+                });
+              };
+
+              return (
+                <div className="flex flex-wrap items-center gap-4 rounded-md border p-3 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={hasNoPork}
+                      onChange={(e) => setFoodPrefs(e.target.checked, hasNoBeef, other)}
+                    />
+                    No Pork
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={hasNoBeef}
+                      onChange={(e) => setFoodPrefs(hasNoPork, e.target.checked, other)}
+                    />
+                    No Beef
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Others</span>
+                    <Input className="h-9 w-64" value={other} onChange={(e) => setFoodPrefs(hasNoPork, hasNoBeef, e.target.value)} />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="space-y-2">
