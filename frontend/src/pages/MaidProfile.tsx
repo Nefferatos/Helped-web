@@ -332,7 +332,7 @@ const MaidProfilePage = () => {
     ],
     ["Date of Birth", formatDate(maid.dateOfBirth)],
     ["Place of Birth", maid.placeOfBirth],
-    ["Height/Weight", `${maid.height}cm/${maid.weight}Kg`],
+    ["Height/Weight", `${maid.height}cm / ${maid.weight}Kg`],
     ["Religion", maid.religion],
     ["Marital Status", maid.maritalStatus],
     ["Number of Children", String(maid.numberOfChildren)],
