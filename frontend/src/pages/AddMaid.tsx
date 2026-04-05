@@ -572,8 +572,48 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
           right={<FormRow label="Ref Code:"><Input value={formData.referenceCode} onChange={(e) => setFormData((prev) => ({ ...prev, referenceCode: e.target.value }))} /></FormRow>}
         />
         <FormRow2Col
-          left={<FormRow label="Type:"><SelectInput value={formData.type} onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))} options={["New maid", "Transfer maid", "APS maid", "Ex-Singapore maid", "Ex-Hong Kong maid", "Ex-Taiwan maid", "Ex-Malaysia maid", "Ex-Middle East maid", "Applying to work in Hong Kong","Applying to work in Canada","Applying to work in Taiwan"]} /></FormRow>}
-          right={<FormRow label="Nationality:"><SelectInput value={formData.nationality} onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))} options={["Filipino maid", "Indonesian maid", "Indian maid", "Myanmar maid", "Sri Lankan maid", "Bangladeshi maid", "Nepali maid", "Cambodian maid", "Others"]} /></FormRow>}
+          left={
+            <FormRow label="Type:">
+              <SelectInput
+                value={formData.type}
+                onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))}
+                options={[
+                  { value: "", label: "Select Type", disabled: true },
+                  "New maid",
+                  "Transfer maid",
+                  "APS maid",
+                  "Ex-Singapore maid",
+                  "Ex-Hong Kong maid",
+                  "Ex-Taiwan maid",
+                  "Ex-Malaysia maid",
+                  "Ex-Middle East maid",
+                  "Applying to work in Hong Kong",
+                  "Applying to work in Canada",
+                  "Applying to work in Taiwan",
+                ]}
+              />
+            </FormRow>
+          }
+          right={
+            <FormRow label="Nationality:">
+              <SelectInput
+                value={formData.nationality}
+                onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))}
+                options={[
+                  { value: "", label: "Select Nationality", disabled: true },
+                  "Filipino maid",
+                  "Indonesian maid",
+                  "Indian maid",
+                  "Myanmar maid",
+                  "Sri Lankan maid",
+                  "Bangladeshi maid",
+                  "Nepali maid",
+                  "Cambodian maid",
+                  "Others",
+                ]}
+              />
+            </FormRow>
+          }
         />
         <FormRow2Col
           left={<div />}
@@ -714,7 +754,14 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
           left={
             <FormRow label="Education:">
               <SelectInput
-                options={["Primary Level(<=6 yrs)", "Secondary Level(7~9 yrs)", "High School(10~12 yrs)", "Vocational Course", "College/Degree (>=13 yrs)"]}
+                options={[
+                  { value: "", label: "Select Education", disabled: true },
+                  "Primary Level(<=6 yrs)",
+                  "Secondary Level(7~9 yrs)",
+                  "High School(10~12 yrs)",
+                  "Vocational Course",
+                  "College/Degree (>=13 yrs)",
+                ]}
                 value={formData.educationLevel}
                 onChange={(e) => setFormData((prev) => ({ ...prev, educationLevel: e.target.value }))}
               />
@@ -723,7 +770,17 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
           right={
             <FormRow label="Religion:">
               <SelectInput
-                options={["Catholic", "Christian", "Muslim", "Hindu", "Buddhist", "Sikh", "Free Thinker", "Others"]}
+                options={[
+                  { value: "", label: "Select Religion", disabled: true },
+                  "Catholic",
+                  "Christian",
+                  "Muslim",
+                  "Hindu",
+                  "Buddhist",
+                  "Sikh",
+                  "Free Thinker",
+                  "Others",
+                ]}
                 value={formData.religion}
                 onChange={(e) => setFormData((prev) => ({ ...prev, religion: e.target.value }))}
               />
@@ -743,7 +800,15 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
           right={
             <FormRow label="Marital Status:">
               <SelectInput
-                options={["Single", "Single Parent", "Married", "Divorced", "Widowed", "Separated"]}
+                options={[
+                  { value: "", label: "Select Marital Status", disabled: true },
+                  "Single",
+                  "Single Parent",
+                  "Married",
+                  "Divorced",
+                  "Widowed",
+                  "Separated",
+                ]}
                 value={formData.maritalStatus}
                 onChange={(e) => setFormData((prev) => ({ ...prev, maritalStatus: e.target.value }))}
               />
@@ -852,7 +917,7 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
 
       <div className="section-header">Language Skills:</div>
       <div className="space-y-3 pt-2">
-        {["English", "Mandarin/Chinese-Dialect", "Bahasa Indonesia/Malaysia", "Hindi", "Tamil"].map((lang) => (
+        {["English", "Hindi", "Tamil"].map((lang) => (
           <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
             <RadioGroup

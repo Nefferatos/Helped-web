@@ -358,6 +358,12 @@ const MaidProfilePage = () => {
         <div className="flex flex-wrap items-center gap-4 border-b pb-4 text-sm">
           <button className="text-primary hover:underline" onClick={handleBack} >View All Maids</button>
           <button
+            className="text-primary hover:underline"
+            onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))}
+          >
+            Full View
+          </button>
+          <button
             className="flex items-center gap-1 text-primary hover:underline"
             onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))}
           >

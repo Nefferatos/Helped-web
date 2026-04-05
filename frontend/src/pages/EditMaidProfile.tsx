@@ -9,8 +9,6 @@ import type { MaidProfile } from "@/lib/maids";
 
 const defaultLanguages = [
   "English",
-  "Mandarin/Chinese-Dialect",
-  "Bahasa Indonesia/Malaysia",
   "Hindi",
   "Tamil",
   "Malayalam",
@@ -563,6 +561,95 @@ const EditMaid = () => {
         <section className="space-y-4">
           <h3 className="text-sm font-semibold text-muted-foreground">Basic Info</h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {(() => {
+              const selectConfigs: Record<string, { placeholder: string; options: string[] }> = {
+                type: {
+                  placeholder: "Select Type",
+                  options: [
+                    "New maid",
+                    "Transfer maid",
+                    "APS maid",
+                    "Ex-Singapore maid",
+                    "Ex-Hong Kong maid",
+                    "Ex-Taiwan maid",
+                    "Ex-Malaysia maid",
+                    "Ex-Middle East maid",
+                    "Applying to work in Hong Kong",
+                    "Applying to work in Canada",
+                    "Applying to work in Taiwan",
+                  ],
+                },
+                nationality: {
+                  placeholder: "Select Nationality",
+                  options: [
+                    "Filipino maid",
+                    "Indonesian maid",
+                    "Indian maid",
+                    "Myanmar maid",
+                    "Sri Lankan maid",
+                    "Bangladeshi maid",
+                    "Nepali maid",
+                    "Cambodian maid",
+                    "Others",
+                  ],
+                },
+                religion: {
+                  placeholder: "Select Religion",
+                  options: ["Catholic", "Christian", "Muslim", "Hindu", "Buddhist", "Sikh", "Free Thinker", "Others"],
+                },
+                maritalStatus: {
+                  placeholder: "Select Marital Status",
+                  options: ["Single", "Single Parent", "Married", "Divorced", "Widowed", "Separated"],
+                },
+                educationLevel: {
+                  placeholder: "Select Education",
+                  options: [
+                    "Primary Level(<=6 yrs)",
+                    "Secondary Level(7~9 yrs)",
+                    "High School(10~12 yrs)",
+                    "Vocational Course",
+                    "College/Degree (>=13 yrs)",
+                  ],
+                },
+              };
+
+              const renderField = (label: string, key: string) => {
+                const selectConfig = selectConfigs[key];
+                if (!selectConfig) {
+                  return (
+                    <div key={key} className="space-y-2">
+                      <label className="text-sm font-medium">{label}</label>
+                      <Input
+                        value={String((form as unknown as Record<string, unknown>)[key] ?? "")}
+                        onChange={(e) => setForm({ ...form, [key]: e.target.value } as MaidProfileFormState)}
+                      />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={key} className="space-y-2">
+                    <label className="text-sm font-medium">{label}</label>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      value={String((form as unknown as Record<string, unknown>)[key] ?? "")}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.value } as MaidProfileFormState)}
+                    >
+                      <option value="" disabled>
+                        {selectConfig.placeholder}
+                      </option>
+                      {selectConfig.options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              };
+
+              return (
+                <>
             {[
               ["Full Name", "fullName"],
               ["Reference Code", "referenceCode"],
@@ -572,15 +659,10 @@ const EditMaid = () => {
               ["Religion", "religion"],
               ["Marital Status", "maritalStatus"],
               ["Education Level", "educationLevel"],
-            ].map(([label, key]) => (
-              <div key={key} className="space-y-2">
-                <label className="text-sm font-medium">{label}</label>
-                <Input
-                  value={String((form as unknown as Record<string, unknown>)[key] ?? "")}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value } as MaidProfileFormState)}
-                />
-              </div>
-            ))}
+            ].map(([label, key]) => renderField(label, key))}
+                </>
+              );
+            })()}
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Date of Birth</label>
