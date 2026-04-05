@@ -4,6 +4,7 @@ export interface ClientUser {
   company?: string;
   phone?: string;
   email: string;
+  emailVerified?: boolean;
   profileImageUrl?: string;
   createdAt: string;
 }

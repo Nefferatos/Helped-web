@@ -2,9 +2,11 @@ import { Request, Response } from 'express'
 import { getAuthenticatedClient, getRequestToken } from '../auth'
 import {
   authenticateClientStore,
+  confirmClientEmailStore,
   createClientSessionStore,
   deleteClientSessionStore,
   registerClientStore,
+  setClientEmailConfirmationCodeStore,
   updateClientStore,
 } from '../store'
 
@@ -14,6 +16,7 @@ const toSafeClient = (client: {
   company?: string
   phone?: string
   email: string
+  emailVerified?: boolean
   profileImageUrl?: string
   createdAt: string
 }) => ({
@@ -22,6 +25,7 @@ const toSafeClient = (client: {
   company: client.company ?? '',
   phone: client.phone ?? '',
   email: client.email,
+  emailVerified: Boolean(client.emailVerified),
   profileImageUrl: client.profileImageUrl ?? '',
   createdAt: client.createdAt,
 })
@@ -49,11 +53,16 @@ export const registerClient = async (req: Request, res: Response) => {
       email: email.trim(),
       password: password.trim(),
     })
-    const session = await createClientSessionStore(client.id)
+    const confirmation = await setClientEmailConfirmationCodeStore(client.email)
+    if (!confirmation) {
+      return res.status(500).json({ error: 'Failed to generate confirmation code' })
+    }
 
-    res.status(201).json({
-      token: session.token,
-      client: toSafeClient(client),
+    res.status(200).json({
+      requiresConfirmation: true,
+      email: client.email,
+      delivery: 'not_configured',
+      devConfirmationCode: confirmation.code,
     })
   } catch (error) {
     if (error instanceof Error && error.message === 'CLIENT_EMAIL_EXISTS') {
@@ -81,6 +90,16 @@ export const loginClient = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid email or password' })
     }
 
+    if (client.emailVerified === false) {
+      const confirmation = await setClientEmailConfirmationCodeStore(client.email)
+      return res.status(200).json({
+        requiresConfirmation: true,
+        email: client.email,
+        delivery: 'not_configured',
+        devConfirmationCode: confirmation?.code,
+      })
+    }
+
     const session = await createClientSessionStore(client.id)
     res.status(200).json({
       token: session.token,
@@ -89,6 +108,53 @@ export const loginClient = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error logging in client:', error)
     res.status(500).json({ error: 'Failed to login client' })
+  }
+}
+
+export const confirmClientEmail = async (req: Request, res: Response) => {
+  try {
+    const { email, code } = req.body as { email?: string; code?: string }
+    if (!email?.trim() || !code?.trim()) {
+      return res.status(400).json({ error: 'email and code are required' })
+    }
+
+    const result = await confirmClientEmailStore(email.trim(), code.trim())
+    if (!result.ok) {
+      return res.status(400).json({ error: result.error })
+    }
+
+    const session = await createClientSessionStore(result.client.id)
+    res.status(200).json({
+      token: session.token,
+      client: toSafeClient(result.client),
+    })
+  } catch (error) {
+    console.error('Error confirming client email:', error)
+    res.status(500).json({ error: 'Failed to confirm email' })
+  }
+}
+
+export const resendClientEmailConfirmation = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body as { email?: string }
+    if (!email?.trim()) {
+      return res.status(400).json({ error: 'email is required' })
+    }
+
+    const confirmation = await setClientEmailConfirmationCodeStore(email.trim())
+    if (!confirmation) {
+      return res.status(404).json({ error: 'Client not found' })
+    }
+
+    res.status(200).json({
+      requiresConfirmation: true,
+      email: confirmation.client.email,
+      delivery: 'not_configured',
+      devConfirmationCode: confirmation.code,
+    })
+  } catch (error) {
+    console.error('Error resending confirmation code:', error)
+    res.status(500).json({ error: 'Failed to resend confirmation code' })
   }
 }
 

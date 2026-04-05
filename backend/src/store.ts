@@ -98,6 +98,9 @@ export interface ClientRecord {
   phone?: string
   email: string
   password: string
+  emailVerified?: boolean
+  emailConfirmationCode?: string
+  emailConfirmationCodeCreatedAt?: string
   profileImageUrl?: string
   createdAt: string
 }
@@ -293,6 +296,8 @@ const dataFile = path.join(dataDir, 'app-data.json')
 let cache: AppData | null = null
 
 const stripBom = (value: string) => value.replace(/^\uFEFF/, '')
+const generateEmailConfirmationCode = () =>
+  String(Math.floor(100000 + Math.random() * 900000))
 
 const mergeAppData = (raw: Partial<AppData>): AppData => {
   const defaults = defaultData()
@@ -332,6 +337,9 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       phone: client.phone ?? '',
       email: client.email ?? '',
       profileImageUrl: client.profileImageUrl ?? '',
+      emailVerified: client.emailVerified ?? true,
+      emailConfirmationCode: client.emailConfirmationCode ?? '',
+      emailConfirmationCodeCreatedAt: client.emailConfirmationCodeCreatedAt ?? '',
       createdAt: client.createdAt ?? now(),
     })),
     clientSessions: raw.clientSessions ?? defaults.clientSessions,
@@ -785,6 +793,9 @@ export const registerClientStore = async (payload: {
     phone: payload.phone ?? '',
     email: payload.email,
     password: payload.password,
+    emailVerified: false,
+    emailConfirmationCode: '',
+    emailConfirmationCodeCreatedAt: '',
     profileImageUrl: '',
     createdAt: now(),
   }
@@ -792,6 +803,50 @@ export const registerClientStore = async (payload: {
   data.clients.unshift(record)
   await saveData(data)
   return record
+}
+
+export const setClientEmailConfirmationCodeStore = async (email: string) => {
+  const data = await loadData()
+  const normalizedEmail = email.trim().toLowerCase()
+  const client = data.clients.find(
+    (item) => item.email.trim().toLowerCase() === normalizedEmail
+  )
+  if (!client) return null
+
+  const code = generateEmailConfirmationCode()
+  client.emailConfirmationCode = code
+  client.emailConfirmationCodeCreatedAt = now()
+  await saveData(data)
+  return { client, code }
+}
+
+export const confirmClientEmailStore = async (email: string, code: string) => {
+  const data = await loadData()
+  const normalizedEmail = email.trim().toLowerCase()
+  const client = data.clients.find(
+    (item) => item.email.trim().toLowerCase() === normalizedEmail
+  )
+  if (!client) return { ok: false as const, error: 'Client not found' }
+
+  const stored = String(client.emailConfirmationCode || '').trim()
+  if (!stored) return { ok: false as const, error: 'No confirmation code found' }
+  if (stored !== code.trim()) return { ok: false as const, error: 'Invalid confirmation code' }
+
+  const createdAt = client.emailConfirmationCodeCreatedAt
+    ? new Date(client.emailConfirmationCodeCreatedAt)
+    : null
+  if (createdAt && Number.isFinite(createdAt.getTime())) {
+    const ageMs = Date.now() - createdAt.getTime()
+    if (ageMs > 15 * 60 * 1000) {
+      return { ok: false as const, error: 'Confirmation code expired' }
+    }
+  }
+
+  client.emailVerified = true
+  client.emailConfirmationCode = ''
+  client.emailConfirmationCodeCreatedAt = ''
+  await saveData(data)
+  return { ok: true as const, client }
 }
 
 export const authenticateClientStore = async (

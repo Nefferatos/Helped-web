@@ -201,9 +201,34 @@ const MaidProfilePage = () => {
   const otherInformation = (skillsPreferences.otherInformation as Record<string, boolean>) || {};
   const workAreaNotes = (skillsPreferences.workAreaNotes as Record<string, string>) || {};
   const pastIllnesses = (introduction.pastIllnesses as Record<string, boolean>) || {};
-  const workAreas = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string }]>;
+  const workAreasOrder = [
+    "Care of infants/children",
+    "Care of elderly",
+    "Care of disabled",
+    "General housework",
+    "Cooking",
+    "Language abilities (spoken)",
+    "Other skills, if any",
+  ] as const;
+
+  const rawWorkAreas = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string }]>;
+  const workAreas = workAreasOrder
+    .map((area) => rawWorkAreas.find(([key]) => key === area) ?? null)
+    .filter(Boolean) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string; rating?: number | null; note?: string }]>;
   const employment = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
-  const languages = Object.entries(maid.languageSkills || {});
+  const languageKeyMap = [
+    { label: "English", keys: ["English"] },
+    { label: "Hindi", keys: ["Hindi"] },
+    { label: "Tamil", keys: ["Tamil"] },
+    { label: "Mandarin / Chinese Dialect", keys: ["Mandarin / Chinese Dialect", "Mandarin/Chinese-Dialect"] },
+    { label: "Bahasa Indonesia / Malaysia", keys: ["Bahasa Indonesia / Malaysia", "Bahasa Indonesia/Malaysia"] },
+  ] as const;
+  const languages = languageKeyMap
+    .map((item) => {
+      const level = item.keys.map((key) => (maid.languageSkills || {})[key]).find((val) => String(val || "").trim());
+      return level ? [item.label, String(level)] as const : null;
+    })
+    .filter(Boolean) as Array<[string, string]>;
   const photos =
     Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
       ? maid.photoDataUrls
@@ -535,14 +560,29 @@ const MaidProfilePage = () => {
               </tr>
             </thead>
             <tbody>
-              {workAreas.map(([area, config]) => (
+              {workAreas
+                .filter(([, config]) => {
+                  const evalValue = String(config.evaluation || "").trim();
+                  return Boolean(config.willing || config.experience || (evalValue && evalValue !== "-" && evalValue !== "N.A."));
+                })
+                .map(([area, config]) => {
+                  const rawAge = String(workAreaNotes["Care of infants/children"] || "").trim();
+                  const formattedAge = rawAge ? rawAge.replace(/\s*-\s*/g, "–") : "";
+                  const needsYears = formattedAge && !/year/i.test(formattedAge);
+                  const areaLabel =
+                    area === "Care of infants/children" && formattedAge
+                      ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})`
+                      : area;
+
+                  return (
                 <tr key={area}>
-                  <td className="border px-3 py-2">{area}</td>
+                  <td className="border px-3 py-2">{areaLabel}</td>
                   <td className="border px-3 py-2 text-center">{config.willing ? "Yes" : "No"}</td>
                   <td className="border px-3 py-2 text-center">{config.experience ? "Yes" : "No"}</td>
                   <td className="border px-3 py-2 text-center">{config.evaluation || "-"}</td>
                 </tr>
-              ))}
+                  );
+                })}
             </tbody>
           </table>
         </div>

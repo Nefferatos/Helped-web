@@ -917,7 +917,7 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
 
       <div className="section-header">Language Skills:</div>
       <div className="space-y-3 pt-2">
-        {["English", "Hindi", "Tamil"].map((lang) => (
+        {["English", "Mandarin / Chinese Dialect", "Bahasa Indonesia / Malaysia", "Hindi", "Tamil"].map((lang) => (
           <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
             <RadioGroup

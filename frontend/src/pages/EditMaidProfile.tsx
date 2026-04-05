@@ -9,6 +9,8 @@ import type { MaidProfile } from "@/lib/maids";
 
 const defaultLanguages = [
   "English",
+  "Mandarin / Chinese Dialect",
+  "Bahasa Indonesia / Malaysia",
   "Hindi",
   "Tamil",
   "Malayalam",
