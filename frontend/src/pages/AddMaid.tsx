@@ -1,12 +1,180 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/sonner";
+import { defaultMaidProfile, type MaidProfile } from "@/lib/maids";
+import { useNavigate } from "react-router-dom"; // NEW: redirect after final tab
 
 const tabs = ["PROFILE", "SKILLS", "EMPLOYMENT HISTORY", "AVAILABILITY/REMARK", "INTRODUCTION", "PUBLIC INTRODUCTION", "PRIVATE INFO"];
 
 const AddMaid = () => {
+  const navigate = useNavigate(); // NEW
   const [activeTab, setActiveTab] = useState(0);
+  const [formData, setFormData] = useState<MaidProfile>(defaultMaidProfile);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isManagePhotosOpen, setIsManagePhotosOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false); // NEW: confirmation modal state
+  // Wizard state: prevents skipping forward unless saved
+  const [maxUnlockedTab, setMaxUnlockedTab] = useState(0);
+  // Ensures we only create (POST) once
+  const [isCreated, setIsCreated] = useState(false);
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+
+  const handleUploadPhoto = () => {
+    setIsManagePhotosOpen(true);
+  };
+
+  const photos =
+    Array.isArray(formData.photoDataUrls) && formData.photoDataUrls.length > 0
+      ? formData.photoDataUrls
+      : formData.photoDataUrl
+      ? [formData.photoDataUrl]
+      : [];
+  const passportOrTwoByTwoPhoto = photos[0] ?? "";
+  const fullBodyPhoto = photos[1] ?? "";
+  const extraPhotos = photos.slice(2);
+
+  const savePhotos = async (nextPhotos: string[]) => {
+    const referenceCode = String(formData.referenceCode || "").trim();
+    if (!referenceCode) {
+      toast.error("Ref Code is required before uploading photos");
+      return;
+    }
+
+    const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
+    const optimistic: MaidProfile = {
+      ...formData,
+      referenceCode,
+      photoDataUrls: cleaned,
+      photoDataUrl: cleaned[0] || "",
+      hasPhoto: cleaned.length > 0,
+    };
+
+    try {
+      setIsUploadingPhoto(true);
+      setFormData(optimistic);
+
+      const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(optimistic),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+      if (!response.ok || !data.maid) {
+        throw new Error(data.error || "Failed to upload photos (save the profile first)");
+      }
+
+      setFormData(data.maid);
+      toast.success("Photos updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload photos");
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const replacePhotoAt = async (index: number, file?: File) => {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const next = [...photos];
+      next[index] = dataUrl;
+      await savePhotos(next);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to read photo");
+    }
+  };
+
+  const addExtraPhoto = async (file?: File) => {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      await savePhotos([...photos, dataUrl]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to read photo");
+    }
+  };
+
+  const removePhotoAt = async (index: number) => {
+    await savePhotos(photos.filter((_, i) => i !== index));
+  };
+
+  // NEW: clicking Save opens confirmation modal (does not save immediately)
+  const handleSubmit = () => {
+    if (isSaving) return;
+    setIsConfirmOpen(true);
+  };
+
+  // NEW: actual save logic (POST/PUT) runs only after user confirms
+  const performSave = async () => {
+    if (isSaving) return;
+
+    const payload: MaidProfile = {
+      ...formData,
+      fullName: String(formData.fullName || "").trim(),
+      referenceCode: String(formData.referenceCode || "").trim(),
+      type: String(formData.type || "").trim(),
+      nationality: String(formData.nationality || "").trim(),
+      placeOfBirth: String(formData.placeOfBirth || "").trim(),
+    };
+
+    if (!payload.fullName || !payload.referenceCode) {
+      toast.error("Maid Name and Ref Code are required");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      // Save strategy: first tab creates once; subsequent saves update the same record.
+      const shouldCreate = activeTab === 0 && !isCreated;
+      const url = shouldCreate ? "/api/maids" : `/api/maids/${encodeURIComponent(payload.referenceCode)}`;
+      const response = await fetch(url, {
+        method: shouldCreate ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+      if (!response.ok || !data.maid) {
+        throw new Error(data.error || "Failed to save maid profile");
+      }
+
+      // Persist latest server copy
+      setFormData(data.maid);
+
+      // Mark created so we don't POST again from tab 0
+      if (shouldCreate) setIsCreated(true);
+
+      // Unlock next step only after a successful save
+      setMaxUnlockedTab((prev) => Math.max(prev, Math.min(activeTab + 1, tabs.length - 1)));
+
+      // Last step: stay put and finish message + label handled by props
+      if (activeTab >= tabs.length - 1) {
+        toast.success("Maid profile completed successfully"); // UPDATED message
+        navigate("/maidprofile"); // NEW: redirect after final tab
+        return;
+      }
+
+      // Step-by-step: move to next tab automatically
+      toast.success(shouldCreate ? "Maid profile created" : "Maid profile saved");
+      setActiveTab(activeTab + 1);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save maid profile");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="page-container">
@@ -19,7 +187,14 @@ const AddMaid = () => {
         {tabs.map((tab, i) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(i)}
+            // Restrict forward navigation: can only go to unlocked steps; can always go back
+            onClick={() => {
+              if (i <= maxUnlockedTab) {
+                setActiveTab(i);
+                return;
+              }
+              toast.error("Please save & continue to unlock the next step");
+            }}
             className={`px-3 py-2 text-xs font-medium rounded-t-md border border-b-0 transition-colors active:scale-[0.97] ${
               activeTab === i
                 ? "bg-card text-primary border-border"
@@ -31,18 +206,128 @@ const AddMaid = () => {
         ))}
       </div>
 
-      {activeTab === 0 && <ProfileTab />}
-      {activeTab === 1 && <SkillsTab />}
-      {activeTab === 2 && <EmploymentHistoryTab />}
-      {activeTab === 3 && <AvailabilityRemarkTab />}
-      {activeTab === 4 && <IntroductionTab />}
-      {activeTab === 5 && <PublicIntroductionTab />}
-      {activeTab === 6 && <PrivateInfoTab />}
+      {/* Dynamic primary label for last step */}
+      {/* UPDATED: Save button now opens confirm modal first */}
+      {activeTab === 0 && <ProfileTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 1 && <SkillsTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 2 && <EmploymentHistoryTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 3 && <AvailabilityRemarkTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 4 && <IntroductionTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 5 && <PublicIntroductionTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {activeTab === 6 && <PrivateInfoTab onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+
+      {/* NEW: Confirmation dialog shown before POST/PUT */}
+      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Submission</DialogTitle>
+            <DialogDescription>
+              {activeTab >= tabs.length - 1
+                ? "You are about to complete and submit this profile. Continue?"
+                : "Are you sure you want to save this information and continue?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsConfirmOpen(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setIsConfirmOpen(false); // close first, then save
+                void performSave();
+              }}
+              disabled={isSaving}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isManagePhotosOpen} onOpenChange={setIsManagePhotosOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Manage Photos</DialogTitle>
+            <DialogDescription>
+              Slot 1: Passport/2x2, Slot 2: Full body, then up to 3 extra photos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="space-y-3">
+              <p className="text-sm font-semibold">Passport / 2x2</p>
+              <div className="h-40 w-40 overflow-hidden rounded border bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+                {passportOrTwoByTwoPhoto ? (
+                  <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-cover" />
+                ) : (
+                  "No photo"
+                )}
+              </div>
+              <input type="file" accept="image/*" disabled={isUploadingPhoto} onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
+              <Button type="button" variant="outline" disabled={isUploadingPhoto || !passportOrTwoByTwoPhoto} onClick={() => void removePhotoAt(0)}>
+                Remove
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-semibold">Full body</p>
+              <div className="h-64 w-44 overflow-hidden rounded border bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+                {fullBodyPhoto ? (
+                  <img src={fullBodyPhoto} alt="full body" className="h-full w-full object-cover" />
+                ) : (
+                  "No photo"
+                )}
+              </div>
+              <input type="file" accept="image/*" disabled={isUploadingPhoto} onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
+              <Button type="button" variant="outline" disabled={isUploadingPhoto || !fullBodyPhoto} onClick={() => void removePhotoAt(1)}>
+                Remove
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-semibold">Extra photos ({extraPhotos.length}/3)</p>
+              <div className="grid grid-cols-3 gap-2">
+                {extraPhotos.map((photo, index) => (
+                  <div key={`${photo}-${index}`} className="relative h-20 overflow-hidden rounded border bg-muted/30">
+                    <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1 rounded bg-background/80 px-2 py-0.5 text-xs"
+                      onClick={() => void removePhotoAt(index + 2)}
+                      disabled={isUploadingPhoto}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <input type="file" accept="image/*" disabled={isUploadingPhoto || photos.length >= 5} onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
+              <p className="text-xs text-muted-foreground">Max 5 total photos.</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsManagePhotosOpen(false)} disabled={isUploadingPhoto}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 /* ─── Helper components ─── */
+
+type TabSaveProps = {
+  onSave?: () => void;
+  isSaving?: boolean;
+  onUploadPhoto?: () => void;
+  isUploadingPhoto?: boolean;
+  // Allows last step to show "Save & Finish" without changing layout
+  primaryLabel?: string;
+};
 
 const FormRow = ({ label, children }: { label: string; children: React.ReactNode; fullWidth?: boolean }) => (
   <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
@@ -76,20 +361,58 @@ const YesNo = ({ name }: { name: string }) => (
   </div>
 );
 
-const SelectInput = ({ options, className }: { options: string[]; className?: string }) => (
-  <select className={`rounded-md border bg-background px-3 py-2 text-sm ${className || "w-full"}`}>
+const SelectInput = ({
+  options,
+  className,
+  value,
+  onChange,
+  name,
+}: {
+  options: string[];
+  className?: string;
+  value?: string;
+  onChange?: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+  name?: string;
+}) => (
+  <select
+    name={name}
+    value={value}
+    onChange={onChange}
+    className={`rounded-md border bg-background px-3 py-2 text-sm ${className || "w-full"}`}
+  >
     {options.map((o) => <option key={o}>{o}</option>)}
   </select>
 );
 
-const SaveButtons = () => (
+const SaveButtons = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto, primaryLabel }: TabSaveProps) => (
   <div className="flex justify-center gap-4 pt-6">
-    <Button className="px-8 bg-success text-success-foreground hover:bg-success/90">Save &amp; Continue</Button>
+    <Button
+      type="button"
+      onClick={onSave}
+      disabled={isSaving || isUploadingPhoto}
+      className="px-8 bg-success text-success-foreground hover:bg-success/90"
+    >
+      {/* Wizard: last tab uses "Save & Finish" */}
+      {primaryLabel || "Save & Continue"}
+    </Button>
+    <Button
+      type="button"
+      variant="outline"
+      onClick={onUploadPhoto}
+      disabled={isSaving || isUploadingPhoto}
+    >
+      Upload Photo
+    </Button>
   </div>
 );
 
 
-const ProfileTab = () => {
+type ProfileTabProps = TabSaveProps & {
+  formData: MaidProfile;
+  setFormData: React.Dispatch<React.SetStateAction<MaidProfile>>;
+};
+
+const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: ProfileTabProps) => {
   const years = Array.from({ length: 60 }, (_, i) => String(1960 + i));
   const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
   const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
@@ -101,12 +424,12 @@ const ProfileTab = () => {
       <div className="section-header">A1. Personal Information</div>
       <div className="space-y-3 pt-2">
         <FormRow2Col
-          left={<FormRow label="Maid Name:"><Input /></FormRow>}
-          right={<FormRow label="Ref Code:"><Input /></FormRow>}
+          left={<FormRow label="Maid Name:"><Input value={formData.fullName} onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))} /></FormRow>}
+          right={<FormRow label="Ref Code:"><Input value={formData.referenceCode} onChange={(e) => setFormData((prev) => ({ ...prev, referenceCode: e.target.value }))} /></FormRow>}
         />
         <FormRow2Col
-          left={<FormRow label="Type:"><SelectInput options={["New maid", "Transfer maid", "APS maid", "Ex-Singapore maid", "Ex-Hong Kong maid", "Ex-Taiwan maid", "Ex-Malaysia maid", "Ex-Middle East maid", "Applying to work in Hong Kong","Applying to work in Canada","Applying to work in Taiwan"]} /></FormRow>}
-          right={<FormRow label="Nationality:"><SelectInput options={["Filipino maid", "Indonesian maid", "Indian maid", "Myanmar maid", "Sri Lankan maid", "Bangladeshi maid", "Nepali maid", "Cambodian maid", "Others"]} /></FormRow>}
+          left={<FormRow label="Type:"><SelectInput value={formData.type} onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))} options={["New maid", "Transfer maid", "APS maid", "Ex-Singapore maid", "Ex-Hong Kong maid", "Ex-Taiwan maid", "Ex-Malaysia maid", "Ex-Middle East maid", "Applying to work in Hong Kong","Applying to work in Canada","Applying to work in Taiwan"]} /></FormRow>}
+          right={<FormRow label="Nationality:"><SelectInput value={formData.nationality} onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))} options={["Filipino maid", "Indonesian maid", "Indian maid", "Myanmar maid", "Sri Lankan maid", "Bangladeshi maid", "Nepali maid", "Cambodian maid", "Others"]} /></FormRow>}
         />
         <FormRow2Col
           left={<div />}
@@ -114,14 +437,14 @@ const ProfileTab = () => {
         />
         <FormRow2Col
           left={<FormRow label="Date of Birth:"><div className="flex gap-1"><SelectInput options={days} className="w-16" /><SelectInput options={months} className="w-16" /><SelectInput options={years} className="w-24" /></div></FormRow>}
-          right={<FormRow label="Place Of Birth:"><Input /></FormRow>}
+          right={<FormRow label="Place Of Birth:"><Input value={formData.placeOfBirth} onChange={(e) => setFormData((prev) => ({ ...prev, placeOfBirth: e.target.value }))} /></FormRow>}
         />
         <FormRow2Col
           left={<FormRow label="Height:"><SelectInput options={["150cm (4'11\")", "152cm (5'0\")", "155cm (5'1\")", "156cm (5'1\")", "157cm (5'2\")", "160cm (5'3\")", "163cm (5'4\")", "165cm (5'5\")", "168cm (5'6\")", "170cm (5'7\")", "173cm (5'8\")", "175cm (5'9\")", "178cm (5'10\")", "180cm (5'11\")"]} /></FormRow>}
           right={<FormRow label="Weight:"><SelectInput options={["40Kg (88 lbs)", "42Kg (93 lbs)", "45Kg (99 lbs)", "48Kg (106 lbs)", "50Kg (110 lbs)", "52Kg (115 lbs)", "55Kg (121 lbs)", "58Kg (128 lbs)", "60Kg (132 lbs)", "63Kg (139 lbs)", "65Kg (143 lbs)", "68Kg (150 lbs)", "70Kg (154 lbs)"]} /></FormRow>}
         />
 
-        <FormRow label="Residential Address in Home Country:"><Input /></FormRow>
+        <FormRow label="Residential Address in Home Country:"><Input value={formData.homeAddress} onChange={(e) => setFormData((prev) => ({ ...prev, homeAddress: e.target.value }))} /></FormRow>
         <FormRow label="Name of Port/Airport to be Repatriated:"><Input /></FormRow>
         <FormRow label="Contact Number in Home Country:"><Input /></FormRow>
 
@@ -238,7 +561,7 @@ const ProfileTab = () => {
         <FormRow label="Any other remarks:"><Input /></FormRow>
       </div>
 
-      <SaveButtons />
+      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
 };
@@ -254,7 +577,7 @@ const skillRows = [
   { no: 7, label: "Other skills, if any", sub: "Please specify:", subField: true },
 ];
 
-const SkillsTab = () => (
+const SkillsTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
   <div className="content-card animate-fade-in-up space-y-6">
     <h3 className="text-center font-bold text-lg">(B) MAID's SKILLS</h3>
 
@@ -347,12 +670,12 @@ const SkillsTab = () => (
       </table>
     </div>
 
-    <SaveButtons />
+    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
   </div>
 );
 
 
-const EmploymentHistoryTab = () => {
+const EmploymentHistoryTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => {
   const years = ["--", ...Array.from({ length: 30 }, (_, i) => String(2000 + i))];
   const countries = ["--", "Singapore", "Hong Kong", "Taiwan", "Malaysia", "Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan", "Lebanon", "Brunei", "Others"];
 
@@ -458,13 +781,13 @@ const EmploymentHistoryTab = () => {
         </FormRow>
       </div>
 
-      <SaveButtons />
+      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
 };
 
 
-const AvailabilityRemarkTab = () => (
+const AvailabilityRemarkTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
   <div className="content-card animate-fade-in-up space-y-6">
     <h3 className="text-center font-bold text-lg">(D) MAID&apos;s AVAILABILITY and REMARK</h3>
 
@@ -488,12 +811,12 @@ const AvailabilityRemarkTab = () => (
       <textarea className="w-full min-h-[100px] rounded-md border bg-background px-3 py-2 text-sm" />
     </div>
 
-    <SaveButtons />
+    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
   </div>
 );
 
 
-const IntroductionTab = () => (
+const IntroductionTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
   <div className="content-card animate-fade-in-up space-y-4">
     <h3 className="text-center font-bold text-lg">MAID&apos;s INTRODUCTION</h3>
     <p className="text-center text-sm text-muted-foreground">
@@ -505,12 +828,12 @@ const IntroductionTab = () => (
       <textarea className="w-full min-h-[250px] rounded-md border bg-background px-3 py-2 text-sm" />
     </div>
 
-    <SaveButtons />
+    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
   </div>
 );
 
 
-const PublicIntroductionTab = () => (
+const PublicIntroductionTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
   <div className="content-card animate-fade-in-up space-y-4">
     <h3 className="text-center font-bold text-lg">PUBLIC INTRODUCTION</h3>
     <p className="text-center text-sm text-muted-foreground">
@@ -535,12 +858,12 @@ const PublicIntroductionTab = () => (
       <textarea className="w-full min-h-[250px] rounded-md border bg-background px-3 py-2 text-sm" />
     </div>
 
-    <SaveButtons />
+    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
   </div>
 );
 
 
-const PrivateInfoTab = () => (
+const PrivateInfoTab = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto }: TabSaveProps) => (
   <div className="content-card animate-fade-in-up space-y-4">
     <h3 className="text-center font-bold text-lg">MAID&apos;s PRIVATE INFORMATION</h3>
 
@@ -561,7 +884,7 @@ const PrivateInfoTab = () => (
       </div>
     </div>
 
-    <SaveButtons />
+    <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
   </div>
 );
 
