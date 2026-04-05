@@ -30,6 +30,7 @@ import EmploymentContracts from "@/pages/EmploymentContracts";
 import AdminSupportChat from "@/pages/AdminSupportChat";
 import RequestsPage from "@/pages/RequestsPage";
 import NotFound from "@/pages/NotFound";
+import EditEmployer from "@/pages/EditEmployer";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
 import { getClientToken } from "@/lib/clientAuth";
 import { adminPath } from "@/lib/routes";
@@ -37,6 +38,7 @@ import AboutUs from "./ClientPage/AboutUs";
 import ContactUS from "./ClientPage/ContactUs";
 import Enquiry2 from "./ClientPage/Enquiry";
 import ServiceDetail from "./ClientPage/ServiceDetails";
+
 
 const queryClient = new QueryClient();
 
@@ -167,6 +169,7 @@ const App = () => {
             <Route path="/contact" element={<ContactUS />} />
             <Route path="/enquiry2" element={<Enquiry2 />} />
             <Route path="/services/:slug" element={<ServiceDetail />} />
+            <Route path="/employer/:refCode" element={<EditEmployer />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
