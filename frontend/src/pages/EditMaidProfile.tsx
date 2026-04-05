@@ -451,7 +451,11 @@ type TabProps = {
    TAB 1 – PROFILE
 ───────────────────────────── */
 const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) => {
-  const years: SelectOption[] = ["--", ...Array.from({ length: 60 }, (_, i) => String(1960 + i))];
+  const currentYear = new Date().getFullYear();
+  const years: SelectOption[] = [
+    "--",
+    ...Array.from({ length: currentYear + 10 - 1960 + 1 }, (_, i) => String(1960 + i)),
+  ];
   const days: SelectOption[] = ["--", ...Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"))];
   const months: SelectOption[] = ["--", ...Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))];
  
