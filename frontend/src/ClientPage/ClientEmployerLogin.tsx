@@ -56,16 +56,25 @@ const ClientEmployerLogin = () => {
       // Supabase automatically sends verification email
       // No SMTP or manual confirmation code needed
       const sb = requireSupabase();
+      const normalizedEmail = email.trim();
 
       if (isLogin) {
         const { data, error } = await sb.auth.signInWithPassword({
-          email,
+          email: normalizedEmail,
           password,
         });
-        if (error) throw error;
+        if (error) {
+          console.error("Login error:", error);
+          throw error;
+        }
 
         // prevent login until email is verified
-        if (data?.user && !data.user.email_confirmed_at) {
+        const confirmedAt =
+          (data?.user as unknown as { email_confirmed_at?: string | null; confirmed_at?: string | null })
+            ?.email_confirmed_at ??
+          (data?.user as unknown as { confirmed_at?: string | null })?.confirmed_at ??
+          null;
+        if (data?.user && !confirmedAt) {
           toast({
             title: "Email not verified",
             description: "Please verify your email before logging in.",
@@ -91,7 +100,7 @@ const ClientEmployerLogin = () => {
 
       try {
         const { data, error } = await sb.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
         });
 
@@ -129,6 +138,7 @@ const ClientEmployerLogin = () => {
       // saveClientAuth(data.token, data.client);
       // navigate("/client/dashboard");
     } catch (error) {
+      console.error("Authentication failed:", error);
       toast({
         title: "Authentication Failed",
         description: error instanceof Error ? error.message : "Unable to continue",

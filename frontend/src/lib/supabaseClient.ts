@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // Vite frontend expects VITE_*
 // This fallback ensures both environments work
 const env = import.meta.env as ImportMetaEnv & Record<string, string | undefined>;
-const supabaseUrl = (env.VITE_SUPABASE_URL || env.SUPABASE_URL)?.trim();
+const supabaseUrl = (env.VITE_SUPABASE_URL || env.SUPABASE_URL)?.trim().replace(/\/$/, "");
 // IMPORTANT: use the anon key (public). Do NOT use the service_role key in the frontend.
 const supabaseAnonKey = (env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY)?.trim();
 
@@ -15,7 +15,15 @@ console.log("Supabase URL loaded:", !!supabaseUrl);
 console.log("Supabase Key loaded:", !!supabaseAnonKey);
 
 export const supabase: SupabaseClient | null =
-  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+        },
+      })
+    : null;
 
 export const requireSupabase = () => {
   if (!supabaseUrl || !supabaseAnonKey) {

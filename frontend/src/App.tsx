@@ -37,6 +37,7 @@ import { getClientToken } from "@/lib/clientAuth";
 import { clearClientAuth } from "@/lib/clientAuth";
 import { supabase } from "@/lib/supabaseClient";
 import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
+import { getSessionFromUrlCompat } from "@/lib/supabaseSessionFromUrl";
 import { adminPath } from "@/lib/routes";
 import AboutUs from "./ClientPage/AboutUs";
 import ContactUS from "./ClientPage/ContactUs";
@@ -135,43 +136,32 @@ const App = () => {
 
     // On app load, fetch session (important after email confirmation redirect).
     void (async () => {
-      // 1) Restore session from URL (email confirmation / implicit flow)
-      // Supabase may return tokens in the URL fragment: #access_token=...&refresh_token=...
+      // 1) Restore session from URL (email confirmation / OAuth PKCE redirects).
+      // Requested behavior:
+      //   const { data, error } = await supabase.auth.getSessionFromUrl();
+      //   if (data?.session) console.log("Session restored:", data.session);
+      //   window.history.replaceState({}, document.title, window.location.pathname);
       try {
-        const hash = window.location.hash?.startsWith("#") ? window.location.hash.slice(1) : "";
-        const hashParams = new URLSearchParams(hash);
-        const accessToken = hashParams.get("access_token") || "";
-        const refreshToken = hashParams.get("refresh_token") || "";
+        const compat = await getSessionFromUrlCompat(supabase);
+        const authAny = supabase.auth as unknown as {
+          getSessionFromUrl?: () => Promise<{ data?: { session?: unknown | null }; error?: unknown | null }>;
+        };
 
-        if (accessToken && refreshToken) {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (error) {
-            console.error("Error getting session from URL:", error);
-          } else if (data?.session) {
-            console.log("Session restored from URL:", data.session);
-          }
-
-          // Clean up URL after extracting session (do not remove hash before extracting).
-          window.history.replaceState({}, document.title, window.location.pathname);
+        if (!authAny.getSessionFromUrl) {
+          authAny.getSessionFromUrl = async () => {
+            return { data: compat.data, error: compat.error };
+          };
         }
-      } catch (error) {
-        console.error("Error getting session from URL:", error);
-      }
 
-      // Also support PKCE redirects that return `?code=...`.
-      try {
-        const url = new URL(window.location.href);
-        const code = url.searchParams.get("code");
-        if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            console.error("Error getting session from URL:", error);
-          } else if (data?.session) {
-            console.log("Session restored from URL:", data.session);
-          }
+        const { data, error } = await authAny.getSessionFromUrl();
+        if (error) {
+          console.error("Error getting session from URL:", error);
+        }
+        if (data?.session) {
+          console.log("Session restored:", data.session);
+        }
+
+        if (compat.urlHadAuthParams) {
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       } catch (error) {
@@ -194,6 +184,7 @@ const App = () => {
 
     // Keep app auth in sync with Supabase auth state changes.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state changed:", event, session);
       if (session?.user) {
         console.log("User logged in:", session.user);
         if (session.access_token) {

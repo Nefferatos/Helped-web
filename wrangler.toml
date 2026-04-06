@@ -9,7 +9,8 @@ binding = "ASSETS"
 [vars]
 # Supabase project URL, e.g. "https://xxxx.supabase.co"
 SUPABASE_URL = "https://etdbexgrsenjznxbbnbd.supabase.co"
-# Supabase anon key (used to verify Supabase Auth JWTs for social/phone login)
+# Supabase anon key (public; used to verify Supabase Auth JWTs issued by the same project as SUPABASE_URL)
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0ZGJleGdyc2VuanpueGJibmJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjY3MjAsImV4cCI6MjA5MDcwMjcyMH0.vtop8R2up7ItNoGXoU1Bx1VAVq23gimj-21nBX4LAg4"
 # Defaults: app_data / default
 SUPABASE_APP_DATA_TABLE = "app_data"
 SUPABASE_APP_DATA_ID = "default"

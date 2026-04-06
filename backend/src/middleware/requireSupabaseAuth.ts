@@ -41,6 +41,17 @@ export const requireSupabaseAuth = async (
     });
 
     if (!response.ok) {
+      let details = "";
+      try {
+        details = await response.text();
+      } catch {
+        // ignore
+      }
+      console.error("Supabase auth verify failed:", {
+        status: response.status,
+        supabaseUrl,
+        details: details.slice(0, 300),
+      });
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -52,4 +63,3 @@ export const requireSupabaseAuth = async (
     return res.status(401).json({ error: "Unauthorized" });
   }
 };
-

@@ -453,10 +453,60 @@ type SupabaseAppDataConfig = {
   rowId: string
 }
 
+const decodeSupabaseJwtClaims = (jwt: string) => {
+  const parts = jwt.split('.')
+  if (parts.length < 2) return null
+  try {
+    const payload = parts[1]
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(parts[1].length / 4) * 4, '=')
+    const json = JSON.parse(atob(payload)) as Record<string, unknown>
+    return json
+  } catch {
+    return null
+  }
+}
+
+const logSupabaseConfigDebug = (env: Bindings) => {
+  if (env.DEV_EXPOSE_CONFIRMATION_CODE !== 'true') return
+
+  const url = env.SUPABASE_URL?.trim() ?? ''
+  const anon = env.SUPABASE_ANON_KEY?.trim() ?? ''
+  const service = env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? ''
+
+  const anonClaims = anon ? decodeSupabaseJwtClaims(anon) : null
+  const serviceClaims = service ? decodeSupabaseJwtClaims(service) : null
+
+  console.log('Supabase config debug', {
+    supabaseUrl: url || null,
+    anonKey: anonClaims
+      ? {
+          ref: anonClaims.ref ?? null,
+          role: anonClaims.role ?? null,
+          iss: anonClaims.iss ?? null,
+        }
+      : anon
+        ? { type: 'non-jwt', length: anon.length }
+        : null,
+    serviceRoleKey: serviceClaims
+      ? {
+          ref: serviceClaims.ref ?? null,
+          role: serviceClaims.role ?? null,
+          iss: serviceClaims.iss ?? null,
+        }
+      : service
+        ? { type: 'non-jwt', length: service.length }
+        : null,
+  })
+}
+
 const getSupabaseAppDataConfig = (env: Bindings): SupabaseAppDataConfig | null => {
   const baseUrl = env.SUPABASE_URL?.trim().replace(/\/$/, '')
   const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim()
   if (!baseUrl || !serviceRoleKey) return null
+
+  logSupabaseConfigDebug(env)
 
   return {
     baseUrl,
@@ -846,7 +896,10 @@ const getSupabaseAuthUser = async (env: Bindings, accessToken: string) => {
 
   const baseUrl = env.SUPABASE_URL?.trim().replace(/\/$/, '')
   const anonKey = env.SUPABASE_ANON_KEY?.trim()
-  if (!baseUrl || !anonKey) return null
+  if (!baseUrl || !anonKey) {
+    console.error('Supabase auth verify skipped: missing SUPABASE_URL or SUPABASE_ANON_KEY')
+    return null
+  }
 
   const response = await fetch(`${baseUrl}/auth/v1/user`, {
     headers: {
@@ -857,6 +910,17 @@ const getSupabaseAuthUser = async (env: Bindings, accessToken: string) => {
   })
 
   if (!response.ok) {
+    let details = ''
+    try {
+      details = await response.text()
+    } catch {
+      // ignore
+    }
+    console.error('Supabase auth verify failed', {
+      status: response.status,
+      baseUrl,
+      details: details.slice(0, 300),
+    })
     return null
   }
 
