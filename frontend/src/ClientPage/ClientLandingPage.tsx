@@ -765,7 +765,7 @@ const ClientLandingPage = () => {
                   <option>Housekeeping</option>
                   <option>Elderly Care</option>
                   <option>Infant Care</option>
-                  <option>Culinary Service</option>
+                  <option>Kid Care</option>
                 </select>
               </div>
             </div>

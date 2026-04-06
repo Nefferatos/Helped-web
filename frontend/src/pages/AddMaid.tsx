@@ -494,7 +494,7 @@ const SaveButtons = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto, primar
       type="button"
       onClick={onSave}
       disabled={isSaving || isUploadingPhoto}
-      className="px-8 bg-success text-success-foreground hover:bg-success/90"
+      className="bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm hover:bg-yellow-400"
     >
       {/* Wizard: last tab uses "Save & Finish" */}
       {primaryLabel || "Save & Continue"}
@@ -605,7 +605,7 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
     <div className="content-card animate-fade-in-up space-y-6">
       <h3 className="text-center font-bold text-lg">(A) PROFILE OF FDW</h3>
 
-      <div className="section-header">A1. Personal Information</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">A1. Personal Information</div>
       <div className="space-y-3 pt-2">
         <FormRow2Col
           left={<FormRow label="Maid Name:"><Input value={formData.fullName} onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))} /></FormRow>}
@@ -955,7 +955,7 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
         />
       </div>
 
-      <div className="section-header">Language Skills:</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">Language Skills:</div>
       <div className="space-y-3 pt-2">
         {fixedLanguages.map((lang) => (
           <div key={lang.key} className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -1014,7 +1014,7 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
         </div>
       </div>
 
-      <div className="section-header">Other Information:</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">Other Information:</div>
       <div className="space-y-2 pt-2">
         {[
           "Able to handle pork?",
@@ -1058,7 +1058,7 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
         </div>
       </div>
 
-      <div className="section-header">A2. Medical History/Dietary Restrictions</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">A2. Medical History/Dietary Restrictions</div>
       <div className="space-y-3 pt-2">
         <FormRow label="Allergies (if any):"><Input value={String(introduction.allergies || "")} onChange={(e) => setIntroductionField("allergies", e.target.value)} /></FormRow>
 
@@ -1156,7 +1156,7 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
       </div>
 
       {/* A3. Others */}
-      <div className="section-header">A3. Others</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">A3. Others</div>
       <div className="pt-2">
         <FormRow label="Any other remarks:"><Input value={String(introduction.otherRemarks || "")} onChange={(e) => setIntroductionField("otherRemarks", e.target.value)} /></FormRow>
       </div>
@@ -1224,7 +1224,7 @@ const SkillsTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isU
     <div className="content-card animate-fade-in-up space-y-6">
       <h3 className="text-center font-bold text-lg">(B) MAID's SKILLS</h3>
 
-      <div className="section-header">B1. Method of Evaluation of Skills</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">B1. Method of Evaluation of Skills</div>
       <p className="text-sm pt-2">Please indicate the method(s) used to evaluate the FDW's skills (can tick more than one):</p>
       <div className="space-y-2 pl-2">
         {[
@@ -1392,7 +1392,7 @@ const EmploymentHistoryTab = ({ formData, setFormData, onSave, isSaving, onUploa
     <div className="content-card animate-fade-in-up space-y-6">
       <h3 className="text-center font-bold text-lg">(C) EMPLOYMENT HISTORY OF THE FDW</h3>
 
-      <div className="section-header">C1. Employment History</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">C1. Employment History</div>
       <div className="space-y-6 pt-2">
         {employment.map((row, idx) => {
           const r = row as Record<string, unknown>;
@@ -1447,7 +1447,7 @@ const EmploymentHistoryTab = ({ formData, setFormData, onSave, isSaving, onUploa
         </button>
       </div>
 
-      <div className="section-header">C2. Employment History in Singapore</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">C2. Employment History in Singapore</div>
       <div className="space-y-2 pt-2">
         <div className="flex items-center gap-4">
           <span className="text-sm font-medium">
@@ -1472,7 +1472,7 @@ const EmploymentHistoryTab = ({ formData, setFormData, onSave, isSaving, onUploa
         </p>
       </div>
 
-      <div className="section-header">
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">
         C3. Feedback from previous employers in Singapore
       </div>
       <div className="space-y-3 pt-2">

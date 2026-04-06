@@ -427,7 +427,7 @@ const SaveButtons = ({ onSave, isSaving, primaryLabel }: SaveButtonsProps) => (
       type="button"
       onClick={onSave}
       disabled={isSaving}
-      className="px-8 bg-success text-success-foreground hover:bg-success/90"
+      className="px-8 bg-yellow-400 text-black hover:bg-yellow-500"
     >
       {primaryLabel || "Save Changes"}
     </Button>
@@ -485,7 +485,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
     <div className="content-card animate-fade-in-up space-y-6">
       <h3 className="text-center font-bold text-lg">(A) PROFILE OF FDW</h3>
  
-      <div className="section-header">A1. Personal Information</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">A1. Personal Information</div>
       <div className="space-y-3 pt-2">
         <FormRow2Col
           left={<FormRow label="Maid Name:"><Input value={form.fullName} onChange={(e) => setForm((p) => p ? { ...p, fullName: e.target.value } : p) } /></FormRow>}
@@ -721,62 +721,35 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
         />
       </div>
  
-      <div className="section-header">Language Skills:</div>
-      <div className="space-y-3 pt-2">
-        {[...defaultLanguages, ...Object.keys(form.languageSkills).filter((k) => !(defaultLanguages as readonly string[]).includes(k))].map((lang) => (
-          <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
-            <RadioGroup
-              name={`lang_${lang}`}
-              options={["Zero", "Poor", "Little", "Fair", "Good"]}
-              value={form.languageSkills[lang] ?? ""}
-              onValueChange={(next) =>
-                setForm((p) => p ? { ...p, languageSkills: { ...p.languageSkills, [lang]: next } } : p)
-              }
-            />
-            {!(defaultLanguages as readonly string[]).includes(lang) && (
-              <button
-                type="button"
-                className="text-xs text-destructive hover:underline ml-2"
-                onClick={() =>
-                  setForm((p) => {
-                    if (!p) return p;
-                    const next = { ...p.languageSkills };
-                    delete next[lang];
-                    return { ...p, languageSkills: next };
-                  })
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">Language Skills:</div>
+        <div className="space-y-3 pt-2">
+          {defaultLanguages.map((lang) => (
+            <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <Label className="text-sm w-52 text-right font-medium">{lang}:</Label>
+
+              <RadioGroup
+                name={`lang_${lang}`}
+                options={["Zero", "Poor", "Little", "Fair", "Good"]}
+                value={form.languageSkills[lang] ?? ""}
+                onValueChange={(next) =>
+                  setForm((p) =>
+                    p
+                      ? {
+                          ...p,
+                          languageSkills: {
+                            ...p.languageSkills,
+                            [lang]: next,
+                          },
+                        }
+                      : p
+                  )
                 }
-              >
-                Remove
-              </button>
-            )}
-          </div>
+              />
+            </div>
         ))}
-        <div className="flex items-center gap-2 pt-1">
-          <Input
-            className="w-48"
-            placeholder="Add other language"
-            value={form.newLanguageName}
-            onChange={(e) => setForm((p) => p ? { ...p, newLanguageName: e.target.value } : p)}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setForm((p) => {
-                if (!p) return p;
-                const name = p.newLanguageName.trim();
-                if (!name || p.languageSkills[name] !== undefined) return { ...p, newLanguageName: "" };
-                return { ...p, languageSkills: { ...p.languageSkills, [name]: "" }, newLanguageName: "" };
-              })
-            }
-          >
-            Add
-          </Button>
-        </div>
       </div>
  
-      <div className="section-header">Other Information:</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">Other Information:</div>
       <div className="space-y-2 pt-2">
         {otherInformationQuestionGroups.map((group) => (
           <div key={group.label} className="flex items-center gap-4">
@@ -804,7 +777,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
         </div>
       </div>
  
-      <div className="section-header">A2. Medical History/Dietary Restrictions</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">A2. Medical History/Dietary Restrictions</div>
       <div className="space-y-3 pt-2">
         <FormRow label="Allergies (if any):"><Input value={form.introduction.allergies} onChange={(e) => setIntroField("allergies", e.target.value)} /></FormRow>
         <p className="text-sm font-medium">Past and existing illnesses:</p>
@@ -862,7 +835,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
         </div>
       </div>
  
-      <div className="section-header">A3. Others</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">A3. Others</div>
       <div className="pt-2">
         <FormRow label="Any other remarks:"><Input value={form.introduction.otherRemarks} onChange={(e) => setIntroField("otherRemarks", e.target.value)} /></FormRow>
       </div>
@@ -901,7 +874,7 @@ const SkillsTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) 
     <div className="content-card animate-fade-in-up space-y-6">
       <h3 className="text-center font-bold text-lg">(B) MAID's SKILLS</h3>
  
-      <div className="section-header">B1. Method of Evaluation of Skills</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">B1. Method of Evaluation of Skills</div>
       <p className="text-sm pt-2">Please indicate the method(s) used to evaluate the FDW's skills:</p>
       <div className="space-y-2 pl-2">
         {["Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA", "Interviewed by Singapore EA"].map((opt) => (
@@ -1013,7 +986,7 @@ const EmploymentHistoryTab = ({ form, setForm, onSave, isSaving, primaryLabel }:
     <div className="content-card animate-fade-in-up space-y-6">
       <h3 className="text-center font-bold text-lg">(C) EMPLOYMENT HISTORY OF THE FDW</h3>
  
-      <div className="section-header">C1. Employment History</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">C1. Employment History</div>
       <div className="space-y-6 pt-2">
         {form.employmentHistory.map((row, idx) => (
           <div key={idx} className="space-y-2 border p-4 rounded-xl">
@@ -1054,7 +1027,7 @@ const EmploymentHistoryTab = ({ form, setForm, onSave, isSaving, primaryLabel }:
         <button type="button" onClick={addRow} className="px-4 py-2 bg-primary text-white rounded-lg text-sm">+ Add Employer</button>
       </div>
  
-      <div className="section-header">C2. Employment History in Singapore</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">C2. Employment History in Singapore</div>
       <div className="space-y-2 pt-2">
         <div className="flex items-center gap-4">
           <span className="text-sm font-medium">Previous working experience in Singapore</span>
@@ -1074,7 +1047,7 @@ const EmploymentHistoryTab = ({ form, setForm, onSave, isSaving, primaryLabel }:
         </p>
       </div>
  
-      <div className="section-header">C3. Feedback from previous employers in Singapore</div>
+      <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">C3. Feedback from previous employers in Singapore</div>
       <div className="space-y-3 pt-2">
         <FormRow label="Feedback from Singapore Employer 1:"><Input /></FormRow>
         <FormRow label="Feedback from Singapore Employer 2:"><Input /></FormRow>
