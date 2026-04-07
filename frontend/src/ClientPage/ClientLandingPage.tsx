@@ -632,7 +632,7 @@ const ClientLandingPage = () => {
                     >
                       {/* Image */}
                       <div
-                        className={`h-28 w-full bg-muted overflow-hidden ${
+                        className={`h-30 w-full bg-muted overflow-hidden ${
                           !isLoggedIn ? "blur-md" : ""
                         }`}
                       >
