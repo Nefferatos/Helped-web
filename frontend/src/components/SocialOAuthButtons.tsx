@@ -4,9 +4,10 @@ import { toast } from "@/components/ui/sonner";
 
 type Props = {
   disabled?: boolean;
+  enableFacebook?: boolean;
 };
 
-const SocialOAuthButtons = ({ disabled }: Props) => {
+const SocialOAuthButtons = ({ disabled, enableFacebook = false }: Props) => {
   const onGoogle = async () => {
     try {
       await signInWithGoogle();
@@ -28,12 +29,14 @@ const SocialOAuthButtons = ({ disabled }: Props) => {
       <Button type="button" variant="outline" size="lg" className="w-full font-body" onClick={() => void onGoogle()} disabled={disabled}>
         Continue with Google
       </Button>
-      <Button type="button" variant="outline" size="lg" className="w-full font-body" onClick={() => void onFacebook()} disabled={disabled}>
-        Continue with Facebook
-      </Button>
+      {/* Keep Facebook available for future use, but hide it unless explicitly enabled. */}
+      {enableFacebook ? (
+        <Button type="button" variant="outline" size="lg" className="w-full font-body" onClick={() => void onFacebook()} disabled={disabled}>
+          Continue with Facebook
+        </Button>
+      ) : null}
     </div>
   );
 };
 
 export default SocialOAuthButtons;
-

@@ -276,7 +276,8 @@ const ClientEmployerLogin = () => {
             </form>
           ) : (
             <div className="space-y-4">
-              <SocialOAuthButtons disabled={isSubmitting} />
+              {/* Facebook is intentionally hidden for client login/signup; re-enable by setting `enableFacebook`. */}
+              <SocialOAuthButtons disabled={isSubmitting} enableFacebook={false} />
 
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
