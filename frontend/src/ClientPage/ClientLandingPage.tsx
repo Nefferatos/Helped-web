@@ -619,7 +619,7 @@ const ClientLandingPage = () => {
                 </div>
               ) : null}
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 justify-items-start">
+              <div className="flex flex-wrap gap-3">
                 {filteredMaids.map((maid) => {
                   const age = calculateAge(maid.dateOfBirth);
                   const photo = getPrimaryPhoto(maid);
@@ -628,11 +628,14 @@ const ClientLandingPage = () => {
                   return (
                     <article
                       key={maid.referenceCode}
-                      className="w-36 flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm hover:shadow-md transition text-xs" >
+                      className="w-36 flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm hover:shadow-md transition text-xs"
+                    >
+                      {/* Image */}
                       <div
-                        className={`h-26 w-full bg-muted overflow-hidden flex-shrink-0 ${
+                        className={`h-28 w-full bg-muted overflow-hidden ${
                           !isLoggedIn ? "blur-md" : ""
-                        }`} >
+                        }`}
+                      >
                         {photo ? (
                           <img
                             src={photo}
@@ -646,6 +649,7 @@ const ClientLandingPage = () => {
                         )}
                       </div>
 
+                      {/* Content */}
                       <div
                         className={`flex flex-col p-2 gap-1 flex-1 items-center text-center ${
                           !isLoggedIn ? "blur-sm select-none" : ""
@@ -654,10 +658,13 @@ const ClientLandingPage = () => {
                         <h3 className="text-[12px] font-medium text-foreground line-clamp-1">
                           {maid.fullName}
                         </h3>
-                        <p className="text-[10px] text-muted-foreground">{maid.referenceCode}</p>
 
+                        <p className="text-[10px] text-muted-foreground">
+                          {maid.referenceCode}
+                        </p>
 
-                        <div className="mt-auto">
+                        {/* Button */}
+                        <div className="mt-auto w-full">
                           <Button variant="outline" size="sm" className="w-full" asChild>
                             <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
                               View Profile
