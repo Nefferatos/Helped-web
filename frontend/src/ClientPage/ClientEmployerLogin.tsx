@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { saveClientAuth } from "@/lib/clientAuth";
 import { supabase, requireSupabase } from "@/lib/supabaseClient";
 import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
+import SocialOAuthButtons from "@/components/SocialOAuthButtons";
 import "./ClientTheme.css";
 
 interface AuthResponse {
@@ -274,7 +275,16 @@ const ClientEmployerLogin = () => {
               </Button>
             </form>
           ) : (
-            <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
+            <div className="space-y-4">
+              <SocialOAuthButtons disabled={isSubmitting} />
+
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <div className="text-xs text-muted-foreground">or</div>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
               {!isLogin && (
               <>
                 <div>
@@ -347,7 +357,8 @@ const ClientEmployerLogin = () => {
             <Button type="submit" size="lg" className="w-full font-body" disabled={isSubmitting}>
               {isSubmitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
             </Button>
-            </form>
+              </form>
+            </div>
           )}
 
           <div className="mt-6 text-center">

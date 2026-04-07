@@ -32,6 +32,7 @@ import AdminSupportChat from "@/pages/AdminSupportChat";
 import RequestsPage from "@/pages/RequestsPage";
 import NotFound from "@/pages/NotFound";
 import EditEmployer from "@/pages/EditEmployer";
+import AuthCallback from "@/pages/AuthCallback";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
 import { getClientToken } from "@/lib/clientAuth";
 import { clearClientAuth } from "@/lib/clientAuth";
@@ -39,6 +40,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import { getSessionFromUrlCompat } from "@/lib/supabaseSessionFromUrl";
 import { adminPath } from "@/lib/routes";
+import ProtectedClientRoute from "@/components/ProtectedClientRoute";
 import AboutUs from "./ClientPage/AboutUs";
 import ContactUS from "./ClientPage/ContactUs";
 import Enquiry2 from "./ClientPage/Enquiry";
@@ -213,6 +215,7 @@ const App = () => {
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/employer-login" element={<ClientEmployerLogin />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/agencies" element={<AgenciesPage />} />
             <Route path="/agencies/:id" element={<AgencyDetailsPage />} />
             <Route path="/agencyadmin/login" element={<AgencyAdminLogin />} />
@@ -230,11 +233,11 @@ const App = () => {
             <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/client/dashboard" element={<ClientDashboard />} />
-            <Route path="/client/maids" element={<ClientMaidsPage />} />
-            <Route path="/client/profile" element={<ClientProfilePage />} />
-            <Route path="/client/history" element={<ClientHistoryPage />} />
-            <Route path="/client/support-chat" element={<ClientSupportChat />} />
+            <Route path="/client/dashboard" element={<ProtectedClientRoute><ClientDashboard /></ProtectedClientRoute>} />
+            <Route path="/client/maids" element={<ProtectedClientRoute><ClientMaidsPage /></ProtectedClientRoute>} />
+            <Route path="/client/profile" element={<ProtectedClientRoute><ClientProfilePage /></ProtectedClientRoute>} />
+            <Route path="/client/history" element={<ProtectedClientRoute><ClientHistoryPage /></ProtectedClientRoute>} />
+            <Route path="/client/support-chat" element={<ProtectedClientRoute><ClientSupportChat /></ProtectedClientRoute>} />
             <Route path="/hire/:refCode" element={<HiringProcessPage />} />
             <Route path="/maids/:refCode" element={<PublicMaidProfile />} />
             <Route path="/agency-portal" element={<AgenciesPage />} />
