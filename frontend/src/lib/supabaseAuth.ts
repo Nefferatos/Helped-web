@@ -6,9 +6,33 @@ import { saveClientAuth, type ClientUser } from "@/lib/clientAuth";
 // reusing the Supabase access token as the Bearer token. The backend accepts it by verifying
 // the Supabase JWT.
 
-const getClientMe = async (accessToken: string) => {
-  const response = await fetch("/api/client-auth/me", {
-    headers: { Authorization: `Bearer ${accessToken}` },
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getSupabaseAccessToken = async (fallbackToken?: string) => {
+  // Preferred: current Supabase session token (freshest, works after OAuth redirect).
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data, error } = await requireSupabase().auth.getSession();
+    if (error) throw error;
+    const token = data.session?.access_token;
+    if (token) return token;
+    await wait(150);
+  }
+
+  // Fallback: caller-provided token (e.g. persisted app token).
+  if (fallbackToken?.trim()) return fallbackToken.trim();
+
+  throw new Error("No Supabase session found. Please sign in again.");
+};
+
+const getClientMe = async (fallbackAccessToken?: string) => {
+  const accessToken = await getSupabaseAccessToken(fallbackAccessToken);
+  const meUrl = new URL("/api/client-auth/me", window.location.origin).toString();
+
+  const response = await fetch(meUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
   });
   const data = (await response.json().catch(() => ({}))) as {
     client?: ClientUser;
@@ -20,10 +44,11 @@ const getClientMe = async (accessToken: string) => {
   return data.client;
 };
 
-export const finalizeClientLoginFromSupabase = async (accessToken: string) => {
+export const finalizeClientLoginFromSupabase = async (accessToken?: string) => {
   // Fetch the app-facing client record (creates one on first login).
-  const client = await getClientMe(accessToken);
-  saveClientAuth(accessToken, client);
+  const token = await getSupabaseAccessToken(accessToken);
+  const client = await getClientMe(token);
+  saveClientAuth(token, client);
   return client;
 };
 

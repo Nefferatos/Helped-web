@@ -21,6 +21,7 @@ export const getAuthenticatedClient = async (
 ): Promise<ClientRecord | null> => {
   const token = getBearerToken(req)
   if (!token) {
+    console.warn('Auth: missing Authorization Bearer token for client request')
     return null
   }
 
@@ -31,20 +32,21 @@ export const getAuthenticatedClient = async (
 
   // Supabase JWT support for social/phone login.
   if (!token.includes('.')) {
+    console.warn('Auth: non-JWT token provided; no matching legacy session found')
     return null
   }
 
   const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/$/, '')
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY?.trim()
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase env vars')
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    console.error('Missing Supabase env vars: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
     return null
   }
 
   try {
     const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: {
-        apikey: supabaseAnonKey,
+        apikey: supabaseServiceRoleKey,
         authorization: `Bearer ${token}`,
         accept: 'application/json',
       },
@@ -60,6 +62,7 @@ export const getAuthenticatedClient = async (
       console.error('Supabase auth verify failed:', {
         status: response.status,
         supabaseUrl,
+        tokenLength: token.length,
         details: details.slice(0, 300),
       })
       return null

@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 import express, { Express, Request, Response, ErrorRequestHandler } from 'express'
 import cors from 'cors'
 import fs from 'fs'
@@ -18,8 +20,27 @@ const port = process.env.PORT || 3000
 const frontendDist = path.resolve(__dirname, '../../frontend/dist')
 const hasFrontendSite = fs.existsSync(frontendDist)
 
+const requireEnv = (key: string) => {
+  const value = process.env[key]?.trim()
+  if (!value) {
+    console.error(`Missing required environment variable: ${key}`)
+    process.exit(1)
+  }
+  return value
+}
+
+// Required for Supabase JWT verification and server-side Supabase operations.
+requireEnv('SUPABASE_URL')
+requireEnv('SUPABASE_SERVICE_ROLE_KEY')
+
 // Middleware
-app.use(cors())
+app.use(
+  cors({
+    origin: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  })
+)
 app.use(express.json({ limit: '25mb' }))
 app.use(express.urlencoded({ extended: true, limit: '25mb' }))
 

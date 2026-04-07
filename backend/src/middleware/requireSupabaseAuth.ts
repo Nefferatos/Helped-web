@@ -21,20 +21,23 @@ export const requireSupabaseAuth = async (
   next: NextFunction,
 ) => {
   const token = getBearerToken(req);
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  if (!token) {
+    console.warn("Auth: missing Authorization Bearer token");
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
   const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY?.trim();
-  if (!supabaseUrl || !supabaseAnonKey) {
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
     return res.status(500).json({
-      error: "Server is missing SUPABASE_URL or SUPABASE_ANON_KEY",
+      error: "Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
     });
   }
 
   try {
     const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: {
-        apikey: supabaseAnonKey,
+        apikey: supabaseServiceRoleKey,
         authorization: `Bearer ${token}`,
         accept: "application/json",
       },
@@ -50,6 +53,7 @@ export const requireSupabaseAuth = async (
       console.error("Supabase auth verify failed:", {
         status: response.status,
         supabaseUrl,
+        tokenLength: token.length,
         details: details.slice(0, 300),
       });
       return res.status(401).json({ error: "Unauthorized" });
