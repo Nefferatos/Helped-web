@@ -15,7 +15,7 @@ import heroImage from "./assets/maid1.png";
 import housekeepingImg from "./assets/housekeeping.png";
 import infantImg from "./assets/infant-care.png";
 import "./ClientTheme.css";
- 
+
 const services = [
   {
     title: "Housekeeping",
@@ -42,7 +42,7 @@ const services = [
     image: culinaryImg,
   },
 ];
- 
+
 const features = [
   {
     icon: CheckCircle,
@@ -60,7 +60,7 @@ const features = [
     description: "Our dedicated service doesn't end with a hire. We provide continued mediation and after-placement care.",
   },
 ];
- 
+
 const portalLinks = [
   {
     title: "User Portal",
@@ -73,7 +73,11 @@ const portalLinks = [
     path: "/agencyadmin/login",
   },
 ];
- 
+
+const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
+const LANGUAGE_OPTIONS = ["No Preference", "English", "Mandarin", "Malay", "Tamil", "Tagalog", "Bahasa Indonesia"];
+const ITEMS_PER_PAGE = 21;
+
 const getExperienceBucket = (maid: MaidProfile) => {
   const count = Array.isArray(maid.employmentHistory) ? maid.employmentHistory.length : 0;
   if (count >= 5) return "5+ Years";
@@ -81,12 +85,12 @@ const getExperienceBucket = (maid: MaidProfile) => {
   if (count >= 1) return "1-2 Years";
   return "No Experience";
 };
- 
+
 const getPrimaryPhoto = (maid: MaidProfile) =>
   Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl || "";
- 
+
 const getPublicIntro = (maid: MaidProfile) => String((maid.introduction as Record<string, unknown>)?.publicIntro || "").trim();
- 
+
 interface CompanyProfileApi {
   company_name?: string;
   short_name?: string;
@@ -104,11 +108,11 @@ interface CompanyProfileApi {
   about_us?: string;
   logo_data_url?: string;
 }
- 
+
 interface CompanyResponse {
   companyProfile?: CompanyProfileApi;
 }
- 
+
 const ClientLandingPage = () => {
   const navigate = useNavigate();
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
@@ -117,21 +121,27 @@ const ClientLandingPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Search state
   const [keyword, setKeyword] = useState("");
-  const [nationality, setNationality] = useState("All Nationalities");
-  const [experience, setExperience] = useState("Any Experience");
-  const [ageGroup, setAgeGroup] = useState("Any Age");
-  const [agencyKeyword, setAgencyKeyword] = useState("");
-  const [agencyNationality, setAgencyNationality] = useState("All Nationalities");
-  const [agencyType, setAgencyType] = useState("All Types");
+  const [maidTypes, setMaidTypes] = useState<string[]>([]);
+  const [willingOffDays, setWillingOffDays] = useState(false);
+  const [nationality, setNationality] = useState("No Preference");
+  const [language, setLanguage] = useState("No Preference");
+
   const [submittedFilters, setSubmittedFilters] = useState({
     keyword: "",
-    nationality: "All Nationalities",
-    experience: "Any Experience",
-    ageGroup: "Any Age",
+    maidTypes: [] as string[],
+    willingOffDays: false,
+    nationality: "No Preference",
+    language: "No Preference",
   });
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+
   const isLoggedIn = Boolean(clientUser);
- 
+
   const location = useLocation();
   useEffect(() => {
     if (location.hash === "#services") {
@@ -143,8 +153,7 @@ const ClientLandingPage = () => {
       }
     }
   }, [location]);
- 
-  // Close mobile menu on resize to desktop
+
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 768) setIsMobileMenuOpen(false);
@@ -152,13 +161,12 @@ const ClientLandingPage = () => {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
- 
-  // Lock body scroll when mobile menu is open
+
   useEffect(() => {
     document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [isMobileMenuOpen]);
- 
+
   useEffect(() => {
     const loadLandingData = async () => {
       try {
@@ -167,13 +175,13 @@ const ClientLandingPage = () => {
           fetch("/api/maids?visibility=public"),
           fetch("/api/company"),
         ]);
- 
+
         const maidData = (await maidsResponse.json().catch(() => ({}))) as { error?: string; maids?: MaidProfile[] };
         if (!maidsResponse.ok || !maidData.maids) {
           throw new Error(maidData.error || "Failed to load public maids");
         }
         setAllPublicMaids(maidData.maids.filter((maid) => maid.isPublic));
- 
+
         if (companyResponse.ok) {
           const companyData = (await companyResponse.json().catch(() => ({}))) as CompanyResponse;
           setCompany(companyData.companyProfile ?? null);
@@ -184,10 +192,10 @@ const ClientLandingPage = () => {
         setIsLoading(false);
       }
     };
- 
+
     void loadLandingData();
   }, []);
- 
+
   useEffect(() => {
     const loadClientProfile = async () => {
       const token = getClientToken();
@@ -195,7 +203,7 @@ const ClientLandingPage = () => {
         setClientUser(null);
         return;
       }
- 
+
       try {
         const response = await fetch("/api/client-auth/me", {
           headers: { ...getClientAuthHeaders() },
@@ -204,21 +212,21 @@ const ClientLandingPage = () => {
           error?: string;
           client?: ClientUser;
         };
- 
+
         if (!response.ok || !data.client) {
           throw new Error(data.error || "Failed to load client profile");
         }
- 
+
         setClientUser(data.client);
       } catch {
         clearClientAuth();
         setClientUser(null);
       }
     };
- 
+
     void loadClientProfile();
   }, []);
- 
+
   const nationalityOptions = useMemo(() => {
     const values = Array.from(
       new Set(
@@ -227,69 +235,74 @@ const ClientLandingPage = () => {
           .filter((value): value is string => Boolean(value))
       )
     ).sort((left, right) => left.localeCompare(right));
- 
-    return ["All Nationalities", ...values];
+
+    return ["No Preference", ...values];
   }, [allPublicMaids]);
- 
-  const typeOptions = useMemo(() => {
-    const values = Array.from(
-      new Set(
-        allPublicMaids
-          .map((maid) => maid.type?.trim())
-          .filter((value): value is string => Boolean(value))
-      )
-    ).sort((left, right) => left.localeCompare(right));
- 
-    return ["All Types", ...values];
-  }, [allPublicMaids]);
- 
-  const agencyFilteredMaids = useMemo(() => {
-    return allPublicMaids.filter((maid) => {
-      const publicIntro = getPublicIntro(maid).toLowerCase();
-      const searchText = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${publicIntro}`.toLowerCase();
- 
-      const keywordMatches = !agencyKeyword.trim() || searchText.includes(agencyKeyword.trim().toLowerCase());
-      const nationalityMatches = agencyNationality === "All Nationalities" || maid.nationality === agencyNationality;
-      const typeMatches = agencyType === "All Types" || maid.type === agencyType;
- 
-      return keywordMatches && nationalityMatches && typeMatches;
-    });
-  }, [agencyKeyword, agencyNationality, agencyType, allPublicMaids]);
- 
+
+  const toggleMaidType = (type: string) => {
+    setMaidTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+
   const filteredMaids = useMemo(() => {
     return allPublicMaids.filter((maid) => {
-      const age = calculateAge(maid.dateOfBirth);
       const publicIntro = getPublicIntro(maid).toLowerCase();
       const searchText = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${publicIntro}`.toLowerCase();
- 
+
       const keywordMatches =
         !submittedFilters.keyword.trim() || searchText.includes(submittedFilters.keyword.trim().toLowerCase());
       const nationalityMatches =
-        submittedFilters.nationality === "All Nationalities" || maid.nationality === submittedFilters.nationality;
-      const experienceMatches =
-        submittedFilters.experience === "Any Experience" || getExperienceBucket(maid) === submittedFilters.experience;
-      const ageMatches =
-        submittedFilters.ageGroup === "Any Age" ||
-        (submittedFilters.ageGroup === "23-30" && age !== null && age >= 23 && age <= 30) ||
-        (submittedFilters.ageGroup === "30-40" && age !== null && age > 30 && age <= 40) ||
-        (submittedFilters.ageGroup === "40+" && age !== null && age > 40);
- 
-      return keywordMatches && nationalityMatches && experienceMatches && ageMatches;
+        submittedFilters.nationality === "No Preference" || maid.nationality === submittedFilters.nationality;
+      const typeMatches =
+        submittedFilters.maidTypes.length === 0 ||
+        submittedFilters.maidTypes.some((t) =>
+          maid.type?.toLowerCase().includes(t.toLowerCase())
+        );
+
+      return keywordMatches && nationalityMatches && typeMatches;
     });
   }, [allPublicMaids, submittedFilters]);
- 
-  const handleSearch = () => {
-    if (!isLoggedIn) {
-      toast.error("Please log in to search maid profiles");
-      navigate("/employer-login");
-      return;
+
+  const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
+  const pagedMaids = filteredMaids.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
     }
-    setSubmittedFilters({ keyword, nationality, experience, ageGroup });
+    const pages: (number | "...")[] = [1];
+    if (currentPage > 3) pages.push("...");
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      pages.push(i);
+    }
+    if (currentPage < totalPages - 2) pages.push("...");
+    pages.push(totalPages);
+    return pages;
+  }, [totalPages, currentPage]);
+
+  const handleSearch = () => {
+    setSubmittedFilters({ keyword, maidTypes, willingOffDays, nationality, language });
+    setCurrentPage(1);
     window.setTimeout(() => {
       document.getElementById("maid-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
   };
- 
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.setTimeout(() => {
+      document.getElementById("maid-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  };
+
+  const handleRequestMaid = () => {
+    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   const handleLogout = async () => {
     try {
       await fetch("/api/client-auth/logout", {
@@ -305,13 +318,13 @@ const ClientLandingPage = () => {
       navigate("/");
     }
   };
- 
+
   return (
     <div className="client-page-theme min-h-screen">
- 
+
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="container flex h-14 items-center justify-between gap-4 px-4 sm:px-6 md:h-16">
- 
+
           <Link
             to="/"
             className="font-display text-base font-bold text-foreground sm:text-lg md:text-xl shrink-0 leading-tight"
@@ -319,7 +332,7 @@ const ClientLandingPage = () => {
             <span className="hidden sm:inline">Find Maids At The Agency</span>
             <span className="sm:hidden">Find Maids</span>
           </Link>
- 
+
           <nav className="hidden items-center gap-5 font-body text-sm font-medium lg:flex xl:gap-8">
             <a href="/" className="hover:text-primary transition-colors">Home</a>
             <a href="#services" className="hover:text-primary transition-colors">Services</a>
@@ -328,7 +341,7 @@ const ClientLandingPage = () => {
             <a href="/enquiry2" className="hover:text-primary transition-colors">Enquiry</a>
             <a href="/contact" className="hover:text-primary transition-colors">Contact Us</a>
           </nav>
- 
+
           <div className="flex items-center gap-2 shrink-0">
             <div className="hidden md:flex">
               {clientUser ? (
@@ -359,7 +372,7 @@ const ClientLandingPage = () => {
                 </Link>
               )}
             </div>
- 
+
             <button
               className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted transition-colors md:hidden"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -369,7 +382,7 @@ const ClientLandingPage = () => {
             </button>
           </div>
         </div>
- 
+
         {isMobileMenuOpen && (
           <>
             <div
@@ -395,9 +408,9 @@ const ClientLandingPage = () => {
                     {item.label}
                   </a>
                 ))}
- 
+
                 <div className="my-2 border-t" />
- 
+
                 {clientUser ? (
                   <div className="space-y-2 px-1">
                     <div className="flex items-center gap-3 py-2">
@@ -431,7 +444,7 @@ const ClientLandingPage = () => {
           </>
         )}
       </header>
- 
+
       <section className="bg-card">
         <div className="container grid items-center gap-8 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-2 md:gap-10 md:py-20 lg:py-24">
           <div className="order-2 md:order-1">
@@ -444,7 +457,7 @@ const ClientLandingPage = () => {
             <p className="mb-6 max-w-lg font-body text-sm text-muted-foreground sm:text-base md:text-lg">
               Discover professional help tailored to your family's unique needs. From housekeeping to specialized infant care, we provide vetted experts you can trust.
             </p>
- 
+
             {clientUser ? (
               <div className="mb-6 rounded-2xl border bg-muted/50 p-4">
                 <p className="font-display text-lg font-semibold text-foreground sm:text-xl">
@@ -460,7 +473,7 @@ const ClientLandingPage = () => {
                 </div>
               </div>
             ) : null}
- 
+
             {clientUser ? (
               <div className="flex flex-wrap gap-3">
                 <Button variant="outline" size="lg" className="font-body flex-1 sm:flex-none">
@@ -472,7 +485,7 @@ const ClientLandingPage = () => {
               </div>
             ) : null}
           </div>
- 
+
           <div className="relative order-1 md:order-2">
             <div className="overflow-hidden rounded-2xl shadow-xl">
               <img
@@ -493,7 +506,7 @@ const ClientLandingPage = () => {
           </div>
         </div>
       </section>
- 
+
       <section className="border-y bg-background py-8 md:py-10">
         <div className="container px-4 sm:px-6">
           <div className="mb-5 flex items-center gap-2">
@@ -515,97 +528,111 @@ const ClientLandingPage = () => {
           </div>
         </div>
       </section>
- 
+
       <section id="search" className="bg-muted py-8 md:py-10">
         <div className="container px-4 sm:px-6">
-          <div className="mb-4 flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary shrink-0" />
-            <h3 className="font-display text-base font-semibold text-foreground sm:text-lg">Find Your Ideal Match</h3>
+          <div className="mb-5">
+            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
+              Maid <span className="text-primary">Search</span>
+            </h2>
           </div>
- 
-          {!isLoggedIn ? (
-            <div className="mb-4 rounded-2xl border bg-card p-5 sm:p-6">
-              <p className="font-display text-lg font-semibold text-foreground sm:text-xl">Login Required for Maid Search</p>
-              <p className="mt-2 font-body text-sm text-muted-foreground">
-                Maid photos, profile details, and search tools are only available after employer login.
-              </p>
-              <div className="mt-4">
-                <Button asChild className="w-full sm:w-auto">
-                  <Link to="/employer-login">Employer Login</Link>
-                </Button>
+
+          <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+            <div className="p-5 sm:p-6 space-y-5">
+
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+                <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">Keywords</label>
+                <input
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className="flex-1 rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="Enter search keywords such as: Filipino maid, baby sitter, etc."
+                />
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">Maid Type</label>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  {MAID_TYPES.map((type) => (
+                    <label key={type} className="flex cursor-pointer items-center gap-2 font-body text-sm text-foreground select-none">
+                      <input
+                        type="radio"
+                        name="maidType"
+                        value={type}
+                        checked={maidTypes.includes(type)}
+                        onChange={() => toggleMaidType(type)}
+                        className="h-4 w-4 accent-primary cursor-pointer"
+                      />
+                      {type}
+                    </label>
+                  ))}
+                  <label className="flex cursor-pointer items-center gap-2 font-body text-sm text-foreground select-none">
+                    <input
+                      type="checkbox"
+                      checked={willingOffDays}
+                      onChange={(e) => setWillingOffDays(e.target.checked)}
+                      className="h-4 w-4 accent-primary cursor-pointer"
+                    />
+                    Willing to work on off-days
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+                  <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">Nationality</label>
+                  <select
+                    value={nationality}
+                    onChange={(e) => setNationality(e.target.value)}
+                    className="w-full sm:w-52 rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    {nationalityOptions.map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+                  <label className="font-body text-sm font-semibold text-foreground sm:shrink-0">Language</label>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="w-full sm:w-52 rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    {LANGUAGE_OPTIONS.map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
-          ) : null}
- 
-          <div className={`mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 ${!isLoggedIn ? "opacity-50 pointer-events-none" : ""}`}>
-            <div className="sm:col-span-2 lg:col-span-1 xl:col-span-1">
-              <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Keyword</label>
-              <input
-                value={keyword}
-                onChange={(event) => setKeyword(event.target.value)}
-                disabled={!isLoggedIn}
-                className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="Name, code, type"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Nationality</label>
-              <select
-                value={nationality}
-                onChange={(event) => setNationality(event.target.value)}
-                disabled={!isLoggedIn}
-                className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+
+            <div className="grid grid-cols-2 border-t">
+              <button
+                onClick={handleRequestMaid}
+                className="flex items-center justify-center gap-2 bg-primary px-4 py-3.5 font-body text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 sm:py-4 sm:text-base border-r border-primary/20"
               >
-                {nationalityOptions.map((option) => (
-                  <option key={option}>{option}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Experience</label>
-              <select
-                value={experience}
-                onChange={(event) => setExperience(event.target.value)}
-                disabled={!isLoggedIn}
-                className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                Request Maid
+              </button>
+              <button
+                onClick={handleSearch}
+                className="flex items-center justify-center gap-2 bg-primary px-4 py-3.5 font-body text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 sm:py-4 sm:text-base"
               >
-                <option>Any Experience</option>
-                <option>1-2 Years</option>
-                <option>3-5 Years</option>
-                <option>5+ Years</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Age Group</label>
-              <select
-                value={ageGroup}
-                onChange={(event) => setAgeGroup(event.target.value)}
-                disabled={!isLoggedIn}
-                className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <option>Any Age</option>
-                <option>23-30</option>
-                <option>30-40</option>
-                <option>40+</option>
-              </select>
-            </div>
-            <div className="flex items-end sm:col-span-2 lg:col-span-1 xl:col-span-1">
-              <Button className="w-full gap-2 font-body" onClick={handleSearch} disabled={!isLoggedIn}>
-                <Search className="h-4 w-4" /> Search Maids
-              </Button>
+                <Search className="h-4 w-4 shrink-0" />
+                Search Maid Now
+              </button>
             </div>
           </div>
- 
-          <p className="font-body text-sm text-muted-foreground">
-            {!isLoggedIn
-              ? "Login to search and unlock maid profile details."
-              : isLoading
+
+          <p className="mt-3 font-body text-sm text-muted-foreground">
+            {isLoading
               ? "Loading available public maids..."
               : `${filteredMaids.length} public maid${filteredMaids.length !== 1 ? "s" : ""} matched your search.`}
           </p>
         </div>
       </section>
- 
+
       <section id="maid-results" className="bg-card py-10 md:py-12">
         <div className="container px-4 sm:px-6">
           <div className="mb-6 flex items-end justify-between gap-4 md:mb-8">
@@ -617,8 +644,13 @@ const ClientLandingPage = () => {
                 Browse currently available public profiles from your search filters.
               </p>
             </div>
+            {totalPages > 1 && (
+              <p className="font-body text-sm text-muted-foreground shrink-0">
+                Page {currentPage} of {totalPages}
+              </p>
+            )}
           </div>
- 
+
           {isLoading ? (
             <div className="rounded-2xl border bg-muted/40 p-6 text-center font-body text-muted-foreground">
               Loading maid profiles...
@@ -627,7 +659,7 @@ const ClientLandingPage = () => {
             <div className="rounded-2xl border bg-muted/40 p-6 text-center">
               <p className="font-display text-lg font-semibold text-foreground">No matching maids found</p>
               <p className="mt-1 font-body text-sm text-muted-foreground">
-                Try a different nationality, age group, or a broader keyword search.
+                Try a different nationality, maid type, or a broader keyword search.
               </p>
             </div>
           ) : (
@@ -647,11 +679,11 @@ const ClientLandingPage = () => {
                   </div>
                 </div>
               ) : null}
- 
+
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-                {filteredMaids.map((maid) => {
+                {pagedMaids.map((maid) => {
                   const photo = getPrimaryPhoto(maid);
- 
+
                   return (
                     <article
                       key={maid.referenceCode}
@@ -670,7 +702,7 @@ const ClientLandingPage = () => {
                           </div>
                         )}
                       </div>
- 
+
                       <div className={`flex flex-col p-2 gap-1.5 flex-1 items-center text-center ${!isLoggedIn ? "blur-sm select-none" : ""}`}>
                         <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
                           {maid.fullName}
@@ -690,11 +722,54 @@ const ClientLandingPage = () => {
                   );
                 })}
               </div>
+
+                {isLoggedIn && totalPages > 1 && (
+                  <div className="mt-8 flex items-center justify-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="rounded-lg border bg-card px-3 py-2 font-body text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
+                    >
+                      Previous
+                    </button>
+
+                    {pageNumbers.map((page, idx) =>
+                      page === "..." ? (
+                        <span
+                          key={`ellipsis-${idx}`}
+                          className="px-2 py-2 font-body text-sm text-muted-foreground select-none"
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page as number)}
+                          className={`min-w-[2.25rem] rounded-lg border px-3 py-2 font-body text-sm transition-colors ${
+                            page === currentPage
+                              ? "bg-primary text-primary-foreground border-primary font-semibold"
+                              : "bg-card text-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    )}
+
+                    <button
+                      onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="rounded-lg border bg-card px-3 py-2 font-body text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
             </>
           )}
         </div>
       </section>
- 
+
       <section id="services" className="bg-card py-12 md:py-16 lg:py-24">
         <div className="container px-4 sm:px-6">
           <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between md:mb-10">
@@ -732,7 +807,7 @@ const ClientLandingPage = () => {
           </div>
         </div>
       </section>
- 
+
       <section id="why" className="bg-muted py-12 md:py-16 lg:py-24">
         <div className="container grid items-center gap-8 px-4 sm:px-6 md:grid-cols-2 md:gap-12">
           <div className="relative">
@@ -769,7 +844,7 @@ const ClientLandingPage = () => {
           </div>
         </div>
       </section>
- 
+
       <section id="contact" className="bg-card py-12 md:py-16 lg:py-24">
         <div className="container max-w-2xl px-4 text-center sm:px-6">
           <h2 className="mb-3 font-display text-2xl font-bold text-foreground sm:text-3xl md:text-4xl">
@@ -812,7 +887,7 @@ const ClientLandingPage = () => {
           </div>
         </div>
       </section>
- 
+
       <footer className="bg-foreground py-10 text-primary-foreground md:py-12">
         <div className="container px-4 sm:px-6">
           <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4 md:gap-8">
@@ -858,5 +933,5 @@ const ClientLandingPage = () => {
     </div>
   );
 };
- 
+
 export default ClientLandingPage;
