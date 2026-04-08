@@ -23,7 +23,11 @@ import {
   type ClientUser,
 } from "@/lib/clientAuth";
 
-const ContactUs = () => {
+type ContactUsProps = {
+  embedded?: boolean;
+};
+
+const ContactUs = ({ embedded = false }: ContactUsProps) => {
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -71,6 +75,7 @@ const ContactUs = () => {
   return (
     <div className="client-page-theme min-h-screen flex flex-col">
 
+      {!embedded && (
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
           <div className="container flex h-16 items-center justify-between">
 
@@ -197,7 +202,8 @@ const ContactUs = () => {
               </div>
             </div>
           )}
-        </header>
+      </header>
+      )}
 
       <main className="flex-1 py-12 md:py-20">
         <div className="container max-w-5xl">

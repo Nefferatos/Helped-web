@@ -95,7 +95,7 @@ const ClientEmployerLogin = () => {
           title: "Login Successful",
           description: "You can now view your assigned maids.",
         });
-        navigate("/client/dashboard");
+        navigate("/client/home");
         return;
       }
 

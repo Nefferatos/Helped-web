@@ -33,7 +33,11 @@ const agencies = [
   "Target Maid Rinzin At The Agency",
 ];
 
-const Enquiry = () => {
+type EnquiryProps = {
+  embedded?: boolean;
+};
+
+const Enquiry = ({ embedded = false }: EnquiryProps) => {
   const [agency, setAgency] = useState("All Agencies");
   const [requirements, setRequirements] = useState("");
   const [name, setName] = useState("");
@@ -118,6 +122,7 @@ const Enquiry = () => {
   return (
       <div className="client-page-theme min-h-screen flex flex-col">
   
+        {!embedded && (
         <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
           <div className="container flex h-16 items-center justify-between">
 
@@ -245,6 +250,7 @@ const Enquiry = () => {
             </div>
           )}
         </header>
+        )}
 
       <main className="flex-1 py-40 md:py-40">
         <div className="container max-w-2xl">

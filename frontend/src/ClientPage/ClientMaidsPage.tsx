@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
 import { getClientAuthHeaders, getClientToken } from "@/lib/clientAuth";
 import {
   calculateAge,
@@ -46,6 +47,8 @@ const ClientMaidsPage = () => {
   const [search, setSearch] = useState("");
   const [nationality, setNationality] = useState("All Nationalities");
   const [maidType, setMaidType] = useState("All Types");
+  const [skill, setSkill] = useState("All Skills");
+  const [experience, setExperience] = useState("All Years");
 
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 12;
@@ -88,15 +91,35 @@ const ClientMaidsPage = () => {
     void loadMaids();
   }, [navigate]);
 
-  const nationalityOptions = useMemo(() => {
-    const values = Array.from(
-      new Set(
-        maids.map((m) => m.nationality?.trim()).filter(Boolean)
-      )
-    ).sort();
+  const normalizeNationalityCategory = (raw?: string) => {
+    const value = String(raw || "").trim().toLowerCase();
+    if (!value) return "Others";
+    if (value.includes("filip") || value.includes("philipp")) return "Filipino";
+    if (value.includes("indo")) return "Indonesian";
+    if (value.includes("indian") || value === "india") return "Indian";
+    if (value.includes("myan") || value.includes("burm")) return "Myanmar";
+    if (value.includes("sri") || value.includes("lanka")) return "Sri Lankan";
+    if (value.includes("bangla")) return "Bangladeshi";
+    if (value.includes("nepal")) return "Nepali";
+    if (value.includes("cambod") || value.includes("khmer")) return "Cambodian";
+    return "Others";
+  };
 
-    return ["All Nationalities", ...values];
-  }, [maids]);
+  const nationalityOptions = useMemo(
+    () => [
+      { value: "All Nationalities", label: "All Nationalities" },
+      { value: "Filipino", label: "Filipino maid" },
+      { value: "Indonesian", label: "Indonesian maid" },
+      { value: "Indian", label: "Indian maid" },
+      { value: "Myanmar", label: "Myanmar maid" },
+      { value: "Sri Lankan", label: "Sri Lankan maid" },
+      { value: "Bangladeshi", label: "Bangladeshi maid" },
+      { value: "Nepali", label: "Nepali maid" },
+      { value: "Cambodian", label: "Cambodian maid" },
+      { value: "Others", label: "Others" },
+    ],
+    []
+  );
 
   const maidTypeOptions = useMemo(() => {
     const values = Array.from(
@@ -105,6 +128,51 @@ const ClientMaidsPage = () => {
 
     return ["All Types", ...values];
   }, [maids]);
+
+  const skillOptions = useMemo(() => {
+    const valueIsEnabled = (value: unknown) => {
+      if (typeof value === "boolean") return value;
+      if (typeof value === "number") return value > 0;
+      if (typeof value === "string") return value.trim().length > 0 && value !== "0";
+      return Boolean(value);
+    };
+
+    const keys = new Set<string>();
+    maids.forEach((maid) => {
+      const skills = maid.skillsPreferences as Record<string, unknown>;
+      const workAreas = maid.workAreas as Record<string, unknown>;
+      Object.entries(skills || {}).forEach(([key, value]) => {
+        if (valueIsEnabled(value)) keys.add(key);
+      });
+      Object.entries(workAreas || {}).forEach(([key, value]) => {
+        if (valueIsEnabled(value)) keys.add(key);
+      });
+    });
+
+    return ["All Skills", ...Array.from(keys).sort((a, b) => a.localeCompare(b))];
+  }, [maids]);
+
+  const experienceOptions = useMemo(
+    () => ["All Years", "No Experience", "1-2 Years", "3-5 Years", "5+ Years"],
+    []
+  );
+
+  const matchesSkill = (maid: MaidProfile, selected: string) => {
+    if (!selected || selected === "All Skills") return true;
+    const skills = (maid.skillsPreferences || {}) as Record<string, unknown>;
+    const workAreas = (maid.workAreas || {}) as Record<string, unknown>;
+    return Boolean(skills[selected]) || Boolean(workAreas[selected]);
+  };
+
+  const matchesExperience = (maid: MaidProfile, selected: string) => {
+    if (!selected || selected === "All Years") return true;
+    const count = Array.isArray(maid.employmentHistory) ? maid.employmentHistory.length : 0;
+    if (selected === "No Experience") return count === 0;
+    if (selected === "1-2 Years") return count >= 1 && count <= 2;
+    if (selected === "3-5 Years") return count >= 3 && count <= 5;
+    if (selected === "5+ Years") return count >= 5;
+    return true;
+  };
 
   const filteredMaids = useMemo(() => {
     return maids.filter((maid) => {
@@ -115,11 +183,13 @@ const ClientMaidsPage = () => {
       return (
         (!search.trim() || text.includes(search.toLowerCase())) &&
         (nationality === "All Nationalities" ||
-          maid.nationality === nationality) &&
-        (maidType === "All Types" || maid.type === maidType)
+          normalizeNationalityCategory(maid.nationality) === nationality) &&
+        (maidType === "All Types" || maid.type === maidType) &&
+        matchesSkill(maid, skill) &&
+        matchesExperience(maid, experience)
       );
     });
-  }, [maids, search, nationality, maidType]);
+  }, [maids, search, nationality, maidType, skill, experience]);
 
   const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
 
@@ -130,7 +200,7 @@ const ClientMaidsPage = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, nationality, maidType]);
+  }, [search, nationality, maidType, skill, experience]);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
@@ -148,7 +218,28 @@ const ClientMaidsPage = () => {
         {/* FILTERS */}
         <Card>
           <CardContent className="p-4">
-            <div className="grid gap-2 md:grid-cols-[2fr_1fr_1fr]">
+            {/* Nationality buttons */}
+            <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1">
+              {nationalityOptions.map((opt) => {
+                if (opt.value === "All Nationalities") return null;
+                const active = nationality === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setNationality(opt.value)}
+                    className={cn(
+                      "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      active ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
               
               <div className="flex items-center gap-2 rounded-xl border px-3">
                 <Search className="h-4 w-4 text-muted-foreground" />
@@ -166,7 +257,9 @@ const ClientMaidsPage = () => {
                 className="h-10 rounded-lg border px-2 text-sm"
               >
                 {nationalityOptions.map((o) => (
-                  <option key={o}>{o}</option>
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
                 ))}
               </select>
 
@@ -176,6 +269,26 @@ const ClientMaidsPage = () => {
                 className="h-10 rounded-lg border px-2 text-sm"
               >
                 {maidTypeOptions.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+
+              <select
+                value={skill}
+                onChange={(e) => setSkill(e.target.value)}
+                className="h-10 rounded-lg border px-2 text-sm"
+              >
+                {skillOptions.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+
+              <select
+                value={experience}
+                onChange={(e) => setExperience(e.target.value)}
+                className="h-10 rounded-lg border px-2 text-sm"
+              >
+                {experienceOptions.map((o) => (
                   <option key={o}>{o}</option>
                 ))}
               </select>

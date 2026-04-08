@@ -12,6 +12,10 @@ import ClientHistoryPage from "@/ClientPage/ClientHistoryPage";
 import ClientLandingPage from "@/ClientPage/ClientLandingPage";
 import ClientMaidsPage from "@/ClientPage/ClientMaidsPage";
 import ClientProfilePage from "@/ClientPage/ClientProfilePage";
+import ClientPortalLayout from "@/ClientPage/ClientPortalLayout";
+import ClientPortalHome from "@/ClientPage/ClientPortalHome";
+import ClientRequestsPage from "@/ClientPage/ClientRequestsPage";
+import ClientChangePasswordPage from "@/ClientPage/ClientChangePasswordPage";
 import AgenciesPage from "@/pages/AgenciesPage";
 import AgencyDetailsPage from "@/pages/AgencyDetailsPage";
 import HiringProcessPage from "@/pages/HiringProcessPage";
@@ -129,7 +133,7 @@ const AdminIndexRedirect = () => {
 
 const ClientHomeRedirect = () => {
   const token = getClientToken();
-  return token ? <Navigate to="/client/dashboard" replace /> : <ClientLandingPage />;
+  return token ? <Navigate to="/client/home" replace /> : <ClientLandingPage />;
 };
 
 const App = () => {
@@ -233,11 +237,22 @@ const App = () => {
             <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/client/dashboard" element={<ProtectedClientRoute><ClientDashboard /></ProtectedClientRoute>} />
-            <Route path="/client/maids" element={<ProtectedClientRoute><ClientMaidsPage /></ProtectedClientRoute>} />
-            <Route path="/client/profile" element={<ProtectedClientRoute><ClientProfilePage /></ProtectedClientRoute>} />
-            <Route path="/client/history" element={<ProtectedClientRoute><ClientHistoryPage /></ProtectedClientRoute>} />
-            <Route path="/client/support-chat" element={<ProtectedClientRoute><ClientSupportChat /></ProtectedClientRoute>} />
+            <Route path="/client" element={<ProtectedClientRoute><ClientPortalLayout /></ProtectedClientRoute>}>
+              <Route index element={<Navigate to="home" replace />} />
+              <Route path="home" element={<ClientPortalHome />} />
+              <Route path="about" element={<AboutUs embedded />} />
+              <Route path="enquiry" element={<Enquiry2 embedded />} />
+              <Route path="contact" element={<ContactUS embedded />} />
+              <Route path="maids" element={<ClientMaidsPage />} />
+              <Route path="requests" element={<ClientRequestsPage />} />
+              <Route path="messages" element={<Navigate to="../support-chat" replace />} />
+              <Route path="support-chat" element={<ClientSupportChat />} />
+              <Route path="profile" element={<ClientProfilePage />} />
+              <Route path="change-password" element={<ClientChangePasswordPage />} />
+              <Route path="history" element={<ClientHistoryPage />} />
+              {/* Keep existing dashboard route working */}
+              <Route path="dashboard" element={<ClientDashboard />} />
+            </Route>
             <Route path="/hire/:refCode" element={<HiringProcessPage />} />
             <Route path="/maids/:refCode" element={<PublicMaidProfile />} />
             <Route path="/agency-portal" element={<AgenciesPage />} />

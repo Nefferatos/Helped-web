@@ -113,7 +113,11 @@ interface CompanyResponse {
   companyProfile?: CompanyProfileApi;
 }
 
-const ClientLandingPage = () => {
+type ClientLandingPageProps = {
+  embedded?: boolean;
+};
+
+const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const navigate = useNavigate();
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
@@ -321,6 +325,7 @@ const ClientLandingPage = () => {
 
   return (
     <div className="client-page-theme min-h-screen">
+      {!embedded && (
 
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="container flex h-14 items-center justify-between gap-4 px-4 sm:px-6 md:h-16">
@@ -444,6 +449,7 @@ const ClientLandingPage = () => {
           </>
         )}
       </header>
+      )}
 
       <section className="bg-card">
         <div className="container grid items-center gap-8 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-2 md:gap-10 md:py-20 lg:py-24">
