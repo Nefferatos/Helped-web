@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { getClientAuthHeaders, getClientToken } from "@/lib/clientAuth";
-import { calculateAge, getExperienceBucket, getPrimaryPhoto, getPublicIntro, type MaidProfile } from "@/lib/maids";
+import {
+  calculateAge,
+  getPrimaryPhoto,
+  getPublicIntro,
+  type MaidProfile,
+} from "@/lib/maids";
 import "./ClientTheme.css";
 
 interface CompanyProfileApi {
@@ -19,19 +23,32 @@ interface CompanyResponse {
   companyProfile?: CompanyProfileApi;
 }
 
-const getAgencyName = (maid: MaidProfile, company: CompanyProfileApi | null) => {
+const getAgencyName = (
+  maid: MaidProfile,
+  company: CompanyProfileApi | null
+) => {
   const agencyContact = maid.agencyContact as Record<string, unknown>;
-  return String(agencyContact.companyName || company?.company_name || company?.short_name || "Agency");
+  return String(
+    agencyContact.companyName ||
+      company?.company_name ||
+      company?.short_name ||
+      "Agency"
+  );
 };
 
 const ClientMaidsPage = () => {
   const navigate = useNavigate();
+
   const [maids, setMaids] = useState<MaidProfile[]>([]);
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [nationality, setNationality] = useState("All Nationalities");
   const [maidType, setMaidType] = useState("All Types");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
 
   useEffect(() => {
     if (!getClientToken()) {
@@ -42,6 +59,7 @@ const ClientMaidsPage = () => {
     const loadMaids = async () => {
       try {
         setIsLoading(true);
+
         const [maidsResponse, companyResponse] = await Promise.all([
           fetch("/api/maids?visibility=public", {
             headers: { ...getClientAuthHeaders() },
@@ -49,20 +67,19 @@ const ClientMaidsPage = () => {
           fetch("/api/company"),
         ]);
 
-        const maidData = (await maidsResponse.json().catch(() => ({}))) as {
-          maids?: MaidProfile[];
-          error?: string;
-        };
-        const companyData = (await companyResponse.json().catch(() => ({}))) as CompanyResponse;
+        const maidData = await maidsResponse.json();
+        const companyData = (await companyResponse.json()) as CompanyResponse;
 
         if (!maidsResponse.ok || !maidData.maids) {
           throw new Error(maidData.error || "Failed to load maids");
         }
 
-        setMaids(maidData.maids.filter((maid) => maid.isPublic));
+        setMaids(maidData.maids.filter((m: MaidProfile) => m.isPublic));
         setCompany(companyData.companyProfile ?? null);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load maids");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to load maids"
+        );
       } finally {
         setIsLoading(false);
       }
@@ -73,176 +90,234 @@ const ClientMaidsPage = () => {
 
   const nationalityOptions = useMemo(() => {
     const values = Array.from(
-      new Set(maids.map((maid) => maid.nationality?.trim()).filter((value): value is string => Boolean(value))),
-    ).sort((left, right) => left.localeCompare(right));
+      new Set(
+        maids.map((m) => m.nationality?.trim()).filter(Boolean)
+      )
+    ).sort();
 
     return ["All Nationalities", ...values];
   }, [maids]);
 
   const maidTypeOptions = useMemo(() => {
     const values = Array.from(
-      new Set(maids.map((maid) => maid.type?.trim()).filter((value): value is string => Boolean(value))),
-    ).sort((left, right) => left.localeCompare(right));
+      new Set(maids.map((m) => m.type?.trim()).filter(Boolean))
+    ).sort();
 
     return ["All Types", ...values];
   }, [maids]);
 
   const filteredMaids = useMemo(() => {
     return maids.filter((maid) => {
-      const publicIntro = getPublicIntro(maid).toLowerCase();
-      const searchText = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${publicIntro}`.toLowerCase();
+      const intro = getPublicIntro(maid).toLowerCase();
+      const text =
+        `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
 
-      const matchesSearch = !search.trim() || searchText.includes(search.trim().toLowerCase());
-      const matchesNationality = nationality === "All Nationalities" || maid.nationality === nationality;
-      const matchesType = maidType === "All Types" || maid.type === maidType;
-
-      return matchesSearch && matchesNationality && matchesType;
+      return (
+        (!search.trim() || text.includes(search.toLowerCase())) &&
+        (nationality === "All Nationalities" ||
+          maid.nationality === nationality) &&
+        (maidType === "All Types" || maid.type === maidType)
+      );
     });
-  }, [maids, maidType, nationality, search]);
+  }, [maids, search, nationality, maidType]);
+
+  const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
+
+  const paginatedMaids = filteredMaids.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, nationality, maidType]);
 
   return (
-    <div className="client-page-theme min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
-        <Link to="/client/dashboard" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+    <div className="min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6">
+
+        {/* BACK */}
+        <Link
+          to="/client/dashboard"
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" />
           Back to Dashboard
         </Link>
 
-        <Card className="rounded-[28px] border bg-card shadow-sm">
-          <CardContent className="p-6 sm:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Maids</p>
-            <h1 className="mt-2 font-display text-3xl font-bold text-foreground">Browse maids</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Choose a maid from a dedicated page with search and filter controls.</p>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-[1.3fr_1fr_1fr]">
-              <div className="flex items-center gap-3 rounded-[22px] border bg-background px-4 py-3 md:col-span-3">
+        {/* FILTERS */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="grid gap-2 md:grid-cols-[2fr_1fr_1fr]">
+              
+              <div className="flex items-center gap-2 rounded-xl border px-3">
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <Input
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search maid name, code, type, or introduction"
-                  className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search maid..."
+                  className="border-0"
                 />
               </div>
+
               <select
                 value={nationality}
-                onChange={(event) => setNationality(event.target.value)}
-                className="h-12 w-full rounded-[18px] border bg-background px-3 text-sm text-foreground"
+                onChange={(e) => setNationality(e.target.value)}
+                className="h-10 rounded-lg border px-2 text-sm"
               >
-                {nationalityOptions.map((option) => (
-                  <option key={option}>{option}</option>
+                {nationalityOptions.map((o) => (
+                  <option key={o}>{o}</option>
                 ))}
               </select>
+
               <select
                 value={maidType}
-                onChange={(event) => setMaidType(event.target.value)}
-                className="h-12 w-full rounded-[18px] border bg-background px-3 text-sm text-foreground"
+                onChange={(e) => setMaidType(e.target.value)}
+                className="h-10 rounded-lg border px-2 text-sm"
               >
-                {maidTypeOptions.map((option) => (
-                  <option key={option}>{option}</option>
+                {maidTypeOptions.map((o) => (
+                  <option key={o}>{o}</option>
                 ))}
               </select>
-              <div className="flex items-center rounded-[18px] border bg-muted/40 px-4 text-sm text-muted-foreground">
-                {isLoading ? "Loading maids..." : `${filteredMaids.length} maids found`}
-              </div>
+
             </div>
           </CardContent>
         </Card>
 
-        {isLoading ? (
-          <Card className="rounded-[28px] border bg-card shadow-sm">
-            <CardContent className="p-10 text-center text-muted-foreground">
-              Loading maids...
-            </CardContent>
-          </Card>
-        ) : filteredMaids.length === 0 ? (
-          <Card className="rounded-[28px] border bg-card shadow-sm">
-            <CardContent className="p-10 text-center">
-              <p className="font-display text-2xl font-semibold text-foreground">
-                No matching maids found
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Try changing the filters or broadening the search.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {filteredMaids.map((maid) => {
-              const age = calculateAge(maid.dateOfBirth);
-              const photo = getPrimaryPhoto(maid);
-              const agencyName = getAgencyName(maid, company);
+        {/* GRID */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-2">
 
-              return (
-             <article
+          {paginatedMaids.map((maid) => {
+            const age = calculateAge(maid.dateOfBirth);
+            const photo = getPrimaryPhoto(maid);
+            const agencyName = getAgencyName(maid, company);
+
+            return (
+              <article
                 key={maid.referenceCode}
-                className="w-36 flex flex-col overflow-hidden rounded-lg border bg-background shadow-sm hover:shadow-md transition text-xs"
+                className="group overflow-hidden rounded-xl border bg-card shadow-sm transition hover:shadow-md hover:-translate-y-1"
               >
-                <div className="h-26 w-full bg-muted overflow-hidden">
+                {/* IMAGE */}
+                <div className="aspect-[3/4] bg-muted overflow-hidden">
                   {photo ? (
                     <img
                       src={photo}
                       alt={maid.fullName}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
+                    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
                       No photo
                     </div>
                   )}
                 </div>
 
-                <div className="p-2 flex flex-col items-center text-center ">
-                  <h3 className="text-[12px] font-medium text-foreground line-clamp-1">
+                {/* CONTENT */}
+                <div className="p-2 flex flex-col gap-2">
+
+                  {/* NAME */}
+                  <h3 className="text-xs font-semibold truncate">
                     {maid.fullName}
                   </h3>
 
-                  <p className="text-[10px] text-muted-foreground">{maid.referenceCode}</p>
-
-                  <p className="text-[10px]">
-                    <span className="font-semibold">Nationality:</span>{" "}
-                    {maid.nationality || "N/A"}
+                  <p className="text-[10px] text-muted-foreground">
+                    ID: {maid.referenceCode}
                   </p>
 
-                  <p className="text-[10px]">
-                    <span className="font-semibold">Type:</span> {maid.type || "N/A"}
+                  {/* BADGES */}
+                  <div className="flex flex-wrap gap-1">
+                    <span className="px-2 py-[2px] rounded-full bg-muted text-[10px]">
+                      {maid.nationality}
+                    </span>
+                    <span className="px-2 py-[2px] rounded-full bg-muted text-[10px]">
+                      {maid.type}
+                    </span>
+                    <span className="px-2 py-[2px] rounded-full bg-muted text-[10px]">
+                      {age} yrs
+                    </span>
+                  </div>
+
+                  {/* QUICK INFO */}
+                  <p className="text-[10px] text-muted-foreground">
+                    Available • Verified
                   </p>
 
-                  <p className="text-[10px]">
-                    <span className="font-semibold">Experience:</span>{" "}
-                    {getExperienceBucket(maid)}
-                  </p>
+                  {/* BUTTONS */}
+                  <div className="flex gap-1 pt-1">
 
-                  <p className="text-[10px]">
-                    <span className="font-semibold">Age:</span> {age ?? "N/A"}
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-1 p-2 items-center">
-                  <Button size="sm" className="h-7 text-xs rounded-md w-full" asChild>
-                    <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View</Link>
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs rounded-md w-full"
-                    asChild
-                  >
-                    <Link
-                      to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(
-                        agencyName
-                      )}`}
+                    <Button
+                      size="sm"
+                      asChild
+                      className="h-7 flex-1 text-[10px]"
                     >
-                      Message
-                    </Link>
-                  </Button>
+                      <Link
+                        to={`/maids/${encodeURIComponent(
+                          maid.referenceCode
+                        )}`}
+                      >
+                        View
+                      </Link>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      asChild
+                      className="h-7 flex-1 text-[10px]"
+                    >
+                      <Link
+                        to={`/client/support-chat?agencyName=${encodeURIComponent(
+                          agencyName
+                        )}`}
+                      >
+                        Chat
+                      </Link>
+                    </Button>
+
+                  </div>
                 </div>
               </article>
-              );
-            })}
+            );
+          })}
+
+        </div>
+
+        {/* PAGINATION */}
+        {totalPages > 1 && (
+          <div className="flex justify-center gap-1 mt-4 flex-wrap">
+            
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+            >
+              Prev
+            </Button>
+
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <Button
+                key={i}
+                size="sm"
+                variant={currentPage === i + 1 ? "default" : "outline"}
+                onClick={() => setCurrentPage(i + 1)}
+              >
+                {i + 1}
+              </Button>
+            ))}
+
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+
           </div>
         )}
+
       </div>
     </div>
   );

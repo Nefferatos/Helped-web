@@ -11,7 +11,7 @@ import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 import { ArrowLeft } from "lucide-react";
 
 type ViewMode = "menu" | "public" | "hidden";
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 
 const EditMaids = () => {
   const navigate = useNavigate();
