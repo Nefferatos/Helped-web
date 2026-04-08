@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -34,13 +34,13 @@ const ClientPortalNavbar = () => {
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const isActive = (to: string) => {
+  const isActive = useCallback((to: string) => {
     const [path, hash] = to.split("#");
     if (hash) {
       return location.pathname === path && location.hash === `#${hash}`;
     }
     return location.pathname === to;
-  };
+  }, [location.hash, location.pathname]);
 
   useEffect(() => {
     setClientUser(getStoredClient());
@@ -50,7 +50,7 @@ const ClientPortalNavbar = () => {
   const activeKey = useMemo(() => {
     const directMatch = tabs.find((tab) => isActive(tab.to));
     return directMatch?.to || "";
-  }, [location.pathname, location.hash]);
+  }, [isActive]);
 
   const handleLogout = async () => {
     try {
