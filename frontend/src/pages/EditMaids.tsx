@@ -1,21 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { calculateAge, formatDate, MaidProfile } from "@/lib/maids";
-import { Search, Eye, EyeOff, Trash2, Download, Upload } from "lucide-react";
+import { Search, Eye, EyeOff, Trash2, Download, Upload, ArrowLeft, AlertTriangle, CheckSquare, Square } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
-import { ArrowLeft } from "lucide-react";
 
 type ViewMode = "menu" | "public" | "hidden";
 const PAGE_SIZE = 10;
 
 const EditMaids = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // <-- Added for back navigation
+  const location = useLocation();
   const [view, setView] = useState<ViewMode>("menu");
   const [search, setSearch] = useState("");
   const [maids, setMaids] = useState<MaidProfile[]>([]);
@@ -31,6 +37,10 @@ const EditMaids = () => {
   const [confirmImportOpen, setConfirmImportOpen] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
 
+  // Delete validation state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<"selected" | MaidProfile | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   useEffect(() => {
     if (location.state?.fromView) {
@@ -39,13 +49,12 @@ const EditMaids = () => {
   }, [location.state]);
 
   const handleBack = () => {
-  if (view !== "menu") {
-    setView("menu");
-    return;
-  }
-
-  navigate(adminPath("/")); 
-};
+    if (view !== "menu") {
+      setView("menu");
+      return;
+    }
+    navigate(adminPath("/"));
+  };
 
   const visibility = useMemo(() => {
     if (view === "public") return "public";
@@ -55,7 +64,6 @@ const EditMaids = () => {
 
   useEffect(() => {
     if (!visibility) return;
-
     const controller = new AbortController();
     const load = async () => {
       try {
@@ -74,7 +82,6 @@ const EditMaids = () => {
         setIsLoading(false);
       }
     };
-
     void load();
     return () => controller.abort();
   }, [search, visibility]);
@@ -92,25 +99,28 @@ const EditMaids = () => {
   }, [currentPage, maids]);
 
   useEffect(() => {
-    if (page !== currentPage) {
-      setPage(currentPage);
-    }
+    if (page !== currentPage) setPage(currentPage);
   }, [currentPage, page]);
 
   const toggle = (ref: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(ref)) {
-        next.delete(ref);
-      } else {
-        next.add(ref);
-      }
+      if (next.has(ref)) next.delete(ref);
+      else next.add(ref);
       return next;
     });
   };
 
+  const toggleAll = () => {
+    if (selected.size === paginatedMaids.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(paginatedMaids.map((m) => m.referenceCode)));
+    }
+  };
+
   const removeLocal = (referenceCode: string) => {
-    setMaids((prev) => prev.filter((maid) => maid.referenceCode !== referenceCode));
+    setMaids((prev) => prev.filter((m) => m.referenceCode !== referenceCode));
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(referenceCode);
@@ -136,21 +146,39 @@ const EditMaids = () => {
     removeLocal(maid.referenceCode);
   };
 
-  const handleDeleteSelected = async () => {
+  // ── Delete with validation ─────────────────────────────────────────────────
+  const openDeleteDialog = (target: "selected" | MaidProfile) => {
+    setDeleteTarget(target);
+    setDeleteConfirmText("");
+    setDeleteDialogOpen(true);
+  };
+
+  const getDeleteLabel = () => {
+    if (!deleteTarget) return "";
+    if (deleteTarget === "selected") return `${selected.size} maid${selected.size !== 1 ? "s" : ""}`;
+    return (deleteTarget as MaidProfile).fullName;
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteDialogOpen(false);
     try {
-      for (const ref of selected) {
-        await deleteMaid(ref);
+      if (deleteTarget === "selected") {
+        for (const ref of selected) await deleteMaid(ref);
+        toast.success(`${selected.size} maid${selected.size !== 1 ? "s" : ""} deleted`);
+      } else {
+        await deleteMaid((deleteTarget as MaidProfile).referenceCode);
+        toast.success("Maid deleted");
       }
-      toast.success("Selected maids deleted");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete maids");
+      toast.error(error instanceof Error ? error.message : "Failed to delete");
     }
   };
 
   const handleToggleSelected = async () => {
     try {
       const targetPublic = view !== "public";
-      for (const maid of maids.filter((item) => selected.has(item.referenceCode))) {
+      for (const maid of maids.filter((m) => selected.has(m.referenceCode))) {
         await toggleVisibility(maid, targetPublic);
       }
       toast.success(targetPublic ? "Selected maids made public" : "Selected maids hidden");
@@ -211,19 +239,12 @@ const EditMaids = () => {
         failed?: number;
         errors?: string[];
       };
-
-      if (!response.ok && response.status !== 207) {
-        throw new Error(data.error || "Failed to import CSV");
-      }
-
+      if (!response.ok && response.status !== 207) throw new Error(data.error || "Failed to import CSV");
       const created = data.created ?? 0;
       const updated = data.updated ?? 0;
       const failed = data.failed ?? 0;
       toast.success(`Import done: ${created} created, ${updated} updated${failed ? `, ${failed} failed` : ""}`);
-      if (failed && data.errors?.length) {
-        toast.error(data.errors.slice(0, 2).join(" | "));
-      }
-
+      if (failed && data.errors?.length) toast.error(data.errors.slice(0, 2).join(" | "));
       if (visibility) {
         const params = new URLSearchParams({ visibility });
         if (search.trim()) params.set("search", search.trim());
@@ -243,10 +264,7 @@ const EditMaids = () => {
       setIsExporting(true);
       const response = await fetch("/api/maids/export.xls");
       if (!response.ok) {
-        if (response.status === 404) {
-          await handleExportCsv();
-          return;
-        }
+        if (response.status === 404) { await handleExportCsv(); return; }
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || "Failed to export Excel");
       }
@@ -270,27 +288,22 @@ const EditMaids = () => {
 
   const importSingleMaidProfile = async (payload: MaidProfile) => {
     const referenceCode = String(payload.referenceCode || "").trim();
-    if (!referenceCode) {
-      throw new Error("referenceCode is required in the imported file");
-    }
-
+    if (!referenceCode) throw new Error("referenceCode is required in the imported file");
     try {
       setIsImporting(true);
       const probe = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`);
       const exists = probe.ok;
-
-      const response = await fetch(exists ? `/api/maids/${encodeURIComponent(referenceCode)}` : "/api/maids", {
-        method: exists ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        exists ? `/api/maids/${encodeURIComponent(referenceCode)}` : "/api/maids",
+        {
+          method: exists ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
-      if (!response.ok || !data.maid) {
-        throw new Error(data.error || "Failed to import maid profile");
-      }
-
+      if (!response.ok || !data.maid) throw new Error(data.error || "Failed to import maid profile");
       toast.success(exists ? "Maid profile updated" : "Maid profile created");
-
       if (visibility) {
         const params = new URLSearchParams({ visibility });
         if (search.trim()) params.set("search", search.trim());
@@ -306,74 +319,140 @@ const EditMaids = () => {
   const handleImportFile = async (file: File) => {
     const name = file.name.toLowerCase();
     const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
-
-    if (ext === "csv") {
-      await importCsvText(await file.text());
-      return;
-    }
-
+    if (ext === "csv") { await importCsvText(await file.text()); return; }
     if (ext === "xls" || ext === "doc") {
       const content = await file.text();
       const maidsCsvBase64 = extractBase64Marker(content, "MAIDS_CSV_BASE64");
-      if (maidsCsvBase64) {
-        await importCsvText(decodeBase64Utf8(maidsCsvBase64));
-        return;
-      }
-
+      if (maidsCsvBase64) { await importCsvText(decodeBase64Utf8(maidsCsvBase64)); return; }
       const maidProfileBase64 = extractBase64Marker(content, "MAID_PROFILE_JSON_BASE64");
-      if (maidProfileBase64) {
-        await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile);
-        return;
-      }
-
+      if (maidProfileBase64) { await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile); return; }
       throw new Error('This file is missing import data. Please import files exported from "Export Maids" or from a maid bio-data export.');
     }
-
     throw new Error("Unsupported file type. Supported: .csv, .xls, .doc");
   };
 
-  const requestExport = () => {
-    if (isExporting) return;
-    setConfirmExportOpen(true);
-  };
-
-  const confirmExportCsv = () => {
-    setConfirmExportOpen(false);
-    void handleExportCsv();
-  };
-
-  const confirmExportXls = () => {
-    setConfirmExportOpen(false);
-    void handleExportXls();
-  };
-
+  const requestExport = () => { if (!isExporting) setConfirmExportOpen(true); };
+  const confirmExportCsv = () => { setConfirmExportOpen(false); void handleExportCsv(); };
+  const confirmExportXls = () => { setConfirmExportOpen(false); void handleExportXls(); };
   const requestImportFile = (file?: File) => {
     if (!file || isImporting) return;
     setPendingImportFile(file);
     setConfirmImportOpen(true);
   };
-
   const confirmImportFile = () => {
     const file = pendingImportFile;
     setConfirmImportOpen(false);
     setPendingImportFile(null);
-    if (file) {
-      void handleImportFile(file);
-    }
+    if (file) void handleImportFile(file);
   };
+
+  const SharedDialogs = () => (
+    <>
+      <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export maids file?</DialogTitle>
+            <DialogDescription>
+              Download as an easy-to-read Excel table (<strong>.xls</strong>) or as a raw CSV (<strong>.csv</strong>).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>Cancel</Button>
+            <Button variant="outline" onClick={confirmExportCsv} disabled={isExporting}>{isExporting ? "Exporting..." : "Download CSV"}</Button>
+            <Button onClick={confirmExportXls} disabled={isExporting}>{isExporting ? "Exporting..." : "Download Excel (.xls)"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import */}
+      <Dialog open={confirmImportOpen} onOpenChange={(open) => { setConfirmImportOpen(open); if (!open) setPendingImportFile(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import maids file?</DialogTitle>
+            <DialogDescription>
+              Supported: <strong>.csv</strong>, <strong>.xls</strong>, <strong>.doc</strong> exported from this system.<br />
+              Required columns: <strong>referenceCode</strong>, <strong>fullName</strong>. Existing maids are updated by referenceCode.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <span className="font-semibold">Selected file:</span> {pendingImportFile?.name ?? "None"}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>Cancel</Button>
+            <Button onClick={confirmImportFile} disabled={isImporting || !pendingImportFile}>{isImporting ? "Importing..." : "Import"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete validation dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => { setDeleteDialogOpen(open); if (!open) setDeleteConfirmText(""); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <DialogTitle className="text-destructive">Confirm Deletion</DialogTitle>
+                <DialogDescription className="mt-0.5">
+                  This action <strong>cannot be undone</strong>.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              You are about to permanently delete <strong>{getDeleteLabel()}</strong>. All associated data will be removed.
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">
+                Type <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold">DELETE</span> to confirm
+              </label>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type DELETE here"
+                className="font-mono"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteConfirmText !== "DELETE"}
+              onClick={() => void confirmDelete()}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Yes, Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 
   if (view === "menu") {
     return (
       <div className="page-container">
         <div className="content-card animate-fade-in-up space-y-6">
-          <div className="flex gap-2">
-            <Input placeholder="Maid name or Code" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button variant="outline"><Search className="mr-2 h-4 w-4" /> Search</Button>
-          </div>
+
           <div className="flex flex-wrap gap-2">
+            <div className="flex flex-1 min-w-48 items-center gap-2 rounded-lg border bg-background px-3 shadow-sm">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <Input
+                placeholder="Search maid name or code…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="border-0 shadow-none focus-visible:ring-0 px-0"
+              />
+            </div>
             <Button variant="outline" onClick={requestExport} disabled={isExporting}>
               <Download className="mr-2 h-4 w-4" />
-              {isExporting ? "Exporting..." : "Export Maids"}
+              {isExporting ? "Exporting…" : "Export"}
             </Button>
             <label className="inline-flex cursor-pointer">
               <input
@@ -381,112 +460,106 @@ const EditMaids = () => {
                 accept=".csv,.xls,.doc,text/csv,application/vnd.ms-excel,application/msword"
                 className="hidden"
                 disabled={isImporting}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  requestImportFile(file);
-                  event.currentTarget.value = "";
-                }}
+                onChange={(e) => { requestImportFile(e.target.files?.[0]); e.currentTarget.value = ""; }}
               />
-              <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground font-semibold">
-                <Upload className="mr-2 h-4 w-4" />
-                {isImporting ? "Importing..." : "Import File (Maids)"}
+              <span className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
+                <Upload className="h-4 w-4" />
+                {isImporting ? "Importing…" : "Import"}
               </span>
             </label>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Import supports <span className="font-semibold">.csv</span> (recommended), or <span className="font-semibold">.xls</span>/<span className="font-semibold">.doc</span> exported from this system. Required columns (CSV): <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Photos &amp; history are not imported.
+
+          <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            Import supports <strong>.csv</strong> (recommended), or <strong>.xls</strong>/<strong>.doc</strong> exported from this system.
+            Required columns: <strong>referenceCode</strong>, <strong>fullName</strong>. Photos &amp; history are not imported.
           </p>
 
-          <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Export maids file?</DialogTitle>
-                <DialogDescription>
-                  Download as an easy-to-read Excel table (<span className="font-semibold">.xls</span>) or as a raw CSV (<span className="font-semibold">.csv</span>).
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>
-                  Cancel
-                </Button>
-                <Button variant="outline" onClick={confirmExportCsv} disabled={isExporting}>
-                  {isExporting ? "Exporting..." : "Download CSV"}
-                </Button>
-                <Button onClick={confirmExportXls} disabled={isExporting}>
-                  {isExporting ? "Exporting..." : "Download Excel (.xls)"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <hr className="border-border" />
 
-          <Dialog open={confirmImportOpen} onOpenChange={(open) => {
-            setConfirmImportOpen(open);
-            if (!open) setPendingImportFile(null);
-          }}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Import maids file?</DialogTitle>
-                <DialogDescription>
-                  Supported: <span className="font-semibold">.csv</span>, <span className="font-semibold">.xls</span>, <span className="font-semibold">.doc</span> exported from this system.
-                  <br />
-                  For CSV: required columns <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Existing maids are updated by <span className="font-semibold">referenceCode</span>.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                <span className="font-semibold">Selected file:</span> {pendingImportFile?.name ?? "None"}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>
-                  Cancel
-                </Button>
-                <Button onClick={confirmImportFile} disabled={isImporting || !pendingImportFile}>
-                  {isImporting ? "Importing..." : "Import"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <hr />
+          {/* View selector cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <button onClick={() => setView("public")} className="flex flex-col items-center gap-2 rounded-lg border p-6 transition-all hover:border-primary/30 hover:bg-secondary/50 active:scale-[0.98]">
-              <Eye className="h-8 w-8 text-primary" />
-              <span className="font-semibold text-primary">Maids In Public</span>
-              <span className="text-xs text-black">Click to edit/delete maids in public</span>
+            <button
+              onClick={() => setView("public")}
+              className="group relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border-2 border-primary/20 bg-primary/5 p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10 hover:shadow-md active:scale-[0.98]"
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/10 transition-all group-hover:ring-primary/20">
+                <Eye className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-primary">Maids In Public</p>
+                <p className="mt-1 text-xs text-muted-foreground">View, edit or delete publicly visible maids</p>
+              </div>
             </button>
-            <button onClick={() => setView("hidden")} className="flex flex-col items-center gap-2 rounded-lg border p-6 transition-all hover:border-primary/30 hover:bg-secondary/50 active:scale-[0.98]">
-              <EyeOff className="h-8 w-8 text-muted-foreground" />
-              <span className="font-semibold">Maids Hidden</span>
-              <span className="text-xs text-black">Click to edit/delete hidden maids</span>
+
+            <button
+              onClick={() => setView("hidden")}
+              className="group relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border-2 border-border bg-muted/30 p-8 text-center transition-all hover:border-muted-foreground/30 hover:bg-muted/60 hover:shadow-md active:scale-[0.98]"
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted ring-4 ring-muted transition-all group-hover:ring-muted-foreground/10">
+                <EyeOff className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-foreground">Maids Hidden</p>
+                <p className="mt-1 text-xs text-muted-foreground">View, edit or delete hidden/draft maids</p>
+              </div>
             </button>
           </div>
-          <p className="text-center text-xs text-accent">Please note: maids without photos will not be displayed in public. After adding photos, you can make them searchable.</p>
+
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+            Maids without photos will not be displayed publicly. Add photos first, then make them searchable.
+          </p>
         </div>
+
+        <SharedDialogs />
       </div>
     );
   }
 
+  const allPageSelected = paginatedMaids.length > 0 && paginatedMaids.every((m) => selected.has(m.referenceCode));
+
   return (
     <div className="page-container">
-      <button
-        onClick={handleBack}
-        className="group inline-flex items-center gap-1 text-sm font-medium text-primary
-                  focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-md">
-        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-        <span className="relative">
-          Back
-          <span className="absolute left-0 -bottom-0.5 h-px w-0 bg-primary transition-all group-hover:w-full" />
-        </span>
-      </button>
-   
+
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <button
+          onClick={handleBack}
+          className="group inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+          <span className="relative">
+            Back
+            <span className="absolute left-0 -bottom-0.5 h-px w-0 bg-primary transition-all group-hover:w-full" />
+          </span>
+        </button>
+
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${view === "public" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+            {view === "public" ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            {view === "public" ? "Public Maids" : "Hidden Maids"}
+          </span>
+          {!isLoading && (
+            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+              {maids.length} total
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="content-card animate-fade-in-up space-y-4">
-        <div className="flex gap-2">
-          <Input placeholder="Maid name or Code" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <Button variant="outline"><Search className="mr-2 h-4 w-4" /> Search</Button>
-        </div>
+
         <div className="flex flex-wrap gap-2">
+          <div className="flex flex-1 min-w-48 items-center gap-2 rounded-lg border bg-background px-3 shadow-sm">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <Input
+              placeholder="Search maid name or code…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="border-0 shadow-none focus-visible:ring-0 px-0"
+            />
+          </div>
           <Button variant="outline" onClick={requestExport} disabled={isExporting}>
             <Download className="mr-2 h-4 w-4" />
-            {isExporting ? "Exporting..." : "Export Maids"}
+            {isExporting ? "Exporting…" : "Export"}
           </Button>
           <label className="inline-flex cursor-pointer">
             <input
@@ -494,73 +567,72 @@ const EditMaids = () => {
               accept=".csv,.xls,.doc,text/csv,application/vnd.ms-excel,application/msword"
               className="hidden"
               disabled={isImporting}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                requestImportFile(file);
-                event.currentTarget.value = "";
-              }}
+              onChange={(e) => { requestImportFile(e.target.files?.[0]); e.currentTarget.value = ""; }}
             />
-            <span className="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground">
-              <Upload className="mr-2 h-4 w-4" />
-              {isImporting ? "Importing..." : "Import File (Maids)"}
+            <span className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
+              <Upload className="h-4 w-4" />
+              {isImporting ? "Importing…" : "Import"}
             </span>
           </label>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Import supports <span className="font-semibold">.csv</span> (recommended), or <span className="font-semibold">.xls</span>/<span className="font-semibold">.doc</span> exported from this system. Required columns (CSV): <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Photos &amp; history are not imported.
-        </p>
 
-        <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Export maids file?</DialogTitle>
-              <DialogDescription>
-                Download as an easy-to-read Excel table (<span className="font-semibold">.xls</span>) or as a raw CSV (<span className="font-semibold">.csv</span>).
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>
-                Cancel
-              </Button>
-              <Button variant="outline" onClick={confirmExportCsv} disabled={isExporting}>
-                {isExporting ? "Exporting..." : "Download CSV"}
-              </Button>
-              <Button onClick={confirmExportXls} disabled={isExporting}>
-                {isExporting ? "Exporting..." : "Download Excel (.xls)"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {maids.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-2.5">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium select-none">
+              <button type="button" onClick={toggleAll} className="text-primary">
+                {allPageSelected
+                  ? <CheckSquare className="h-4 w-4" />
+                  : <Square className="h-4 w-4 text-muted-foreground" />}
+              </button>
+              {selected.size > 0
+                ? <span>{selected.size} selected</span>
+                : <span className="text-muted-foreground">Select all on page</span>}
+            </label>
 
-        <Dialog open={confirmImportOpen} onOpenChange={(open) => {
-          setConfirmImportOpen(open);
-          if (!open) setPendingImportFile(null);
-        }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Import maids file?</DialogTitle>
-              <DialogDescription>
-                Supported: <span className="font-semibold">.csv</span>, <span className="font-semibold">.xls</span>, <span className="font-semibold">.doc</span> exported from this system.
-                <br />
-                For CSV: required columns <span className="font-semibold">referenceCode</span>, <span className="font-semibold">fullName</span>. Existing maids are updated by <span className="font-semibold">referenceCode</span>.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="rounded-md border bg-muted/30 p-3 text-sm">
-              <span className="font-semibold">Selected file:</span> {pendingImportFile?.name ?? "None"}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={selected.size === 0}
+                onClick={() => void handleToggleSelected()}
+                className="h-8 text-xs"
+              >
+                <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                {view === "public" ? "Hide Selected" : "Publish Selected"}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={selected.size === 0}
+                onClick={() => openDeleteDialog("selected")}
+                className="h-8 text-xs"
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                Delete Selected ({selected.size})
+              </Button>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>
-                Cancel
-              </Button>
-              <Button onClick={confirmImportFile} disabled={isImporting || !pendingImportFile}>
-                {isImporting ? "Importing..." : "Import"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </div>
+        )}
 
         {isLoading ? (
-          <div className="py-10 text-center text-black">Loading maids...</div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+              <div key={i} className="animate-pulse rounded-xl border bg-muted/40">
+                <div className="aspect-[3/4] rounded-t-xl bg-muted" />
+                <div className="space-y-2 p-2">
+                  <div className="h-3 w-3/4 rounded bg-muted" />
+                  <div className="h-2.5 w-1/2 rounded bg-muted" />
+                  <div className="h-2.5 w-2/3 rounded bg-muted" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : maids.length === 0 ? (
+          <div className="rounded-xl border border-dashed py-16 text-center">
+            <EyeOff className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">No maid records found.</p>
+            <p className="mt-1 text-xs text-muted-foreground/60">Try a different search or adjust filters.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {paginatedMaids.map((maid, i) => {
@@ -569,10 +641,12 @@ const EditMaids = () => {
                 Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
                   ? maid.photoDataUrls[0]
                   : maid.photoDataUrl;
+              const isSelected = selected.has(maid.referenceCode);
+
               return (
                 <div
                   key={maid.referenceCode}
-                  className="flex flex-col items-center gap-2 rounded-lg border p-2 text-center text-[11px] leading-tight transition-all hover:border-primary/30 hover:shadow-md"
+                  className={`group relative flex flex-col overflow-hidden rounded-xl border text-[11px] leading-tight transition-all hover:shadow-md ${isSelected ? "border-primary ring-2 ring-primary/20" : "hover:border-primary/30"}`}
                   style={{
                     animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards",
                     animationDelay: `${i * 0.04}s`,
@@ -580,106 +654,92 @@ const EditMaids = () => {
                   }}
                 >
                   <div
-                    className="flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-muted text-xs"
+                    className="relative h-36 w-full cursor-pointer overflow-hidden bg-muted"
                     onClick={() =>
                       navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
-                        state: { fromView: view } // <-- pass current view for back button
+                        state: { fromView: view },
                       })
                     }
                   >
                     {photoPreview ? (
-                      <img
-                        src={photoPreview}
-                        alt={maid.fullName}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : maid.hasPhoto ? (
-                      "Photo"
+                      <img src={photoPreview} alt={maid.fullName} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                     ) : (
-                      "No Photo"
+                      <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">No Photo</div>
                     )}
+
+                    <div
+                      className="absolute left-2 top-2"
+                      onClick={(e) => { e.stopPropagation(); toggle(maid.referenceCode); }}
+                    >
+                      <div className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-white/70 bg-black/20 backdrop-blur-sm"}`}>
+                        {isSelected && <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openDeleteDialog(maid); }}
+                      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded border border-white/20 bg-black/40 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 hover:bg-destructive"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
                   </div>
 
-                  <p
-                    className="cursor-pointer font-semibold hover:text-primary"
-                    onClick={() =>
-                      navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
-                        state: { fromView: view } // <-- pass current view for back button
-                      })
-                    }
-                  >
-                    {maid.fullName}
-                  </p>
-
-                  <div className="font-medium space-y-[2px]">
-                    <p>
-                      {maid.maritalStatus}
-                      {age !== null ? `(${age})` : ""}
+                  <div className="flex flex-1 flex-col gap-1 p-2">
+                    <p
+                      className="cursor-pointer truncate font-semibold text-foreground hover:text-primary"
+                      onClick={() =>
+                        navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
+                          state: { fromView: view },
+                        })
+                      }
+                    >
+                      {maid.fullName}
                     </p>
 
-                    <p>
-                      {maid.nationality} {maid.type}
-                    </p>
+                    <div className="space-y-0.5 text-[10px] text-muted-foreground">
+                      <p>{maid.maritalStatus}{age !== null ? ` · ${age} yrs` : ""}</p>
+                      <p>{maid.nationality} · {maid.type}</p>
+                      <p className="font-semibold text-foreground">Ref: {maid.referenceCode}</p>
+                      <p>Upd: {formatDate(maid.updatedAt)}</p>
+                    </div>
 
-                    <p className="font-bold">Rinzin Maids</p>
-
-                    <p className="font-semibold">
-                      Ref: {maid.referenceCode}
-                    </p>
-
-                    <p className="text-gray-500">
-                      Upd on {formatDate(maid.updatedAt)}
-                    </p>
-                  </div>
-
-                  <div className="mt-1 w-full border-t pt-1">
-                    <label className="flex items-center justify-center gap-1 text-[10px]">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(maid.referenceCode)}
-                        onChange={() => toggle(maid.referenceCode)}
-                        className="accent-primary" />
-                      Select
-                    </label>
+                    <div className="mt-auto pt-1">
+                      <button
+                        onClick={() => void toggleVisibility(maid, view !== "public")}
+                        className={`inline-flex w-full items-center justify-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${view === "public" ? "bg-primary/10 text-primary hover:bg-primary/20" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                      >
+                        {view === "public" ? <><Eye className="h-3 w-3" /> Public — Hide</> : <><EyeOff className="h-3 w-3" /> Hidden — Publish</>}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
-            {!isLoading && maids.length === 0 && <div className="col-span-full py-10 text-center text-muted-foreground">No maid records found.</div>}
           </div>
         )}
 
-        <div className="flex justify-center gap-3 pt-4">
-          <Button variant="destructive" size="sm" disabled={selected.size === 0} onClick={() => void handleDeleteSelected()}>
-            <Trash2 className="mr-1 h-4 w-4" /> Delete Selected
-          </Button>
-          <Button variant="outline" size="sm" disabled={selected.size === 0} onClick={() => void handleToggleSelected()}>
-            <EyeOff className="mr-1 h-4 w-4" /> {view === "public" ? "Hide Selected" : "Publish Selected"}
-          </Button>
-        </div>
-
-        {maids.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-sm">
+        {maids.length > PAGE_SIZE && (
+          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
             <button
-              className="h-7 rounded border px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-8 rounded-lg border px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted transition-colors"
               disabled={currentPage <= 1}
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              Prev
+              Previous
             </button>
             {Array.from({ length: totalPages }, (_, i) => (
               <button
                 key={i}
                 onClick={() => setPage(i + 1)}
-                className={`h-7 w-7 rounded ${i + 1 === currentPage ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                className={`h-8 min-w-[2rem] rounded-lg border px-2.5 text-xs transition-colors ${i + 1 === currentPage ? "bg-primary text-primary-foreground border-primary font-semibold" : "hover:bg-muted"}`}
               >
                 {i + 1}
               </button>
             ))}
             <button
-              className="h-7 rounded border px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-8 rounded-lg border px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted transition-colors"
               disabled={currentPage >= totalPages}
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
               Next
             </button>
@@ -687,51 +747,35 @@ const EditMaids = () => {
         )}
       </div>
 
+      <SharedDialogs />
+
       <SendMaidToClientDialog
         maid={maidToSendThroughAgency}
         open={Boolean(maidToSendThroughAgency)}
-        onOpenChange={(open) => {
-          if (!open) setMaidToSendThroughAgency(null);
-        }}
+        onOpenChange={(open) => { if (!open) setMaidToSendThroughAgency(null); }}
         actionType="interested"
         onSuccess={(updatedMaid) => {
-          setMaids((prev) =>
-            prev.map((item) =>
-              item.referenceCode === updatedMaid.referenceCode ? updatedMaid : item
-            )
-          );
+          setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m));
           setMaidToSendThroughAgency(null);
         }}
       />
       <SendMaidToClientDialog
         maid={maidToDirectHire}
         open={Boolean(maidToDirectHire)}
-        onOpenChange={(open) => {
-          if (!open) setMaidToDirectHire(null);
-        }}
+        onOpenChange={(open) => { if (!open) setMaidToDirectHire(null); }}
         actionType="direct_hire"
         onSuccess={(updatedMaid) => {
-          setMaids((prev) =>
-            prev.map((item) =>
-              item.referenceCode === updatedMaid.referenceCode ? updatedMaid : item
-            )
-          );
+          setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m));
           setMaidToDirectHire(null);
         }}
       />
       <SendMaidToClientDialog
         maid={maidToReject}
         open={Boolean(maidToReject)}
-        onOpenChange={(open) => {
-          if (!open) setMaidToReject(null);
-        }}
+        onOpenChange={(open) => { if (!open) setMaidToReject(null); }}
         actionType="rejected"
         onSuccess={(updatedMaid) => {
-          setMaids((prev) =>
-            prev.map((item) =>
-              item.referenceCode === updatedMaid.referenceCode ? updatedMaid : item
-            )
-          );
+          setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m));
           setMaidToReject(null);
         }}
       />

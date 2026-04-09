@@ -3,9 +3,7 @@ import { ArrowLeft, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
-import { cn } from "@/lib/utils";
 import { getClientAuthHeaders, getClientToken } from "@/lib/clientAuth";
 import {
   calculateAge,
@@ -37,21 +35,215 @@ const getAgencyName = (
   );
 };
 
+interface Filters {
+  keyword: string;
+  agencyPreference: string;
+  biodataCreatedWithin: string;
+  maidType: string; 
+  willingOffDays: boolean;
+  hasChildren: boolean;
+  withVideo: boolean;
+  // Nationality checkboxes
+  natFilipino: boolean;
+  natIndonesian: boolean;
+  natMyanmar: boolean;
+  natIndian: boolean;
+  natSriLankan: boolean;
+  natCambodian: boolean;
+  natBangladeshi: boolean;
+  natOthers: boolean;
+  natNoPreference: boolean;
+  // Working Experience
+  expHomeCountry: boolean;
+  expSingapore: boolean;
+  expMalaysia: boolean;
+  expHongKong: boolean;
+  expTaiwan: boolean;
+  expMiddleEast: boolean;
+  expOtherCountries: boolean;
+  expNoPreference: boolean;
+  // Duty
+  dutyCareInfant: boolean;
+  dutyCareYoungChildren: boolean;
+  dutyCareElderlyDisabled: boolean;
+  dutyCooking: boolean;
+  dutyGeneralHousekeeping: boolean;
+  dutyNoPreference: boolean;
+  // Education
+  eduCollege: boolean;
+  eduHighSchool: boolean;
+  eduSecondary: boolean;
+  eduPrimary: boolean;
+  eduNoPreference: boolean;
+  // Language
+  langEnglish: boolean;
+  langMandarin: boolean;
+  langBahasaIndonesia: boolean;
+  langHindi: boolean;
+  langTamil: boolean;
+  langNoPreference: boolean;
+  // Age
+  age21to25: boolean;
+  age26to30: boolean;
+  age31to35: boolean;
+  age36to40: boolean;
+  age41above: boolean;
+  ageNoPreference: boolean;
+  // Marital Status
+  marSingle: boolean;
+  marMarried: boolean;
+  marWidowed: boolean;
+  marDivorced: boolean;
+  marSeparated: boolean;
+  marNoPreference: boolean;
+  // Height
+  height150below: boolean;
+  height151to155: boolean;
+  height156to160: boolean;
+  height161above: boolean;
+  heightNoPreference: boolean;
+  // Religion
+  relFreeThinker: boolean;
+  relChristian: boolean;
+  relCatholic: boolean;
+  relBuddhist: boolean;
+  relMuslim: boolean;
+  relHindu: boolean;
+  relSikh: boolean;
+  relOthers: boolean;
+  relNoPreference: boolean;
+}
+
+const defaultFilters: Filters = {
+  keyword: "",
+  agencyPreference: "No Preference",
+  biodataCreatedWithin: "No Preference",
+  maidType: "",
+  willingOffDays: false,
+  hasChildren: false,
+  withVideo: false,
+  natFilipino: false,
+  natIndonesian: false,
+  natMyanmar: false,
+  natIndian: false,
+  natSriLankan: false,
+  natCambodian: false,
+  natBangladeshi: false,
+  natOthers: false,
+  natNoPreference: true,
+  expHomeCountry: false,
+  expSingapore: false,
+  expMalaysia: false,
+  expHongKong: false,
+  expTaiwan: false,
+  expMiddleEast: false,
+  expOtherCountries: false,
+  expNoPreference: true,
+  dutyCareInfant: false,
+  dutyCareYoungChildren: false,
+  dutyCareElderlyDisabled: false,
+  dutyCooking: false,
+  dutyGeneralHousekeeping: false,
+  dutyNoPreference: true,
+  eduCollege: false,
+  eduHighSchool: false,
+  eduSecondary: false,
+  eduPrimary: false,
+  eduNoPreference: true,
+  langEnglish: false,
+  langMandarin: false,
+  langBahasaIndonesia: false,
+  langHindi: false,
+  langTamil: false,
+  langNoPreference: true,
+  age21to25: false,
+  age26to30: false,
+  age31to35: false,
+  age36to40: false,
+  age41above: false,
+  ageNoPreference: true,
+  marSingle: false,
+  marMarried: false,
+  marWidowed: false,
+  marDivorced: false,
+  marSeparated: false,
+  marNoPreference: true,
+  height150below: false,
+  height151to155: false,
+  height156to160: false,
+  height161above: false,
+  heightNoPreference: true,
+  relFreeThinker: false,
+  relChristian: false,
+  relCatholic: false,
+  relBuddhist: false,
+  relMuslim: false,
+  relHindu: false,
+  relSikh: false,
+  relOthers: false,
+  relNoPreference: true,
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+const normalizeNationality = (raw?: string) => {
+  const v = String(raw || "").trim().toLowerCase();
+  if (!v) return "others";
+  if (v.includes("filip") || v.includes("philipp")) return "filipino";
+  if (v.includes("indo")) return "indonesian";
+  if (v.includes("myan") || v.includes("burm")) return "myanmar";
+  if (v.includes("indian") || v === "india") return "indian";
+  if (v.includes("sri") || v.includes("lanka")) return "srilanka";
+  if (v.includes("cambod") || v.includes("khmer")) return "cambodian";
+  if (v.includes("bangla")) return "bangladeshi";
+  return "others";
+};
+
+const ITEMS_PER_PAGE = 12;
+
+// ── Checkbox helper component ──────────────────────────────────────────────────
+const CB = ({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) => (
+  <label className="flex cursor-pointer items-center gap-1.5 select-none font-body text-sm text-foreground">
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className="h-3.5 w-3.5 accent-primary cursor-pointer"
+    />
+    {label}
+  </label>
+);
+
+// ── Main component ─────────────────────────────────────────────────────────────
 const ClientMaidsPage = () => {
   const navigate = useNavigate();
 
   const [maids, setMaids] = useState<MaidProfile[]>([]);
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [nationality, setNationality] = useState("All Nationalities");
-  const [maidType, setMaidType] = useState("All Types");
-  const [skill, setSkill] = useState("All Skills");
-  const [experience, setExperience] = useState("All Years");
-
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 12;
+
+  // Draft filters (what the user is editing in the form)
+  const [draft, setDraft] = useState<Filters>(defaultFilters);
+  // Submitted filters (what actually drives the results)
+  const [submitted, setSubmitted] = useState<Filters>(defaultFilters);
+  // Controls whether results are visible at all
+  const [hasSearched, setHasSearched] = useState(false);
+  // Controls whether the filter form is expanded (after first search)
+  const [formOpen, setFormOpen] = useState(true);
+
+  const set = (key: keyof Filters, value: boolean | string) =>
+    setDraft((prev) => ({ ...prev, [key]: value }));
+
+  const toggle = (key: keyof Filters) =>
+    setDraft((prev) => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     if (!getClientToken()) {
@@ -62,27 +254,21 @@ const ClientMaidsPage = () => {
     const loadMaids = async () => {
       try {
         setIsLoading(true);
-
         const [maidsResponse, companyResponse] = await Promise.all([
           fetch("/api/maids?visibility=public", {
             headers: { ...getClientAuthHeaders() },
           }),
           fetch("/api/company"),
         ]);
-
         const maidData = await maidsResponse.json();
         const companyData = (await companyResponse.json()) as CompanyResponse;
-
         if (!maidsResponse.ok || !maidData.maids) {
           throw new Error(maidData.error || "Failed to load maids");
         }
-
         setMaids(maidData.maids.filter((m: MaidProfile) => m.isPublic));
         setCompany(companyData.companyProfile ?? null);
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to load maids"
-        );
+        toast.error(error instanceof Error ? error.message : "Failed to load maids");
       } finally {
         setIsLoading(false);
       }
@@ -91,344 +277,518 @@ const ClientMaidsPage = () => {
     void loadMaids();
   }, [navigate]);
 
-  const normalizeNationalityCategory = (raw?: string) => {
-    const value = String(raw || "").trim().toLowerCase();
-    if (!value) return "Others";
-    if (value.includes("filip") || value.includes("philipp")) return "Filipino";
-    if (value.includes("indo")) return "Indonesian";
-    if (value.includes("indian") || value === "india") return "Indian";
-    if (value.includes("myan") || value.includes("burm")) return "Myanmar";
-    if (value.includes("sri") || value.includes("lanka")) return "Sri Lankan";
-    if (value.includes("bangla")) return "Bangladeshi";
-    if (value.includes("nepal")) return "Nepali";
-    if (value.includes("cambod") || value.includes("khmer")) return "Cambodian";
-    return "Others";
-  };
-
-  const nationalityOptions = useMemo(
-    () => [
-      { value: "All Nationalities", label: "All Nationalities" },
-      { value: "Filipino", label: "Filipino maid" },
-      { value: "Indonesian", label: "Indonesian maid" },
-      { value: "Indian", label: "Indian maid" },
-      { value: "Myanmar", label: "Myanmar maid" },
-      { value: "Sri Lankan", label: "Sri Lankan maid" },
-      { value: "Bangladeshi", label: "Bangladeshi maid" },
-      { value: "Nepali", label: "Nepali maid" },
-      { value: "Cambodian", label: "Cambodian maid" },
-      { value: "Others", label: "Others" },
-    ],
-    []
-  );
-
-  const maidTypeOptions = useMemo(() => {
-    const values = Array.from(
-      new Set(maids.map((m) => m.type?.trim()).filter(Boolean))
-    ).sort();
-
-    return ["All Types", ...values];
-  }, [maids]);
-
-  const skillOptions = useMemo(() => {
-    const valueIsEnabled = (value: unknown) => {
-      if (typeof value === "boolean") return value;
-      if (typeof value === "number") return value > 0;
-      if (typeof value === "string") return value.trim().length > 0 && value !== "0";
-      return Boolean(value);
-    };
-
-    const keys = new Set<string>();
-    maids.forEach((maid) => {
-      const skills = maid.skillsPreferences as Record<string, unknown>;
-      const workAreas = maid.workAreas as Record<string, unknown>;
-      Object.entries(skills || {}).forEach(([key, value]) => {
-        if (valueIsEnabled(value)) keys.add(key);
-      });
-      Object.entries(workAreas || {}).forEach(([key, value]) => {
-        if (valueIsEnabled(value)) keys.add(key);
-      });
-    });
-
-    return ["All Skills", ...Array.from(keys).sort((a, b) => a.localeCompare(b))];
-  }, [maids]);
-
-  const experienceOptions = useMemo(
-    () => ["All Years", "No Experience", "1-2 Years", "3-5 Years", "5+ Years"],
-    []
-  );
-
-  const matchesSkill = (maid: MaidProfile, selected: string) => {
-    if (!selected || selected === "All Skills") return true;
-    const skills = (maid.skillsPreferences || {}) as Record<string, unknown>;
-    const workAreas = (maid.workAreas || {}) as Record<string, unknown>;
-    return Boolean(skills[selected]) || Boolean(workAreas[selected]);
-  };
-
-  const matchesExperience = (maid: MaidProfile, selected: string) => {
-    if (!selected || selected === "All Years") return true;
-    const count = Array.isArray(maid.employmentHistory) ? maid.employmentHistory.length : 0;
-    if (selected === "No Experience") return count === 0;
-    if (selected === "1-2 Years") return count >= 1 && count <= 2;
-    if (selected === "3-5 Years") return count >= 3 && count <= 5;
-    if (selected === "5+ Years") return count >= 5;
-    return true;
-  };
-
   const filteredMaids = useMemo(() => {
+    const f = submitted;
+
+    const isNoPreference = (noPreferenceFlag: boolean, ...specific: boolean[]) =>
+      noPreferenceFlag || specific.every((v) => !v);
+
     return maids.filter((maid) => {
       const intro = getPublicIntro(maid).toLowerCase();
-      const text =
-        `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
+      const text = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
+      const skills = (maid.skillsPreferences || {}) as Record<string, unknown>;
+      const workAreas = (maid.workAreas || {}) as Record<string, unknown>;
 
-      return (
-        (!search.trim() || text.includes(search.toLowerCase())) &&
-        (nationality === "All Nationalities" ||
-          normalizeNationalityCategory(maid.nationality) === nationality) &&
-        (maidType === "All Types" || maid.type === maidType) &&
-        matchesSkill(maid, skill) &&
-        matchesExperience(maid, experience)
-      );
+      if (f.keyword.trim() && !text.includes(f.keyword.trim().toLowerCase())) return false;
+
+      if (f.maidType && maid.type !== f.maidType) return false;
+
+      if (!isNoPreference(f.natNoPreference, f.natFilipino, f.natIndonesian, f.natMyanmar,
+          f.natIndian, f.natSriLankan, f.natCambodian, f.natBangladeshi, f.natOthers)) {
+        const norm = normalizeNationality(maid.nationality);
+        const match =
+          (f.natFilipino && norm === "filipino") ||
+          (f.natIndonesian && norm === "indonesian") ||
+          (f.natMyanmar && norm === "myanmar") ||
+          (f.natIndian && norm === "indian") ||
+          (f.natSriLankan && norm === "srilanka") ||
+          (f.natCambodian && norm === "cambodian") ||
+          (f.natBangladeshi && norm === "bangladeshi") ||
+          (f.natOthers && norm === "others");
+        if (!match) return false;
+      }
+
+      if (!isNoPreference(f.ageNoPreference, f.age21to25, f.age26to30, f.age31to35, f.age36to40, f.age41above)) {
+        const age = calculateAge(maid.dateOfBirth) ?? 0;
+        const match =
+          (f.age21to25 && age >= 21 && age <= 25) ||
+          (f.age26to30 && age >= 26 && age <= 30) ||
+          (f.age31to35 && age >= 31 && age <= 35) ||
+          (f.age36to40 && age >= 36 && age <= 40) ||
+          (f.age41above && age >= 41);
+        if (!match) return false;
+      }
+
+      if (!isNoPreference(f.dutyNoPreference, f.dutyCareInfant, f.dutyCareYoungChildren,
+          f.dutyCareElderlyDisabled, f.dutyCooking, f.dutyGeneralHousekeeping)) {
+        const hasSkill = (keys: string[]) =>
+          keys.some((k) => Boolean(skills[k]) || Boolean(workAreas[k]));
+        const match =
+          (f.dutyCareInfant && hasSkill(["careForInfant", "infantCare", "care_for_infant"])) ||
+          (f.dutyCareYoungChildren && hasSkill(["careForYoungChildren", "childCare", "care_for_young_children"])) ||
+          (f.dutyCareElderlyDisabled && hasSkill(["careForElderly", "elderlyCare", "care_for_elderly", "care_for_disabled"])) ||
+          (f.dutyCooking && hasSkill(["cooking", "cook"])) ||
+          (f.dutyGeneralHousekeeping && hasSkill(["generalHousekeeping", "housekeeping", "general_housekeeping"]));
+        if (!match) return false;
+      }
+
+      if (!isNoPreference(f.expNoPreference, f.expHomeCountry, f.expSingapore, f.expMalaysia,
+          f.expHongKong, f.expTaiwan, f.expMiddleEast, f.expOtherCountries)) {
+        const history = (Array.isArray(maid.employmentHistory) ? maid.employmentHistory : []) as Array<Record<string, unknown>>;
+        const countries = history.map((h) => String(h.country || h.workCountry || "").toLowerCase());
+        const match =
+          (f.expHomeCountry && countries.some((c) => c.includes("home") || c.includes("philippines") || c.includes("indonesia") || c.includes("myanmar") || c.includes("india"))) ||
+          (f.expSingapore && countries.some((c) => c.includes("singapore") || c.includes("sg"))) ||
+          (f.expMalaysia && countries.some((c) => c.includes("malaysia"))) ||
+          (f.expHongKong && countries.some((c) => c.includes("hong kong") || c.includes("hongkong"))) ||
+          (f.expTaiwan && countries.some((c) => c.includes("taiwan"))) ||
+          (f.expMiddleEast && countries.some((c) => c.includes("uae") || c.includes("dubai") || c.includes("saudi") || c.includes("qatar") || c.includes("kuwait") || c.includes("middle east"))) ||
+          (f.expOtherCountries && countries.length > 0);
+        if (!match) return false;
+      }
+
+      if (!isNoPreference(f.eduNoPreference, f.eduCollege, f.eduHighSchool, f.eduSecondary, f.eduPrimary)) {
+        const edu = String(maid.education || (maid as Record<string, unknown>).educationLevel || "").toLowerCase();
+        const match =
+          (f.eduCollege && (edu.includes("college") || edu.includes("degree") || edu.includes("university"))) ||
+          (f.eduHighSchool && (edu.includes("high school") || edu.includes("secondary"))) ||
+          (f.eduSecondary && (edu.includes("secondary") || edu.includes("middle"))) ||
+          (f.eduPrimary && (edu.includes("primary") || edu.includes("elementary")));
+        if (!match) return false;
+      }
+
+      if (!isNoPreference(f.langNoPreference, f.langEnglish, f.langMandarin, f.langBahasaIndonesia, f.langHindi, f.langTamil)) {
+        const langs = String(maid.languages || (maid as Record<string, unknown>).languagesSpoken || text).toLowerCase();
+        const match =
+          (f.langEnglish && langs.includes("english")) ||
+          (f.langMandarin && (langs.includes("mandarin") || langs.includes("chinese"))) ||
+          (f.langBahasaIndonesia && (langs.includes("bahasa") || langs.includes("malay") || langs.includes("indonesia"))) ||
+          (f.langHindi && langs.includes("hindi")) ||
+          (f.langTamil && langs.includes("tamil"));
+        if (!match) return false;
+      }
+
+      if (!isNoPreference(f.marNoPreference, f.marSingle, f.marMarried, f.marWidowed, f.marDivorced, f.marSeparated)) {
+        const mar = String(maid.maritalStatus || (maid as Record<string, unknown>).marital_status || "").toLowerCase();
+        const match =
+          (f.marSingle && mar.includes("single")) ||
+          (f.marMarried && mar.includes("married")) ||
+          (f.marWidowed && mar.includes("widow")) ||
+          (f.marDivorced && mar.includes("divorce")) ||
+          (f.marSeparated && mar.includes("separat"));
+        if (!match) return false;
+      }
+
+      if (!isNoPreference(f.heightNoPreference, f.height150below, f.height151to155, f.height156to160, f.height161above)) {
+        const heightCm = Number(maid.height || (maid as Record<string, unknown>).heightCm || 0);
+        if (heightCm > 0) {
+          const match =
+            (f.height150below && heightCm <= 150) ||
+            (f.height151to155 && heightCm >= 151 && heightCm <= 155) ||
+            (f.height156to160 && heightCm >= 156 && heightCm <= 160) ||
+            (f.height161above && heightCm >= 161);
+          if (!match) return false;
+        }
+      }
+
+      if (!isNoPreference(f.relNoPreference, f.relFreeThinker, f.relChristian, f.relCatholic,
+          f.relBuddhist, f.relMuslim, f.relHindu, f.relSikh, f.relOthers)) {
+        const rel = String(maid.religion || (maid as Record<string, unknown>).religion || "").toLowerCase();
+        const match =
+          (f.relFreeThinker && (rel.includes("free") || rel.includes("none") || rel.includes("atheist"))) ||
+          (f.relChristian && rel.includes("christian") && !rel.includes("catholic")) ||
+          (f.relCatholic && rel.includes("catholic")) ||
+          (f.relBuddhist && rel.includes("buddh")) ||
+          (f.relMuslim && rel.includes("muslim") || rel.includes("islam")) ||
+          (f.relHindu && rel.includes("hindu")) ||
+          (f.relSikh && rel.includes("sikh")) ||
+          (f.relOthers && rel.length > 0);
+        if (!match) return false;
+      }
+
+      return true;
     });
-  }, [maids, search, nationality, maidType, skill, experience]);
+  }, [maids, submitted]);
 
   const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
-
-  const paginatedMaids = filteredMaids.slice(
+  const pagedMaids = filteredMaids.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
-  useEffect(() => {
+  const handleSearch = () => {
+    setSubmitted(draft);
     setCurrentPage(1);
-  }, [search, nationality, maidType, skill, experience]);
+    setHasSearched(true);
+    setFormOpen(false);
+  };
+
+  const handleRequestMaid = () => {
+      navigate("/client/requests");
+  };
+
+  // Page number list with ellipsis
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages: (number | "...")[] = [1];
+    if (currentPage > 3) pages.push("...");
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      pages.push(i);
+    }
+    if (currentPage < totalPages - 2) pages.push("...");
+    pages.push(totalPages);
+    return pages;
+  }, [totalPages, currentPage]);
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6">
+    <div className="client-page-theme min-h-screen bg-background">
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 flex flex-col gap-6">
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
 
-        {/* BACK */}
-        <Link
-          to="/client/dashboard"
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Link>
-
-        {/* FILTERS */}
-        <Card>
-          <CardContent className="p-4">
-            {/* Nationality buttons */}
-            <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1">
-              {nationalityOptions.map((opt) => {
-                if (opt.value === "All Nationalities") return null;
-                const active = nationality === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setNationality(opt.value)}
-                    className={cn(
-                      "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                      active ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted",
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-3 border-b p-4">
+              <Button
+                type="button"
+                size="lg"
+                variant="default"
+                className="font-body font-semibold"
+                onClick={handleRequestMaid}
+              >
+                Request Maid
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                className="font-body font-semibold"
+                onClick={handleSearch}
+              >
+                <Search className="mr-2 h-4 w-4" />
+                Search Maid Now
+              </Button>
+              {hasSearched && (
+                <button
+                  type="button"
+                  onClick={() => setFormOpen((v) => !v)}
+                  className="ml-auto font-body text-sm text-primary hover:underline"
+                >
+                  {formOpen ? "Hide filters ▲" : "Edit filters ▼"}
+                </button>
+              )}
             </div>
 
-            <div className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
-              
-              <div className="flex items-center gap-2 rounded-xl border px-3">
-                <Search className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search maid..."
-                  className="border-0"
+            {(!hasSearched || formOpen) && (
+
+            <div className="p-5 space-y-4">
+
+              <div className="flex items-center gap-4">
+                <label className="w-44 shrink-0 font-body text-sm font-semibold text-foreground">Keywords</label>
+                <input
+                  value={draft.keyword}
+                  onChange={(e) => set("keyword", e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className="flex-1 rounded-lg border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="Enter search keywords such as: Filipino maid, baby sitter, etc."
                 />
               </div>
 
-              <select
-                value={nationality}
-                onChange={(e) => setNationality(e.target.value)}
-                className="h-10 rounded-lg border px-2 text-sm"
-              >
-                {nationalityOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-4">
+                <label className="w-44 shrink-0 font-body text-sm font-semibold text-foreground">Agency Preference</label>
+                <select
+                  value={draft.agencyPreference}
+                  onChange={(e) => set("agencyPreference", e.target.value)}
+                  className="w-64 rounded-lg border bg-background px-3 py-2 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option>No Preference</option>
+                </select>
+              </div>
 
-              <select
-                value={maidType}
-                onChange={(e) => setMaidType(e.target.value)}
-                className="h-10 rounded-lg border px-2 text-sm"
-              >
-                {maidTypeOptions.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-4">
+                <label className="w-44 shrink-0 font-body text-sm font-semibold text-foreground">Bio-data Created within</label>
+                <select
+                  value={draft.biodataCreatedWithin}
+                  onChange={(e) => set("biodataCreatedWithin", e.target.value)}
+                  className="w-48 rounded-lg border bg-background px-3 py-2 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option>No Preference</option>
+                  <option>1 week</option>
+                  <option>2 weeks</option>
+                  <option>1 month</option>
+                  <option>3 months</option>
+                  <option>6 months</option>
+                  <option>1 year</option>
+                </select>
+              </div>
 
-              <select
-                value={skill}
-                onChange={(e) => setSkill(e.target.value)}
-                className="h-10 rounded-lg border px-2 text-sm"
-              >
-                {skillOptions.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-4">
+                <label className="w-44 shrink-0 font-body text-sm font-semibold text-foreground">Maid Type</label>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  {(["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const).map((type) => (
+                    <label key={type} className="flex cursor-pointer items-center gap-1.5 font-body text-sm text-foreground select-none">
+                      <input
+                        type="radio"
+                        name="maidType"
+                        value={type}
+                        checked={draft.maidType === type}
+                        onChange={() => set("maidType", draft.maidType === type ? "" : type)}
+                        className="h-3.5 w-3.5 accent-primary cursor-pointer"
+                      />
+                      {type}
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-              <select
-                value={experience}
-                onChange={(e) => setExperience(e.target.value)}
-                className="h-10 rounded-lg border px-2 text-sm"
-              >
-                {experienceOptions.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 pl-[11.5rem]">
+                <CB checked={draft.willingOffDays} onChange={() => toggle("willingOffDays")} label="Willing to work on off-days" />
+                <CB checked={draft.hasChildren} onChange={() => toggle("hasChildren")} label="Has Children" />
+                <CB checked={draft.withVideo} onChange={() => toggle("withVideo")} label="With Video" />
+              </div>
 
+              <div className="border-t pt-4" />
+
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Nationality</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.natFilipino} onChange={() => toggle("natFilipino")} label="Filipino" />
+                    <CB checked={draft.natIndonesian} onChange={() => toggle("natIndonesian")} label="Indonesian" />
+                    <CB checked={draft.natMyanmar} onChange={() => toggle("natMyanmar")} label="Myanmese" />
+                    <CB checked={draft.natIndian} onChange={() => toggle("natIndian")} label="Indian" />
+                    <CB checked={draft.natSriLankan} onChange={() => toggle("natSriLankan")} label="Sri Lankan" />
+                    <CB checked={draft.natCambodian} onChange={() => toggle("natCambodian")} label="Cambodian" />
+                    <CB checked={draft.natBangladeshi} onChange={() => toggle("natBangladeshi")} label="Bangladeshi" />
+                    <CB checked={draft.natOthers} onChange={() => toggle("natOthers")} label="Others" />
+                    <CB checked={draft.natNoPreference} onChange={() => toggle("natNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Working Experience</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.expHomeCountry} onChange={() => toggle("expHomeCountry")} label="Home Country" />
+                    <CB checked={draft.expSingapore} onChange={() => toggle("expSingapore")} label="Singapore" />
+                    <CB checked={draft.expMalaysia} onChange={() => toggle("expMalaysia")} label="Malaysia" />
+                    <CB checked={draft.expHongKong} onChange={() => toggle("expHongKong")} label="Hong Kong" />
+                    <CB checked={draft.expTaiwan} onChange={() => toggle("expTaiwan")} label="Taiwan" />
+                    <CB checked={draft.expMiddleEast} onChange={() => toggle("expMiddleEast")} label="Middle East" />
+                    <CB checked={draft.expOtherCountries} onChange={() => toggle("expOtherCountries")} label="Other Countries" />
+                    <CB checked={draft.expNoPreference} onChange={() => toggle("expNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Duty</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.dutyCareInfant} onChange={() => toggle("dutyCareInfant")} label="Care for Infant" />
+                    <CB checked={draft.dutyCareYoungChildren} onChange={() => toggle("dutyCareYoungChildren")} label="Care for Young Children" />
+                    <CB checked={draft.dutyCareElderlyDisabled} onChange={() => toggle("dutyCareElderlyDisabled")} label="Care for Elderly/Disabled" />
+                    <CB checked={draft.dutyCooking} onChange={() => toggle("dutyCooking")} label="Cooking" />
+                    <CB checked={draft.dutyGeneralHousekeeping} onChange={() => toggle("dutyGeneralHousekeeping")} label="General Housekeeping" />
+                    <CB checked={draft.dutyNoPreference} onChange={() => toggle("dutyNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Education</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.eduCollege} onChange={() => toggle("eduCollege")} label="College/Degree (≥12 yrs)" />
+                    <CB checked={draft.eduHighSchool} onChange={() => toggle("eduHighSchool")} label="High School (10~12 yrs)" />
+                    <CB checked={draft.eduSecondary} onChange={() => toggle("eduSecondary")} label="Secondary (7~9 yrs)" />
+                    <CB checked={draft.eduPrimary} onChange={() => toggle("eduPrimary")} label="Primary Level (5~6 yrs)" />
+                    <CB checked={draft.eduNoPreference} onChange={() => toggle("eduNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Language</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.langEnglish} onChange={() => toggle("langEnglish")} label="English" />
+                    <CB checked={draft.langMandarin} onChange={() => toggle("langMandarin")} label="Mandarin/Chinese-Dialect" />
+                    <CB checked={draft.langBahasaIndonesia} onChange={() => toggle("langBahasaIndonesia")} label="Bahasa Indonesia/Malaysia" />
+                    <CB checked={draft.langHindi} onChange={() => toggle("langHindi")} label="Hindi" />
+                    <CB checked={draft.langTamil} onChange={() => toggle("langTamil")} label="Tamil" />
+                    <CB checked={draft.langNoPreference} onChange={() => toggle("langNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Age</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.age21to25} onChange={() => toggle("age21to25")} label="21 to 25" />
+                    <CB checked={draft.age26to30} onChange={() => toggle("age26to30")} label="26 to 30" />
+                    <CB checked={draft.age31to35} onChange={() => toggle("age31to35")} label="31 to 35" />
+                    <CB checked={draft.age36to40} onChange={() => toggle("age36to40")} label="36 to 40" />
+                    <CB checked={draft.age41above} onChange={() => toggle("age41above")} label="41 and Above" />
+                    <CB checked={draft.ageNoPreference} onChange={() => toggle("ageNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Marital Status</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.marSingle} onChange={() => toggle("marSingle")} label="Single" />
+                    <CB checked={draft.marMarried} onChange={() => toggle("marMarried")} label="Married" />
+                    <CB checked={draft.marWidowed} onChange={() => toggle("marWidowed")} label="Widowed" />
+                    <CB checked={draft.marDivorced} onChange={() => toggle("marDivorced")} label="Divorced" />
+                    <CB checked={draft.marSeparated} onChange={() => toggle("marSeparated")} label="Separated" />
+                    <CB checked={draft.marNoPreference} onChange={() => toggle("marNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Height of maid (cm)</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.height150below} onChange={() => toggle("height150below")} label="150 and Below" />
+                    <CB checked={draft.height151to155} onChange={() => toggle("height151to155")} label="151 to 155" />
+                    <CB checked={draft.height156to160} onChange={() => toggle("height156to160")} label="156 to 160" />
+                    <CB checked={draft.height161above} onChange={() => toggle("height161above")} label="161 and Above" />
+                    <CB checked={draft.heightNoPreference} onChange={() => toggle("heightNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Religion</p>
+                  <div className="space-y-1.5">
+                    <CB checked={draft.relFreeThinker} onChange={() => toggle("relFreeThinker")} label="Free Thinker" />
+                    <CB checked={draft.relChristian} onChange={() => toggle("relChristian")} label="Christian" />
+                    <CB checked={draft.relCatholic} onChange={() => toggle("relCatholic")} label="Catholic" />
+                    <CB checked={draft.relBuddhist} onChange={() => toggle("relBuddhist")} label="Buddhist" />
+                    <CB checked={draft.relMuslim} onChange={() => toggle("relMuslim")} label="Muslim" />
+                    <CB checked={draft.relHindu} onChange={() => toggle("relHindu")} label="Hindu" />
+                    <CB checked={draft.relSikh} onChange={() => toggle("relSikh")} label="Sikh" />
+                    <CB checked={draft.relOthers} onChange={() => toggle("relOthers")} label="Others" />
+                    <CB checked={draft.relNoPreference} onChange={() => toggle("relNoPreference")} label="No Preference" />
+                  </div>
+                </div>
+
+              </div>
             </div>
+
+            )} 
+
           </CardContent>
         </Card>
 
-        {/* GRID */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-2">
-
-          {paginatedMaids.map((maid) => {
-            const age = calculateAge(maid.dateOfBirth);
-            const photo = getPrimaryPhoto(maid);
-            const agencyName = getAgencyName(maid, company);
-
-            return (
-              <article
-                key={maid.referenceCode}
-                className="group overflow-hidden rounded-xl border bg-card shadow-sm transition hover:shadow-md hover:-translate-y-1"
-              >
-                {/* IMAGE */}
-                <div className="aspect-[3/4] bg-muted overflow-hidden">
-                  {photo ? (
-                    <img
-                      src={photo}
-                      alt={maid.fullName}
-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                      No photo
-                    </div>
-                  )}
-                </div>
-
-                {/* CONTENT */}
-                <div className="p-2 flex flex-col gap-2">
-
-                  {/* NAME */}
-                  <h3 className="text-xs font-semibold truncate">
-                    {maid.fullName}
-                  </h3>
-
-                  <p className="text-[10px] text-muted-foreground">
-                    ID: {maid.referenceCode}
-                  </p>
-
-                  {/* BADGES */}
-                  <div className="flex flex-wrap gap-1">
-                    <span className="px-2 py-[2px] rounded-full bg-muted text-[10px]">
-                      {maid.nationality}
-                    </span>
-                    <span className="px-2 py-[2px] rounded-full bg-muted text-[10px]">
-                      {maid.type}
-                    </span>
-                    <span className="px-2 py-[2px] rounded-full bg-muted text-[10px]">
-                      {age} yrs
-                    </span>
-                  </div>
-
-                  {/* QUICK INFO */}
-                  <p className="text-[10px] text-muted-foreground">
-                    Available • Verified
-                  </p>
-
-                  {/* BUTTONS */}
-                  <div className="flex gap-1 pt-1">
-
-                    <Button
-                      size="sm"
-                      asChild
-                      className="h-7 flex-1 text-[10px]"
-                    >
-                      <Link
-                        to={`/maids/${encodeURIComponent(
-                          maid.referenceCode
-                        )}`}
-                      >
-                        View
-                      </Link>
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      asChild
-                      className="h-7 flex-1 text-[10px]"
-                    >
-                      <Link
-                        to={`/client/support-chat?agencyName=${encodeURIComponent(
-                          agencyName
-                        )}`}
-                      >
-                        Chat
-                      </Link>
-                    </Button>
-
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-
-        </div>
-
-        {/* PAGINATION */}
-        {totalPages > 1 && (
-          <div className="flex justify-center gap-1 mt-4 flex-wrap">
-            
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => p - 1)}
-            >
-              Prev
-            </Button>
-
-            {Array.from({ length: totalPages }).map((_, i) => (
-              <Button
-                key={i}
-                size="sm"
-                variant={currentPage === i + 1 ? "default" : "outline"}
-                onClick={() => setCurrentPage(i + 1)}
-              >
-                {i + 1}
-              </Button>
-            ))}
-
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-
+        {hasSearched && (
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <p className="font-body text-sm text-muted-foreground">
+              {isLoading
+                ? "Loading maid profiles..."
+                : `${filteredMaids.length} maid${filteredMaids.length !== 1 ? "s" : ""} matched your search.`}
+              {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+            </p>
           </div>
+
+          {isLoading ? (
+            <div className="rounded-2xl border bg-muted/40 p-8 text-center font-body text-muted-foreground">
+              Loading maid profiles...
+            </div>
+          ) : filteredMaids.length === 0 ? (
+            <div className="rounded-2xl border bg-muted/40 p-8 text-center">
+              <p className="font-display text-lg font-semibold text-foreground">No matching maids found</p>
+              <p className="mt-1 font-body text-sm text-muted-foreground">
+                Try adjusting your filters or use broader criteria.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {pagedMaids.map((maid) => {
+                const age = calculateAge(maid.dateOfBirth);
+                const photo = getPrimaryPhoto(maid);
+                const agencyName = getAgencyName(maid, company);
+
+                return (
+                  <article
+                    key={maid.referenceCode}
+                    className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition hover:shadow-md hover:-translate-y-0.5"
+                  >
+                    <div className="aspect-[3/4] overflow-hidden bg-muted">
+                      {photo ? (
+                        <img
+                          src={photo}
+                          alt={maid.fullName}
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
+                          No photo
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 p-2 flex-1">
+                      <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
+                        {maid.fullName}
+                      </h3>
+                      <p className="text-[10px] text-muted-foreground leading-tight">
+                        {maid.referenceCode}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        <span className="rounded-full bg-muted px-2 py-px text-[10px]">{maid.nationality}</span>
+                        <span className="rounded-full bg-muted px-2 py-px text-[10px]">{maid.type}</span>
+                        {age && <span className="rounded-full bg-muted px-2 py-px text-[10px]">{age} yrs</span>}
+                      </div>
+                      <div className="mt-auto flex gap-1 pt-1">
+                        <Button size="sm" asChild className="h-7 flex-1 text-[10px] px-1">
+                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                            View
+                          </Link>
+                        </Button>
+                        <Button size="sm" variant="outline" asChild className="h-7 flex-1 text-[10px] px-1">
+                          <Link to={`/client/support-chat?agencyName=${encodeURIComponent(agencyName)}`}>
+                            Chat
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="mt-8 flex items-center justify-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="rounded-lg border bg-card px-3 py-2 font-body text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
+              >
+                Previous
+              </button>
+
+              {pageNumbers.map((page, idx) =>
+                page === "..." ? (
+                  <span key={`ellipsis-${idx}`} className="px-2 py-2 font-body text-sm text-muted-foreground select-none">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page as number)}
+                    className={`min-w-[2.25rem] rounded-lg border px-3 py-2 font-body text-sm transition-colors ${
+                      page === currentPage
+                        ? "bg-primary text-primary-foreground border-primary font-semibold"
+                        : "bg-card text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded-lg border bg-card px-3 py-2 font-body text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
         )}
 
       </div>

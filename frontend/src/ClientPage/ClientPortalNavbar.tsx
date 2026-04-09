@@ -18,13 +18,9 @@ import "./ClientTheme.css";
 
 const tabs = [
   { label: "Home", to: "/client/home" },
-  { label: "Services", to: "/client/home#services" },
-  { label: "About Us", to: "/client/about" },
-  { label: "Enquiry", to: "/client/enquiry" },
-  { label: "Contact Us", to: "/client/contact" },
-  { label: "Maids", to: "/client/maids" },
-
+  { label: "Search Maid", to: "/client/maids" },
   { label: "Messages", to: "/client/support-chat" },
+  { label: "Enquiry", to: "/client/enquiry" },
   { label: "History", to: "/client/history" },
 ];
 
@@ -59,7 +55,7 @@ const ClientPortalNavbar = () => {
         headers: { ...getClientAuthHeaders() },
       });
     } catch {
-      // Ignore logout errors; we'll clear local session regardless.
+
     } finally {
       clearClientAuth();
       toast.success("Logged out");
