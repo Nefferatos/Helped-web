@@ -221,7 +221,7 @@ const AgencyProfile = () => {
           </div>
 
           <div className="flex flex-col items-center gap-3">
-            <div className="flex h-28 w-24 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
+            <div className="flex h-28 w-34 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
               {company.logo_data_url ? (
                 <img src={company.logo_data_url} alt={`${company.company_name} logo`} className="h-full w-full object-cover" />
               ) : (

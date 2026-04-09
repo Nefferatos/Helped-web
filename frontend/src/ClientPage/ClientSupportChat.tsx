@@ -307,13 +307,7 @@ const ClientSupportChat = () => {
   return (
     <div className="client-page-theme min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
       <div className="container py-8 md:py-12">
-        <Link
-          to="/client/dashboard"
-          className="mb-6 inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-        </Link>
-
+      
         <div className="mb-6 flex items-center gap-3">
           <MessageCircle className="h-5 w-5 text-primary" />
           <h1 className="font-display text-2xl font-bold text-foreground">Support Messages</h1>

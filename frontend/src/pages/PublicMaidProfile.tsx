@@ -133,7 +133,7 @@ const PublicMaidProfile = () => {
     <div className="client-page-theme min-h-screen bg-card">
       <div className="container py-10 md:py-14">
         <Link
-          to="/"
+          to="/client/maids"
           className="mb-3 inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />

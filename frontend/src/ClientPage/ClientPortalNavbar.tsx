@@ -76,7 +76,7 @@ const ClientPortalNavbar = () => {
           </button>
 
           <Link to="/client/home" className="shrink-0 font-display text-base font-bold text-foreground sm:text-lg">
-            Client Portal
+            Employer Portal
           </Link>
         </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,11 +39,10 @@ interface Filters {
   keyword: string;
   agencyPreference: string;
   biodataCreatedWithin: string;
-  maidType: string; 
+  maidType: string;
   willingOffDays: boolean;
   hasChildren: boolean;
   withVideo: boolean;
-  // Nationality checkboxes
   natFilipino: boolean;
   natIndonesian: boolean;
   natMyanmar: boolean;
@@ -53,7 +52,6 @@ interface Filters {
   natBangladeshi: boolean;
   natOthers: boolean;
   natNoPreference: boolean;
-  // Working Experience
   expHomeCountry: boolean;
   expSingapore: boolean;
   expMalaysia: boolean;
@@ -62,47 +60,40 @@ interface Filters {
   expMiddleEast: boolean;
   expOtherCountries: boolean;
   expNoPreference: boolean;
-  // Duty
   dutyCareInfant: boolean;
   dutyCareYoungChildren: boolean;
   dutyCareElderlyDisabled: boolean;
   dutyCooking: boolean;
   dutyGeneralHousekeeping: boolean;
   dutyNoPreference: boolean;
-  // Education
   eduCollege: boolean;
   eduHighSchool: boolean;
   eduSecondary: boolean;
   eduPrimary: boolean;
   eduNoPreference: boolean;
-  // Language
   langEnglish: boolean;
   langMandarin: boolean;
   langBahasaIndonesia: boolean;
   langHindi: boolean;
   langTamil: boolean;
   langNoPreference: boolean;
-  // Age
   age21to25: boolean;
   age26to30: boolean;
   age31to35: boolean;
   age36to40: boolean;
   age41above: boolean;
   ageNoPreference: boolean;
-  // Marital Status
   marSingle: boolean;
   marMarried: boolean;
   marWidowed: boolean;
   marDivorced: boolean;
   marSeparated: boolean;
   marNoPreference: boolean;
-  // Height
   height150below: boolean;
   height151to155: boolean;
   height156to160: boolean;
   height161above: boolean;
   heightNoPreference: boolean;
-  // Religion
   relFreeThinker: boolean;
   relChristian: boolean;
   relCatholic: boolean;
@@ -184,7 +175,6 @@ const defaultFilters: Filters = {
   relNoPreference: true,
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
 const normalizeNationality = (raw?: string) => {
   const v = String(raw || "").trim().toLowerCase();
   if (!v) return "others";
@@ -200,7 +190,6 @@ const normalizeNationality = (raw?: string) => {
 
 const ITEMS_PER_PAGE = 12;
 
-// ── Checkbox helper component ──────────────────────────────────────────────────
 const CB = ({
   checked,
   onChange,
@@ -210,18 +199,23 @@ const CB = ({
   onChange: () => void;
   label: string;
 }) => (
-  <label className="flex cursor-pointer items-center gap-1.5 select-none font-body text-sm text-foreground">
+  <label className="flex cursor-pointer items-start gap-1.5 select-none font-body text-sm text-foreground leading-snug">
     <input
       type="checkbox"
       checked={checked}
       onChange={onChange}
-      className="h-3.5 w-3.5 accent-primary cursor-pointer"
+      className="mt-0.5 h-3.5 w-3.5 accent-primary cursor-pointer shrink-0"
     />
-    {label}
+    <span>{label}</span>
   </label>
 );
 
-// ── Main component ─────────────────────────────────────────────────────────────
+const SectionHead = ({ children }: { children: React.ReactNode }) => (
+  <p className="mb-2 font-body text-sm font-semibold text-foreground border-b border-border pb-1">
+    {children}
+  </p>
+);
+
 const ClientMaidsPage = () => {
   const navigate = useNavigate();
 
@@ -230,13 +224,9 @@ const ClientMaidsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Draft filters (what the user is editing in the form)
   const [draft, setDraft] = useState<Filters>(defaultFilters);
-  // Submitted filters (what actually drives the results)
   const [submitted, setSubmitted] = useState<Filters>(defaultFilters);
-  // Controls whether results are visible at all
   const [hasSearched, setHasSearched] = useState(false);
-  // Controls whether the filter form is expanded (after first search)
   const [formOpen, setFormOpen] = useState(true);
 
   const set = (key: keyof Filters, value: boolean | string) =>
@@ -286,15 +276,17 @@ const ClientMaidsPage = () => {
     return maids.filter((maid) => {
       const intro = getPublicIntro(maid).toLowerCase();
       const text = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
+
       const skills = (maid.skillsPreferences || {}) as Record<string, unknown>;
       const workAreas = (maid.workAreas || {}) as Record<string, unknown>;
 
       if (f.keyword.trim() && !text.includes(f.keyword.trim().toLowerCase())) return false;
-
       if (f.maidType && maid.type !== f.maidType) return false;
 
-      if (!isNoPreference(f.natNoPreference, f.natFilipino, f.natIndonesian, f.natMyanmar,
-          f.natIndian, f.natSriLankan, f.natCambodian, f.natBangladeshi, f.natOthers)) {
+      if (!isNoPreference(
+        f.natNoPreference, f.natFilipino, f.natIndonesian, f.natMyanmar,
+        f.natIndian, f.natSriLankan, f.natCambodian, f.natBangladeshi, f.natOthers
+      )) {
         const norm = normalizeNationality(maid.nationality);
         const match =
           (f.natFilipino && norm === "filipino") ||
@@ -308,7 +300,10 @@ const ClientMaidsPage = () => {
         if (!match) return false;
       }
 
-      if (!isNoPreference(f.ageNoPreference, f.age21to25, f.age26to30, f.age31to35, f.age36to40, f.age41above)) {
+      if (!isNoPreference(
+        f.ageNoPreference, f.age21to25, f.age26to30,
+        f.age31to35, f.age36to40, f.age41above
+      )) {
         const age = calculateAge(maid.dateOfBirth) ?? 0;
         const match =
           (f.age21to25 && age >= 21 && age <= 25) ||
@@ -319,8 +314,10 @@ const ClientMaidsPage = () => {
         if (!match) return false;
       }
 
-      if (!isNoPreference(f.dutyNoPreference, f.dutyCareInfant, f.dutyCareYoungChildren,
-          f.dutyCareElderlyDisabled, f.dutyCooking, f.dutyGeneralHousekeeping)) {
+      if (!isNoPreference(
+        f.dutyNoPreference, f.dutyCareInfant, f.dutyCareYoungChildren,
+        f.dutyCareElderlyDisabled, f.dutyCooking, f.dutyGeneralHousekeeping
+      )) {
         const hasSkill = (keys: string[]) =>
           keys.some((k) => Boolean(skills[k]) || Boolean(workAreas[k]));
         const match =
@@ -332,8 +329,10 @@ const ClientMaidsPage = () => {
         if (!match) return false;
       }
 
-      if (!isNoPreference(f.expNoPreference, f.expHomeCountry, f.expSingapore, f.expMalaysia,
-          f.expHongKong, f.expTaiwan, f.expMiddleEast, f.expOtherCountries)) {
+      if (!isNoPreference(
+        f.expNoPreference, f.expHomeCountry, f.expSingapore, f.expMalaysia,
+        f.expHongKong, f.expTaiwan, f.expMiddleEast, f.expOtherCountries
+      )) {
         const history = (Array.isArray(maid.employmentHistory) ? maid.employmentHistory : []) as Array<Record<string, unknown>>;
         const countries = history.map((h) => String(h.country || h.workCountry || "").toLowerCase());
         const match =
@@ -348,7 +347,7 @@ const ClientMaidsPage = () => {
       }
 
       if (!isNoPreference(f.eduNoPreference, f.eduCollege, f.eduHighSchool, f.eduSecondary, f.eduPrimary)) {
-        const edu = String(maid.education || (maid as Record<string, unknown>).educationLevel || "").toLowerCase();
+        const edu = String((maid as any).education || (maid as any).educationLevel || "").toLowerCase();
         const match =
           (f.eduCollege && (edu.includes("college") || edu.includes("degree") || edu.includes("university"))) ||
           (f.eduHighSchool && (edu.includes("high school") || edu.includes("secondary"))) ||
@@ -358,7 +357,7 @@ const ClientMaidsPage = () => {
       }
 
       if (!isNoPreference(f.langNoPreference, f.langEnglish, f.langMandarin, f.langBahasaIndonesia, f.langHindi, f.langTamil)) {
-        const langs = String(maid.languages || (maid as Record<string, unknown>).languagesSpoken || text).toLowerCase();
+        const langs = String((maid as any).languages || (maid as any).languagesSpoken || text).toLowerCase();
         const match =
           (f.langEnglish && langs.includes("english")) ||
           (f.langMandarin && (langs.includes("mandarin") || langs.includes("chinese"))) ||
@@ -369,7 +368,7 @@ const ClientMaidsPage = () => {
       }
 
       if (!isNoPreference(f.marNoPreference, f.marSingle, f.marMarried, f.marWidowed, f.marDivorced, f.marSeparated)) {
-        const mar = String(maid.maritalStatus || (maid as Record<string, unknown>).marital_status || "").toLowerCase();
+        const mar = String((maid as any).maritalStatus || (maid as any).marital_status || "").toLowerCase();
         const match =
           (f.marSingle && mar.includes("single")) ||
           (f.marMarried && mar.includes("married")) ||
@@ -380,7 +379,7 @@ const ClientMaidsPage = () => {
       }
 
       if (!isNoPreference(f.heightNoPreference, f.height150below, f.height151to155, f.height156to160, f.height161above)) {
-        const heightCm = Number(maid.height || (maid as Record<string, unknown>).heightCm || 0);
+        const heightCm = Number((maid as any).height || (maid as any).heightCm || 0);
         if (heightCm > 0) {
           const match =
             (f.height150below && heightCm <= 150) ||
@@ -391,15 +390,17 @@ const ClientMaidsPage = () => {
         }
       }
 
-      if (!isNoPreference(f.relNoPreference, f.relFreeThinker, f.relChristian, f.relCatholic,
-          f.relBuddhist, f.relMuslim, f.relHindu, f.relSikh, f.relOthers)) {
-        const rel = String(maid.religion || (maid as Record<string, unknown>).religion || "").toLowerCase();
+      if (!isNoPreference(
+        f.relNoPreference, f.relFreeThinker, f.relChristian, f.relCatholic,
+        f.relBuddhist, f.relMuslim, f.relHindu, f.relSikh, f.relOthers
+      )) {
+        const rel = String((maid as any).religion || "").toLowerCase();
         const match =
           (f.relFreeThinker && (rel.includes("free") || rel.includes("none") || rel.includes("atheist"))) ||
           (f.relChristian && rel.includes("christian") && !rel.includes("catholic")) ||
           (f.relCatholic && rel.includes("catholic")) ||
           (f.relBuddhist && rel.includes("buddh")) ||
-          (f.relMuslim && rel.includes("muslim") || rel.includes("islam")) ||
+          (f.relMuslim && (rel.includes("muslim") || rel.includes("islam"))) ||
           (f.relHindu && rel.includes("hindu")) ||
           (f.relSikh && rel.includes("sikh")) ||
           (f.relOthers && rel.length > 0);
@@ -424,10 +425,9 @@ const ClientMaidsPage = () => {
   };
 
   const handleRequestMaid = () => {
-      navigate("/client/requests");
+    navigate("/client/requests");
   };
 
-  // Page number list with ellipsis
   const pageNumbers = useMemo(() => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: (number | "...")[] = [1];
@@ -442,34 +442,34 @@ const ClientMaidsPage = () => {
 
   return (
     <div className="client-page-theme min-h-screen bg-background">
-      <div className="mx-auto w-full max-w-5xl px-4 py-6 flex flex-col gap-6">
+      <div className="mx-auto w-full max-w-5xl px-3 py-4 flex flex-col gap-4">
+
         <Card className="overflow-hidden">
           <CardContent className="p-0">
 
-            <div className="flex items-center gap-3 border-b p-4">
+            {/* ── Action buttons bar ── */}
+            <div className="grid grid-cols-2 gap-2 border-b p-3">
               <Button
                 type="button"
-                size="lg"
                 variant="default"
-                className="font-body font-semibold"
+                className="font-body font-semibold w-full"
                 onClick={handleRequestMaid}
               >
                 Request Maid
               </Button>
               <Button
                 type="button"
-                size="lg"
-                className="font-body font-semibold"
+                className="font-body font-semibold w-full"
                 onClick={handleSearch}
               >
-                <Search className="mr-2 h-4 w-4" />
+                <Search className="mr-1.5 h-4 w-4" />
                 Search Maid Now
               </Button>
               {hasSearched && (
                 <button
                   type="button"
                   onClick={() => setFormOpen((v) => !v)}
-                  className="ml-auto font-body text-sm text-primary hover:underline"
+                  className="col-span-2 text-center font-body text-sm text-primary hover:underline pt-1"
                 >
                   {formOpen ? "Hide filters ▲" : "Edit filters ▼"}
                 </button>
@@ -477,318 +477,327 @@ const ClientMaidsPage = () => {
             </div>
 
             {(!hasSearched || formOpen) && (
+              <div className="p-3 space-y-3">
 
-            <div className="p-5 space-y-4">
-
-              <div className="flex items-center gap-4">
-                <label className="w-44 shrink-0 font-body text-sm font-semibold text-foreground">Keywords</label>
-                <input
-                  value={draft.keyword}
-                  onChange={(e) => set("keyword", e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className="flex-1 rounded-lg border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="Enter search keywords such as: Filipino maid, baby sitter, etc."
-                />
-              </div>
-
-              <div className="flex items-center gap-4">
-                <label className="w-44 shrink-0 font-body text-sm font-semibold text-foreground">Agency Preference</label>
-                <select
-                  value={draft.agencyPreference}
-                  onChange={(e) => set("agencyPreference", e.target.value)}
-                  className="w-64 rounded-lg border bg-background px-3 py-2 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                >
-                  <option>No Preference</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <label className="w-44 shrink-0 font-body text-sm font-semibold text-foreground">Bio-data Created within</label>
-                <select
-                  value={draft.biodataCreatedWithin}
-                  onChange={(e) => set("biodataCreatedWithin", e.target.value)}
-                  className="w-48 rounded-lg border bg-background px-3 py-2 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                >
-                  <option>No Preference</option>
-                  <option>1 week</option>
-                  <option>2 weeks</option>
-                  <option>1 month</option>
-                  <option>3 months</option>
-                  <option>6 months</option>
-                  <option>1 year</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <label className="w-44 shrink-0 font-body text-sm font-semibold text-foreground">Maid Type</label>
-                <div className="flex flex-wrap gap-x-5 gap-y-2">
-                  {(["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const).map((type) => (
-                    <label key={type} className="flex cursor-pointer items-center gap-1.5 font-body text-sm text-foreground select-none">
-                      <input
-                        type="radio"
-                        name="maidType"
-                        value={type}
-                        checked={draft.maidType === type}
-                        onChange={() => set("maidType", draft.maidType === type ? "" : type)}
-                        className="h-3.5 w-3.5 accent-primary cursor-pointer"
-                      />
-                      {type}
-                    </label>
-                  ))}
+                <div className="space-y-1">
+                  <label className="font-body text-sm font-semibold text-foreground">Keywords</label>
+                  <input
+                    value={draft.keyword}
+                    onChange={(e) => set("keyword", e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    className="w-full rounded border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="Enter search keywords such as: Filipino maid, baby sitter, etc."
+                  />
                 </div>
-              </div>
 
-              <div className="flex flex-wrap gap-x-6 gap-y-2 pl-[11.5rem]">
-                <CB checked={draft.willingOffDays} onChange={() => toggle("willingOffDays")} label="Willing to work on off-days" />
-                <CB checked={draft.hasChildren} onChange={() => toggle("hasChildren")} label="Has Children" />
-                <CB checked={draft.withVideo} onChange={() => toggle("withVideo")} label="With Video" />
-              </div>
+                <div className="space-y-1">
+                  <label className="font-body text-sm font-semibold text-foreground">Agency Preference</label>
+                  <select
+                    value={draft.agencyPreference}
+                    onChange={(e) => set("agencyPreference", e.target.value)}
+                    className="w-full rounded border border-border bg-background px-3 py-2 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option>No Preference</option>
+                  </select>
+                </div>
 
-              <div className="border-t pt-4" />
+                <div className="space-y-1">
+                  <label className="font-body text-sm font-semibold text-foreground">Bio-data Created within</label>
+                  <select
+                    value={draft.biodataCreatedWithin}
+                    onChange={(e) => set("biodataCreatedWithin", e.target.value)}
+                    className="w-full rounded border border-border bg-background px-3 py-2 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option>No Preference</option>
+                    <option>1 week</option>
+                    <option>2 weeks</option>
+                    <option>1 month</option>
+                    <option>3 months</option>
+                    <option>6 months</option>
+                    <option>1 year</option>
+                  </select>
+                </div>
 
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-1.5">
+                  <label className="font-body text-sm font-semibold text-foreground">Maid Type</label>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                    {(["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const).map((type) => (
+                      <label key={type} className="flex cursor-pointer items-center gap-1.5 font-body text-sm text-foreground select-none">
+                        <input
+                          type="radio"
+                          name="maidType"
+                          value={type}
+                          checked={draft.maidType === type}
+                          onChange={() => set("maidType", draft.maidType === type ? "" : type)}
+                          className="h-3.5 w-3.5 accent-primary cursor-pointer"
+                        />
+                        {type}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-0.5">
+                    <CB checked={draft.willingOffDays} onChange={() => toggle("willingOffDays")} label="Willing to work on off-days" />
+                    <CB checked={draft.hasChildren} onChange={() => toggle("hasChildren")} label="Has Children" />
+                    <CB checked={draft.withVideo} onChange={() => toggle("withVideo")} label="With Video" />
+                  </div>
+                </div>
 
-                <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Nationality</p>
-                  <div className="space-y-1.5">
-                    <CB checked={draft.natFilipino} onChange={() => toggle("natFilipino")} label="Filipino" />
-                    <CB checked={draft.natIndonesian} onChange={() => toggle("natIndonesian")} label="Indonesian" />
-                    <CB checked={draft.natMyanmar} onChange={() => toggle("natMyanmar")} label="Myanmese" />
-                    <CB checked={draft.natIndian} onChange={() => toggle("natIndian")} label="Indian" />
-                    <CB checked={draft.natSriLankan} onChange={() => toggle("natSriLankan")} label="Sri Lankan" />
-                    <CB checked={draft.natCambodian} onChange={() => toggle("natCambodian")} label="Cambodian" />
-                    <CB checked={draft.natBangladeshi} onChange={() => toggle("natBangladeshi")} label="Bangladeshi" />
-                    <CB checked={draft.natOthers} onChange={() => toggle("natOthers")} label="Others" />
-                    <CB checked={draft.natNoPreference} onChange={() => toggle("natNoPreference")} label="No Preference" />
+                <div className="border-t border-border" />
+
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                  <div>
+                    <SectionHead>Nationality</SectionHead>
+                    <div className="space-y-1.5">
+                      <CB checked={draft.natFilipino} onChange={() => toggle("natFilipino")} label="Filipino" />
+                      <CB checked={draft.natIndonesian} onChange={() => toggle("natIndonesian")} label="Indonesian" />
+                      <CB checked={draft.natMyanmar} onChange={() => toggle("natMyanmar")} label="Myanmese" />
+                      <CB checked={draft.natIndian} onChange={() => toggle("natIndian")} label="Indian" />
+                      <CB checked={draft.natSriLankan} onChange={() => toggle("natSriLankan")} label="Sri Lankan" />
+                      <CB checked={draft.natCambodian} onChange={() => toggle("natCambodian")} label="Cambodian" />
+                      <CB checked={draft.natBangladeshi} onChange={() => toggle("natBangladeshi")} label="Bangladeshi" />
+                      <CB checked={draft.natOthers} onChange={() => toggle("natOthers")} label="Others" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <SectionHead>Working Experience</SectionHead>
+                    <div className="space-y-1.5">
+                      <CB checked={draft.expHomeCountry} onChange={() => toggle("expHomeCountry")} label="Home Country" />
+                      <CB checked={draft.expSingapore} onChange={() => toggle("expSingapore")} label="Singapore" />
+                      <CB checked={draft.expMalaysia} onChange={() => toggle("expMalaysia")} label="Malaysia" />
+                      <CB checked={draft.expHongKong} onChange={() => toggle("expHongKong")} label="Hong Kong" />
+                      <CB checked={draft.expTaiwan} onChange={() => toggle("expTaiwan")} label="Taiwan" />
+                      <CB checked={draft.expMiddleEast} onChange={() => toggle("expMiddleEast")} label="Middle East" />
+                      <CB checked={draft.expOtherCountries} onChange={() => toggle("expOtherCountries")} label="Other Countries" />
+                    </div>
                   </div>
                 </div>
 
                 <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Working Experience</p>
-                  <div className="space-y-1.5">
-                    <CB checked={draft.expHomeCountry} onChange={() => toggle("expHomeCountry")} label="Home Country" />
-                    <CB checked={draft.expSingapore} onChange={() => toggle("expSingapore")} label="Singapore" />
-                    <CB checked={draft.expMalaysia} onChange={() => toggle("expMalaysia")} label="Malaysia" />
-                    <CB checked={draft.expHongKong} onChange={() => toggle("expHongKong")} label="Hong Kong" />
-                    <CB checked={draft.expTaiwan} onChange={() => toggle("expTaiwan")} label="Taiwan" />
-                    <CB checked={draft.expMiddleEast} onChange={() => toggle("expMiddleEast")} label="Middle East" />
-                    <CB checked={draft.expOtherCountries} onChange={() => toggle("expOtherCountries")} label="Other Countries" />
-                    <CB checked={draft.expNoPreference} onChange={() => toggle("expNoPreference")} label="No Preference" />
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Duty</p>
-                  <div className="space-y-1.5">
+                  <SectionHead>Duty</SectionHead>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                     <CB checked={draft.dutyCareInfant} onChange={() => toggle("dutyCareInfant")} label="Care for Infant" />
                     <CB checked={draft.dutyCareYoungChildren} onChange={() => toggle("dutyCareYoungChildren")} label="Care for Young Children" />
                     <CB checked={draft.dutyCareElderlyDisabled} onChange={() => toggle("dutyCareElderlyDisabled")} label="Care for Elderly/Disabled" />
                     <CB checked={draft.dutyCooking} onChange={() => toggle("dutyCooking")} label="Cooking" />
                     <CB checked={draft.dutyGeneralHousekeeping} onChange={() => toggle("dutyGeneralHousekeeping")} label="General Housekeeping" />
-                    <CB checked={draft.dutyNoPreference} onChange={() => toggle("dutyNoPreference")} label="No Preference" />
                   </div>
                 </div>
 
-                <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Education</p>
-                  <div className="space-y-1.5">
-                    <CB checked={draft.eduCollege} onChange={() => toggle("eduCollege")} label="College/Degree (≥12 yrs)" />
-                    <CB checked={draft.eduHighSchool} onChange={() => toggle("eduHighSchool")} label="High School (10~12 yrs)" />
-                    <CB checked={draft.eduSecondary} onChange={() => toggle("eduSecondary")} label="Secondary (7~9 yrs)" />
-                    <CB checked={draft.eduPrimary} onChange={() => toggle("eduPrimary")} label="Primary Level (5~6 yrs)" />
-                    <CB checked={draft.eduNoPreference} onChange={() => toggle("eduNoPreference")} label="No Preference" />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                  <div>
+                    <SectionHead>Language</SectionHead>
+                    <div className="space-y-1.5">
+                      <CB checked={draft.langEnglish} onChange={() => toggle("langEnglish")} label="English" />
+                      <CB checked={draft.langMandarin} onChange={() => toggle("langMandarin")} label="Mandarin/Chinese-Dialect" />
+                      <CB checked={draft.langBahasaIndonesia} onChange={() => toggle("langBahasaIndonesia")} label="Bahasa Indonesia/Malaysia" />
+                      <CB checked={draft.langHindi} onChange={() => toggle("langHindi")} label="Hindi" />
+                      <CB checked={draft.langTamil} onChange={() => toggle("langTamil")} label="Tamil" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <SectionHead>Age</SectionHead>
+                    <div className="space-y-1.5">
+                      <CB checked={draft.age21to25} onChange={() => toggle("age21to25")} label="21 to 25" />
+                      <CB checked={draft.age26to30} onChange={() => toggle("age26to30")} label="26 to 30" />
+                      <CB checked={draft.age31to35} onChange={() => toggle("age31to35")} label="31 to 35" />
+                      <CB checked={draft.age36to40} onChange={() => toggle("age36to40")} label="36 to 40" />
+                      <CB checked={draft.age41above} onChange={() => toggle("age41above")} label="41 and Above" />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Language</p>
-                  <div className="space-y-1.5">
-                    <CB checked={draft.langEnglish} onChange={() => toggle("langEnglish")} label="English" />
-                    <CB checked={draft.langMandarin} onChange={() => toggle("langMandarin")} label="Mandarin/Chinese-Dialect" />
-                    <CB checked={draft.langBahasaIndonesia} onChange={() => toggle("langBahasaIndonesia")} label="Bahasa Indonesia/Malaysia" />
-                    <CB checked={draft.langHindi} onChange={() => toggle("langHindi")} label="Hindi" />
-                    <CB checked={draft.langTamil} onChange={() => toggle("langTamil")} label="Tamil" />
-                    <CB checked={draft.langNoPreference} onChange={() => toggle("langNoPreference")} label="No Preference" />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                  <div>
+                    <SectionHead>Marital Status</SectionHead>
+                    <div className="space-y-1.5">
+                      <CB checked={draft.marSingle} onChange={() => toggle("marSingle")} label="Single" />
+                      <CB checked={draft.marMarried} onChange={() => toggle("marMarried")} label="Married" />
+                      <CB checked={draft.marWidowed} onChange={() => toggle("marWidowed")} label="Widowed" />
+                      <CB checked={draft.marDivorced} onChange={() => toggle("marDivorced")} label="Divorced" />
+                      <CB checked={draft.marSeparated} onChange={() => toggle("marSeparated")} label="Separated" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <SectionHead>Education</SectionHead>
+                    <div className="space-y-1.5">
+                      <CB checked={draft.eduCollege} onChange={() => toggle("eduCollege")} label="College/Degree (≥12 yrs)" />
+                      <CB checked={draft.eduHighSchool} onChange={() => toggle("eduHighSchool")} label="High School (10~12 yrs)" />
+                      <CB checked={draft.eduSecondary} onChange={() => toggle("eduSecondary")} label="Secondary (7~9 yrs)" />
+                      <CB checked={draft.eduPrimary} onChange={() => toggle("eduPrimary")} label="Primary Level (5~6 yrs)" />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Age</p>
-                  <div className="space-y-1.5">
-                    <CB checked={draft.age21to25} onChange={() => toggle("age21to25")} label="21 to 25" />
-                    <CB checked={draft.age26to30} onChange={() => toggle("age26to30")} label="26 to 30" />
-                    <CB checked={draft.age31to35} onChange={() => toggle("age31to35")} label="31 to 35" />
-                    <CB checked={draft.age36to40} onChange={() => toggle("age36to40")} label="36 to 40" />
-                    <CB checked={draft.age41above} onChange={() => toggle("age41above")} label="41 and Above" />
-                    <CB checked={draft.ageNoPreference} onChange={() => toggle("ageNoPreference")} label="No Preference" />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                  <div>
+                    <SectionHead>Height of maid (cm)</SectionHead>
+                    <div className="space-y-1.5">
+                      <CB checked={draft.height150below} onChange={() => toggle("height150below")} label="150 and Below" />
+                      <CB checked={draft.height151to155} onChange={() => toggle("height151to155")} label="151 to 155" />
+                      <CB checked={draft.height156to160} onChange={() => toggle("height156to160")} label="156 to 160" />
+                      <CB checked={draft.height161above} onChange={() => toggle("height161above")} label="161 and Above" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <SectionHead>Religion</SectionHead>
+                    <div className="space-y-1.5">
+                      <CB checked={draft.relFreeThinker} onChange={() => toggle("relFreeThinker")} label="Free Thinker" />
+                      <CB checked={draft.relChristian} onChange={() => toggle("relChristian")} label="Christian" />
+                      <CB checked={draft.relCatholic} onChange={() => toggle("relCatholic")} label="Catholic" />
+                      <CB checked={draft.relBuddhist} onChange={() => toggle("relBuddhist")} label="Buddhist" />
+                      <CB checked={draft.relMuslim} onChange={() => toggle("relMuslim")} label="Muslim" />
+                      <CB checked={draft.relHindu} onChange={() => toggle("relHindu")} label="Hindu" />
+                      <CB checked={draft.relSikh} onChange={() => toggle("relSikh")} label="Sikh" />
+                      <CB checked={draft.relOthers} onChange={() => toggle("relOthers")} label="Others" />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Marital Status</p>
-                  <div className="space-y-1.5">
-                    <CB checked={draft.marSingle} onChange={() => toggle("marSingle")} label="Single" />
-                    <CB checked={draft.marMarried} onChange={() => toggle("marMarried")} label="Married" />
-                    <CB checked={draft.marWidowed} onChange={() => toggle("marWidowed")} label="Widowed" />
-                    <CB checked={draft.marDivorced} onChange={() => toggle("marDivorced")} label="Divorced" />
-                    <CB checked={draft.marSeparated} onChange={() => toggle("marSeparated")} label="Separated" />
-                    <CB checked={draft.marNoPreference} onChange={() => toggle("marNoPreference")} label="No Preference" />
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Height of maid (cm)</p>
-                  <div className="space-y-1.5">
-                    <CB checked={draft.height150below} onChange={() => toggle("height150below")} label="150 and Below" />
-                    <CB checked={draft.height151to155} onChange={() => toggle("height151to155")} label="151 to 155" />
-                    <CB checked={draft.height156to160} onChange={() => toggle("height156to160")} label="156 to 160" />
-                    <CB checked={draft.height161above} onChange={() => toggle("height161above")} label="161 and Above" />
-                    <CB checked={draft.heightNoPreference} onChange={() => toggle("heightNoPreference")} label="No Preference" />
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 font-body text-sm font-semibold text-foreground">Religion</p>
-                  <div className="space-y-1.5">
-                    <CB checked={draft.relFreeThinker} onChange={() => toggle("relFreeThinker")} label="Free Thinker" />
-                    <CB checked={draft.relChristian} onChange={() => toggle("relChristian")} label="Christian" />
-                    <CB checked={draft.relCatholic} onChange={() => toggle("relCatholic")} label="Catholic" />
-                    <CB checked={draft.relBuddhist} onChange={() => toggle("relBuddhist")} label="Buddhist" />
-                    <CB checked={draft.relMuslim} onChange={() => toggle("relMuslim")} label="Muslim" />
-                    <CB checked={draft.relHindu} onChange={() => toggle("relHindu")} label="Hindu" />
-                    <CB checked={draft.relSikh} onChange={() => toggle("relSikh")} label="Sikh" />
-                    <CB checked={draft.relOthers} onChange={() => toggle("relOthers")} label="Others" />
-                    <CB checked={draft.relNoPreference} onChange={() => toggle("relNoPreference")} label="No Preference" />
-                  </div>
-                </div>
 
               </div>
-            </div>
-
-            )} 
-
+            )}
           </CardContent>
         </Card>
 
         {hasSearched && (
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <p className="font-body text-sm text-muted-foreground">
-              {isLoading
-                ? "Loading maid profiles..."
-                : `${filteredMaids.length} maid${filteredMaids.length !== 1 ? "s" : ""} matched your search.`}
-              {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
-            </p>
-          </div>
-
-          {isLoading ? (
-            <div className="rounded-2xl border bg-muted/40 p-8 text-center font-body text-muted-foreground">
-              Loading maid profiles...
-            </div>
-          ) : filteredMaids.length === 0 ? (
-            <div className="rounded-2xl border bg-muted/40 p-8 text-center">
-              <p className="font-display text-lg font-semibold text-foreground">No matching maids found</p>
-              <p className="mt-1 font-body text-sm text-muted-foreground">
-                Try adjusting your filters or use broader criteria.
+          <div>
+            <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
+              <p className="font-body text-sm text-muted-foreground">
+                {isLoading
+                  ? "Loading maid profiles..."
+                  : `${filteredMaids.length} maid${filteredMaids.length !== 1 ? "s" : ""} matched your search.`}
+                {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
               </p>
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {pagedMaids.map((maid) => {
-                const age = calculateAge(maid.dateOfBirth);
-                const photo = getPrimaryPhoto(maid);
-                const agencyName = getAgencyName(maid, company);
 
-                return (
-                  <article
-                    key={maid.referenceCode}
-                    className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition hover:shadow-md hover:-translate-y-0.5"
-                  >
-                    <div className="aspect-[3/4] overflow-hidden bg-muted">
-                      {photo ? (
-                        <img
-                          src={photo}
-                          alt={maid.fullName}
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
-                          No photo
+            {isLoading ? (
+              <div className="rounded-2xl border bg-muted/40 p-8 text-center font-body text-muted-foreground">
+                Loading maid profiles...
+              </div>
+            ) : filteredMaids.length === 0 ? (
+              <div className="rounded-2xl border bg-muted/40 p-8 text-center">
+                <p className="font-display text-lg font-semibold text-foreground">No matching maids found</p>
+                <p className="mt-1 font-body text-sm text-muted-foreground">
+                  Try adjusting your filters or use broader criteria.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {pagedMaids.map((maid) => {
+                  const age = calculateAge(maid.dateOfBirth);
+                  const photo = getPrimaryPhoto(maid);
+                  const agencyName = getAgencyName(maid, company);
+
+                  return (
+                    <article
+                      key={maid.referenceCode}
+                      className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition hover:shadow-md hover:-translate-y-0.5"
+                    >
+                      <div className="aspect-[3/4] overflow-hidden bg-muted">
+                        {photo ? (
+                          <img
+                            src={photo}
+                            alt={maid.fullName}
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
+                            No photo
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 p-2.5 flex-1">
+                        <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
+                          {maid.fullName}
+                        </h3>
+                        <p className="text-[10px] text-muted-foreground leading-tight">
+                          {maid.referenceCode}
+                        </p>
+
+                        <div className="flex flex-wrap gap-1">
+                          {maid.nationality && (
+                            <span className="rounded-full bg-muted px-2 py-px text-[10px] border border-border/40">
+                              {maid.nationality}
+                            </span>
+                          )}
+                          {maid.type && (
+                            <span className={`rounded-full px-2 py-px text-[10px] border ${
+                              maid.type === "New Maid"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : maid.type === "Transfer Maid"
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}>
+                              {maid.type}
+                            </span>
+                          )}
+                          {age && (
+                            <span className="rounded-full bg-muted px-2 py-px text-[10px] border border-border/40">
+                              {age} yrs
+                            </span>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex flex-col gap-1.5 p-2 flex-1">
-                      <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
-                        {maid.fullName}
-                      </h3>
-                      <p className="text-[10px] text-muted-foreground leading-tight">
-                        {maid.referenceCode}
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        <span className="rounded-full bg-muted px-2 py-px text-[10px]">{maid.nationality}</span>
-                        <span className="rounded-full bg-muted px-2 py-px text-[10px]">{maid.type}</span>
-                        {age && <span className="rounded-full bg-muted px-2 py-px text-[10px]">{age} yrs</span>}
+                        <div className="mt-auto pt-1.5">
+                          <Button size="sm" asChild className="h-7 w-full text-[10px] px-1">
+                            <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                              View Profile
+                            </Link>
+                          </Button>
+                        </div>
                       </div>
-                      <div className="mt-auto flex gap-1 pt-1">
-                        <Button size="sm" asChild className="h-7 flex-1 text-[10px] px-1">
-                          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
-                            View
-                          </Link>
-                        </Button>
-                        <Button size="sm" variant="outline" asChild className="h-7 flex-1 text-[10px] px-1">
-                          <Link to={`/client/support-chat?agencyName=${encodeURIComponent(agencyName)}`}>
-                            Chat
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
 
-          {totalPages > 1 && (
-            <div className="mt-8 flex items-center justify-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="rounded-lg border bg-card px-3 py-2 font-body text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
-              >
-                Previous
-              </button>
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-lg border bg-card px-3 py-2 font-body text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
+                >
+                  Previous
+                </button>
 
-              {pageNumbers.map((page, idx) =>
-                page === "..." ? (
-                  <span key={`ellipsis-${idx}`} className="px-2 py-2 font-body text-sm text-muted-foreground select-none">
-                    …
-                  </span>
-                ) : (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page as number)}
-                    className={`min-w-[2.25rem] rounded-lg border px-3 py-2 font-body text-sm transition-colors ${
-                      page === currentPage
-                        ? "bg-primary text-primary-foreground border-primary font-semibold"
-                        : "bg-card text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                )
-              )}
+                {pageNumbers.map((page, idx) =>
+                  page === "..." ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 py-2 font-body text-sm text-muted-foreground select-none">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page as number)}
+                      className={`min-w-[2.25rem] rounded-lg border px-3 py-2 font-body text-sm transition-colors ${
+                        page === currentPage
+                          ? "bg-primary text-primary-foreground border-primary font-semibold"
+                          : "bg-card text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
 
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="rounded-lg border bg-card px-3 py-2 font-body text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          )}
-        </div>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="rounded-lg border bg-card px-3 py-2 font-body text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
       </div>

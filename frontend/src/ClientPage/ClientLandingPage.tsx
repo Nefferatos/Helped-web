@@ -126,7 +126,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Search state
   const [keyword, setKeyword] = useState("");
   const [maidTypes, setMaidTypes] = useState<string[]>([]);
   const [willingOffDays, setWillingOffDays] = useState(false);
@@ -141,7 +140,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     language: "No Preference",
   });
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
   const isLoggedIn = Boolean(clientUser);
@@ -469,14 +467,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 <p className="font-display text-lg font-semibold text-foreground sm:text-xl">
                   Welcome back, {clientUser.name}
                 </p>
-                <p className="mt-1 font-body text-sm text-muted-foreground">
-                  Your client account is active. Open your dashboard to view maids assigned to you.
-                </p>
-                <div className="mt-4">
-                  <Button className="font-body w-full sm:w-auto" asChild>
-                    <Link to="/client/dashboard">Open Client Dashboard</Link>
-                  </Button>
-                </div>
+
               </div>
             ) : null}
 
