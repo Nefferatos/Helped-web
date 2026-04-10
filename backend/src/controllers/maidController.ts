@@ -519,13 +519,17 @@ export const getMaidByReferenceCode = async (req: Request, res: Response) => {
 export const createMaid = async (req: Request, res: Response) => {
   try {
     const maid = req.body as Partial<MaidProfile>
-    const validationError = validateMaidPayload(maid)
+    const payload = {
+      ...maid,
+      isPublic: maid.isPublic ?? true,
+    } as Partial<MaidProfile>
+    const validationError = validateMaidPayload(payload)
 
     if (validationError) {
       return res.status(400).json({ error: validationError })
     }
 
-    const created = await createMaidStore(toMaidRecord(maid as MaidProfile))
+    const created = await createMaidStore(toMaidRecord(payload as MaidProfile))
     res.status(201).json({ maid: created })
   } catch (error) {
     if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {

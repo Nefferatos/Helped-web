@@ -63,7 +63,7 @@ export const defaultMaidProfile: MaidProfile = {
   photoDataUrls: [],
   photoDataUrl: "",
   videoDataUrl: "",
-  isPublic: false,
+  isPublic: true,
   hasPhoto: false,
 };
 

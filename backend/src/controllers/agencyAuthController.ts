@@ -23,13 +23,20 @@ const toSafeAgencyAdmin = (admin: {
 
 export const registerAgencyAdmin = async (req: Request, res: Response) => {
   try {
-    const { username, password, agencyName } = req.body as {
-      username?: string
-      password?: string
-      agencyName?: string
+    const body = (req.body ?? null) as {
+      username?: unknown
+      password?: unknown
+      agencyName?: unknown
+    } | null
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Invalid JSON body' })
     }
 
-    if (!username?.trim() || !password?.trim() || !agencyName?.trim()) {
+    const username = typeof body.username === 'string' ? body.username : ''
+    const password = typeof body.password === 'string' ? body.password : ''
+    const agencyName = typeof body.agencyName === 'string' ? body.agencyName : ''
+
+    if (!username.trim() || !password.trim() || !agencyName.trim()) {
       return res
         .status(400)
         .json({ error: 'username, password, and agencyName are required' })
@@ -61,12 +68,15 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
 
 export const loginAgencyAdmin = async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body as {
-      username?: string
-      password?: string
+    const body = (req.body ?? null) as { username?: unknown; password?: unknown } | null
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Invalid JSON body' })
     }
 
-    if (!username?.trim() || !password?.trim()) {
+    const username = typeof body.username === 'string' ? body.username : ''
+    const password = typeof body.password === 'string' ? body.password : ''
+
+    if (!username.trim() || !password.trim()) {
       return res.status(400).json({ error: 'username and password are required' })
     }
 

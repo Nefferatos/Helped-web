@@ -620,7 +620,9 @@ const AdminSupportChat = () => {
         });
         const data = (await response.json().catch(() => ({}))) as { lastId?: number };
         if (response.ok && typeof data.lastId === "number") lastId = data.lastId;
-      } catch {}
+      } catch {
+        // no-op
+      }
       while (!controller.signal.aborted) {
         try {
           await streamSse(`/api/chats/admin/stream?afterId=${lastId}`, {
@@ -648,6 +650,7 @@ const AdminSupportChat = () => {
             },
           });
         } catch {
+          // no-op
           if (controller.signal.aborted) return;
           await new Promise((resolve) => window.setTimeout(resolve, 1200));
         }

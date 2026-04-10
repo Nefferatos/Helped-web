@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { saveClientAuth } from "@/lib/clientAuth";
 import { supabase, requireSupabase } from "@/lib/supabaseClient";
@@ -222,10 +223,26 @@ const ClientEmployerLogin = () => {
           <ArrowLeft className="h-4 w-4" /> Back to Home
         </Link>
 
+        {step === "auth" ? (
+          <Tabs
+            value={isLogin ? "login" : "signup"}
+            onValueChange={(value) => {
+              setIsLogin(value === "login");
+              setStep("auth");
+            }}
+            className="mb-4"
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Employer Login</TabsTrigger>
+              <TabsTrigger value="signup">Employer Signup</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : null}
+
         <div className="rounded-2xl bg-card p-8 shadow-lg">
           <div className="mb-8 text-center">
             <h1 className="mb-1 font-display text-2xl font-bold text-foreground">
-              {step === "confirm" ? "Confirm Email" : isLogin ? "Employer Login" : "Create Client Account"}
+              {step === "confirm" ? "Confirm Email" : isLogin ? "Employer Login" : "Employer Signup"}
             </h1>
             <p className="font-body text-sm text-muted-foreground">
               {step === "confirm"
@@ -276,8 +293,7 @@ const ClientEmployerLogin = () => {
             </form>
           ) : (
             <div className="space-y-4">
-              {/* Facebook is intentionally hidden for client login/signup; re-enable by setting `enableFacebook`. */}
-              <SocialOAuthButtons disabled={isSubmitting} enableFacebook={false} />
+              <SocialOAuthButtons disabled={isSubmitting} enableFacebook />
 
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
@@ -361,15 +377,6 @@ const ClientEmployerLogin = () => {
               </form>
             </div>
           )}
-
-          <div className="mt-6 text-center">
-            <p className="font-body text-sm text-muted-foreground">
-              {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-              <button onClick={() => setIsLogin((value) => !value)} className="font-medium text-primary hover:underline">
-                {isLogin ? "Sign Up" : "Sign In"}
-              </button>
-            </p>
-          </div>
         </div>
       </div>
     </div>

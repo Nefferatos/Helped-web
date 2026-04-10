@@ -13,6 +13,8 @@ import agencyAuthRoutes from './routes/agencyAuthRoutes'
 import clientRoutes from './routes/clientRoutes'
 import chatRoutes from './routes/chatRoutes'
 import dashboardRoutes from './routes/dashboardRoutes'
+import employerRoutes from './routes/employerRoutes'
+import employerContractFileRoutes from './routes/employerContractFileRoutes'
 import { initializeStore } from './store'
 
 const app: Express = express()
@@ -72,6 +74,8 @@ app.use('/api/agency-auth', agencyAuthRoutes)
 app.use('/api/client', clientRoutes)
 app.use('/api/chats', chatRoutes)
 app.use('/api', dashboardRoutes)
+app.use('/api/employers', employerRoutes)
+app.use('/api/employer-contract-files', employerContractFileRoutes)
 
 if (hasFrontendSite) {
   app.use(express.static(frontendDist))
@@ -91,6 +95,15 @@ const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     return res.status(413).json({
       error: 'Payload too large. Please upload a smaller file.',
     })
+  }
+
+  if (
+    err &&
+    typeof err === 'object' &&
+    'type' in err &&
+    (err as { type?: string }).type === 'entity.parse.failed'
+  ) {
+    return res.status(400).json({ error: 'Invalid JSON body' })
   }
   console.error(err.stack)
   res.status(500).json({ error: 'Something went wrong!' })

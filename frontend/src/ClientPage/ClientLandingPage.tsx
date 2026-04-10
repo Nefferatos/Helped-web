@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { toast } from "@/components/ui/sonner";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { calculateAge, MaidProfile } from "@/lib/maids";
+import { filterMaids } from "@/lib/maidFilter";
 import culinaryImg from "./assets/culinary.png";
 import elderlyImg from "./assets/elderly-care.png";
 import familyImg from "./assets/family.jpg";
@@ -128,16 +129,12 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
   const [keyword, setKeyword] = useState("");
   const [maidTypes, setMaidTypes] = useState<string[]>([]);
-  const [willingOffDays, setWillingOffDays] = useState(false);
   const [nationality, setNationality] = useState("No Preference");
-  const [language, setLanguage] = useState("No Preference");
 
   const [submittedFilters, setSubmittedFilters] = useState({
     keyword: "",
     maidTypes: [] as string[],
-    willingOffDays: false,
     nationality: "No Preference",
-    language: "No Preference",
   });
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -248,23 +245,16 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   };
 
   const filteredMaids = useMemo(() => {
-    return allPublicMaids.filter((maid) => {
-      const publicIntro = getPublicIntro(maid).toLowerCase();
-      const searchText = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${publicIntro}`.toLowerCase();
-
-      const keywordMatches =
-        !submittedFilters.keyword.trim() || searchText.includes(submittedFilters.keyword.trim().toLowerCase());
-      const nationalityMatches =
-        submittedFilters.nationality === "No Preference" || maid.nationality === submittedFilters.nationality;
-      const typeMatches =
-        submittedFilters.maidTypes.length === 0 ||
-        submittedFilters.maidTypes.some((t) =>
-          maid.type?.toLowerCase().includes(t.toLowerCase())
-        );
-
-      return keywordMatches && nationalityMatches && typeMatches;
+    return filterMaids(allPublicMaids, {
+      keyword,
+      nationality: nationality === "No Preference" ? [] : [nationality],
+      maidTypes,
     });
-  }, [allPublicMaids, submittedFilters]);
+  }, [allPublicMaids, keyword, maidTypes, nationality]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [keyword, maidTypes, nationality]);
 
   const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
   const pagedMaids = filteredMaids.slice(
@@ -287,7 +277,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   }, [totalPages, currentPage]);
 
   const handleSearch = () => {
-    setSubmittedFilters({ keyword, maidTypes, willingOffDays, nationality, language });
     setCurrentPage(1);
     window.setTimeout(() => {
       document.getElementById("maid-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -564,15 +553,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                       {type}
                     </label>
                   ))}
-                  <label className="flex cursor-pointer items-center gap-2 font-body text-sm text-foreground select-none">
-                    <input
-                      type="checkbox"
-                      checked={willingOffDays}
-                      onChange={(e) => setWillingOffDays(e.target.checked)}
-                      className="h-4 w-4 accent-primary cursor-pointer"
-                    />
-                    Willing to work on off-days
-                  </label>
                 </div>
               </div>
 
@@ -590,18 +570,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
-                  <label className="font-body text-sm font-semibold text-foreground sm:shrink-0">Language</label>
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="w-full sm:w-52 rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
-                    {LANGUAGE_OPTIONS.map((opt) => (
-                      <option key={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
             </div>
 

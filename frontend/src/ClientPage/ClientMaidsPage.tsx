@@ -11,6 +11,7 @@ import {
   getPublicIntro,
   type MaidProfile,
 } from "@/lib/maids";
+import { filterMaids } from "@/lib/maidFilter";
 import "./ClientTheme.css";
 
 interface CompanyProfileApi {
@@ -229,11 +230,110 @@ const ClientMaidsPage = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [formOpen, setFormOpen] = useState(true);
 
+  const hasLivePreview = useMemo(() => {
+    for (const key of Object.keys(defaultFilters) as Array<keyof Filters>) {
+      if (draft[key] !== defaultFilters[key]) return true;
+    }
+    return false;
+  }, [draft]);
+
+  const showResults = hasSearched || hasLivePreview;
+
+  const preferenceGroups = useMemo(
+    () => [
+      {
+        noPreference: "natNoPreference" as const,
+        specifics: [
+          "natFilipino",
+          "natIndonesian",
+          "natMyanmar",
+          "natIndian",
+          "natSriLankan",
+          "natCambodian",
+          "natBangladeshi",
+          "natOthers",
+        ] as const,
+      },
+      {
+        noPreference: "expNoPreference" as const,
+        specifics: [
+          "expHomeCountry",
+          "expSingapore",
+          "expMalaysia",
+          "expHongKong",
+          "expTaiwan",
+          "expMiddleEast",
+          "expOtherCountries",
+        ] as const,
+      },
+      {
+        noPreference: "dutyNoPreference" as const,
+        specifics: [
+          "dutyCareInfant",
+          "dutyCareYoungChildren",
+          "dutyCareElderlyDisabled",
+          "dutyCooking",
+          "dutyGeneralHousekeeping",
+        ] as const,
+      },
+      {
+        noPreference: "eduNoPreference" as const,
+        specifics: ["eduCollege", "eduHighSchool", "eduSecondary", "eduPrimary"] as const,
+      },
+      {
+        noPreference: "langNoPreference" as const,
+        specifics: ["langEnglish", "langMandarin", "langBahasaIndonesia", "langHindi", "langTamil"] as const,
+      },
+      {
+        noPreference: "ageNoPreference" as const,
+        specifics: ["age21to25", "age26to30", "age31to35", "age36to40", "age41above"] as const,
+      },
+      {
+        noPreference: "marNoPreference" as const,
+        specifics: ["marSingle", "marMarried", "marWidowed", "marDivorced", "marSeparated"] as const,
+      },
+      {
+        noPreference: "heightNoPreference" as const,
+        specifics: ["height150below", "height151to155", "height156to160", "height161above"] as const,
+      },
+      {
+        noPreference: "relNoPreference" as const,
+        specifics: [
+          "relFreeThinker",
+          "relChristian",
+          "relCatholic",
+          "relBuddhist",
+          "relMuslim",
+          "relHindu",
+          "relSikh",
+          "relOthers",
+        ] as const,
+      },
+    ],
+    []
+  );
+
   const set = (key: keyof Filters, value: boolean | string) =>
     setDraft((prev) => ({ ...prev, [key]: value }));
 
   const toggle = (key: keyof Filters) =>
-    setDraft((prev) => ({ ...prev, [key]: !prev[key] }));
+    setDraft((prev) => {
+      const nextValue = !prev[key];
+
+      const group = preferenceGroups.find((g) =>
+        (g.specifics as readonly (keyof Filters)[]).includes(key)
+      );
+      if (!group) return { ...prev, [key]: nextValue };
+
+      const next = { ...prev, [key]: nextValue, [group.noPreference]: false };
+      const allOff = (group.specifics as readonly (keyof Filters)[]).every((k) => {
+        if (k === key) return !nextValue;
+        return !prev[k];
+      });
+      if (allOff) next[group.noPreference] = true;
+
+      return next;
+    });
 
   useEffect(() => {
     if (!getClientToken()) {
@@ -267,149 +367,15 @@ const ClientMaidsPage = () => {
     void loadMaids();
   }, [navigate]);
 
+  const activeFilters = hasSearched ? submitted : draft;
+
   const filteredMaids = useMemo(() => {
-    const f = submitted;
+    return filterMaids(maids, activeFilters);
+  }, [maids, activeFilters]);
 
-    const isNoPreference = (noPreferenceFlag: boolean, ...specific: boolean[]) =>
-      noPreferenceFlag || specific.every((v) => !v);
-
-    return maids.filter((maid) => {
-      const intro = getPublicIntro(maid).toLowerCase();
-      const text = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
-
-      const skills = (maid.skillsPreferences || {}) as Record<string, unknown>;
-      const workAreas = (maid.workAreas || {}) as Record<string, unknown>;
-
-      if (f.keyword.trim() && !text.includes(f.keyword.trim().toLowerCase())) return false;
-      if (f.maidType && maid.type !== f.maidType) return false;
-
-      if (!isNoPreference(
-        f.natNoPreference, f.natFilipino, f.natIndonesian, f.natMyanmar,
-        f.natIndian, f.natSriLankan, f.natCambodian, f.natBangladeshi, f.natOthers
-      )) {
-        const norm = normalizeNationality(maid.nationality);
-        const match =
-          (f.natFilipino && norm === "filipino") ||
-          (f.natIndonesian && norm === "indonesian") ||
-          (f.natMyanmar && norm === "myanmar") ||
-          (f.natIndian && norm === "indian") ||
-          (f.natSriLankan && norm === "srilanka") ||
-          (f.natCambodian && norm === "cambodian") ||
-          (f.natBangladeshi && norm === "bangladeshi") ||
-          (f.natOthers && norm === "others");
-        if (!match) return false;
-      }
-
-      if (!isNoPreference(
-        f.ageNoPreference, f.age21to25, f.age26to30,
-        f.age31to35, f.age36to40, f.age41above
-      )) {
-        const age = calculateAge(maid.dateOfBirth) ?? 0;
-        const match =
-          (f.age21to25 && age >= 21 && age <= 25) ||
-          (f.age26to30 && age >= 26 && age <= 30) ||
-          (f.age31to35 && age >= 31 && age <= 35) ||
-          (f.age36to40 && age >= 36 && age <= 40) ||
-          (f.age41above && age >= 41);
-        if (!match) return false;
-      }
-
-      if (!isNoPreference(
-        f.dutyNoPreference, f.dutyCareInfant, f.dutyCareYoungChildren,
-        f.dutyCareElderlyDisabled, f.dutyCooking, f.dutyGeneralHousekeeping
-      )) {
-        const hasSkill = (keys: string[]) =>
-          keys.some((k) => Boolean(skills[k]) || Boolean(workAreas[k]));
-        const match =
-          (f.dutyCareInfant && hasSkill(["careForInfant", "infantCare", "care_for_infant"])) ||
-          (f.dutyCareYoungChildren && hasSkill(["careForYoungChildren", "childCare", "care_for_young_children"])) ||
-          (f.dutyCareElderlyDisabled && hasSkill(["careForElderly", "elderlyCare", "care_for_elderly", "care_for_disabled"])) ||
-          (f.dutyCooking && hasSkill(["cooking", "cook"])) ||
-          (f.dutyGeneralHousekeeping && hasSkill(["generalHousekeeping", "housekeeping", "general_housekeeping"]));
-        if (!match) return false;
-      }
-
-      if (!isNoPreference(
-        f.expNoPreference, f.expHomeCountry, f.expSingapore, f.expMalaysia,
-        f.expHongKong, f.expTaiwan, f.expMiddleEast, f.expOtherCountries
-      )) {
-        const history = (Array.isArray(maid.employmentHistory) ? maid.employmentHistory : []) as Array<Record<string, unknown>>;
-        const countries = history.map((h) => String(h.country || h.workCountry || "").toLowerCase());
-        const match =
-          (f.expHomeCountry && countries.some((c) => c.includes("home") || c.includes("philippines") || c.includes("indonesia") || c.includes("myanmar") || c.includes("india"))) ||
-          (f.expSingapore && countries.some((c) => c.includes("singapore") || c.includes("sg"))) ||
-          (f.expMalaysia && countries.some((c) => c.includes("malaysia"))) ||
-          (f.expHongKong && countries.some((c) => c.includes("hong kong") || c.includes("hongkong"))) ||
-          (f.expTaiwan && countries.some((c) => c.includes("taiwan"))) ||
-          (f.expMiddleEast && countries.some((c) => c.includes("uae") || c.includes("dubai") || c.includes("saudi") || c.includes("qatar") || c.includes("kuwait") || c.includes("middle east"))) ||
-          (f.expOtherCountries && countries.length > 0);
-        if (!match) return false;
-      }
-
-      if (!isNoPreference(f.eduNoPreference, f.eduCollege, f.eduHighSchool, f.eduSecondary, f.eduPrimary)) {
-        const edu = String((maid as any).education || (maid as any).educationLevel || "").toLowerCase();
-        const match =
-          (f.eduCollege && (edu.includes("college") || edu.includes("degree") || edu.includes("university"))) ||
-          (f.eduHighSchool && (edu.includes("high school") || edu.includes("secondary"))) ||
-          (f.eduSecondary && (edu.includes("secondary") || edu.includes("middle"))) ||
-          (f.eduPrimary && (edu.includes("primary") || edu.includes("elementary")));
-        if (!match) return false;
-      }
-
-      if (!isNoPreference(f.langNoPreference, f.langEnglish, f.langMandarin, f.langBahasaIndonesia, f.langHindi, f.langTamil)) {
-        const langs = String((maid as any).languages || (maid as any).languagesSpoken || text).toLowerCase();
-        const match =
-          (f.langEnglish && langs.includes("english")) ||
-          (f.langMandarin && (langs.includes("mandarin") || langs.includes("chinese"))) ||
-          (f.langBahasaIndonesia && (langs.includes("bahasa") || langs.includes("malay") || langs.includes("indonesia"))) ||
-          (f.langHindi && langs.includes("hindi")) ||
-          (f.langTamil && langs.includes("tamil"));
-        if (!match) return false;
-      }
-
-      if (!isNoPreference(f.marNoPreference, f.marSingle, f.marMarried, f.marWidowed, f.marDivorced, f.marSeparated)) {
-        const mar = String((maid as any).maritalStatus || (maid as any).marital_status || "").toLowerCase();
-        const match =
-          (f.marSingle && mar.includes("single")) ||
-          (f.marMarried && mar.includes("married")) ||
-          (f.marWidowed && mar.includes("widow")) ||
-          (f.marDivorced && mar.includes("divorce")) ||
-          (f.marSeparated && mar.includes("separat"));
-        if (!match) return false;
-      }
-
-      if (!isNoPreference(f.heightNoPreference, f.height150below, f.height151to155, f.height156to160, f.height161above)) {
-        const heightCm = Number((maid as any).height || (maid as any).heightCm || 0);
-        if (heightCm > 0) {
-          const match =
-            (f.height150below && heightCm <= 150) ||
-            (f.height151to155 && heightCm >= 151 && heightCm <= 155) ||
-            (f.height156to160 && heightCm >= 156 && heightCm <= 160) ||
-            (f.height161above && heightCm >= 161);
-          if (!match) return false;
-        }
-      }
-
-      if (!isNoPreference(
-        f.relNoPreference, f.relFreeThinker, f.relChristian, f.relCatholic,
-        f.relBuddhist, f.relMuslim, f.relHindu, f.relSikh, f.relOthers
-      )) {
-        const rel = String((maid as any).religion || "").toLowerCase();
-        const match =
-          (f.relFreeThinker && (rel.includes("free") || rel.includes("none") || rel.includes("atheist"))) ||
-          (f.relChristian && rel.includes("christian") && !rel.includes("catholic")) ||
-          (f.relCatholic && rel.includes("catholic")) ||
-          (f.relBuddhist && rel.includes("buddh")) ||
-          (f.relMuslim && (rel.includes("muslim") || rel.includes("islam"))) ||
-          (f.relHindu && rel.includes("hindu")) ||
-          (f.relSikh && rel.includes("sikh")) ||
-          (f.relOthers && rel.length > 0);
-        if (!match) return false;
-      }
-
-      return true;
-    });
-  }, [maids, submitted]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [draft]);
 
   const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
   const pagedMaids = filteredMaids.slice(
@@ -465,7 +431,7 @@ const ClientMaidsPage = () => {
                 <Search className="mr-1.5 h-4 w-4" />
                 Search Maid Now
               </Button>
-              {hasSearched && (
+              {showResults && (
                 <button
                   type="button"
                   onClick={() => setFormOpen((v) => !v)}
@@ -476,7 +442,7 @@ const ClientMaidsPage = () => {
               )}
             </div>
 
-            {(!hasSearched || formOpen) && (
+            {(!showResults || formOpen) && (
               <div className="p-3 space-y-3">
 
                 <div className="space-y-1">
@@ -664,7 +630,7 @@ const ClientMaidsPage = () => {
           </CardContent>
         </Card>
 
-        {hasSearched && (
+        {showResults && (
           <div>
             <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
               <p className="font-body text-sm text-muted-foreground">

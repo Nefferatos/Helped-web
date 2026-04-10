@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import { toast } from "@/components/ui/sonner";
+import { saveAgencyAdminAuth, type AgencyAdminUser } from "@/lib/agencyAdminAuth";
+import { adminPath } from "@/lib/routes";
 
 // OAuth callback landing page.
 // Supabase parses the auth response and stores the session. We then fetch `/api/client-auth/me`
@@ -13,6 +15,7 @@ const AuthCallback = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const mode = new URLSearchParams(window.location.search).get("mode");
 
     const run = async () => {
       try {
@@ -24,6 +27,27 @@ const AuthCallback = () => {
         const accessToken = data.session?.access_token;
         if (!accessToken) {
           throw new Error("No Supabase session found. Please try signing in again.");
+        }
+
+        if (mode === "agency") {
+          const response = await fetch("/api/agency-auth/me", {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/json",
+            },
+          });
+          const payload = (await response.json().catch(() => ({}))) as {
+            admin?: AgencyAdminUser;
+            error?: string;
+          };
+          if (!response.ok || !payload.admin) {
+            throw new Error(payload.error || "Unable to complete agency sign-in");
+          }
+
+          saveAgencyAdminAuth(accessToken, payload.admin);
+          toast.success("Signed in successfully");
+          navigate(adminPath("/dashboard"), { replace: true });
+          return;
         }
 
         await finalizeClientLoginFromSupabase(accessToken);

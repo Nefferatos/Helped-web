@@ -55,7 +55,7 @@ const ClientPortalNavbar = () => {
         headers: { ...getClientAuthHeaders() },
       });
     } catch {
-
+      // no-op
     } finally {
       clearClientAuth();
       toast.success("Logged out");

@@ -636,9 +636,6 @@ const requireSupabaseConfig = (env: Bindings) => {
 
 const safeApi =
   (handler: (c: any) => Promise<Response> | Response) => async (c: any) => {
-    const missing = requireSupabaseConfig(c.env)
-    if (missing) return missing
-
     try {
       return await handler(c)
     } catch (error) {
@@ -662,122 +659,144 @@ const parseAuthorizationToken = (request: Request) => {
 }
 
 const requireClientAuth = async (c: any, next: () => Promise<void>) => {
+  console.log('requireClientAuth: storage mode', getStorageMode(c.env));
+
   const token = parseAuthorizationToken(c.req.raw)
   if (!token) {
+    console.log('requireClientAuth: no token')
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
-  const data = await loadData(c.env)
-  const session = data.clientSessions.find((item) => item.token === token)
-  if (session) {
-    const client = data.clients.find((item) => item.id === session.clientId)
-    if (!client) {
+  try {
+    const data = await loadData(c.env)
+    console.log('requireClientAuth: data loaded')
+    const session = data.clientSessions.find((item) => item.token === token)
+    if (session) {
+      const client = data.clients.find((item) => item.id === session.clientId)
+      if (!client) {
+        console.log('requireClientAuth: session client not found')
+        return c.json({ error: 'Unauthorized' }, 401)
+      }
+      c.set('client', client)
+      await next()
+      return
+    }
+
+    // Supabase Auth JWT support (Google/Facebook/Phone).
+    console.log('requireClientAuth: trying Supabase')
+    const supabaseUser = await getSupabaseAuthUser(c.env, token)
+    if (!supabaseUser) {
+      console.log('requireClientAuth: Supabase auth failed')
       return c.json({ error: 'Unauthorized' }, 401)
     }
 
-    c.set('client', client)
-    await next()
-    return
-  }
+    const normalizedEmail = supabaseUser.email ? normalizeEmail(supabaseUser.email) : ''
+    const client =
+      data.clients.find((item) => item.supabaseUserId && item.supabaseUserId === supabaseUser.id) ??
+      (normalizedEmail
+        ? data.clients.find((item) => normalizeEmail(item.email) === normalizedEmail)
+        : null) ??
+      (supabaseUser.phone
+        ? data.clients.find((item) => (item.phone ?? '').trim() === supabaseUser.phone!.trim())
+        : null)
 
-  // Supabase Auth JWT support (Google/Facebook/Phone).
-  const supabaseUser = await getSupabaseAuthUser(c.env, token)
-  if (!supabaseUser) {
+    if (client) {
+      if (!client.supabaseUserId) {
+        client.supabaseUserId = supabaseUser.id
+        await saveData(c.env, data)
+      }
+      c.set('client', client)
+      await next()
+      return
+    }
+
+    // First-time Supabase login: create an app client record.
+    console.log('requireClientAuth: creating new client')
+    const nameFromMeta =
+      (supabaseUser.user_metadata?.full_name as string | undefined) ??
+      (supabaseUser.user_metadata?.name as string | undefined) ??
+      ''
+    const created: ClientRecord = {
+      id: data.counters.clients++,
+      supabaseUserId: supabaseUser.id,
+      name: nameFromMeta || (supabaseUser.email ? supabaseUser.email.split('@')[0] : 'Client'),
+      company: '',
+      phone: supabaseUser.phone ?? '',
+      email: supabaseUser.email ?? '',
+      password: '',
+      profileImageUrl: '',
+      createdAt: now(),
+      emailVerified: true,
+    }
+
+    data.clients.unshift(created)
+    await saveData(c.env, data)
+    c.set('client', created)
+    await next()
+  } catch (error) {
+    console.error('requireClientAuth error:', error)
     return c.json({ error: 'Unauthorized' }, 401)
   }
-
-  const normalizedEmail = supabaseUser.email ? normalizeEmail(supabaseUser.email) : ''
-  const client =
-    data.clients.find((item) => item.supabaseUserId && item.supabaseUserId === supabaseUser.id) ??
-    (normalizedEmail
-      ? data.clients.find((item) => normalizeEmail(item.email) === normalizedEmail)
-      : null) ??
-    (supabaseUser.phone
-      ? data.clients.find((item) => (item.phone ?? '').trim() === supabaseUser.phone!.trim())
-      : null)
-
-  if (client) {
-    if (!client.supabaseUserId) {
-      client.supabaseUserId = supabaseUser.id
-      await saveData(c.env, data)
-    }
-    c.set('client', client)
-    await next()
-    return
-  }
-
-  // First-time Supabase login: create an app client record.
-  const nameFromMeta =
-    (supabaseUser.user_metadata?.full_name as string | undefined) ??
-    (supabaseUser.user_metadata?.name as string | undefined) ??
-    ''
-  const created: ClientRecord = {
-    id: data.counters.clients++,
-    supabaseUserId: supabaseUser.id,
-    name: nameFromMeta || (supabaseUser.email ? supabaseUser.email.split('@')[0] : 'Client'),
-    company: '',
-    phone: supabaseUser.phone ?? '',
-    email: supabaseUser.email ?? '',
-    password: '',
-    profileImageUrl: '',
-    createdAt: now(),
-    emailVerified: true,
-  }
-
-  data.clients.unshift(created)
-  await saveData(c.env, data)
-  c.set('client', created)
-  await next()
 }
 
 const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
   const token = parseAuthorizationToken(c.req.raw)
   if (!token) {
+    console.log('requireAgencyAdminAuth: no token')
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
-  const data = await loadData(c.env)
-  const session = data.agencyAdminSessions.find((item) => item.token === token)
-  if (session) {
-    const admin = data.agencyAdmins.find((item) => item.id === session.adminId)
-    if (!admin) {
+  try {
+    const data = await loadData(c.env)
+    console.log('requireAgencyAdminAuth: data loaded')
+    const session = data.agencyAdminSessions.find((item) => item.token === token)
+    if (session) {
+      const admin = data.agencyAdmins.find((item) => item.id === session.adminId)
+      if (!admin) {
+        console.log('requireAgencyAdminAuth: session admin not found')
+        return c.json({ error: 'Unauthorized' }, 401)
+      }
+      c.set('agencyAdmin', admin)
+      await next()
+      return
+    }
+
+    // Supabase Auth JWT support (optional).
+    // Security: we only allow JWT auth for agency admins that already exist in app data.
+    console.log('requireAgencyAdminAuth: trying Supabase')
+    const supabaseUser = await getSupabaseAuthUser(c.env, token)
+    if (!supabaseUser) {
+      console.log('requireAgencyAdminAuth: Supabase auth failed')
       return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    const normalizedEmail = supabaseUser.email ? normalizeEmail(supabaseUser.email) : ''
+    const admin =
+      data.agencyAdmins.find(
+        (item) => item.supabaseUserId && item.supabaseUserId === supabaseUser.id
+      ) ??
+      (normalizedEmail
+        ? data.agencyAdmins.find(
+            (item) => normalizeEmail(item.email ?? '') === normalizedEmail
+          )
+        : null)
+
+    if (!admin) {
+      console.log('requireAgencyAdminAuth: admin not found')
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    if (!admin.supabaseUserId) {
+      admin.supabaseUserId = supabaseUser.id
+      await saveData(c.env, data)
     }
 
     c.set('agencyAdmin', admin)
     await next()
-    return
-  }
-
-  // Supabase Auth JWT support (optional).
-  // Security: we only allow JWT auth for agency admins that already exist in app data.
-  const supabaseUser = await getSupabaseAuthUser(c.env, token)
-  if (!supabaseUser) {
+  } catch (error) {
+    console.error('requireAgencyAdminAuth error:', error)
     return c.json({ error: 'Unauthorized' }, 401)
   }
-
-  const normalizedEmail = supabaseUser.email ? normalizeEmail(supabaseUser.email) : ''
-  const admin =
-    data.agencyAdmins.find(
-      (item) => item.supabaseUserId && item.supabaseUserId === supabaseUser.id
-    ) ??
-    (normalizedEmail
-      ? data.agencyAdmins.find(
-          (item) => normalizeEmail(item.email ?? '') === normalizedEmail
-        )
-      : null)
-
-  if (!admin) {
-    return c.json({ error: 'Unauthorized' }, 401)
-  }
-
-  if (!admin.supabaseUserId) {
-    admin.supabaseUserId = supabaseUser.id
-    await saveData(c.env, data)
-  }
-
-  c.set('agencyAdmin', admin)
-  await next()
 }
 
 const toSafeClient = (client: ClientRecord) => ({
@@ -891,6 +910,8 @@ const supabaseUserCache = new Map<
 >()
 
 const getSupabaseAuthUser = async (env: Bindings, accessToken: string) => {
+  console.log('getSupabaseAuthUser: token length', accessToken.length);
+
   const cached = supabaseUserCache.get(accessToken)
   if (cached && cached.expiresAt > Date.now()) return cached.user
 
@@ -901,33 +922,38 @@ const getSupabaseAuthUser = async (env: Bindings, accessToken: string) => {
     return null
   }
 
-  const response = await fetch(`${baseUrl}/auth/v1/user`, {
-    headers: {
-      apikey: anonKey,
-      authorization: `Bearer ${accessToken}`,
-      accept: 'application/json',
-    },
-  })
-
-  if (!response.ok) {
-    let details = ''
-    try {
-      details = await response.text()
-    } catch {
-      // ignore
-    }
-    console.error('Supabase auth verify failed', {
-      status: response.status,
-      baseUrl,
-      details: details.slice(0, 300),
+  try {
+    const response = await fetch(`${baseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: anonKey,
+        authorization: `Bearer ${accessToken}`,
+        accept: 'application/json',
+      },
     })
+
+    if (!response.ok) {
+      let details = ''
+      try {
+        details = await response.text()
+      } catch {
+        // ignore
+      }
+      console.error('Supabase auth verify failed', {
+        status: response.status,
+        baseUrl,
+        details: details.slice(0, 300),
+      })
+      return null
+    }
+
+    const user = (await response.json()) as SupabaseAuthUser
+    // Cache for 5 minutes to reduce Supabase Auth calls.
+    supabaseUserCache.set(accessToken, { user, expiresAt: Date.now() + 5 * 60 * 1000 })
+    return user
+  } catch (error) {
+    console.error('getSupabaseAuthUser fetch error:', error)
     return null
   }
-
-  const user = (await response.json()) as SupabaseAuthUser
-  // Cache for 5 minutes to reduce Supabase Auth calls.
-  supabaseUserCache.set(accessToken, { user, expiresAt: Date.now() + 5 * 60 * 1000 })
-  return user
 }
 
 const createSseResponse = (
@@ -2460,18 +2486,36 @@ app.post('/api/agency-auth/resend', async (c) => {
   })
 })
 
-app.post('/api/agency-auth/login', async (c) => {
+app.post('/api/agency-auth/login', safeApi(async (c) => {
+  console.log('/api/agency-auth/login called')
   const body = await parseBody<{ username?: string; password?: string }>(c.req.raw)
+  if (!body) {
+    return c.json({ error: 'Invalid JSON body' }, 400)
+  }
   if (!body?.username?.trim() || !body.password?.trim()) {
     return c.json({ error: 'username and password are required' }, 400)
   }
 
-  const data = await loadData(c.env)
-  const admin = data.agencyAdmins.find(
-    (item) =>
-      item.username.toLowerCase() === body.username!.trim().toLowerCase() &&
-      item.password === body.password!.trim()
-  )
+  let data
+  try {
+    data = await loadData(c.env)
+  } catch (error) {
+    console.error('/api/agency-auth/login loadData error:', error)
+    return c.json({ error: 'Storage unavailable' }, 500)
+  }
+  console.log('/api/agency-auth/login data loaded')
+  const usernameOrEmail = body.username.trim()
+  const normalizedIdentifier = usernameOrEmail.toLowerCase()
+  const normalizedEmail = isEmailLike(usernameOrEmail) ? normalizeEmail(usernameOrEmail) : ''
+  const password = body.password.trim()
+
+  const admin = data.agencyAdmins.find((item) => {
+    const username = typeof item.username === 'string' ? item.username.trim().toLowerCase() : ''
+    const email = typeof item.email === 'string' ? normalizeEmail(item.email) : ''
+    const matchesIdentifier =
+      username === normalizedIdentifier || (normalizedEmail && email === normalizedEmail)
+    return matchesIdentifier && item.password === password
+  })
   if (!admin) {
     return c.json({ error: 'Invalid username or password' }, 401)
   }
@@ -2496,8 +2540,9 @@ app.post('/api/agency-auth/login', async (c) => {
   data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.adminId !== admin.id)
   data.agencyAdminSessions.unshift(session)
   await saveData(c.env, data)
+  console.log('/api/agency-auth/login success')
   return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) })
-})
+}))
 
 app.get('/api/agency-auth/me', requireAgencyAdminAuth, async (c) => {
   return c.json({ admin: toSafeAgencyAdmin(c.get('agencyAdmin')) })

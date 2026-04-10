@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Download } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 
 const FormRow = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="grid grid-cols-[180px_1fr] gap-3 items-center">
@@ -48,6 +49,8 @@ const generatedForms = [
 const EditEmployer = () => {
   const { refCode } = useParams();
   const isNew = refCode === "new";
+  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [maid, setMaid] = useState({
     name: isNew ? "" : "Saraswathi Murugan",
@@ -119,6 +122,64 @@ const EditEmployer = () => {
           { name: "", type: "", relationship: "", dateOfBirth: "04/06/1928" },
         ]
   );
+
+  useEffect(() => {
+    if (!refCode || isNew) return;
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/employers/${encodeURIComponent(refCode)}`);
+        const data = (await response.json().catch(() => ({}))) as {
+          employer?: {
+            maid?: Record<string, unknown>;
+            agency?: Record<string, unknown>;
+            employer?: Record<string, unknown>;
+            spouse?: Record<string, unknown>;
+            familyMembers?: Array<Record<string, unknown>>;
+          };
+        };
+        if (!response.ok || !data.employer) return;
+        if (data.employer.maid) setMaid((data.employer.maid as typeof maid) ?? maid);
+        if (data.employer.agency) setAgency((data.employer.agency as typeof agency) ?? agency);
+        if (data.employer.employer) setEmployer((data.employer.employer as typeof employer) ?? employer);
+        if (data.employer.spouse) setSpouse((data.employer.spouse as typeof spouse) ?? spouse);
+        if (data.employer.familyMembers) setFamilyMembers((data.employer.familyMembers as typeof familyMembers) ?? familyMembers);
+      } catch {
+        // no-op
+      }
+    };
+    void load();
+  }, [isNew, refCode]);
+
+  const submitEmployerContract = async () => {
+    if (isSubmitting) return;
+    if (!employer.name.trim()) {
+      toast.error("Employer name is required");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const response = await fetch("/api/employers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          refCode: isNew ? null : refCode,
+          maid,
+          agency,
+          employer,
+          spouse,
+          familyMembers,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; employer?: { refCode?: string } };
+      if (!response.ok || !data.employer?.refCode) throw new Error(data.error || "Failed to submit employer contract");
+      toast.success("Employer contract saved");
+      if (isNew) navigate(`/employer/${encodeURIComponent(data.employer.refCode)}`, { replace: true });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to submit employer contract");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const [notificationDate, setNotificationDate] = useState({ month: isNew ? "" : "JANUARY", year: isNew ? "" : "2017" });
 
@@ -328,7 +389,7 @@ const EditEmployer = () => {
         ))}
 
         <div className="flex justify-center gap-4 pt-4 border-t">
-          <Button>Submit & Generate Forms</Button>
+          <Button onClick={() => void submitEmployerContract()} disabled={isSubmitting}>Submit & Generate Forms</Button>
           <Button variant="outline"><Download className="w-4 h-4 mr-2" /> Download Forms and Print</Button>
         </div>
 

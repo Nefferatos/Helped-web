@@ -154,6 +154,27 @@ export interface ChatMessageRecord {
   readByClient: boolean
 }
 
+export interface EmployerContractRecord {
+  id: number
+  refCode: string
+  maid: Record<string, unknown>
+  agency: Record<string, unknown>
+  employer: Record<string, unknown>
+  spouse: Record<string, unknown>
+  familyMembers: Array<Record<string, unknown>>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EmployerContractFileRecord {
+  id: number
+  name: string
+  size: number
+  type: string
+  dataBase64: string
+  createdAt: string
+}
+
 interface AppData {
   companyProfile: CompanyProfileRecord
   momPersonnel: MOMPersonnelRecord[]
@@ -166,6 +187,8 @@ interface AppData {
   agencyAdminSessions: AgencyAdminSessionRecord[]
   directSales: DirectSaleRecord[]
   chatMessages: ChatMessageRecord[]
+  employers: EmployerContractRecord[]
+  employerContractFiles: EmployerContractFileRecord[]
   counters: {
     momPersonnel: number
     testimonials: number
@@ -175,6 +198,8 @@ interface AppData {
     agencyAdmins: number
     directSales: number
     chatMessages: number
+    employers: number
+    employerContractFiles: number
   }
 }
 
@@ -278,6 +303,8 @@ const defaultData = (): AppData => ({
   agencyAdminSessions: [],
   directSales: [],
   chatMessages: [],
+  employers: [],
+  employerContractFiles: [],
   counters: {
     momPersonnel: 1,
     testimonials: 1,
@@ -287,6 +314,8 @@ const defaultData = (): AppData => ({
     agencyAdmins: 2,
     directSales: 1,
     chatMessages: 1,
+    employers: 1,
+    employerContractFiles: 1,
   },
 })
 
@@ -357,6 +386,27 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         agencyId: message.agencyId,
         agencyName: message.agencyName ?? '',
       })) ?? defaults.chatMessages,
+    employers: (raw.employers ?? defaults.employers).map((record) => ({
+      ...record,
+      refCode: String((record as { refCode?: unknown }).refCode ?? '').trim(),
+      maid: (record as { maid?: Record<string, unknown> }).maid ?? {},
+      agency: (record as { agency?: Record<string, unknown> }).agency ?? {},
+      employer: (record as { employer?: Record<string, unknown> }).employer ?? {},
+      spouse: (record as { spouse?: Record<string, unknown> }).spouse ?? {},
+      familyMembers: Array.isArray((record as { familyMembers?: unknown }).familyMembers)
+        ? ((record as { familyMembers?: Array<Record<string, unknown>> }).familyMembers ?? [])
+        : [],
+      createdAt: record.createdAt ?? now(),
+      updatedAt: record.updatedAt ?? record.createdAt ?? now(),
+    })),
+    employerContractFiles: (raw.employerContractFiles ?? defaults.employerContractFiles).map((record) => ({
+      ...record,
+      name: String((record as { name?: unknown }).name ?? ''),
+      size: Number((record as { size?: unknown }).size ?? 0) || 0,
+      type: String((record as { type?: unknown }).type ?? ''),
+      dataBase64: String((record as { dataBase64?: unknown }).dataBase64 ?? ''),
+      createdAt: record.createdAt ?? now(),
+    })),
     counters: {
       momPersonnel:
         raw.counters?.momPersonnel ??
@@ -383,6 +433,13 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       chatMessages:
         raw.counters?.chatMessages ??
         ((raw.chatMessages?.length ?? 0) + 1 || defaults.counters.chatMessages),
+      employers:
+        raw.counters?.employers ??
+        ((raw.employers?.length ?? 0) + 1 || defaults.counters.employers),
+      employerContractFiles:
+        raw.counters?.employerContractFiles ??
+        ((raw.employerContractFiles?.length ?? 0) + 1 ||
+          defaults.counters.employerContractFiles),
     },
   }
 }
@@ -698,9 +755,14 @@ export const registerAgencyAdminStore = async (payload: {
   agencyName: string
 }) => {
   const data = await loadData()
-  const existing = data.agencyAdmins.find(
-    (admin) => admin.username.toLowerCase() === payload.username.toLowerCase()
-  )
+  const normalizedUsername = payload.username.trim().toLowerCase()
+  const existing = data.agencyAdmins.find((admin) => {
+    const username =
+      typeof (admin as { username?: unknown }).username === 'string'
+        ? (admin as { username: string }).username.trim().toLowerCase()
+        : ''
+    return username === normalizedUsername
+  })
 
   if (existing) {
     throw new Error('AGENCY_ADMIN_USERNAME_EXISTS')
@@ -724,18 +786,21 @@ export const authenticateAgencyAdminStore = async (
   password: string
 ) => {
   const data = await loadData()
+  const normalizedUsername = username.trim().toLowerCase()
   return (
-    data.agencyAdmins.find(
-      (admin) =>
-        admin.username.toLowerCase() === username.toLowerCase() &&
-        admin.password === password
-    ) ?? null
+    data.agencyAdmins.find((admin) => {
+      const recordUsername =
+        typeof (admin as { username?: unknown }).username === 'string'
+          ? (admin as { username: string }).username.trim().toLowerCase()
+          : ''
+      return recordUsername === normalizedUsername && admin.password === password
+    }) ?? null
   )
 }
 
 export const createAgencyAdminSessionStore = async (adminId: number) => {
   const data = await loadData()
-  data.agencyAdminSessions = data.agencyAdminSessions.filter(
+  data.agencyAdminSessions = (data.agencyAdminSessions ?? []).filter(
     (session) => session.adminId !== adminId
   )
 
@@ -1454,6 +1519,111 @@ export const deleteEnquiryStore = async (id: number) => {
   const existing = data.enquiries.find((item) => item.id === id)
   if (!existing) return null
   data.enquiries = data.enquiries.filter((item) => item.id !== id)
+  await saveData(data)
+  return existing
+}
+
+const formatEmployerRefCode = (value: number) => String(value).padStart(5, '0')
+
+export const getEmployerContractsStore = async () => {
+  const data = await loadData()
+  return [...data.employers].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+}
+
+export const getEmployerContractStore = async (refCode: string) => {
+  const data = await loadData()
+  const code = String(refCode || '').trim()
+  if (!code) return null
+  return data.employers.find((item) => item.refCode === code) ?? null
+}
+
+export const saveEmployerContractStore = async (payload: {
+  refCode?: string | null
+  maid?: Record<string, unknown>
+  agency?: Record<string, unknown>
+  employer?: Record<string, unknown>
+  spouse?: Record<string, unknown>
+  familyMembers?: Array<Record<string, unknown>>
+}) => {
+  const data = await loadData()
+
+  const incomingRef = String(payload.refCode ?? '').trim()
+  const index = incomingRef
+    ? data.employers.findIndex((item) => item.refCode === incomingRef)
+    : -1
+  const id = index === -1 ? data.counters.employers++ : data.employers[index].id
+  const refCode = incomingRef || formatEmployerRefCode(id)
+
+  const record: EmployerContractRecord = {
+    refCode,
+    id,
+    maid: payload.maid ?? {},
+    agency: payload.agency ?? {},
+    employer: payload.employer ?? {},
+    spouse: payload.spouse ?? {},
+    familyMembers: Array.isArray(payload.familyMembers)
+      ? payload.familyMembers
+      : [],
+    createdAt: index === -1 ? now() : data.employers[index].createdAt,
+    updatedAt: now(),
+  }
+
+  if (index === -1) data.employers.unshift(record)
+  else data.employers[index] = record
+
+  await saveData(data)
+  return record
+}
+
+export const deleteEmployerContractStore = async (refCode: string) => {
+  const data = await loadData()
+  const code = String(refCode || '').trim()
+  const existing = data.employers.find((item) => item.refCode === code) ?? null
+  if (!existing) return null
+  data.employers = data.employers.filter((item) => item.refCode !== code)
+  await saveData(data)
+  return existing
+}
+
+export const getEmployerContractFilesStore = async () => {
+  const data = await loadData()
+  return [...data.employerContractFiles].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+}
+
+export const getEmployerContractFileStore = async (id: number) => {
+  const data = await loadData()
+  return data.employerContractFiles.find((item) => item.id === id) ?? null
+}
+
+export const addEmployerContractFilesStore = async (
+  files: Array<{ name: string; size: number; type: string; dataBase64: string }>
+) => {
+  const data = await loadData()
+  const createdAt = now()
+  const records: EmployerContractFileRecord[] = files.map((file) => ({
+    id: data.counters.employerContractFiles++,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    dataBase64: file.dataBase64,
+    createdAt,
+  }))
+  data.employerContractFiles.unshift(...records)
+  await saveData(data)
+  return records
+}
+
+export const deleteEmployerContractFileStore = async (id: number) => {
+  const data = await loadData()
+  const existing = data.employerContractFiles.find((item) => item.id === id)
+  if (!existing) return null
+  data.employerContractFiles = data.employerContractFiles.filter(
+    (item) => item.id !== id
+  )
   await saveData(data)
   return existing
 }

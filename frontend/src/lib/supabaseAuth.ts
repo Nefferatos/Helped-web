@@ -62,7 +62,8 @@ export const signInWithGoogle = async () => {
 };
 
 export const signInWithFacebook = async () => {
-  const { error } = await requireSupabase().auth.signInWithOAuth({
+  const supabase = requireSupabase();
+  const { error } = await supabase.auth.signInWithOAuth({
     provider: "facebook",
     options: { redirectTo: `${window.location.origin}/auth/callback` },
   });

@@ -3,12 +3,14 @@ import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   clearAgencyAdminAuth,
   getAgencyAdminToken,
   saveAgencyAdminAuth,
 } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
+import { requireSupabase } from "@/lib/supabaseClient";
 
 interface AgencyAuthResponse {
   error?: string;
@@ -46,6 +48,21 @@ const AgencyAdminLogin = () => {
       navigate(adminPath("/dashboard"));
     }
   }, [navigate]);
+
+  const signInWithProvider = async (provider: "google" | "facebook") => {
+    try {
+      setIsSubmitting(true);
+      const supabase = requireSupabase();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: `${window.location.origin}/auth/callback?mode=agency` },
+      });
+      if (error) throw error;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to continue");
+      setIsSubmitting(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -163,6 +180,22 @@ const AgencyAdminLogin = () => {
           <ArrowLeft className="h-4 w-4" /> Back to Home
         </Link>
 
+        {step === "auth" ? (
+          <Tabs
+            value={isLogin ? "login" : "signup"}
+            onValueChange={(value) => {
+              setIsLogin(value === "login");
+              setStep("auth");
+            }}
+            className="mb-4"
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Agency Login</TabsTrigger>
+              <TabsTrigger value="signup">Agency Signup</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : null}
+
         <div className="rounded-2xl bg-card p-8 shadow-lg">
           <div className="mb-8 text-center">
             <h1 className="mb-1 font-display text-2xl font-bold text-foreground">
@@ -218,103 +251,120 @@ const AgencyAdminLogin = () => {
               </Button>
             </form>
           ) : (
-            <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
-              {!isLogin ? (
-                <>
-                  <div>
-                    <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
-                      Agency Name
-                    </label>
-                    <input
-                      type="text"
-                      value={agencyName}
-                      onChange={(event) => setAgencyName(event.target.value)}
-                      className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                      placeholder="Your agency name"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                      placeholder="agency@example.com"
-                      required
-                    />
-                  </div>
-                </>
-              ) : null}
-
-              <div>
-                <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="username"
-                  required
-                />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full font-body"
+                  onClick={() => void signInWithProvider("google")}
+                  disabled={isSubmitting}
+                >
+                  Continue with Google
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full font-body"
+                  onClick={() => void signInWithProvider("facebook")}
+                  disabled={isSubmitting}
+                >
+                  Continue with Facebook
+                </Button>
               </div>
 
-              <div>
-                <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
-                  Password
-                </label>
-                <div className="relative">
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <div className="text-xs text-muted-foreground">or</div>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
+                {!isLogin ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
+                        Agency Name
+                      </label>
+                      <input
+                        type="text"
+                        value={agencyName}
+                        onChange={(event) => setAgencyName(event.target.value)}
+                        className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="Your agency name"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="agency@example.com"
+                        required
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                <div>
+                  <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
+                    Username
+                  </label>
                   <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="w-full rounded-lg border bg-background px-3 py-2.5 pr-10 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="Password"
+                    type="text"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="username"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((value) => !value)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
                 </div>
-              </div>
 
-              <Button type="submit" size="lg" className="w-full font-body" disabled={isSubmitting}>
-                {isSubmitting
-                  ? "Please wait..."
-                  : isLogin
-                    ? "Sign In to Agency Portal"
-                    : "Create Agency Portal"}
-              </Button>
-            </form>
+                <div>
+                  <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="w-full rounded-lg border bg-background px-3 py-2.5 pr-10 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      placeholder="Password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <Button type="submit" size="lg" className="w-full font-body" disabled={isSubmitting}>
+                  {isSubmitting
+                    ? "Please wait..."
+                    : isLogin
+                      ? "Sign In to Agency Portal"
+                      : "Create Agency Portal"}
+                </Button>
+              </form>
+            </div>
           )}
-
-          <div className="mt-6 text-center">
-            <p className="font-body text-sm text-muted-foreground">
-              {isLogin
-                ? "Need a new agency portal?"
-                : "Already have an agency portal?"}{" "}
-              <button
-                onClick={() => setIsLogin((value) => !value)}
-                className="font-medium text-primary hover:underline"
-              >
-                {isLogin ? "Register Here" : "Sign In"}
-              </button>
-            </p>
-          </div>
         </div>
       </div>
     </div>

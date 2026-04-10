@@ -15,6 +15,9 @@ import { Search, Eye, EyeOff, Trash2, Download, Upload, ArrowLeft, AlertTriangle
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
+import { scanUploadedFile } from "@/lib/fileScan";
+import JSZip from "jszip";
+import * as XLSX from "xlsx";
 
 type ViewMode = "menu" | "public" | "hidden";
 const PAGE_SIZE = 10;
@@ -35,7 +38,7 @@ const EditMaids = () => {
   const [maidToReject, setMaidToReject] = useState<MaidProfile | null>(null);
   const [confirmExportOpen, setConfirmExportOpen] = useState(false);
   const [confirmImportOpen, setConfirmImportOpen] = useState(false);
-  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
+  const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
 
   // Delete validation state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -319,6 +322,67 @@ const EditMaids = () => {
   const handleImportFile = async (file: File) => {
     const name = file.name.toLowerCase();
     const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
+    if (ext === "pdf") {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const max = Math.min(bytes.length, 1024 * 1024);
+      let printable = "";
+      for (let i = 0; i < max && printable.length < 6000; i += 1) {
+        const b = bytes[i];
+        if (b === 0x0a || b === 0x0d || b === 0x09) printable += " ";
+        else if (b >= 0x20 && b <= 0x7e) printable += String.fromCharCode(b);
+        else printable += " ";
+      }
+      const text = printable.replace(/\s+/g, " ").trim();
+      const refMatch = text.match(/\breference\s*code\b\s*[:-]?\s*([a-z0-9_-]{2,})/i);
+      const nameMatch = text.match(/\bfull\s*name\b\s*[:-]?\s*([a-z][^:]{1,80}?)(?=\s{2,}|$)/i);
+      if (!text || text.length < 40 || !refMatch?.[1] || !nameMatch?.[1]) {
+        throw new Error("PDF does not contain importable data");
+      }
+      const escapeCsv = (value: string) => {
+        const v = String(value ?? "");
+        if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+        return v;
+      };
+      await importCsvText(`referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`);
+      return;
+    }
+    if (ext === "docx") {
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const docXml = await zip.file("word/document.xml")?.async("text");
+      if (!docXml) throw new Error("DOCX does not contain importable data");
+      const xml = new DOMParser().parseFromString(docXml, "application/xml");
+      const text = Array.from(xml.getElementsByTagName("w:t"))
+        .map((n) => n.textContent ?? "")
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+      const refMatch = text.match(/\breference\s*code\b\s*[:-]?\s*([a-z0-9_-]{2,})/i);
+      const nameMatch = text.match(/\bfull\s*name\b\s*[:-]?\s*([a-z][^:]{1,80}?)(?=\s{2,}|$)/i);
+      if (!refMatch?.[1] || !nameMatch?.[1]) throw new Error("DOCX is missing required fields: referenceCode, fullName");
+      const escapeCsv = (value: string) => {
+        const v = String(value ?? "");
+        if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+        return v;
+      };
+      await importCsvText(`referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`);
+      return;
+    }
+    if (ext === "xlsx") {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
+      if (!sheet) throw new Error("XLSX does not contain importable data");
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false }) as unknown[][];
+      const header = Array.isArray(rows[0]) ? rows[0] : [];
+      const headerIndexes = new Map<string, number>();
+      header.forEach((h, idx) => headerIndexes.set(String(h ?? "").trim().toLowerCase(), idx));
+      if (!headerIndexes.has("referencecode") || !headerIndexes.has("fullname")) {
+        throw new Error("XLSX is missing required columns: referenceCode, fullName");
+      }
+      const csvText = XLSX.utils.sheet_to_csv(sheet);
+      await importCsvText(csvText);
+      return;
+    }
     if (ext === "csv") { await importCsvText(await file.text()); return; }
     if (ext === "xls" || ext === "doc") {
       const content = await file.text();
@@ -328,22 +392,46 @@ const EditMaids = () => {
       if (maidProfileBase64) { await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile); return; }
       throw new Error('This file is missing import data. Please import files exported from "Export Maids" or from a maid bio-data export.');
     }
-    throw new Error("Unsupported file type. Supported: .csv, .xls, .doc");
+    throw new Error("Unsupported file type. Supported: .csv, .xls, .xlsx, .doc, .docx, .pdf");
   };
 
   const requestExport = () => { if (!isExporting) setConfirmExportOpen(true); };
   const confirmExportCsv = () => { setConfirmExportOpen(false); void handleExportCsv(); };
   const confirmExportXls = () => { setConfirmExportOpen(false); void handleExportXls(); };
-  const requestImportFile = (file?: File) => {
-    if (!file || isImporting) return;
-    setPendingImportFile(file);
+  const requestImportFiles = async (files?: FileList | File[]) => {
+    if (!files || isImporting) return;
+    const all = Array.from(files);
+    if (all.length > 10) toast.error("Max 10 files per upload");
+    const list = all.slice(0, 10);
+    if (list.length === 0) return;
+
+    const approved: File[] = [];
+    for (const file of list) {
+      const scan = await scanUploadedFile(file);
+      if (!scan.success) {
+        toast.error(`${file.name}: ${scan.message}`);
+        continue;
+      }
+      approved.push(file);
+    }
+
+    if (approved.length === 0) return;
+    setPendingImportFiles(approved);
     setConfirmImportOpen(true);
   };
-  const confirmImportFile = () => {
-    const file = pendingImportFile;
+  const confirmImportFiles = async () => {
+    const files = pendingImportFiles;
     setConfirmImportOpen(false);
-    setPendingImportFile(null);
-    if (file) void handleImportFile(file);
+    setPendingImportFiles([]);
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      try {
+        await handleImportFile(file);
+      } catch (error) {
+        toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `${file.name}: Failed to import`);
+      }
+    }
   };
 
   const SharedDialogs = () => (
@@ -365,21 +453,22 @@ const EditMaids = () => {
       </Dialog>
 
       {/* Import */}
-      <Dialog open={confirmImportOpen} onOpenChange={(open) => { setConfirmImportOpen(open); if (!open) setPendingImportFile(null); }}>
+      <Dialog open={confirmImportOpen} onOpenChange={(open) => { setConfirmImportOpen(open); if (!open) setPendingImportFiles([]); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Import maids file?</DialogTitle>
             <DialogDescription>
-              Supported: <strong>.csv</strong>, <strong>.xls</strong>, <strong>.doc</strong> exported from this system.<br />
+              Supported: <strong>.csv</strong>, <strong>.xls</strong>, <strong>.xlsx</strong>, <strong>.doc</strong>, <strong>.docx</strong>, <strong>.pdf</strong> exported from this system.<br />
               Required columns: <strong>referenceCode</strong>, <strong>fullName</strong>. Existing maids are updated by referenceCode.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md border bg-muted/30 p-3 text-sm">
-            <span className="font-semibold">Selected file:</span> {pendingImportFile?.name ?? "None"}
+            <span className="font-semibold">Selected file{pendingImportFiles.length === 1 ? "" : "s"}:</span>{" "}
+            {pendingImportFiles.length ? pendingImportFiles.map((f) => f.name).join(", ") : "None"}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>Cancel</Button>
-            <Button onClick={confirmImportFile} disabled={isImporting || !pendingImportFile}>{isImporting ? "Importing..." : "Import"}</Button>
+            <Button onClick={() => void confirmImportFiles()} disabled={isImporting || pendingImportFiles.length === 0}>{isImporting ? "Importing..." : "Import"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -457,10 +546,11 @@ const EditMaids = () => {
             <label className="inline-flex cursor-pointer">
               <input
                 type="file"
-                accept=".csv,.xls,.doc,text/csv,application/vnd.ms-excel,application/msword"
+                accept=".csv,.xls,.xlsx,.doc,.docx,.pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
                 className="hidden"
                 disabled={isImporting}
-                onChange={(e) => { requestImportFile(e.target.files?.[0]); e.currentTarget.value = ""; }}
+                multiple
+                onChange={(e) => { void requestImportFiles(e.target.files); e.currentTarget.value = ""; }}
               />
               <span className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
                 <Upload className="h-4 w-4" />
@@ -470,7 +560,7 @@ const EditMaids = () => {
           </div>
 
           <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-            Import supports <strong>.csv</strong> (recommended), or <strong>.xls</strong>/<strong>.doc</strong> exported from this system.
+            Import supports <strong>.csv</strong> (recommended), or <strong>.xls</strong>/<strong>.xlsx</strong>/<strong>.doc</strong>/<strong>.docx</strong>/<strong>.pdf</strong> exported from this system.
             Required columns: <strong>referenceCode</strong>, <strong>fullName</strong>. Photos &amp; history are not imported.
           </p>
 
@@ -564,10 +654,11 @@ const EditMaids = () => {
           <label className="inline-flex cursor-pointer">
             <input
               type="file"
-              accept=".csv,.xls,.doc,text/csv,application/vnd.ms-excel,application/msword"
+              accept=".csv,.xls,.xlsx,.doc,.docx,.pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
               className="hidden"
               disabled={isImporting}
-              onChange={(e) => { requestImportFile(e.target.files?.[0]); e.currentTarget.value = ""; }}
+              multiple
+              onChange={(e) => { void requestImportFiles(e.target.files); e.currentTarget.value = ""; }}
             />
             <span className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
               <Upload className="h-4 w-4" />
