@@ -78,6 +78,8 @@ type ClientPortalDraft = {
   relNoPreference: boolean;
 };
 
+// ─── Nationality ────────────────────────────────────────────────────────────
+// AddMaid stores values like "Filipino maid", "Indonesian maid", "Myanmar maid" etc.
 const normalizeNationality = (raw?: string) => {
   const v = String(raw || "").trim().toLowerCase();
   if (!v) return "others";
@@ -91,16 +93,49 @@ const normalizeNationality = (raw?: string) => {
   return "others";
 };
 
-const toLanguageText = (raw: unknown) => {
+// ─── Maid Type ───────────────────────────────────────────────────────────────
+// AddMaid stores: "New maid", "Transfer maid", "Ex-Singapore maid", etc. (mixed case)
+// Filter UI sends: "New Maid", "Transfer Maid", "Ex-Singapore Maid"
+// → normalise both sides to lowercase for comparison
+const normalizeMaidType = (raw?: string) => String(raw || "").trim().toLowerCase();
+
+// ─── Language ────────────────────────────────────────────────────────────────
+// AddMaid stores languageSkills as: { "English": "Good", "Mandarin/Chinese-Dialect": "Fair", ... }
+// The filter checks whether the skill level is something meaningful (not "Zero" or empty).
+const toLanguageText = (raw: unknown): string => {
   if (typeof raw === "string") return raw;
   if (Array.isArray(raw)) return raw.join(" ");
   if (raw && typeof raw === "object") {
+    // For languageSkills objects, build a string of "key value" pairs.
+    // Only include entries whose value is not "Zero" and not empty — so "Zero" skill
+    // does not cause a false positive match.
     return Object.entries(raw as Record<string, unknown>)
-      .map(([k, v]) => `${k} ${String(v ?? "")}`)
+      .filter(([, v]) => {
+        const val = String(v ?? "").trim().toLowerCase();
+        return val && val !== "zero";
+      })
+      .map(([k]) => k) // just the language name is enough for inclusion check
       .join(" ");
   }
   return String(raw ?? "");
 };
+
+// ─── Education ───────────────────────────────────────────────────────────────
+// AddMaid options (exact strings stored in educationLevel):
+//   "Primary Level(<=6 yrs)"
+//   "Secondary Level(7~9 yrs)"
+//   "High School(10~12 yrs)"
+//   "Vocational Course"
+//   "College/Degree (>=13 yrs)"
+const normalizeEducation = (raw: string): string => raw.toLowerCase();
+
+// ─── Working Experience ──────────────────────────────────────────────────────
+// AddMaid employment history stores country as exact strings from the dropdown:
+//   "Singapore", "Hong Kong", "Taiwan", "Malaysia",
+//   "Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan", "Lebanon",
+//   "Brunei", "Others"
+// Home country is not in the dropdown — maids with only home-country experience
+// will typically have no employment history rows, or their nationality implies home country.
 
 const isClientPortalDraft = (filters: unknown): filters is ClientPortalDraft => {
   if (!filters || typeof filters !== "object") return false;
@@ -124,56 +159,43 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
 
   if (isClientPortalDraft(filters)) {
     const f = filters;
-    const maidRecordToBool = (v: unknown) => Boolean(v) && String(v).trim().length > 0;
 
     const shouldApplyGroup = (noPreferenceFlag: boolean, specifics: boolean[]) =>
       !noPreferenceFlag && specifics.some(Boolean);
 
-    const knownCountryMatchers = [
-      (c: string) => c.includes("singapore") || c.includes("sg"),
-      (c: string) => c.includes("malaysia"),
-      (c: string) => c.includes("hong kong") || c.includes("hongkong"),
-      (c: string) => c.includes("taiwan"),
-      (c: string) =>
-        c.includes("uae") ||
-        c.includes("dubai") ||
-        c.includes("saudi") ||
-        c.includes("qatar") ||
-        c.includes("kuwait") ||
-        c.includes("middle east"),
-      (c: string) =>
-        c.includes("home") ||
-        c.includes("philippines") ||
-        c.includes("indonesia") ||
-        c.includes("myanmar") ||
-        c.includes("india"),
-    ] as const;
-
     return maids.filter((maid) => {
       const maidRecord = maid as unknown as Record<string, unknown>;
 
-      const intro = String((maid.introduction as Record<string, unknown>)?.publicIntro || "").trim();
-      const text = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
+      // ── Keyword ────────────────────────────────────────────────────────────
+      if (f.keyword.trim()) {
+        const intro = String((maid.introduction as Record<string, unknown>)?.publicIntro || "").trim();
+        const text = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
+        if (!text.includes(f.keyword.trim().toLowerCase())) return false;
+      }
 
-      if (f.keyword.trim() && !text.includes(f.keyword.trim().toLowerCase())) return false;
-      if (f.maidType && String(maid.type || "") !== f.maidType) return false;
+      // ── Maid Type ──────────────────────────────────────────────────────────
+      // FIX: compare case-insensitively because AddMaid stores "New maid" but
+      // the filter UI sends "New Maid".
+      if (f.maidType) {
+        if (normalizeMaidType(maid.type) !== normalizeMaidType(f.maidType)) return false;
+      }
+
+      // ── Has Children ───────────────────────────────────────────────────────
       if (f.hasChildren && Number(maid.numberOfChildren || 0) <= 0) return false;
 
-      if (Boolean(f.withVideo)) {
-        const video =
-          String((maid as Record<string, unknown>)["videoDataUrl"] ?? maidRecord["videoUrl"] ?? maidRecord["video"] ?? "").trim();
+      // ── With Video ─────────────────────────────────────────────────────────
+      if (f.withVideo) {
+        const video = String(
+          maidRecord["videoDataUrl"] ?? maidRecord["videoUrl"] ?? maidRecord["video"] ?? ""
+        ).trim();
         if (!video) return false;
       }
 
+      // ── Nationality ────────────────────────────────────────────────────────
+      // AddMaid stores values like "Filipino maid", "Indonesian maid" — normalizeNationality handles this.
       const natSpecifics = [
-        f.natFilipino,
-        f.natIndonesian,
-        f.natMyanmar,
-        f.natIndian,
-        f.natSriLankan,
-        f.natCambodian,
-        f.natBangladeshi,
-        f.natOthers,
+        f.natFilipino, f.natIndonesian, f.natMyanmar, f.natIndian,
+        f.natSriLankan, f.natCambodian, f.natBangladeshi, f.natOthers,
       ];
       if (shouldApplyGroup(f.natNoPreference, natSpecifics)) {
         const norm = normalizeNationality(maid.nationality);
@@ -189,6 +211,7 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         if (!match) return false;
       }
 
+      // ── Age ────────────────────────────────────────────────────────────────
       const ageSpecifics = [f.age21to25, f.age26to30, f.age31to35, f.age36to40, f.age41above];
       if (shouldApplyGroup(f.ageNoPreference, ageSpecifics)) {
         const age = calculateAge(maid.dateOfBirth);
@@ -202,57 +225,70 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         if (!match) return false;
       }
 
-      const skills = (maid.skillsPreferences || {}) as Record<string, unknown>;
-      const workAreas = (maid.workAreas || {}) as Record<string, unknown>;
-
+      // ── Duty / Skills ──────────────────────────────────────────────────────
+      // FIX: AddMaid stores duties in workAreas using the EXACT label strings from skillRows:
+      //   "Care of infants/children", "Care of elderly", "Care of disabled",
+      //   "General housework", "Cooking"
+      // Each entry is an object like: { willing: true, experience: true, ... }
+      // We check willing === true OR experience === true.
       const dutySpecifics = [
-        f.dutyCareInfant,
-        f.dutyCareYoungChildren,
-        f.dutyCareElderlyDisabled,
-        f.dutyCooking,
-        f.dutyGeneralHousekeeping,
+        f.dutyCareInfant, f.dutyCareYoungChildren, f.dutyCareElderlyDisabled,
+        f.dutyCooking, f.dutyGeneralHousekeeping,
       ];
       if (shouldApplyGroup(f.dutyNoPreference, dutySpecifics)) {
-        const hasSkill = (keys: string[]) => keys.some((k) => maidRecordToBool(skills[k]) || maidRecordToBool(workAreas[k]));
+        const workAreas = (maid.workAreas || {}) as Record<string, unknown>;
+
+        const hasWillingnessOrExp = (labels: string[]) =>
+          labels.some((label) => {
+            const entry = workAreas[label] as Record<string, unknown> | undefined;
+            if (!entry) return false;
+            return entry.willing === true || entry.experience === true;
+          });
+
         const match =
-          (f.dutyCareInfant && hasSkill(["careForInfant", "infantCare", "care_for_infant"])) ||
-          (f.dutyCareYoungChildren &&
-            hasSkill(["careForYoungChildren", "childCare", "care_for_young_children"])) ||
-          (f.dutyCareElderlyDisabled &&
-            hasSkill(["careForElderly", "elderlyCare", "care_for_elderly", "care_for_disabled"])) ||
-          (f.dutyCooking && hasSkill(["cooking", "cook"])) ||
-          (f.dutyGeneralHousekeeping && hasSkill(["generalHousekeeping", "housekeeping", "general_housekeeping"]));
+          (f.dutyCareInfant && hasWillingnessOrExp(["Care of infants/children"])) ||
+          (f.dutyCareYoungChildren && hasWillingnessOrExp(["Care of infants/children"])) ||
+          (f.dutyCareElderlyDisabled && hasWillingnessOrExp(["Care of elderly", "Care of disabled"])) ||
+          (f.dutyCooking && hasWillingnessOrExp(["Cooking"])) ||
+          (f.dutyGeneralHousekeeping && hasWillingnessOrExp(["General housework"]));
         if (!match) return false;
       }
 
+      // ── Working Experience (country) ───────────────────────────────────────
+      // FIX: AddMaid uses field name "country" (confirmed in EmploymentHistoryTab).
+      // The dropdown values are: "Singapore", "Hong Kong", "Taiwan", "Malaysia",
+      // "Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan",
+      // "Lebanon", "Brunei", "Others"
+      // Home Country = maid has NO overseas entries (all rows are empty/Others),
+      // or we check if zero history rows exist (implying only home-country experience).
       const expSpecifics = [
-        f.expHomeCountry,
-        f.expSingapore,
-        f.expMalaysia,
-        f.expHongKong,
-        f.expTaiwan,
-        f.expMiddleEast,
-        f.expOtherCountries,
+        f.expHomeCountry, f.expSingapore, f.expMalaysia, f.expHongKong,
+        f.expTaiwan, f.expMiddleEast, f.expOtherCountries,
       ];
       if (shouldApplyGroup(f.expNoPreference, expSpecifics)) {
         const history = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
         const countries = history
-          .map((h) => String((h as Record<string, unknown>)["country"] || (h as Record<string, unknown>)["workCountry"] || "").toLowerCase())
-          .filter(Boolean);
+          .map((h) => String((h as Record<string, unknown>)["country"] || "").trim())
+          .filter((c) => c && c !== "--");
 
-        const isHome = (c: string) =>
-          c.includes("home") || c.includes("philippines") || c.includes("indonesia") || c.includes("myanmar") || c.includes("india");
-        const isSingapore = (c: string) => c.includes("singapore") || c.includes("sg");
-        const isMalaysia = (c: string) => c.includes("malaysia");
-        const isHongKong = (c: string) => c.includes("hong kong") || c.includes("hongkong");
-        const isTaiwan = (c: string) => c.includes("taiwan");
+        const knownOverseasCountries = ["Singapore", "Hong Kong", "Taiwan", "Malaysia",
+          "Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan", "Lebanon", "Brunei"];
+
+        const isSingapore = (c: string) => c === "Singapore";
+        const isMalaysia = (c: string) => c === "Malaysia";
+        const isHongKong = (c: string) => c === "Hong Kong";
+        const isTaiwan = (c: string) => c === "Taiwan";
         const isMiddleEast = (c: string) =>
-          c.includes("uae") || c.includes("dubai") || c.includes("saudi") || c.includes("qatar") || c.includes("kuwait") || c.includes("middle east");
-
-        const isOther = (c: string) => c.length > 0 && !knownCountryMatchers.some((fn) => fn(c));
+          ["Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan", "Lebanon"].includes(c);
+        // "Others" in the dropdown + anything not in the known list
+        const isOther = (c: string) =>
+          c === "Others" || (!knownOverseasCountries.includes(c) && c.length > 0);
+        // Home country = no overseas history at all, or only "Others"/unknown entries
+        const hasAnyOverseas = countries.some((c) => knownOverseasCountries.includes(c));
+        const isHome = !hasAnyOverseas;
 
         const match =
-          (f.expHomeCountry && countries.some(isHome)) ||
+          (f.expHomeCountry && isHome) ||
           (f.expSingapore && countries.some(isSingapore)) ||
           (f.expMalaysia && countries.some(isMalaysia)) ||
           (f.expHongKong && countries.some(isHongKong)) ||
@@ -262,45 +298,69 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         if (!match) return false;
       }
 
+      // ── Education ──────────────────────────────────────────────────────────
+      // FIX: AddMaid exact stored values:
+      //   "Primary Level(<=6 yrs)"        → eduPrimary
+      //   "Secondary Level(7~9 yrs)"      → eduSecondary
+      //   "High School(10~12 yrs)"        → eduHighSchool
+      //   "Vocational Course"             → treated as eduHighSchool equivalent
+      //   "College/Degree (>=13 yrs)"     → eduCollege
       const eduSpecifics = [f.eduCollege, f.eduHighSchool, f.eduSecondary, f.eduPrimary];
       if (shouldApplyGroup(f.eduNoPreference, eduSpecifics)) {
-        const edu = String(maidRecord["education"] || maidRecord["educationLevel"] || maid.educationLevel || "").toLowerCase();
+        const edu = normalizeEducation(
+          String(maidRecord["educationLevel"] || maid.educationLevel || "")
+        );
         const match =
-          (f.eduCollege && (edu.includes("college") || edu.includes("degree") || edu.includes("university"))) ||
-          (f.eduHighSchool && (edu.includes("high school") || edu.includes("secondary"))) ||
-          (f.eduSecondary && (edu.includes("secondary") || edu.includes("middle"))) ||
-          (f.eduPrimary && (edu.includes("primary") || edu.includes("elementary")));
+          (f.eduCollege && edu.includes("college")) ||
+          (f.eduHighSchool && (edu.includes("high school") || edu.includes("vocational"))) ||
+          (f.eduSecondary && edu.includes("secondary")) ||
+          (f.eduPrimary && edu.includes("primary"));
         if (!match) return false;
       }
 
+      // ── Language ───────────────────────────────────────────────────────────
+      // FIX: AddMaid stores languageSkills as an object:
+      //   { "English": "Good", "Mandarin/Chinese-Dialect": "Fair", "Hindi": "Zero", ... }
+      // toLanguageText() already filters out "Zero" entries.
+      // We join the keys (language names) and check inclusion.
       const langSpecifics = [f.langEnglish, f.langMandarin, f.langBahasaIndonesia, f.langHindi, f.langTamil];
       if (shouldApplyGroup(f.langNoPreference, langSpecifics)) {
-        const rawLangs = maidRecord["languageSkills"] ?? maidRecord["languages"] ?? maidRecord["languagesSpoken"] ?? maid.languageSkills ?? text;
+        const rawLangs =
+          maidRecord["languageSkills"] ??
+          maid.languageSkills ??
+          maidRecord["languages"] ??
+          maidRecord["languagesSpoken"] ??
+          "";
         const langs = toLanguageText(rawLangs).toLowerCase();
         const match =
           (f.langEnglish && langs.includes("english")) ||
           (f.langMandarin && (langs.includes("mandarin") || langs.includes("chinese"))) ||
-          (f.langBahasaIndonesia && (langs.includes("bahasa") || langs.includes("malay") || langs.includes("indonesia"))) ||
+          (f.langBahasaIndonesia && (langs.includes("bahasa") || langs.includes("indonesia") || langs.includes("malay"))) ||
           (f.langHindi && langs.includes("hindi")) ||
           (f.langTamil && langs.includes("tamil"));
         if (!match) return false;
       }
 
+      // ── Marital Status ─────────────────────────────────────────────────────
+      // AddMaid stores exact strings: "Single", "Single Parent", "Married",
+      // "Divorced", "Widowed", "Separated"
       const marSpecifics = [f.marSingle, f.marMarried, f.marWidowed, f.marDivorced, f.marSeparated];
       if (shouldApplyGroup(f.marNoPreference, marSpecifics)) {
-        const mar = String(maidRecord["maritalStatus"] || maidRecord["marital_status"] || maid.maritalStatus || "").toLowerCase();
+        const mar = String(maid.maritalStatus || maidRecord["maritalStatus"] || "").toLowerCase();
         const match =
-          (f.marSingle && mar.includes("single")) ||
-          (f.marMarried && mar.includes("married")) ||
+          (f.marSingle && (mar === "single" || mar === "single parent")) ||
+          (f.marMarried && mar === "married") ||
           (f.marWidowed && mar.includes("widow")) ||
           (f.marDivorced && mar.includes("divorce")) ||
           (f.marSeparated && mar.includes("separat"));
         if (!match) return false;
       }
 
+      // ── Height ─────────────────────────────────────────────────────────────
+      // AddMaid stores height as a number on maid.height (e.g. 155).
       const heightSpecifics = [f.height150below, f.height151to155, f.height156to160, f.height161above];
       if (shouldApplyGroup(f.heightNoPreference, heightSpecifics)) {
-        const heightCm = Number(maidRecord["heightCm"] ?? maidRecord["height"] ?? maid.height ?? 0);
+        const heightCm = Number(maid.height ?? maidRecord["heightCm"] ?? maidRecord["height_cm"] ?? 0);
         if (!(heightCm > 0)) return false;
         const match =
           (f.height150below && heightCm <= 150) ||
@@ -310,27 +370,24 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         if (!match) return false;
       }
 
+      // ── Religion ───────────────────────────────────────────────────────────
+      // AddMaid stores exact strings: "Catholic", "Christian", "Muslim", "Hindu",
+      // "Buddhist", "Sikh", "Free Thinker", "Others"
       const relSpecifics = [
-        f.relFreeThinker,
-        f.relChristian,
-        f.relCatholic,
-        f.relBuddhist,
-        f.relMuslim,
-        f.relHindu,
-        f.relSikh,
-        f.relOthers,
+        f.relFreeThinker, f.relChristian, f.relCatholic, f.relBuddhist,
+        f.relMuslim, f.relHindu, f.relSikh, f.relOthers,
       ];
       if (shouldApplyGroup(f.relNoPreference, relSpecifics)) {
-        const rel = String(maidRecord["religion"] || maid.religion || "").toLowerCase();
+        const rel = String(maid.religion || maidRecord["religion"] || "").toLowerCase().trim();
         const match =
-          (f.relFreeThinker && (rel.includes("free") || rel.includes("none") || rel.includes("atheist"))) ||
-          (f.relChristian && rel.includes("christian") && !rel.includes("catholic")) ||
-          (f.relCatholic && rel.includes("catholic")) ||
-          (f.relBuddhist && rel.includes("buddh")) ||
-          (f.relMuslim && (rel.includes("muslim") || rel.includes("islam"))) ||
-          (f.relHindu && rel.includes("hindu")) ||
-          (f.relSikh && rel.includes("sikh")) ||
-          (f.relOthers && rel.length > 0);
+          (f.relFreeThinker && rel === "free thinker") ||
+          (f.relChristian && rel === "christian") ||
+          (f.relCatholic && rel === "catholic") ||
+          (f.relBuddhist && rel === "buddhist") ||
+          (f.relMuslim && (rel === "muslim" || rel.includes("islam"))) ||
+          (f.relHindu && rel === "hindu") ||
+          (f.relSikh && rel === "sikh") ||
+          (f.relOthers && rel === "others");
         if (!match) return false;
       }
 
@@ -338,65 +395,58 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
     });
   }
 
+  // ── SimpleMaidFilters fallback (non-ClientPortal usage) ───────────────────
   const f = filters as SimpleMaidFilters;
   return maids.filter((maid) => {
-    // Keyword (name or referenceCode)
     if (f.keyword?.trim()) {
       const keyword = f.keyword.trim().toLowerCase();
       const intro = String((maid.introduction as Record<string, unknown>)?.publicIntro || "").trim();
       const searchText = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
-      const match = searchText.includes(keyword);
-      if (!match) return false;
+      if (!searchText.includes(keyword)) return false;
     }
 
-    // Nationality
     const nat = Array.isArray(f.nationality)
       ? f.nationality
       : typeof f.nationality === "string"
         ? [f.nationality]
         : [];
-    const natList = nat
-      .map((v) => String(v || "").trim())
-      .filter((v) => v && v !== "No Preference");
+    const natList = nat.map((v) => String(v || "").trim()).filter((v) => v && v !== "No Preference");
     if (natList.length > 0) {
       if (!natList.includes(String(maid.nationality || "").trim())) return false;
     }
 
-    // Maid Type
     const type = f.type?.trim() || "";
-    const maidTypes = Array.isArray(f.maidTypes) ? f.maidTypes.map((v) => String(v || "").trim()).filter(Boolean) : [];
+    const maidTypes = Array.isArray(f.maidTypes)
+      ? f.maidTypes.map((v) => String(v || "").trim()).filter(Boolean)
+      : [];
     if (type) {
-      if (String(maid.type || "") !== type) return false;
+      if (normalizeMaidType(maid.type) !== normalizeMaidType(type)) return false;
     } else if (maidTypes.length > 0) {
-      const maidType = String(maid.type || "");
-      const match = maidTypes.some((t) => maidType.toLowerCase().includes(t.toLowerCase()));
-      if (!match) return false;
+      const mt = normalizeMaidType(maid.type);
+      if (!maidTypes.some((t) => mt.includes(normalizeMaidType(t)))) return false;
     }
 
-    // Age Group
     if (f.ageGroup?.trim()) {
       const age = calculateAge(maid.dateOfBirth);
       if (!age) return false;
-
       const [min, max] = f.ageGroup.split("-").map((n) => Number(n));
       if (!Number.isFinite(min) || !Number.isFinite(max)) return false;
       if (age < min || age > max) return false;
     }
 
-    // Marital Status
     if (f.maritalStatus?.trim()) {
-      if (String(maid.maritalStatus || "").trim() !== f.maritalStatus.trim()) return false;
+      if (String(maid.maritalStatus || "").trim().toLowerCase() !== f.maritalStatus.trim().toLowerCase()) return false;
     }
 
-    // Has Children
-    if (Boolean(f.hasChildren)) {
+    if (f.hasChildren) {
       if (!maid.numberOfChildren || maid.numberOfChildren <= 0) return false;
     }
 
-    // Language (uses languageSkills)
     if (f.language?.trim() && f.language.trim() !== "No Preference") {
       const lang = f.language.trim().toLowerCase();
-      const skills = toLanguageText((maid as unknown as Record<string, unknown>)["languageSkills"] ?? maid.languageSkills).toLowerCase();
+      const skills = toLanguageText(
+        (maid as unknown as Record<string, unknown>)["languageSkills"] ?? maid.languageSkills
+      ).toLowerCase();
       if (!skills.includes(lang)) return false;
     }
 

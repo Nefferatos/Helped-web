@@ -98,34 +98,41 @@ const ClientRequestsPage = () => {
       requirements.exSingaporeMaid ? "Ex-Singapore Maid" : null,
     ].filter(Boolean) as string[];
 
-    const messageLines = [
-      "REQUEST MAID (Client Portal)",
-      "",
-      `Requirements: ${requirementsList.length ? requirementsList.join(", ") : "None selected"}`,
-      `Nationality: ${form.nationality || "No Preference"}`,
-      `Primary Duty: ${form.primaryDuty || "No Preference"}`,
-      `Age Group: ${form.ageGroup || "No Preference"}`,
-      `Language: ${form.language || "No Preference"}`,
-      form.otherRequirements.trim() ? "" : null,
-      form.otherRequirements.trim() ? `Other Requirements: ${form.otherRequirements.trim()}` : null,
-    ].filter((line) => line !== null) as string[];
-
     try {
       setIsSubmitting(true);
-      const response = await fetch("/api/enquiries", {
+
+      const payload = {
+        // "GENERAL" is a special sentinel — the server store skips maid lookup for this code
+        referenceCode: "GENERAL",
+        // Only include clientId when the client is actually logged in
+        ...(storedClient?.id != null && { clientId: storedClient.id }),
+        status: "pending",
+        formData: {
+          clientName: form.name.trim(),
+          clientEmail: form.email.trim(),
+          clientPhone: form.phone.trim(),
+          nationality: form.nationality,
+          primaryDuty: form.primaryDuty,
+          ageGroup: form.ageGroup,
+          language: form.language,
+          ...(form.otherRequirements.trim() && {
+            otherRequirements: form.otherRequirements.trim(),
+          }),
+          ...(requirementsList.length > 0 && {
+            requirements: requirementsList.join(", "),
+          }),
+        },
+      };
+
+      const response = await fetch("/api/direct-sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: form.name.trim(),
-          email: form.email.trim(),
-          phone: form.phone.trim(),
-          message: messageLines.join("\n"),
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
       if (!response.ok) {
-        throw new Error(data.error || "Failed to submit request");
+        throw new Error(data.error || data.message || `Request failed (${response.status})`);
       }
 
       toast.success("Request sent to admin/agency");

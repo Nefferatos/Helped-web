@@ -71,7 +71,7 @@ const HomePage = () => {
             </p>
           </div>
         </div>
-
+{/* 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
           <div className="rounded-lg border bg-secondary/30 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Maids</p>
@@ -97,7 +97,7 @@ const HomePage = () => {
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Unread Chats</p>
             <p className="mt-1 text-2xl font-bold text-foreground">{summary?.unreadAgencyChats ?? "..."}</p>
           </div>
-        </div>
+        </div> */}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {menuItems.map((item, i) => (

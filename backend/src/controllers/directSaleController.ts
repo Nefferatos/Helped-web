@@ -41,7 +41,10 @@ export const createDirectSale = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'referenceCode is required' })
     }
 
-    if (!Number.isInteger(clientId)) {
+    // Allow GENERAL requests without a clientId (submitted from the client requests page
+    // by users who may not be logged in or have no account-linked id).
+    const isGeneral = referenceCode.trim().toUpperCase() === 'GENERAL'
+    if (!isGeneral && !Number.isInteger(clientId)) {
       return res.status(400).json({ error: 'clientId is required' })
     }
 
@@ -53,9 +56,10 @@ export const createDirectSale = async (req: Request, res: Response) => {
         : status === 'rejected'
         ? 'rejected'
         : 'pending'
+
     const result = await createDirectSaleStore(
       referenceCode,
-      Number(clientId),
+      clientId != null ? Number(clientId) : 0,
       normalizedStatus,
       formData
     )

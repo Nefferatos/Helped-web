@@ -137,6 +137,7 @@ export interface DirectSaleRecord {
   clientPhone: string
   status: string
   requestDetails?: Record<string, string>
+  formData?: Record<string, string>
   createdAt: string
 }
 
@@ -963,9 +964,6 @@ export const getClientByTokenStore = async (token: string) => {
   return client
 }
 
-// Supabase Auth bridge:
-// When frontend uses Supabase social/phone login, it sends Supabase JWT as Bearer token.
-// This helper maps the Supabase user to a local client record (creating one if needed).
 export const getOrCreateClientBySupabaseUserStore = async (user: {
   id: string
   email?: string
@@ -1256,9 +1254,37 @@ export const createDirectSaleStore = async (
   maidReferenceCode: string,
   clientId: number,
   status: string = 'pending',
-  requestDetails?: Record<string, string>
+  formData?: Record<string, string>
 ) => {
   const data = await loadData()
+
+  // ── GENERAL REQUEST ──────────────────────────────────────────────────────────
+  // Submitted from ClientRequestsPage — no specific maid, client may not exist
+  // in the local store (they may be a Supabase-only user or a guest).
+  const isGeneral = maidReferenceCode.trim().toUpperCase() === 'GENERAL'
+
+  if (isGeneral) {
+    const client = clientId ? data.clients.find((item) => item.id === clientId) : null
+
+    const record: DirectSaleRecord = {
+      id: data.counters.directSales++,
+      maidReferenceCode: 'GENERAL',
+      maidName: '',
+      clientId: client?.id ?? 0,
+      clientName: formData?.clientName ?? client?.name ?? '',
+      clientEmail: formData?.clientEmail ?? client?.email ?? '',
+      clientPhone: formData?.clientPhone ?? client?.phone ?? '',
+      status,
+      formData,
+      createdAt: now(),
+    }
+
+    data.directSales.unshift(record)
+    await saveData(data)
+    return { directSale: record, maid: null }
+  }
+
+  // ── SPECIFIC MAID REQUEST ────────────────────────────────────────────────────
   const maidIndex = data.maids.findIndex(
     (maid) => maid.referenceCode === maidReferenceCode
   )
@@ -1280,7 +1306,7 @@ export const createDirectSaleStore = async (
     clientEmail: client.email,
     clientPhone: client.phone || '',
     status,
-    requestDetails,
+    formData,
     createdAt: now(),
   }
 
