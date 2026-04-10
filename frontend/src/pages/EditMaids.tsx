@@ -20,6 +20,10 @@ import JSZip from "jszip";
 import * as XLSX from "xlsx";
 
 type ViewMode = "menu" | "public" | "hidden";
+type VisibilityTarget =
+  | { maid: MaidProfile; makePublic: boolean }
+  | { bulk: true; makePublic: boolean };
+
 const PAGE_SIZE = 10;
 
 const EditMaids = () => {
@@ -44,6 +48,10 @@ const EditMaids = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<"selected" | MaidProfile | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  // Visibility confirmation state
+  const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
+  const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
 
   useEffect(() => {
     if (location.state?.fromView) {
@@ -178,15 +186,31 @@ const EditMaids = () => {
     }
   };
 
-  const handleToggleSelected = async () => {
+  // ── Visibility with confirmation ───────────────────────────────────────────
+  const openVisibilityDialog = (target: VisibilityTarget) => {
+    setPendingVisibilityTarget(target);
+    setVisibilityDialogOpen(true);
+  };
+
+  const confirmVisibilityChange = async () => {
+    if (!pendingVisibilityTarget) return;
+    setVisibilityDialogOpen(false);
     try {
-      const targetPublic = view !== "public";
-      for (const maid of maids.filter((m) => selected.has(m.referenceCode))) {
-        await toggleVisibility(maid, targetPublic);
+      if ("bulk" in pendingVisibilityTarget) {
+        for (const maid of maids.filter((m) => selected.has(m.referenceCode))) {
+          await toggleVisibility(maid, pendingVisibilityTarget.makePublic);
+        }
+        toast.success(
+          pendingVisibilityTarget.makePublic ? "Selected maids made public" : "Selected maids hidden"
+        );
+      } else {
+        await toggleVisibility(pendingVisibilityTarget.maid, pendingVisibilityTarget.makePublic);
+        toast.success(pendingVisibilityTarget.makePublic ? "Maid published" : "Maid hidden");
       }
-      toast.success(targetPublic ? "Selected maids made public" : "Selected maids hidden");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update selected maids");
+      toast.error(error instanceof Error ? error.message : "Failed to update visibility");
+    } finally {
+      setPendingVisibilityTarget(null);
     }
   };
 
@@ -436,6 +460,7 @@ const EditMaids = () => {
 
   const SharedDialogs = () => (
     <>
+      {/* Export */}
       <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
         <DialogContent>
           <DialogHeader>
@@ -517,6 +542,73 @@ const EditMaids = () => {
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Yes, Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Visibility confirmation dialog */}
+      <Dialog
+        open={visibilityDialogOpen}
+        onOpenChange={(open) => {
+          setVisibilityDialogOpen(open);
+          if (!open) setPendingVisibilityTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${pendingVisibilityTarget?.makePublic ? "bg-primary/10" : "bg-muted"}`}>
+                {pendingVisibilityTarget?.makePublic
+                  ? <Eye className="h-5 w-5 text-primary" />
+                  : <EyeOff className="h-5 w-5 text-muted-foreground" />}
+              </div>
+              <div>
+                <DialogTitle>
+                  {pendingVisibilityTarget?.makePublic ? "Publish maid?" : "Hide maid?"}
+                </DialogTitle>
+                <DialogDescription className="mt-0.5">
+                  This can be reversed at any time.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-foreground">
+            {pendingVisibilityTarget && "bulk" in pendingVisibilityTarget ? (
+              <>
+                <strong>{selected.size} maid{selected.size !== 1 ? "s" : ""}</strong> will be{" "}
+                <strong>
+                  {pendingVisibilityTarget.makePublic ? "made visible to the public" : "hidden from public view"}
+                </strong>.
+              </>
+            ) : (
+              <>
+                <strong>{(pendingVisibilityTarget as { maid: MaidProfile } | null)?.maid?.fullName}</strong> will be{" "}
+                <strong>
+                  {pendingVisibilityTarget?.makePublic ? "visible to the public" : "hidden from public view"}
+                </strong>.
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setVisibilityDialogOpen(false);
+                setPendingVisibilityTarget(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={pendingVisibilityTarget?.makePublic ? "default" : "secondary"}
+              onClick={() => void confirmVisibilityChange()}
+            >
+              {pendingVisibilityTarget?.makePublic
+                ? <><Eye className="mr-2 h-4 w-4" /> Publish</>
+                : <><EyeOff className="mr-2 h-4 w-4" /> Hide</>}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -685,7 +777,9 @@ const EditMaids = () => {
                 variant="outline"
                 size="sm"
                 disabled={selected.size === 0}
-                onClick={() => void handleToggleSelected()}
+                onClick={() =>
+                  openVisibilityDialog({ bulk: true, makePublic: view !== "public" })
+                }
                 className="h-8 text-xs"
               >
                 <EyeOff className="mr-1.5 h-3.5 w-3.5" />
@@ -744,8 +838,10 @@ const EditMaids = () => {
                     opacity: 0,
                   }}
                 >
+                  {/* ── Photo area ── */}
                   <div
-                    className="relative h-36 w-full cursor-pointer overflow-hidden bg-muted"
+                    className="relative w-full cursor-pointer overflow-hidden bg-muted"
+                    style={{ aspectRatio: "3/4" }}
                     onClick={() =>
                       navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
                         state: { fromView: view },
@@ -753,11 +849,16 @@ const EditMaids = () => {
                     }
                   >
                     {photoPreview ? (
-                      <img src={photoPreview} alt={maid.fullName} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                      <img
+                        src={photoPreview}
+                        alt={maid.fullName}
+                        className="absolute inset-0 h-full w-full object-contain transition duration-300 group-hover:scale-105"
+                      />
                     ) : (
                       <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">No Photo</div>
                     )}
 
+                    {/* Checkbox */}
                     <div
                       className="absolute left-2 top-2"
                       onClick={(e) => { e.stopPropagation(); toggle(maid.referenceCode); }}
@@ -767,6 +868,7 @@ const EditMaids = () => {
                       </div>
                     </div>
 
+                    {/* Delete button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); openDeleteDialog(maid); }}
                       className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded border border-white/20 bg-black/40 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 hover:bg-destructive"
@@ -796,10 +898,14 @@ const EditMaids = () => {
 
                     <div className="mt-auto pt-1">
                       <button
-                        onClick={() => void toggleVisibility(maid, view !== "public")}
+                        onClick={() =>
+                          openVisibilityDialog({ maid, makePublic: view !== "public" })
+                        }
                         className={`inline-flex w-full items-center justify-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${view === "public" ? "bg-primary/10 text-primary hover:bg-primary/20" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
                       >
-                        {view === "public" ? <><Eye className="h-3 w-3" /> Public — Hide</> : <><EyeOff className="h-3 w-3" /> Hidden — Publish</>}
+                        {view === "public"
+                          ? <><Eye className="h-3 w-3" /> Public — Hide</>
+                          : <><EyeOff className="h-3 w-3" /> Hidden — Publish</>}
                       </button>
                     </div>
                   </div>

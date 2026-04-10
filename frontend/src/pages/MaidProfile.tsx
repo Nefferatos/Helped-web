@@ -109,6 +109,7 @@ const MaidProfilePage = () => {
   const [confirmExportOpen, setConfirmExportOpen] = useState(false);
   const [pendingExportType, setPendingExportType] = useState<"pdf" | "word" | "excel" | null>(null);
   const [showOtherLanguages, setShowOtherLanguages] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
   const otherLanguages = useMemo(() => {
     const allowedKeys = new Set<string>(fixedLanguageKeyMap.flatMap((item) => item.keys).map(String));
@@ -330,6 +331,7 @@ const MaidProfilePage = () => {
       setIsMediaSaving(false);
     }
   };
+
   const detailRows: Array<[string, string]> = [
     ["Maid Name", maid.fullName],
     ["Ref. Code", maid.referenceCode],
@@ -382,6 +384,29 @@ const MaidProfilePage = () => {
 
   return (
     <div className="page-container">
+      {/* Lightbox */}
+      {lightboxPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setLightboxPhoto(null)}
+        >
+          <div className="relative max-h-[90vh] max-w-[90vw]">
+            <img
+              src={lightboxPhoto}
+              alt="Full size preview"
+              className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-black shadow-lg text-sm font-bold hover:bg-gray-100"
+              onClick={() => setLightboxPhoto(null)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex items-center gap-3">
         <button
           onClick={handleBack}
@@ -395,7 +420,7 @@ const MaidProfilePage = () => {
 
       <div className="content-card animate-fade-in-up space-y-6">
         <div className="flex flex-wrap items-center gap-4 border-b pb-4 text-sm">
-          <button className="text-primary hover:underline" onClick={handleBack} >View All Maids</button>
+          <button className="text-primary hover:underline" onClick={handleBack}>View All Maids</button>
           <button
             className="text-primary hover:underline"
             onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))}
@@ -410,7 +435,13 @@ const MaidProfilePage = () => {
           </button>
           <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => setIsManagePhotosOpen(true)}><Image className="h-3 w-3" /> Manage Photos</button>
           <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => setIsVideoModalOpen(true)}><Youtube className="h-3 w-3" /> Video Link</button>
-          <button className="flex items-center gap-1 text-destructive hover:underline" onClick={() => void handleDelete()}><Trash2 className="h-3 w-3" /> {isDeleting ? "Deleting..." : "Delete"}</button>
+          <button onClick={() => {if (isDeleting) return;  const confirmDelete = window.confirm("Are you sure you want to delete this item?"); if (!confirmDelete) return; void handleDelete(); }}
+            disabled={isDeleting}
+            className="flex items-center gap-1 text-destructive hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 className="h-3 w-3" />
+            {isDeleting ? "Deleting..." : "Delete"}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -445,40 +476,86 @@ const MaidProfilePage = () => {
           </div>
 
           <div className="flex flex-col items-center gap-4">
-            <div className="grid w-full grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground text-center">Passport / 2x2</p>
-                <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
+            <div className="grid w-full grid-cols-2 gap-4">
+              <div className="flex flex-col items-center gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Passport / 2×2</p>
+                <button
+                  type="button"
+                  disabled={!passportOrTwoByTwoPhoto}
+                  onClick={() => passportOrTwoByTwoPhoto && setLightboxPhoto(passportOrTwoByTwoPhoto)}
+                  className="group relative flex h-50 w-full max-w-[10rem] items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-muted bg-muted/20 shadow-sm transition hover:border-primary/50 hover:shadow-md disabled:cursor-default"
+                  title={passportOrTwoByTwoPhoto ? "Click to enlarge" : "No photo"}
+                >
                   {passportOrTwoByTwoPhoto ? (
-                    <img src={passportOrTwoByTwoPhoto} alt={`${maid.fullName} passport`} className="h-full w-full object-cover" />
+                    <>
+                      <img
+                        src={passportOrTwoByTwoPhoto}
+                        alt={`${maid.fullName} passport`}
+                        className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.03]"
+                      />
+                      <span className="absolute bottom-1 right-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        Enlarge
+                      </span>
+                    </>
                   ) : (
-                    "No Photo"
+                    <span className="text-center text-xs text-muted-foreground px-2">No Photo</span>
                   )}
-                </div>
+                </button>
               </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground text-center">Full body</p>
-                <div className="mx-auto flex h-44 w-28 items-center justify-center overflow-hidden rounded border bg-muted text-xs text-muted-foreground">
+
+              <div className="flex flex-col items-center gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Full Body</p>
+                <button
+                  type="button"
+                  disabled={!fullBodyPhoto}
+                  onClick={() => fullBodyPhoto && setLightboxPhoto(fullBodyPhoto)}
+                  className="group relative flex h-52 w-full max-w-[9rem] items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-muted bg-muted/20 shadow-sm transition hover:border-primary/50 hover:shadow-md disabled:cursor-default"
+                  title={fullBodyPhoto ? "Click to enlarge" : "No photo"}
+                >
                   {fullBodyPhoto ? (
-                    <img src={fullBodyPhoto} alt={`${maid.fullName} full body`} className="h-full w-full object-cover" />
+                    <>
+                      <img
+                        src={fullBodyPhoto}
+                        alt={`${maid.fullName} full body`}
+                        className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.03]"
+                      />
+                      <span className="absolute bottom-1 right-1 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        Enlarge
+                      </span>
+                    </>
                   ) : (
-                    "No Photo"
+                    <span className="text-center text-xs text-muted-foreground px-2">No Photo</span>
                   )}
-                </div>
+                </button>
               </div>
             </div>
 
             {extraPhotos.length > 0 && (
-              <div className="grid w-full grid-cols-4 gap-2">
+              <div className="grid w-full grid-cols-3 gap-2">
                 {extraPhotos.map((photo, index) => (
-                  <div key={`${photo}-${index}`} className="h-14 overflow-hidden rounded border">
-                    <img src={photo} alt={`${maid.fullName} extra ${index + 1}`} className="h-full w-full object-cover" />
-                  </div>
+                  <button
+                    key={`${photo}-${index}`}
+                    type="button"
+                    onClick={() => setLightboxPhoto(photo)}
+                    className="group relative h-24 overflow-hidden rounded-lg border-2 border-dashed border-muted bg-muted/20 shadow-sm transition hover:border-primary/50 hover:shadow-md"
+                    title="Click to enlarge"
+                  >
+                    <img
+                      src={photo}
+                      alt={`${maid.fullName} extra ${index + 1}`}
+                      className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.05]"
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      Enlarge
+                    </span>
+                  </button>
                 ))}
               </div>
             )}
+
             <p className="text-xs text-muted-foreground">{photos.length}/5 photos uploaded</p>
             <p className="text-xs text-muted-foreground">Status: {maid.status || "available"}</p>
+
             <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
               <button className="flex items-center gap-2 text-primary hover:underline" onClick={() => setIsThroughAgencyDialogOpen(true)}>
                 <Send className="h-4 w-4" /> Through Agency
@@ -565,7 +642,6 @@ const MaidProfilePage = () => {
         <div className="space-y-1">
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Other Information</h3>
           <div className="grid max-w-2xl grid-cols-1 gap-y-1 text-sm md:grid-cols-[1fr_40px]">
-            {/* Render the full Availability/Remarks checklist (YES/NO) */}
             {availabilityRemarkItems.map((item) => (
               <div key={item.label} className="contents">
                 <p>{item.label}</p>
@@ -604,12 +680,12 @@ const MaidProfilePage = () => {
                       : area;
 
                   return (
-                <tr key={area}>
-                  <td className="border px-3 py-2">{areaLabel}</td>
-                  <td className="border px-3 py-2 text-center">{config.willing ? "Yes" : "No"}</td>
-                  <td className="border px-3 py-2 text-center">{config.experience ? "Yes" : "No"}</td>
-                  <td className="border px-3 py-2 text-center">{config.evaluation || "-"}</td>
-                </tr>
+                    <tr key={area}>
+                      <td className="border px-3 py-2">{areaLabel}</td>
+                      <td className="border px-3 py-2 text-center">{config.willing ? "Yes" : "No"}</td>
+                      <td className="border px-3 py-2 text-center">{config.experience ? "Yes" : "No"}</td>
+                      <td className="border px-3 py-2 text-center">{config.evaluation || "-"}</td>
+                    </tr>
                   );
                 })}
             </tbody>
@@ -714,7 +790,6 @@ const MaidProfilePage = () => {
           <p className="whitespace-pre-wrap">{String(introduction.publicIntro || "Maid Introduction in Public is empty, please add to have more employers view this bio-data.")}</p>
         </div>
 
-        {/* Only show private introduction if client is authenticated AND emailVerified === true */}
         {canViewPrivateIntro && (
           <div className="space-y-1 text-sm">
             <h3 className="font-semibold text-muted-foreground">Introduction (Employer login is required to view this Introduction)</h3>
@@ -765,69 +840,65 @@ const MaidProfilePage = () => {
       <Dialog open={isManagePhotosOpen} onOpenChange={setIsManagePhotosOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Manage Photos</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-bold">Manage Photos</DialogTitle>
+            <DialogDescription className="text-sm text-gray-600">
               Slot 1: Passport/2x2, Slot 2: Full body, then up to 3 extra photos.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             <div className="space-y-3">
-              <p className="text-sm font-semibold">Passport / 2x2</p>
-              <div className="h-40 w-40 overflow-hidden rounded border bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+              <p className="text-sm font-bold">Passport / 2x2</p>
+              <div className="h-40 w-40 overflow-hidden rounded border-2 border-gray-300 bg-gray-50 flex items-center justify-center text-xs text-gray-500">
                 {passportOrTwoByTwoPhoto ? (
-                  <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-cover" />
+                  <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-contain" />
                 ) : (
                   "No photo"
                 )}
               </div>
+              <p className="text-xs font-semibold text-blue-600 text-center">Required: 100 × 125 px</p>
               <input type="file" accept="image/*" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
-              <Button type="button" variant="outline" disabled={isMediaSaving || !passportOrTwoByTwoPhoto} onClick={() => void removePhotoAt(0)}>
-                Remove
-              </Button>
+              <Button type="button" variant="outline" disabled={isMediaSaving || !passportOrTwoByTwoPhoto} onClick={() => void removePhotoAt(0)}>Remove</Button>
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-semibold">Full body</p>
-              <div className="h-64 w-44 overflow-hidden rounded border bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+              <p className="text-sm font-bold">Full body</p>
+              <div className="h-64 w-44 overflow-hidden rounded border-2 border-gray-300 bg-gray-50 flex items-center justify-center text-xs text-gray-500">
                 {fullBodyPhoto ? (
-                  <img src={fullBodyPhoto} alt="full body" className="h-full w-full object-cover" />
+                  <img src={fullBodyPhoto} alt="full body" className="h-full w-full object-contain" />
                 ) : (
                   "No photo"
                 )}
               </div>
+              <p className="text-xs font-semibold text-blue-600 text-center">Required: 240 × 400 px</p>
               <input type="file" accept="image/*" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
-              <Button type="button" variant="outline" disabled={isMediaSaving || !fullBodyPhoto} onClick={() => void removePhotoAt(1)}>
-                Remove
-              </Button>
+              <Button type="button" variant="outline" disabled={isMediaSaving || !fullBodyPhoto} onClick={() => void removePhotoAt(1)}>Remove</Button>
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-semibold">Extra photos ({extraPhotos.length}/3)</p>
+              <p className="text-sm font-bold">Extra photos ({extraPhotos.length}/3)</p>
               <div className="grid grid-cols-3 gap-2">
                 {extraPhotos.map((photo, index) => (
-                  <div key={`${photo}-${index}`} className="relative h-20 overflow-hidden rounded border bg-muted/30">
-                    <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-cover" />
+                  <div key={`${photo}-${index}`} className="relative h-20 overflow-hidden rounded border-2 border-gray-300 bg-gray-50">
+                    <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-contain" />
                     <button
                       type="button"
-                      className="absolute right-1 top-1 rounded bg-background/80 px-2 py-0.5 text-xs"
+                      className="absolute right-1 top-1 rounded bg-black/70 text-white px-2 py-0.5 text-xs font-semibold"
                       onClick={() => void removePhotoAt(index + 2)}
                       disabled={isMediaSaving}
                     >
-                      Remove
+                      ✕
                     </button>
                   </div>
                 ))}
               </div>
               <input type="file" accept="image/*" disabled={isMediaSaving || photos.length >= 5} onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
-              <p className="text-xs text-muted-foreground">Max 5 total photos.</p>
+              <p className="text-xs font-semibold text-gray-700 text-center">Max 5 total photos</p>
             </div>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsManagePhotosOpen(false)} disabled={isMediaSaving}>
-              Close
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setIsManagePhotosOpen(false)} disabled={isMediaSaving}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -887,9 +958,7 @@ const MaidProfilePage = () => {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsVideoModalOpen(false)} disabled={isMediaSaving}>
-              Close
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setIsVideoModalOpen(false)} disabled={isMediaSaving}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
