@@ -569,35 +569,55 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
           left={
             <FormRow label="Height:">
               <SelectInput
-                value={form.height}
-                onChange={(e) => setForm((p) => p ? { ...p, height: e.target.value } : p)}
+                value={form?.height || ""}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p!,
+                    height: e.target.value, // ✅ keep as string
+                  }))
+                }
                 options={[
                   { value: "", label: "Select", disabled: true },
-                  { value: "150", label: "150cm (4'11\")" }, { value: "152", label: "152cm (5'0\")" },
-                  { value: "155", label: "155cm (5'1\")" }, { value: "156", label: "156cm (5'1\")" },
-                  { value: "157", label: "157cm (5'2\")" }, { value: "160", label: "160cm (5'3\")" },
-                  { value: "163", label: "163cm (5'4\")" }, { value: "165", label: "165cm (5'5\")" },
-                  { value: "168", label: "168cm (5'6\")" }, { value: "170", label: "170cm (5'7\")" },
-                  { value: "173", label: "173cm (5'8\")" }, { value: "175", label: "175cm (5'9\")" },
-                  { value: "178", label: "178cm (5'10\")" }, { value: "180", label: "180cm (5'11\")" },
+
+                  ...Array.from({ length: 81 }, (_, i) => {
+                    const cm = 150 + i;
+
+                    const totalInches = cm / 2.54;
+                    const feet = Math.floor(totalInches / 12);
+                    const inches = Math.round(totalInches % 12);
+
+                    return {
+                      value: String(cm),
+                      label: `${cm}cm (${feet}'${inches}")`,
+                    };
+                  }),
                 ]}
               />
             </FormRow>
           }
+
           right={
             <FormRow label="Weight:">
               <SelectInput
-                value={form.weight}
-                onChange={(e) => setForm((p) => p ? { ...p, weight: e.target.value } : p)}
+                value={form?.weight || ""}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p!,
+                    weight: e.target.value,
+                  }))
+                }
                 options={[
                   { value: "", label: "Select", disabled: true },
-                  { value: "40", label: "40Kg (88 lbs)" }, { value: "42", label: "42Kg (93 lbs)" },
-                  { value: "45", label: "45Kg (99 lbs)" }, { value: "48", label: "48Kg (106 lbs)" },
-                  { value: "50", label: "50Kg (110 lbs)" }, { value: "52", label: "52Kg (115 lbs)" },
-                  { value: "55", label: "55Kg (121 lbs)" }, { value: "58", label: "58Kg (128 lbs)" },
-                  { value: "60", label: "60Kg (132 lbs)" }, { value: "63", label: "63Kg (139 lbs)" },
-                  { value: "65", label: "65Kg (143 lbs)" }, { value: "68", label: "68Kg (150 lbs)" },
-                  { value: "70", label: "70Kg (154 lbs)" },
+
+                  ...Array.from({ length: 101 }, (_, i) => {
+                    const kg = 40 + i;
+                    const lbs = Math.round(kg * 2.20462);
+
+                    return {
+                      value: String(kg),
+                      label: `${kg}Kg (${lbs} lbs)`,
+                    };
+                  }),
                 ]}
               />
             </FormRow>
@@ -1174,7 +1194,7 @@ const PrivateInfoTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabPr
         </div>
       </FormRow>
       <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-2 items-start">
-        <Label className="text-sm sm:text-right pt-2">Agency's Historical Record of the Maid</Label>
+        <Label className="text-sm sm:text-left pt-2">Agency's Historical Record <br></br> of the Maid</Label>
         <textarea
           className="w-full min-h-[200px] rounded-md border bg-background px-3 py-2 text-sm"
           value={form.skillsPreferences.privateInfo}

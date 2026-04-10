@@ -175,7 +175,7 @@ const MaidProfileFullView = () => {
                 return (
                   <div key={label} className="space-y-1">
                     <p className="text-xs text-muted-foreground">{label}</p>
-                    <div className="h-20 w-full overflow-hidden rounded border bg-muted/30">
+                    <div className="h-30 w-full overflow-hidden rounded border bg-muted/30">
                       {url ? <img src={url} alt={label} className="h-full w-full object-cover" /> : null}
                     </div>
                   </div>

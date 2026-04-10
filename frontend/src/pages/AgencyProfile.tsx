@@ -172,7 +172,7 @@ const AgencyProfile = () => {
 
       <div className="content-card animate-fade-in-up space-y-6">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <div className="rounded-lg border bg-muted/30 p-3">
+          {/* <div className="rounded-lg border bg-muted/30 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Public Maids</p>
             <p className="mt-1 text-xl font-bold">{summary?.publicMaids ?? 0}</p>
           </div>
@@ -195,7 +195,7 @@ const AgencyProfile = () => {
           <div className="rounded-lg border bg-muted/30 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Testimonials</p>
             <p className="mt-1 text-xl font-bold">{summary?.testimonials ?? testimonials.length}</p>
-          </div>
+          </div> */}
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
