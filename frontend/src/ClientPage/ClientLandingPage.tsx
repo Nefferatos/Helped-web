@@ -67,11 +67,17 @@ const portalLinks = [
     title: "User Portal",
     description: "Employer login, client dashboard, profile, history, and support chat.",
     path: "/employer-login",
+    icon: UserRound,
+    bg: "#E6F1FB",
+    iconColor: "#185FA5",
   },
   {
     title: "Agency Admin Portal",
     description: "Agency admin login and full management dashboard.",
     path: "/agencyadmin/login",
+    icon: Settings,
+    bg: "#EEEDFE",
+    iconColor: "#534AB7",
   },
 ];
 
@@ -456,7 +462,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 <p className="font-display text-lg font-semibold text-foreground sm:text-xl">
                   Welcome back, {clientUser.name}
                 </p>
-
               </div>
             ) : null}
 
@@ -499,18 +504,49 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
             <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">Portal Access</h2>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
-            {portalLinks.map((portal) => (
-              <Link
-                key={portal.path}
-                to={portal.path}
-                className="rounded-2xl border bg-card p-4 transition hover:border-primary/40 hover:shadow-sm sm:p-5"
-              >
-                <p className="font-display text-base font-semibold text-foreground sm:text-lg">{portal.title}</p>
-                <p className="mt-1.5 font-body text-sm text-muted-foreground">{portal.description}</p>
-                <p className="mt-3 font-mono text-xs text-primary">{portal.path}</p>
-              </Link>
-            ))}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {portalLinks.map((portal) => {
+              const Icon = portal.icon;
+              return (
+                <Link
+                  key={portal.path}
+                  to={portal.path}
+                  className="group relative overflow-hidden rounded-xl border bg-card p-4 transition-colors
+                             hover:border-border/60 hover:bg-muted/30 sm:p-5"
+                >
+                  {/* Icon chip */}
+                  <div
+                    className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg"
+                    style={{ background: portal.bg }}
+                  >
+                    <Icon
+                      className="h-4 w-4"
+                      style={{ color: portal.iconColor }}
+                    />
+                  </div>
+
+                  <p className="font-display text-sm font-semibold text-foreground sm:text-base">
+                    {portal.title}
+                  </p>
+                  <p className="mt-1 font-body text-xs text-muted-foreground sm:text-sm leading-relaxed">
+                    {portal.description}
+                  </p>
+                  <p className="mt-3 font-mono text-[11px] text-muted-foreground/60">
+                    {portal.path}
+                  </p>
+
+                  {/* Hover arrow */}
+                  <span
+                    className="absolute right-4 top-4 text-sm text-muted-foreground opacity-0
+                               translate-x-1 -translate-y-1 transition-all duration-150
+                               group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0"
+                  >
+                    ↗
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -569,7 +605,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                     ))}
                   </select>
                 </div>
-
               </div>
             </div>
 
