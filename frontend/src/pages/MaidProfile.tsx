@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send } from "lucide-react";
+import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send, AlertTriangle } from "lucide-react";
 import { MaidProfile, formatDate } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -78,13 +78,28 @@ const SectionHeader = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
+const YesNoBadge = ({ yes }: { yes: boolean }) => (
+  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${yes ? "bg-emerald-50 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
+    {yes ? "Yes" : "No"}
+  </span>
+);
+
+const KVRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="contents">
+    <p className="py-1 pr-3 text-[11px] font-medium text-muted-foreground border-b border-dashed border-muted/60 leading-snug">{label}</p>
+    <p className="py-1 text-[12px] border-b border-dashed border-muted/60 leading-snug">{value || "—"}</p>
+  </div>
+);
+
 const MaidProfilePage = () => {
   const location = useLocation();
   const fromView = (location.state as LocationState | null)?.fromView;
   const { refCode } = useParams();
   const navigate = useNavigate();
+
   const [maid, setMaid] = useState<MaidProfile | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isThroughAgencyDialogOpen, setIsThroughAgencyDialogOpen] = useState(false);
   const [isDirectHireDialogOpen, setIsDirectHireDialogOpen] = useState(false);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
@@ -135,12 +150,13 @@ const MaidProfilePage = () => {
       const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}`, { method: "DELETE" });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Failed to delete maid");
-      toast.success("Maid deleted");
+      toast.success("Maid profile deleted successfully");
       navigate(adminPath("/edit-maids"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete maid");
     } finally {
       setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
     }
   };
 
@@ -254,22 +270,10 @@ const MaidProfilePage = () => {
     ["Private Info", String(skillsPreferences.privateInfo || "N/A")],
   ];
 
-  const YesNoBadge = ({ yes }: { yes: boolean }) => (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${yes ? "bg-emerald-50 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
-      {yes ? "Yes" : "No"}
-    </span>
-  );
-
-  const KVRow = ({ label, value }: { label: string; value: string }) => (
-    <div className="contents">
-      <p className="py-1 pr-3 text-[11px] font-medium text-muted-foreground border-b border-dashed border-muted/60 leading-snug">{label}</p>
-      <p className="py-1 text-[12px] border-b border-dashed border-muted/60 leading-snug">{value || "—"}</p>
-    </div>
-  );
-
   return (
     <div className="page-container">
 
+      {/* ── Lightbox ───────────────────────────────────────── */}
       {lightboxPhoto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm" onClick={() => setLightboxPhoto(null)}>
           <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -290,21 +294,21 @@ const MaidProfilePage = () => {
         <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 rounded-lg border bg-muted/20 px-2 py-1.5">
           <button onClick={handleBack} className="rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors">All Maids</button>
           <button onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))} className="rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors">Full View</button>
-          <span className="mx-1 text-muted-foreground/40 text-xs select-none">|</span>
+          <span className="mx-1 text-muted-foreground/30 select-none">|</span>
           <button onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><Edit className="h-3 w-3" />Edit</button>
           <button onClick={() => setIsManagePhotosOpen(true)} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><Image className="h-3 w-3" />Photos</button>
           <button onClick={() => setIsVideoModalOpen(true)} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><Youtube className="h-3 w-3" />Video</button>
-          <span className="mx-1 text-muted-foreground/40 text-xs select-none">|</span>
+          <span className="mx-1 text-muted-foreground/30 select-none">|</span>
           <button onClick={() => requestExport("pdf")} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><FileDown className="h-3 w-3" />PDF</button>
           <button onClick={() => requestExport("word")} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><FileText className="h-3 w-3" />Word</button>
           <button onClick={() => requestExport("excel")} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><Sheet className="h-3 w-3" />Excel</button>
-          <span className="mx-1 text-muted-foreground/40 text-xs select-none">|</span>
-          <button onClick={() => setIsThroughAgencyDialogOpen(true)} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><Send className="h-3 w-3" />Agency</button>
+          <span className="mx-1 text-muted-foreground/30 select-none">|</span>
+          {/* <button onClick={() => setIsThroughAgencyDialogOpen(true)} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><Send className="h-3 w-3" />Agency</button>
           <button onClick={() => setIsDirectHireDialogOpen(true)} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"><Send className="h-3 w-3" />Direct Hire</button>
-          <button onClick={() => setIsRejectDialogOpen(true)} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted transition-colors"><Send className="h-3 w-3" />Reject</button>
-          <span className="mx-1 text-muted-foreground/40 text-xs select-none">|</span>
+          <button onClick={() => setIsRejectDialogOpen(true)} className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted transition-colors"><Send className="h-3 w-3" />Reject</button> */}
+          <span className="mx-1 text-muted-foreground/30 select-none">|</span>
           <button
-            onClick={() => { if (isDeleting) return; if (!window.confirm("Delete this maid profile?")) return; void handleDelete(); }}
+            onClick={() => setIsDeleteDialogOpen(true)}
             disabled={isDeleting}
             className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
           >
@@ -381,7 +385,6 @@ const MaidProfilePage = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
-
           <div className="rounded-lg border overflow-hidden">
             <SectionHeader>Personal Details</SectionHeader>
             <div className="grid grid-cols-[140px_1fr] p-4 text-sm">
@@ -400,7 +403,6 @@ const MaidProfilePage = () => {
           </div>
 
           <div className="flex flex-col gap-4">
-
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Other Information</SectionHeader>
               <div className="p-3 space-y-1.5">
@@ -415,14 +417,12 @@ const MaidProfilePage = () => {
                 })}
               </div>
             </div>
-
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Availability</SectionHeader>
               <div className="grid grid-cols-[auto_1fr] p-3">
                 {availabilityRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
               </div>
             </div>
-
           </div>
         </div>
 
@@ -440,16 +440,12 @@ const MaidProfilePage = () => {
               </thead>
               <tbody className="divide-y text-xs">
                 {workAreas
-                  .filter(([, config]) => {
-                    const ev = String(config.evaluation || "").trim();
-                    return Boolean(config.willing || config.experience || (ev && ev !== "-" && ev !== "N.A."));
-                  })
+                  .filter(([, config]) => { const ev = String(config.evaluation || "").trim(); return Boolean(config.willing || config.experience || (ev && ev !== "-" && ev !== "N.A.")); })
                   .map(([area, config]) => {
                     const rawAge = String(workAreaNotes["Care of infants/children"] || "").trim();
                     const formattedAge = rawAge ? rawAge.replace(/\s*-\s*/g, "–") : "";
                     const needsYears = formattedAge && !/year/i.test(formattedAge);
-                    const areaLabel = area === "Care of infants/children" && formattedAge
-                      ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})` : area;
+                    const areaLabel = area === "Care of infants/children" && formattedAge ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})` : area;
                     return (
                       <tr key={area} className="hover:bg-muted/20">
                         <td className="px-4 py-2">{areaLabel}</td>
@@ -466,18 +462,8 @@ const MaidProfilePage = () => {
 
         {(workAreaNotes["Cooking"] || workAreaNotes["Other Skill"]) && (
           <div className="grid gap-3 sm:grid-cols-2">
-            {workAreaNotes["Cooking"] && (
-              <div className="rounded-lg border overflow-hidden">
-                <SectionHeader>Cooking Notes</SectionHeader>
-                <p className="p-3 text-xs whitespace-pre-wrap text-foreground">{workAreaNotes["Cooking"]}</p>
-              </div>
-            )}
-            {workAreaNotes["Other Skill"] && (
-              <div className="rounded-lg border overflow-hidden">
-                <SectionHeader>Other Skill Notes</SectionHeader>
-                <p className="p-3 text-xs whitespace-pre-wrap text-foreground">{workAreaNotes["Other Skill"]}</p>
-              </div>
-            )}
+            {workAreaNotes["Cooking"] && (<div className="rounded-lg border overflow-hidden"><SectionHeader>Cooking Notes</SectionHeader><p className="p-3 text-xs whitespace-pre-wrap text-foreground">{workAreaNotes["Cooking"]}</p></div>)}
+            {workAreaNotes["Other Skill"] && (<div className="rounded-lg border overflow-hidden"><SectionHeader>Other Skill Notes</SectionHeader><p className="p-3 text-xs whitespace-pre-wrap text-foreground">{workAreaNotes["Other Skill"]}</p></div>)}
           </div>
         )}
 
@@ -488,9 +474,7 @@ const MaidProfilePage = () => {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-muted/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {["From","To","Country","Employer","Duties","Remarks"].map((h) => (
-                      <th key={h} className="px-4 py-2 text-left">{h}</th>
-                    ))}
+                    {["From","To","Country","Employer","Duties","Remarks"].map((h) => <th key={h} className="px-4 py-2 text-left">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y text-xs">
@@ -533,7 +517,6 @@ const MaidProfilePage = () => {
               </div>
             )}
           </div>
-
           <div className="rounded-lg border overflow-hidden">
             <SectionHeader>Private Information</SectionHeader>
             <div className="grid grid-cols-[130px_1fr] p-4 text-sm">
@@ -545,16 +528,12 @@ const MaidProfilePage = () => {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="rounded-lg border overflow-hidden">
             <SectionHeader>Public Introduction</SectionHeader>
-            <p className="p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">
-              {String(introduction.publicIntro || "No public introduction added yet.")}
-            </p>
+            <p className="p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">{String(introduction.publicIntro || "No public introduction added yet.")}</p>
           </div>
           {canViewPrivateIntro && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/30 overflow-hidden">
               <SectionHeader>Private Introduction</SectionHeader>
-              <p className="p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">
-                {String(introduction.intro || "—")}
-              </p>
+              <p className="p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">{String(introduction.intro || "—")}</p>
             </div>
           )}
         </div>
@@ -563,12 +542,74 @@ const MaidProfilePage = () => {
           <span>Last updated: {formatDate(maid.updatedAt)}</span>
           <span>Hits: 1</span>
         </div>
-
       </div>
 
+     
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => { if (!isDeleting) setIsDeleteDialogOpen(open); }}
+      >
+        <DialogContent className="max-w-sm p-0 overflow-hidden">
+          <div className="bg-destructive/10 px-6 pt-6 pb-4 text-center border-b border-destructive/15">
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-destructive/15 ring-4 ring-destructive/10">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+            </div>
+            <DialogTitle className="text-base font-semibold text-foreground">
+              Delete this profile?
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{maid.fullName}</span>{" "}
+              <span className="font-mono text-xs text-muted-foreground">({maid.referenceCode})</span>
+            </DialogDescription>
+          </div>
+
+          <div className="px-6 py-4 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-destructive">
+              This will permanently remove:
+            </p>
+            <div className="space-y-1.5">
+              {[
+                "All bio-data and personal information",
+                "Uploaded photos and video link",
+                "Employment history and skill records",
+                "This action cannot be undone",
+              ].map((item, i) => (
+                <div key={item} className="flex items-start gap-2.5 text-xs text-muted-foreground">
+                  <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${i === 3 ? "bg-destructive" : "bg-destructive/40"}`} />
+                  <span className={i === 3 ? "font-semibold text-destructive" : ""}>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 border-t bg-muted/20 px-6 py-4">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              disabled={isDeleting}
+              onClick={() => void handleDelete()}
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  Deleting…
+                </span>
+              ) : "Yes, delete permanently"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmExportOpen} onOpenChange={(open) => { setConfirmExportOpen(open); if (!open) setPendingExportType(null); }}>
-        <DialogContent>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{pendingExportType === "pdf" ? "Export PDF?" : pendingExportType === "word" ? "Export Word?" : "Export Excel?"}</DialogTitle>
             <DialogDescription>
@@ -591,11 +632,11 @@ const MaidProfilePage = () => {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Manage Photos</DialogTitle>
-            <DialogDescription>Slot 1: Passport/2×2 · Slot 2: Full body · Slots 3–5: Extra</DialogDescription>
+            <DialogDescription>Slot 1: Passport Size · Slot 2: Full body · Slots 3–5: Extra</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <div className="space-y-2">
-              <p className="text-xs font-semibold">Passport / 2×2</p>
+              <p className="text-xs font-semibold">Passport Size</p>
               <div className="h-36 overflow-hidden rounded border bg-muted/20 flex items-center justify-center text-xs text-muted-foreground">
                 {passportOrTwoByTwoPhoto ? <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-contain" /> : "No photo"}
               </div>

@@ -47,6 +47,53 @@ const fixedLanguageKeyMap = [
   { label: "Bahasa Indonesia/Malaysia", keys: ["Bahasa Indonesia/Malaysia", "Bahasa Indonesia / Malaysia", "Bahasa"] },
 ] as const;
 
+
+const SectionHeader = ({ title }: { title: string }) => (
+  <div className="border-b bg-muted/50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground">
+    {title}
+  </div>
+);
+
+const SubHeader = ({ title }: { title: string }) => (
+  <div className="border-b bg-muted/30 px-4 py-1 text-[11px] font-semibold text-foreground">
+    {title}
+  </div>
+);
+
+const Row = ({ label, value }: { label: string; value: string }) => (
+  <div className="grid grid-cols-[180px_1fr] border-b last:border-b-0">
+    <span className="border-r px-4 py-[5px] text-[13px] leading-snug text-foreground font-medium">
+      {label}
+    </span>
+    <span className="px-3 py-[5px] text-[13px] leading-snug whitespace-pre-wrap text-foreground break-words">
+      {value}
+    </span>
+  </div>
+);
+
+const YesNo = ({ value }: { value: boolean }) =>
+  value ? (
+    <span className="rounded px-2 py-0.5 text-[11px] font-medium bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300">
+      YES
+    </span>
+  ) : (
+    <span className="rounded px-2 py-0.5 text-[11px] font-medium bg-muted text-muted-foreground">
+      NO
+    </span>
+  );
+
+const YesNoRow = ({ label, value }: { label: string; value: boolean }) => (
+  <div className="grid grid-cols-[1fr_56px] border-b last:border-b-0">
+    <span className="border-r px-4 py-[5px] text-[13px] leading-snug text-foreground">
+      {label}
+    </span>
+    <span className="flex items-center justify-center py-[5px]">
+      <YesNo value={value} />
+    </span>
+  </div>
+);
+
+
 const MaidProfileFullView = () => {
   const { refCode } = useParams<{ refCode: string }>();
   const navigate = useNavigate();
@@ -66,7 +113,6 @@ const MaidProfileFullView = () => {
         navigate(adminPath("/edit-maids"));
       }
     };
-
     void load();
   }, [navigate, refCode]);
 
@@ -78,7 +124,7 @@ const MaidProfileFullView = () => {
   const introduction = useMemo(() => (maid?.introduction as Record<string, unknown>) || {}, [maid]);
   const agencyContact = useMemo(() => (maid?.agencyContact as Record<string, unknown>) || {}, [maid]);
   const otherLanguages = useMemo(() => {
-    const allowedKeys = new Set(fixedLanguageKeyMap.flatMap((item) => item.keys));
+    const allowedKeys = new Set<string>(fixedLanguageKeyMap.flatMap((item) => [...item.keys]));
     return Object.entries(maid?.languageSkills || {})
       .map(([language, level]) => [language, String(level || "")] as const)
       .filter(([language, level]) => !allowedKeys.has(language) && level.trim());
@@ -109,7 +155,7 @@ const MaidProfileFullView = () => {
 
   return (
     <div className="page-container">
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-3 flex items-center gap-3">
         <button
           onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`))}
           className="group inline-flex items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary/80 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-md"
@@ -119,311 +165,210 @@ const MaidProfileFullView = () => {
         </button>
       </div>
 
-      <div className="content-card animate-fade-in-up space-y-8">
-        <div className="border-b pb-4">
-          <h2 className="text-lg font-bold">Full View: {maid.fullName}</h2>
-          <p className="text-sm text-muted-foreground">{maid.referenceCode}</p>
+      <div className="animate-fade-in-up overflow-hidden rounded-lg border bg-background">
+
+        <div className="border-b px-4 py-3">
+          <h2 className="text-base font-semibold">Full View: {maid.fullName}</h2>
+          <p className="text-xs text-muted-foreground">{maid.referenceCode}</p>
         </div>
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">PROFILE</h3>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-            {[
-              ["Maid Name", maid.fullName],
-              ["Ref Code", maid.referenceCode],
-              ["Type", maid.type],
-              ["Nationality", maid.nationality],
-              ["Indian Maid Category", String(skillsPreferences.indianMaidCategory || "")],
-              ["Date of Birth", maid.dateOfBirth],
-              ["Place of Birth", maid.placeOfBirth],
-              ["Height", `${String(maid.height)} cm`],
-              ["Weight", `${String(maid.weight)} Kg`],
-              ["Residential Address in Home Country", maid.homeAddress],
-              ["Airport / Port to be repatriated", maid.airportRepatriation],
-              ["Contact Number in Home Country", String(agencyContact.homeCountryContactNumber || "")],
-              ["Education", maid.educationLevel],
-              ["Religion", maid.religion],
-              ["Marital Status", maid.maritalStatus],
-              ["Number of Siblings", String(maid.numberOfSiblings)],
-              ["Number of Children", String(maid.numberOfChildren)],
-              ["Ages of Children", String(introduction.agesOfChildren || "")],
-              ["Present Salary (S$)", String(introduction.presentSalary || "")],
-              ["Expected Salary", String(introduction.expectedSalary || "")],
-              ["When will this maid be Available?", String(introduction.availability || "")],
-              ["Contract Ends", String(introduction.contractEnds || "")],
-              ["Maid Loan (S$)", String(introduction.maidLoan || "")],
-              ["Offday Compensation (S$/day)", String(introduction.offdayCompensation || "")],
-              ["Off-days Per Month", String(skillsPreferences.offDaysPerMonth || "")],
-              ["Status", String(maid.status || "available")],
-              ["Public", String(Boolean(maid.isPublic))],
-              ["Video Link", String(maid.videoDataUrl || "")],
-            ].map(([label, value]) => (
-              <div key={label} className="contents">
-                <p className="py-1 font-semibold text-muted-foreground md:text-right">{label}</p>
-                <p className="py-1 whitespace-pre-wrap">{String(value || "")}</p>
-              </div>
-            ))}
-          </div>
+        <SectionHeader title="Profile" />
+        <Row label="Maid Name" value={maid.fullName} />
+        <Row label="Ref Code" value={maid.referenceCode} />
+        <Row label="Type" value={maid.type ?? ""} />
+        <Row label="Nationality" value={maid.nationality ?? ""} />
+        <Row label="Indian Maid Category" value={String(skillsPreferences.indianMaidCategory || "")} />
+        <Row label="Date of Birth" value={maid.dateOfBirth ?? ""} />
+        <Row label="Place of Birth" value={maid.placeOfBirth ?? ""} />
+        <Row label="Height" value={`${String(maid.height)} cm`} />
+        <Row label="Weight" value={`${String(maid.weight)} kg`} />
+        <Row label="Residential Address" value={maid.homeAddress ?? ""} />
+        <Row label="Airport / Port" value={maid.airportRepatriation ?? ""} />
+        <Row label="Home Country Contact" value={String(agencyContact.homeCountryContactNumber || "")} />
+        <Row label="Education" value={maid.educationLevel ?? ""} />
+        <Row label="Religion" value={maid.religion ?? ""} />
+        <Row label="Marital Status" value={maid.maritalStatus ?? ""} />
+        <Row label="Number of Siblings" value={String(maid.numberOfSiblings)} />
+        <Row label="Number of Children" value={String(maid.numberOfChildren)} />
+        <Row label="Ages of Children" value={String(introduction.agesOfChildren || "")} />
+        <Row label="Present Salary (S$)" value={String(introduction.presentSalary || "")} />
+        <Row label="Expected Salary" value={String(introduction.expectedSalary || "")} />
+        <Row label="When Available?" value={String(introduction.availability || "")} />
+        <Row label="Contract Ends" value={String(introduction.contractEnds || "")} />
+        <Row label="Maid Loan (S$)" value={String(introduction.maidLoan || "")} />
+        <Row label="Offday Compensation (S$/day)" value={String(introduction.offdayCompensation || "")} />
+        <Row label="Off-days Per Month" value={String(skillsPreferences.offDaysPerMonth || "")} />
+        <Row label="Status" value={String(maid.status || "available")} />
+        <Row label="Public" value={String(Boolean(maid.isPublic))} />
+        <Row label="Video Link" value={String(maid.videoDataUrl || "")} />
 
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-muted-foreground">Photos</p>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              {Array.from({ length: 5 }, (_, index) => {
-                const url = photos[index] || "";
-                const label =
-                  index === 0 ? "Passport / 2x2" : index === 1 ? "Full body" : `Extra ${index - 1}`;
-                return (
-                  <div key={label} className="space-y-1">
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <div className="h-30 w-full overflow-hidden rounded border bg-muted/30">
-                      {url ? <img src={url} alt={label} className="h-full w-full object-cover" /> : null}
-                    </div>
+        <SubHeader title="Photos" />
+        <div className="border-b px-4 py-3">
+          <div className="grid grid-cols-5 gap-2">
+            {Array.from({ length: 5 }, (_, index) => {
+              const url = photos[index] || "";
+              const label = index === 0 ? "Passport / 2×2" : index === 1 ? "Full body" : `Extra ${index - 1}`;
+              return (
+                <div key={label} className="space-y-1">
+                  <p className="text-[10px] text-muted-foreground">{label}</p>
+                  <div className="aspect-[3/4] w-full overflow-hidden rounded border bg-muted/30 flex items-center justify-center">
+                    {url
+                      ? <img src={url} alt={label} className="h-full w-full object-cover" />
+                      : <span className="text-[10px] text-muted-foreground">Empty</span>
+                    }
                   </div>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground">{photos.length}/5 photos uploaded</p>
+                </div>
+              );
+            })}
           </div>
-        </section>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">{photos.length}/5 photos uploaded</p>
+        </div>
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">SKILLS</h3>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-muted-foreground">Language Skills</p>
-            <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-              {fixedLanguageKeyMap.map((item) => {
-                const level = item.keys.map((key) => (maid.languageSkills || {})[key]).find((val) => String(val || "").trim());
-                if (!level) return null;
-                return (
-                  <div key={item.label} className="contents">
-                    <p className="py-1 font-semibold text-muted-foreground md:text-right">{item.label}</p>
-                    <p className="py-1">{String(level)}</p>
-                  </div>
-                );
-              })}
-            </div>
-            {otherLanguages.length > 0 && (
-              <button
-                type="button"
-                className="text-primary hover:underline text-sm"
-                onClick={() => setShowOtherLanguages((prev) => !prev)}
-              >
-                {showOtherLanguages ? "Hide other languages" : "Show other languages"}
-              </button>
-            )}
-            {showOtherLanguages && (
-              <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-                {otherLanguages.map(([language, level]) => (
-                  <div key={language} className="contents">
-                    <p className="py-1 font-semibold text-muted-foreground md:text-right">{language}</p>
-                    <p className="py-1">{level}</p>
-                  </div>
+        <SectionHeader title="Skills" />
+
+        <SubHeader title="Language Skills" />
+        {fixedLanguageKeyMap.map((item) => {
+          const level = item.keys.map((key) => (maid.languageSkills || {})[key]).find((val) => String(val || "").trim());
+          if (!level) return null;
+          return <Row key={item.label} label={item.label} value={String(level)} />;
+        })}
+        {otherLanguages.length > 0 && (
+          <div className="border-b px-4 py-1.5">
+            <button
+              type="button"
+              className="text-[12px] text-primary hover:underline"
+              onClick={() => setShowOtherLanguages((prev) => !prev)}
+            >
+              {showOtherLanguages ? "Hide other languages" : `Show ${otherLanguages.length} other language(s)`}
+            </button>
+          </div>
+        )}
+        {showOtherLanguages && otherLanguages.map(([language, level]) => (
+          <Row key={language} label={language} value={level} />
+        ))}
+
+        <SubHeader title="Other Information" />
+        {availabilityRemarkItems.map((item) => (
+          <YesNoRow
+            key={item.label}
+            label={item.label}
+            value={item.keys.some((key) => Boolean(otherInformation[key]))}
+          />
+        ))}
+
+        <SubHeader title="Work Area Notes" />
+        <Row label="Care of infants/children" value={String(workAreaNotes["Care of infants/children"] || "")} />
+        <Row label="Cooking" value={String(workAreaNotes.Cooking || "")} />
+        <Row label="Language abilities (spoken)" value={String(workAreaNotes["Language abilities (spoken)"] || "")} />
+        <Row label="Other skills, if any" value={String(workAreaNotes["Other Skill"] || "")} />
+
+        <SectionHeader title="Work Areas" />
+        <div className="overflow-x-auto border-b">
+          <table className="w-full border-collapse text-[13px] text-foreground">
+            <thead>
+              <tr className="bg-muted/50">
+                {["Area", "Willing", "Experience", "Years", "Rating", "Note", "Evaluation"].map((h) => (
+                  <th key={h} className="border-b border-r last:border-r-0 px-3 py-1.5 text-left text-[12px] font-semibold text-foreground whitespace-nowrap">
+                    {h}
+                  </th>
                 ))}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-muted-foreground">Other Information</p>
-            <div className="grid max-w-2xl grid-cols-1 gap-y-1 text-sm md:grid-cols-[1fr_60px]">
-              {availabilityRemarkItems.map((item) => (
-                <div key={item.label} className="contents">
-                  <p>{item.label}</p>
-                  <p className="text-center">{item.keys.some((key) => Boolean(otherInformation[key])) ? "YES" : "NO"}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-muted-foreground">Work Area Notes</p>
-            <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-              {[
-                ["Care of infants/children", String(workAreaNotes["Care of infants/children"] || "")],
-                ["Cooking", String(workAreaNotes.Cooking || "")],
-                ["Language abilities (spoken)", String(workAreaNotes["Language abilities (spoken)"] || "")],
-                ["Other skills, if any", String(workAreaNotes["Other Skill"] || "")],
-              ].map(([label, value]) => (
-                <div key={label} className="contents">
-                  <p className="py-1 font-semibold text-muted-foreground md:text-right">{label}</p>
-                  <p className="py-1 whitespace-pre-wrap">{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">Work Areas</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full border text-sm">
-              <thead>
-                <tr className="bg-muted/50">
-                  <th className="border px-3 py-2 text-left">Area</th>
-                  <th className="border px-3 py-2 text-center">Willing</th>
-                  <th className="border px-3 py-2 text-center">Experience</th>
-                  <th className="border px-3 py-2 text-center">Years</th>
-                  <th className="border px-3 py-2 text-center">Rating</th>
-                  <th className="border px-3 py-2 text-left">Note</th>
-                  <th className="border px-3 py-2 text-left">Evaluation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workAreas.map(([area, config]) => (
+                <tr key={area} className="border-b last:border-b-0 hover:bg-muted/30">
+                  <td className="border-r px-3 py-[6px]">{area}</td>
+                  <td className="border-r px-3 py-[6px] text-center">{config.willing ? "Yes" : "No"}</td>
+                  <td className="border-r px-3 py-[6px] text-center">{config.experience ? "Yes" : "No"}</td>
+                  <td className="border-r px-3 py-[6px] text-center">{String(config.yearsOfExperience || "")}</td>
+                  <td className="border-r px-3 py-[6px] text-center">
+                    {config.rating === null || config.rating === undefined ? "N.A." : String(config.rating)}
+                  </td>
+                  <td className="border-r px-3 py-[6px] whitespace-pre-wrap">{String(config.note || "")}</td>
+                  <td className="px-3 py-[6px] whitespace-pre-wrap">{String(config.evaluation || "")}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {workAreas.map(([area, config]) => (
-                  <tr key={area} className="hover:bg-muted/30">
-                    <td className="border px-3 py-2">{area}</td>
-                    <td className="border px-3 py-2 text-center">{config.willing ? "Yes" : "No"}</td>
-                    <td className="border px-3 py-2 text-center">{config.experience ? "Yes" : "No"}</td>
-                    <td className="border px-3 py-2 text-center">{String(config.yearsOfExperience || "")}</td>
-                    <td className="border px-3 py-2 text-center">{config.rating === null || config.rating === undefined ? "N.A." : String(config.rating)}</td>
-                    <td className="border px-3 py-2 whitespace-pre-wrap">{String(config.note || "")}</td>
-                    <td className="border px-3 py-2 whitespace-pre-wrap">{String(config.evaluation || "")}</td>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <SectionHeader title="Employment History" />
+        <div className="overflow-x-auto border-b">
+          <table className="w-full border-collapse text-[13px] text-foreground">
+            <thead>
+              <tr className="bg-muted/50">
+                {["From", "To", "Country", "Employer", "Duties", "Remarks"].map((h) => (
+                  <th key={h} className="border-b border-r last:border-r-0 px-3 py-1.5 text-left text-[12px] font-semibold text-foreground whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {employment.map((row, index) => {
+                const r = row as Record<string, unknown>;
+                return (
+                  <tr key={index} className="border-b last:border-b-0 hover:bg-muted/30">
+                    <td className="border-r px-3 py-[6px] whitespace-nowrap">{String(r.from || "")}</td>
+                    <td className="border-r px-3 py-[6px] whitespace-nowrap">{String(r.to || "")}</td>
+                    <td className="border-r px-3 py-[6px]">{String(r.country || "")}</td>
+                    <td className="border-r px-3 py-[6px]">{String(r.employer || "")}</td>
+                    <td className="border-r px-3 py-[6px] whitespace-pre-wrap">{String(r.duties || "")}</td>
+                    <td className="px-3 py-[6px] whitespace-pre-wrap">{String(r.remarks || "")}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">EMPLOYMENT HISTORY</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full border text-sm">
-              <thead>
-                <tr className="bg-muted/50">
-                  {["From", "To", "Country", "Employer", "Duties", "Remarks"].map((h) => (
-                    <th key={h} className="border px-3 py-1.5 text-left font-semibold">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {employment.map((row, index) => {
-                  const r = row as Record<string, unknown>;
-                  return (
-                    <tr key={index} className="hover:bg-muted/30">
-                      <td className="border px-3 py-1.5">{String(r.from || "")}</td>
-                      <td className="border px-3 py-1.5">{String(r.to || "")}</td>
-                      <td className="border px-3 py-1.5">{String(r.country || "")}</td>
-                      <td className="border px-3 py-1.5">{String(r.employer || "")}</td>
-                      <td className="border px-3 py-1.5 whitespace-pre-wrap">{String(r.duties || "")}</td>
-                      <td className="border px-3 py-1.5 whitespace-pre-wrap">{String(r.remarks || "")}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        {/* ── AVAILABILITY / REMARK ── */}
+        <SectionHeader title="Availability / Remark" />
+        <Row label="Availability Remark" value={String(skillsPreferences.availabilityRemark || "")} />
+        <Row
+          label="Interview Availability"
+          value={interviewAvailabilityOptions.filter((opt) => availabilityInterviewOptions.includes(opt)).join(", ")}
+        />
+        <Row label="Previous SG Experience" value={String(skillsPreferences.sgExperience ?? "")} />
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">AVAILABILITY/REMARK</h3>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-            {[
-              ["Availability Remark", String(skillsPreferences.availabilityRemark || "")],
-              ["Interview Availability", interviewAvailabilityOptions.filter((opt) => availabilityInterviewOptions.includes(opt)).join(", ")],
-              ["Previous working experience in Singapore", String(skillsPreferences.sgExperience ?? "")],
-            ].map(([label, value]) => (
-              <div key={label} className="contents">
-                <p className="py-1 font-semibold text-muted-foreground md:text-right">{label}</p>
-                <p className="py-1 whitespace-pre-wrap">{value}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        {/* ── INTRODUCTION ── */}
+        <SectionHeader title="Introduction" />
+        <Row label="Intro (Private)" value={String(introduction.intro || "")} />
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">INTRODUCTION</h3>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-            {[
-              ["Intro (Private)", String(introduction.intro || "")],
-            ].map(([label, value]) => (
-              <div key={label} className="contents">
-                <p className="py-1 font-semibold text-muted-foreground md:text-right">{label}</p>
-                <p className="py-1 whitespace-pre-wrap">{value}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        {/* ── PUBLIC INTRODUCTION ── */}
+        <SectionHeader title="Public Introduction" />
+        <Row label="Public Intro" value={String(introduction.publicIntro || "")} />
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">PUBLIC INTRODUCTION</h3>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-            <div className="contents">
-              <p className="py-1 font-semibold text-muted-foreground md:text-right">Public Intro</p>
-              <p className="py-1 whitespace-pre-wrap">{String(introduction.publicIntro || "")}</p>
-            </div>
-          </div>
-        </section>
+        {/* ── PRIVATE INFO ── */}
+        <SectionHeader title="Private Info" />
+        <Row label="Interviewed by" value={String(skillsPreferences.interviewedBy || "")} />
+        <Row label="Who Referred This Maid?" value={String(skillsPreferences.referredBy || "")} />
+        <Row label="Passport Number" value={String(agencyContact.passportNo || "")} />
+        <Row label="Telephone (Maid / Foreign Agency)" value={String(agencyContact.phone || "")} />
+        <Row label="Agency Historical Record" value={String(skillsPreferences.privateInfo || "")} />
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">PRIVATE INFO</h3>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-            {[
-              ["This maid was interviewed by", String(skillsPreferences.interviewedBy || "")],
-              ["Who Referred This Maid?", String(skillsPreferences.referredBy || "")],
-              ["Passport Number of the Maid", String(agencyContact.passportNo || "")],
-              ["Telephone Number of Maid/Foreign Agency", String(agencyContact.phone || "")],
-              ["Agency's Historical Record of the Maid", String(skillsPreferences.privateInfo || "")],
-            ].map(([label, value]) => (
-              <div key={label} className="contents">
-                <p className="py-1 font-semibold text-muted-foreground md:text-right">{label}</p>
-                <p className="py-1 whitespace-pre-wrap">{value}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        {/* ── MEDICAL HISTORY ── */}
+        <SectionHeader title="Medical History / Dietary Restrictions" />
+        <Row label="Allergies (if any)" value={String(introduction.allergies || "")} />
+        <Row label="Physical disabilities" value={String(introduction.physicalDisabilities || "")} />
+        <Row label="Dietary restrictions" value={String(introduction.dietaryRestrictions || "")} />
+        <Row label="Food handling preferences" value={String(introduction.foodHandlingPreferences || "")} />
+        <Row label="Other Illnesses" value={String(introduction.otherIllnesses || "")} />
+        <Row label="Any other remarks" value={String(introduction.otherRemarks || "")} />
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">Medical History / Dietary Restrictions</h3>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-            {[
-              ["Allergies (if any)", String(introduction.allergies || "")],
-              ["Physical disabilities", String(introduction.physicalDisabilities || "")],
-              ["Dietary restrictions", String(introduction.dietaryRestrictions || "")],
-              ["Food handling preferences", String(introduction.foodHandlingPreferences || "")],
-              ["Other Illnesses", String(introduction.otherIllnesses || "")],
-              ["Any other remarks", String(introduction.otherRemarks || "")],
-            ].map(([label, value]) => (
-              <div key={label} className="contents">
-                <p className="py-1 font-semibold text-muted-foreground md:text-right">{label}</p>
-                <p className="py-1 whitespace-pre-wrap">{value}</p>
-              </div>
-            ))}
-          </div>
+        <SubHeader title="Past and existing illnesses" />
+        {Object.entries(pastIllnesses).map(([key, value]) => (
+          <YesNoRow key={key} label={key} value={Boolean(value)} />
+        ))}
 
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-muted-foreground">Past and existing illnesses</p>
-            <div className="grid max-w-2xl grid-cols-1 gap-y-1 text-sm md:grid-cols-[1fr_80px]">
-              {Object.entries(pastIllnesses).map(([key, value]) => (
-                <div key={key} className="contents">
-                  <p>{key}</p>
-                  <p className="text-center">{value ? "YES" : "NO"}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <SectionHeader title="Agency Contact" />
+        <Row label="Company Name" value={String(agencyContact.companyName || "")} />
+        <Row label="License No." value={String(agencyContact.licenseNo || "")} />
+        <Row label="Contact Person" value={String(agencyContact.contactPerson || "")} />
+        <Row label="Phone" value={String(agencyContact.phone || "")} />
+        <Row label="Passport No." value={String(agencyContact.passportNo || "")} />
+        <Row label="Home Country Contact Number" value={String(agencyContact.homeCountryContactNumber || "")} />
 
-        <section className="space-y-2 text-sm">
-          <h3 className="text-sm font-semibold text-muted-foreground">Agency Contact</h3>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-[220px_1fr]">
-            {[
-              ["Company Name", String(agencyContact.companyName || "")],
-              ["License No.", String(agencyContact.licenseNo || "")],
-              ["Contact Person", String(agencyContact.contactPerson || "")],
-              ["Phone", String(agencyContact.phone || "")],
-              ["Passport No.", String(agencyContact.passportNo || "")],
-              ["Home Country Contact Number", String(agencyContact.homeCountryContactNumber || "")],
-            ].map(([label, value]) => (
-              <div key={label} className="contents">
-                <p className="py-1 font-semibold text-muted-foreground md:text-right">{label}</p>
-                <p className="py-1 whitespace-pre-wrap">{value}</p>
-              </div>
-            ))}
-          </div>
-        </section>
       </div>
     </div>
   );

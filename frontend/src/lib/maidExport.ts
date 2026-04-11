@@ -18,28 +18,27 @@ const calculateAge = (dateOfBirth?: string) => {
   if (!dateOfBirth) return null;
   const dob = new Date(dateOfBirth);
   if (Number.isNaN(dob.getTime())) return null;
-
   const today = new Date();
   let age = today.getFullYear() - dob.getFullYear();
   const monthDiff = today.getMonth() - dob.getMonth();
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
     age -= 1;
   }
-
   return age;
 };
 
-const sectionTitle = (title: string) => `<h2>${escapeHtml(title)}</h2>`;
+const sectionTitle = (title: string) =>
+  `<h2>${escapeHtml(title)}</h2>`;
 
 const renderKeyValueTable = (rows: Array<[string, string]>) => `
-  <table>
+  <table class="kv">
     <tbody>
       ${rows
         .map(
           ([label, value]) => `
             <tr>
               <th>${escapeHtml(label)}</th>
-              <td>${escapeHtml(value)}</td>
+              <td>${escapeHtml(value) || "<span class='empty'>—</span>"}</td>
             </tr>
           `
         )
@@ -49,11 +48,11 @@ const renderKeyValueTable = (rows: Array<[string, string]>) => `
 `;
 
 const renderBooleanTable = (rows: Array<[string, boolean]>) => `
-  <table>
+  <table class="bool">
     <thead>
       <tr>
         <th>Question</th>
-        <th>Answer</th>
+        <th style="width:70px;text-align:center;">Answer</th>
       </tr>
     </thead>
     <tbody>
@@ -62,7 +61,9 @@ const renderBooleanTable = (rows: Array<[string, boolean]>) => `
           ([label, value]) => `
             <tr>
               <td>${escapeHtml(label)}</td>
-              <td>${value ? "Yes" : "No"}</td>
+              <td style="text-align:center;">
+                <span class="pill ${value ? "yes" : "no"}">${value ? "YES" : "NO"}</span>
+              </td>
             </tr>
           `
         )
@@ -71,19 +72,16 @@ const renderBooleanTable = (rows: Array<[string, boolean]>) => `
   </table>
 `;
 
-const renderMatrixTable = (
-  headers: string[],
-  rows: string[][]
-) => `
-  <table>
+const renderMatrixTable = (headers: string[], rows: string[][]) => `
+  <table class="matrix">
     <thead>
-      <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
+      <tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>
     </thead>
     <tbody>
       ${rows
         .map(
           (row) => `
-            <tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>
+            <tr>${row.map((value) => `<td>${escapeHtml(value) || "—"}</td>`).join("")}</tr>
           `
         )
         .join("")}
@@ -180,140 +178,284 @@ const buildMaidProfileHtml = (maid: MaidProfile) => {
 
   const importPayloadBase64 = encodeBase64Utf8(JSON.stringify(buildImportPayload(maid)));
 
-  return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>${escapeHtml(maid.fullName)} Bio-data</title>
-        <style>
-          body { font-family: Arial, sans-serif; color: #111827; margin: 24px; line-height: 1.45; }
-          h1 { font-size: 28px; margin-bottom: 4px; }
-          h2 { font-size: 18px; margin: 24px 0 10px; border-bottom: 1px solid #d1d5db; padding-bottom: 6px; }
-          p.meta { color: #6b7280; margin-top: 0; }
-          .hero { display: grid; grid-template-columns: 180px 1fr; gap: 18px; align-items: start; }
-          .photo img { width: 180px; height: 220px; object-fit: cover; border: 1px solid #d1d5db; border-radius: 8px; }
-          .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 12px; }
-          .gallery img { width: 100%; height: 110px; object-fit: cover; border: 1px solid #d1d5db; border-radius: 6px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-          th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; vertical-align: top; }
-          th { width: 240px; background: #f3f4f6; font-weight: 700; }
-          tbody tr:nth-child(even) { background: #fafafa; }
-          .section { margin-top: 18px; }
-          .text-block { border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
-        </style>
-      </head>
-      <body>
-        <!--MAID_PROFILE_JSON_BASE64:${importPayloadBase64}-->
-        <h1>${escapeHtml(maid.fullName)}</h1>
-        <p class="meta">Reference Code: ${escapeHtml(maid.referenceCode)} | Last updated: ${escapeHtml(formatDate(maid.updatedAt))}</p>
+  const css = `
+    *, *::before, *::after { box-sizing: border-box; }
 
-        <div class="hero">
-          <div class="photo">
-            ${
-              photos[0]
-                ? `<img src="${photos[0]}" alt="${escapeHtml(maid.fullName)}" />`
-                : `<div style="height:220px;border:1px solid #d1d5db;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6b7280;">No Photo</div>`
-            }
-          </div>
-          <div>
-            ${sectionTitle("Personal Details")}
-            ${renderKeyValueTable(detailRows)}
-          </div>
-        </div>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      color: #111827;
+      margin: 0;
+      padding: 28px 32px;
+      line-height: 1.5;
+      background: #fff;
+    }
 
-        ${photos.length > 1 ? `<div class="gallery">${photos.slice(1).map((photo) => `<img src="${photo}" alt="Gallery photo" />`).join("")}</div>` : ""}
+    /* ── Page header ── */
+    .page-header {
+      border-bottom: 2px solid #111827;
+      padding-bottom: 14px;
+      margin-bottom: 20px;
+    }
+    .page-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 3px;
+      color: #111827;
+    }
+    .page-header .meta {
+      font-size: 12px;
+      color: #6b7280;
+      margin: 0;
+    }
 
-        <div class="section">
-          ${sectionTitle("Language Skills")}
-          <div class="text-block">${escapeHtml(languages.join(", ") || "N/A")}</div>
-        </div>
+    /* ── Hero layout ── */
+    .hero {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .photo-col img {
+      width: 200px;
+      height: auto;
+      display: block;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+    }
+    .photo-col .no-photo {
+      width: 200px;
+      height: 240px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+      font-size: 12px;
+      background: #f9fafb;
+    }
 
-        <div class="section">
-          ${sectionTitle("Other Information")}
-          ${
-            Object.keys(otherInformation).length > 0
-              ? renderBooleanTable(Object.entries(otherInformation))
-              : `<div class="text-block">No other information available.</div>`
-          }
-        </div>
+    /* ── Gallery: full images, no cropping ── */
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .gallery img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+    }
 
-        <div class="section">
-          ${sectionTitle("Maid Skills")}
-          ${
-            workAreas.length > 0
-              ? renderMatrixTable(
-                  ["Area", "Willingness", "Experience", "Evaluation"],
-                  workAreas.map(([area, config]) => [
-                    area,
-                    config.willing ? "Yes" : "No",
-                    config.experience ? "Yes" : "No",
-                    config.evaluation || "-",
-                  ])
-                )
-              : `<div class="text-block">No skill records available.</div>`
-          }
-        </div>
+    /* ── Section titles ── */
+    .section { margin-top: 20px; }
+    h2 {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #fff;
+      background: #111827;
+      padding: 5px 10px;
+      margin: 0;
+    }
 
-        <div class="section">
-          ${sectionTitle("Employment History")}
-          ${
-            employment.length > 0
-              ? renderMatrixTable(
-                  ["From", "To", "Country", "Employer", "Maid Duties", "Remarks"],
-                  employment.map((entry) => {
-                    const row = entry as Record<string, string>;
-                    return [
-                      row.from || "",
-                      row.to || "",
-                      row.country || "",
-                      row.employer || "",
-                      row.duties || "",
-                      row.remarks || "",
-                    ];
-                  })
-                )
-              : `<div class="text-block">No employment history available.</div>`
-          }
-        </div>
+    /* ── KV table ── */
+    table.kv { width: 100%; border-collapse: collapse; }
+    table.kv th,
+    table.kv td {
+      border: 1px solid #e5e7eb;
+      padding: 5px 10px;
+      vertical-align: top;
+      font-size: 12px;
+    }
+    table.kv th {
+      width: 210px;
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+      white-space: nowrap;
+    }
+    table.kv td { color: #111827; }
+    table.kv tbody tr:nth-child(even) td { background: #fafafa; }
 
-        <div class="section">
-          ${sectionTitle("Medical History / Dietary Restrictions")}
-          ${renderKeyValueTable(medicalRows)}
-          ${
-            Object.keys(pastIllnesses).length > 0
-              ? `
-                <div class="section">
-                  <h2>Past and Existing Illnesses</h2>
-                  ${renderBooleanTable(Object.entries(pastIllnesses))}
-                </div>
-              `
-              : ""
-          }
-        </div>
+    /* ── Boolean table ── */
+    table.bool { width: 100%; border-collapse: collapse; }
+    table.bool th,
+    table.bool td {
+      border: 1px solid #e5e7eb;
+      padding: 5px 10px;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    table.bool thead th {
+      background: #f3f4f6;
+      font-weight: 600;
+      color: #374151;
+    }
+    table.bool tbody tr:nth-child(even) td { background: #fafafa; }
 
-        <div class="section">
-          ${sectionTitle("Availability / Remark")}
-          ${renderKeyValueTable(availabilityRows)}
-        </div>
+    /* ── Matrix table ── */
+    table.matrix { width: 100%; border-collapse: collapse; }
+    table.matrix th,
+    table.matrix td {
+      border: 1px solid #e5e7eb;
+      padding: 5px 10px;
+      font-size: 12px;
+      vertical-align: top;
+    }
+    table.matrix thead th {
+      background: #f3f4f6;
+      font-weight: 600;
+      color: #374151;
+      white-space: nowrap;
+    }
+    table.matrix tbody tr:nth-child(even) td { background: #fafafa; }
 
-        <div class="section">
-          ${sectionTitle("Public Introduction")}
-          <div class="text-block">${escapeHtml(String(introduction.publicIntro || "Maid Introduction in Public is empty."))}</div>
-        </div>
+    /* ── Pills ── */
+    .pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .pill.yes { background: #dcfce7; color: #166534; }
+    .pill.no  { background: #f3f4f6; color: #6b7280; }
 
-        <div class="section">
-          ${sectionTitle("Introduction")}
-          <div class="text-block">${escapeHtml(String(introduction.intro || "(Employer login is required to view this Introduction)"))}</div>
-        </div>
+    /* ── Text block ── */
+    .text-block {
+      border: 1px solid #e5e7eb;
+      padding: 10px 12px;
+      white-space: pre-wrap;
+      font-size: 12px;
+      color: #111827;
+      background: #fafafa;
+      line-height: 1.6;
+    }
+    .empty { color: #9ca3af; }
 
-        <div class="section">
-          ${sectionTitle("Private Information")}
-          ${renderKeyValueTable(privateRows)}
-        </div>
-      </body>
-    </html>
+    @media print {
+      body { padding: 16px 20px; }
+      .section { page-break-inside: avoid; }
+    }
   `;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(maid.fullName)} Bio-data</title>
+  <style>${css}</style>
+</head>
+<body>
+  <!--MAID_PROFILE_JSON_BASE64:${importPayloadBase64}-->
+
+  <div class="page-header">
+    <h1>${escapeHtml(maid.fullName)}</h1>
+    <p class="meta">Reference Code: ${escapeHtml(maid.referenceCode)} &nbsp;|&nbsp; Last updated: ${escapeHtml(formatDate(maid.updatedAt))}</p>
+  </div>
+
+  <div class="hero">
+    <div class="photo-col">
+      ${photos[0]
+        ? `<img src="${photos[0]}" alt="${escapeHtml(maid.fullName)}" />`
+        : `<div class="no-photo">No Photo</div>`}
+    </div>
+    <div>
+      ${sectionTitle("Personal Details")}
+      ${renderKeyValueTable(detailRows)}
+    </div>
+  </div>
+
+  ${photos.length > 1
+    ? `<div class="gallery">${photos.slice(1).map((p) => `<img src="${p}" alt="Gallery photo" />`).join("")}</div>`
+    : ""}
+
+  <div class="section">
+    ${sectionTitle("Language Skills")}
+    <div class="text-block">${escapeHtml(languages.join(", ") || "N/A")}</div>
+  </div>
+
+  <div class="section">
+    ${sectionTitle("Other Information")}
+    ${Object.keys(otherInformation).length > 0
+      ? renderBooleanTable(Object.entries(otherInformation) as Array<[string, boolean]>)
+      : `<div class="text-block">No other information available.</div>`}
+  </div>
+
+  <div class="section">
+    ${sectionTitle("Maid Skills")}
+    ${workAreas.length > 0
+      ? renderMatrixTable(
+          ["Area", "Willingness", "Experience", "Evaluation"],
+          workAreas.map(([area, config]) => [
+            area,
+            config.willing ? "Yes" : "No",
+            config.experience ? "Yes" : "No",
+            config.evaluation || "—",
+          ])
+        )
+      : `<div class="text-block">No skill records available.</div>`}
+  </div>
+
+  <div class="section">
+    ${sectionTitle("Employment History")}
+    ${employment.length > 0
+      ? renderMatrixTable(
+          ["From", "To", "Country", "Employer", "Maid Duties", "Remarks"],
+          employment.map((entry) => {
+            const row = entry as Record<string, string>;
+            return [
+              row.from || "",
+              row.to || "",
+              row.country || "",
+              row.employer || "",
+              row.duties || "",
+              row.remarks || "",
+            ];
+          })
+        )
+      : `<div class="text-block">No employment history available.</div>`}
+  </div>
+
+  <div class="section">
+    ${sectionTitle("Medical History / Dietary Restrictions")}
+    ${renderKeyValueTable(medicalRows)}
+    ${Object.keys(pastIllnesses).length > 0
+      ? `<div class="section">
+           ${sectionTitle("Past and Existing Illnesses")}
+           ${renderBooleanTable(Object.entries(pastIllnesses) as Array<[string, boolean]>)}
+         </div>`
+      : ""}
+  </div>
+
+  <div class="section">
+    ${sectionTitle("Availability / Remark")}
+    ${renderKeyValueTable(availabilityRows)}
+  </div>
+
+  <div class="section">
+    ${sectionTitle("Public Introduction")}
+    <div class="text-block">${escapeHtml(String(introduction.publicIntro || "Maid Introduction in Public is empty."))}</div>
+  </div>
+
+  <div class="section">
+    ${sectionTitle("Introduction")}
+    <div class="text-block">${escapeHtml(String(introduction.intro || "(Employer login is required to view this Introduction)"))}</div>
+  </div>
+
+  <div class="section">
+    ${sectionTitle("Private Information")}
+    ${renderKeyValueTable(privateRows)}
+  </div>
+
+</body>
+</html>`;
 };
 
 const downloadBlob = (filename: string, blob: Blob) => {
@@ -345,7 +487,6 @@ export const exportMaidProfileToPdf = (maid: MaidProfile) => {
   if (!printWindow) {
     throw new Error("Unable to open print window");
   }
-
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();

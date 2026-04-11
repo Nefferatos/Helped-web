@@ -498,58 +498,94 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      <section className="border-y bg-background py-8 md:py-10">
+    <section className="border-y bg-background py-8 md:py-10">
         <div className="container px-4 sm:px-6">
           <div className="mb-5 flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
             <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">Portal Access</h2>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {portalLinks.map((portal) => {
-              const Icon = portal.icon;
-              return (
-                <Link
-                  key={portal.path}
-                  to={portal.path}
-                  className="group relative overflow-hidden rounded-xl border bg-card p-4 transition-colors
-                             hover:border-border/60 hover:bg-muted/30 sm:p-5"
-                >
-                  {/* Icon chip */}
-                  <div
-                    className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg"
-                    style={{ background: portal.bg }}
-                  >
-                    <Icon
-                      className="h-4 w-4"
-                      style={{ color: portal.iconColor }}
-                    />
+            <div className="grid gap-3 sm:grid-cols-2 mb-4">
+              <Link
+                to="/employer-login"
+                className="group rounded-xl border bg-card p-5 transition-colors hover:border-border/60 hover:bg-muted/20"
+              >
+                <div className="mb-4 flex items-start justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "#EAF3DE" }}>
+                    <UserRound className="h-5 w-5" style={{ color: "#3B6D11" }} />
                   </div>
-
-                  <p className="font-display text-sm font-semibold text-foreground sm:text-base">
-                    {portal.title}
-                  </p>
-                  <p className="mt-1 font-body text-xs text-muted-foreground sm:text-sm leading-relaxed">
-                    {portal.description}
-                  </p>
-                  <p className="mt-3 font-mono text-[11px] text-muted-foreground/60">
-                    {portal.path}
-                  </p>
-
-                  {/* Hover arrow */}
-                  <span
-                    className="absolute right-4 top-4 text-sm text-muted-foreground opacity-0
-                               translate-x-1 -translate-y-1 transition-all duration-150
-                               group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0"
-                  >
-                    ↗
+                  <span className="rounded-full px-2.5 py-1 font-body text-[11px] font-medium" style={{ background: "#EAF3DE", color: "#3B6D11" }}>
+                    For employers
                   </span>
-                </Link>
-              );
-            })}
+                </div>
+
+                <p className="font-display text-base font-semibold text-foreground mb-1.5">Employer / Client Login</p>
+                <p className="font-body text-sm text-muted-foreground mb-4 leading-relaxed">
+                  Hire a maid, view biodata, track your applications, and chat with support.
+                </p>
+
+                <ul className="space-y-1.5 mb-5">
+                  {["Browse & shortlist maid profiles", "Track hiring progress", "Message & get support"].map(item => (
+                    <li key={item} className="flex items-center gap-2 font-body text-xs text-muted-foreground">
+                      <CheckCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "#3B6D11" }} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[11px]" style={{ color: "#3B6D11" }}>/employer-login</span>
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: "#EAF3DE" }}>
+                    <ArrowRight className="h-3.5 w-3.5" style={{ color: "#3B6D11" }} />
+                  </div>
+                </div>
+              </Link>
+
+              <Link
+                to="/agencyadmin/login"
+                className="group rounded-xl border bg-card p-5 transition-colors hover:border-border/60 hover:bg-muted/20"
+              >
+                <div className="mb-4 flex items-start justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "#FAEEDA" }}>
+                    <Settings className="h-5 w-5" style={{ color: "#854F0B" }} />
+                  </div>
+                  <span className="rounded-full px-2.5 py-1 font-body text-[11px] font-medium" style={{ background: "#FAEEDA", color: "#854F0B" }}>
+                    Agency staff only
+                  </span>
+                </div>
+
+                <p className="font-display text-base font-semibold text-foreground mb-1.5">Agency Admin Portal</p>
+                <p className="font-body text-sm text-muted-foreground mb-4 leading-relaxed">
+                  Manage maid listings, client accounts, applications, and agency settings.
+                </p>
+
+                <ul className="space-y-1.5 mb-5">
+                  {["Add & publish maid profiles", "Manage client accounts", "Full agency dashboard"].map(item => (
+                    <li key={item} className="flex items-center gap-2 font-body text-xs text-muted-foreground">
+                      <CheckCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "#854F0B" }} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[11px]" style={{ color: "#854F0B" }}>/agencyadmin/login</span>
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: "#FAEEDA" }}>
+                    <ArrowRight className="h-3.5 w-3.5" style={{ color: "#854F0B" }} />
+                  </div>
+                </div>
+              </Link>
+            </div>
+
+            <div className="flex items-start gap-2.5 rounded-lg p-3" style={{ borderLeft: "3px solid #639922", background: "rgb(234 243 222 / 0.4)" }}>
+              <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "#3B6D11" }} />
+              <p className="font-body text-xs text-muted-foreground leading-relaxed">
+                Looking for work as a maid? Contact the agency directly — maid registration is handled by agency staff.
+              </p>
+            </div>
+
           </div>
-        </div>
-      </section>
+        </section>
 
       <section id="search" className="bg-muted py-8 md:py-10">
         <div className="container px-4 sm:px-6">
