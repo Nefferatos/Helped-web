@@ -13,8 +13,6 @@ import {
 import { filterMaids } from "@/lib/maidFilter";
 import "./ClientTheme.css";
 
-/* ─── Types ──────────────────────────────────────────────────────────────── */
-
 interface CompanyProfileApi {
   company_name?: string;
   short_name?: string;
@@ -133,8 +131,6 @@ const defaultFilters: Filters = {
 
 const ITEMS_PER_PAGE = 12;
 
-/* ─── Preference groups ──────────────────────────────────────────────────── */
-
 const PREFERENCE_GROUPS = [
   { noPreference: "natNoPreference" as const, specifics: ["natFilipino","natIndonesian","natMyanmar","natIndian","natSriLankan","natCambodian","natBangladeshi","natOthers"] as const },
   { noPreference: "expNoPreference" as const, specifics: ["expHomeCountry","expSingapore","expMalaysia","expHongKong","expTaiwan","expMiddleEast","expOtherCountries"] as const },
@@ -146,8 +142,6 @@ const PREFERENCE_GROUPS = [
   { noPreference: "heightNoPreference" as const, specifics: ["height150below","height151to155","height156to160","height161above"] as const },
   { noPreference: "relNoPreference" as const, specifics: ["relFreeThinker","relChristian","relCatholic","relBuddhist","relMuslim","relHindu","relSikh","relOthers"] as const },
 ];
-
-/* ─── Active filter tag labels ───────────────────────────────────────────── */
 
 const FILTER_LABELS: Partial<Record<keyof Filters, string>> = {
   natFilipino: "🇵🇭 Filipino", natIndonesian: "🇮🇩 Indonesian", natMyanmar: "🇲🇲 Myanmese",
@@ -175,16 +169,9 @@ const FILTER_LABELS: Partial<Record<keyof Filters, string>> = {
   willingOffDays: "Willing Off-days", hasChildren: "Has Children", withVideo: "With Video",
 };
 
-/* ─── Small components ───────────────────────────────────────────────────── */
-
 const CB = ({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) => (
   <label className="flex cursor-pointer items-center gap-2 select-none group">
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={onChange}
-      className="sr-only"
-    />
+    <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
     <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
       checked ? "bg-primary border-primary" : "border-border bg-background group-hover:border-primary/60"
     }`}>
@@ -211,8 +198,6 @@ const SectionHead = ({ children, count }: { children: React.ReactNode; count?: n
   </div>
 );
 
-/* ─── Main component ─────────────────────────────────────────────────────── */
-
 const ClientMaidsPage = () => {
   const navigate = useNavigate();
 
@@ -224,7 +209,6 @@ const ClientMaidsPage = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(true);
 
-  /* ── Count active filters ── */
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (draft.keyword.trim()) count++;
@@ -245,7 +229,6 @@ const ClientMaidsPage = () => {
 
   const showResults = hasSearched || hasLivePreview;
 
-  /* ── Active tags for display strip ── */
   const activeTags = useMemo(() => {
     const tags: { key: keyof Filters; label: string }[] = [];
     if (draft.keyword.trim()) tags.push({ key: "keyword", label: `"${draft.keyword.trim()}"` });
@@ -257,7 +240,6 @@ const ClientMaidsPage = () => {
     return tags;
   }, [draft]);
 
-  /* ── Toggle / set helpers ── */
   const set = (key: keyof Filters, value: boolean | string) =>
     setDraft((prev) => ({ ...prev, [key]: value }));
 
@@ -286,7 +268,6 @@ const ClientMaidsPage = () => {
 
   const countGroup = (keys: readonly (keyof Filters)[]) => keys.filter((k) => draft[k] === true).length;
 
-  /* ── Data loading ── */
   useEffect(() => {
     if (!getClientToken()) { navigate("/employer-login"); return; }
     const loadMaids = async () => {
@@ -310,7 +291,6 @@ const ClientMaidsPage = () => {
     void loadMaids();
   }, [navigate]);
 
-  /* ── Filtering ── */
   const filteredMaids = useMemo(() => filterMaids(maids, draft), [maids, draft]);
   useEffect(() => { setCurrentPage(1); }, [draft]);
 
@@ -329,8 +309,6 @@ const ClientMaidsPage = () => {
     return pages;
   }, [totalPages, currentPage]);
 
-  /* ─────────────────────────────────────────────────────────────────────── */
-
   return (
     <div className="client-page-theme min-h-screen bg-background">
       <div className="mx-auto w-full max-w-5xl px-3 py-4 flex flex-col gap-4">
@@ -339,7 +317,6 @@ const ClientMaidsPage = () => {
         <Card className="overflow-hidden shadow-sm">
           <CardContent className="p-0">
 
-            {/* ── Header bar ── */}
             <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3">
               <div className="flex items-center gap-2 min-w-0">
                 <SlidersHorizontal className="h-4 w-4 shrink-0 text-gray-500" />
@@ -372,7 +349,6 @@ const ClientMaidsPage = () => {
               </div>
             </div>
 
-            {/* ── Active tags strip ── */}
             {activeTags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 border-b bg-primary/5 px-4 py-2.5">
                 {activeTags.map(({ key, label }) => (
@@ -394,11 +370,9 @@ const ClientMaidsPage = () => {
               </div>
             )}
 
-            {/* ── Filter body ── */}
             {filtersOpen && (
               <div className="p-4 space-y-5">
 
-                {/* Keyword search */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
                     Search Keywords
@@ -424,7 +398,6 @@ const ClientMaidsPage = () => {
                   </div>
                 </div>
 
-                {/* Bio-data + Maid Type */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
@@ -468,7 +441,6 @@ const ClientMaidsPage = () => {
                   </div>
                 </div>
 
-                {/* Quick toggles */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
                     Quick Filters
@@ -497,7 +469,6 @@ const ClientMaidsPage = () => {
 
                 <div className="border-t border-dashed border-border" />
 
-                {/* ── Checkbox grid ── */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5">
 
                   <div>
@@ -625,7 +596,6 @@ const ClientMaidsPage = () => {
 
                 </div>
 
-                {/* ── Action row ── */}
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
                   <Button
                     type="button"
@@ -663,8 +633,6 @@ const ClientMaidsPage = () => {
         {/* ══ RESULTS ══════════════════════════════════════════════════════ */}
         {showResults && (
           <div>
-
-            {/* Results bar */}
             <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
               <p className="text-sm text-muted-foreground">
                 {isLoading ? (
@@ -694,12 +662,11 @@ const ClientMaidsPage = () => {
               )}
             </div>
 
-            {/* Skeleton loading */}
             {isLoading ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
                 {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm animate-pulse">
-                    <div className="aspect-[3/4] bg-muted" />
+                  <div key={i} className="flex flex-col overflow-hidden border bg-card shadow-sm animate-pulse">
+                    <div className="h-56 bg-muted" />
                     <div className="p-2.5 space-y-2">
                       <div className="h-2.5 w-3/4 rounded bg-muted" />
                       <div className="h-2 w-1/2 rounded bg-muted" />
@@ -710,7 +677,7 @@ const ClientMaidsPage = () => {
               </div>
 
             ) : filteredMaids.length === 0 ? (
-              <div className="rounded-2xl border bg-muted/30 p-10 text-center">
+              <div className="border bg-muted/30 p-10 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                   <Search className="h-5 w-5 text-muted-foreground" />
                 </div>
@@ -731,7 +698,7 @@ const ClientMaidsPage = () => {
               </div>
 
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
                 {pagedMaids.map((maid) => {
                   const age = calculateAge(maid.dateOfBirth);
                   const photo = getPrimaryPhoto(maid);
@@ -745,18 +712,18 @@ const ClientMaidsPage = () => {
                   return (
                     <article
                       key={maid.referenceCode}
-                      className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
+                      className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-shadow hover:shadow-md"
                     >
-                      {/* Photo */}
-                      <div className="aspect-[3/4] overflow-hidden bg-muted relative">
+                      {/* Photo — natural height, no cropping */}
+                      <div className="relative w-full bg-muted">
                         {photo ? (
                           <img
                             src={photo}
                             alt={maid.fullName}
-                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                            className="block w-full h-auto"
                           />
                         ) : (
-                          <div className="flex h-full items-center justify-center flex-col gap-1 text-muted-foreground/50">
+                          <div className="flex h-48 items-center justify-center flex-col gap-1 text-muted-foreground/50">
                             <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                             </svg>
@@ -764,8 +731,8 @@ const ClientMaidsPage = () => {
                           </div>
                         )}
                         {maid.type && (
-                          <div className="absolute top-1.5 left-1.5 right-1.5">
-                            <span className={`inline-block rounded-full px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColor}`}>
+                          <div className="absolute top-1.5 left-1.5">
+                            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColor}`}>
                               {maid.type}
                             </span>
                           </div>
@@ -782,12 +749,12 @@ const ClientMaidsPage = () => {
                         </p>
                         <div className="flex flex-wrap gap-1 mt-0.5">
                           {maid.nationality && (
-                            <span className="rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
+                            <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
                               {maid.nationality}
                             </span>
                           )}
                           {age && (
-                            <span className="rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
+                            <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
                               {age} yrs
                             </span>
                           )}
@@ -806,7 +773,6 @@ const ClientMaidsPage = () => {
               </div>
             )}
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="mt-6 flex items-center justify-center gap-1 flex-wrap">
                 <button

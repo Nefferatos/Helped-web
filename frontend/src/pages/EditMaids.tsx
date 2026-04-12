@@ -44,12 +44,9 @@ const EditMaids = () => {
   const [confirmImportOpen, setConfirmImportOpen] = useState(false);
   const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
 
-  // Delete validation state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<"selected" | MaidProfile | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-  // Visibility confirmation state
   const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
   const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
 
@@ -157,10 +154,8 @@ const EditMaids = () => {
     removeLocal(maid.referenceCode);
   };
 
-  // ── Delete with validation ─────────────────────────────────────────────────
   const openDeleteDialog = (target: "selected" | MaidProfile) => {
     setDeleteTarget(target);
-    setDeleteConfirmText("");
     setDeleteDialogOpen(true);
   };
 
@@ -186,7 +181,6 @@ const EditMaids = () => {
     }
   };
 
-  // ── Visibility with confirmation ───────────────────────────────────────────
   const openVisibilityDialog = (target: VisibilityTarget) => {
     setPendingVisibilityTarget(target);
     setVisibilityDialogOpen(true);
@@ -443,12 +437,12 @@ const EditMaids = () => {
     setPendingImportFiles(approved);
     setConfirmImportOpen(true);
   };
+
   const confirmImportFiles = async () => {
     const files = pendingImportFiles;
     setConfirmImportOpen(false);
     setPendingImportFiles([]);
     if (files.length === 0) return;
-
     for (const file of files) {
       try {
         await handleImportFile(file);
@@ -498,8 +492,8 @@ const EditMaids = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete validation dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={(open) => { setDeleteDialogOpen(open); if (!open) setDeleteConfirmText(""); }}>
+      {/* Delete confirmation dialog — simple confirm, no typing required */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3">
@@ -514,32 +508,12 @@ const EditMaids = () => {
               </div>
             </div>
           </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              You are about to permanently delete <strong>{getDeleteLabel()}</strong>. All associated data will be removed.
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">
-                Type <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold">DELETE</span> to confirm
-              </label>
-              <Input
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder="Type DELETE here"
-                className="font-mono"
-                autoFocus
-              />
-            </div>
+          <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            You are about to permanently delete <strong>{getDeleteLabel()}</strong>. All associated data will be removed.
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              disabled={deleteConfirmText !== "DELETE"}
-              onClick={() => void confirmDelete()}
-            >
+            <Button variant="destructive" onClick={() => void confirmDelete()}>
               <Trash2 className="mr-2 h-4 w-4" />
               Yes, Delete
             </Button>
@@ -573,7 +547,6 @@ const EditMaids = () => {
               </div>
             </div>
           </DialogHeader>
-
           <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-foreground">
             {pendingVisibilityTarget && "bulk" in pendingVisibilityTarget ? (
               <>
@@ -591,7 +564,6 @@ const EditMaids = () => {
               </>
             )}
           </div>
-
           <DialogFooter>
             <Button
               variant="outline"
@@ -658,11 +630,10 @@ const EditMaids = () => {
 
           <hr className="border-border" />
 
-          {/* View selector cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <button
               onClick={() => setView("public")}
-              className="group relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border-2 border-primary/20 bg-primary/5 p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10 hover:shadow-md active:scale-[0.98]"
+              className="group relative flex flex-col items-center gap-3 overflow-hidden border-2 border-primary/20 bg-primary/5 p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10 hover:shadow-md active:scale-[0.98]"
             >
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/10 transition-all group-hover:ring-primary/20">
                 <Eye className="h-7 w-7 text-primary" />
@@ -675,7 +646,7 @@ const EditMaids = () => {
 
             <button
               onClick={() => setView("hidden")}
-              className="group relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border-2 border-border bg-muted/30 p-8 text-center transition-all hover:border-muted-foreground/30 hover:bg-muted/60 hover:shadow-md active:scale-[0.98]"
+              className="group relative flex flex-col items-center gap-3 overflow-hidden border-2 border-border bg-muted/30 p-8 text-center transition-all hover:border-muted-foreground/30 hover:bg-muted/60 hover:shadow-md active:scale-[0.98]"
             >
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted ring-4 ring-muted transition-all group-hover:ring-muted-foreground/10">
                 <EyeOff className="h-7 w-7 text-muted-foreground" />
@@ -777,9 +748,7 @@ const EditMaids = () => {
                 variant="outline"
                 size="sm"
                 disabled={selected.size === 0}
-                onClick={() =>
-                  openVisibilityDialog({ bulk: true, makePublic: view !== "public" })
-                }
+                onClick={() => openVisibilityDialog({ bulk: true, makePublic: view !== "public" })}
                 className="h-8 text-xs"
               >
                 <EyeOff className="mr-1.5 h-3.5 w-3.5" />
@@ -802,8 +771,8 @@ const EditMaids = () => {
         {isLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-              <div key={i} className="animate-pulse rounded-xl border bg-muted/40">
-                <div className="aspect-[3/4] rounded-t-xl bg-muted" />
+              <div key={i} className="animate-pulse border bg-muted/40">
+                <div className="aspect-[3/4] bg-muted" />
                 <div className="space-y-2 p-2">
                   <div className="h-3 w-3/4 rounded bg-muted" />
                   <div className="h-2.5 w-1/2 rounded bg-muted" />
@@ -813,7 +782,7 @@ const EditMaids = () => {
             ))}
           </div>
         ) : maids.length === 0 ? (
-          <div className="rounded-xl border border-dashed py-16 text-center">
+          <div className="border border-dashed py-16 text-center">
             <EyeOff className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm font-medium text-muted-foreground">No maid records found.</p>
             <p className="mt-1 text-xs text-muted-foreground/60">Try a different search or adjust filters.</p>
@@ -831,7 +800,7 @@ const EditMaids = () => {
               return (
                 <div
                   key={maid.referenceCode}
-                  className={`group relative flex flex-col overflow-hidden rounded-xl border text-[11px] leading-tight transition-all hover:shadow-md ${isSelected ? "border-primary ring-2 ring-primary/20" : "hover:border-primary/30"}`}
+                  className={`group relative flex flex-col overflow-hidden border text-[11px] leading-tight transition-all hover:shadow-md ${isSelected ? "border-primary ring-2 ring-primary/20" : "hover:border-primary/30"}`}
                   style={{
                     animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards",
                     animationDelay: `${i * 0.04}s`,
@@ -840,8 +809,7 @@ const EditMaids = () => {
                 >
                   {/* ── Photo area ── */}
                   <div
-                    className="relative w-full cursor-pointer overflow-hidden bg-muted"
-                    style={{ aspectRatio: "3/4" }}
+                    className="relative w-full cursor-pointer bg-muted"
                     onClick={() =>
                       navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
                         state: { fromView: view },
@@ -852,10 +820,12 @@ const EditMaids = () => {
                       <img
                         src={photoPreview}
                         alt={maid.fullName}
-                        className="absolute inset-0 h-full w-full object-contain transition duration-300 group-hover:scale-105"
+                        className="block h-auto w-full"
                       />
                     ) : (
-                      <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">No Photo</div>
+                      <div className="flex h-40 items-center justify-center text-[10px] text-muted-foreground">
+                        No Photo
+                      </div>
                     )}
 
                     {/* Checkbox */}
@@ -898,9 +868,7 @@ const EditMaids = () => {
 
                     <div className="mt-auto pt-1">
                       <button
-                        onClick={() =>
-                          openVisibilityDialog({ maid, makePublic: view !== "public" })
-                        }
+                        onClick={() => openVisibilityDialog({ maid, makePublic: view !== "public" })}
                         className={`inline-flex w-full items-center justify-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${view === "public" ? "bg-primary/10 text-primary hover:bg-primary/20" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
                       >
                         {view === "public"
