@@ -49,20 +49,21 @@ const AgencyAdminLogin = () => {
     }
   }, [navigate]);
 
-  const signInWithProvider = async (provider: "google" | "facebook") => {
-    try {
-      setIsSubmitting(true);
-      const supabase = requireSupabase();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: `${window.location.origin}/auth/callback?mode=agency` },
-      });
-      if (error) throw error;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to continue");
-      setIsSubmitting(false);
-    }
-  };
+  // Social auth flow is preserved here for future use.
+  // const signInWithProvider = async (provider: "google" | "facebook") => {
+  //   try {
+  //     setIsSubmitting(true);
+  //     const supabase = requireSupabase();
+  //     const { error } = await supabase.auth.signInWithOAuth({
+  //       provider,
+  //       options: { redirectTo: `${window.location.origin}/auth/callback?mode=agency` },
+  //     });
+  //     if (error) throw error;
+  //   } catch (error) {
+  //     toast.error(error instanceof Error ? error.message : "Unable to continue");
+  //     setIsSubmitting(false);
+  //   }
+  // };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -252,6 +253,8 @@ const AgencyAdminLogin = () => {
             </form>
           ) : (
             <div className="space-y-4">
+              {/* Social auth buttons are commented out for future use */}
+              {/*
               <div className="space-y-2">
                 <Button
                   type="button"
@@ -280,6 +283,7 @@ const AgencyAdminLogin = () => {
                 <div className="text-xs text-muted-foreground">or</div>
                 <div className="h-px flex-1 bg-border" />
               </div>
+              */}
 
               <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
                 {!isLogin ? (

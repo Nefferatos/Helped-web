@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Edit, Image, Trash2, Youtube, FileDown, Check, FileText, Sheet, Send, AlertTriangle, Star } from "lucide-react";
 import { MaidProfile, formatDate } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { getClientToken, getStoredClient } from "@/lib/clientAuth";
 import {
   Dialog,
@@ -90,6 +91,29 @@ const KVRow = ({ label, value }: { label: string; value: string }) => (
     <p className="py-1 text-[12px] border-b border-dashed border-muted/60 leading-snug">{value || "—"}</p>
   </div>
 );
+
+const StarDisplay = ({ evaluation }: { evaluation?: string }) => {
+  const raw = String(evaluation || "").trim();
+  if (!raw || raw === "—" || raw === "N.A." || raw === "-") {
+    return <span className="text-muted-foreground text-xs">N.A.</span>;
+  }
+  const match = raw.match(/^(\d+)\/5/);
+  const rating = match ? parseInt(match[1], 10) : null;
+  const note = raw.replace(/^\d+\/5\s*[-–]?\s*/, "").trim();
+  if (rating === null) {
+    return <span className="text-[11px] text-muted-foreground">{raw}</span>;
+  }
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: 5 }, (_, i) => (
+          <Star key={i} className={`h-4 w-4 ${i < rating ? "fill-primary text-primary" : "text-muted-foreground/30"}`} />
+        ))}
+      </div>
+      {note && <span className="text-[10px] text-muted-foreground leading-tight text-center">{note}</span>}
+    </div>
+  );
+};
 
 const MaidProfilePage = () => {
   const location = useLocation();
@@ -187,8 +211,8 @@ const MaidProfilePage = () => {
   const workAreaNotes = (skillsPreferences.workAreaNotes as Record<string, string>) || {};
   const pastIllnesses = (introduction.pastIllnesses as Record<string, boolean>) || {};
   const workAreasOrder = ["Care of infants/children","Care of elderly","Care of disabled","General housework","Cooking","Language abilities (spoken)","Other skills, if any"] as const;
-  const rawWorkAreas = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string }]>;
-  const workAreas = workAreasOrder.map((area) => rawWorkAreas.find(([key]) => key === area) ?? null).filter(Boolean) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string }]>;
+  const rawWorkAreas = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string; rating?: number; note?: string }]>;
+  const workAreas = workAreasOrder.map((area) => rawWorkAreas.find(([key]) => key === area) ?? null).filter(Boolean) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string; rating?: number; note?: string }]>;
   const employment = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
 
   const fixedLanguages = fixedLanguageKeyMap
@@ -283,15 +307,16 @@ const MaidProfilePage = () => {
         </div>
       )}
 
-      <div className="mb-3">
+      <div className="mb-4">
         <button onClick={handleBack} className="group inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
           <ArrowLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" /> Back to all maids
         </button>
       </div>
 
-      <div className="content-card animate-fade-in-up space-y-4">
 
-        <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 rounded-lg border bg-muted/20 px-2 py-1.5">
+
+
+          <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 rounded-lg border bg-muted/20 px-2 py-1.5">
           <button onClick={handleBack} className="rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors">All Maids</button>
           <button onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))} className="rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors">Full View</button>
           <span className="mx-1 text-muted-foreground/30 select-none">|</span>
@@ -434,8 +459,14 @@ const MaidProfilePage = () => {
                 <tr className="border-b bg-muted/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-2 text-left">Area of Work</th>
                   <th className="px-4 py-2 text-center w-20">Willing</th>
-                  <th className="px-4 py-2 text-center w-20">Exp.</th>
-                  <th className="px-4 py-2 text-center w-24">Evaluation</th>
+                  <th className="px-4 py-2 text-center w-32">
+                    Exp.<br />
+                    <span className="font-normal normal-case">If yes, state the no. of years</span>
+                  </th>
+                  <th className="px-4 py-2 text-center w-36">
+                    Evaluation<br />
+                    <span className="font-normal normal-case">Stars out of 5</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y text-xs">
@@ -446,12 +477,24 @@ const MaidProfilePage = () => {
                     const formattedAge = rawAge ? rawAge.replace(/\s*-\s*/g, "–") : "";
                     const needsYears = formattedAge && !/year/i.test(formattedAge);
                     const areaLabel = area === "Care of infants/children" && formattedAge ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})` : area;
+                    const yrs = String(config.yearsOfExperience || "").trim();
                     return (
                       <tr key={area} className="hover:bg-muted/20">
                         <td className="px-4 py-2">{areaLabel}</td>
                         <td className="px-4 py-2 text-center"><YesNoBadge yes={Boolean(config.willing)} /></td>
-                        <td className="px-4 py-2 text-center"><YesNoBadge yes={Boolean(config.experience)} /></td>
-                        <td className="px-4 py-2 text-center text-muted-foreground">{config.evaluation || "—"}</td>
+                        <td className="px-4 py-2 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <YesNoBadge yes={Boolean(config.experience)} />
+                            {config.experience && yrs && (
+                              <span className="text-[11px] text-muted-foreground">
+                                {yrs} {Number(yrs) === 1 ? "year" : "years"}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <StarDisplay evaluation={config.evaluation} />
+                        </td>
                       </tr>
                     );
                   })}
@@ -542,7 +585,6 @@ const MaidProfilePage = () => {
           <span>Last updated: {formatDate(maid.updatedAt)}</span>
           <span>Hits: 1</span>
         </div>
-      </div>
 
      
       <Dialog
