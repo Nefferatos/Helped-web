@@ -130,6 +130,7 @@ const EmploymentContracts = () => {
             employer?: Record<string, unknown>;
             spouse?: Record<string, unknown>;
             familyMembers?: Array<Record<string, unknown>>;
+            documents?: Array<Record<string, unknown>>;
           };
           error?: string;
         };
@@ -147,6 +148,7 @@ const EmploymentContracts = () => {
             employer: existingData.employer.employer ?? {},
             spouse: existingData.employer.spouse ?? {},
             familyMembers: existingData.employer.familyMembers ?? [],
+            documents: existingData.employer.documents ?? [],
           }),
         });
         const createData = (await createResponse.json().catch(() => ({}))) as { error?: string };

@@ -163,6 +163,11 @@ export interface EmployerContractRecord {
   employer: Record<string, unknown>
   spouse: Record<string, unknown>
   familyMembers: Array<Record<string, unknown>>
+  documents: Array<{
+    category: string
+    fileUrl: string
+    fileName: string
+  }>
   createdAt: string
   updatedAt: string
 }
@@ -173,6 +178,8 @@ export interface EmployerContractFileRecord {
   size: number
   type: string
   dataBase64: string
+  category: string
+  refCode: string
   createdAt: string
 }
 
@@ -397,6 +404,19 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       familyMembers: Array.isArray((record as { familyMembers?: unknown }).familyMembers)
         ? ((record as { familyMembers?: Array<Record<string, unknown>> }).familyMembers ?? [])
         : [],
+      documents: Array.isArray((record as { documents?: unknown }).documents)
+        ? ((record as {
+            documents?: Array<{
+              category?: unknown
+              fileUrl?: unknown
+              fileName?: unknown
+            }>
+          }).documents ?? []).map((document) => ({
+            category: String(document.category ?? ''),
+            fileUrl: String(document.fileUrl ?? ''),
+            fileName: String(document.fileName ?? ''),
+          }))
+        : [],
       createdAt: record.createdAt ?? now(),
       updatedAt: record.updatedAt ?? record.createdAt ?? now(),
     })),
@@ -406,6 +426,8 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       size: Number((record as { size?: unknown }).size ?? 0) || 0,
       type: String((record as { type?: unknown }).type ?? ''),
       dataBase64: String((record as { dataBase64?: unknown }).dataBase64 ?? ''),
+      category: String((record as { category?: unknown }).category ?? ''),
+      refCode: String((record as { refCode?: unknown }).refCode ?? ''),
       createdAt: record.createdAt ?? now(),
     })),
     counters: {
@@ -1572,6 +1594,11 @@ export const saveEmployerContractStore = async (payload: {
   employer?: Record<string, unknown>
   spouse?: Record<string, unknown>
   familyMembers?: Array<Record<string, unknown>>
+  documents?: Array<{
+    category?: string
+    fileUrl?: string
+    fileName?: string
+  }>
 }) => {
   const data = await loadData()
 
@@ -1591,6 +1618,15 @@ export const saveEmployerContractStore = async (payload: {
     spouse: payload.spouse ?? {},
     familyMembers: Array.isArray(payload.familyMembers)
       ? payload.familyMembers
+      : [],
+    documents: Array.isArray(payload.documents)
+      ? payload.documents
+          .map((document) => ({
+            category: String(document.category ?? '').trim(),
+            fileUrl: String(document.fileUrl ?? '').trim(),
+            fileName: String(document.fileName ?? '').trim(),
+          }))
+          .filter((document) => document.category && document.fileUrl && document.fileName)
       : [],
     createdAt: index === -1 ? now() : data.employers[index].createdAt,
     updatedAt: now(),
@@ -1626,7 +1662,14 @@ export const getEmployerContractFileStore = async (id: number) => {
 }
 
 export const addEmployerContractFilesStore = async (
-  files: Array<{ name: string; size: number; type: string; dataBase64: string }>
+  files: Array<{
+    name: string
+    size: number
+    type: string
+    dataBase64: string
+    category?: string
+    refCode?: string
+  }>
 ) => {
   const data = await loadData()
   const createdAt = now()
@@ -1636,6 +1679,8 @@ export const addEmployerContractFilesStore = async (
     size: file.size,
     type: file.type,
     dataBase64: file.dataBase64,
+    category: String(file.category ?? ''),
+    refCode: String(file.refCode ?? ''),
     createdAt,
   }))
   data.employerContractFiles.unshift(...records)

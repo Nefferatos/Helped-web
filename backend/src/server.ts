@@ -76,6 +76,7 @@ app.use('/api/chats', chatRoutes)
 app.use('/api', dashboardRoutes)
 app.use('/api/employers', employerRoutes)
 app.use('/api/employer-contract-files', employerContractFileRoutes)
+app.use('/api/employer-files', employerContractFileRoutes)
 
 if (hasFrontendSite) {
   app.use(express.static(frontendDist))
