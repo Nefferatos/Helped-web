@@ -20,6 +20,7 @@ import {
   Users,
   FileCheck2,
   Loader2,
+  ArrowUp,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { downloadMergedEmployerPdf, printMergedEmployerPdf } from "@/lib/employerPdf";
@@ -891,6 +892,7 @@ const EditEmployer = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const navItems = [
     { label: "HOME", path: adminPath("/dashboard") },
@@ -1089,6 +1091,18 @@ const EditEmployer = () => {
     };
     void load();
   }, [isNew, refCode, agency, employer, familyMembers, maid, spouse]);
+
+  // ── Back to top functionality ─────────────────────────────────────────────
+  useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 320);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   // ── Submit (unchanged) ────────────────────────────────────────────────────
   const submitEmployerContract = async () => {
@@ -1860,6 +1874,16 @@ const EditEmployer = () => {
 
       </div>
     </div>
+    {showBackToTop && (
+      <button
+        type="button"
+        onClick={scrollToTop}
+        className="fixed right-4 bottom-4 z-50 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-lg shadow-black/10 transition hover:bg-primary-foreground hover:text-primary"
+      >
+        <ArrowUp className="w-4 h-4" />
+        Top
+      </button>
+    )}
   </>
   );
 };
