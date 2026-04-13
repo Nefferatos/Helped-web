@@ -74,6 +74,10 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
                 Enquiry
               </NavLink>
 
+              <NavLink to="/faq" className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}>
+                FAQ
+              </NavLink>
+
               <NavLink to="/contact" className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}>
                 Contact Us
               </NavLink>
@@ -156,6 +160,10 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
 
                 <Link to="/enquiry2" className="py-2 px-3 rounded-lg hover:bg-muted">
                   Enquiry
+                </Link>
+
+                <Link to="/faq" className="py-2 px-3 rounded-lg hover:bg-muted">
+                  FAQ
                 </Link>
 
                 <Link to="/contact" className="py-2 px-3 rounded-lg hover:bg-muted">

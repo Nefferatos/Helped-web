@@ -20,6 +20,7 @@ const tabs = [
   { label: "Home", to: "/client/home" },
   { label: "Search Maid", to: "/client/maids" },
   { label: "Messages", to: "/client/support-chat" },
+  { label: "FAQ", to: "/client/faq" },
   { label: "Enquiry", to: "/client/enquiry" },
   { label: "History", to: "/client/history" },
 ];

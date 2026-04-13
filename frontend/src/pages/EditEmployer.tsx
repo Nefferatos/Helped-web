@@ -456,7 +456,7 @@ const CategoryFileUpload = ({
         <div className="flex items-center gap-2 min-w-0">
           <FileText className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
           <span className="text-xs font-medium text-gray-700 truncate">{category}</span>
-          {hasTemplate ? (
+          {/* {hasTemplate ? (
             <span className="flex-shrink-0 text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded-full font-semibold">
               Template available
             </span>
@@ -464,19 +464,19 @@ const CategoryFileUpload = ({
             <span className="flex-shrink-0 text-[10px] bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-full font-semibold">
               No template
             </span>
-          )}
+          )} */}
         </div>
 
         <div className="flex items-center gap-2">
           {hasTemplate ? (
             <>
-              <button
+              {/* <button
                 type="button"
                 onClick={() => toast.info(`Opening template for "${category}"…`)}
                 className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors"
               >
                 <Eye className="w-3 h-3" /> View Template
-              </button>
+              </button> */}
               <span className="w-px h-3.5 bg-gray-200" />
               <button
                 type="button"
@@ -1239,11 +1239,11 @@ const EditEmployer = () => {
         <SectionCard title="Maid Information" icon={User} accent="blue">
 
           {/* Maid search / select */}
-          <div className="bg-blue-50/50 rounded-lg border border-blue-100 p-3 space-y-1.5">
+          {/* <div className="bg-blue-50/50 rounded-lg border border-blue-100 p-3 space-y-1.5">
             <p className="text-xs font-semibold text-blue-700">Quick Select — Existing Maid</p>
             <p className="text-xs text-gray-500">Search the maid directory to auto-fill the fields below.</p>
             <MaidSearchSelect onSelect={handleMaidSelect} />
-          </div>
+          </div> */}
 
           {/* Maid fields */}
           <div className="space-y-3.5">

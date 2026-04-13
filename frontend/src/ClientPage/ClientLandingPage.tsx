@@ -292,6 +292,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               <a href="#search" className="hover:text-primary transition-colors">Search Maids</a>
               <a href="/about" className="hover:text-primary transition-colors">About Us</a>
               <a href="/enquiry2" className="hover:text-primary transition-colors">Enquiry</a>
+              <a href="/faq" className="hover:text-primary transition-colors">FAQ</a>
               <a href="/contact" className="hover:text-primary transition-colors">Contact Us</a>
             </nav>
 

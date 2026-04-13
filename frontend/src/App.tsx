@@ -49,6 +49,8 @@ import AboutUs from "./ClientPage/AboutUs";
 import ContactUS from "./ClientPage/ContactUs";
 import Enquiry2 from "./ClientPage/Enquiry";
 import ServiceDetail from "./ClientPage/ServiceDetails";
+import FaqPage from "./ClientPage/FAQPage";
+
 
 
 const queryClient = new QueryClient();
@@ -268,6 +270,7 @@ const App = () => {
             <Route path="/enquiry2" element={<Enquiry2 />} />
             <Route path="/services/:slug" element={<ServiceDetail />} />
             <Route path="/employer/:refCode" element={<EditEmployer />} />
+            <Route path="/faq" element={<FaqPage />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
