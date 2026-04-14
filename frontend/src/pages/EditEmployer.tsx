@@ -76,6 +76,37 @@ const MAID_DIRECTORY = [
   },
 ];
 
+type MaidSelectionValue = {
+  id?: number | string;
+  referenceCode?: string;
+  photoDataUrl?: string;
+  photoDataUrls?: string[];
+  name: string;
+  nationality: string;
+  workPermitNo: string;
+  finNo: string;
+  passportNo: string;
+  salary: string;
+  numberOfTerms: string;
+  communicationToBuy: string;
+  nameOfReplacement: string;
+  passportOfMaid: string;
+};
+
+type PublicMaidRecord = {
+  id: number | string;
+  fullName: string;
+  referenceCode: string;
+  nationality?: string;
+  photoDataUrl?: string;
+  photoDataUrls?: string[];
+  agencyContact?: Record<string, unknown>;
+  introduction?: Record<string, unknown>;
+  isPublic?: boolean;
+};
+
+const getTodayValue = () => new Date().toISOString().slice(0, 10);
+
 // ─── Generated forms with template flags ──────────────────────────────────────
 const GENERATED_FORMS: {
   category: string;
@@ -276,11 +307,11 @@ const DatePicker = ({
 const MaidSearchSelect = ({
   onSelect,
 }: {
-  onSelect: (maid: (typeof MAID_DIRECTORY)[0] | null) => void;
+  onSelect: (maid: MaidSelectionValue | null) => void;
 }) => {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<(typeof MAID_DIRECTORY)[0] | null>(null);
+  const [selected, setSelected] = useState<MaidSelectionValue | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const filtered = MAID_DIRECTORY.filter(
@@ -298,7 +329,7 @@ const MaidSearchSelect = ({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const handleSelect = (m: (typeof MAID_DIRECTORY)[0]) => {
+  const handleSelect = (m: MaidSelectionValue) => {
     setSelected(m);
     setQuery(m.name);
     setOpen(false);
@@ -888,11 +919,20 @@ const BulkUploadModal = ({
 // ─── Main Component ───────────────────────────────────────────────────────────
 const EditEmployer = () => {
   const { refCode } = useParams();
-  const isNew = refCode === "new";
   const navigate = useNavigate();
   const location = useLocation();
+  const isCreateRoute =
+    location.pathname === adminPath("/employment-contracts/new") || refCode === "new";
+  const isNew = isCreateRoute;
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [maidSearch, setMaidSearch] = useState("");
+  const [publicMaids, setPublicMaids] = useState<PublicMaidRecord[]>([]);
+  const [isLoadingPublicMaids, setIsLoadingPublicMaids] = useState(false);
+  const [publicMaidsError, setPublicMaidsError] = useState<string | null>(null);
+  const [selectedMaidId, setSelectedMaidId] = useState<number | string | null>(null);
+  const [selectedPublicMaid, setSelectedPublicMaid] = useState<PublicMaidRecord | null>(null);
 
   const navItems = [
     { label: "HOME", path: adminPath("/dashboard") },
@@ -907,6 +947,7 @@ const EditEmployer = () => {
 
   // ── State (unchanged field names & structure) ─────────────────────────────
   const [maid, setMaid] = useState({
+    referenceCode: "",
     name: isNew ? "" : "Saraswathi Murugan",
     nationality: isNew ? "" : "Indian maid",
     workPermitNo: "",
@@ -917,9 +958,12 @@ const EditEmployer = () => {
     communicationToBuy: "",
     nameOfReplacement: isNew ? "" : "Alpha Ranger",
     passportOfMaid: "",
+    photoDataUrl: "",
+    photoDataUrls: [] as string[],
   });
 
   const [agency, setAgency] = useState({
+    caseReferenceNumber: refCode || "",
     contractDate: isNew ? "" : "25.11.2016",
     serviceFee: isNew ? "" : "1399",
     deposit: "",
@@ -930,6 +974,7 @@ const EditEmployer = () => {
     placementFee: isNew ? "" : "1399",
     balanceFee: "",
     agencyWitness: isNew ? "" : "Rahimunisha Binti Muhammadhan (R1107570)",
+    maidId: "",
   });
 
   const [employer, setEmployer] = useState({
@@ -994,6 +1039,25 @@ const EditEmployer = () => {
   // Bulk upload
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
 
+  const stepSubtitle = !isNew
+    ? "Employment Contract"
+    : step === 1
+    ? "Agency"
+    : step === 2
+    ? "Select Maid"
+    : "Employer Details";
+
+  const displayedCaseReferenceNumber = agency.caseReferenceNumber || refCode || "Auto-generated on save";
+
+  const filteredPublicMaids = publicMaids.filter((publicMaid) => {
+    const term = maidSearch.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      publicMaid.fullName.toLowerCase().includes(term) ||
+      publicMaid.referenceCode.toLowerCase().includes(term)
+    );
+  });
+
   const handleBulkUploadComplete = (byCategory: Record<string, UploadedFile[]>) => {
     setCategoryUploads((prev) => {
       const merged = { ...prev };
@@ -1047,9 +1111,57 @@ const EditEmployer = () => {
     }
   };
 
+  useEffect(() => {
+    if (!isNew || agency.contractDate) return;
+    setAgency((prev) => ({
+      ...prev,
+      contractDate: getTodayValue(),
+    }));
+  }, [agency.contractDate, isNew]);
+
+  useEffect(() => {
+    setStep(isNew ? 1 : 3);
+  }, [isNew, refCode]);
+
+  useEffect(() => {
+    if (!isNew) return;
+
+    const loadPublicMaids = async () => {
+      try {
+        setIsLoadingPublicMaids(true);
+        setPublicMaidsError(null);
+        const response = await fetch("/api/public-maids");
+        const data = (await response.json().catch(() => ({}))) as {
+          maids?: PublicMaidRecord[];
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load public maids");
+        }
+
+        const nextMaids = Array.isArray(data.maids)
+          ? data.maids.filter((publicMaid) => publicMaid?.isPublic !== false)
+          : [];
+
+        setPublicMaids(nextMaids);
+      } catch (error) {
+        setPublicMaidsError(error instanceof Error ? error.message : "Failed to load public maids");
+      } finally {
+        setIsLoadingPublicMaids(false);
+      }
+    };
+
+    void loadPublicMaids();
+  }, [isNew]);
+
   // ── Load existing data ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!refCode || isNew) return;
+    if (isNew) {
+      setCategoryUploads({});
+      return;
+    }
+    if (!refCode) return;
     const load = async () => {
       try {
         const response = await fetch(`/api/employers/${encodeURIComponent(refCode)}`);
@@ -1068,11 +1180,11 @@ const EditEmployer = () => {
           };
         };
         if (!response.ok || !data.employer) return;
-        if (data.employer.maid) setMaid((data.employer.maid as typeof maid) ?? maid);
-        if (data.employer.agency) setAgency((data.employer.agency as typeof agency) ?? agency);
-        if (data.employer.employer) setEmployer((data.employer.employer as typeof employer) ?? employer);
-        if (data.employer.spouse) setSpouse((data.employer.spouse as typeof spouse) ?? spouse);
-        if (data.employer.familyMembers) setFamilyMembers((data.employer.familyMembers as typeof familyMembers) ?? familyMembers);
+        if (data.employer.maid) setMaid(data.employer.maid as typeof maid);
+        if (data.employer.agency) setAgency(data.employer.agency as typeof agency);
+        if (data.employer.employer) setEmployer(data.employer.employer as typeof employer);
+        if (data.employer.spouse) setSpouse(data.employer.spouse as typeof spouse);
+        if (data.employer.familyMembers) setFamilyMembers(data.employer.familyMembers as typeof familyMembers);
         if (Array.isArray(data.employer.documents)) {
           const uploadsByCategory = data.employer.documents.reduce<Record<string, UploadedFile[]>>((acc, document) => {
             const category = String(document.category ?? "").trim();
@@ -1084,13 +1196,15 @@ const EditEmployer = () => {
             return acc;
           }, {});
           setCategoryUploads(uploadsByCategory);
+        } else {
+          setCategoryUploads({});
         }
       } catch {
         // no-op
       }
     };
     void load();
-  }, [isNew, refCode, agency, employer, familyMembers, maid, spouse]);
+  }, [isNew, refCode]);
 
   // ── Back to top functionality ─────────────────────────────────────────────
   useEffect(() => {
@@ -1104,31 +1218,89 @@ const EditEmployer = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  const goToNextStep = () => {
+    if (step === 1) {
+      if (!agency.contractDate.trim()) {
+        toast.error("Contract date is required");
+        return;
+      }
+      if (!agency.serviceFee.trim()) {
+        toast.error("Service fee is required");
+        return;
+      }
+      if (!agency.placementFee.trim()) {
+        toast.error("Placement fee is required");
+        return;
+      }
+      if (!agency.agencyWitness.trim()) {
+        toast.error("Agency witness is required");
+        return;
+      }
+    }
+
+    if (step === 2 && !selectedMaidId) {
+      toast.error("Please select a maid before continuing");
+      return;
+    }
+
+    setStep((prev) => (prev < 3 ? ((prev + 1) as 1 | 2 | 3) : prev));
+    scrollToTop();
+  };
+
+  const goToPreviousStep = () => {
+    setStep((prev) => (prev > 1 ? ((prev - 1) as 1 | 2 | 3) : prev));
+    scrollToTop();
+  };
+
   // ── Submit (unchanged) ────────────────────────────────────────────────────
   const submitEmployerContract = async () => {
     if (isSubmitting) return;
+    if (isNew && !selectedMaidId) {
+      toast.error("Please select a maid first");
+      return;
+    }
     if (!employer.name.trim()) {
       toast.error("Employer name is required");
       return;
     }
     try {
       setIsSubmitting(true);
-      const response = await fetch("/api/employers", {
+      const requestBody = isNew
+        ? {
+            case_reference_number: agency.caseReferenceNumber || null,
+            contract_date: agency.contractDate,
+            service_fee: agency.serviceFee,
+            placement_fee: agency.placementFee,
+            agency_witness: agency.agencyWitness,
+            maid_id: selectedMaidId,
+            refCode: null,
+            maid,
+            agency: {
+              ...agency,
+              maidId: selectedMaidId,
+            },
+            employer,
+            spouse,
+            familyMembers,
+          }
+        : {
+            refCode: isNew ? null : refCode,
+            maid,
+            agency,
+            employer,
+            spouse,
+            familyMembers,
+            documents: Object.values(categoryUploads).flat().map((file) => ({
+              category: file.category,
+              fileUrl: file.url,
+              fileName: file.name,
+            })),
+          };
+
+      const response = await fetch(isNew ? "/api/employment-contract" : "/api/employers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          refCode: isNew ? null : refCode,
-          maid,
-          agency,
-          employer,
-          spouse,
-          familyMembers,
-          documents: Object.values(categoryUploads).flat().map((file) => ({
-            category: file.category,
-            fileUrl: file.url,
-            fileName: file.name,
-          })),
-        }),
+        body: JSON.stringify(requestBody),
       });
       const data = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -1137,8 +1309,7 @@ const EditEmployer = () => {
       if (!response.ok || !data.employer?.refCode)
         throw new Error(data.error || "Failed to submit employer contract");
       toast.success("Employer contract saved");
-      if (isNew)
-        navigate(`/employer/${encodeURIComponent(data.employer.refCode)}`, { replace: true });
+      navigate(adminPath("/employment-contracts"), { replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to submit employer contract");
     } finally {
@@ -1147,14 +1318,18 @@ const EditEmployer = () => {
   };
 
   // ── Handle maid auto-fill ─────────────────────────────────────────────────
-  const handleMaidSelect = (selected: (typeof MAID_DIRECTORY)[0] | null) => {
+  const handleMaidSelect = (selected: MaidSelectionValue | null) => {
     if (!selected) {
       setMaidAutoFilled(false);
+      setSelectedMaidId(null);
+      setSelectedPublicMaid(null);
+      setAgency((prev) => ({ ...prev, maidId: "" }));
       return;
     }
     setMaid((prev) => ({
       ...prev,
       name: selected.name,
+      referenceCode: selected.referenceCode ?? "",
       nationality: selected.nationality,
       workPermitNo: selected.workPermitNo,
       finNo: selected.finNo,
@@ -1164,7 +1339,11 @@ const EditEmployer = () => {
       communicationToBuy: selected.communicationToBuy,
       nameOfReplacement: selected.nameOfReplacement,
       passportOfMaid: selected.passportOfMaid,
+      photoDataUrl: selected.photoDataUrl ?? "",
+      photoDataUrls: Array.isArray(selected.photoDataUrls) ? selected.photoDataUrls : [],
     }));
+    setSelectedMaidId(selected.id ?? null);
+    setAgency((prev) => ({ ...prev, maidId: String(selected.id ?? "") }));
     setMaidAutoFilled(true);
   };
 
@@ -1201,14 +1380,26 @@ const EditEmployer = () => {
       <div className="flex items-start justify-between mb-6">
         <div>
           <Link
-            to="/agencyadmin/employment-contracts"
+            to={adminPath("/employment-contracts")}
             className="text-xs text-primary hover:underline flex items-center gap-1 mb-2"
           >
-            ← Back to Employment Listing
+            ← Back to Employer Listing
           </Link>
           <h2 className="text-xl font-bold text-gray-900">
-            {isNew ? "Add a New Employer" : "Edit Employer Record"}
+            {isNew ? "Add a New Employer" : "Edit Employment Contract"}
           </h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary mt-1">
+            {stepSubtitle}
+          </p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {isNew
+              ? step === 1
+                ? "Set up the agency contract details before selecting a maid."
+                : step === 2
+                ? "Please Search and Select a Maid for this Employer."
+                : "Review the selected maid and complete the employer details."
+              : "This page loads the saved contract fields so you can edit them directly."}
+          </p>
           {!isNew && (
             <p className="text-sm text-gray-500 mt-0.5">
               Reference:{" "}
@@ -1218,24 +1409,49 @@ const EditEmployer = () => {
         </div>
 
         {/* Quick-save button in header for convenience */}
-        <Button
-          onClick={() => void submitEmployerContract()}
-          disabled={isSubmitting}
-          className="hidden sm:flex items-center gap-2"
-        >
-          {isSubmitting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Check className="w-4 h-4" />
-          )}
-          {isNew ? "Create Record" : "Save Changes"}
-        </Button>
+        {!isNew || step === 3 ? (
+          <Button
+            onClick={() => void submitEmployerContract()}
+            disabled={isSubmitting}
+            className="hidden sm:flex items-center gap-2"
+          >
+            {isSubmitting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Check className="w-4 h-4" />
+            )}
+            {isNew ? "Generate Contract" : "Save Changes"}
+          </Button>
+        ) : null}
       </div>
 
       {/* ── Form body ─────────────────────────────────────────────────────── */}
       <div className="space-y-5 animate-fade-in-up">
+        {isNew ? (
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 1, label: "1. Contract Setup" },
+              { id: 2, label: "2. Select Maid" },
+              { id: 3, label: "3. Employer Details" },
+            ].map((item) => (
+              <div
+                key={item.id}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  step === item.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : step > item.id
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-gray-200 bg-white text-gray-500"
+                }`}
+              >
+                {item.label}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         {/* ── SECTION 1: Maid Information ──────────────────────────────── */}
+        {!isNew ? (
         <SectionCard title="Maid Information" icon={User} accent="blue">
 
           {/* Maid search / select */}
@@ -1349,6 +1565,203 @@ const EditEmployer = () => {
             </Field>
           </div>
         </SectionCard>
+        ) : null}
+
+        {isNew && step === 1 ? (
+          <>
+            <SectionCard title="Employer Contract Setup" icon={Scroll} accent="amber">
+              <div className="space-y-3.5">
+                <Field label="Case Reference Number">
+                  <Input value={displayedCaseReferenceNumber} readOnly className="bg-gray-50 text-gray-500" />
+                </Field>
+
+                <Field label="Contract Date" required>
+                  <Input
+                    type="date"
+                    value={agency.contractDate}
+                    onChange={(e) => setAgency({ ...agency, contractDate: e.target.value })}
+                    className="max-w-[180px]"
+                  />
+                </Field>
+
+                <div className="grid sm:grid-cols-2 gap-3.5">
+                  <Field label="Service Fee" required>
+                    <Input
+                      value={agency.serviceFee}
+                      onChange={(e) => setAgency({ ...agency, serviceFee: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </Field>
+                  <Field label="Placement Fee (Maid Loan)" required>
+                    <Input
+                      value={agency.placementFee}
+                      onChange={(e) => setAgency({ ...agency, placementFee: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Agency Witness" required>
+                  <Select
+                    value={agency.agencyWitness || undefined}
+                    onValueChange={(v) => setAgency({ ...agency, agencyWitness: v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select witness" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Balamurugan S/O Subramaniam (R1218275">
+                        Balamurugan S/O Subramaniam (R1218275)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+            </SectionCard>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 pt-4">
+              <Button variant="outline" onClick={() => navigate(adminPath("/employment-contracts"))} className="w-full sm:w-auto">
+                Back to Employer Listing
+              </Button>
+              <Button onClick={goToNextStep} className="w-full sm:w-auto">
+                Next
+              </Button>
+            </div>
+          </>
+        ) : null}
+
+        {isNew && step === 2 ? (
+          <>
+            <SectionCard title="The Maid Employed" icon={User} accent="blue">
+              <div className="space-y-4">
+                <Field label="Search Maid">
+                  <Input
+                    value={maidSearch}
+                    onChange={(e) => setMaidSearch(e.target.value)}
+                    placeholder="Search by maid name or reference code"
+                  />
+                </Field>
+
+                {publicMaidsError ? (
+                  <p className="text-sm text-rose-500">{publicMaidsError}</p>
+                ) : null}
+
+                <div className="overflow-x-auto rounded-lg border border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Reference</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Name</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Nationality</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Passport</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isLoadingPublicMaids ? (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-6 text-center text-sm text-gray-500">Loading public maids…</td>
+                        </tr>
+                      ) : filteredPublicMaids.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-6 text-center text-sm text-gray-500">No public maids found.</td>
+                        </tr>
+                      ) : (
+                        filteredPublicMaids.map((publicMaid) => {
+                          const passportNo = String(publicMaid.agencyContact?.passportNo ?? "");
+                          const isSelected = selectedMaidId === publicMaid.id;
+                          return (
+                            <tr key={String(publicMaid.id)} className={isSelected ? "bg-blue-50/70" : "bg-white"}>
+                              <td className="border-t px-3 py-2 text-xs">{publicMaid.referenceCode}</td>
+                              <td className="border-t px-3 py-2 text-xs font-medium text-gray-800">{publicMaid.fullName}</td>
+                              <td className="border-t px-3 py-2 text-xs">{publicMaid.nationality || "—"}</td>
+                              <td className="border-t px-3 py-2 text-xs">{passportNo || "—"}</td>
+                              <td className="border-t px-3 py-2 text-xs">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={isSelected ? "default" : "outline"}
+                                  onClick={() => {
+                                    setSelectedPublicMaid(publicMaid);
+                                    handleMaidSelect({
+                                      id: publicMaid.id,
+                                      referenceCode: publicMaid.referenceCode,
+                                      photoDataUrl: publicMaid.photoDataUrl,
+                                      photoDataUrls: publicMaid.photoDataUrls,
+                                      name: publicMaid.fullName,
+                                      nationality: String(publicMaid.nationality || ""),
+                                      workPermitNo: "",
+                                      finNo: "",
+                                      passportNo,
+                                      salary: String(publicMaid.introduction?.expectedSalary || ""),
+                                      numberOfTerms: "",
+                                      communicationToBuy: "",
+                                      nameOfReplacement: "",
+                                      passportOfMaid: "",
+                                    });
+                                  }}
+                                >
+                                  {isSelected ? "Selected" : "Select"}
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </SectionCard>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 pt-4">
+              <Button variant="outline" onClick={goToPreviousStep} className="w-full sm:w-auto">
+                Back
+              </Button>
+              <Button onClick={goToNextStep} disabled={!selectedMaidId} className="w-full sm:w-auto">
+                Next
+              </Button>
+            </div>
+          </>
+        ) : null}
+
+        {!isNew || step === 3 ? (
+        <>
+        {isNew ? (
+          <SectionCard title="Selected Maid" icon={User} accent="blue">
+            <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+              <div className="overflow-hidden rounded-xl border bg-gray-50">
+                {((Array.isArray(maid.photoDataUrls) && maid.photoDataUrls[0]) || maid.photoDataUrl) ? (
+                  <img
+                    src={(Array.isArray(maid.photoDataUrls) && maid.photoDataUrls[0]) || maid.photoDataUrl}
+                    alt={selectedPublicMaid?.fullName || maid.name || "Selected maid"}
+                    className="h-full min-h-[220px] w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex min-h-[220px] items-center justify-center text-sm text-gray-400">
+                    No profile photo
+                  </div>
+                )}
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3.5">
+              <Field label="Name">
+                <Input value={selectedPublicMaid?.fullName || maid.name} readOnly className="bg-gray-50 text-gray-500" />
+              </Field>
+              <Field label="Reference Code">
+                <Input value={selectedPublicMaid?.referenceCode || ""} readOnly className="bg-gray-50 text-gray-500" />
+              </Field>
+              <Field label="Nationality">
+                <Input value={selectedPublicMaid?.nationality || maid.nationality} readOnly className="bg-gray-50 text-gray-500" />
+              </Field>
+              <Field label="Passport / FIN">
+                <Input
+                  value={maid.passportNo || maid.finNo}
+                  readOnly
+                  className="bg-gray-50 text-gray-500"
+                />
+              </Field>
+              </div>
+            </div>
+          </SectionCard>
+        ) : null}
 
         {/* ── SECTION 2: Employer Information ──────────────────────────── */}
         <SectionCard title="Employer Information" icon={Building2} accent="indigo">
@@ -1690,7 +2103,11 @@ const EditEmployer = () => {
           </SectionCard>
         ))}
 
+        </>
+        ) : null}
+
         {/* ── SECTION 5: Contract Details (Agency / Invoice) ────────────── */}
+        {!isNew ? (
         <SectionCard title="Contract Details" icon={Scroll} accent="amber">
           <div className="space-y-3.5">
             <Field label="Contract Date">
@@ -1793,48 +2210,65 @@ const EditEmployer = () => {
             </Field>
           </div>
         </SectionCard>
+        ) : null}
 
         {/* ── CTA Buttons ───────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 pb-1 border-t border-gray-100">
-          <Button
-            onClick={() => void submitEmployerContract()}
-            disabled={isSubmitting}
-            className="w-full sm:w-auto min-w-[180px] flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Check className="w-4 h-4" />
-            )}
-            {isSubmitting
-              ? "Saving…"
-              : isNew
-              ? "Create & Generate Forms"
-              : "Save & Generate Forms"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => void handleDownloadForms()}
-            className="w-full sm:w-auto min-w-[180px] flex items-center justify-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Download Merged PDF
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => void handlePrintForms()}
-            className="w-full sm:w-auto min-w-[180px] flex items-center justify-center gap-2"
-          >
-            <Eye className="w-4 h-4" />
-            Print Forms
-          </Button>
-        </div>
+        {!isNew || step === 3 ? (
+          <>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 pb-1 border-t border-gray-100">
+              {isNew ? (
+                <Button variant="outline" onClick={goToPreviousStep} className="w-full sm:w-auto min-w-[180px]">
+                  Back
+                </Button>
+              ) : null}
+              <Button
+                onClick={() => void submitEmployerContract()}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto min-w-[180px] flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                {isSubmitting
+                  ? "Saving…"
+                  : isNew
+                  ? "Generate Contract"
+                  : "Save & Generate Forms"}
+              </Button>
+              {!isNew ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleDownloadForms()}
+                    className="w-full sm:w-auto min-w-[180px] flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Merged PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handlePrintForms()}
+                    className="w-full sm:w-auto min-w-[180px] flex items-center justify-center gap-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Print Forms
+                  </Button>
+                </>
+              ) : null}
+            </div>
 
-        <p className="text-xs text-gray-400 text-center pb-2">
-          Auto-generated forms are for reference only. Please review before distribution.
-        </p>
+            <p className="text-xs text-gray-400 text-center pb-2">
+              {isNew
+                ? "Generate the contract after reviewing the selected maid and employer details."
+                : "Auto-generated forms are for reference only. Please review before distribution."}
+            </p>
+          </>
+        ) : null}
 
         {/* ── SECTION 6: Document Upload per Category ───────────────────── */}
+        {!isNew ? (
         <SectionCard title="Documents & File Uploads" icon={FileCheck2} accent="slate">
           <div className="-mt-1 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <p className="text-xs text-gray-500">
@@ -1863,14 +2297,17 @@ const EditEmployer = () => {
             ))}
           </div>
         </SectionCard>
+        ) : null}
 
         {/* ── Bulk Upload Modal ──────────────────────────────────────────── */}
-        <BulkUploadModal
-          open={bulkUploadOpen}
-          onClose={() => setBulkUploadOpen(false)}
-          refCode={refCode || "temp"}
-          onUploadComplete={handleBulkUploadComplete}
-        />
+        {!isNew ? (
+          <BulkUploadModal
+            open={bulkUploadOpen}
+            onClose={() => setBulkUploadOpen(false)}
+            refCode={refCode || "temp"}
+            onUploadComplete={handleBulkUploadComplete}
+          />
+        ) : null}
 
       </div>
     </div>

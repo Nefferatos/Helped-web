@@ -13,9 +13,12 @@ type SimpleMaidFilters = {
 
 type ClientPortalDraft = {
   keyword: string;
+  agencyPreference: string;
+  biodataCreatedWithin: string;
   maidType: string;
   hasChildren: boolean;
   withVideo?: boolean;
+  willingOffDays?: boolean;
   natFilipino: boolean;
   natIndonesian: boolean;
   natMyanmar: boolean;
@@ -129,6 +132,27 @@ const toLanguageText = (raw: unknown): string => {
 //   "College/Degree (>=13 yrs)"
 const normalizeEducation = (raw: string): string => raw.toLowerCase();
 
+const offDayCompensationKeys = [
+  "Can work on off-days with compensation?",
+  "Willing to work on off-days with compensation?",
+  "Willing to work on off-days with  compensation?",
+] as const;
+
+const getRecencyCutoff = (label: string) => {
+  const value = label.trim().toLowerCase();
+  const cutoff = new Date();
+
+  if (value === "1 week") cutoff.setDate(cutoff.getDate() - 7);
+  else if (value === "2 weeks") cutoff.setDate(cutoff.getDate() - 14);
+  else if (value === "1 month") cutoff.setMonth(cutoff.getMonth() - 1);
+  else if (value === "3 months") cutoff.setMonth(cutoff.getMonth() - 3);
+  else if (value === "6 months") cutoff.setMonth(cutoff.getMonth() - 6);
+  else if (value === "1 year") cutoff.setFullYear(cutoff.getFullYear() - 1);
+  else return null;
+
+  return cutoff;
+};
+
 // ─── Working Experience ──────────────────────────────────────────────────────
 // AddMaid employment history stores country as exact strings from the dropdown:
 //   "Singapore", "Hong Kong", "Taiwan", "Malaysia",
@@ -142,6 +166,8 @@ const isClientPortalDraft = (filters: unknown): filters is ClientPortalDraft => 
   const any = filters as Record<string, unknown>;
   return (
     typeof any.keyword === "string" &&
+    typeof any.agencyPreference === "string" &&
+    typeof any.biodataCreatedWithin === "string" &&
     typeof any.natNoPreference === "boolean" &&
     typeof any.expNoPreference === "boolean" &&
     typeof any.dutyNoPreference === "boolean" &&
@@ -172,6 +198,19 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         const text = `${maid.fullName} ${maid.referenceCode} ${maid.nationality} ${maid.type} ${intro}`.toLowerCase();
         if (!text.includes(f.keyword.trim().toLowerCase())) return false;
       }
+      if (f.agencyPreference.trim() && f.agencyPreference !== "No Preference") {
+        const agencyContact = (maid.agencyContact || maidRecord["agencyContact"] || {}) as Record<string, unknown>;
+        const companyName = String(agencyContact.companyName || "").trim().toLowerCase();
+        if (!companyName.includes(f.agencyPreference.trim().toLowerCase())) return false;
+      }
+      if (f.biodataCreatedWithin.trim() && f.biodataCreatedWithin !== "No Preference") {
+        const cutoff = getRecencyCutoff(f.biodataCreatedWithin);
+        if (cutoff) {
+          const createdAtRaw = String(maidRecord["createdAt"] || maidRecord["updatedAt"] || "").trim();
+          const createdAt = createdAtRaw ? new Date(createdAtRaw) : null;
+          if (!createdAt || Number.isNaN(createdAt.getTime()) || createdAt < cutoff) return false;
+        }
+      }
 
       // ── Maid Type ──────────────────────────────────────────────────────────
       // FIX: compare case-insensitively because AddMaid stores "New maid" but
@@ -189,6 +228,11 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
           maidRecord["videoDataUrl"] ?? maidRecord["videoUrl"] ?? maidRecord["video"] ?? ""
         ).trim();
         if (!video) return false;
+      }
+      if (f.willingOffDays) {
+        const introduction = (maid.introduction || maidRecord["introduction"] || {}) as Record<string, unknown>;
+        const canWorkOffDays = offDayCompensationKeys.some((key) => introduction[key] === true);
+        if (!canWorkOffDays) return false;
       }
 
       // ── Nationality ────────────────────────────────────────────────────────

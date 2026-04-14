@@ -1,31 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, X, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "@/components/ui/sonner";
-import { getClientAuthHeaders, getClientToken } from "@/lib/clientAuth";
-import {
-  calculateAge,
-  getPrimaryPhoto,
-  type MaidProfile,
-} from "@/lib/maids";
-import { filterMaids } from "@/lib/maidFilter";
+import { getClientToken } from "@/lib/clientAuth";
 import "./ClientTheme.css";
-
-interface CompanyProfileApi {
-  company_name?: string;
-  short_name?: string;
-}
-
-interface CompanyResponse {
-  companyProfile?: CompanyProfileApi;
-}
-
-const getAgencyName = (maid: MaidProfile, company: CompanyProfileApi | null) => {
-  const agencyContact = maid.agencyContact as Record<string, unknown>;
-  return String(agencyContact.companyName || company?.company_name || company?.short_name || "Agency");
-};
 
 interface Filters {
   keyword: string;
@@ -129,8 +108,6 @@ const defaultFilters: Filters = {
   relNoPreference: true,
 };
 
-const ITEMS_PER_PAGE = 12;
-
 const PREFERENCE_GROUPS = [
   { noPreference: "natNoPreference" as const, specifics: ["natFilipino","natIndonesian","natMyanmar","natIndian","natSriLankan","natCambodian","natBangladeshi","natOthers"] as const },
   { noPreference: "expNoPreference" as const, specifics: ["expHomeCountry","expSingapore","expMalaysia","expHongKong","expTaiwan","expMiddleEast","expOtherCountries"] as const },
@@ -169,6 +146,60 @@ const FILTER_LABELS: Partial<Record<keyof Filters, string>> = {
   willingOffDays: "Willing Off-days", hasChildren: "Has Children", withVideo: "With Video",
 };
 
+const parseDraftFromSearchParams = (searchParams: URLSearchParams): Filters | null => {
+  const raw = searchParams.get("filters");
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<Filters>;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      ...defaultFilters,
+      ...parsed,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getSelectedNationalityFromDraft = (draft: Filters) =>
+  [
+    draft.natFilipino ? "Filipino maid" : "",
+    draft.natIndonesian ? "Indonesian maid" : "",
+    draft.natMyanmar ? "Myanmar maid" : "",
+    draft.natIndian ? "Indian maid" : "",
+    draft.natSriLankan ? "Sri Lankan maid" : "",
+    draft.natCambodian ? "Cambodian maid" : "",
+    draft.natBangladeshi ? "Bangladeshi maid" : "",
+    draft.natOthers ? "Others" : "",
+  ].find(Boolean) || "";
+
+const getSelectedEducationFromDraft = (draft: Filters) => {
+  if (draft.eduCollege) return "College/Degree (>=12 yrs)";
+  if (draft.eduHighSchool) return "Secondary (>=8 yrs)";
+  if (draft.eduSecondary) return "Secondary (>=8 yrs)";
+  if (draft.eduPrimary) return "Primary (<=6 yrs)";
+  return "";
+};
+
+const getSelectedLanguageFromDraft = (draft: Filters) => {
+  if (draft.langEnglish) return "English";
+  if (draft.langMandarin) return "Mandarin";
+  if (draft.langBahasaIndonesia) return "Malay";
+  if (draft.langHindi) return "Hindi";
+  if (draft.langTamil) return "Tamil";
+  return "";
+};
+
+const getSelectedAgeFromDraft = (draft: Filters) => {
+  if (draft.age21to25) return "21 to 25";
+  if (draft.age26to30) return "26 to 30";
+  if (draft.age31to35) return "31 to 35";
+  if (draft.age36to40) return "36 to 40";
+  if (draft.age41above) return "41 to 45";
+  return "";
+};
+
 const CB = ({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) => (
   <label className="flex cursor-pointer items-center gap-2 select-none group">
     <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
@@ -200,14 +231,17 @@ const SectionHead = ({ children, count }: { children: React.ReactNode; count?: n
 
 const ClientMaidsPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialDraft = useMemo(() => parseDraftFromSearchParams(searchParams) ?? defaultFilters, [searchParams]);
 
-  const [maids, setMaids] = useState<MaidProfile[]>([]);
-  const [company, setCompany] = useState<CompanyProfileApi | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [draft, setDraft] = useState<Filters>(defaultFilters);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [draft, setDraft] = useState<Filters>(initialDraft);
   const [filtersOpen, setFiltersOpen] = useState(true);
+
+  useEffect(() => {
+    const nextDraft = parseDraftFromSearchParams(searchParams);
+    if (!nextDraft) return;
+    setDraft(nextDraft);
+  }, [searchParams]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -219,15 +253,6 @@ const ClientMaidsPage = () => {
     }
     return count;
   }, [draft]);
-
-  const hasLivePreview = useMemo(() => {
-    for (const key of Object.keys(defaultFilters) as Array<keyof Filters>) {
-      if (draft[key] !== defaultFilters[key]) return true;
-    }
-    return false;
-  }, [draft]);
-
-  const showResults = hasSearched || hasLivePreview;
 
   const activeTags = useMemo(() => {
     const tags: { key: keyof Filters; label: string }[] = [];
@@ -264,50 +289,34 @@ const ClientMaidsPage = () => {
     if (group) { toggle(key); } else { set(key, false); }
   };
 
-  const clearAllFilters = () => { setDraft(defaultFilters); setHasSearched(false); };
+  const clearAllFilters = () => { setDraft(defaultFilters); };
 
   const countGroup = (keys: readonly (keyof Filters)[]) => keys.filter((k) => draft[k] === true).length;
 
   useEffect(() => {
     if (!getClientToken()) { navigate("/employer-login"); return; }
-    const loadMaids = async () => {
-      try {
-        setIsLoading(true);
-        const [maidsRes, companyRes] = await Promise.all([
-          fetch("/api/maids?visibility=public", { headers: { ...getClientAuthHeaders() } }),
-          fetch("/api/company"),
-        ]);
-        const maidData = await maidsRes.json();
-        const companyData = (await companyRes.json()) as CompanyResponse;
-        if (!maidsRes.ok || !maidData.maids) throw new Error(maidData.error || "Failed to load maids");
-        setMaids(maidData.maids.filter((m: MaidProfile) => m.isPublic));
-        setCompany(companyData.companyProfile ?? null);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load maids");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    void loadMaids();
   }, [navigate]);
 
-  const filteredMaids = useMemo(() => filterMaids(maids, draft), [maids, draft]);
-  useEffect(() => { setCurrentPage(1); }, [draft]);
+  const handleSearch = () => {
+    setFiltersOpen(false);
 
-  const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
-  const pagedMaids = filteredMaids.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+    const nextSearchParams = new URLSearchParams();
+    nextSearchParams.set("filters", JSON.stringify(draft));
+    if (draft.keyword.trim()) nextSearchParams.set("q", draft.keyword.trim());
+    if (draft.maidType.trim()) nextSearchParams.set("type", draft.maidType.trim());
+    const activeNationality = getSelectedNationalityFromDraft(draft);
+    if (activeNationality) nextSearchParams.set("nationality", activeNationality);
+    const selectedEducation = getSelectedEducationFromDraft(draft);
+    if (selectedEducation) nextSearchParams.set("education", selectedEducation);
+    const selectedLanguage = getSelectedLanguageFromDraft(draft);
+    if (selectedLanguage) nextSearchParams.set("language", selectedLanguage);
+    const selectedAge = getSelectedAgeFromDraft(draft);
+    if (selectedAge) nextSearchParams.set("age", selectedAge);
+    if (draft.willingOffDays) nextSearchParams.set("offDays", "true");
+    if (draft.withVideo) nextSearchParams.set("withVideo", "true");
 
-  const handleSearch = () => { setCurrentPage(1); setHasSearched(true); setFiltersOpen(false); };
-
-  const pageNumbers = useMemo(() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const pages: (number | "...")[] = [1];
-    if (currentPage > 3) pages.push("...");
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
-    if (currentPage < totalPages - 2) pages.push("...");
-    pages.push(totalPages);
-    return pages;
-  }, [totalPages, currentPage]);
+    navigate(`/client/maids/search?${nextSearchParams.toString()}`);
+  };
 
   return (
     <div className="client-page-theme min-h-screen bg-background">
@@ -631,186 +640,6 @@ const ClientMaidsPage = () => {
         </Card>
 
         {/* ══ RESULTS ══════════════════════════════════════════════════════ */}
-        {showResults && (
-          <div>
-            <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
-              <p className="text-sm text-muted-foreground">
-                {isLoading ? (
-                  "Loading maid profiles…"
-                ) : (
-                  <>
-                    <span className="font-semibold text-foreground">{filteredMaids.length}</span>
-                    {" "}maid{filteredMaids.length !== 1 ? "s" : ""} found
-                    {totalPages > 1 && <span> · Page {currentPage} of {totalPages}</span>}
-                  </>
-                )}
-              </p>
-              {!filtersOpen && (
-                <button
-                  type="button"
-                  onClick={() => setFiltersOpen(true)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                >
-                  <SlidersHorizontal className="h-3 w-3" />
-                  Edit Filters
-                  {activeFilterCount > 0 && (
-                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {isLoading ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="flex flex-col overflow-hidden border bg-card shadow-sm animate-pulse">
-                    <div className="h-56 bg-muted" />
-                    <div className="p-2.5 space-y-2">
-                      <div className="h-2.5 w-3/4 rounded bg-muted" />
-                      <div className="h-2 w-1/2 rounded bg-muted" />
-                      <div className="h-6 w-full rounded bg-muted mt-3" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-            ) : filteredMaids.length === 0 ? (
-              <div className="border bg-muted/30 p-10 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                  <Search className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <p className="font-semibold text-foreground">No maids found</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Try broadening your filters or clearing some criteria.
-                </p>
-                {activeFilterCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearAllFilters}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Clear all filters
-                  </button>
-                )}
-              </div>
-
-            ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
-                {pagedMaids.map((maid) => {
-                  const age = calculateAge(maid.dateOfBirth);
-                  const photo = getPrimaryPhoto(maid);
-                  const typeLower = (maid.type || "").toLowerCase();
-                  const typeColor = typeLower.includes("new")
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : typeLower.includes("transfer")
-                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                    : "bg-amber-50 text-amber-700 border-amber-200";
-
-                  return (
-                    <article
-                      key={maid.referenceCode}
-                      className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-shadow hover:shadow-md"
-                    >
-                      {/* Photo — natural height, no cropping */}
-                      <div className="relative w-full bg-muted">
-                        {photo ? (
-                          <img
-                            src={photo}
-                            alt={maid.fullName}
-                            className="block w-full h-auto"
-                          />
-                        ) : (
-                          <div className="flex h-48 items-center justify-center flex-col gap-1 text-muted-foreground/50">
-                            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                            </svg>
-                            <span className="text-[9px]">No photo</span>
-                          </div>
-                        )}
-                        {maid.type && (
-                          <div className="absolute top-1.5 left-1.5">
-                            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColor}`}>
-                              {maid.type}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex flex-col gap-1 p-2.5 flex-1">
-                        <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
-                          {maid.fullName}
-                        </h3>
-                        <p className="text-[10px] text-muted-foreground font-mono leading-tight">
-                          {maid.referenceCode}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-0.5">
-                          {maid.nationality && (
-                            <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
-                              {maid.nationality}
-                            </span>
-                          )}
-                          {age && (
-                            <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
-                              {age} yrs
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-auto pt-2">
-                          <Button size="sm" asChild className="h-7 w-full text-[10px] px-1 font-semibold">
-                            <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
-                              View Profile
-                            </Link>
-                          </Button>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-
-            {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-center gap-1 flex-wrap">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="rounded-lg border bg-card px-3 py-2 text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
-                >
-                  ← Prev
-                </button>
-                {pageNumbers.map((page, idx) =>
-                  page === "..." ? (
-                    <span key={`e-${idx}`} className="px-2 py-2 text-sm text-muted-foreground select-none">…</span>
-                  ) : (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page as number)}
-                      className={`min-w-[2.25rem] rounded-lg border px-3 py-2 text-sm transition-colors ${
-                        page === currentPage
-                          ? "bg-primary text-primary-foreground border-primary font-semibold"
-                          : "bg-card text-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  )
-                )}
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="rounded-lg border bg-card px-3 py-2 text-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
-                >
-                  Next →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
       </div>
     </div>
   );

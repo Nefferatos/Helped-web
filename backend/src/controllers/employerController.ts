@@ -60,7 +60,17 @@ export const saveEmployerContract = async (req: Request, res: Response) => {
       familyMembers,
       documents,
     })
-    res.status(200).json({ employer: saved })
+    res.status(200).json({
+      employer: saved,
+      employmentContract: {
+        refCode: saved.refCode,
+        caseReferenceNumber: String((saved.agency as { caseReferenceNumber?: unknown })?.caseReferenceNumber ?? saved.refCode),
+        contractDate: String((saved.agency as { contractDate?: unknown })?.contractDate ?? ''),
+        serviceFee: String((saved.agency as { serviceFee?: unknown })?.serviceFee ?? ''),
+        placementFee: String((saved.agency as { placementFee?: unknown })?.placementFee ?? ''),
+        agencyWitness: String((saved.agency as { agencyWitness?: unknown })?.agencyWitness ?? ''),
+      },
+    })
   } catch (error) {
     console.error('Error saving employer contract:', error)
     res.status(500).json({ error: 'Failed to save employer contract' })

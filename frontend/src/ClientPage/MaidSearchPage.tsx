@@ -59,6 +59,118 @@ const AGE_OPTIONS = [
   "51+",
 ];
 
+const QUICK_LINKS = {
+  mostRecent3Days: "Most Recent Maid in 3 days",
+  english: "English Speaking Maid",
+  mandarin: "Mandarin Speaking Maid",
+  hokkienCantonese: "Hokkien/Cantonese Speaking",
+  newMaid: "New Maid",
+  transferMaid: "Transfer Maid",
+  exSingapore: "Ex-Singapore Maid",
+  filipino: "Filipino Maid",
+  indonesian: "Indonesian Maid",
+  myanmar: "Myanmar Maid",
+  indian: "Indian Maid",
+  mizoram: "Mizoram Maid",
+  darjeeling: "Darjeeling Maid",
+  manipur: "Manipur Maid",
+  punjabi: "Punjabi Maid",
+  sriLankan: "Sri Lankan Maid",
+  cambodian: "Cambodian Maid",
+  bangladeshi: "Bangladeshi Maid",
+} as const;
+
+type QuickLinkKey = keyof typeof QUICK_LINKS;
+
+const offDayCompensationKeys = [
+  "Can work on off-days with compensation?",
+  "Willing to work on off-days with compensation?",
+  "Willing to work on off-days with  compensation?",
+] as const;
+
+const matchesEducation = (maid: MaidProfile, education: string) => {
+  if (education === "No Preference") return true;
+  const value = String(maid.educationLevel || "").toLowerCase();
+  if (education === "Primary (<=6 yrs)") return value.includes("primary");
+  if (education === "Secondary (>=8 yrs)") return value.includes("secondary") || value.includes("high school");
+  if (education === "College/Degree (>=12 yrs)") return value.includes("college") || value.includes("degree");
+  return true;
+};
+
+const matchesLanguage = (maid: MaidProfile, language: string) => {
+  if (language === "No Preference") return true;
+  const skills = Object.entries(maid.languageSkills || {})
+    .filter(([, level]) => String(level || "").trim() && String(level || "").trim().toLowerCase() !== "zero")
+    .map(([key]) => key.toLowerCase())
+    .join(" ");
+  const term = language.toLowerCase();
+  if (term === "mandarin") return skills.includes("mandarin") || skills.includes("chinese");
+  if (term === "malay") return skills.includes("bahasa") || skills.includes("malay") || skills.includes("indonesia");
+  return skills.includes(term);
+};
+
+const canWorkOffDays = (maid: MaidProfile) => {
+  const introduction = (maid.introduction || {}) as Record<string, unknown>;
+  return offDayCompensationKeys.some((key) => introduction[key] === true);
+};
+
+const matchesNationalityText = (maid: MaidProfile, value: string) =>
+  String(maid.nationality || "").trim().toLowerCase().includes(value.trim().toLowerCase());
+
+const matchesQuickLink = (maid: MaidProfile, quickLink: QuickLinkKey) => {
+  switch (quickLink) {
+    case "mostRecent3Days": {
+      const raw = String(maid.createdAt || maid.updatedAt || "").trim();
+      if (!raw) return false;
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) return false;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 3);
+      return date >= cutoff;
+    }
+    case "english":
+      return matchesLanguage(maid, "English");
+    case "mandarin":
+      return matchesLanguage(maid, "Mandarin");
+    case "hokkienCantonese": {
+      const skills = Object.entries(maid.languageSkills || {})
+        .filter(([, level]) => String(level || "").trim() && String(level || "").trim().toLowerCase() !== "zero")
+        .map(([key]) => key.toLowerCase())
+        .join(" ");
+      return skills.includes("hokkien") || skills.includes("cantonese");
+    }
+    case "newMaid":
+      return String(maid.type || "").toLowerCase().includes("new");
+    case "transferMaid":
+      return String(maid.type || "").toLowerCase().includes("transfer");
+    case "exSingapore":
+      return String(maid.type || "").toLowerCase().includes("ex-singapore");
+    case "filipino":
+      return matchesNationalityText(maid, "filipino");
+    case "indonesian":
+      return matchesNationalityText(maid, "indonesian");
+    case "myanmar":
+      return matchesNationalityText(maid, "myanmar");
+    case "indian":
+      return matchesNationalityText(maid, "indian");
+    case "mizoram":
+      return matchesNationalityText(maid, "mizoram");
+    case "darjeeling":
+      return matchesNationalityText(maid, "darjeeling");
+    case "manipur":
+      return matchesNationalityText(maid, "manipur");
+    case "punjabi":
+      return matchesNationalityText(maid, "punjabi");
+    case "sriLankan":
+      return matchesNationalityText(maid, "sri lankan");
+    case "cambodian":
+      return matchesNationalityText(maid, "cambodian");
+    case "bangladeshi":
+      return matchesNationalityText(maid, "bangladeshi");
+    default:
+      return true;
+  }
+};
 
 const getPrimaryPhoto = (maid: MaidProfile) =>
   Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
@@ -71,6 +183,18 @@ const getTypeLabel = (type: string) => {
   if (t.includes("transfer")) return "TRANSFER";
   if (t.includes("ex")) return "EX-SG";
   return type.toUpperCase();
+};
+
+const parseAdvancedFilters = (searchParams: URLSearchParams) => {
+  const raw = searchParams.get("filters");
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
 };
 
 
@@ -100,15 +224,18 @@ const pageNumbers = (current: number, total: number): (number | "...")[] => {
 
 const MaidSearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const advancedFilters = useMemo(() => parseAdvancedFilters(searchParams), [searchParams]);
+  const advancedFiltersRaw = searchParams.get("filters") || "";
+  const quickLink = (searchParams.get("quick") || "") as QuickLinkKey | "";
 
   const [keyword, setKeyword] = useState(searchParams.get("q") || "");
   const [maidType, setMaidType] = useState<string>(searchParams.get("type") || "");
-  const [offDays, setOffDays] = useState(false);
-  const [withVideo, setWithVideo] = useState(false);
+  const [offDays, setOffDays] = useState(searchParams.get("offDays") === "true" || Boolean(advancedFilters && (advancedFilters as Record<string, unknown>).willingOffDays));
+  const [withVideo, setWithVideo] = useState(searchParams.get("withVideo") === "true" || Boolean(advancedFilters && (advancedFilters as Record<string, unknown>).withVideo));
   const [nationality, setNationality] = useState(searchParams.get("nationality") || "No Preference");
-  const [education, setEducation] = useState("No Preference");
-  const [language, setLanguage] = useState("No Preference");
-  const [age, setAge] = useState("No Preference");
+  const [education, setEducation] = useState(searchParams.get("education") || "No Preference");
+  const [language, setLanguage] = useState(searchParams.get("language") || "No Preference");
+  const [age, setAge] = useState(searchParams.get("age") || "No Preference");
   const [page, setPage] = useState(1);
 
   const [allMaids, setAllMaids] = useState<MaidProfile[]>([]);
@@ -142,12 +269,67 @@ const MaidSearchPage = () => {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const advanced = advancedFilters as Record<string, unknown> | null;
+    setKeyword(searchParams.get("q") || "");
+    setMaidType(searchParams.get("type") || "");
+    setOffDays(searchParams.get("offDays") === "true" || Boolean(advanced?.willingOffDays));
+    setWithVideo(searchParams.get("withVideo") === "true" || Boolean(advanced?.withVideo));
+    setNationality(searchParams.get("nationality") || "No Preference");
+    setEducation(
+      searchParams.get("education") ||
+        (advanced?.eduCollege ? "College/Degree (>=12 yrs)" :
+        advanced?.eduHighSchool || advanced?.eduSecondary ? "Secondary (>=8 yrs)" :
+        advanced?.eduPrimary ? "Primary (<=6 yrs)" : "No Preference")
+    );
+    setLanguage(
+      searchParams.get("language") ||
+        (advanced?.langEnglish ? "English" :
+        advanced?.langMandarin ? "Mandarin" :
+        advanced?.langBahasaIndonesia ? "Malay" :
+        advanced?.langHindi ? "Hindi" :
+        advanced?.langTamil ? "Tamil" : "No Preference")
+    );
+    setAge(
+      searchParams.get("age") ||
+        (advanced?.age21to25 ? "21 to 25" :
+        advanced?.age26to30 ? "26 to 30" :
+        advanced?.age31to35 ? "31 to 35" :
+        advanced?.age36to40 ? "36 to 40" :
+        advanced?.age41above ? "41 to 45" : "No Preference")
+    );
+    setPage(1);
+  }, [searchParams, advancedFilters]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [keyword, maidType, offDays, withVideo, nationality, education, language, age, advancedFiltersRaw, quickLink]);
+
   const filteredMaids = useMemo(() => {
-    let result = filterMaids(allMaids, {
+    let result = advancedFilters ? filterMaids(allMaids, advancedFilters) : allMaids;
+
+    result = filterMaids(result, {
       keyword,
       nationality: nationality === "No Preference" ? [] : [nationality],
       maidTypes: maidType ? [maidType] : [],
     });
+
+    if (withVideo) {
+      result = result.filter((maid) => String(maid.videoDataUrl || "").trim().length > 0);
+    }
+
+    if (offDays) {
+      result = result.filter(canWorkOffDays);
+    }
+
+    if (education !== "No Preference") {
+      result = result.filter((maid) => matchesEducation(maid, education));
+    }
+
+    if (language !== "No Preference") {
+      result = result.filter((maid) => matchesLanguage(maid, language));
+    }
+
     if (age !== "No Preference") {
       const [minAge, maxAge] = age.includes("+")
         ? [parseInt(age), 999]
@@ -157,26 +339,48 @@ const MaidSearchPage = () => {
         return a !== null && a >= minAge && (maxAge === 999 ? true : a <= maxAge);
       });
     }
+
+    if (quickLink) {
+      result = result.filter((maid) => matchesQuickLink(maid, quickLink));
+    }
+
     return result;
-  }, [allMaids, keyword, maidType, nationality, offDays, withVideo, age]);
+  }, [advancedFilters, allMaids, keyword, maidType, nationality, offDays, withVideo, education, language, age, quickLink]);
 
   const totalPages = Math.max(1, Math.ceil(filteredMaids.length / PAGE_SIZE));
   const pagedMaids = filteredMaids.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleSearch = () => {
     setPage(1);
+    const nextSearchParams = new URLSearchParams();
+    if (advancedFiltersRaw) nextSearchParams.set("filters", advancedFiltersRaw);
+    if (keyword.trim()) nextSearchParams.set("q", keyword.trim());
+    if (maidType.trim()) nextSearchParams.set("type", maidType.trim());
+    if (nationality !== "No Preference") nextSearchParams.set("nationality", nationality);
+    if (education !== "No Preference") nextSearchParams.set("education", education);
+    if (language !== "No Preference") nextSearchParams.set("language", language);
+    if (age !== "No Preference") nextSearchParams.set("age", age);
+    if (offDays) nextSearchParams.set("offDays", "true");
+    if (withVideo) nextSearchParams.set("withVideo", "true");
+    if (quickLink) nextSearchParams.set("quick", quickLink);
+    setSearchParams(nextSearchParams);
   };
 
   const handleNatLink = (label: string) => {
-    const nat = label.replace(" Maid", "").replace(" Speaking", "").trim();
-    const typeMap: Record<string, string> = {
-      "New": "New Maid",
-      "Transfer": "Transfer Maid",
-      "Ex-Singapore": "Ex-Singapore Maid",
-    };
-    if (typeMap[nat]) { setMaidType(typeMap[nat]); setNationality("No Preference"); }
-    else { setNationality(nat); setMaidType(""); }
+    const quickLinkKey = (Object.entries(QUICK_LINKS).find(([, value]) => value === label)?.[0] || "") as QuickLinkKey | "";
+    const nextSearchParams = new URLSearchParams();
+    if (advancedFiltersRaw) nextSearchParams.set("filters", advancedFiltersRaw);
+    if (quickLinkKey) nextSearchParams.set("quick", quickLinkKey);
+    setKeyword("");
+    setMaidType("");
+    setNationality("No Preference");
+    setEducation("No Preference");
+    setLanguage("No Preference");
+    setAge("No Preference");
+    setOffDays(false);
+    setWithVideo(false);
     setPage(1);
+    setSearchParams(nextSearchParams);
   };
 
   const pages = pageNumbers(page, totalPages);
@@ -311,6 +515,21 @@ const MaidSearchPage = () => {
         <Sidebar />
 
         <main className="flex-1 min-w-0">
+          {advancedFilters ? (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded border border-primary/20 bg-primary/5 px-4 py-3">
+              <div>
+                <p className="font-body text-sm font-semibold text-foreground">Advanced filters applied</p>
+                <p className="mt-0.5 font-body text-xs text-muted-foreground">
+                  These results were carried over from the client search page. You can refine them here or go back to edit the full filter set.
+                </p>
+              </div>
+              <Button variant="outline" asChild>
+                <Link to={advancedFiltersRaw ? `/client/maids?filters=${encodeURIComponent(advancedFiltersRaw)}` : "/client/maids"}>
+                  Edit Advanced Filters
+                </Link>
+              </Button>
+            </div>
+          ) : null}
 
           <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-4 py-2 font-body text-sm text-amber-700">
             You have shortlisted{" "}

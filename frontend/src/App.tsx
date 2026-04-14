@@ -11,6 +11,7 @@ import ClientDashboard from "@/ClientPage/ClientDashboard";
 import ClientHistoryPage from "@/ClientPage/ClientHistoryPage";
 import ClientLandingPage from "@/ClientPage/ClientLandingPage";
 import ClientMaidsPage from "@/ClientPage/ClientMaidsPage";
+import MaidSearchPage from "@/ClientPage/MaidSearchPage";
 import ClientProfilePage from "@/ClientPage/ClientProfilePage";
 import ClientPortalLayout from "@/ClientPage/ClientPortalLayout";
 import ClientPortalHome from "@/ClientPage/ClientPortalHome";
@@ -32,6 +33,7 @@ import PublicMaidProfile from "@/pages/PublicMaidProfile";
 import ChangePassword from "@/pages/ChangePassword";
 import Enquiry from "@/pages/Enquiry";
 import EmploymentContracts from "@/pages/EmploymentContracts";
+import EmploymentContractView from "@/pages/EmploymentContractView";
 import AdminSupportChat from "@/pages/AdminSupportChat";
 import RequestsPage from "@/pages/RequestsPage";
 import NotFound from "@/pages/NotFound";
@@ -239,6 +241,9 @@ const App = () => {
             <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/employment-contracts/new" element={<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/employment-contracts/:refCode" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/client" element={<ProtectedClientRoute><ClientPortalLayout /></ProtectedClientRoute>}>
               <Route index element={<Navigate to="home" replace />} />
               <Route path="home" element={<ClientPortalHome />} />
@@ -246,6 +251,7 @@ const App = () => {
               <Route path="enquiry" element={<Enquiry2 embedded />} />
               <Route path="contact" element={<ContactUS embedded />} />
               <Route path="maids" element={<ClientMaidsPage />} />
+              <Route path="maids/search" element={<MaidSearchPage />} />
               <Route path="requests" element={<ClientRequestsPage />} />
               <Route path="messages" element={<Navigate to="../support-chat" replace />} />
               <Route path="support-chat" element={<ClientSupportChat />} />
@@ -269,6 +275,7 @@ const App = () => {
             <Route path="/contact" element={<ContactUS />} />
             <Route path="/enquiry2" element={<Enquiry2 />} />
             <Route path="/services/:slug" element={<ServiceDetail />} />
+            <Route path="/employer/new" element={<Navigate to="/agencyadmin/employment-contracts/new" replace />} />
             <Route path="/employer/:refCode" element={<EditEmployer />} />
             <Route path="/faq" element={<FaqPage />} />
           </Routes>

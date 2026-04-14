@@ -183,6 +183,26 @@ export interface EmployerContractFileRecord {
   createdAt: string
 }
 
+export interface EmploymentContractRecord {
+  id: number
+  refCode: string
+  employerRefCode: string
+  employerId: number | null
+  maidId: number | null
+  maidReferenceCode: string
+  maidName: string
+  employerName: string
+  caseReferenceNumber: string
+  contractDate: string
+  serviceFee: string
+  placementFee: string
+  agencyWitness: string
+  employerSnapshot: Record<string, unknown>
+  maidSnapshot: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
 interface AppData {
   companyProfile: CompanyProfileRecord
   momPersonnel: MOMPersonnelRecord[]
@@ -196,6 +216,7 @@ interface AppData {
   directSales: DirectSaleRecord[]
   chatMessages: ChatMessageRecord[]
   employers: EmployerContractRecord[]
+  employmentContracts: EmploymentContractRecord[]
   employerContractFiles: EmployerContractFileRecord[]
   counters: {
     momPersonnel: number
@@ -207,6 +228,7 @@ interface AppData {
     directSales: number
     chatMessages: number
     employers: number
+    employmentContracts: number
     employerContractFiles: number
   }
 }
@@ -312,6 +334,7 @@ const defaultData = (): AppData => ({
   directSales: [],
   chatMessages: [],
   employers: [],
+  employmentContracts: [],
   employerContractFiles: [],
   counters: {
     momPersonnel: 1,
@@ -323,6 +346,7 @@ const defaultData = (): AppData => ({
     directSales: 1,
     chatMessages: 1,
     employers: 1,
+    employmentContracts: 1,
     employerContractFiles: 1,
   },
 })
@@ -335,6 +359,41 @@ let cache: AppData | null = null
 const stripBom = (value: string) => value.replace(/^\uFEFF/, '')
 const generateEmailConfirmationCode = () =>
   String(Math.floor(100000 + Math.random() * 900000))
+
+const toTrimmedString = (value: unknown) => String(value ?? '').trim()
+const toNullableNumber = (value: unknown) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const normalizeEmploymentContractRecord = (
+  record: Partial<EmploymentContractRecord>,
+  fallbackRefCode: string
+): EmploymentContractRecord => ({
+  id: Number(record.id ?? 0) || 0,
+  refCode: toTrimmedString(record.refCode) || fallbackRefCode,
+  employerRefCode:
+    toTrimmedString(record.employerRefCode) || toTrimmedString(record.refCode) || fallbackRefCode,
+  employerId: toNullableNumber(record.employerId),
+  maidId: toNullableNumber(record.maidId),
+  maidReferenceCode: toTrimmedString(record.maidReferenceCode),
+  maidName: toTrimmedString(record.maidName),
+  employerName: toTrimmedString(record.employerName),
+  caseReferenceNumber:
+    toTrimmedString(record.caseReferenceNumber) || toTrimmedString(record.refCode) || fallbackRefCode,
+  contractDate: toTrimmedString(record.contractDate),
+  serviceFee: toTrimmedString(record.serviceFee),
+  placementFee: toTrimmedString(record.placementFee),
+  agencyWitness: toTrimmedString(record.agencyWitness),
+  employerSnapshot:
+    record.employerSnapshot && typeof record.employerSnapshot === 'object'
+      ? record.employerSnapshot
+      : {},
+  maidSnapshot:
+    record.maidSnapshot && typeof record.maidSnapshot === 'object' ? record.maidSnapshot : {},
+  createdAt: record.createdAt ?? now(),
+  updatedAt: record.updatedAt ?? record.createdAt ?? now(),
+})
 
 const mergeAppData = (raw: Partial<AppData>): AppData => {
   const defaults = defaultData()
@@ -420,6 +479,44 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       createdAt: record.createdAt ?? now(),
       updatedAt: record.updatedAt ?? record.createdAt ?? now(),
     })),
+    employmentContracts: (
+      raw.employmentContracts ??
+      raw.employers?.map((record) => {
+        const employerRecord = record as EmployerContractRecord
+        const agency = employerRecord.agency ?? {}
+        const maid = employerRecord.maid ?? {}
+        const employer = employerRecord.employer ?? {}
+        return {
+          id: employerRecord.id,
+          refCode: employerRecord.refCode,
+          employerRefCode: employerRecord.refCode,
+          employerId: employerRecord.id,
+          maidId: toNullableNumber((maid as { id?: unknown }).id),
+          maidReferenceCode: toTrimmedString((maid as { referenceCode?: unknown }).referenceCode),
+          maidName:
+            toTrimmedString((maid as { fullName?: unknown }).fullName) ||
+            toTrimmedString((maid as { name?: unknown }).name),
+          employerName: toTrimmedString((employer as { name?: unknown }).name),
+          caseReferenceNumber:
+            toTrimmedString((agency as { caseReferenceNumber?: unknown }).caseReferenceNumber) ||
+            employerRecord.refCode,
+          contractDate: toTrimmedString((agency as { contractDate?: unknown }).contractDate),
+          serviceFee: toTrimmedString((agency as { serviceFee?: unknown }).serviceFee),
+          placementFee: toTrimmedString((agency as { placementFee?: unknown }).placementFee),
+          agencyWitness: toTrimmedString((agency as { agencyWitness?: unknown }).agencyWitness),
+          employerSnapshot: employer,
+          maidSnapshot: maid,
+          createdAt: employerRecord.createdAt,
+          updatedAt: employerRecord.updatedAt,
+        }
+      }) ??
+      defaults.employmentContracts
+    ).map((record) =>
+      normalizeEmploymentContractRecord(
+        record,
+        toTrimmedString((record as { refCode?: unknown }).refCode)
+      )
+    ),
     employerContractFiles: (raw.employerContractFiles ?? defaults.employerContractFiles).map((record) => ({
       ...record,
       name: String((record as { name?: unknown }).name ?? ''),
@@ -459,6 +556,10 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       employers:
         raw.counters?.employers ??
         ((raw.employers?.length ?? 0) + 1 || defaults.counters.employers),
+      employmentContracts:
+        raw.counters?.employmentContracts ??
+        ((raw.employmentContracts?.length ?? raw.employers?.length ?? 0) + 1 ||
+          defaults.counters.employmentContracts),
       employerContractFiles:
         raw.counters?.employerContractFiles ??
         ((raw.employerContractFiles?.length ?? 0) + 1 ||
@@ -1601,20 +1702,34 @@ export const saveEmployerContractStore = async (payload: {
   }>
 }) => {
   const data = await loadData()
+  const agencyPayload =
+    payload.agency && typeof payload.agency === 'object' ? payload.agency : {}
+  const maidPayload =
+    payload.maid && typeof payload.maid === 'object' ? payload.maid : {}
+  const employerPayload =
+    payload.employer && typeof payload.employer === 'object' ? payload.employer : {}
 
-  const incomingRef = String(payload.refCode ?? '').trim()
+  const incomingRef =
+    String(payload.refCode ?? '').trim() ||
+    toTrimmedString((agencyPayload as { caseReferenceNumber?: unknown }).caseReferenceNumber)
   const index = incomingRef
     ? data.employers.findIndex((item) => item.refCode === incomingRef)
     : -1
   const id = index === -1 ? data.counters.employers++ : data.employers[index].id
   const refCode = incomingRef || formatEmployerRefCode(id)
+  const normalizedAgency = {
+    ...agencyPayload,
+    caseReferenceNumber:
+      toTrimmedString((agencyPayload as { caseReferenceNumber?: unknown }).caseReferenceNumber) ||
+      refCode,
+  }
 
   const record: EmployerContractRecord = {
     refCode,
     id,
-    maid: payload.maid ?? {},
-    agency: payload.agency ?? {},
-    employer: payload.employer ?? {},
+    maid: maidPayload,
+    agency: normalizedAgency,
+    employer: employerPayload,
     spouse: payload.spouse ?? {},
     familyMembers: Array.isArray(payload.familyMembers)
       ? payload.familyMembers
@@ -1634,6 +1749,57 @@ export const saveEmployerContractStore = async (payload: {
 
   if (index === -1) data.employers.unshift(record)
   else data.employers[index] = record
+
+  const existingEmploymentContractIndex = data.employmentContracts.findIndex(
+    (item) => item.employerRefCode === refCode || item.refCode === refCode
+  )
+  const employmentContractId =
+    existingEmploymentContractIndex === -1
+      ? data.counters.employmentContracts++
+      : data.employmentContracts[existingEmploymentContractIndex].id
+  const employmentContractRecord = normalizeEmploymentContractRecord(
+    {
+      id: employmentContractId,
+      refCode,
+      employerRefCode: refCode,
+      employerId: id,
+      maidId: toNullableNumber((maidPayload as { id?: unknown; maidId?: unknown }).id) ??
+        toNullableNumber((maidPayload as { maidId?: unknown }).maidId),
+      maidReferenceCode:
+        toTrimmedString((maidPayload as { referenceCode?: unknown }).referenceCode),
+      maidName:
+        toTrimmedString((maidPayload as { fullName?: unknown }).fullName) ||
+        toTrimmedString((maidPayload as { name?: unknown }).name),
+      employerName: toTrimmedString((employerPayload as { name?: unknown }).name),
+      caseReferenceNumber: toTrimmedString(
+        (normalizedAgency as { caseReferenceNumber?: unknown }).caseReferenceNumber
+      ),
+      contractDate: toTrimmedString(
+        (normalizedAgency as { contractDate?: unknown }).contractDate
+      ),
+      serviceFee: toTrimmedString((normalizedAgency as { serviceFee?: unknown }).serviceFee),
+      placementFee: toTrimmedString(
+        (normalizedAgency as { placementFee?: unknown }).placementFee
+      ),
+      agencyWitness: toTrimmedString(
+        (normalizedAgency as { agencyWitness?: unknown }).agencyWitness
+      ),
+      employerSnapshot: employerPayload,
+      maidSnapshot: maidPayload,
+      createdAt:
+        existingEmploymentContractIndex === -1
+          ? now()
+          : data.employmentContracts[existingEmploymentContractIndex].createdAt,
+      updatedAt: now(),
+    },
+    refCode
+  )
+
+  if (existingEmploymentContractIndex === -1) {
+    data.employmentContracts.unshift(employmentContractRecord)
+  } else {
+    data.employmentContracts[existingEmploymentContractIndex] = employmentContractRecord
+  }
 
   await saveData(data)
   return record

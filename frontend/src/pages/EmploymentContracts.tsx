@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
-import { Copy, Trash2, Plus } from "lucide-react";
+import { Copy, Eye, Pencil, Search, Trash2, Plus } from "lucide-react";
+import { adminPath } from "@/lib/routes";
 
 const mockEmployers = [
   { ref: "06579", date: "01-11-2014", employer: "Suresh Satyanarayana Balasubramanian", spouse: "Anupama Shivaprasad", maid: "Saraswathi Murugan" },
@@ -45,6 +47,7 @@ const EmploymentContracts = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const toggleSelect = (ref: string) => {
     setSelected((prev) => {
@@ -55,16 +58,34 @@ const EmploymentContracts = () => {
     });
   };
 
-  const totalPages = Math.max(1, Math.ceil(employers.length / PAGE_SIZE));
+  const filteredEmployers = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return employers;
+
+    return employers.filter((record) => {
+      return (
+        record.ref.toLowerCase().includes(term) ||
+        record.employer.toLowerCase().includes(term) ||
+        record.spouse.toLowerCase().includes(term) ||
+        record.maid.toLowerCase().includes(term)
+      );
+    });
+  }, [employers, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployers.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginatedEmployers = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return employers.slice(start, start + PAGE_SIZE);
-  }, [currentPage, employers]);
+    return filteredEmployers.slice(start, start + PAGE_SIZE);
+  }, [currentPage, filteredEmployers]);
 
   useEffect(() => {
     if (page !== currentPage) setPage(currentPage);
   }, [currentPage, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm]);
 
   const loadEmployers = async () => {
     try {
@@ -193,13 +214,14 @@ const EmploymentContracts = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 className="text-xl font-bold">Employment Contracts & Forms</h2>
         <p className="text-sm">
-          Total <span className="text-success font-bold">{employers.length}</span> Employers found
+          Total <span className="text-success font-bold">{filteredEmployers.length}</span> of{" "}
+          <span className="font-bold">{employers.length}</span> Employers found
         </p>
       </div>
 
       <div className="content-card animate-fade-in-up space-y-4">
         <div className="flex gap-2">
-          <Button size="sm" onClick={() => navigate("/employer/new")}>
+          <Button size="sm" onClick={() => navigate(adminPath("/employment-contracts/new"))}>
             <Plus className="w-3 h-3 mr-1" /> Add New Employer
           </Button>
           <Button variant="outline" size="sm" disabled={selected.size === 0 || isMutating} onClick={() => void handleDuplicate()}>
@@ -208,6 +230,22 @@ const EmploymentContracts = () => {
           <Button variant="destructive" size="sm" disabled={selected.size === 0 || isMutating} onClick={() => void handleDelete()}>
             <Trash2 className="w-3 h-3 mr-1" /> Delete Employer
           </Button>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Use <span className="font-medium text-foreground">Add New Employer</span> for a blank contract page, open
+          <span className="font-medium text-foreground"> View</span> to review the saved employment contract and forms,
+          or choose <span className="font-medium text-foreground">Edit</span> to update the current fields.
+        </p>
+
+        <div className="relative max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by maid name, ref number, spouse, or employer"
+            className="pl-9"
+          />
         </div>
 
         <div className="overflow-x-auto border rounded-lg">
@@ -219,25 +257,26 @@ const EmploymentContracts = () => {
                 <th className="border-b px-3 py-2 text-left font-semibold text-xs">Employer Name</th>
                 <th className="border-b px-3 py-2 text-left font-semibold text-xs">Spouse Name</th>
                 <th className="border-b px-3 py-2 text-left font-semibold text-xs">Maid Name</th>
+                <th className="border-b px-3 py-2 text-left font-semibold text-xs w-40">Action</th>
                 <th className="border-b px-3 py-2 text-center font-semibold text-xs w-16">Select</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td className="border-b px-3 py-6 text-center text-sm text-muted-foreground" colSpan={6}>
+                  <td className="border-b px-3 py-6 text-center text-sm text-muted-foreground" colSpan={7}>
                     Loading…
                   </td>
                 </tr>
               ) : loadError ? (
                 <tr>
-                  <td className="border-b px-3 py-6 text-center text-sm text-destructive" colSpan={6}>
+                  <td className="border-b px-3 py-6 text-center text-sm text-destructive" colSpan={7}>
                     {loadError}
                   </td>
                 </tr>
               ) : paginatedEmployers.length === 0 ? (
                 <tr>
-                  <td className="border-b px-3 py-6 text-center text-sm text-muted-foreground" colSpan={6}>
+                  <td className="border-b px-3 py-6 text-center text-sm text-muted-foreground" colSpan={7}>
                     No contracts found.
                   </td>
                 </tr>
@@ -250,13 +289,35 @@ const EmploymentContracts = () => {
                     animationDelay: `${i * 0.02}s`,
                     opacity: 0,
                   }}
-                  onClick={() => navigate(`/employer/${emp.ref}`)}
+                  onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(emp.ref)}`))}
                 >
                   <td className="border-b px-3 py-2 text-xs text-muted-foreground">{emp.ref}</td>
                   <td className="border-b px-3 py-2 text-xs">{emp.date}</td>
                   <td className="border-b px-3 py-2 text-xs font-medium text-primary">{emp.employer}</td>
                   <td className="border-b px-3 py-2 text-xs">{emp.spouse || "—"}</td>
                   <td className="border-b px-3 py-2 text-xs text-primary">{emp.maid}</td>
+                  <td className="border-b px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(emp.ref)}`))}
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        View
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(emp.ref)}/edit`))}
+                      >
+                        <Pencil className="w-3 h-3 mr-1" />
+                        Edit
+                      </Button>
+                    </div>
+                  </td>
                   <td className="border-b px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"

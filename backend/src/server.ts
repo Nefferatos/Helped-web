@@ -15,7 +15,8 @@ import chatRoutes from './routes/chatRoutes'
 import dashboardRoutes from './routes/dashboardRoutes'
 import employerRoutes from './routes/employerRoutes'
 import employerContractFileRoutes from './routes/employerContractFileRoutes'
-import { initializeStore } from './store'
+import { getMaidsStore, initializeStore } from './store'
+import { saveEmployerContract } from './controllers/employerController'
 
 const app: Express = express()
 const port = process.env.PORT || 3000
@@ -75,6 +76,16 @@ app.use('/api/client', clientRoutes)
 app.use('/api/chats', chatRoutes)
 app.use('/api', dashboardRoutes)
 app.use('/api/employers', employerRoutes)
+app.get('/api/public-maids', async (_req: Request, res: Response) => {
+  try {
+    const maids = await getMaidsStore(undefined, 'public')
+    res.status(200).json({ maids })
+  } catch (error) {
+    console.error('Error fetching public maids:', error)
+    res.status(500).json({ error: 'Failed to fetch public maids' })
+  }
+})
+app.post('/api/employment-contract', saveEmployerContract)
 app.use('/api/employer-contract-files', employerContractFileRoutes)
 app.use('/api/employer-files', employerContractFileRoutes)
 
