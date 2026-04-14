@@ -35,7 +35,6 @@ import {
   getClientAuthHeaders,
 } from "@/lib/clientAuth";
 
-// ── category config ──────────────────────────────────────────────────────────
 const CATEGORIES = [
   { id: "all",        label: "All Topics",       Icon: Home },
   { id: "hiring",     label: "Hiring Process",   Icon: UserCheck },
@@ -47,7 +46,6 @@ const CATEGORIES = [
 ];
 
 const faqItems = [
-  // hiring
   {
     id: 1,
     cat: "hiring",
@@ -120,7 +118,6 @@ const faqItems = [
       </div>
     ),
   },
-  // costs
   {
     id: 4,
     cat: "costs",
@@ -160,7 +157,6 @@ const faqItems = [
       </div>
     ),
   },
-  // legal
   {
     id: 7,
     cat: "legal",
@@ -201,7 +197,6 @@ const faqItems = [
       </div>
     ),
   },
-  // welfare
   {
     id: 9,
     cat: "welfare",
@@ -252,7 +247,6 @@ const faqItems = [
       </div>
     ),
   },
-  // salaries
   {
     id: 22,
     cat: "salaries",
@@ -394,7 +388,6 @@ const FAQPage = () => {
   return (
     <>
       <style>{`
-        /* ── tokens ── */
         :root {
           --green-950: #052e16;
           --green-900: #14532d;
@@ -414,8 +407,6 @@ const FAQPage = () => {
           --shadow-md: 0 4px 16px rgba(0,0,0,.08);
         }
 
-        /* ── layout ── */
-        .faq-page { min-height: 100vh; display: flex; flex-direction: column; background: var(--sand); font-family: 'Georgia', serif; }
 
         /* ── hero ── */
         .faq-hero {
@@ -490,7 +481,6 @@ const FAQPage = () => {
         .faq-search-input::placeholder { color: rgba(255,255,255,.45); }
         .faq-search-input:focus { border-color: rgba(255,255,255,.6); background: rgba(255,255,255,.18); }
 
-        /* stats strip */
         .faq-stats {
           display: flex;
           gap: 32px;
@@ -501,7 +491,6 @@ const FAQPage = () => {
         .faq-stat-val { font-size: 22px; font-weight: 700; color: #fff; line-height: 1; }
         .faq-stat-lbl { font-size: 11px; font-family: sans-serif; color: rgba(255,255,255,.55); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
 
-        /* ── body layout ── */
         .faq-body-wrap {
           flex: 1;
           max-width: 1200px;
@@ -856,7 +845,7 @@ const FAQPage = () => {
                   Enquiry
                 </Link>
 
-                <Link to="/faw" className="py-2 px-3 rounded-lg hover:bg-muted">
+                <Link to="/faq" className="py-2 px-3 rounded-lg hover:bg-muted">
                   FAQ
                 </Link>
 
@@ -881,9 +870,8 @@ const FAQPage = () => {
               </div>
             </div>
           )}
-      </header>
+        </header>
 
-        {/* ── HERO ── */}
         <div className="faq-hero">
           <div className="faq-hero-inner">
             <div className="faq-hero-left">
@@ -921,10 +909,8 @@ const FAQPage = () => {
           </div>
         </div>
 
-        {/* ── BODY ── */}
         <div className="faq-body-wrap">
 
-          {/* sidebar */}
           <aside className="faq-sidebar">
             <div className="faq-sidebar-label">Browse Topics</div>
             {CATEGORIES.map(({ id, label, Icon }) => (
@@ -940,7 +926,6 @@ const FAQPage = () => {
             ))}
           </aside>
 
-          {/* right */}
           <div className="faq-right">
             <div className="faq-toolbar">
               <span className="faq-result-label">
@@ -982,7 +967,6 @@ const FAQPage = () => {
           </div>
         </div>
 
-        {/* ── FOOTER ── */}
         <footer className="bg-foreground py-12 text-primary-foreground">
           <div className="container">
             <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4">
