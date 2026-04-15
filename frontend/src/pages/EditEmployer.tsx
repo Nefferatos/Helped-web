@@ -405,34 +405,27 @@ const EditEmployer = () => {
   const [categoryUploads, setCategoryUploads] = useState<Record<string, UploadedFile[]>>({});
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
 
-  const navItems = [
-    { label: "HOME", path: adminPath("/dashboard") },
-    { label: "AGENCY PROFILE", path: adminPath("/agency-profile") },
-    { label: "ADD MAIDS", path: adminPath("/add-maid") },
-    { label: "EDIT/DELETE MAIDS", path: adminPath("/edit-maids") },
-    { label: "CHANGE PASSWORD", path: adminPath("/change-password") },
-    { label: "ENQUIRY", path: adminPath("/enquiry") },
-  ];
 
-  // ── Maid state ──────────────────────────────────────────────────────────────
-  const [maid, setMaid] = useState({
-    referenceCode: "",
-    name: isNew ? "" : "Saraswathi Murugan",
-    nationality: isNew ? "" : "Filipino maid",
-    workPermitNo: "",
-    finNo: "",
-    passportNo: "",
-    salary: "",
-    numberOfOffDays: "",
-    compensationNoOffday: isNew ? "" : "0",
-    nameOfReplacement: "",
-    passportOfMaid: "",
-    photoDataUrl: "",
-    photoDataUrls: [] as string[],
-  });
+      const [maid, setMaid] = useState({
+      referenceCode: "",
+      name: isNew ? "" : "Saraswathi Murugan",
+      nationality: isNew ? "" : "Filipino maid",
+      workPermitNo: "",
+      finNo: "",
+      passportNo: "",
+      salary: "",
+      numberOfOffDays: "",
+      compensationNoOffday: isNew ? "" : "0",
+      nameOfReplacement: "",
+      passportOfMaid: "",
+      photoDataUrl: "",
+      photoDataUrls: [] as string[],
 
-  // ── Agency state ────────────────────────────────────────────────────────────
-  const [agency, setAgency] = useState({
+      numberOfTerms: "",
+      communicationToBuy: "",
+    });
+
+    const [agency, setAgency] = useState({
     caseReferenceNumber: refCode || "",
     contractDate: isNew ? "" : "13-04-2026",
     dateOfEmploymentDay: isNew ? "" : "01",
@@ -449,10 +442,14 @@ const EditEmployer = () => {
     insuranceFee: "",
     agencyWitness: isNew ? "" : "Balamurugan S/O Subramaniam (R1218275)",
     maidId: "",
+
+    handlingInHospitalFee: "",
+    extensionFee: "",
+    discountedFee: "",
+    balanceFee: "",
   });
 
-  // ── Employer state ──────────────────────────────────────────────────────────
-  const [employer, setEmployer] = useState({
+    const [employer, setEmployer] = useState({
     name: "",
     gender: "",
     dateOfBirthDay: isNew ? "" : "01",
@@ -473,15 +470,16 @@ const EditEmployer = () => {
     monthlyCombinedIncome: "",
     existingEmployer: "",
     existingEmployerNric: "",
+
+    monthlyContribution: "",
+    dateOfEmployment: "",
   });
 
-  // ── Notification of Assessment ──────────────────────────────────────────────
   const [notificationDate, setNotificationDate] = useState({
     month: isNew ? "" : "JANUARY",
     year: isNew ? "" : "2017",
   });
 
-  // ── Spouse state ────────────────────────────────────────────────────────────
   const [spouse, setSpouse] = useState({
     name: "",
     gender: "",
@@ -495,7 +493,6 @@ const EditEmployer = () => {
     company: "",
   });
 
-  // ── Family Members ──────────────────────────────────────────────────────────
   const emptyFamilyMember = () => ({
     name: "",
     relationship: "",
@@ -744,23 +741,7 @@ const EditEmployer = () => {
 
   return (
     <>
-      <nav className="border-b bg-secondary">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-1 px-4 py-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`rounded-sm px-3 py-2 text-xs font-bold uppercase tracking-wide transition-colors active:scale-[0.97] ${
-                location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
-                  ? "bg-primary text-primary-foreground"
-                  : "text-primary hover:bg-primary/10"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </nav>
+      
 
       <div className="page-container max-w-4xl py-4 text-sm">
 
@@ -831,7 +812,6 @@ const EditEmployer = () => {
           </>
         )}
 
-        {/* ══ STEP 2 — Select Maid ══ */}
         {isNew && step === 2 && (
           <>
             <SectionHeader title="The Maid Employed" />
@@ -915,10 +895,8 @@ const EditEmployer = () => {
           </>
         )}
 
-        {/* ══ STEP 3 / Edit Mode — all sections ══ */}
         {(!isNew || step === 3) && (
           <>
-            {/* Selected maid preview (new mode only) */}
             {isNew && (
               <>
                 <SectionHeader title="Selected Maid" />
@@ -941,12 +919,10 @@ const EditEmployer = () => {
               </>
             )}
 
-            {/* ══ THE MAID EMPLOYED (edit mode) ══ */}
             {!isNew && (
               <>
                 <SectionHeader title="The Maid Employed" />
                 <SectionBody>
-                  {/* Reference number row + search */}
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <label className="text-xs font-semibold text-rose-600">Reference Number:</label>
                     <Input
@@ -956,7 +932,6 @@ const EditEmployer = () => {
                       placeholder="e.g. 06583"
                     />
                   </div>
-                  {/* Maid search bar */}
                   <div className="mb-3 flex gap-2">
                     <Input
                       className={`${inp} flex-1`}
@@ -1018,7 +993,6 @@ const EditEmployer = () => {
               </>
             )}
 
-            {/* ══ AGENCY ══ */}
             <SectionHeader title="Agency" />
             <SectionBody>
               <dl className="space-y-1">
@@ -1043,7 +1017,6 @@ const EditEmployer = () => {
                   </div>
                 </Field>
 
-                {/* Blue-tinted fee block */}
                 <div className="my-1 rounded border border-[#b8cde8] bg-[#dce8f5] px-3 py-2 space-y-1">
                   <Field label="Invoice Number">
                     <Input className={`${inp} max-w-[140px] bg-white`} value={agency.invoiceNumber} onChange={(e) => setAgency({ ...agency, invoiceNumber: e.target.value })} placeholder="1" />
@@ -1086,7 +1059,6 @@ const EditEmployer = () => {
               </dl>
             </SectionBody>
 
-            {/* ══ EMPLOYER ══ */}
             <SectionHeader title="Employer" />
             <SectionBody>
               <dl className="space-y-1">
@@ -1207,7 +1179,6 @@ const EditEmployer = () => {
               </dl>
             </SectionBody>
 
-            {/* ══ SPOUSE ══ */}
             <SectionHeader title="Spouse" />
             <SectionBody>
               <dl className="space-y-1">
@@ -1257,7 +1228,6 @@ const EditEmployer = () => {
               </dl>
             </SectionBody>
 
-            {/* ══ FAMILY MEMBERS — dynamic add/remove ══ */}
             {familyMembers.map((fm, idx) => (
               <div key={idx}>
                 <div className="mt-4 mb-0 rounded-t-sm bg-[#4a7bb5] px-3 py-1.5 flex items-center justify-between">
@@ -1285,7 +1255,6 @@ const EditEmployer = () => {
                       />
                     </Field>
                     <Field label="Relationship">
-                      {/* Row 1: Daughter / Son */}
                       <div className="space-y-1 pt-0.5">
                         <div className="flex gap-4">
                           {["Daughter", "Son"].map((opt) => (
@@ -1301,7 +1270,6 @@ const EditEmployer = () => {
                             </label>
                           ))}
                         </div>
-                        {/* Row 2: Father / Mother */}
                         <div className="flex gap-4">
                           {["Father", "Mother"].map((opt) => (
                             <label key={opt} className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-700">
@@ -1316,7 +1284,6 @@ const EditEmployer = () => {
                             </label>
                           ))}
                         </div>
-                        {/* Row 3: Father-in-Law / Mother-in-Law */}
                         <div className="flex gap-4">
                           {["Father-in-Law", "Mother-in-Law"].map((opt) => (
                             <label key={opt} className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-700">
@@ -1356,7 +1323,6 @@ const EditEmployer = () => {
               </div>
             ))}
 
-            {/* Add Family Member button */}
             <button
               type="button"
               onClick={addFamilyMember}
@@ -1366,7 +1332,6 @@ const EditEmployer = () => {
               Add Family Member
             </button>
 
-            {/* CTA buttons */}
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2 rounded border border-[#c5d3e8] bg-gray-50 px-4 py-3">
               {isNew && <Button variant="outline" size="sm" onClick={goToPreviousStep}>← Back</Button>}
               <Button size="sm" onClick={() => void submitEmployerContract()} disabled={isSubmitting} className="flex items-center gap-1.5">
@@ -1386,7 +1351,6 @@ const EditEmployer = () => {
             </div>
             <p className="mt-1 text-center text-[10px] text-gray-400">The PDF Forms are for demo purposes only. Please approach admin for customization works.</p>
 
-            {/* Document upload section */}
             {!isNew && (
               <>
                 <div className="mt-1 flex items-center justify-end">
@@ -1424,7 +1388,6 @@ const EditEmployer = () => {
         )}
       </div>
 
-      {/* back-to-top */}
       {showBackToTop && (
         <button
           type="button"
