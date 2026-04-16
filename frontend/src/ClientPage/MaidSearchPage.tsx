@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search, Star, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Search, Star, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
 import { toast } from "@/components/ui/sonner";
-
 
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
 const PAGE_SIZE = 18;
@@ -29,35 +28,7 @@ const NATIONALITY_LINKS = [
   "Sri Lankan Maid",
   "Cambodian Maid",
   "Bangladeshi Maid",
-];
-
-const EDUCATION_OPTIONS = [
-  "No Preference",
-  "Primary (<=6 yrs)",
-  "Secondary (>=8 yrs)",
-  "College/Degree (>=12 yrs)",
-];
-
-const LANGUAGE_OPTIONS = [
-  "No Preference",
-  "English",
-  "Mandarin",
-  "Hokkien",
-  "Cantonese",
-  "Malay",
-  "Tamil",
-];
-
-const AGE_OPTIONS = [
-  "No Preference",
-  "21 to 25",
-  "26 to 30",
-  "31 to 35",
-  "36 to 40",
-  "41 to 45",
-  "46 to 50",
-  "51+",
-];
+] as const;
 
 const QUICK_LINKS = {
   mostRecent3Days: "Most Recent Maid in 3 days",
@@ -82,20 +53,305 @@ const QUICK_LINKS = {
 
 type QuickLinkKey = keyof typeof QUICK_LINKS;
 
-const offDayCompensationKeys = [
-  "Can work on off-days with compensation?",
-  "Willing to work on off-days with compensation?",
-  "Willing to work on off-days with  compensation?",
-] as const;
-
-const matchesEducation = (maid: MaidProfile, education: string) => {
-  if (education === "No Preference") return true;
-  const value = String(maid.educationLevel || "").toLowerCase();
-  if (education === "Primary (<=6 yrs)") return value.includes("primary");
-  if (education === "Secondary (>=8 yrs)") return value.includes("secondary") || value.includes("high school");
-  if (education === "College/Degree (>=12 yrs)") return value.includes("college") || value.includes("degree");
-  return true;
+type ClientDraft = {
+  keyword: string;
+  agencyPreference: string;
+  biodataCreatedWithin: string;
+  maidType: string;
+  willingOffDays: boolean;
+  hasChildren: boolean;
+  withVideo: boolean;
+  natFilipino: boolean;
+  natIndonesian: boolean;
+  natMyanmar: boolean;
+  natIndian: boolean;
+  natSriLankan: boolean;
+  natCambodian: boolean;
+  natBangladeshi: boolean;
+  natOthers: boolean;
+  natNoPreference: boolean;
+  expHomeCountry: boolean;
+  expSingapore: boolean;
+  expMalaysia: boolean;
+  expHongKong: boolean;
+  expTaiwan: boolean;
+  expMiddleEast: boolean;
+  expOtherCountries: boolean;
+  expNoPreference: boolean;
+  dutyCareInfant: boolean;
+  dutyCareYoungChildren: boolean;
+  dutyCareElderlyDisabled: boolean;
+  dutyCooking: boolean;
+  dutyGeneralHousekeeping: boolean;
+  dutyNoPreference: boolean;
+  eduCollege: boolean;
+  eduHighSchool: boolean;
+  eduSecondary: boolean;
+  eduPrimary: boolean;
+  eduNoPreference: boolean;
+  langEnglish: boolean;
+  langMandarin: boolean;
+  langBahasaIndonesia: boolean;
+  langHindi: boolean;
+  langTamil: boolean;
+  langNoPreference: boolean;
+  age21to25: boolean;
+  age26to30: boolean;
+  age31to35: boolean;
+  age36to40: boolean;
+  age41above: boolean;
+  ageNoPreference: boolean;
+  marSingle: boolean;
+  marMarried: boolean;
+  marWidowed: boolean;
+  marDivorced: boolean;
+  marSeparated: boolean;
+  marNoPreference: boolean;
+  height150below: boolean;
+  height151to155: boolean;
+  height156to160: boolean;
+  height161above: boolean;
+  heightNoPreference: boolean;
+  relFreeThinker: boolean;
+  relChristian: boolean;
+  relCatholic: boolean;
+  relBuddhist: boolean;
+  relMuslim: boolean;
+  relHindu: boolean;
+  relSikh: boolean;
+  relOthers: boolean;
+  relNoPreference: boolean;
 };
+
+type SidebarFilters = {
+  keyword: string;
+  biodataCreatedWithin: string;
+  maidType: string;
+  nationality: string;
+  religion: string;
+  maritalStatus: string;
+  education: string;
+  language: string;
+  age: string;
+  height: string;
+  experience: string;
+  duty: string;
+  willingOffDays: boolean;
+  hasChildren: boolean;
+  withVideo: boolean;
+};
+
+const defaultSidebarFilters: SidebarFilters = {
+  keyword: "",
+  biodataCreatedWithin: "No Preference",
+  maidType: "",
+  nationality: "No Preference",
+  religion: "No Preference",
+  maritalStatus: "No Preference",
+  education: "No Preference",
+  language: "No Preference",
+  age: "No Preference",
+  height: "No Preference",
+  experience: "No Preference",
+  duty: "No Preference",
+  willingOffDays: false,
+  hasChildren: false,
+  withVideo: false,
+};
+
+const parseAdvancedFilters = (searchParams: URLSearchParams) => {
+  const raw = searchParams.get("filters");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeNationality = (value: string) => {
+  const lower = value.trim().toLowerCase();
+  if (lower.includes("filip")) return "Filipino";
+  if (lower.includes("indo")) return "Indonesian";
+  if (lower.includes("myan")) return "Myanmar";
+  if (lower.includes("indian")) return "Indian";
+  if (lower.includes("sri") || lower.includes("lanka")) return "Sri Lankan";
+  if (lower.includes("cambod")) return "Cambodian";
+  if (lower.includes("bangla")) return "Bangladeshi";
+  return "Others";
+};
+
+const normalizeReligion = (value: string) => {
+  const lower = value.trim().toLowerCase();
+  if (lower === "free thinker") return "Free Thinker";
+  if (lower === "christian") return "Christian";
+  if (lower === "catholic") return "Catholic";
+  if (lower === "buddhist") return "Buddhist";
+  if (lower === "muslim" || lower.includes("islam")) return "Muslim";
+  if (lower === "hindu") return "Hindu";
+  if (lower === "sikh") return "Sikh";
+  if (!lower) return "No Preference";
+  return "Others";
+};
+
+const normalizeEducation = (value: string) => {
+  const lower = value.trim().toLowerCase();
+  if (!lower) return "No Preference";
+  if (lower.includes("college") || lower.includes("degree")) return "College / Degree";
+  if (lower.includes("high school") || lower.includes("vocational")) return "High School / Vocational";
+  if (lower.includes("secondary")) return "Secondary";
+  if (lower.includes("primary")) return "Primary";
+  return value;
+};
+
+const deriveSidebarFilters = (searchParams: URLSearchParams, advancedFilters: Record<string, unknown> | null): SidebarFilters => ({
+  keyword: searchParams.get("q") || String(advancedFilters?.keyword || ""),
+  biodataCreatedWithin: searchParams.get("biodata") || String(advancedFilters?.biodataCreatedWithin || "No Preference"),
+  maidType: searchParams.get("type") || String(advancedFilters?.maidType || ""),
+  nationality: searchParams.get("nationality") || (
+    advancedFilters?.natFilipino ? "Filipino" :
+    advancedFilters?.natIndonesian ? "Indonesian" :
+    advancedFilters?.natMyanmar ? "Myanmar" :
+    advancedFilters?.natIndian ? "Indian" :
+    advancedFilters?.natSriLankan ? "Sri Lankan" :
+    advancedFilters?.natCambodian ? "Cambodian" :
+    advancedFilters?.natBangladeshi ? "Bangladeshi" :
+    advancedFilters?.natOthers ? "Others" : "No Preference"
+  ),
+  religion: searchParams.get("religion") || (
+    advancedFilters?.relFreeThinker ? "Free Thinker" :
+    advancedFilters?.relChristian ? "Christian" :
+    advancedFilters?.relCatholic ? "Catholic" :
+    advancedFilters?.relBuddhist ? "Buddhist" :
+    advancedFilters?.relMuslim ? "Muslim" :
+    advancedFilters?.relHindu ? "Hindu" :
+    advancedFilters?.relSikh ? "Sikh" :
+    advancedFilters?.relOthers ? "Others" : "No Preference"
+  ),
+  maritalStatus: searchParams.get("marital") || (
+    advancedFilters?.marSingle ? "Single" :
+    advancedFilters?.marMarried ? "Married" :
+    advancedFilters?.marWidowed ? "Widowed" :
+    advancedFilters?.marDivorced ? "Divorced" :
+    advancedFilters?.marSeparated ? "Separated" : "No Preference"
+  ),
+  education: searchParams.get("education") || (
+    advancedFilters?.eduCollege ? "College / Degree" :
+    advancedFilters?.eduHighSchool ? "High School / Vocational" :
+    advancedFilters?.eduSecondary ? "Secondary" :
+    advancedFilters?.eduPrimary ? "Primary" : "No Preference"
+  ),
+  language: searchParams.get("language") || (
+    advancedFilters?.langEnglish ? "English" :
+    advancedFilters?.langMandarin ? "Mandarin" :
+    advancedFilters?.langBahasaIndonesia ? "Bahasa Indonesia / Malay" :
+    advancedFilters?.langHindi ? "Hindi" :
+    advancedFilters?.langTamil ? "Tamil" : "No Preference"
+  ),
+  age: searchParams.get("age") || (
+    advancedFilters?.age21to25 ? "21 to 25" :
+    advancedFilters?.age26to30 ? "26 to 30" :
+    advancedFilters?.age31to35 ? "31 to 35" :
+    advancedFilters?.age36to40 ? "36 to 40" :
+    advancedFilters?.age41above ? "41 and above" : "No Preference"
+  ),
+  height: searchParams.get("height") || (
+    advancedFilters?.height150below ? "150cm and below" :
+    advancedFilters?.height151to155 ? "151cm to 155cm" :
+    advancedFilters?.height156to160 ? "156cm to 160cm" :
+    advancedFilters?.height161above ? "161cm and above" : "No Preference"
+  ),
+  experience: searchParams.get("experience") || (
+    advancedFilters?.expHomeCountry ? "Home Country" :
+    advancedFilters?.expSingapore ? "Singapore" :
+    advancedFilters?.expMalaysia ? "Malaysia" :
+    advancedFilters?.expHongKong ? "Hong Kong" :
+    advancedFilters?.expTaiwan ? "Taiwan" :
+    advancedFilters?.expMiddleEast ? "Middle East" :
+    advancedFilters?.expOtherCountries ? "Other Countries" : "No Preference"
+  ),
+  duty: searchParams.get("duty") || (
+    advancedFilters?.dutyCareInfant ? "Infant Care" :
+    advancedFilters?.dutyCareYoungChildren ? "Young Children" :
+    advancedFilters?.dutyCareElderlyDisabled ? "Elderly / Disabled" :
+    advancedFilters?.dutyCooking ? "Cooking" :
+    advancedFilters?.dutyGeneralHousekeeping ? "Housekeeping" : "No Preference"
+  ),
+  willingOffDays: searchParams.get("offDays") === "true" || Boolean(advancedFilters?.willingOffDays),
+  hasChildren: searchParams.get("hasChildren") === "true" || Boolean(advancedFilters?.hasChildren),
+  withVideo: searchParams.get("withVideo") === "true" || Boolean(advancedFilters?.withVideo),
+});
+
+const buildDraftFromSidebar = (filters: SidebarFilters): ClientDraft => ({
+  keyword: filters.keyword,
+  agencyPreference: "No Preference",
+  biodataCreatedWithin: filters.biodataCreatedWithin,
+  maidType: filters.maidType,
+  willingOffDays: filters.willingOffDays,
+  hasChildren: filters.hasChildren,
+  withVideo: filters.withVideo,
+  natFilipino: filters.nationality === "Filipino",
+  natIndonesian: filters.nationality === "Indonesian",
+  natMyanmar: filters.nationality === "Myanmar",
+  natIndian: filters.nationality === "Indian",
+  natSriLankan: filters.nationality === "Sri Lankan",
+  natCambodian: filters.nationality === "Cambodian",
+  natBangladeshi: filters.nationality === "Bangladeshi",
+  natOthers: filters.nationality === "Others",
+  natNoPreference: filters.nationality === "No Preference",
+  expHomeCountry: filters.experience === "Home Country",
+  expSingapore: filters.experience === "Singapore",
+  expMalaysia: filters.experience === "Malaysia",
+  expHongKong: filters.experience === "Hong Kong",
+  expTaiwan: filters.experience === "Taiwan",
+  expMiddleEast: filters.experience === "Middle East",
+  expOtherCountries: filters.experience === "Other Countries",
+  expNoPreference: filters.experience === "No Preference",
+  dutyCareInfant: filters.duty === "Infant Care",
+  dutyCareYoungChildren: filters.duty === "Young Children",
+  dutyCareElderlyDisabled: filters.duty === "Elderly / Disabled",
+  dutyCooking: filters.duty === "Cooking",
+  dutyGeneralHousekeeping: filters.duty === "Housekeeping",
+  dutyNoPreference: filters.duty === "No Preference",
+  eduCollege: filters.education === "College / Degree",
+  eduHighSchool: filters.education === "High School / Vocational",
+  eduSecondary: filters.education === "Secondary",
+  eduPrimary: filters.education === "Primary",
+  eduNoPreference: filters.education === "No Preference",
+  langEnglish: filters.language === "English",
+  langMandarin: filters.language === "Mandarin",
+  langBahasaIndonesia: filters.language === "Bahasa Indonesia / Malay",
+  langHindi: filters.language === "Hindi",
+  langTamil: filters.language === "Tamil",
+  langNoPreference: filters.language === "No Preference" || filters.language === "Hokkien" || filters.language === "Cantonese",
+  age21to25: filters.age === "21 to 25",
+  age26to30: filters.age === "26 to 30",
+  age31to35: filters.age === "31 to 35",
+  age36to40: filters.age === "36 to 40",
+  age41above: filters.age === "41 and above",
+  ageNoPreference: filters.age === "No Preference",
+  marSingle: filters.maritalStatus === "Single",
+  marMarried: filters.maritalStatus === "Married",
+  marWidowed: filters.maritalStatus === "Widowed",
+  marDivorced: filters.maritalStatus === "Divorced",
+  marSeparated: filters.maritalStatus === "Separated",
+  marNoPreference: filters.maritalStatus === "No Preference",
+  height150below: filters.height === "150cm and below",
+  height151to155: filters.height === "151cm to 155cm",
+  height156to160: filters.height === "156cm to 160cm",
+  height161above: filters.height === "161cm and above",
+  heightNoPreference: filters.height === "No Preference",
+  relFreeThinker: filters.religion === "Free Thinker",
+  relChristian: filters.religion === "Christian",
+  relCatholic: filters.religion === "Catholic",
+  relBuddhist: filters.religion === "Buddhist",
+  relMuslim: filters.religion === "Muslim",
+  relHindu: filters.religion === "Hindu",
+  relSikh: filters.religion === "Sikh",
+  relOthers: filters.religion === "Others",
+  relNoPreference: filters.religion === "No Preference",
+});
 
 const matchesLanguage = (maid: MaidProfile, language: string) => {
   if (language === "No Preference") return true;
@@ -105,17 +361,9 @@ const matchesLanguage = (maid: MaidProfile, language: string) => {
     .join(" ");
   const term = language.toLowerCase();
   if (term === "mandarin") return skills.includes("mandarin") || skills.includes("chinese");
-  if (term === "malay") return skills.includes("bahasa") || skills.includes("malay") || skills.includes("indonesia");
+  if (term === "bahasa indonesia / malay") return skills.includes("bahasa") || skills.includes("malay") || skills.includes("indonesia");
   return skills.includes(term);
 };
-
-const canWorkOffDays = (maid: MaidProfile) => {
-  const introduction = (maid.introduction || {}) as Record<string, unknown>;
-  return offDayCompensationKeys.some((key) => introduction[key] === true);
-};
-
-const matchesNationalityText = (maid: MaidProfile, value: string) =>
-  String(maid.nationality || "").trim().toLowerCase().includes(value.trim().toLowerCase());
 
 const matchesQuickLink = (maid: MaidProfile, quickLink: QuickLinkKey) => {
   switch (quickLink) {
@@ -128,75 +376,64 @@ const matchesQuickLink = (maid: MaidProfile, quickLink: QuickLinkKey) => {
       cutoff.setDate(cutoff.getDate() - 3);
       return date >= cutoff;
     }
-    case "english":
-      return matchesLanguage(maid, "English");
-    case "mandarin":
-      return matchesLanguage(maid, "Mandarin");
-    case "hokkienCantonese": {
-      const skills = Object.entries(maid.languageSkills || {})
-        .filter(([, level]) => String(level || "").trim() && String(level || "").trim().toLowerCase() !== "zero")
-        .map(([key]) => key.toLowerCase())
-        .join(" ");
-      return skills.includes("hokkien") || skills.includes("cantonese");
-    }
-    case "newMaid":
-      return String(maid.type || "").toLowerCase().includes("new");
-    case "transferMaid":
-      return String(maid.type || "").toLowerCase().includes("transfer");
-    case "exSingapore":
-      return String(maid.type || "").toLowerCase().includes("ex-singapore");
-    case "filipino":
-      return matchesNationalityText(maid, "filipino");
-    case "indonesian":
-      return matchesNationalityText(maid, "indonesian");
-    case "myanmar":
-      return matchesNationalityText(maid, "myanmar");
-    case "indian":
-      return matchesNationalityText(maid, "indian");
-    case "mizoram":
-      return matchesNationalityText(maid, "mizoram");
-    case "darjeeling":
-      return matchesNationalityText(maid, "darjeeling");
-    case "manipur":
-      return matchesNationalityText(maid, "manipur");
-    case "punjabi":
-      return matchesNationalityText(maid, "punjabi");
-    case "sriLankan":
-      return matchesNationalityText(maid, "sri lankan");
-    case "cambodian":
-      return matchesNationalityText(maid, "cambodian");
-    case "bangladeshi":
-      return matchesNationalityText(maid, "bangladeshi");
-    default:
-      return true;
+    case "english": return matchesLanguage(maid, "English");
+    case "mandarin": return matchesLanguage(maid, "Mandarin");
+    case "hokkienCantonese": return matchesLanguage(maid, "Hokkien") || matchesLanguage(maid, "Cantonese");
+    case "newMaid": return String(maid.type || "").toLowerCase().includes("new");
+    case "transferMaid": return String(maid.type || "").toLowerCase().includes("transfer");
+    case "exSingapore": return String(maid.type || "").toLowerCase().includes("ex-singapore");
+    case "filipino": return normalizeNationality(String(maid.nationality || "")) === "Filipino";
+    case "indonesian": return normalizeNationality(String(maid.nationality || "")) === "Indonesian";
+    case "myanmar": return normalizeNationality(String(maid.nationality || "")) === "Myanmar";
+    case "indian": return normalizeNationality(String(maid.nationality || "")) === "Indian";
+    case "mizoram": return String(maid.nationality || "").toLowerCase().includes("mizoram");
+    case "darjeeling": return String(maid.nationality || "").toLowerCase().includes("darjeeling");
+    case "manipur": return String(maid.nationality || "").toLowerCase().includes("manipur");
+    case "punjabi": return String(maid.nationality || "").toLowerCase().includes("punjabi");
+    case "sriLankan": return normalizeNationality(String(maid.nationality || "")) === "Sri Lankan";
+    case "cambodian": return normalizeNationality(String(maid.nationality || "")) === "Cambodian";
+    case "bangladeshi": return normalizeNationality(String(maid.nationality || "")) === "Bangladeshi";
+    default: return true;
   }
+};
+
+const matchesHeight = (maid: MaidProfile, value: string) => {
+  if (value === "No Preference") return true;
+  const height = Number(maid.height || 0);
+  if (!height) return false;
+  if (value === "150cm and below") return height <= 150;
+  if (value === "151cm to 155cm") return height >= 151 && height <= 155;
+  if (value === "156cm to 160cm") return height >= 156 && height <= 160;
+  if (value === "161cm and above") return height >= 161;
+  return true;
+};
+
+const matchesDuty = (maid: MaidProfile, duty: string) => {
+  if (duty === "No Preference") return true;
+  const workAreas = maid.workAreas as Record<string, { willing?: boolean; experience?: boolean }>;
+  const hasAny = (labels: string[]) =>
+    labels.some((label) => {
+      const entry = workAreas[label];
+      return Boolean(entry?.willing || entry?.experience);
+    });
+  if (duty === "Infant Care") return hasAny(["Care of infants/children"]);
+  if (duty === "Young Children") return hasAny(["Care of infants/children", "Care of young children"]);
+  if (duty === "Elderly / Disabled") return hasAny(["Care of elderly", "Care of disabled"]);
+  if (duty === "Cooking") return hasAny(["Cooking"]);
+  if (duty === "Housekeeping") return hasAny(["General housework"]);
+  return true;
 };
 
 const getPrimaryPhoto = (maid: MaidProfile) =>
-  Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
-    ? maid.photoDataUrls[0]
-    : maid.photoDataUrl || "";
+  Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl || "";
 
 const getTypeLabel = (type: string) => {
-  const t = type.toLowerCase();
-  if (t.includes("new")) return "NEW";
-  if (t.includes("transfer")) return "TRANSFER";
-  if (t.includes("ex")) return "EX-SG";
+  const lower = type.toLowerCase();
+  if (lower.includes("new")) return "NEW";
+  if (lower.includes("transfer")) return "TRANSFER";
+  if (lower.includes("ex")) return "EX-SG";
   return type.toUpperCase();
 };
-
-const parseAdvancedFilters = (searchParams: URLSearchParams) => {
-  const raw = searchParams.get("filters");
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-
 
 const useShortlist = () => {
   const [shortlist, setShortlist] = useState<Set<string>>(new Set());
@@ -210,44 +447,142 @@ const useShortlist = () => {
   return { shortlist, toggle };
 };
 
-
 const pageNumbers = (current: number, total: number): (number | "...")[] => {
-  if (total <= 10) return Array.from({ length: total }, (_, i) => i + 1);
+  if (total <= 10) return Array.from({ length: total }, (_, index) => index + 1);
   const pages: (number | "...")[] = [1];
   if (current > 3) pages.push("...");
-  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+  for (let index = Math.max(2, current - 1); index <= Math.min(total - 1, current + 1); index++) pages.push(index);
   if (current < total - 2) pages.push("...");
   pages.push(total);
   return pages;
 };
 
+// ─── Collapsible sidebar section ────────────────────────────────────────────
+const CollapsibleSection = ({
+  title,
+  children,
+  defaultOpen = true,
+  badge,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  badge?: number;
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-muted/40"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-[0.14em] text-primary">{title}</span>
+          {badge !== undefined && badge > 0 && (
+            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+              {badge}
+            </span>
+          )}
+        </div>
+        <ChevronDown
+          className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && <div className="border-t border-border/60 px-4 pb-4 pt-3">{children}</div>}
+    </div>
+  );
+};
+
+// ─── Styled select ───────────────────────────────────────────────────────────
+const FilterSelect = ({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+}) => (
+  <label className="grid gap-1">
+    <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`h-9 w-full rounded-lg border px-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+        value !== "No Preference" && value !== ""
+          ? "border-primary/50 bg-primary/5 font-medium text-foreground"
+          : "border-border bg-background text-foreground"
+      }`}
+    >
+      {options.map((opt) => (
+        <option key={opt} value={opt}>{opt}</option>
+      ))}
+    </select>
+  </label>
+);
+
+// ─── Toggle chip ─────────────────────────────────────────────────────────────
+const ToggleChip = ({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+      active
+        ? "border-primary bg-primary text-primary-foreground shadow-sm"
+        : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+    }`}
+  >
+    {label}
+  </button>
+);
+
+// ─── Toggle switch row ───────────────────────────────────────────────────────
+const SwitchRow = ({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) => (
+  <label className="flex cursor-pointer items-center justify-between gap-2 py-1">
+    <span className={`text-sm ${checked ? "font-medium text-foreground" : "text-muted-foreground"}`}>{label}</span>
+    <div
+      className={`relative h-5 w-9 rounded-full transition-colors ${checked ? "bg-primary" : "bg-muted"}`}
+      onClick={() => onChange(!checked)}
+    >
+      <span
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all duration-200 ${
+          checked ? "left-4" : "left-0.5"
+        }`}
+      />
+    </div>
+  </label>
+);
 
 const MaidSearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const advancedFilters = useMemo(() => parseAdvancedFilters(searchParams), [searchParams]);
   const advancedFiltersRaw = searchParams.get("filters") || "";
   const quickLink = (searchParams.get("quick") || "") as QuickLinkKey | "";
-
-  const [keyword, setKeyword] = useState(searchParams.get("q") || "");
-  const [maidType, setMaidType] = useState<string>(searchParams.get("type") || "");
-  const [offDays, setOffDays] = useState(searchParams.get("offDays") === "true" || Boolean(advancedFilters && (advancedFilters as Record<string, unknown>).willingOffDays));
-  const [withVideo, setWithVideo] = useState(searchParams.get("withVideo") === "true" || Boolean(advancedFilters && (advancedFilters as Record<string, unknown>).withVideo));
-  const [nationality, setNationality] = useState(searchParams.get("nationality") || "No Preference");
-  const [education, setEducation] = useState(searchParams.get("education") || "No Preference");
-  const [language, setLanguage] = useState(searchParams.get("language") || "No Preference");
-  const [age, setAge] = useState(searchParams.get("age") || "No Preference");
+  const [filters, setFilters] = useState<SidebarFilters>(() => deriveSidebarFilters(searchParams, advancedFilters));
   const [page, setPage] = useState(1);
-
   const [allMaids, setAllMaids] = useState<MaidProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const { shortlist, toggle: toggleShortlist } = useShortlist();
-
-  const nationalityOptions = useMemo(() => {
-    const vals = Array.from(
-      new Set(allMaids.map((m) => m.nationality?.trim()).filter(Boolean) as string[])
-    ).sort();
-    return ["No Preference", ...vals];
-  }, [allMaids]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -257,10 +592,11 @@ const MaidSearchPage = () => {
         const res = await fetch("/api/maids?visibility=public", { signal: controller.signal });
         const data = (await res.json()) as { maids?: MaidProfile[]; error?: string };
         if (!res.ok || !data.maids) throw new Error(data.error || "Failed to load");
-        setAllMaids(data.maids.filter((m) => m.isPublic));
-      } catch (err) {
-        if (!(err instanceof DOMException && err.name === "AbortError"))
-          toast.error(err instanceof Error ? err.message : "Failed to load maids");
+        setAllMaids(data.maids.filter((maid) => maid.isPublic));
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          toast.error(error instanceof Error ? error.message : "Failed to load maids");
+        }
       } finally {
         setIsLoading(false);
       }
@@ -270,260 +606,343 @@ const MaidSearchPage = () => {
   }, []);
 
   useEffect(() => {
-    const advanced = advancedFilters as Record<string, unknown> | null;
-    setKeyword(searchParams.get("q") || "");
-    setMaidType(searchParams.get("type") || "");
-    setOffDays(searchParams.get("offDays") === "true" || Boolean(advanced?.willingOffDays));
-    setWithVideo(searchParams.get("withVideo") === "true" || Boolean(advanced?.withVideo));
-    setNationality(searchParams.get("nationality") || "No Preference");
-    setEducation(
-      searchParams.get("education") ||
-        (advanced?.eduCollege ? "College/Degree (>=12 yrs)" :
-        advanced?.eduHighSchool || advanced?.eduSecondary ? "Secondary (>=8 yrs)" :
-        advanced?.eduPrimary ? "Primary (<=6 yrs)" : "No Preference")
-    );
-    setLanguage(
-      searchParams.get("language") ||
-        (advanced?.langEnglish ? "English" :
-        advanced?.langMandarin ? "Mandarin" :
-        advanced?.langBahasaIndonesia ? "Malay" :
-        advanced?.langHindi ? "Hindi" :
-        advanced?.langTamil ? "Tamil" : "No Preference")
-    );
-    setAge(
-      searchParams.get("age") ||
-        (advanced?.age21to25 ? "21 to 25" :
-        advanced?.age26to30 ? "26 to 30" :
-        advanced?.age31to35 ? "31 to 35" :
-        advanced?.age36to40 ? "36 to 40" :
-        advanced?.age41above ? "41 to 45" : "No Preference")
-    );
+    setFilters(deriveSidebarFilters(searchParams, advancedFilters));
     setPage(1);
   }, [searchParams, advancedFilters]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [keyword, maidType, offDays, withVideo, nationality, education, language, age, advancedFiltersRaw, quickLink]);
+  const nationalityOptions = useMemo(
+    () => ["No Preference", ...Array.from(new Set(allMaids.map((m) => normalizeNationality(String(m.nationality || ""))).filter(Boolean))).sort()],
+    [allMaids],
+  );
+  const religionOptions = useMemo(
+    () => ["No Preference", ...Array.from(new Set(allMaids.map((m) => normalizeReligion(String(m.religion || ""))).filter((v) => v && v !== "No Preference"))).sort()],
+    [allMaids],
+  );
+  const maritalOptions = useMemo(
+    () => ["No Preference", ...Array.from(new Set(allMaids.map((m) => String(m.maritalStatus || "").trim()).filter(Boolean))).sort()],
+    [allMaids],
+  );
+  const educationOptions = useMemo(
+    () => ["No Preference", ...Array.from(new Set(allMaids.map((m) => normalizeEducation(String(m.educationLevel || ""))).filter((v) => v && v !== "No Preference")))],
+    [allMaids],
+  );
+
+  const languageOptions = ["No Preference", "English", "Mandarin", "Hokkien", "Cantonese", "Bahasa Indonesia / Malay", "Hindi", "Tamil"];
+  const ageOptions = ["No Preference", "21 to 25", "26 to 30", "31 to 35", "36 to 40", "41 and above"];
+  const heightOptions = ["No Preference", "150cm and below", "151cm to 155cm", "156cm to 160cm", "161cm and above"];
+  const experienceOptions = ["No Preference", "Home Country", "Singapore", "Malaysia", "Hong Kong", "Taiwan", "Middle East", "Other Countries"];
+  const dutyOptions = ["No Preference", "Infant Care", "Young Children", "Elderly / Disabled", "Cooking", "Housekeeping"];
 
   const filteredMaids = useMemo(() => {
-    let result = advancedFilters ? filterMaids(allMaids, advancedFilters) : allMaids;
-
-    result = filterMaids(result, {
-      keyword,
-      nationality: nationality === "No Preference" ? [] : [nationality],
-      maidTypes: maidType ? [maidType] : [],
-    });
-
-    if (withVideo) {
-      result = result.filter((maid) => String(maid.videoDataUrl || "").trim().length > 0);
+    const draft = buildDraftFromSidebar(filters);
+    let result = filterMaids(allMaids, draft);
+    if (filters.language === "Hokkien" || filters.language === "Cantonese") {
+      result = result.filter((m) => matchesLanguage(m, filters.language));
     }
-
-    if (offDays) {
-      result = result.filter(canWorkOffDays);
+    if (filters.height !== "No Preference") {
+      result = result.filter((m) => matchesHeight(m, filters.height));
     }
-
-    if (education !== "No Preference") {
-      result = result.filter((maid) => matchesEducation(maid, education));
+    if (filters.duty !== "No Preference") {
+      result = result.filter((m) => matchesDuty(m, filters.duty));
     }
-
-    if (language !== "No Preference") {
-      result = result.filter((maid) => matchesLanguage(maid, language));
-    }
-
-    if (age !== "No Preference") {
-      const [minAge, maxAge] = age.includes("+")
-        ? [parseInt(age), 999]
-        : age.split(" to ").map(Number);
-      result = result.filter((m) => {
-        const a = calculateAge(m.dateOfBirth);
-        return a !== null && a >= minAge && (maxAge === 999 ? true : a <= maxAge);
-      });
-    }
-
     if (quickLink) {
-      result = result.filter((maid) => matchesQuickLink(maid, quickLink));
+      result = result.filter((m) => matchesQuickLink(m, quickLink));
     }
-
     return result;
-  }, [advancedFilters, allMaids, keyword, maidType, nationality, offDays, withVideo, education, language, age, quickLink]);
+  }, [allMaids, filters, quickLink]);
 
   const totalPages = Math.max(1, Math.ceil(filteredMaids.length / PAGE_SIZE));
   const pagedMaids = filteredMaids.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pages = pageNumbers(page, totalPages);
+
+  // Count active filters for badge
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.keyword.trim()) count++;
+    if (filters.maidType) count++;
+    if (filters.biodataCreatedWithin !== "No Preference") count++;
+    if (filters.nationality !== "No Preference") count++;
+    if (filters.religion !== "No Preference") count++;
+    if (filters.maritalStatus !== "No Preference") count++;
+    if (filters.education !== "No Preference") count++;
+    if (filters.language !== "No Preference") count++;
+    if (filters.age !== "No Preference") count++;
+    if (filters.height !== "No Preference") count++;
+    if (filters.experience !== "No Preference") count++;
+    if (filters.duty !== "No Preference") count++;
+    if (filters.willingOffDays) count++;
+    if (filters.hasChildren) count++;
+    if (filters.withVideo) count++;
+    return count;
+  }, [filters]);
 
   const handleSearch = () => {
     setPage(1);
-    const nextSearchParams = new URLSearchParams();
-    if (advancedFiltersRaw) nextSearchParams.set("filters", advancedFiltersRaw);
-    if (keyword.trim()) nextSearchParams.set("q", keyword.trim());
-    if (maidType.trim()) nextSearchParams.set("type", maidType.trim());
-    if (nationality !== "No Preference") nextSearchParams.set("nationality", nationality);
-    if (education !== "No Preference") nextSearchParams.set("education", education);
-    if (language !== "No Preference") nextSearchParams.set("language", language);
-    if (age !== "No Preference") nextSearchParams.set("age", age);
-    if (offDays) nextSearchParams.set("offDays", "true");
-    if (withVideo) nextSearchParams.set("withVideo", "true");
-    if (quickLink) nextSearchParams.set("quick", quickLink);
-    setSearchParams(nextSearchParams);
+    const nextParams = new URLSearchParams();
+    const draft = buildDraftFromSidebar(filters);
+    nextParams.set("filters", JSON.stringify(draft));
+    if (filters.keyword.trim()) nextParams.set("q", filters.keyword.trim());
+    if (filters.maidType.trim()) nextParams.set("type", filters.maidType.trim());
+    if (filters.nationality !== "No Preference") nextParams.set("nationality", filters.nationality);
+    if (filters.religion !== "No Preference") nextParams.set("religion", filters.religion);
+    if (filters.maritalStatus !== "No Preference") nextParams.set("marital", filters.maritalStatus);
+    if (filters.education !== "No Preference") nextParams.set("education", filters.education);
+    if (filters.language !== "No Preference") nextParams.set("language", filters.language);
+    if (filters.age !== "No Preference") nextParams.set("age", filters.age);
+    if (filters.height !== "No Preference") nextParams.set("height", filters.height);
+    if (filters.experience !== "No Preference") nextParams.set("experience", filters.experience);
+    if (filters.duty !== "No Preference") nextParams.set("duty", filters.duty);
+    if (filters.biodataCreatedWithin !== "No Preference") nextParams.set("biodata", filters.biodataCreatedWithin);
+    if (filters.willingOffDays) nextParams.set("offDays", "true");
+    if (filters.hasChildren) nextParams.set("hasChildren", "true");
+    if (filters.withVideo) nextParams.set("withVideo", "true");
+    if (quickLink) nextParams.set("quick", quickLink);
+    setSearchParams(nextParams);
+    setMobileSidebarOpen(false);
   };
 
-  const handleNatLink = (label: string) => {
+  const handleQuickLink = (label: string) => {
     const quickLinkKey = (Object.entries(QUICK_LINKS).find(([, value]) => value === label)?.[0] || "") as QuickLinkKey | "";
-    const nextSearchParams = new URLSearchParams();
-    if (advancedFiltersRaw) nextSearchParams.set("filters", advancedFiltersRaw);
-    if (quickLinkKey) nextSearchParams.set("quick", quickLinkKey);
-    setKeyword("");
-    setMaidType("");
-    setNationality("No Preference");
-    setEducation("No Preference");
-    setLanguage("No Preference");
-    setAge("No Preference");
-    setOffDays(false);
-    setWithVideo(false);
+    const nextParams = new URLSearchParams();
+    const nextFilters = { ...defaultSidebarFilters };
+    if (quickLinkKey) nextParams.set("quick", quickLinkKey);
+    nextParams.set("filters", JSON.stringify(buildDraftFromSidebar(nextFilters)));
+    setFilters(nextFilters);
     setPage(1);
-    setSearchParams(nextSearchParams);
+    setSearchParams(nextParams);
   };
 
-  const pages = pageNumbers(page, totalPages);
+  const handleReset = () => {
+    setFilters(defaultSidebarFilters);
+    setPage(1);
+    setSearchParams(new URLSearchParams());
+  };
 
-  // ── sidebar ────────────────────────────────────────────────────────────────
+  // ── Sidebar JSX ─────────────────────────────────────────────────────────────
+  const SidebarContent = () => (
+    <div className="space-y-2.5">
 
-  const Sidebar = () => (
-    <aside className="w-full shrink-0 md:w-52 lg:w-56">
-      {/* Search box */}
-      <div className="mb-3 rounded border border-border bg-card p-3">
-        <p className="mb-2 font-display text-sm font-bold text-primary">Maid Search</p>
-        <input
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Filipino maid, baby sitter, etc."
-          className="mb-2 w-full rounded border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
-        />
-
-        <p className="mb-1.5 font-body text-xs font-semibold text-foreground">Maid Type</p>
-        <div className="mb-3 space-y-1">
-          {MAID_TYPES.map((t) => (
-            <label key={t} className="flex cursor-pointer items-center gap-2 font-body text-xs text-foreground select-none">
-              <input
-                type="radio"
-                name="maidType"
-                checked={maidType === t}
-                onChange={() => setMaidType(maidType === t ? "" : t)}
-                className="accent-primary"
-              />
-              {t}
-            </label>
-          ))}
-          <label className="flex cursor-pointer items-center gap-2 font-body text-xs text-foreground select-none">
-            <input type="checkbox" checked={offDays} onChange={(e) => setOffDays(e.target.checked)} className="accent-primary" />
-            Willing to work on off-days
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 font-body text-xs text-foreground select-none">
-            <input type="checkbox" checked={withVideo} onChange={(e) => setWithVideo(e.target.checked)} className="accent-primary" />
-            Maid With Video
-            <span className="rounded bg-red-500 px-1 py-px text-[9px] font-bold text-white">▶</span>
-          </label>
-        </div>
-
-        <div className="mb-2 space-y-1.5">
-          {[
-            { label: "Nationality", value: nationality, options: nationalityOptions, set: setNationality },
-            { label: "Education", value: education, options: EDUCATION_OPTIONS, set: setEducation },
-            { label: "Language", value: language, options: LANGUAGE_OPTIONS, set: setLanguage },
-            { label: "Age", value: age, options: AGE_OPTIONS, set: setAge },
-          ].map(({ label, value, options, set }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <label className="w-20 shrink-0 font-body text-xs font-semibold text-foreground">{label}</label>
-              <select
-                value={value}
-                onChange={(e) => { set(e.target.value); setPage(1); }}
-                className="flex-1 rounded border border-border bg-background px-1.5 py-1 font-body text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+      {/* Search + Maid Type */}
+      <CollapsibleSection title="Search" defaultOpen={true}>
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={filters.keyword}
+              onChange={(e) => setFilters((prev) => ({ ...prev, keyword: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Name, ref code, nationality…"
+              className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            {filters.keyword && (
+              <button
+                type="button"
+                onClick={() => setFilters((prev) => ({ ...prev, keyword: "" }))}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                {options.map((o) => <option key={o}>{o}</option>)}
-              </select>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <FilterSelect
+            label="Profile Created Within"
+            value={filters.biodataCreatedWithin}
+            onChange={(v) => setFilters((prev) => ({ ...prev, biodataCreatedWithin: v }))}
+            options={["No Preference", "1 week", "2 weeks", "1 month", "3 months", "6 months", "1 year"]}
+          />
+
+          <div>
+            <span className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Maid Type</span>
+            <div className="flex flex-wrap gap-1.5">
+              {MAID_TYPES.map((type) => (
+                <ToggleChip
+                  key={type}
+                  label={type}
+                  active={filters.maidType === type}
+                  onClick={() => setFilters((prev) => ({ ...prev, maidType: prev.maidType === type ? "" : type }))}
+                />
+              ))}
             </div>
-          ))}
+          </div>
         </div>
+      </CollapsibleSection>
 
-        <button
-          onClick={handleSearch}
-          className="w-full rounded bg-primary py-2 font-body text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Search Maid
-        </button>
+      {/* Personal Details */}
+      <CollapsibleSection
+        title="Personal Details"
+        badge={[filters.nationality, filters.religion, filters.maritalStatus, filters.age, filters.height].filter((v) => v !== "No Preference").length}
+      >
+        <div className="space-y-3">
+          <FilterSelect label="Nationality" value={filters.nationality} onChange={(v) => setFilters((p) => ({ ...p, nationality: v }))} options={nationalityOptions} />
+          <FilterSelect label="Religion" value={filters.religion} onChange={(v) => setFilters((p) => ({ ...p, religion: v }))} options={religionOptions} />
+          <FilterSelect label="Marital Status" value={filters.maritalStatus} onChange={(v) => setFilters((p) => ({ ...p, maritalStatus: v }))} options={maritalOptions} />
+          <FilterSelect label="Age Group" value={filters.age} onChange={(v) => setFilters((p) => ({ ...p, age: v }))} options={ageOptions} />
+          <FilterSelect label="Height" value={filters.height} onChange={(v) => setFilters((p) => ({ ...p, height: v }))} options={heightOptions} />
+          <FilterSelect label="Education" value={filters.education} onChange={(v) => setFilters((p) => ({ ...p, education: v }))} options={educationOptions} />
+        </div>
+      </CollapsibleSection>
+
+      {/* Skills & Availability */}
+      <CollapsibleSection
+        title="Skills & Availability"
+        badge={[filters.language, filters.duty, filters.experience].filter((v) => v !== "No Preference").length + (filters.willingOffDays ? 1 : 0) + (filters.hasChildren ? 1 : 0) + (filters.withVideo ? 1 : 0)}
+      >
+        <div className="space-y-3">
+          <FilterSelect label="Language" value={filters.language} onChange={(v) => setFilters((p) => ({ ...p, language: v }))} options={languageOptions} />
+          <FilterSelect label="Preferred Duty" value={filters.duty} onChange={(v) => setFilters((p) => ({ ...p, duty: v }))} options={dutyOptions} />
+          <FilterSelect label="Work Experience" value={filters.experience} onChange={(v) => setFilters((p) => ({ ...p, experience: v }))} options={experienceOptions} />
+          <div className="space-y-1 border-t border-border/50 pt-2">
+            <SwitchRow label="Willing to work on off-days" checked={filters.willingOffDays} onChange={(v) => setFilters((p) => ({ ...p, willingOffDays: v }))} />
+            <SwitchRow label="Has children" checked={filters.hasChildren} onChange={(v) => setFilters((p) => ({ ...p, hasChildren: v }))} />
+            <SwitchRow label="Has video introduction" checked={filters.withVideo} onChange={(v) => setFilters((p) => ({ ...p, withVideo: v }))} />
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <Button className="flex-1 rounded-xl" onClick={handleSearch}>
+          <Search className="mr-1.5 h-3.5 w-3.5" />
+          Search
+          {activeFilterCount > 0 && (
+            <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary-foreground/20 px-1 text-[10px] font-bold">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+        {activeFilterCount > 0 && (
+          <Button variant="outline" className="rounded-xl px-3" onClick={handleReset} title="Clear all filters">
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
-      {/* Quick nav links */}
-      <div className="rounded border border-border bg-card overflow-hidden">
-        {NATIONALITY_LINKS.map((link) => (
-          <button
-            key={link}
-            onClick={() => handleNatLink(link)}
-            className="flex w-full items-center gap-1.5 border-b border-border/50 px-3 py-2 text-left font-body text-xs text-foreground transition-colors hover:bg-primary/5 hover:text-primary last:border-b-0"
-          >
-            <span className="text-primary">›</span>
-            {link}
-          </button>
-        ))}
+      {/* Quick links */}
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <p className="border-b border-border/60 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
+          Quick Browse
+        </p>
+        <div className="divide-y divide-border/40">
+          {NATIONALITY_LINKS.map((link) => {
+            const isActive = quickLink && QUICK_LINKS[Object.keys(QUICK_LINKS).find((k) => QUICK_LINKS[k as QuickLinkKey] === link) as QuickLinkKey] === link;
+            return (
+              <button
+                key={link}
+                onClick={() => handleQuickLink(link)}
+                className={`flex w-full items-center gap-2 px-4 py-2 text-left text-xs transition-colors ${
+                  isActive
+                    ? "bg-primary/10 font-semibold text-primary"
+                    : "text-foreground hover:bg-muted/50 hover:text-primary"
+                }`}
+              >
+                <span className="text-primary opacity-60">›</span>
+                {link}
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </aside>
+    </div>
   );
 
-  // ── pagination bar ─────────────────────────────────────────────────────────
-
+  // ── Pagination ───────────────────────────────────────────────────────────────
   const PaginationBar = () => (
     <div className="flex flex-wrap items-center gap-1">
       <button
-        onClick={() => setPage((p) => Math.max(1, p - 1))}
+        onClick={() => setPage((prev) => Math.max(1, prev - 1))}
         disabled={page === 1}
-        className="flex h-7 w-7 items-center justify-center rounded border border-border text-foreground hover:bg-muted disabled:opacity-40"
+        className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
-      {pages.map((p, idx) =>
-        p === "..." ? (
-          <span key={`e${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
+      {pages.map((item, index) =>
+        item === "..." ? (
+          <span key={`ellipsis-${index}`} className="px-1 text-xs text-muted-foreground">…</span>
         ) : (
           <button
-            key={p}
-            onClick={() => setPage(p as number)}
-            className={`flex h-7 min-w-[1.75rem] items-center justify-center rounded border px-2 text-xs font-medium transition-colors ${
-              p === page
+            key={item}
+            onClick={() => setPage(item as number)}
+            className={`flex h-7 min-w-[1.75rem] items-center justify-center rounded-lg border px-2 text-xs font-medium transition-colors ${
+              item === page
                 ? "border-primary bg-primary text-primary-foreground"
-                : "border-border text-foreground hover:bg-muted"
+                : "border-border bg-background text-foreground hover:bg-muted"
             }`}
           >
-            {p}
+            {item}
           </button>
-        )
+        ),
       )}
       <button
-        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+        onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
         disabled={page === totalPages}
-        className="flex h-7 w-7 items-center justify-center rounded border border-border text-foreground hover:bg-muted disabled:opacity-40"
+        className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
     </div>
   );
 
-
   return (
     <div className="min-h-screen bg-background">
+      {/* Mobile filter toggle bar */}
+      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur md:hidden">
+        <p className="text-sm font-medium text-foreground">
+          {isLoading ? "Loading…" : `${filteredMaids.length} result${filteredMaids.length !== 1 ? "s" : ""}`}
+        </p>
+        <button
+          type="button"
+          onClick={() => setMobileSidebarOpen((v) => !v)}
+          className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Mobile sidebar overlay */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-30 md:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-background p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="font-semibold">Filters</p>
+              <button type="button" onClick={() => setMobileSidebarOpen(false)}>
+                <X className="h-5 w-5 text-muted-foreground" />
+              </button>
+            </div>
+            <SidebarContent />
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto flex flex-col gap-4 px-3 py-4 sm:px-4 md:flex-row md:gap-5 md:py-6">
 
-        <Sidebar />
+        {/* Desktop sidebar */}
+        <aside className="hidden w-64 shrink-0 md:block lg:w-72">
+          <div className="sticky top-4">
+            <SidebarContent />
+          </div>
+        </aside>
 
-        <main className="flex-1 min-w-0">
+        {/* Main content */}
+        <main className="min-w-0 flex-1">
+
+          {/* Advanced filters carry-over banner */}
           {advancedFilters ? (
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded border border-primary/20 bg-primary/5 px-4 py-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
               <div>
-                <p className="font-body text-sm font-semibold text-foreground">Advanced filters applied</p>
-                <p className="mt-0.5 font-body text-xs text-muted-foreground">
-                  These results were carried over from the client search page. You can refine them here or go back to edit the full filter set.
+                <p className="text-sm font-semibold text-foreground">Advanced filters applied</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Carried over from the client search page. Refine here or go back to edit.
                 </p>
               </div>
-              <Button variant="outline" asChild>
+              <Button variant="outline" size="sm" asChild>
                 <Link to={advancedFiltersRaw ? `/client/maids?filters=${encodeURIComponent(advancedFiltersRaw)}` : "/client/maids"}>
                   Edit Advanced Filters
                 </Link>
@@ -531,44 +950,67 @@ const MaidSearchPage = () => {
             </div>
           ) : null}
 
-          <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-4 py-2 font-body text-sm text-amber-700">
-            You have shortlisted{" "}
-            <span className="font-bold text-primary">{shortlist.size}</span>{" "}
-            {shortlist.size === 1 ? "maid" : "maids"}
-          </div>
+          {/* Shortlist banner */}
+          {shortlist.size > 0 && (
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+              <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
+              <span>
+                <span className="font-bold">{shortlist.size}</span>{" "}
+                {shortlist.size === 1 ? "maid" : "maids"} shortlisted
+              </span>
+            </div>
+          )}
 
+          {/* Results header */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="font-body text-sm text-muted-foreground">
-              Click photo for more details
-              {!isLoading && (
-                <span className="ml-2 text-xs text-muted-foreground/70">
-                  ({filteredMaids.length} result{filteredMaids.length !== 1 ? "s" : ""})
-                </span>
-              )}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground">
+                {isLoading ? (
+                  "Loading profiles…"
+                ) : (
+                  <>
+                    <span className="font-semibold text-foreground">{filteredMaids.length}</span>{" "}
+                    {filteredMaids.length !== 1 ? "profiles" : "profile"} found
+                    {quickLink && (
+                      <span className="ml-1 text-muted-foreground/70">
+                        · {QUICK_LINKS[quickLink as QuickLinkKey]}
+                      </span>
+                    )}
+                  </>
+                )}
+              </p>
+            </div>
             <PaginationBar />
           </div>
 
+          {/* Grid */}
           {isLoading ? (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-              {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                <div key={i} className="animate-pulse overflow-hidden rounded border bg-muted">
-                  <div className="aspect-[3/4] bg-muted/60" />
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                <div key={index} className="overflow-hidden rounded-xl border border-border bg-muted animate-pulse">
+                  <div className="aspect-[3/4] bg-muted-foreground/10" />
                   <div className="space-y-1.5 p-2">
-                    <div className="h-2 w-3/4 rounded bg-muted-foreground/20" />
-                    <div className="h-2 w-1/2 rounded bg-muted-foreground/20" />
-                    <div className="h-2 w-2/3 rounded bg-muted-foreground/20" />
+                    <div className="h-2 w-3/4 rounded-full bg-muted-foreground/15" />
+                    <div className="h-2 w-1/2 rounded-full bg-muted-foreground/10" />
+                    <div className="h-2 w-2/3 rounded-full bg-muted-foreground/10" />
                   </div>
                 </div>
               ))}
             </div>
           ) : filteredMaids.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-              <Search className="mb-3 h-10 w-10 text-muted-foreground/30" />
-              <p className="font-display text-base font-semibold text-foreground">No maids found</p>
-              <p className="mt-1 font-body text-sm text-muted-foreground">
-                Try adjusting your filters or search keywords.
-              </p>
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 text-center">
+              <Search className="mb-3 h-10 w-10 text-muted-foreground/25" />
+              <p className="text-base font-semibold text-foreground">No profiles found</p>
+              <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters or search keywords.</p>
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="mt-4 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  Clear all filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
@@ -580,13 +1022,13 @@ const MaidSearchPage = () => {
                 const typeBadgeColor = typeLower.includes("new")
                   ? "bg-emerald-500"
                   : typeLower.includes("transfer")
-                  ? "bg-blue-500"
-                  : "bg-amber-500";
+                    ? "bg-blue-500"
+                    : "bg-amber-500";
 
                 return (
                   <article
                     key={maid.referenceCode}
-                    className="group flex flex-col overflow-hidden rounded border border-border bg-card shadow-sm transition-shadow hover:shadow-md"
+                    className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
                   >
                     <div className="relative w-full bg-muted">
                       <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
@@ -594,45 +1036,47 @@ const MaidSearchPage = () => {
                           <img
                             src={photo}
                             alt={maid.fullName}
-                            className="block h-auto w-full cursor-pointer"
+                            className="block h-auto w-full cursor-pointer object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                           />
                         ) : (
                           <div className="flex aspect-[3/4] items-center justify-center bg-muted">
-                            <svg className="h-8 w-8 text-muted-foreground/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                            <svg className="h-8 w-8 text-muted-foreground/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
                             </svg>
                           </div>
                         )}
                       </Link>
 
+                      {/* Type badge */}
+                      {maid.type && (
+                        <span className={`absolute left-1.5 top-1.5 rounded px-1.5 py-px text-[8px] font-bold uppercase tracking-wider text-white shadow ${typeBadgeColor}`}>
+                          {getTypeLabel(maid.type)}
+                        </span>
+                      )}
+
+                      {/* Shortlist button */}
                       <button
                         onClick={() => toggleShortlist(maid.referenceCode)}
-                        className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1 font-body text-[9px] font-bold text-white transition-colors ${
-                          isShortlisted ? "bg-amber-500" : "bg-primary hover:bg-primary/90"
+                        className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
+                          isShortlisted
+                            ? "bg-amber-500"
+                            : "bg-black/60 opacity-0 group-hover:opacity-100"
                         }`}
                       >
                         <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
-                        {isShortlisted ? "Shortlisted" : "Add to Shortlist"}
+                        {isShortlisted ? "Shortlisted" : "Shortlist"}
                       </button>
                     </div>
 
                     <div className="flex flex-col gap-0.5 p-2">
-                      <div className="flex flex-wrap items-center gap-1">
-                        <span className="font-body text-[11px] font-semibold leading-tight text-foreground">
-                          {maid.nationality || "—"} maid
-                        </span>
-                        {maid.type && (
-                          <span className={`rounded px-1 py-px font-body text-[8px] font-bold uppercase text-white ${typeBadgeColor}`}>
-                            {getTypeLabel(maid.type)}
-                          </span>
-                        )}
-                      </div>
-                      <p className="font-body text-[10px] text-muted-foreground leading-tight">
-                        {maid.maritalStatus || "—"}{age !== null ? `(${age})` : ""}
+                      <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
+                        {maid.nationality || "—"} Maid
                       </p>
-                      
-                      <p className="font-mono text-[9px] text-muted-foreground leading-tight">
-                        Ref: {maid.referenceCode}
+                      <p className="truncate text-[10px] leading-tight text-muted-foreground">
+                        {maid.maritalStatus || "—"}{age !== null ? `, ${age} yrs` : ""}
+                      </p>
+                      <p className="font-mono text-[9px] leading-tight text-muted-foreground/70">
+                        {maid.referenceCode}
                       </p>
                     </div>
                   </article>
@@ -641,10 +1085,12 @@ const MaidSearchPage = () => {
             </div>
           )}
 
+          {/* Bottom pagination */}
           {!isLoading && filteredMaids.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="font-body text-sm text-muted-foreground">
-                Click photo for full details
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Page <span className="font-medium text-foreground">{page}</span> of{" "}
+                <span className="font-medium text-foreground">{totalPages}</span>
               </p>
               <PaginationBar />
             </div>

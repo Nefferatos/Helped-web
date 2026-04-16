@@ -252,6 +252,7 @@ const App = () => {
               <Route path="contact" element={<ContactUS embedded />} />
               <Route path="maids" element={<ClientMaidsPage />} />
               <Route path="maids/search" element={<MaidSearchPage />} />
+              <Route path="faq" element={<FaqPage />} />
               <Route path="requests" element={<ClientRequestsPage />} />
               <Route path="messages" element={<Navigate to="../support-chat" replace />} />
               <Route path="support-chat" element={<ClientSupportChat />} />

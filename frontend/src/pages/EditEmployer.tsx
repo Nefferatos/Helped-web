@@ -501,7 +501,7 @@ const EditEmployer = () => {
     dateOfBirthMonth: "01",
     dateOfBirthYear: "1910",
   });
-
+  
   const [familyMembers, setFamilyMembers] = useState(
     isNew
       ? [emptyFamilyMember()]
@@ -706,14 +706,24 @@ const EditEmployer = () => {
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to download forms"); }
   };
 
-  const handlePrintForms = async () => {
+const transformFamilyMembers = (members: typeof familyMembers) => 
+  members.map(({ name, relationship, dateOfBirthDay: day, dateOfBirthMonth: month, dateOfBirthYear: year }) => ({
+    name,
+    type: ['Daughter', 'Son'].includes(relationship) ? 'child' : 'parent',
+    relationship,
+    dateOfBirth: `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`
+  } as const));
+
+const handlePrintForms = async () => {
     if (!uploadedDocuments.length) { toast.error("Upload at least one document first"); return; }
     try {
-      const { skippedCount } = await printMergedEmployerPdf(uploadedDocuments, { maid, agency, employer, spouse, familyMembers, notificationDate });
+      const printResult = await printMergedEmployerPdf(uploadedDocuments, { maid, agency, employer, spouse, familyMembers: transformFamilyMembers(familyMembers), notificationDate });
+      const { skippedCount } = printResult;
       if (skippedCount > 0) { toast.success(`Print preview opened. Skipped ${skippedCount} non-PDF file${skippedCount === 1 ? "" : "s"}.`); return; }
       toast.success("Print preview opened");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to print forms"); }
   };
+
 
   const ordinal = (n: number) => ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"][n - 1] ?? `${n}th`;
 
@@ -1143,7 +1153,7 @@ const EditEmployer = () => {
                   <Input className={`${inp} max-w-[200px]`} value={employer.mobileNumber} onChange={(e) => setEmployer({ ...employer, mobileNumber: e.target.value })} placeholder="e.g. 91234567" />
                 </Field>
                 <Field label="Monthly Combined Income">
-                  <Select value={employer.monthlyCombinedIncome || undefined} onValueChange={(v) => setEmployer({ ...employer, monthlyCombinedIncome: v })}>
+                  <Select value={employer.monthlyContribution || undefined} onValueChange={(v) => setEmployer({ ...employer, monthlyContribution: v })}>
                     <SelectTrigger className={`${sel} w-48`}><SelectValue placeholder="-- Select --" /></SelectTrigger>
                     <SelectContent>
                       {incomeOptions.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}

@@ -229,6 +229,8 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         ).trim();
         if (!video) return false;
       }
+
+      // ── Willing Off-days ───────────────────────────────────────────────────
       if (f.willingOffDays) {
         const introduction = (maid.introduction || maidRecord["introduction"] || {}) as Record<string, unknown>;
         const canWorkOffDays = offDayCompensationKeys.some((key) => introduction[key] === true);
@@ -270,9 +272,12 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
       }
 
       // ── Duty / Skills ──────────────────────────────────────────────────────
-      // FIX: AddMaid stores duties in workAreas using the EXACT label strings from skillRows:
-      //   "Care of infants/children", "Care of elderly", "Care of disabled",
-      //   "General housework", "Cooking"
+      // AddMaid stores duties in workAreas using the EXACT label strings from skillRows:
+      //   "Care of infants/children"  → dutyCareInfant AND dutyCareYoungChildren
+      //   "Care of elderly"           → dutyCareElderlyDisabled
+      //   "Care of disabled"          → dutyCareElderlyDisabled
+      //   "General housework"         → dutyGeneralHousekeeping
+      //   "Cooking"                   → dutyCooking
       // Each entry is an object like: { willing: true, experience: true, ... }
       // We check willing === true OR experience === true.
       const dutySpecifics = [
@@ -290,8 +295,9 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
           });
 
         const match =
+          // FIX: both infant and young-children map to the same AddMaid key
           (f.dutyCareInfant && hasWillingnessOrExp(["Care of infants/children"])) ||
-          (f.dutyCareYoungChildren && hasWillingnessOrExp(["Care of infants/children"])) ||
+          (f.dutyCareYoungChildren && hasWillingnessOrExp(["Care of infants/children", "Care of young children"])) ||
           (f.dutyCareElderlyDisabled && hasWillingnessOrExp(["Care of elderly", "Care of disabled"])) ||
           (f.dutyCooking && hasWillingnessOrExp(["Cooking"])) ||
           (f.dutyGeneralHousekeeping && hasWillingnessOrExp(["General housework"]));
@@ -327,7 +333,7 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         // "Others" in the dropdown + anything not in the known list
         const isOther = (c: string) =>
           c === "Others" || (!knownOverseasCountries.includes(c) && c.length > 0);
-        // Home country = no overseas history at all, or only "Others"/unknown entries
+        // Home country = maid has NO overseas entries at all
         const hasAnyOverseas = countries.some((c) => knownOverseasCountries.includes(c));
         const isHome = !hasAnyOverseas;
 
@@ -343,11 +349,11 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
       }
 
       // ── Education ──────────────────────────────────────────────────────────
-      // FIX: AddMaid exact stored values:
+      // AddMaid exact stored values:
       //   "Primary Level(<=6 yrs)"        → eduPrimary
       //   "Secondary Level(7~9 yrs)"      → eduSecondary
-      //   "High School(10~12 yrs)"        → eduHighSchool
-      //   "Vocational Course"             → treated as eduHighSchool equivalent
+      //   "High School(10~12 yrs)"        → eduHighSchool   ← FIX: was mapping to "secondary"
+      //   "Vocational Course"             → eduHighSchool equivalent
       //   "College/Degree (>=13 yrs)"     → eduCollege
       const eduSpecifics = [f.eduCollege, f.eduHighSchool, f.eduSecondary, f.eduPrimary];
       if (shouldApplyGroup(f.eduNoPreference, eduSpecifics)) {
@@ -356,14 +362,16 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         );
         const match =
           (f.eduCollege && edu.includes("college")) ||
+          // FIX: "high school" must match "high school" — not "secondary"
           (f.eduHighSchool && (edu.includes("high school") || edu.includes("vocational"))) ||
-          (f.eduSecondary && edu.includes("secondary")) ||
+          // "secondary" matches "secondary level" only (not high school)
+          (f.eduSecondary && edu.includes("secondary") && !edu.includes("high school")) ||
           (f.eduPrimary && edu.includes("primary"));
         if (!match) return false;
       }
 
       // ── Language ───────────────────────────────────────────────────────────
-      // FIX: AddMaid stores languageSkills as an object:
+      // AddMaid stores languageSkills as an object:
       //   { "English": "Good", "Mandarin/Chinese-Dialect": "Fair", "Hindi": "Zero", ... }
       // toLanguageText() already filters out "Zero" entries.
       // We join the keys (language names) and check inclusion.

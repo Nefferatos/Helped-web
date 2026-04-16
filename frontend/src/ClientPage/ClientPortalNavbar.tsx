@@ -108,7 +108,7 @@ const ClientPortalNavbar = () => {
 
         <div className="flex items-center gap-2 shrink-0">
           <Button asChild className="rounded-full hidden sm:inline-flex">
-            <Link to="/client/requests">Request Maid</Link>
+            <Link to="/client/maids?intent=request">Request Maid</Link>
           </Button>
 
           <DropdownMenu>
@@ -166,7 +166,7 @@ const ClientPortalNavbar = () => {
             </div>
             <div className="mt-3">
               <Button asChild className="w-full rounded-2xl">
-                <Link to="/client/requests">Request Maid</Link>
+                <Link to="/client/maids?intent=request">Request Maid</Link>
               </Button>
             </div>
           </div>
