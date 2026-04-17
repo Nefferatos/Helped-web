@@ -437,7 +437,6 @@ const getTypeLabel = (type: string) => {
   return type.toUpperCase();
 };
 
-
 const pageNumbers = (current: number, total: number): (number | "...")[] => {
   if (total <= 10) return Array.from({ length: total }, (_, index) => index + 1);
   const pages: (number | "...")[] = [1];
@@ -563,6 +562,93 @@ const SwitchRow = ({
   </label>
 );
 
+// ─── Maid card (shared between grid and shortlist dialog) ────────────────────
+const MaidCard = ({
+  maid,
+  isShortlisted,
+  onToggleShortlist,
+  onNavigate,
+}: {
+  maid: MaidProfile;
+  isShortlisted: boolean;
+  onToggleShortlist: (ref: string) => void;
+  onNavigate?: () => void;
+}) => {
+  const photo = getPrimaryPhoto(maid);
+  const age = calculateAge(maid.dateOfBirth);
+  const typeLower = (maid.type || "").toLowerCase();
+  const typeBadgeColor = typeLower.includes("new")
+    ? "bg-emerald-500"
+    : typeLower.includes("transfer")
+    ? "bg-blue-500"
+    : "bg-amber-500";
+
+  return (
+    <article className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <div className="relative w-full bg-muted">
+        <Link
+          to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
+          onClick={onNavigate}
+        >
+          {photo ? (
+            <img
+              src={photo}
+              alt={maid.fullName}
+              className="block h-auto w-full cursor-pointer object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="flex aspect-[3/4] items-center justify-center bg-muted">
+              <svg
+                className="h-8 w-8 text-muted-foreground/20"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+              </svg>
+            </div>
+          )}
+        </Link>
+
+        {/* Type badge */}
+        {maid.type && (
+          <span
+            className={`absolute left-1.5 top-1.5 rounded px-1.5 py-px text-[8px] font-bold uppercase tracking-wider text-white shadow ${typeBadgeColor}`}
+          >
+            {getTypeLabel(maid.type)}
+          </span>
+        )}
+
+        {/* Shortlist button */}
+        <button
+          onClick={() => onToggleShortlist(maid.referenceCode)}
+          className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
+            isShortlisted
+              ? "bg-amber-500"
+              : "bg-black/60 opacity-0 group-hover:opacity-100"
+          }`}
+        >
+          <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
+          {isShortlisted ? "Shortlisted" : "Shortlist"}
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-0.5 p-2">
+        <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
+          {maid.nationality || "—"} Maid
+        </p>
+        <p className="truncate text-[10px] leading-tight text-muted-foreground">
+          {maid.maritalStatus || "—"}{age !== null ? `, ${age} yrs` : ""}
+        </p>
+        <p className="font-mono text-[9px] leading-tight text-muted-foreground/70">
+          {maid.referenceCode}
+        </p>
+      </div>
+    </article>
+  );
+};
+
 const MaidSearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const advancedFilters = useMemo(() => parseAdvancedFilters(searchParams), [searchParams]);
@@ -656,6 +742,7 @@ const MaidSearchPage = () => {
   const totalPages = Math.max(1, Math.ceil(filteredMaids.length / PAGE_SIZE));
   const pagedMaids = filteredMaids.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pages = pageNumbers(page, totalPages);
+
   const shortlistedMaids = useMemo(
     () =>
       shortlistRefs
@@ -668,7 +755,6 @@ const MaidSearchPage = () => {
     [shortlistRefs, shortlistedMaids],
   );
 
-  // Count active filters for badge
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.keyword.trim()) count++;
@@ -731,11 +817,9 @@ const MaidSearchPage = () => {
     setSearchParams(new URLSearchParams());
   };
 
-  // ── Sidebar JSX ─────────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <div className="space-y-2.5">
 
-      {/* Search + Maid Type */}
       <CollapsibleSection title="Search" defaultOpen={true}>
         <div className="space-y-3">
           <div className="relative">
@@ -757,7 +841,6 @@ const MaidSearchPage = () => {
               </button>
             )}
           </div>
-
 
           <FilterSelect
             label="Profile Created Within"
@@ -782,7 +865,6 @@ const MaidSearchPage = () => {
         </div>
       </CollapsibleSection>
 
-      {/* Personal Details */}
       <CollapsibleSection
         title="Personal Details"
         badge={[filters.nationality, filters.religion, filters.maritalStatus, filters.age, filters.height].filter((v) => v !== "No Preference").length}
@@ -797,7 +879,6 @@ const MaidSearchPage = () => {
         </div>
       </CollapsibleSection>
 
-      {/* Skills & Availability */}
       <CollapsibleSection
         title="Skills & Availability"
         badge={[filters.language, filters.duty, filters.experience].filter((v) => v !== "No Preference").length + (filters.willingOffDays ? 1 : 0) + (filters.hasChildren ? 1 : 0) + (filters.withVideo ? 1 : 0)}
@@ -814,7 +895,6 @@ const MaidSearchPage = () => {
         </div>
       </CollapsibleSection>
 
-      {/* Action buttons */}
       <div className="flex gap-2">
         <Button className="flex-1 rounded-xl" onClick={handleSearch}>
           <Search className="mr-1.5 h-3.5 w-3.5" />
@@ -832,7 +912,6 @@ const MaidSearchPage = () => {
         )}
       </div>
 
-      {/* Quick links */}
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <p className="border-b border-border/60 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
           Quick Browse
@@ -860,7 +939,6 @@ const MaidSearchPage = () => {
     </div>
   );
 
-  // ── Pagination ───────────────────────────────────────────────────────────────
   const PaginationBar = () => (
     <div className="flex flex-wrap items-center gap-1">
       <button
@@ -899,7 +977,6 @@ const MaidSearchPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile filter toggle bar */}
       <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur md:hidden">
         <p className="text-sm font-medium text-foreground">
           {isLoading ? "Loading…" : `${filteredMaids.length} result${filteredMaids.length !== 1 ? "s" : ""}`}
@@ -919,7 +996,6 @@ const MaidSearchPage = () => {
         </button>
       </div>
 
-      {/* Mobile sidebar overlay */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-30 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
@@ -937,17 +1013,14 @@ const MaidSearchPage = () => {
 
       <div className="container mx-auto flex flex-col gap-4 px-3 py-4 sm:px-4 md:flex-row md:gap-5 md:py-6">
 
-        {/* Desktop sidebar */}
         <aside className="hidden w-64 shrink-0 md:block lg:w-72">
           <div className="sticky top-4">
             <SidebarContent />
           </div>
         </aside>
 
-        {/* Main content */}
         <main className="min-w-0 flex-1">
 
-          {/* Advanced filters carry-over banner */}
           {advancedFilters ? (
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
               <div>
@@ -964,7 +1037,6 @@ const MaidSearchPage = () => {
             </div>
           ) : null}
 
-          {/* Shortlist banner */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
@@ -984,7 +1056,6 @@ const MaidSearchPage = () => {
             </Button>
           </div>
 
-          {/* Results header */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground">
@@ -1006,8 +1077,6 @@ const MaidSearchPage = () => {
             <PaginationBar />
           </div>
 
-
-          {/* Grid */}
           {isLoading ? (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: PAGE_SIZE }).map((_, index) => (
@@ -1038,78 +1107,17 @@ const MaidSearchPage = () => {
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {pagedMaids.map((maid) => {
-                const photo = getPrimaryPhoto(maid);
-                const age = calculateAge(maid.dateOfBirth);
-                const isShortlisted = shortlist.has(maid.referenceCode);
-                const typeLower = (maid.type || "").toLowerCase();
-                const typeBadgeColor = typeLower.includes("new")
-                  ? "bg-emerald-500"
-                  : typeLower.includes("transfer")
-                    ? "bg-blue-500"
-                    : "bg-amber-500";
-
-                return (
-                  <article
-                    key={maid.referenceCode}
-                    className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
-                  >
-                    <div className="relative w-full bg-muted">
-                      <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
-                        {photo ? (
-                          <img
-                            src={photo}
-                            alt={maid.fullName}
-                            className="block h-auto w-full cursor-pointer object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                          />
-                        ) : (
-                          <div className="flex aspect-[3/4] items-center justify-center bg-muted">
-                            <svg className="h-8 w-8 text-muted-foreground/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-                            </svg>
-                          </div>
-                        )}
-                      </Link>
-
-                      {/* Type badge */}
-                      {maid.type && (
-                        <span className={`absolute left-1.5 top-1.5 rounded px-1.5 py-px text-[8px] font-bold uppercase tracking-wider text-white shadow ${typeBadgeColor}`}>
-                          {getTypeLabel(maid.type)}
-                        </span>
-                      )}
-
-                      {/* Shortlist button */}
-                      <button
-                        onClick={() => handleToggleShortlist(maid.referenceCode)}
-                        className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
-                          isShortlisted
-                            ? "bg-amber-500"
-                            : "bg-black/60 opacity-0 group-hover:opacity-100"
-                        }`}
-                      >
-                        <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
-                        {isShortlisted ? "Shortlisted" : "Shortlist"}
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col gap-0.5 p-2">
-                      <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
-                        {maid.nationality || "—"} Maid
-                      </p>
-                      <p className="truncate text-[10px] leading-tight text-muted-foreground">
-                        {maid.maritalStatus || "—"}{age !== null ? `, ${age} yrs` : ""}
-                      </p>
-                      <p className="font-mono text-[9px] leading-tight text-muted-foreground/70">
-                        {maid.referenceCode}
-                      </p>
-                    </div>
-                  </article>
-                );
-              })}
+              {pagedMaids.map((maid) => (
+                <MaidCard
+                  key={maid.referenceCode}
+                  maid={maid}
+                  isShortlisted={shortlist.has(maid.referenceCode)}
+                  onToggleShortlist={handleToggleShortlist}
+                />
+              ))}
             </div>
           )}
 
-          {/* Bottom pagination */}
           {!isLoading && filteredMaids.length > 0 && (
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
@@ -1121,91 +1129,101 @@ const MaidSearchPage = () => {
           )}
 
           <Dialog open={isShortlistOpen} onOpenChange={setIsShortlistOpen}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-3xl">
               <DialogHeader>
-                <DialogTitle>My Shortlist</DialogTitle>
-                <DialogDescription>Click any shortlisted maid to view profile details.</DialogDescription>
+                <DialogTitle className="flex items-center gap-2">
+                  <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
+                  My Shortlist
+                  {shortlistRefs.length > 0 && (
+                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[11px] font-bold text-amber-700">
+                      {shortlistRefs.length}
+                    </span>
+                  )}
+                </DialogTitle>
+                <DialogDescription>
+                  Click any profile to view full details. Tap the star to remove from shortlist.
+                </DialogDescription>
               </DialogHeader>
+
               {shortlistRefs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Your shortlist is empty.</p>
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
+                    <Star className="h-7 w-7 text-amber-300" />
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">No maids shortlisted yet</p>
+                  <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                    Tap the star that appears on any profile card to add it to your shortlist.
+                  </p>
+                </div>
               ) : (
-                <div className="grid max-h-[70vh] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {shortlistedMaids.map((maid) => {
-                    const photo = getPrimaryPhoto(maid);
-                    const age = calculateAge(maid.dateOfBirth);
-                    const typeLower = (maid.type || "").toLowerCase();
-                    const typeBadgeColor = typeLower.includes("new")
-                      ? "bg-emerald-500"
-                      : typeLower.includes("transfer")
-                        ? "bg-blue-500"
-                        : "bg-amber-500";
+                <div className="max-h-[68vh] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
 
-                    return (
-                      <article key={`shortlist-dialog-${maid.referenceCode}`} className="overflow-hidden rounded-lg border border-border bg-background">
-                        <div className="flex">
-                          <Link
-                            to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
-                            className="relative h-24 w-20 shrink-0 bg-muted"
-                            onClick={() => setIsShortlistOpen(false)}
-                          >
-                            {photo ? (
-                              <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <svg className="h-6 w-6 text-muted-foreground/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-                                </svg>
-                              </div>
-                            )}
-                            {maid.type && (
-                              <span className={`absolute left-1 top-1 rounded px-1 py-px text-[8px] font-bold uppercase tracking-wider text-white ${typeBadgeColor}`}>
-                                {getTypeLabel(maid.type)}
-                              </span>
-                            )}
-                          </Link>
-                          <div className="flex min-w-0 flex-1 flex-col justify-between p-2">
-                            <div>
-                              <Link
-                                to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
-                                className="line-clamp-1 text-xs font-semibold text-foreground hover:text-primary"
-                                onClick={() => setIsShortlistOpen(false)}
-                              >
-                                {maid.fullName || `${maid.nationality || "Maid"} Maid`}
-                              </Link>
-                              <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
-                                {maid.nationality || "—"}{age !== null ? `, ${age} yrs` : ""}
-                              </p>
-                              <p className="font-mono text-[10px] text-muted-foreground/80">{maid.referenceCode}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleShortlist(maid.referenceCode)}
-                              className="mt-1 w-fit text-[10px] font-medium text-destructive hover:underline"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
+                    {shortlistedMaids.map((maid) => (
+                      <MaidCard
+                        key={`shortlist-${maid.referenceCode}`}
+                        maid={maid}
+                        isShortlisted={true}
+                        onToggleShortlist={handleToggleShortlist}
+                        onNavigate={() => setIsShortlistOpen(false)}
+                      />
+                    ))}
 
-                  {missingShortlistRefs.map((ref) => (
-                    <div key={`missing-dialog-${ref}`} className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2">
-                      <p className="font-mono text-xs text-foreground">{ref}</p>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleShortlist(ref)}
-                        className="text-[11px] font-medium text-destructive hover:underline"
+                    {missingShortlistRefs.map((ref) => (
+                      <div
+                        key={`missing-${ref}`}
+                        className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-3 text-center"
+                        style={{ aspectRatio: "3 / 4" }}
                       >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
+                        <svg
+                          className="h-6 w-6 text-muted-foreground/25"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
+                        </svg>
+                        <p className="break-all font-mono text-[9px] text-muted-foreground/70">{ref}</p>
+                        <p className="text-[9px] text-muted-foreground/50">Profile not found</p>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleShortlist(ref)}
+                          className="text-[10px] font-medium text-destructive hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer summary */}
+                  <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{shortlistedMaids.length}</span>{" "}
+                      {shortlistedMaids.length === 1 ? "profile" : "profiles"} shortlisted
+                      {missingShortlistRefs.length > 0 && (
+                        <span className="ml-1 text-muted-foreground/60">
+                          · {missingShortlistRefs.length} not found
+                        </span>
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        shortlistRefs.forEach((ref) => handleToggleShortlist(ref));
+                      }}
+                      className="text-xs font-medium text-destructive hover:underline"
+                    >
+                      Clear all
+                    </button>
+                  </div>
                 </div>
               )}
             </DialogContent>
           </Dialog>
+
         </main>
       </div>
     </div>

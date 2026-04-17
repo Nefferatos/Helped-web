@@ -849,11 +849,7 @@ const EmploymentContractView = () => {
             </button>
           </div>
 
-          {maid.referenceCode ? (
-            <div className="mb-3 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
-              Selected maid preview: {maid.name || "Default display"} | Ref {maid.referenceCode || "Default display"} | Salary {maid.salary || "Default display"}
-            </div>
-          ) : null}
+         
 
           <div className="grid grid-cols-[1fr_130px] gap-4">
             <dl className="space-y-1">
