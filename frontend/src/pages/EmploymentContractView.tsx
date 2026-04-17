@@ -25,6 +25,7 @@ import {
   FileText,
   FileCheck2,
   Printer,
+  Pencil,
 } from "lucide-react";
 import { downloadMergedEmployerPdf, printMergedEmployerPdf } from "@/lib/employerPdf";
 import { adminPath } from "@/lib/routes";
@@ -740,7 +741,17 @@ const EmploymentContractView = () => {
               Reference Number: <span className="font-semibold text-[#4a7bb5]">{refCode || "—"}</span>
             </p>
           </div>
-     
+          {isReadOnly && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(refCode || "")}/edit`))}
+              className="flex items-center gap-1.5"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit Contract
+            </Button>
+          )}
         </div>
 
         {/* ══ THE MAID EMPLOYED ══ */}
@@ -1194,17 +1205,30 @@ const EmploymentContractView = () => {
         ) : null}
 
         {/* ══ ACTION BUTTONS ══ */}
-        {showStepThree && !isReadOnly ? (
+        {showStepThree ? (
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 rounded border border-[#c5d3e8] bg-gray-50 px-4 py-3">
-          <Button size="sm" onClick={() => void submitContract()} disabled={isSubmitting} className="flex items-center gap-1.5">
-            {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-            {showStepTabs ? "Save Employer Form" : "Submit &amp; Generate Forms"}
-          </Button>
-          {showStepTabs ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => setActiveStep(2)}>
-              Back
-            </Button>
+          {!isReadOnly ? (
+            <>
+              <Button size="sm" onClick={() => void submitContract()} disabled={isSubmitting} className="flex items-center gap-1.5">
+                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                {isCreateMode ? "Save Employer Form" : "Save Changes"}
+              </Button>
+              {showStepTabs && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setActiveStep(2)}>
+                  Back
+                </Button>
+              )}
+            </>
           ) : (
+            <Button
+              type="button"
+              onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(refCode || "")}/edit`))}
+            >
+              Edit Employer Contract
+            </Button>
+          )}
+
+          {!showStepTabs && (
             <>
               <Button variant="outline" size="sm" onClick={handleSelectAll}>
                 {allSelected ? "Deselect All" : "Select All"}
@@ -1216,14 +1240,6 @@ const EmploymentContractView = () => {
               </Button>
             </>
           )}     
-          {isReadOnly ? (
-            <Button
-              type="button"
-              onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(refCode || "")}/edit`))}
-            >
-              Edit
-            </Button>
-          ) : null}
         </div>
         ) : null}
 

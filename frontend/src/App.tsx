@@ -34,6 +34,7 @@ import ChangePassword from "@/pages/ChangePassword";
 import Enquiry from "@/pages/Enquiry";
 import EmploymentContracts from "@/pages/EmploymentContracts";
 import EmploymentContractView from "@/pages/EmploymentContractView";
+import EditEmployer from "@/pages/EditEmployer";
 import AdminSupportChat from "@/pages/AdminSupportChat";
 import RequestsPage from "@/pages/RequestsPage";
 import NotFound from "@/pages/NotFound";
@@ -242,7 +243,7 @@ const App = () => {
             <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts/new" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts/:refCode" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/client" element={<ProtectedClientRoute><ClientPortalLayout /></ProtectedClientRoute>}>
               <Route index element={<Navigate to="home" replace />} />
               <Route path="home" element={<ClientPortalHome />} />
