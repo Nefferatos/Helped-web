@@ -44,8 +44,8 @@ app.use(
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   })
 )
-app.use(express.json({ limit: '25mb' }))
-app.use(express.urlencoded({ extended: true, limit: '25mb' }))
+app.use(express.json({ limit: '120mb' }))
+app.use(express.urlencoded({ extended: true, limit: '120mb' }))
 
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'Server is running' })

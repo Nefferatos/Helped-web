@@ -6,13 +6,13 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getClientToken, getStoredClient } from "@/lib/clientAuth";
-import { formatDate, getPublicIntro, MaidProfile } from "@/lib/maids";
+import { calculateAge, formatDate, getPublicIntro, MaidProfile } from "@/lib/maids";
 import { sendMaidToClient } from "@/lib/maidShare";
+import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import { toast } from "@/components/ui/sonner";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 
@@ -119,28 +119,9 @@ const KVRow = ({ label, value }: { label: string; value: string }) => (
     <p className="py-1 text-[12px] border-b border-dashed border-muted/60 leading-snug">{value || "—"}</p>
   </div>
 );
+const getPrimaryPhoto = (maid: MaidProfile) =>
+  Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl || "";
 
-const SHORTLIST_STORAGE_KEY = "clientShortlistRefs";
-
-const getSavedShortlistRefs = () => {
-  if (typeof window === "undefined") return [] as string[];
-  try {
-    const stored = window.localStorage.getItem(SHORTLIST_STORAGE_KEY);
-    const refs = stored ? JSON.parse(stored) : [];
-    return Array.isArray(refs) ? refs.filter((item) => typeof item === "string" && item) : [];
-  } catch {
-    return [] as string[];
-  }
-};
-
-const saveShortlistRefs = (refs: string[]) => {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SHORTLIST_STORAGE_KEY, JSON.stringify(Array.from(new Set(refs))));
-  } catch {
-    // ignore
-  }
-};
 
 const PublicMaidProfile = () => {
   const { refCode } = useParams();
@@ -148,6 +129,8 @@ const PublicMaidProfile = () => {
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [shortlistRefs, setShortlistRefs] = useState<string[]>([]);
+  const [shortlistMaids, setShortlistMaids] = useState<MaidProfile[]>([]);
+  const [isShortlistLoading, setIsShortlistLoading] = useState(false);
   const [isShortlistOpen, setIsShortlistOpen] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const [showOtherLanguages, setShowOtherLanguages] = useState(false);
@@ -182,18 +165,51 @@ const PublicMaidProfile = () => {
     void loadData();
   }, [refCode]);
 
-  useEffect(() => { setShortlistRefs(getSavedShortlistRefs()); }, []);
+  useEffect(() => {
+    setShortlistRefs(getSavedShortlistRefs());
+    return subscribeToShortlistRefs(setShortlistRefs);
+  }, []);
+
+  useEffect(() => {
+    if (!isShortlistOpen || shortlistRefs.length === 0) {
+      if (shortlistRefs.length === 0) setShortlistMaids([]);
+      return;
+    }
+    const controller = new AbortController();
+    const loadShortlistMaids = async () => {
+      try {
+        setIsShortlistLoading(true);
+        const res = await fetch("/api/maids?visibility=public", { signal: controller.signal });
+        const data = (await res.json()) as { maids?: MaidProfile[]; error?: string };
+        if (!res.ok || !data.maids) throw new Error(data.error || "Failed to load shortlist");
+        setShortlistMaids(data.maids.filter((item) => item.isPublic && shortlistRefs.includes(item.referenceCode)));
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          toast.error(error instanceof Error ? error.message : "Failed to load shortlist");
+        }
+      } finally {
+        setIsShortlistLoading(false);
+      }
+    };
+    void loadShortlistMaids();
+    return () => controller.abort();
+  }, [isShortlistOpen, shortlistRefs]);
   useEffect(() => { setShowOtherLanguages(false); }, [maid?.referenceCode]);
 
   const agencyContact = useMemo(() => (maid ? maid.agencyContact as Record<string, unknown> : null), [maid]);
   const isShortlisted = Boolean(maid?.referenceCode && shortlistRefs.includes(maid.referenceCode));
+  const shortlistedMaidMap = useMemo(
+    () => new Map(shortlistMaids.map((item) => [item.referenceCode, item])),
+    [shortlistMaids],
+  );
+  const shortlistDisplay = useMemo(
+    () => shortlistRefs.map((ref) => ({ ref, maid: shortlistedMaidMap.get(ref) || null })),
+    [shortlistRefs, shortlistedMaidMap],
+  );
 
   const handleToggleShortlist = () => {
     if (!maid?.referenceCode) return;
-    const nextRefs = isShortlisted
-      ? shortlistRefs.filter((ref) => ref !== maid.referenceCode)
-      : [...shortlistRefs, maid.referenceCode];
-    saveShortlistRefs(nextRefs);
+    const nextRefs = toggleShortlistRef(maid.referenceCode);
     setShortlistRefs(nextRefs);
     toast.success(isShortlisted ? "Removed from shortlist" : "Added to shortlist");
   };
@@ -669,30 +685,79 @@ const PublicMaidProfile = () => {
 
         {/* ── Shortlist dialog ── */}
         <Dialog open={isShortlistOpen} onOpenChange={setIsShortlistOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>My Shortlist</DialogTitle>
-              <DialogDescription>Your saved maid reference codes (stored on this device).</DialogDescription>
+              <DialogDescription>Click a shortlisted maid to view profile details.</DialogDescription>
             </DialogHeader>
-            <div className="space-y-2">
-              {shortlistRefs.length > 0 ? (
-                shortlistRefs.map((ref) => (
-                  <div key={ref} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/10 px-3 py-2">
-                    <Link to={`/maids/${encodeURIComponent(ref)}`} className="text-sm font-medium text-primary hover:underline">{ref}</Link>
-                    <Button variant="outline" size="sm" onClick={() => {
-                      const next = shortlistRefs.filter((item) => item !== ref);
-                      saveShortlistRefs(next);
-                      setShortlistRefs(next);
-                    }}>Remove</Button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Your shortlist is empty.</p>
-              )}
-            </div>
-            <DialogFooter>
+            {shortlistRefs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Your shortlist is empty.</p>
+            ) : isShortlistLoading ? (
+              <p className="text-sm text-muted-foreground">Loading shortlist…</p>
+            ) : (
+              <div className="grid max-h-[70vh] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                {shortlistDisplay.map(({ ref, maid: shortlistedMaid }) =>
+                  shortlistedMaid ? (
+                    <article key={`shortlist-${ref}`} className="overflow-hidden rounded-lg border border-border bg-background">
+                      <div className="flex">
+                        <Link
+                          to={`/maids/${encodeURIComponent(ref)}`}
+                          className="relative h-24 w-20 shrink-0 bg-muted"
+                          onClick={() => setIsShortlistOpen(false)}
+                        >
+                          {getPrimaryPhoto(shortlistedMaid) ? (
+                            <img src={getPrimaryPhoto(shortlistedMaid)} alt={shortlistedMaid.fullName} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <svg className="h-6 w-6 text-muted-foreground/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+                              </svg>
+                            </div>
+                          )}
+                        </Link>
+                        <div className="flex min-w-0 flex-1 flex-col justify-between p-2">
+                          <div>
+                            <Link
+                              to={`/maids/${encodeURIComponent(ref)}`}
+                              className="line-clamp-1 text-xs font-semibold text-foreground hover:text-primary"
+                              onClick={() => setIsShortlistOpen(false)}
+                            >
+                              {shortlistedMaid.fullName || `${shortlistedMaid.nationality || "Maid"} Maid`}
+                            </Link>
+                            <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                              {shortlistedMaid.nationality || "—"}
+                              {calculateAge(shortlistedMaid.dateOfBirth) !== null ? `, ${calculateAge(shortlistedMaid.dateOfBirth)} yrs` : ""}
+                            </p>
+                            <p className="font-mono text-[10px] text-muted-foreground/80">{ref}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShortlistRefs(toggleShortlistRef(ref))}
+                            className="mt-1 w-fit text-[10px] font-medium text-destructive hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ) : (
+                    <div key={`shortlist-missing-${ref}`} className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2">
+                      <p className="font-mono text-xs text-foreground">{ref}</p>
+                      <button
+                        type="button"
+                        onClick={() => setShortlistRefs(toggleShortlistRef(ref))}
+                        className="text-[11px] font-medium text-destructive hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ),
+                )}
+              </div>
+            )}
+            <div className="mt-2 flex justify-end">
               <Button variant="outline" onClick={() => setIsShortlistOpen(false)}>Close</Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

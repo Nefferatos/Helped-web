@@ -37,7 +37,6 @@ import EmploymentContractView from "@/pages/EmploymentContractView";
 import AdminSupportChat from "@/pages/AdminSupportChat";
 import RequestsPage from "@/pages/RequestsPage";
 import NotFound from "@/pages/NotFound";
-import EditEmployer from "@/pages/EditEmployer";
 import AuthCallback from "@/pages/AuthCallback";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
 import { getClientToken } from "@/lib/clientAuth";
@@ -241,9 +240,9 @@ const App = () => {
             <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/employment-contracts/new" element={<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/employment-contracts/new" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts/:refCode" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/client" element={<ProtectedClientRoute><ClientPortalLayout /></ProtectedClientRoute>}>
               <Route index element={<Navigate to="home" replace />} />
               <Route path="home" element={<ClientPortalHome />} />
@@ -277,7 +276,7 @@ const App = () => {
             <Route path="/enquiry2" element={<Enquiry2 />} />
             <Route path="/services/:slug" element={<ServiceDetail />} />
             <Route path="/employer/new" element={<Navigate to="/agencyadmin/employment-contracts/new" replace />} />
-            <Route path="/employer/:refCode" element={<EditEmployer />} />
+            <Route path="/employer/:refCode" element={<Navigate to="/agencyadmin/employment-contracts" replace />} />
             <Route path="/faq" element={<FaqPage />} />
           </Routes>
         </BrowserRouter>

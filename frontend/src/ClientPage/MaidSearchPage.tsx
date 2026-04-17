@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ChevronDown, Search, Star, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
 import { toast } from "@/components/ui/sonner";
+import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
 const PAGE_SIZE = 18;
@@ -435,17 +437,6 @@ const getTypeLabel = (type: string) => {
   return type.toUpperCase();
 };
 
-const useShortlist = () => {
-  const [shortlist, setShortlist] = useState<Set<string>>(new Set());
-  const toggle = (ref: string) =>
-    setShortlist((prev) => {
-      const next = new Set(prev);
-      if (next.has(ref)) next.delete(ref);
-      else next.add(ref);
-      return next;
-    });
-  return { shortlist, toggle };
-};
 
 const pageNumbers = (current: number, total: number): (number | "...")[] => {
   if (total <= 10) return Array.from({ length: total }, (_, index) => index + 1);
@@ -582,7 +573,18 @@ const MaidSearchPage = () => {
   const [allMaids, setAllMaids] = useState<MaidProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const { shortlist, toggle: toggleShortlist } = useShortlist();
+  const [isShortlistOpen, setIsShortlistOpen] = useState(false);
+  const [shortlistRefs, setShortlistRefs] = useState<string[]>(() => getSavedShortlistRefs());
+  const shortlist = useMemo(() => new Set(shortlistRefs), [shortlistRefs]);
+
+  useEffect(() => {
+    setShortlistRefs(getSavedShortlistRefs());
+    return subscribeToShortlistRefs(setShortlistRefs);
+  }, []);
+
+  const handleToggleShortlist = (ref: string) => {
+    setShortlistRefs(toggleShortlistRef(ref));
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -654,6 +656,17 @@ const MaidSearchPage = () => {
   const totalPages = Math.max(1, Math.ceil(filteredMaids.length / PAGE_SIZE));
   const pagedMaids = filteredMaids.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pages = pageNumbers(page, totalPages);
+  const shortlistedMaids = useMemo(
+    () =>
+      shortlistRefs
+        .map((ref) => allMaids.find((maid) => maid.referenceCode === ref))
+        .filter((maid): maid is MaidProfile => Boolean(maid)),
+    [allMaids, shortlistRefs],
+  );
+  const missingShortlistRefs = useMemo(
+    () => shortlistRefs.filter((ref) => !shortlistedMaids.some((maid) => maid.referenceCode === ref)),
+    [shortlistRefs, shortlistedMaids],
+  );
 
   // Count active filters for badge
   const activeFilterCount = useMemo(() => {
@@ -744,6 +757,7 @@ const MaidSearchPage = () => {
               </button>
             )}
           </div>
+
 
           <FilterSelect
             label="Profile Created Within"
@@ -951,15 +965,24 @@ const MaidSearchPage = () => {
           ) : null}
 
           {/* Shortlist banner */}
-          {shortlist.size > 0 && (
-            <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            <div className="flex items-center gap-2">
               <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
               <span>
-                <span className="font-bold">{shortlist.size}</span>{" "}
-                {shortlist.size === 1 ? "maid" : "maids"} shortlisted
+                <span className="font-bold">{shortlistRefs.length}</span>{" "}
+                {shortlistRefs.length === 1 ? "maid" : "maids"} shortlisted
               </span>
             </div>
-          )}
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              onClick={() => setIsShortlistOpen(true)}
+              className="h-auto p-0 text-amber-800 hover:text-amber-900"
+            >
+              My Shortlist
+            </Button>
+          </div>
 
           {/* Results header */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -982,6 +1005,7 @@ const MaidSearchPage = () => {
             </div>
             <PaginationBar />
           </div>
+
 
           {/* Grid */}
           {isLoading ? (
@@ -1056,7 +1080,7 @@ const MaidSearchPage = () => {
 
                       {/* Shortlist button */}
                       <button
-                        onClick={() => toggleShortlist(maid.referenceCode)}
+                        onClick={() => handleToggleShortlist(maid.referenceCode)}
                         className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
                           isShortlisted
                             ? "bg-amber-500"
@@ -1095,6 +1119,93 @@ const MaidSearchPage = () => {
               <PaginationBar />
             </div>
           )}
+
+          <Dialog open={isShortlistOpen} onOpenChange={setIsShortlistOpen}>
+            <DialogContent className="max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>My Shortlist</DialogTitle>
+                <DialogDescription>Click any shortlisted maid to view profile details.</DialogDescription>
+              </DialogHeader>
+              {shortlistRefs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Your shortlist is empty.</p>
+              ) : (
+                <div className="grid max-h-[70vh] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {shortlistedMaids.map((maid) => {
+                    const photo = getPrimaryPhoto(maid);
+                    const age = calculateAge(maid.dateOfBirth);
+                    const typeLower = (maid.type || "").toLowerCase();
+                    const typeBadgeColor = typeLower.includes("new")
+                      ? "bg-emerald-500"
+                      : typeLower.includes("transfer")
+                        ? "bg-blue-500"
+                        : "bg-amber-500";
+
+                    return (
+                      <article key={`shortlist-dialog-${maid.referenceCode}`} className="overflow-hidden rounded-lg border border-border bg-background">
+                        <div className="flex">
+                          <Link
+                            to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
+                            className="relative h-24 w-20 shrink-0 bg-muted"
+                            onClick={() => setIsShortlistOpen(false)}
+                          >
+                            {photo ? (
+                              <img src={photo} alt={maid.fullName} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <svg className="h-6 w-6 text-muted-foreground/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+                                </svg>
+                              </div>
+                            )}
+                            {maid.type && (
+                              <span className={`absolute left-1 top-1 rounded px-1 py-px text-[8px] font-bold uppercase tracking-wider text-white ${typeBadgeColor}`}>
+                                {getTypeLabel(maid.type)}
+                              </span>
+                            )}
+                          </Link>
+                          <div className="flex min-w-0 flex-1 flex-col justify-between p-2">
+                            <div>
+                              <Link
+                                to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
+                                className="line-clamp-1 text-xs font-semibold text-foreground hover:text-primary"
+                                onClick={() => setIsShortlistOpen(false)}
+                              >
+                                {maid.fullName || `${maid.nationality || "Maid"} Maid`}
+                              </Link>
+                              <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                                {maid.nationality || "—"}{age !== null ? `, ${age} yrs` : ""}
+                              </p>
+                              <p className="font-mono text-[10px] text-muted-foreground/80">{maid.referenceCode}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleShortlist(maid.referenceCode)}
+                              className="mt-1 w-fit text-[10px] font-medium text-destructive hover:underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+
+                  {missingShortlistRefs.map((ref) => (
+                    <div key={`missing-dialog-${ref}`} className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2">
+                      <p className="font-mono text-xs text-foreground">{ref}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleShortlist(ref)}
+                        className="text-[11px] font-medium text-destructive hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </main>
       </div>
     </div>

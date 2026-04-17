@@ -9,7 +9,7 @@ import {
 
 const router: Router = express.Router()
 
-router.use(express.raw({ type: 'multipart/form-data', limit: '25mb' }))
+router.use(express.raw({ type: 'multipart/form-data', limit: '110mb' }))
 router.get('/', listEmployerContractFiles)
 router.post('/', uploadEmployerContractFiles)
 router.get('/:id/view', viewEmployerContractFile)

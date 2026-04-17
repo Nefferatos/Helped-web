@@ -1,1 +1,10 @@
-# TODO: Fix TypeScript familyMembers Type Error in EditEmployer.tsx\n\n## Steps:\n\n1. ✅ [Completed] Understand files and create detailed edit plan\n2. 🔄 Add transformation function to convert familyMembers state shape to FormData-compatible shape in EditEmployer.tsx\n3. 🔄 Update handlePrintForms to use transformed familyMembers\n4. 🔄 [Optional] Update handleDownloadForms similarly if formData passed\n5. ✅ Verify TS error resolved\n6. ✅ Test print preview with family members\n7. ✅ Update TODO.md with completion\n8. ✅ Attempt task completion\n
+# Employment Contract View Form Integration
+
+## Steps:
+- [x] 1. Create TODO.md 
+- [x] 2. Update EmploymentContractView.tsx: Add imports, fetch public maids, compute initialData for ContractForm, render ContractForm read-only.
+- [x] 3. Test navigation to view page, verify form displays prefilled.
+- [x] 4. attempt_completion
+
+## Status: Complete
+

@@ -7,12 +7,22 @@ import {
 } from '../store'
 
 const MAX_FILES = 10
-const MAX_BYTES_PER_FILE = 5 * 1024 * 1024
+const MAX_BYTES_PER_FILE = 100 * 1024 * 1024
+const PDF_ONLY_MESSAGE = 'Only PDF files are allowed'
+const FILE_SIZE_LIMIT_MESSAGE = 'File exceeds 100MB limit'
 
 const normalizeBase64 = (value: string) => value.replace(/\s+/g, '')
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const isPdfFile = (type: string, fileName: string, buffer: Buffer) => {
+  const normalizedType = type.trim().toLowerCase()
+  const isMimePdf = normalizedType === 'application/pdf'
+  const isPdfHeader = buffer.subarray(0, 5).toString('ascii') === '%PDF-'
+  const isPdfExtension = fileName.trim().toLowerCase().endsWith('.pdf')
+  return isMimePdf && isPdfHeader && isPdfExtension
+}
 
 const parseMultipartFormData = (req: Request) => {
   const contentType = String(req.headers['content-type'] ?? '')
@@ -115,8 +125,11 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
       if (!file.fileName || !file.buffer.length) {
         return res.status(400).json({ error: 'Invalid file payload' })
       }
+      if (!isPdfFile(file.type, file.fileName, file.buffer)) {
+        return res.status(400).json({ error: PDF_ONLY_MESSAGE })
+      }
       if (file.buffer.length > MAX_BYTES_PER_FILE) {
-        return res.status(400).json({ error: `File too large (max ${MAX_BYTES_PER_FILE} bytes)` })
+        return res.status(400).json({ error: FILE_SIZE_LIMIT_MESSAGE })
       }
 
       const [saved] = await addEmployerContractFilesStore([
@@ -162,20 +175,39 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
       category: String(file.category ?? ''),
       refCode: String(file.refCode ?? ''),
     }))
+    const validatedFiles: Array<{
+      name: string
+      size: number
+      type: string
+      dataBase64: string
+      category: string
+      refCode: string
+    }> = []
 
     for (const f of normalized) {
       if (!f.name || !f.size || !f.dataBase64) {
         return res.status(400).json({ error: 'Invalid file payload' })
       }
-      if (f.size <= 0 || f.size > MAX_BYTES_PER_FILE) {
-        return res.status(400).json({ error: `File too large (max ${MAX_BYTES_PER_FILE} bytes)` })
-      }
       if (!/^[A-Za-z0-9+/=]+$/.test(f.dataBase64)) {
         return res.status(400).json({ error: 'Invalid base64 data' })
       }
+      const buffer = Buffer.from(f.dataBase64, 'base64')
+      if (!buffer.length) {
+        return res.status(400).json({ error: 'Invalid file payload' })
+      }
+      if (buffer.length > MAX_BYTES_PER_FILE) {
+        return res.status(400).json({ error: FILE_SIZE_LIMIT_MESSAGE })
+      }
+      if (!isPdfFile(f.type, f.name, buffer)) {
+        return res.status(400).json({ error: PDF_ONLY_MESSAGE })
+      }
+      validatedFiles.push({
+        ...f,
+        size: buffer.length,
+      })
     }
 
-    const saved = await addEmployerContractFilesStore(normalized)
+    const saved = await addEmployerContractFilesStore(validatedFiles)
     res.status(200).json({
       files: saved.map((f) => ({
         id: f.id,

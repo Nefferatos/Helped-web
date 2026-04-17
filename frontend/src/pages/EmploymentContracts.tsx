@@ -33,8 +33,11 @@ type EmployerRow = {
   ref: string;
   date: string;
   employer: string;
+  employerNationality: string;
   spouse: string;
+  spouseNationality: string;
   maid: string;
+  maidNationality: string;
 };
 
 const PAGE_SIZE = 20;
@@ -43,7 +46,14 @@ const EmploymentContracts = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
-  const [employers, setEmployers] = useState<EmployerRow[]>(() => [...mockEmployers]);
+  const [employers, setEmployers] = useState<EmployerRow[]>(() =>
+    mockEmployers.map((item) => ({
+      ...item,
+      employerNationality: "",
+      spouseNationality: "",
+      maidNationality: "",
+    })),
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
@@ -66,8 +76,11 @@ const EmploymentContracts = () => {
       return (
         record.ref.toLowerCase().includes(term) ||
         record.employer.toLowerCase().includes(term) ||
+        record.employerNationality.toLowerCase().includes(term) ||
         record.spouse.toLowerCase().includes(term) ||
-        record.maid.toLowerCase().includes(term)
+        record.spouseNationality.toLowerCase().includes(term) ||
+        record.maid.toLowerCase().includes(term) ||
+        record.maidNationality.toLowerCase().includes(term)
       );
     });
   }, [employers, searchTerm]);
@@ -117,8 +130,11 @@ const EmploymentContracts = () => {
           ref: String(record.refCode ?? "").trim(),
           date: contractDate || String(record.updatedAt ?? record.createdAt ?? ""),
           employer: String(employer.name ?? ""),
+          employerNationality: String(employer.nationality ?? ""),
           spouse: String(spouse.name ?? ""),
+          spouseNationality: String(spouse.nationality ?? ""),
           maid: String(maid.name ?? ""),
+          maidNationality: String(maid.nationality ?? ""),
         };
       });
 

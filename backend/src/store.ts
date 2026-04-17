@@ -1811,6 +1811,12 @@ export const deleteEmployerContractStore = async (refCode: string) => {
   const existing = data.employers.find((item) => item.refCode === code) ?? null
   if (!existing) return null
   data.employers = data.employers.filter((item) => item.refCode !== code)
+  data.employmentContracts = data.employmentContracts.filter(
+    (item) => item.refCode !== code && item.employerRefCode !== code
+  )
+  data.employerContractFiles = data.employerContractFiles.filter(
+    (item) => String(item.refCode || '').trim() !== code
+  )
   await saveData(data)
   return existing
 }
