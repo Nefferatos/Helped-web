@@ -53,6 +53,11 @@ const QUICK_LINKS = {
   bangladeshi: "Bangladeshi Maid",
 } as const;
 
+// Pre-built reverse map: label → key
+const QUICK_LINKS_BY_LABEL = Object.fromEntries(
+  Object.entries(QUICK_LINKS).map(([k, v]) => [v, k])
+) as Record<string, QuickLinkKey>;
+
 type QuickLinkKey = keyof typeof QUICK_LINKS;
 
 type ClientDraft = {
@@ -804,7 +809,7 @@ const MaidSearchPage = () => {
   };
 
   const handleQuickLink = (label: string) => {
-    const quickLinkKey = (Object.entries(QUICK_LINKS).find(([, value]) => value === label)?.[0] || "") as QuickLinkKey | "";
+    const quickLinkKey = QUICK_LINKS_BY_LABEL[label] ?? "";
     const nextParams = new URLSearchParams();
     const nextFilters = { ...defaultSidebarFilters };
     if (quickLinkKey) nextParams.set("quick", quickLinkKey);
@@ -920,12 +925,14 @@ const MaidSearchPage = () => {
           Quick Browse
         </p>
         <div className="divide-y divide-border/40">
-          {NATIONALITY_LINKS.map((link) => {
-            const isActive = quickLink && QUICK_LINKS[Object.keys(QUICK_LINKS).find((k) => QUICK_LINKS[k as QuickLinkKey] === link) as QuickLinkKey] === link;
+          {NATIONALITY_LINKS.map((label) => {
+            // ✅ FIX: look up the key for this label, then compare directly to quickLink
+            const linkKey = QUICK_LINKS_BY_LABEL[label];
+            const isActive = !!quickLink && quickLink === linkKey;
             return (
               <button
-                key={link}
-                onClick={() => handleQuickLink(link)}
+                key={label}
+                onClick={() => handleQuickLink(label)}
                 className={`flex w-full items-center gap-2 px-4 py-2 text-left text-xs transition-colors ${
                   isActive
                     ? "bg-primary/10 font-semibold text-primary"
@@ -933,7 +940,7 @@ const MaidSearchPage = () => {
                 }`}
               >
                 <span className="text-primary opacity-60">›</span>
-                {link}
+                {label}
               </button>
             );
           })}

@@ -350,6 +350,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                     { label: "Services", href: "#services" },
                     { label: "Search Maids", href: "#search" },
                     { label: "About Us", href: "/about" },
+                    { label: "FAQ", href: "/faq" },
                     { label: "Enquiry", href: "/enquiry2" },
                     { label: "Contact Us", href: "/contact" },
                   ].map((item) => (
