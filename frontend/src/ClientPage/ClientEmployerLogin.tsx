@@ -33,8 +33,10 @@ const ClientEmployerLogin = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [step, setStep] = useState<"auth" | "confirm">("auth");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
@@ -47,16 +49,18 @@ const ClientEmployerLogin = () => {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
+    if (!isLogin && password !== confirmPassword) {
+      toast({
+        title: "Passwords do not match",
+        description: "Please make sure both passwords are the same.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
-      // Supabase setup:
-      // Authentication -> Providers -> Email -> ENABLE
-      // Confirm Email must be ON
-      // URL Configuration must include production domain
-      //
-      // Supabase automatically sends verification email
-      // No SMTP or manual confirmation code needed
       const sb = requireSupabase();
       const normalizedEmail = email.trim();
 
@@ -70,7 +74,6 @@ const ClientEmployerLogin = () => {
           throw error;
         }
 
-        // prevent login until email is verified
         const confirmedAt =
           (data?.user as unknown as { email_confirmed_at?: string | null; confirmed_at?: string | null })
             ?.email_confirmed_at ??
@@ -122,23 +125,9 @@ const ClientEmployerLogin = () => {
         description: "We sent a verification email. Please verify before logging in.",
       });
       setIsLogin(true);
+      setConfirmPassword("");
       return;
 
-      // Disabled: replaced with Supabase email verification
-      // const endpoint = isLogin ? "/api/client-auth/login" : "/api/client-auth/register";
-      // const payload = isLogin
-      //   ? { email, password }
-      //   : { name, company, phone, email, password };
-      // const response = await fetch(endpoint, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(payload),
-      // });
-      // const data = (await response.json().catch(() => ({}))) as AuthResponse;
-      // if (data.requiresConfirmation) { ... }
-      // if (!response.ok || !data.token || !data.client) { ... }
-      // saveClientAuth(data.token, data.client);
-      // navigate("/client/dashboard");
     } catch (error) {
       console.error("Authentication failed:", error);
       toast({
@@ -154,7 +143,6 @@ const ClientEmployerLogin = () => {
   const handleConfirm = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    // Disabled: replaced with Supabase email verification
     toast({
       title: "Email verification",
       description: "Please verify via the email link from Supabase, then log in.",
@@ -165,17 +153,6 @@ const ClientEmployerLogin = () => {
 
     try {
       setIsConfirming(true);
-      // const response = await fetch("/api/client-auth/confirm", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ email: confirmationEmail, code: confirmationCode }),
-      // });
-      // const data = (await response.json().catch(() => ({}))) as AuthResponse;
-      // if (!response.ok || !data.token || !data.client) {
-      //   throw new Error(data.error || "Confirmation failed");
-      // }
-      // saveClientAuth(data.token, data.client);
-      // navigate("/client/dashboard");
     } catch (error) {
       toast({
         title: "Confirmation failed",
@@ -190,7 +167,6 @@ const ClientEmployerLogin = () => {
   const handleResend = async () => {
     if (!confirmationEmail.trim()) return;
     try {
-      // Disabled: replaced with Supabase email verification
       const { error } = await requireSupabase().auth.resend({
         type: "signup",
         email: confirmationEmail.trim(),
@@ -200,13 +176,6 @@ const ClientEmployerLogin = () => {
         title: "Verification email resent",
         description: `We resent the verification email to ${confirmationEmail.trim()}.`,
       });
-
-      // const response = await fetch("/api/client-auth/resend", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ email: confirmationEmail }),
-      // });
-      // const data = (await response.json().catch(() => ({}))) as AuthResponse;
     } catch (error) {
       toast({
         title: "Resend failed",
@@ -229,6 +198,7 @@ const ClientEmployerLogin = () => {
             onValueChange={(value) => {
               setIsLogin(value === "login");
               setStep("auth");
+              setConfirmPassword("");
             }}
             className="mb-4"
           >
@@ -302,78 +272,99 @@ const ClientEmployerLogin = () => {
               </div>
 
               <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
-              {!isLogin && (
-              <>
+                {!isLogin && (
+                  <>
+                    <div>
+                      <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Full Name</label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="John Doe"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Phone Number</label>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(event) => setPhone(event.target.value)}
+                        className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="+65 9123 4567"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div>
-                  <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Full Name</label>
+                  <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Email Address</label>
                   <input
-                    type="text"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
                     className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="John Doe"
+                    placeholder="employer@company.com"
                     required
                   />
                 </div>
+
                 <div>
-                  <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Company Name</label>
-                  <input
-                    type="text"
-                    value={company}
-                    onChange={(event) => setCompany(event.target.value)}
-                    className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="Your company"
-                  />
+                  <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="w-full rounded-lg border bg-background px-3 py-2.5 pr-10 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      placeholder="........"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="+65 9123 4567"
-                  />
-                </div>
-              </>
-              )}
 
-            <div>
-              <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="employer@company.com"
-                required
-              />
-            </div>
+                {!isLogin && (
+                  <div>
+                    <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Confirm Password</label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        className={`w-full rounded-lg border bg-background px-3 py-2.5 pr-10 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring ${
+                          confirmPassword && password !== confirmPassword
+                            ? "border-destructive focus:ring-destructive"
+                            : ""
+                        }`}
+                        placeholder="........"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((value) => !value)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {confirmPassword && password !== confirmPassword && (
+                      <p className="mt-1 font-body text-xs text-destructive">Passwords do not match.</p>
+                    )}
+                  </div>
+                )}
 
-            <div>
-              <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="w-full rounded-lg border bg-background px-3 py-2.5 pr-10 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="........"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            <Button type="submit" size="lg" className="w-full font-body" disabled={isSubmitting}>
-              {isSubmitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
-            </Button>
+                <Button type="submit" size="lg" className="w-full font-body" disabled={isSubmitting}>
+                  {isSubmitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
+                </Button>
               </form>
             </div>
           )}
