@@ -163,6 +163,7 @@ export interface EmployerContractRecord {
   employer: Record<string, unknown>
   spouse: Record<string, unknown>
   familyMembers: Array<Record<string, unknown>>
+  notificationDate?: Record<string, unknown>
   documents: Array<{
     category: string
     fileUrl: string
@@ -463,6 +464,8 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       familyMembers: Array.isArray((record as { familyMembers?: unknown }).familyMembers)
         ? ((record as { familyMembers?: Array<Record<string, unknown>> }).familyMembers ?? [])
         : [],
+      notificationDate:
+        (record as { notificationDate?: Record<string, unknown> }).notificationDate ?? {},
       documents: Array.isArray((record as { documents?: unknown }).documents)
         ? ((record as {
             documents?: Array<{
@@ -1695,6 +1698,7 @@ export const saveEmployerContractStore = async (payload: {
   employer?: Record<string, unknown>
   spouse?: Record<string, unknown>
   familyMembers?: Array<Record<string, unknown>>
+  notificationDate?: Record<string, unknown>
   documents?: Array<{
     category?: string
     fileUrl?: string
@@ -1734,6 +1738,10 @@ export const saveEmployerContractStore = async (payload: {
     familyMembers: Array.isArray(payload.familyMembers)
       ? payload.familyMembers
       : [],
+    notificationDate:
+      payload.notificationDate && typeof payload.notificationDate === 'object'
+        ? payload.notificationDate
+        : {},
     documents: Array.isArray(payload.documents)
       ? payload.documents
           .map((document) => ({

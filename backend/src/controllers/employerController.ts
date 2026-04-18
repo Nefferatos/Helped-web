@@ -32,13 +32,14 @@ export const getEmployerContract = async (req: Request, res: Response) => {
 
 export const saveEmployerContract = async (req: Request, res: Response) => {
   try {
-    const { refCode, maid, agency, employer, spouse, familyMembers, documents } = req.body as {
+    const { refCode, maid, agency, employer, spouse, familyMembers, notificationDate, documents } = req.body as {
       refCode?: string | null
       maid?: Record<string, unknown>
       agency?: Record<string, unknown>
       employer?: Record<string, unknown>
       spouse?: Record<string, unknown>
       familyMembers?: Array<Record<string, unknown>>
+      notificationDate?: Record<string, unknown>
       documents?: Array<{
         category?: string
         fileUrl?: string
@@ -58,6 +59,7 @@ export const saveEmployerContract = async (req: Request, res: Response) => {
       employer,
       spouse,
       familyMembers,
+      notificationDate,
       documents,
     })
     res.status(200).json({

@@ -33,6 +33,7 @@ import PublicMaidProfile from "@/pages/PublicMaidProfile";
 import ChangePassword from "@/pages/ChangePassword";
 import Enquiry from "@/pages/Enquiry";
 import EmploymentContracts from "@/pages/EmploymentContracts";
+import AddEmployment from "@/pages/AddEmployment";
 import EmploymentContractView from "@/pages/EmploymentContractView";
 import EditEmployer from "@/pages/EditEmployer";
 import AdminSupportChat from "@/pages/AdminSupportChat";
@@ -241,7 +242,7 @@ const App = () => {
             <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/employment-contracts/new" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
+            <Route path="/agencyadmin/employment-contracts/new" element={<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts/:refCode" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/client" element={<ProtectedClientRoute><ClientPortalLayout /></ProtectedClientRoute>}>

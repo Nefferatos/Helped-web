@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ChevronDown, Search, Star, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { calculateAge, MaidProfile } from "@/lib/maids";
+import { calculateAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
 import { toast } from "@/components/ui/sonner";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
@@ -636,13 +636,16 @@ const MaidCard = ({
 
       <div className="flex flex-col gap-0.5 p-2">
         <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
-          {maid.nationality || "—"} Maid
+          {maid.fullName || "Unnamed maid"}
         </p>
         <p className="truncate text-[10px] leading-tight text-muted-foreground">
-          {maid.maritalStatus || "—"}{age !== null ? `, ${age} yrs` : ""}
+          {getExperienceBucket(maid)}
+        </p>
+        <p className="truncate text-[10px] leading-tight text-muted-foreground">
+          {maid.nationality || "—"}
         </p>
         <p className="font-mono text-[9px] leading-tight text-muted-foreground/70">
-          {maid.referenceCode}
+          {maid.referenceCode}{age !== null ? ` • ${age} yrs` : ""}
         </p>
       </div>
     </article>
