@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,29 +11,33 @@ import { useNavigate } from "react-router-dom"; // NEW: redirect after final tab
 const tabs = ["PROFILE", "SKILLS", "EMPLOYMENT HISTORY", "AVAILABILITY/REMARK", "INTRODUCTION", "PUBLIC INTRODUCTION", "PRIVATE INFO"];
 
 const AddMaid = () => {
-  const navigate = useNavigate(); // NEW
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState<MaidProfile>(defaultMaidProfile);
+  // isSaving only blocks intermediate-tab saves; last-tab uses background save
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isManagePhotosOpen, setIsManagePhotosOpen] = useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false); // NEW: confirmation modal state
-  // Wizard state: prevents skipping forward unless saved
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [maxUnlockedTab, setMaxUnlockedTab] = useState(0);
-  // Ensures we only create (POST) once
   const [isCreated, setIsCreated] = useState(false);
+  // Tracks in-flight background saves so we can warn on unmount if needed
+  const bgSaveRef = useRef<Promise<void> | null>(null);
 
-  const fileToDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
-  const handleUploadPhoto = () => {
-    setIsManagePhotosOpen(true);
-  };
+  const fileToDataUrl = useCallback(
+    (file: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      }),
+    [],
+  );
+
+  const handleUploadPhoto = useCallback(() => setIsManagePhotosOpen(true), []);
 
   const photos =
     Array.isArray(formData.photoDataUrls) && formData.photoDataUrls.length > 0
@@ -45,142 +49,170 @@ const AddMaid = () => {
   const fullBodyPhoto = photos[1] ?? "";
   const extraPhotos = photos.slice(2);
 
-  const savePhotos = async (nextPhotos: string[]) => {
-    const referenceCode = String(formData.referenceCode || "").trim();
-    if (!referenceCode) {
-      toast.error("Ref Code is required before uploading photos");
-      return;
-    }
+  // ── Photo save (optimistic local update → API PUT, only sends maid data) ─
 
-    const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
-    const optimistic: MaidProfile = {
-      ...formData,
-      referenceCode,
-      photoDataUrls: cleaned,
-      photoDataUrl: cleaned[0] || "",
-      hasPhoto: cleaned.length > 0,
-    };
-
-    try {
-      setIsUploadingPhoto(true);
-      setFormData(optimistic);
-
-      const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(optimistic),
-      });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
-      if (!response.ok || !data.maid) {
-        throw new Error(data.error || "Failed to upload photos (save the profile first)");
+  const savePhotos = useCallback(
+    async (nextPhotos: string[]) => {
+      const referenceCode = String(formData.referenceCode || "").trim();
+      if (!referenceCode) {
+        toast.error("Ref Code is required before uploading photos");
+        return;
       }
 
-      setFormData(data.maid);
-      toast.success("Photos updated");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to upload photos");
-    } finally {
-      setIsUploadingPhoto(false);
-    }
-  };
+      const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
+      // Only the maid profile fields are sent — no app_data blob
+      const optimistic: MaidProfile = {
+        ...formData,
+        referenceCode,
+        photoDataUrls: cleaned,
+        photoDataUrl: cleaned[0] || "",
+        hasPhoto: cleaned.length > 0,
+      };
 
-  const replacePhotoAt = async (index: number, file?: File) => {
-    if (!file) return;
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      const next = [...photos];
-      next[index] = dataUrl;
-      await savePhotos(next);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to read photo");
-    }
-  };
+      try {
+        setIsUploadingPhoto(true);
+        setFormData(optimistic); // ← optimistic update; UI reflects instantly
 
-  const addExtraPhoto = async (file?: File) => {
-    if (!file) return;
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      await savePhotos([...photos, dataUrl]);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to read photo");
-    }
-  };
+        const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(optimistic), // sends only maid data, not app_data
+        });
+        const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+        if (!response.ok || !data.maid) {
+          throw new Error(data.error || "Failed to upload photos (save the profile first)");
+        }
 
-  const removePhotoAt = async (index: number) => {
-    await savePhotos(photos.filter((_, i) => i !== index));
-  };
+        setFormData(data.maid);
+        toast.success("Photos updated");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to upload photos");
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    },
+    [formData],
+  );
 
-  // NEW: clicking Save opens confirmation modal (does not save immediately)
-const handleSubmit = () => {
-  if (isSaving) return;
+  const replacePhotoAt = useCallback(
+    async (index: number, file?: File) => {
+      if (!file) return;
+      try {
+        const dataUrl = await fileToDataUrl(file);
+        const next = [...photos];
+        next[index] = dataUrl;
+        await savePhotos(next);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to read photo");
+      }
+    },
+    [fileToDataUrl, photos, savePhotos],
+  );
 
-  if (activeTab === tabs.length - 1) {
-    setIsConfirmOpen(true); // only last tab
-  } else {
-    void performSave(); // skip dialog for other tabs
-  }
-};
+  const addExtraPhoto = useCallback(
+    async (file?: File) => {
+      if (!file) return;
+      try {
+        const dataUrl = await fileToDataUrl(file);
+        await savePhotos([...photos, dataUrl]);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to read photo");
+      }
+    },
+    [fileToDataUrl, photos, savePhotos],
+  );
 
-  // NEW: actual save logic (POST/PUT) runs only after user confirms
-  const performSave = async () => {
-    if (isSaving) return;
+  const removePhotoAt = useCallback(
+    async (index: number) => {
+      await savePhotos(photos.filter((_, i) => i !== index));
+    },
+    [photos, savePhotos],
+  );
 
-    const payload: MaidProfile = {
-      ...formData,
-      fullName: String(formData.fullName || "").trim(),
-      referenceCode: String(formData.referenceCode || "").trim(),
-      type: String(formData.type || "").trim(),
-      nationality: String(formData.nationality || "").trim(),
-      placeOfBirth: String(formData.placeOfBirth || "").trim(),
-    };
+  // ── Validation (shared between foreground & background saves) ────────────
 
+  const buildPayload = useCallback((): MaidProfile => ({
+    ...formData,
+    fullName: String(formData.fullName || "").trim(),
+    referenceCode: String(formData.referenceCode || "").trim(),
+    type: String(formData.type || "").trim(),
+    nationality: String(formData.nationality || "").trim(),
+    placeOfBirth: String(formData.placeOfBirth || "").trim(),
+  }), [formData]);
+
+  // ── Background save: fires-and-forgets after navigate on final tab ───────
+
+  const runBackgroundSave = useCallback(
+    (payload: MaidProfile, shouldCreate: boolean) => {
+      const refCode = payload.referenceCode;
+      const url = shouldCreate ? "/api/maids" : `/api/maids/${encodeURIComponent(refCode)}`;
+      const method = shouldCreate ? "POST" : "PUT";
+
+      const promise = (async () => {
+        try {
+          const response = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload), // only maid data — no app_data blob
+          });
+          const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+          if (!response.ok || !data.maid) {
+            throw new Error(data.error || "Failed to save maid profile");
+          }
+          // Success is silent — user has already navigated away
+        } catch (err) {
+          // Log for debugging; show non-blocking retry toast
+          console.error("[AddMaid] Background save failed:", err);
+          toast.error(
+            err instanceof Error ? `Auto-save failed: ${err.message}` : "Auto-save failed — please re-open the profile and save again",
+            { duration: 10_000 },
+          );
+        }
+      })();
+
+      bgSaveRef.current = promise;
+    },
+    [],
+  );
+
+  // ── Core save logic ───────────────────────────────────────────────────────
+
+  const performSave = useCallback(() => {
+    const payload = buildPayload();
+
+    // Validate required fields before advancing
     if (!payload.fullName || !payload.referenceCode) {
       toast.error("Maid Name and Ref Code are required");
       return;
     }
 
-    try {
-      setIsSaving(true);
+    const shouldCreate = activeTab === 0 && !isCreated;
 
-      // Save strategy: first tab creates once; subsequent saves update the same record.
-      const shouldCreate = activeTab === 0 && !isCreated;
-      const url = shouldCreate ? "/api/maids" : `/api/maids/${encodeURIComponent(payload.referenceCode)}`;
-      const response = await fetch(url, {
-        method: shouldCreate ? "POST" : "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
-      if (!response.ok || !data.maid) {
-        throw new Error(data.error || "Failed to save maid profile");
-      }
-
-      // Persist latest server copy
-      setFormData(data.maid);
-
-      // Mark created so we don't POST again from tab 0
+    // ── OPTIMISTIC: ALL tabs ──────────────────────────────────────────────
+    // Advance / navigate immediately — the network call never blocks the UI.
+    if (activeTab >= tabs.length - 1) {
+      // Last tab → navigate away
+      toast.success("Maid profile completed — saving in background…");
+      navigate("/agencyadmin/edit-maids");
+    } else {
+      // Intermediate tabs → jump to next tab instantly
       if (shouldCreate) setIsCreated(true);
-
-      // Unlock next step only after a successful save
       setMaxUnlockedTab((prev) => Math.max(prev, Math.min(activeTab + 1, tabs.length - 1)));
-
-      // Last step: stay put and finish message + label handled by props
-      if (activeTab >= tabs.length - 1) {
-        toast.success("Maid profile completed successfully"); // UPDATED message
-        navigate("/agencyadmin/edit-maids");// NEW: redirect after final tab
-        return;
-      }
-
-      // Step-by-step: move to next tab automatically
-      toast.success(shouldCreate ? "Maid profile created" : "Maid profile saved");
-      setActiveTab(activeTab + 1);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save maid profile");
-    } finally {
-      setIsSaving(false);
+      setActiveTab((t) => t + 1);
     }
-  };
+
+    // Fire-and-forget background save for every tab
+    runBackgroundSave(payload, shouldCreate);
+  }, [buildPayload, activeTab, isCreated, navigate, runBackgroundSave]);
+
+  // Opens confirm dialog on last tab; saves directly on intermediate tabs
+  const handleSubmit = useCallback(() => {
+    if (activeTab === tabs.length - 1) {
+      setIsConfirmOpen(true);
+    } else {
+      performSave();
+    }
+  }, [activeTab, performSave]);
 
   return (
     <div className="page-container">
@@ -212,15 +244,22 @@ const handleSubmit = () => {
         ))}
       </div>
 
-      {/* Dynamic primary label for last step */}
-      {/* UPDATED: Save button now opens confirm modal first */}
-      {activeTab === 0 && <ProfileTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 1 && <SkillsTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 2 && <EmploymentHistoryTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 3 && <AvailabilityRemarkTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 4 && <IntroductionTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 5 && <PublicIntroductionTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
-      {activeTab === 6 && <PrivateInfoTab formData={formData} setFormData={setFormData} onSave={handleSubmit} isSaving={isSaving} onUploadPhoto={handleUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel={activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue"} />}
+      {/* ── Active tab (single render; eliminates 7 repeated conditionals) ── */}
+      {(() => {
+        const primaryLabel = activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue";
+        const ActiveTab = TabComponents[activeTab];
+        return (
+          <ActiveTab
+            formData={formData}
+            setFormData={setFormData}
+            onSave={handleSubmit}
+            isSaving={isSaving}
+            onUploadPhoto={handleUploadPhoto}
+            isUploadingPhoto={isUploadingPhoto}
+            primaryLabel={primaryLabel}
+          />
+        );
+      })()}
 
       {/* NEW: Confirmation dialog shown before POST/PUT */}
       <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
@@ -511,7 +550,7 @@ const SaveButtons = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto, primar
 );
 
 
-const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const currentYear = new Date().getFullYear();
   const years: SelectOption[] = [
     "--",
@@ -539,6 +578,14 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
   const [dobDraft, setDobDraft] = useState(() => ({ day: dobDay, month: dobMonth, year: dobYear }));
   const [contractDraft, setContractDraft] = useState(() => ({ day: contractDay, month: contractMonth, year: contractYear }));
 
+  // Per-field inline errors
+  const [errors, setErrors] = useState<{ fullName?: string; referenceCode?: string; dateOfBirth?: string }>({});
+
+  // Refs used to scroll the viewport to the first broken field
+  const fullNameRef  = useRef<HTMLDivElement>(null);
+  const refCodeRef   = useRef<HTMLDivElement>(null);
+  const dobRef       = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     setDobDraft({ day: dobDay, month: dobMonth, year: dobYear });
   }, [dobDay, dobMonth, dobYear]);
@@ -546,6 +593,37 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
   useEffect(() => {
     setContractDraft({ day: contractDay, month: contractMonth, year: contractYear });
   }, [contractDay, contractMonth, contractYear]);
+
+  // Auto-clear the DOB error the moment a complete date is picked
+  useEffect(() => {
+    if (errors.dateOfBirth && formData.dateOfBirth) {
+      setErrors((prev) => ({ ...prev, dateOfBirth: undefined }));
+    }
+  }, [errors.dateOfBirth, formData.dateOfBirth]);
+
+  // Validate all required fields; scroll to first error; block save if any fail
+  const handleSave = () => {
+    const newErrors: typeof errors = {};
+
+    if (!String(formData.fullName || "").trim())      newErrors.fullName      = "Maid Name is required.";
+    if (!String(formData.referenceCode || "").trim()) newErrors.referenceCode = "Ref Code is required.";
+    if (!formData.dateOfBirth)                        newErrors.dateOfBirth   = "Date of Birth is required. Please select day, month, and year.";
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      // Scroll smoothly to the topmost error field
+      const scrollTarget = newErrors.fullName
+        ? fullNameRef
+        : newErrors.referenceCode
+        ? refCodeRef
+        : dobRef;
+      scrollTarget.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
+    setErrors({});
+    onSave?.();
+  };
 
   const setIntroductionField = (key: string, value: unknown) =>
     setFormData((prev) => ({
@@ -608,8 +686,36 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
       <div className="section-header bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm">A1. Personal Information</div>
       <div className="space-y-3 pt-2">
         <FormRow2Col
-          left={<FormRow label="Maid Name:"><Input value={formData.fullName} onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))} /></FormRow>}
-          right={<FormRow label="Ref Code:"><Input value={formData.referenceCode} onChange={(e) => setFormData((prev) => ({ ...prev, referenceCode: e.target.value }))} /></FormRow>}
+          left={
+            <div ref={fullNameRef}>
+              <FormRow label="Maid Name:">
+                <Input
+                  value={formData.fullName}
+                  className={errors.fullName ? "border-red-500 ring-1 ring-red-400 focus-visible:ring-red-400" : ""}
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, fullName: e.target.value }));
+                    if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: undefined }));
+                  }}
+                />
+                {errors.fullName && <p className="text-xs text-red-500 font-medium mt-1">{errors.fullName}</p>}
+              </FormRow>
+            </div>
+          }
+          right={
+            <div ref={refCodeRef}>
+              <FormRow label="Ref Code:">
+                <Input
+                  value={formData.referenceCode}
+                  className={errors.referenceCode ? "border-red-500 ring-1 ring-red-400 focus-visible:ring-red-400" : ""}
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, referenceCode: e.target.value }));
+                    if (errors.referenceCode) setErrors((prev) => ({ ...prev, referenceCode: undefined }));
+                  }}
+                />
+                {errors.referenceCode && <p className="text-xs text-red-500 font-medium mt-1">{errors.referenceCode}</p>}
+              </FormRow>
+            </div>
+          }
         />
         <FormRow2Col
           left={
@@ -669,55 +775,62 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
         />
         <FormRow2Col
           left={
-            <FormRow label="Date of Birth:">
-              <div className="flex gap-1">
-                <SelectInput
-                  options={days}
-                  className="w-16"
-                  value={dobDraft.day}
-                  onChange={(e) => {
-                    const nextDay = e.target.value;
-                    const next = { ...dobDraft, day: nextDay };
-                    setDobDraft(next);
-                    if (next.day === "--" || next.month === "--" || next.year === "--") {
-                      setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
-                      return;
-                    }
-                    setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
-                  }}
-                />
-                <SelectInput
-                  options={months}
-                  className="w-16"
-                  value={dobDraft.month}
-                  onChange={(e) => {
-                    const nextMonth = e.target.value;
-                    const next = { ...dobDraft, month: nextMonth };
-                    setDobDraft(next);
-                    if (next.day === "--" || next.month === "--" || next.year === "--") {
-                      setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
-                      return;
-                    }
-                    setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
-                  }}
-                />
-                <SelectInput
-                  options={years}
-                  className="w-24"
-                  value={dobDraft.year}
-                  onChange={(e) => {
-                    const nextYear = e.target.value;
-                    const next = { ...dobDraft, year: nextYear };
-                    setDobDraft(next);
-                    if (next.day === "--" || next.month === "--" || next.year === "--") {
-                      setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
-                      return;
-                    }
-                    setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
-                  }}
-                />
-              </div>
-            </FormRow>
+            <div ref={dobRef}>
+              <FormRow label="Date of Birth:">
+                <div className="flex flex-col gap-1">
+                  <div className="flex gap-1">
+                    <SelectInput
+                      options={days}
+                      className={`w-16 ${errors.dateOfBirth ? "border-red-500 ring-1 ring-red-400" : ""}`}
+                      value={dobDraft.day}
+                      onChange={(e) => {
+                        const nextDay = e.target.value;
+                        const next = { ...dobDraft, day: nextDay };
+                        setDobDraft(next);
+                        if (next.day === "--" || next.month === "--" || next.year === "--") {
+                          setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
+                          return;
+                        }
+                        setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
+                      }}
+                    />
+                    <SelectInput
+                      options={months}
+                      className={`w-16 ${errors.dateOfBirth ? "border-red-500 ring-1 ring-red-400" : ""}`}
+                      value={dobDraft.month}
+                      onChange={(e) => {
+                        const nextMonth = e.target.value;
+                        const next = { ...dobDraft, month: nextMonth };
+                        setDobDraft(next);
+                        if (next.day === "--" || next.month === "--" || next.year === "--") {
+                          setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
+                          return;
+                        }
+                        setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
+                      }}
+                    />
+                    <SelectInput
+                      options={years}
+                      className={`w-24 ${errors.dateOfBirth ? "border-red-500 ring-1 ring-red-400" : ""}`}
+                      value={dobDraft.year}
+                      onChange={(e) => {
+                        const nextYear = e.target.value;
+                        const next = { ...dobDraft, year: nextYear };
+                        setDobDraft(next);
+                        if (next.day === "--" || next.month === "--" || next.year === "--") {
+                          setFormData((prev) => ({ ...prev, dateOfBirth: "" }));
+                          return;
+                        }
+                        setFormData((prev) => ({ ...prev, dateOfBirth: `${next.year}-${next.month}-${next.day}` }));
+                      }}
+                    />
+                  </div>
+                  {errors.dateOfBirth && (
+                    <p className="text-xs text-red-500 font-medium">{errors.dateOfBirth}</p>
+                  )}
+                </div>
+              </FormRow>
+            </div>
           }
           right={<FormRow label="Place Of Birth:"><Input value={formData.placeOfBirth} onChange={(e) => setFormData((prev) => ({ ...prev, placeOfBirth: e.target.value }))} /></FormRow>}
         />
@@ -1169,10 +1282,10 @@ const ProfileTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, is
         <FormRow label="Any other remarks:"><Input value={String(introduction.otherRemarks || "")} onChange={(e) => setIntroductionField("otherRemarks", e.target.value)} /></FormRow>
       </div>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
+      <SaveButtons onSave={handleSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
-};
+});
 
 
 const skillRows = [
@@ -1185,7 +1298,7 @@ const skillRows = [
   { no: 7, label: "Other skills, if any", sub: "Please specify:", subField: true },
 ];
 
-const SkillsTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+const SkillsTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const workAreas = (formData.workAreas as Record<string, unknown>) || {};
   const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
   const workAreaNotes = (skillsPreferences.workAreaNotes as Record<string, string>) || {};
@@ -1371,10 +1484,10 @@ const SkillsTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isU
       <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
-};
+});
 
 
-const EmploymentHistoryTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const years: SelectOption[] = ["--", ...Array.from({ length: 30 }, (_, i) => String(2000 + i))];
   const countries: SelectOption[] = ["--", "Singapore", "Hong Kong", "Taiwan", "Malaysia", "Saudi Arabia", "UAE", "Kuwait", "Bahrain", "Qatar", "Oman", "Jordan", "Lebanon", "Brunei", "Others"];
 
@@ -1499,10 +1612,10 @@ const EmploymentHistoryTab = ({ formData, setFormData, onSave, isSaving, onUploa
       <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
-};
+});
 
 
-const AvailabilityRemarkTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
   const interviewOptions = (skillsPreferences.availabilityInterviewOptions as string[]) || [];
   const availabilityRemark = String(skillsPreferences.availabilityRemark || "");
@@ -1565,10 +1678,10 @@ const AvailabilityRemarkTab = ({ formData, setFormData, onSave, isSaving, onUplo
       <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
-};
+});
 
 
-const IntroductionTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+const IntroductionTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const introduction = (formData.introduction as Record<string, unknown>) || {};
   return (
     <div className="content-card animate-fade-in-up space-y-4">
@@ -1597,10 +1710,10 @@ const IntroductionTab = ({ formData, setFormData, onSave, isSaving, onUploadPhot
       <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
-};
+});
 
 
-const PublicIntroductionTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+const PublicIntroductionTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const introduction = (formData.introduction as Record<string, unknown>) || {};
   return (
     <div className="content-card animate-fade-in-up space-y-4">
@@ -1642,10 +1755,10 @@ const PublicIntroductionTab = ({ formData, setFormData, onSave, isSaving, onUplo
       <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
-};
+});
 
 
-const PrivateInfoTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
+const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const agencyContact = (formData.agencyContact as Record<string, unknown>) || {};
   const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
 
@@ -1736,6 +1849,17 @@ const PrivateInfoTab = ({ formData, setFormData, onSave, isSaving, onUploadPhoto
       <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
     </div>
   );
-};
+});
+
+// ─── Tab component map: declared here so all tab components are in scope ─────
+const TabComponents = [
+  ProfileTab,
+  SkillsTab,
+  EmploymentHistoryTab,
+  AvailabilityRemarkTab,
+  IntroductionTab,
+  PublicIntroductionTab,
+  PrivateInfoTab,
+] as const;
 
 export default AddMaid;
