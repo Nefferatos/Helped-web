@@ -40,6 +40,8 @@ import AdminSupportChat from "@/pages/AdminSupportChat";
 import RequestsPage from "@/pages/RequestsPage";
 import NotFound from "@/pages/NotFound";
 import AuthCallback from "@/pages/AuthCallback";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import DataDeletion from "@/pages/DataDeletion";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
 import { getClientToken } from "@/lib/clientAuth";
 import { clearClientAuth } from "@/lib/clientAuth";
@@ -271,6 +273,8 @@ const App = () => {
             <Route path="/agencyadminportal" element={<Navigate to="/agencyadmin/login" replace />} />
             <Route path="/user-portal" element={<ClientHomeRedirect />} />
             <Route path="/userportal" element={<ClientHomeRedirect />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/data-deletion" element={<DataDeletion />} />
             <Route path="/" element={<ClientHomeRedirect />} />
             <Route path="*" element={<NotFound />} />
             <Route path="/about" element={<AboutUs />} />
