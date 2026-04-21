@@ -173,6 +173,47 @@ In the Cloudflare Worker deployment, the following app data is stored in Supabas
 
 Legacy note: `backend/` contains an old Node/Express server and is not used in the Cloudflare Worker deployment.
 
+## AI Automation + Make.com Integration (Express backend)
+
+The Node/Express backend now includes integration-ready endpoints for AI automation workflows:
+
+- `POST /api/send-to-make` → forwards `{ message, userId }` to your Make.com webhook.
+- `POST /api/send-message` → stores outbound/simulated user messages.
+- `GET /api/maids?location=<value>&maxSalary=<number>` → returns filtered maid records.
+- `POST /api/leads` → stores structured AI lead data (`service`, `budget`, `location`, `urgency`).
+
+Set this environment variable in `backend/.env`:
+
+```bash
+MAKE_WEBHOOK_URL=https://hook.make.com/your-webhook-id
+```
+
+Frontend fetch example:
+
+```ts
+await fetch('/api/send-to-make', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    message: 'User needs part-time maid in Tampines',
+    userId: 'user_123',
+  }),
+})
+```
+
+Example response format:
+
+```json
+{
+  "success": true,
+  "message": "Payload forwarded to Make.com webhook",
+  "data": {
+    "status": 200,
+    "data": "Accepted"
+  }
+}
+```
+
 ## Beginner Troubleshooting
 
 ### Problem: "I pasted schema.sql into Supabase, but live data is not appearing there"

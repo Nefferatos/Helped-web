@@ -11,6 +11,7 @@ import {
   updateMaidStore,
   updateMaidVisibilityStore,
 } from '../store'
+import { getFilteredMaids, normalizeBudget } from '../services/makeIntegrationService'
 
 interface MaidProfile {
   fullName: string
@@ -225,11 +226,19 @@ const parseNumber = (value: string | undefined, fallback: number) => {
 
 export const getMaidList = async (req: Request, res: Response) => {
   try {
-    const { search, visibility } = req.query
-    const maids = await getMaidsStore(
-      typeof search === 'string' ? search : undefined,
-      typeof visibility === 'string' ? visibility : undefined
-    )
+    const { search, visibility, location, maxSalary } = req.query
+    const maxSalaryValue = normalizeBudget(maxSalary)
+    const hasIntegrationFilters =
+      typeof location === 'string' || typeof maxSalaryValue === 'number'
+    const maids = hasIntegrationFilters
+      ? await getFilteredMaids({
+          location: typeof location === 'string' ? location : undefined,
+          maxSalary: maxSalaryValue ?? undefined,
+        })
+      : await getMaidsStore(
+          typeof search === 'string' ? search : undefined,
+          typeof visibility === 'string' ? visibility : undefined
+        )
     res.status(200).json({ maids })
   } catch (error) {
     console.error('Error fetching maids:', error)
