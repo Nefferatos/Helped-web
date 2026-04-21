@@ -15,7 +15,12 @@ import chatRoutes from './routes/chatRoutes'
 import dashboardRoutes from './routes/dashboardRoutes'
 import employerRoutes from './routes/employerRoutes'
 import employerContractFileRoutes from './routes/employerContractFileRoutes'
+import leadWorkflowRoutes from './routes/leadWorkflowRoutes'
+import inquiryWorkflowRoutes from './routes/inquiryWorkflowRoutes'
+import matchingWorkflowRoutes from './routes/matchingWorkflowRoutes'
+import automationRoutes from './routes/automationRoutes'
 import { getMaidsStore, initializeStore } from './store'
+import { initializeWorkflowStore } from './store/workflowStore'
 import { saveEmployerContract } from './controllers/employerController'
 
 const app: Express = express()
@@ -75,6 +80,10 @@ app.use('/api/agency-auth', agencyAuthRoutes)
 app.use('/api/client', clientRoutes)
 app.use('/api/chats', chatRoutes)
 app.use('/api', dashboardRoutes)
+app.use('/api/leads', leadWorkflowRoutes)
+app.use('/api/inquiry', inquiryWorkflowRoutes)
+app.use('/api', matchingWorkflowRoutes)
+app.use('/api', automationRoutes)
 app.use('/api/employers', employerRoutes)
 app.get('/api/public-maids', async (_req: Request, res: Response) => {
   try {
@@ -125,6 +134,7 @@ app.use(errorHandler)
 const startServer = async () => {
   try {
     await initializeStore()
+    await initializeWorkflowStore()
 
     app.listen(port, () => {
       console.log(`Server is running at http://localhost:${port}`)
