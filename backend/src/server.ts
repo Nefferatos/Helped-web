@@ -15,6 +15,7 @@ import chatRoutes from './routes/chatRoutes'
 import dashboardRoutes from './routes/dashboardRoutes'
 import employerRoutes from './routes/employerRoutes'
 import employerContractFileRoutes from './routes/employerContractFileRoutes'
+import makeIntegrationRoutes from './routes/makeIntegrationRoutes'
 import { getMaidsStore, initializeStore } from './store'
 import { saveEmployerContract } from './controllers/employerController'
 
@@ -65,6 +66,7 @@ app.get('/api/data', (req: Request, res: Response) => {
 })
 
 // Company management routes
+app.use('/api', makeIntegrationRoutes)
 app.use('/api/company', companyRoutes)
 app.use('/api/maids', maidRoutes)
 app.use('/api/enquiries', enquiryRoutes)

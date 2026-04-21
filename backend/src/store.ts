@@ -204,6 +204,23 @@ export interface EmploymentContractRecord {
   updatedAt: string
 }
 
+export interface AutomationMessageRecord {
+  id: number
+  userId: string
+  message: string
+  direction: 'outbound'
+  createdAt: string
+}
+
+export interface LeadRecord {
+  id: number
+  service: string
+  budget: number
+  location: string
+  urgency: string
+  createdAt: string
+}
+
 interface AppData {
   companyProfile: CompanyProfileRecord
   momPersonnel: MOMPersonnelRecord[]
@@ -219,6 +236,8 @@ interface AppData {
   employers: EmployerContractRecord[]
   employmentContracts: EmploymentContractRecord[]
   employerContractFiles: EmployerContractFileRecord[]
+  automationMessages: AutomationMessageRecord[]
+  leads: LeadRecord[]
   counters: {
     momPersonnel: number
     testimonials: number
@@ -231,6 +250,8 @@ interface AppData {
     employers: number
     employmentContracts: number
     employerContractFiles: number
+    automationMessages: number
+    leads: number
   }
 }
 
@@ -337,6 +358,8 @@ const defaultData = (): AppData => ({
   employers: [],
   employmentContracts: [],
   employerContractFiles: [],
+  automationMessages: [],
+  leads: [],
   counters: {
     momPersonnel: 1,
     testimonials: 1,
@@ -349,6 +372,8 @@ const defaultData = (): AppData => ({
     employers: 1,
     employmentContracts: 1,
     employerContractFiles: 1,
+    automationMessages: 1,
+    leads: 1,
   },
 })
 
@@ -530,6 +555,21 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       refCode: String((record as { refCode?: unknown }).refCode ?? ''),
       createdAt: record.createdAt ?? now(),
     })),
+    automationMessages: (raw.automationMessages ?? defaults.automationMessages).map((record) => ({
+      ...record,
+      userId: String((record as { userId?: unknown }).userId ?? '').trim(),
+      message: String((record as { message?: unknown }).message ?? '').trim(),
+      direction: 'outbound',
+      createdAt: record.createdAt ?? now(),
+    })),
+    leads: (raw.leads ?? defaults.leads).map((record) => ({
+      ...record,
+      service: String((record as { service?: unknown }).service ?? '').trim(),
+      budget: Number((record as { budget?: unknown }).budget ?? 0) || 0,
+      location: String((record as { location?: unknown }).location ?? '').trim(),
+      urgency: String((record as { urgency?: unknown }).urgency ?? '').trim(),
+      createdAt: record.createdAt ?? now(),
+    })),
     counters: {
       momPersonnel:
         raw.counters?.momPersonnel ??
@@ -567,6 +607,12 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         raw.counters?.employerContractFiles ??
         ((raw.employerContractFiles?.length ?? 0) + 1 ||
           defaults.counters.employerContractFiles),
+      automationMessages:
+        raw.counters?.automationMessages ??
+        ((raw.automationMessages?.length ?? 0) + 1 || defaults.counters.automationMessages),
+      leads:
+        raw.counters?.leads ??
+        ((raw.leads?.length ?? 0) + 1 || defaults.counters.leads),
     },
   }
 }
@@ -1877,4 +1923,41 @@ export const deleteEmployerContractFileStore = async (id: number) => {
   )
   await saveData(data)
   return existing
+}
+
+export const addAutomationMessageStore = async (payload: {
+  userId: string
+  message: string
+}) => {
+  const data = await loadData()
+  const record: AutomationMessageRecord = {
+    id: data.counters.automationMessages++,
+    userId: payload.userId,
+    message: payload.message,
+    direction: 'outbound',
+    createdAt: now(),
+  }
+  data.automationMessages.unshift(record)
+  await saveData(data)
+  return record
+}
+
+export const addLeadStore = async (payload: {
+  service: string
+  budget: number
+  location: string
+  urgency: string
+}) => {
+  const data = await loadData()
+  const record: LeadRecord = {
+    id: data.counters.leads++,
+    service: payload.service,
+    budget: payload.budget,
+    location: payload.location,
+    urgency: payload.urgency,
+    createdAt: now(),
+  }
+  data.leads.unshift(record)
+  await saveData(data)
+  return record
 }
