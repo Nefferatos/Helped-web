@@ -1,0 +1,20 @@
+{
+  "leads": [],
+  "inquiries": [],
+  "matches": [],
+  "schedules": [],
+  "contracts": [],
+  "notifications": [],
+  "automationLogs": [],
+  "makeDeliveries": [],
+  "counters": {
+    "leads": 1,
+    "inquiries": 1,
+    "matches": 1,
+    "schedules": 1,
+    "contracts": 1,
+    "notifications": 1,
+    "automationLogs": 1,
+    "makeDeliveries": 1
+  }
+}

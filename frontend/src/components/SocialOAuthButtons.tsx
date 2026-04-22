@@ -53,7 +53,7 @@ const SocialOAuthButtons = ({ disabled, enableFacebook = false }: Props) => {
         Continue with Google
       </Button>
 
-      {enableFacebook && (
+      {/* {enableFacebook && (
         <Button
           type="button"
           variant="outline"
@@ -65,7 +65,7 @@ const SocialOAuthButtons = ({ disabled, enableFacebook = false }: Props) => {
           <FacebookIcon />
           Continue with Facebook
         </Button>
-      )}
+      )} */}
     </div>
   );
 };
