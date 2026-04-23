@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import {
   getAuthenticatedAgencyAdmin,
   getAuthenticatedClient,
+  getRequestAgencyId,
 } from '../auth'
 import {
   createChatMessageStore,
@@ -45,15 +46,16 @@ export const getMyChatMessages = async (req: Request, res: Response) => {
     }
 
     const context = getConversationContext(req)
+    const agencyId = await getRequestAgencyId(req, context.agencyId ?? 1)
     const messages = await getChatMessagesForClientStore(
       client.id,
       context.conversationType,
-      context.agencyId
+      agencyId
     )
     await markChatMessagesReadForClientStore(
       client.id,
       context.conversationType,
-      context.agencyId
+      agencyId
     )
     res.status(200).json({ client, messages })
   } catch (error) {
@@ -105,10 +107,11 @@ export const sendMyChatMessage = async (req: Request, res: Response) => {
     }
 
     const context = getConversationContext(req)
+    const agencyId = await getRequestAgencyId(req, context.agencyId ?? 1)
     const created = await createChatMessageStore({
       clientId: client.id,
       conversationType: context.conversationType,
-      agencyId: context.agencyId,
+      agencyId,
       agencyName: context.agencyName,
       senderRole: 'client',
       senderName: client.name,
@@ -129,7 +132,7 @@ export const getAdminChatConversations = async (req: Request, res: Response) => 
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    const conversations = await getChatConversationsStore()
+    const conversations = await getChatConversationsStore(admin.agencyId)
     res.status(200).json({ conversations })
   } catch (error) {
     console.error('Error fetching admin chat conversations:', error)
@@ -144,7 +147,7 @@ export const getAdminChatSummary = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    const unreadCount = await getUnreadChatCountForAdminStore()
+    const unreadCount = await getUnreadChatCountForAdminStore(admin.agencyId)
     res.status(200).json({ unreadCount })
   } catch (error) {
     console.error('Error fetching admin chat summary:', error)
@@ -165,15 +168,19 @@ export const getAdminChatMessages = async (req: Request, res: Response) => {
     }
 
     const context = getConversationContext(req)
+    const agencyId =
+      context.conversationType === 'agency'
+        ? context.agencyId ?? admin.agencyId
+        : admin.agencyId
     const messages = await getChatMessagesForClientStore(
       clientId,
       context.conversationType,
-      context.agencyId
+      agencyId
     )
     await markChatMessagesReadForAgencyStore(
       clientId,
       context.conversationType,
-      context.agencyId
+      agencyId
     )
     res.status(200).json({ messages })
   } catch (error) {
@@ -200,10 +207,14 @@ export const sendAdminChatMessage = async (req: Request, res: Response) => {
     }
 
     const context = getConversationContext(req)
+    const agencyId =
+      context.conversationType === 'agency'
+        ? context.agencyId ?? admin.agencyId
+        : admin.agencyId
     const created = await createChatMessageStore({
       clientId,
       conversationType: context.conversationType,
-      agencyId: context.agencyId,
+      agencyId,
       agencyName: context.agencyName ?? admin.agencyName,
       senderRole: 'agency',
       senderName:

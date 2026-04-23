@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { getRequestAgencyId } from '../auth'
 import {
   deleteEmployerContractStore,
   getEmployerContractStore,
@@ -8,7 +9,8 @@ import {
 
 export const listEmployerContracts = async (_req: Request, res: Response) => {
   try {
-    const employers = await getEmployerContractsStore()
+    const agencyId = await getRequestAgencyId(_req)
+    const employers = await getEmployerContractsStore(agencyId)
     res.status(200).json({ employers })
   } catch (error) {
     console.error('Error fetching employer contracts:', error)
@@ -18,8 +20,9 @@ export const listEmployerContracts = async (_req: Request, res: Response) => {
 
 export const getEmployerContract = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { refCode } = req.params
-    const employer = await getEmployerContractStore(refCode)
+    const employer = await getEmployerContractStore(refCode, agencyId)
     if (!employer) {
       return res.status(404).json({ error: 'Employer not found' })
     }
@@ -32,6 +35,7 @@ export const getEmployerContract = async (req: Request, res: Response) => {
 
 export const saveEmployerContract = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { refCode, maid, agency, employer, spouse, familyMembers, notificationDate, documents } = req.body as {
       refCode?: string | null
       maid?: Record<string, unknown>
@@ -61,7 +65,7 @@ export const saveEmployerContract = async (req: Request, res: Response) => {
       familyMembers,
       notificationDate,
       documents,
-    })
+    }, agencyId)
     res.status(200).json({
       employer: saved,
       employmentContract: {
@@ -81,8 +85,9 @@ export const saveEmployerContract = async (req: Request, res: Response) => {
 
 export const deleteEmployerContract = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { refCode } = req.params
-    const deleted = await deleteEmployerContractStore(refCode)
+    const deleted = await deleteEmployerContractStore(refCode, agencyId)
     if (!deleted) {
       return res.status(404).json({ error: 'Employer not found' })
     }

@@ -2,6 +2,7 @@
 // Handles all business logic for company profile, MOM personnel, and testimonials
 
 import { Request, Response } from 'express'
+import { getRequestAgencyId } from '../auth'
 import {
   addMomPersonnelStore,
   addTestimonialStore,
@@ -59,12 +60,13 @@ export const getCompanyProfile = async (req: Request, res: Response) => {
 
 export const getCompanySummary = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const [companyBundle, maids, enquiries, directSales, unreadAgencyChats] = await Promise.all([
       getCompanyBundle(),
-      getMaidsStore(),
-      getEnquiriesStore(),
-      getDirectSalesStore(),
-      getUnreadAgencyChatCountStore(),
+      getMaidsStore(undefined, undefined, agencyId),
+      getEnquiriesStore(undefined, agencyId),
+      getDirectSalesStore(agencyId),
+      getUnreadAgencyChatCountStore(agencyId),
     ])
 
     const publicMaids = maids.filter((maid) => maid.isPublic).length

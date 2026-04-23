@@ -10,6 +10,7 @@ import enquiryRoutes from './routes/enquiryRoutes'
 import directSaleRoutes from './routes/directSaleRoutes'
 import clientAuthRoutes from './routes/clientAuthRoutes'
 import agencyAuthRoutes from './routes/agencyAuthRoutes'
+import agencyRoutes from './routes/agencyRoutes'
 import clientRoutes from './routes/clientRoutes'
 import chatRoutes from './routes/chatRoutes'
 import dashboardRoutes from './routes/dashboardRoutes'
@@ -77,6 +78,7 @@ app.use('/api/direct-sales', directSaleRoutes)
 app.use('/api/direct-sell', directSaleRoutes)
 app.use('/api/client-auth', clientAuthRoutes)
 app.use('/api/agency-auth', agencyAuthRoutes)
+app.use('/api/agency', agencyRoutes)
 app.use('/api/client', clientRoutes)
 app.use('/api/chats', chatRoutes)
 app.use('/api', dashboardRoutes)

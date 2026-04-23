@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { getRequestAgencyId } from '../auth'
 import {
   addEnquiryStore,
   deleteEnquiryStore,
@@ -8,8 +9,10 @@ import {
 export const getEnquiries = async (req: Request, res: Response) => {
   try {
     const { search } = req.query
+    const agencyId = await getRequestAgencyId(req)
     const enquiries = await getEnquiriesStore(
-      typeof search === 'string' ? search : undefined
+      typeof search === 'string' ? search : undefined,
+      agencyId
     )
     res.status(200).json({ enquiries })
   } catch (error) {
@@ -20,6 +23,7 @@ export const getEnquiries = async (req: Request, res: Response) => {
 
 export const createEnquiry = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { username, date, email, phone, message } = req.body as {
       username?: string
       date?: string
@@ -48,7 +52,7 @@ export const createEnquiry = async (req: Request, res: Response) => {
       email,
       phone,
       message,
-    })
+    }, agencyId)
 
     res.status(201).json({ enquiry })
   } catch (error) {
@@ -59,8 +63,9 @@ export const createEnquiry = async (req: Request, res: Response) => {
 
 export const deleteEnquiry = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { id } = req.params
-    const deleted = await deleteEnquiryStore(Number(id))
+    const deleted = await deleteEnquiryStore(Number(id), agencyId)
 
     if (!deleted) {
       return res.status(404).json({ error: 'Enquiry not found' })

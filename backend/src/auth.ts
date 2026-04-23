@@ -85,12 +85,28 @@ export const getAuthenticatedClient = async (
 export const getAuthenticatedAgencyAdmin = async (
   req: Request
 ): Promise<AgencyAdminRecord | null> => {
+  if (req.admin && req.agencyId === req.admin.agencyId) {
+    return req.admin
+  }
+
   const token = getBearerToken(req)
   if (!token) {
     return null
   }
 
-  return getAgencyAdminByTokenStore(token)
+  const admin = await getAgencyAdminByTokenStore(token)
+  if (!admin) {
+    return null
+  }
+
+  req.admin = admin
+  req.agencyId = admin.agencyId
+  return admin
 }
 
 export const getRequestToken = (req: Request) => getBearerToken(req)
+
+export const getRequestAgencyId = async (req: Request, fallback = 1) => {
+  const admin = await getAuthenticatedAgencyAdmin(req)
+  return admin?.agencyId ?? req.agencyId ?? fallback
+}

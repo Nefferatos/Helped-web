@@ -9,13 +9,19 @@ import {
 
 const toSafeAgencyAdmin = (admin: {
   id: number
+  agencyId: number
   username: string
+  email?: string
+  role?: 'admin' | 'staff'
   agencyName: string
   profileImageUrl?: string
   createdAt: string
 }) => ({
   id: admin.id,
+  agencyId: admin.agencyId,
   username: admin.username,
+  email: admin.email ?? '',
+  role: admin.role ?? 'admin',
   agencyName: admin.agencyName,
   profileImageUrl: admin.profileImageUrl ?? '',
   createdAt: admin.createdAt,
@@ -25,6 +31,7 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
   try {
     const body = (req.body ?? null) as {
       username?: unknown
+      email?: unknown
       password?: unknown
       agencyName?: unknown
     } | null
@@ -33,6 +40,7 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
     }
 
     const username = typeof body.username === 'string' ? body.username : ''
+    const email = typeof body.email === 'string' ? body.email : ''
     const password = typeof body.password === 'string' ? body.password : ''
     const agencyName = typeof body.agencyName === 'string' ? body.agencyName : ''
 
@@ -44,6 +52,7 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
 
     const admin = await registerAgencyAdminStore({
       username: username.trim(),
+      email: email.trim() || undefined,
       password: password.trim(),
       agencyName: agencyName.trim(),
     })
@@ -59,6 +68,9 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
       error.message === 'AGENCY_ADMIN_USERNAME_EXISTS'
     ) {
       return res.status(409).json({ error: 'Agency admin username already exists' })
+    }
+    if (error instanceof Error && error.message === 'AGENCY_ADMIN_EMAIL_EXISTS') {
+      return res.status(409).json({ error: 'Agency admin email already exists' })
     }
 
     console.error('Error registering agency admin:', error)
@@ -77,7 +89,7 @@ export const loginAgencyAdmin = async (req: Request, res: Response) => {
     const password = typeof body.password === 'string' ? body.password : ''
 
     if (!username.trim() || !password.trim()) {
-      return res.status(400).json({ error: 'username and password are required' })
+      return res.status(400).json({ error: 'username/email and password are required' })
     }
 
     const admin = await authenticateAgencyAdminStore(
@@ -85,7 +97,7 @@ export const loginAgencyAdmin = async (req: Request, res: Response) => {
       password.trim()
     )
     if (!admin) {
-      return res.status(401).json({ error: 'Invalid username or password' })
+      return res.status(401).json({ error: 'Invalid credentials' })
     }
 
     const session = await createAgencyAdminSessionStore(admin.id)
@@ -125,5 +137,55 @@ export const logoutAgencyAdmin = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error logging out agency admin:', error)
     res.status(500).json({ error: 'Failed to logout agency admin' })
+  }
+}
+
+export const createAgencyAdminForAgency = async (req: Request, res: Response) => {
+  try {
+    const currentAdmin = await getAuthenticatedAgencyAdmin(req)
+    if (!currentAdmin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const body = (req.body ?? null) as {
+      email?: unknown
+      username?: unknown
+      password?: unknown
+      role?: unknown
+    } | null
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Invalid JSON body' })
+    }
+
+    const email = typeof body.email === 'string' ? body.email.trim() : ''
+    const username =
+      typeof body.username === 'string' ? body.username.trim() : email.split('@')[0] || ''
+    const password = typeof body.password === 'string' ? body.password.trim() : ''
+    const role = body.role === 'staff' ? 'staff' : 'admin'
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'email and password are required' })
+    }
+
+    const admin = await registerAgencyAdminStore({
+      agencyId: currentAdmin.agencyId,
+      agencyName: currentAdmin.agencyName,
+      username,
+      email,
+      password,
+      role,
+    })
+
+    res.status(201).json({ admin: toSafeAgencyAdmin(admin) })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'AGENCY_ADMIN_EMAIL_EXISTS') {
+      return res.status(409).json({ error: 'Agency admin email already exists' })
+    }
+    if (error instanceof Error && error.message === 'AGENCY_ADMIN_USERNAME_EXISTS') {
+      return res.status(409).json({ error: 'Agency admin username already exists' })
+    }
+
+    console.error('Error creating agency admin:', error)
+    res.status(500).json({ error: 'Failed to create agency admin' })
   }
 }

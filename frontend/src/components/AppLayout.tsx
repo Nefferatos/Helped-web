@@ -15,6 +15,7 @@ const navItems = [
   { label: "EDIT/DELETE", path: adminPath("/edit-maids") },
   // { label: "REQUESTS", path: adminPath("/requests") },
   { label: "CHAT SUPPORT", path: adminPath("/chat-support") },
+  { label: "STAFF", path: adminPath("/staff") },
   { label: "PASSWORD MANAGEMENT", path: adminPath("/change-password") },
   { label: "INCOMING INQUIRIES", path: adminPath("/enquiry") },
 ];

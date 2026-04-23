@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { getRequestAgencyId } from '../auth'
 import {
   addEmployerContractFilesStore,
   deleteEmployerContractFileStore,
@@ -86,7 +87,8 @@ const parseMultipartFormData = (req: Request) => {
 
 export const listEmployerContractFiles = async (_req: Request, res: Response) => {
   try {
-    const files = await getEmployerContractFilesStore()
+    const agencyId = await getRequestAgencyId(_req)
+    const files = await getEmployerContractFilesStore(agencyId)
     res.status(200).json({
       files: files.map((f) => ({
         id: f.id,
@@ -106,6 +108,7 @@ export const listEmployerContractFiles = async (_req: Request, res: Response) =>
 
 export const uploadEmployerContractFiles = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const contentType = String(req.headers['content-type'] ?? '')
     if (/multipart\/form-data/i.test(contentType)) {
       const { fields, files } = parseMultipartFormData(req)
@@ -141,7 +144,7 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
           category,
           refCode,
         },
-      ])
+      ], agencyId)
 
       return res.status(200).json({
         fileUrl: `/api/employer-files/${saved.id}/view`,
@@ -207,7 +210,7 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
       })
     }
 
-    const saved = await addEmployerContractFilesStore(validatedFiles)
+    const saved = await addEmployerContractFilesStore(validatedFiles, agencyId)
     res.status(200).json({
       files: saved.map((f) => ({
         id: f.id,
@@ -231,9 +234,10 @@ const sendEmployerContractFile = async (
   disposition: 'attachment' | 'inline'
 ) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const id = Number(req.params.id)
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' })
-    const file = await getEmployerContractFileStore(id)
+    const file = await getEmployerContractFileStore(id, agencyId)
     if (!file) return res.status(404).json({ error: 'File not found' })
     const buffer = Buffer.from(file.dataBase64, 'base64')
     const safeFileName = file.name.replace(new RegExp(escapeRegExp('"'), 'g'), '')
@@ -255,9 +259,10 @@ export const downloadEmployerContractFile = async (req: Request, res: Response) 
 
 export const deleteEmployerContractFile = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const id = Number(req.params.id)
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' })
-    const deleted = await deleteEmployerContractFileStore(id)
+    const deleted = await deleteEmployerContractFileStore(id, agencyId)
     if (!deleted) return res.status(404).json({ error: 'File not found' })
     res.status(200).json({ message: 'File deleted successfully' })
   } catch (error) {

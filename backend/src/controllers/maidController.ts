@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { getRequestAgencyId } from '../auth'
 import {
   addMaidPhotoStore,
   createMaidStore,
@@ -129,7 +130,7 @@ const validateMaidPayload = (maid: Partial<MaidProfile>) => {
 
 const toMaidRecord = (
   maid: MaidProfile
-): Omit<MaidRecord, 'id' | 'createdAt' | 'updatedAt'> => ({
+): Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'> => ({
   fullName: maid.fullName.trim(),
   referenceCode: maid.referenceCode.trim(),
   status: maid.status ?? 'available',
@@ -226,9 +227,11 @@ const parseNumber = (value: string | undefined, fallback: number) => {
 export const getMaidList = async (req: Request, res: Response) => {
   try {
     const { search, visibility } = req.query
+    const agencyId = await getRequestAgencyId(req)
     const maids = await getMaidsStore(
       typeof search === 'string' ? search : undefined,
-      typeof visibility === 'string' ? visibility : undefined
+      typeof visibility === 'string' ? visibility : undefined,
+      agencyId
     )
     res.status(200).json({ maids })
   } catch (error) {
@@ -239,7 +242,8 @@ export const getMaidList = async (req: Request, res: Response) => {
 
 export const exportMaidsCsv = async (req: Request, res: Response) => {
   try {
-    const maids = await getMaidsStore()
+    const agencyId = await getRequestAgencyId(req)
+    const maids = await getMaidsStore(undefined, undefined, agencyId)
     const header = csvColumns.join(',')
     const rows = maids.map((maid) =>
       [
@@ -281,7 +285,8 @@ export const exportMaidsCsv = async (req: Request, res: Response) => {
 
 export const exportMaidsXls = async (req: Request, res: Response) => {
   try {
-    const maids = await getMaidsStore()
+    const agencyId = await getRequestAgencyId(req)
+    const maids = await getMaidsStore(undefined, undefined, agencyId)
     const header = csvColumns.join(',')
     const rows = maids.map((maid) =>
       [
@@ -389,6 +394,7 @@ export const exportMaidsXls = async (req: Request, res: Response) => {
 
 export const importMaidsCsv = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { csv } = req.body as { csv?: string }
     if (!csv?.trim()) {
       return res.status(400).json({ error: 'CSV content is required' })
@@ -425,7 +431,7 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
         continue
       }
 
-      const existing = await getMaidByReferenceCodeStore(referenceCode)
+      const existing = await getMaidByReferenceCodeStore(referenceCode, agencyId)
       const base: MaidRecord | (typeof defaultMaidProfile & { fullName: string; referenceCode: string }) =
         existing ??
         ({
@@ -471,10 +477,10 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
 
       try {
         if (existing) {
-          await updateMaidStore(referenceCode, toMaidRecord(profile))
+          await updateMaidStore(referenceCode, toMaidRecord(profile), agencyId)
           updated += 1
         } else {
-          await createMaidStore(toMaidRecord(profile))
+          await createMaidStore(toMaidRecord(profile), agencyId)
           created += 1
         }
       } catch (error) {
@@ -502,8 +508,9 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
 
 export const getMaidByReferenceCode = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const referenceCode = String(req.params.referenceCode ?? '').trim()
-    const result = await getMaidByReferenceCodeStore(referenceCode)
+    const result = await getMaidByReferenceCodeStore(referenceCode, agencyId)
 
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
@@ -518,6 +525,7 @@ export const getMaidByReferenceCode = async (req: Request, res: Response) => {
 
 export const createMaid = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const maid = req.body as Partial<MaidProfile>
     const payload = {
       ...maid,
@@ -529,7 +537,7 @@ export const createMaid = async (req: Request, res: Response) => {
       return res.status(400).json({ error: validationError })
     }
 
-    const created = await createMaidStore(toMaidRecord(payload as MaidProfile))
+    const created = await createMaidStore(toMaidRecord(payload as MaidProfile), agencyId)
     res.status(201).json({ maid: created })
   } catch (error) {
     if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {
@@ -542,6 +550,7 @@ export const createMaid = async (req: Request, res: Response) => {
 
 export const updateMaid = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { referenceCode } = req.params
     const maid = req.body as Partial<MaidProfile>
     const validationError = validateMaidPayload(maid)
@@ -550,7 +559,7 @@ export const updateMaid = async (req: Request, res: Response) => {
       return res.status(400).json({ error: validationError })
     }
 
-    const existing = await getMaidByReferenceCodeStore(referenceCode)
+    const existing = await getMaidByReferenceCodeStore(referenceCode, agencyId)
     if (!existing) {
       return res.status(404).json({ error: 'Maid not found' })
     }
@@ -579,7 +588,7 @@ export const updateMaid = async (req: Request, res: Response) => {
           : existing.hasPhoto,
     }
 
-    const result = await updateMaidStore(referenceCode, toMaidRecord(merged))
+    const result = await updateMaidStore(referenceCode, toMaidRecord(merged), agencyId)
 
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
@@ -597,6 +606,7 @@ export const updateMaid = async (req: Request, res: Response) => {
 
 export const updateMaidVisibility = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { referenceCode } = req.params
     const { isPublic } = req.body as { isPublic?: boolean }
 
@@ -604,7 +614,7 @@ export const updateMaidVisibility = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'isPublic boolean is required' })
     }
 
-    const result = await updateMaidVisibilityStore(referenceCode, isPublic)
+    const result = await updateMaidVisibilityStore(referenceCode, isPublic, agencyId)
 
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
@@ -619,13 +629,14 @@ export const updateMaidVisibility = async (req: Request, res: Response) => {
 
 export const updateMaidPhoto = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { referenceCode } = req.params
     const { photoDataUrl } = req.body as { photoDataUrl?: string }
     if (typeof photoDataUrl !== 'string') {
       return res.status(400).json({ error: 'photoDataUrl string is required' })
     }
 
-    const result = await updateMaidPhotoStore(referenceCode, photoDataUrl)
+    const result = await updateMaidPhotoStore(referenceCode, photoDataUrl, agencyId)
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
     }
@@ -639,13 +650,14 @@ export const updateMaidPhoto = async (req: Request, res: Response) => {
 
 export const addMaidPhoto = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { referenceCode } = req.params
     const { photoDataUrl } = req.body as { photoDataUrl?: string }
     if (typeof photoDataUrl !== 'string' || !photoDataUrl.trim()) {
       return res.status(400).json({ error: 'photoDataUrl string is required' })
     }
 
-    const result = await addMaidPhotoStore(referenceCode, photoDataUrl)
+    const result = await addMaidPhotoStore(referenceCode, photoDataUrl, agencyId)
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
     }
@@ -662,13 +674,14 @@ export const addMaidPhoto = async (req: Request, res: Response) => {
 
 export const updateMaidVideo = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { referenceCode } = req.params
     const { videoDataUrl } = req.body as { videoDataUrl?: string }
     if (typeof videoDataUrl !== 'string') {
       return res.status(400).json({ error: 'videoDataUrl string is required' })
     }
 
-    const result = await updateMaidVideoStore(referenceCode, videoDataUrl)
+    const result = await updateMaidVideoStore(referenceCode, videoDataUrl, agencyId)
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
     }
@@ -682,8 +695,9 @@ export const updateMaidVideo = async (req: Request, res: Response) => {
 
 export const deleteMaid = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { referenceCode } = req.params
-    const result = await deleteMaidStore(referenceCode)
+    const result = await deleteMaidStore(referenceCode, agencyId)
 
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })

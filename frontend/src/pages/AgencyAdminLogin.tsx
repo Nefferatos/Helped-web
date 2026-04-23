@@ -86,14 +86,14 @@ const AgencyAdminLogin = () => {
           <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
             <div>
               <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">
-                Username
+                Username or Email
               </label>
               <input
                 type="text"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="username"
+                placeholder="username or email"
                 required
               />
             </div>

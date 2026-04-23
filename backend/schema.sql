@@ -86,3 +86,46 @@ CREATE TABLE IF NOT EXISTS maids (
 
 CREATE INDEX IF NOT EXISTS idx_maids_reference_code ON maids(reference_code);
 CREATE INDEX IF NOT EXISTS idx_maids_is_public ON maids(is_public);
+
+-- Multi-admin / multi-agency support
+CREATE TABLE IF NOT EXISTS agency_admins (
+  id SERIAL PRIMARY KEY,
+  agency_id INTEGER NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'admin',
+  username VARCHAR(255),
+  agency_name VARCHAR(255),
+  profile_image_url TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_agency_admins_agency_id ON agency_admins(agency_id);
+
+CREATE TABLE IF NOT EXISTS agency_admin_sessions (
+  token VARCHAR(255) PRIMARY KEY,
+  admin_id INTEGER NOT NULL REFERENCES agency_admins(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_agency_admin_sessions_admin_id ON agency_admin_sessions(admin_id);
+
+ALTER TABLE maids
+  ADD COLUMN IF NOT EXISTS agency_id INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE agency_admins
+  ADD COLUMN IF NOT EXISTS username VARCHAR(255);
+
+ALTER TABLE agency_admins
+  ADD COLUMN IF NOT EXISTS agency_name VARCHAR(255);
+
+ALTER TABLE agency_admins
+  ADD COLUMN IF NOT EXISTS profile_image_url TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_maids_agency_id ON maids(agency_id);
+
+-- Apply the same ownership pattern to other agency-owned tables in production:
+-- enquiries.agency_id
+-- direct_sales.agency_id
+-- employer_contracts.agency_id
+-- employer_contract_files.agency_id

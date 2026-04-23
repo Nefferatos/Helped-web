@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { getRequestAgencyId } from '../auth'
 import {
   createDirectSaleStore,
   getClientOptionsStore,
@@ -8,7 +9,8 @@ import {
 
 export const getDirectSales = async (req: Request, res: Response) => {
   try {
-    const directSales = await getDirectSalesStore()
+    const agencyId = await getRequestAgencyId(req)
+    const directSales = await getDirectSalesStore(agencyId)
     res.status(200).json({ directSales })
   } catch (error) {
     console.error('Error fetching direct sales:', error)
@@ -18,7 +20,8 @@ export const getDirectSales = async (req: Request, res: Response) => {
 
 export const getClientOptions = async (req: Request, res: Response) => {
   try {
-    const clients = await getClientOptionsStore()
+    const agencyId = await getRequestAgencyId(req)
+    const clients = await getClientOptionsStore(agencyId)
     res.status(200).json({ clients })
   } catch (error) {
     console.error('Error fetching client options:', error)
@@ -28,6 +31,7 @@ export const getClientOptions = async (req: Request, res: Response) => {
 
 export const createDirectSale = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const { referenceCode: routeReferenceCode } = req.params
     const { referenceCode: bodyReferenceCode, clientId, status, formData } = req.body as {
       referenceCode?: string
@@ -61,7 +65,8 @@ export const createDirectSale = async (req: Request, res: Response) => {
       referenceCode,
       clientId != null ? Number(clientId) : 0,
       normalizedStatus,
-      formData
+      formData,
+      agencyId
     )
 
     res.status(201).json(result)
@@ -81,13 +86,14 @@ export const createDirectSale = async (req: Request, res: Response) => {
 
 export const markDirectSaleInterested = async (req: Request, res: Response) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const id = Number(req.params.id)
 
     if (!Number.isInteger(id)) {
       return res.status(400).json({ error: 'Valid direct sale id is required' })
     }
 
-    const result = await updateDirectSaleStatusStore(id, 'interested')
+    const result = await updateDirectSaleStatusStore(id, 'interested', agencyId)
 
     if (!result) {
       return res.status(404).json({ error: 'Direct sale not found' })
@@ -105,13 +111,14 @@ export const markDirectSaleDirectHire = async (
   res: Response
 ) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const id = Number(req.params.id)
 
     if (!Number.isInteger(id)) {
       return res.status(400).json({ error: 'Valid direct sale id is required' })
     }
 
-    const result = await updateDirectSaleStatusStore(id, 'direct_hire')
+    const result = await updateDirectSaleStatusStore(id, 'direct_hire', agencyId)
 
     if (!result) {
       return res.status(404).json({ error: 'Direct sale not found' })
@@ -129,13 +136,14 @@ export const markDirectSaleRejected = async (
   res: Response
 ) => {
   try {
+    const agencyId = await getRequestAgencyId(req)
     const id = Number(req.params.id)
 
     if (!Number.isInteger(id)) {
       return res.status(400).json({ error: 'Valid direct sale id is required' })
     }
 
-    const result = await updateDirectSaleStatusStore(id, 'rejected')
+    const result = await updateDirectSaleStatusStore(id, 'rejected', agencyId)
 
     if (!result) {
       return res.status(404).json({ error: 'Direct sale not found' })
