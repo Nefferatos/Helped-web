@@ -858,7 +858,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      <section id="contact" className="bg-card py-12 md:py-16 lg:py-24">
+      {/* <section id="contact" className="bg-card py-12 md:py-16 lg:py-24">
         <div className="container max-w-2xl px-4 text-center sm:px-6">
           <h2 className="mb-3 font-display text-2xl font-bold text-foreground sm:text-3xl md:text-4xl">
             Initiate Your Search Today
@@ -899,7 +899,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </Button>
           </div>
         </div>
-      </section>
+      </section> */}
 
       <footer className="bg-foreground py-10 text-primary-foreground md:py-12">
         <div className="container px-4 sm:px-6">
