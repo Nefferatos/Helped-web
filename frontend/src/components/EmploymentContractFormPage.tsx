@@ -944,34 +944,6 @@ export const EmploymentContractPage = ({
             </button>
           </div>
 
-          {maid.referenceCode ? (
-            <div className="mb-3 rounded border border-blue-100 bg-blue-50 p-3">
-              <div className="flex items-start gap-3">
-                <div className="h-16 w-12 overflow-hidden rounded border border-gray-200 bg-white">
-                  {maidPhoto ? (
-                    <img
-                      src={maidPhoto}
-                      alt={maid.name || "Selected maid"}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-gray-300">
-                      <User className="h-4 w-4" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-semibold text-gray-800">{maid.name || "Unnamed maid"}</div>
-                  <div className="mt-0.5 text-[11px] text-gray-500">
-                    Experience: {selectedMaidExperience || "No Experience"} | Nationality: {maid.nationality || "Not set"}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-blue-600">
-                    Ref: {maid.referenceCode || "N/A"} | Salary: {maid.salary || "Default display"}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           <div className="grid grid-cols-[1fr_130px] gap-4">
             <dl className="space-y-1">

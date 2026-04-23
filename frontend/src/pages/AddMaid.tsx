@@ -691,7 +691,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
               <FormRow label="Maid Name:">
                 <Input
                   value={formData.fullName}
-                  className={errors.fullName ? "border-red-500 ring-1 ring-red-400 focus-visible:ring-red-400" : ""}
+                  className={errors.fullName ? "border-red-500 ring-1 ring-red-400 focus-visible:ring-red-400 bg-yellow-100" : "bg-yellow-100"}
                   onChange={(e) => {
                     setFormData((prev) => ({ ...prev, fullName: e.target.value }));
                     if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: undefined }));
@@ -706,7 +706,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
               <FormRow label="Ref Code:">
                 <Input
                   value={formData.referenceCode}
-                  className={errors.referenceCode ? "border-red-500 ring-1 ring-red-400 focus-visible:ring-red-400" : ""}
+                  className={errors.referenceCode ? "border-red-500 ring-1 ring-red-400 focus-visible:ring-red-400 bg-yellow-100" : "bg-yellow-100"}
                   onChange={(e) => {
                     setFormData((prev) => ({ ...prev, referenceCode: e.target.value }));
                     if (errors.referenceCode) setErrors((prev) => ({ ...prev, referenceCode: undefined }));

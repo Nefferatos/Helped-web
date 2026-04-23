@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { FileDown, Check, AlertTriangle, Star } from "lucide-react";
+import { FileDown, Check, AlertTriangle, Star, Search } from "lucide-react";
 import { MaidProfile, formatDate } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -133,6 +133,7 @@ const MaidProfilePage = () => {
   const [confirmExportOpen, setConfirmExportOpen] = useState(false);
   const [showOtherLanguages, setShowOtherLanguages] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+  const [isBringingToTop, setIsBringingToTop] = useState(false);
 
   // ── Inline switch-maid search ──
   const [replaceSearch, setReplaceSearch] = useState("");
@@ -188,6 +189,37 @@ const MaidProfilePage = () => {
   const handleBack = () => {
     if (fromView) navigate(adminPath("/edit-maids"), { state: { fromView } });
     else navigate(adminPath("/edit-maids"));
+  };
+
+  const handleBringToTop = async () => {
+    if (!maid || isBringingToTop) return;
+    try {
+      setIsBringingToTop(true);
+      // Try dedicated endpoint first; fallback to a PUT that bumps updatedAt
+      const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/bring-to-top`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (response.status === 404) {
+        const putResponse = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...maid, updatedAt: new Date().toISOString() }),
+        });
+        const putData = (await putResponse.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+        if (!putResponse.ok || !putData.maid) throw new Error(putData.error || "Failed to bring to top");
+        setMaid(putData.maid);
+      } else {
+        const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+        if (!response.ok) throw new Error(data.error || "Failed to bring to top");
+        if (data.maid) setMaid(data.maid);
+      }
+      toast.success(`"${maid.fullName}" brought to the top of listings`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to bring maid to top");
+    } finally {
+      setIsBringingToTop(false);
+    }
   };
 
   useEffect(() => {
@@ -354,11 +386,42 @@ const MaidProfilePage = () => {
           </div>
         </div>
       )}
-      
-       {/* Row 2: Switch-maid search bar — styled like the old system screenshot */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1" ref={replaceRef}>
-          <span className="text-sm text-black">Maid name or Code:</span>
-          <div className="relative">
+
+      {/* ── Edit/Delete Maid header + Search Bar ── */}
+      <div className="mb-4">
+        {/* Header row: icon + title */}
+        <div className="flex items-center justify-center gap-3 mb-3">
+          {/* Maid+magnifier icon — matches the screenshot */}
+          <div className="relative shrink-0 w-14 h-14">
+            {/* person silhouette */}
+            <svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg" className="absolute inset-0 w-full h-full">
+              <circle cx="22" cy="14" r="10" fill="#5a3e2b" />
+              <ellipse cx="22" cy="36" rx="14" ry="12" fill="#5a3e2b" />
+              {/* magnifier glass */}
+              <circle cx="36" cy="36" r="10" fill="none" stroke="#cc2200" strokeWidth="3.5" />
+              <line x1="43" y1="43" x2="51" y2="51" stroke="#cc2200" strokeWidth="4" strokeLinecap="round" />
+              {/* white glare on lens */}
+              <circle cx="33" cy="33" r="2.5" fill="white" fillOpacity="0.4" />
+            </svg>
+          </div>
+          <h1
+            className="text-2xl font-bold text-black"
+            style={{ fontFamily: "Tahoma, MS Sans Serif, sans-serif" }}
+          >
+            Edit/Delete Maid
+          </h1>
+        </div>
+
+        {/* Search row */}
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1" ref={replaceRef}>
+          <label
+            className="text-sm text-black select-none"
+            style={{ fontFamily: "Tahoma, MS Sans Serif, sans-serif" }}
+          >
+            Maid name or Code:
+          </label>
+          <div className="relative flex items-center">
+            <Search className="absolute left-1.5 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
             <input
               type="text"
               value={replaceSearch}
@@ -367,12 +430,19 @@ const MaidProfilePage = () => {
                 if (!e.target.value.trim()) setShowReplaceResults(false);
               }}
               onKeyDown={(e) => { if (e.key === "Enter") void handleReplaceSearch(); }}
-              className="border border-gray-400 text-sm text-black px-2 py-[3px] w-52 focus:outline-none focus:border-blue-500"
+              className="text-sm text-black pl-6 pr-1.5 py-[2px] w-52 bg-white focus:outline-none"
+              style={{
+                border: "2px inset #808080",
+                boxShadow: "inset 1px 1px 2px rgba(0,0,0,0.2)",
+                fontFamily: "Tahoma, MS Sans Serif, sans-serif",
+              }}
             />
 
             {/* Results dropdown */}
             {showReplaceResults && (
-              <div className="absolute left-0 top-full z-50 w-80 border border-gray-400 bg-white shadow-lg max-h-72 overflow-y-auto">
+              <div className="absolute left-0 top-full z-50 w-80 border border-gray-400 bg-white shadow-lg max-h-72 overflow-y-auto"
+                style={{ borderColor: "#808080" }}
+              >
                 {isReplaceSearching ? (
                   <div className="px-3 py-2 text-sm text-black">Searching…</div>
                 ) : replaceResults.length === 0 ? (
@@ -388,7 +458,7 @@ const MaidProfilePage = () => {
                         key={result.referenceCode}
                         type="button"
                         onClick={() => handleSelectReplace(result.referenceCode)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#0a246a] hover:text-white border-b border-gray-100 last:border-b-0 group"
                       >
                         <div className="h-10 w-8 shrink-0 overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center">
                           {thumb
@@ -396,8 +466,8 @@ const MaidProfilePage = () => {
                             : <span className="text-[9px] text-gray-400 text-center leading-tight">No photo</span>}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-black truncate">{result.fullName}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-sm font-bold truncate">{result.fullName}</p>
+                          <p className="text-xs opacity-70">
                             {result.referenceCode}
                             {result.nationality ? ` · ${result.nationality}` : ""}
                             {result.type ? ` · ${result.type}` : ""}
@@ -411,368 +481,397 @@ const MaidProfilePage = () => {
             )}
           </div>
 
+          {/* Classic Windows "Search" button */}
           <button
             type="button"
             onClick={() => void handleReplaceSearch()}
             disabled={isReplaceSearching || !replaceSearch.trim()}
-            className="border border-gray-400 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-black text-sm px-3 py-[3px] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-black text-sm px-4 py-[2px] disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-px select-none"
+            style={{
+              fontFamily: "Tahoma, MS Sans Serif, sans-serif",
+              background: "linear-gradient(to bottom, #f5f5f5, #e0e0e0)",
+              border: "1px solid #808080",
+              boxShadow: "inset 1px 1px 0 #ffffff, inset -1px -1px 0 #7a7a7a, 1px 1px 0 #000000",
+              minWidth: 64,
+            }}
           >
             {isReplaceSearching ? "Searching…" : "Search"}
           </button>
-        </div>
+        </div>{/* end search row */}
+      </div>{/* end header+search block */}
 
-      {/* ── Top Navigation Bar ── */}
-      <div className="mb-5 py-2 border-b-2 border-gray-300 space-y-2">
-
-        {/* Row 1: action links */}
-        <div className="flex flex-wrap items-center gap-y-1.5">
-          <span onClick={handleBack} className={navLink}>Bring this Maid to Top</span>
-          {navSep}
-          <span onClick={handleBack} className={navLink}>View All Maids</span>
-          {navSep}
-          <span onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))} className={navLink}>Edit This Maid</span>
-          {navSep}
-          <span onClick={() => setIsManagePhotosOpen(true)} className={navLink}>Manage Photos</span>
-          {navSep}
-          <span onClick={() => setIsVideoModalOpen(true)} className={navLink}>
-            YouTube Video{" "}
-          </span>
-          {navSep}
-          <span
-            onClick={() => setIsDeleteDialogOpen(true)}
-            className="text-red-600 underline text-sm font-medium cursor-pointer hover:text-red-800 transition-colors whitespace-nowrap"
-          >
-            {isDeleting ? "Deleting…" : "Delete"}
-          </span>
-        </div>
-      </div>
-
-      {/* ── Main Top Row: Video | Agency | Photos+PDF ── */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_230px_auto] mb-6 items-start">
-
-        {/* Left: Video Box */}
-        <div className="relative min-h-[210px] overflow-hidden rounded border-2 border-gray-400 bg-gray-50">
-          {youtubeEmbedUrl ? (
-            <iframe className="absolute inset-0 h-full w-full" src={youtubeEmbedUrl} title="YouTube video"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              referrerPolicy="strict-origin-when-cross-origin" allowFullScreen />
-          ) : maid.videoDataUrl ? (
-            <video controls className="absolute inset-0 h-full w-full object-cover" src={maid.videoDataUrl} />
-          ) : (
-            <div className="flex min-h-[210px] flex-col items-start justify-center p-5 gap-3">
-              <p className="text-sm text-black leading-relaxed">
-                It appears that you do not have a video on-line for this maid. You can upload a video file to accompany this maid.
-              </p>
-              <button
-                onClick={() => setIsVideoModalOpen(true)}
-                className="text-blue-700 underline text-sm font-medium hover:text-blue-900 transition-colors"
-              >
-                Click here to upload the video file for this maid.
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Middle: Agency Info */}
-        <div className="rounded border-2 border-gray-400 bg-white p-4 space-y-1">
-          <p className="text-base font-bold text-black leading-snug">To contact her agency,</p>
-          <p className="text-sm font-bold text-black leading-snug">
-            {String(agencyContact.companyName || "At The Agency (formerly Rinzin Agency Pte. Ltd)")}
-          </p>
-          <p className="text-sm text-black">(License No.: {String(agencyContact.licenseNo || "25C3114")}),</p>
-          <p className="text-sm text-black">
-            Please call <span className="font-bold">{String(agencyContact.contactPerson || "Bala")}</span>
-          </p>
-          <p className="text-sm text-black">
-            at <span className="font-bold text-blue-700 text-base">{String(agencyContact.phone || "80730757")}</span>
-          </p>
-        </div>
-
-        {/* Right: PDF Download + Photos */}
-        <div className="flex flex-col gap-3 items-start">
-          <button
-            onClick={handleExportPdf}
-            className="flex items-center gap-2 text-blue-700 underline text-sm font-medium hover:text-blue-900 transition-colors"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded bg-red-600 shrink-0">
-              <FileDown className="h-5 w-5 text-white" />
+      {/* ══════════════════════════════════════════════
+          BOND PAPER WRAPPER — all biodata content inside
+      ══════════════════════════════════════════════ */}
+      <div
+        className="bg-white mx-auto px-8 py-6"
+        style={{
+          border: "1px solid #c8c4b8",
+          boxShadow:
+            "0 1px 0 #e8e4dc, 0 2px 0 #d8d4cc, 0 3px 0 #c8c4bc, " +
+            "2px 4px 12px rgba(0,0,0,0.18), 4px 8px 24px rgba(0,0,0,0.09)",
+          backgroundColor: "#fefefe",
+          backgroundImage:
+            "repeating-linear-gradient(to bottom, transparent, transparent 27px, rgba(0,0,80,0.03) 27px, rgba(0,0,80,0.03) 28px)",
+          maxWidth: "100%",
+        }}
+      >
+        {/* ── Top Navigation Bar — inside bond paper ── */}
+        <div className="mb-5 pb-2 border-b-2 border-gray-300">
+          <div className="flex flex-wrap items-center gap-y-1.5">
+            <span
+              onClick={() => void handleBringToTop()}
+              className={`${navLink} ${isBringingToTop ? "opacity-60 cursor-wait" : ""}`}
+            >
+              {isBringingToTop ? "Moving to Top…" : "Bring this Maid to Top"}
             </span>
-            Download Maid Bio-data in PDF
-          </button>
-
-          <p className="text-sm font-bold text-black">{photos.length}/5 photos</p>
-
-          <div className="flex gap-2">
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                disabled={!passportOrTwoByTwoPhoto}
-                onClick={() => passportOrTwoByTwoPhoto && setLightboxPhoto(passportOrTwoByTwoPhoto)}
-                className="group relative flex h-36 w-28 items-center justify-center overflow-hidden rounded border-2 border-gray-400 bg-gray-100 transition hover:border-blue-400 disabled:cursor-default"
-              >
-                {passportOrTwoByTwoPhoto ? (
-                  <>
-                    <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-contain" />
-                    <span className="absolute inset-0 flex items-end justify-center bg-black/20 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <span className="rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">View</span>
-                    </span>
-                  </>
-                ) : <span className="text-sm text-black">No photo</span>}
-              </button>
-              {maid.type && (
-                <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded uppercase">
-                  {maid.type.replace(" maid", "").toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                disabled={!fullBodyPhoto}
-                onClick={() => fullBodyPhoto && setLightboxPhoto(fullBodyPhoto)}
-                className="group relative flex h-52 w-28 items-center justify-center overflow-hidden rounded border-2 border-gray-400 bg-gray-100 transition hover:border-blue-400 disabled:cursor-default"
-              >
-                {fullBodyPhoto ? (
-                  <>
-                    <img src={fullBodyPhoto} alt="full body" className="h-full w-full object-contain" />
-                    <span className="absolute inset-0 flex items-end justify-center bg-black/20 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <span className="rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">View</span>
-                    </span>
-                  </>
-                ) : <span className="text-sm text-black">No photo</span>}
-              </button>
-              {maid.type && (
-                <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded uppercase">
-                  {maid.type.replace(" maid", "").toUpperCase()}
-                </span>
-              )}
-            </div>
+            {navSep}
+            <span onClick={handleBack} className={navLink}>View All Maids</span>
+            {navSep}
+            <span onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))} className={navLink}>Edit This Maid</span>
+            {navSep}
+            <span onClick={() => setIsManagePhotosOpen(true)} className={navLink}>Manage Photos</span>
+            {navSep}
+            <span onClick={() => setIsVideoModalOpen(true)} className={navLink}>YouTube Video</span>
+            {navSep}
+            <span
+              onClick={() => setIsDeleteDialogOpen(true)}
+              className="text-red-600 underline text-sm font-medium cursor-pointer hover:text-red-800 transition-colors whitespace-nowrap"
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </span>
           </div>
+        </div>
 
-          {extraPhotos.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap">
-              {extraPhotos.map((photo, index) => (
+        {/* ── Main Top Row: Video | Agency | Photos+PDF ── */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_230px_auto] mb-6 items-start">
+
+          {/* Left: Video Box */}
+          <div className="relative min-h-[210px] overflow-hidden rounded border-2 border-gray-400 bg-gray-50">
+            {youtubeEmbedUrl ? (
+              <iframe className="absolute inset-0 h-full w-full" src={youtubeEmbedUrl} title="YouTube video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin" allowFullScreen />
+            ) : maid.videoDataUrl ? (
+              <video controls className="absolute inset-0 h-full w-full object-cover" src={maid.videoDataUrl} />
+            ) : (
+              <div className="flex min-h-[210px] flex-col items-start justify-center p-5 gap-3">
+                <p className="text-sm text-black leading-relaxed">
+                  It appears that you do not have a video on-line for this maid. You can upload a video file to accompany this maid.
+                </p>
                 <button
-                  key={`${photo}-${index}`}
-                  type="button"
-                  onClick={() => setLightboxPhoto(photo)}
-                  className="group relative h-16 w-16 overflow-hidden rounded border border-gray-400 bg-gray-100 transition hover:border-blue-400"
+                  onClick={() => setIsVideoModalOpen(true)}
+                  className="text-blue-700 underline text-sm font-medium hover:text-blue-900 transition-colors"
                 >
-                  <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-contain" />
-                  <span className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
+                  Click here to upload the video file for this maid.
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+              </div>
+            )}
+          </div>
 
-      {/* ── Personal Details + Other Info ── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px] mb-4">
-        <div className="rounded border border-gray-300 overflow-hidden">
-          <SectionHeader>Personal Details</SectionHeader>
-          <div className="grid grid-cols-[165px_1fr] p-4">
-            {detailRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
-            <p className="py-1.5 pr-3 text-sm font-bold text-black border-b border-dashed border-muted/60">Languages</p>
-            <div className="py-1.5 text-sm text-black border-b border-dashed border-muted/60 space-y-0.5">
-              {fixedLanguages.map(([lang, level]) => (
-                <p key={lang}>{lang} <span className="text-black">({level})</span></p>
-              ))}
-              {otherLanguages.length > 0 && (
-                <button type="button" className="text-blue-700 underline text-sm hover:text-blue-900" onClick={() => setShowOtherLanguages((p) => !p)}>
-                  {showOtherLanguages ? "Hide others" : `+${otherLanguages.length} more`}
+          {/* Middle: Agency Info */}
+          <div className="rounded border-2 border-gray-400 bg-white p-4 space-y-1">
+            <p className="text-base font-bold text-black leading-snug">To contact her agency,</p>
+            <p className="text-sm font-bold text-black leading-snug">
+              {String(agencyContact.companyName || "At The Agency (formerly Rinzin Agency Pte. Ltd)")}
+            </p>
+            <p className="text-sm text-black">(License No.: {String(agencyContact.licenseNo || "25C3114")}),</p>
+            <p className="text-sm text-black">
+              Please call <span className="font-bold">{String(agencyContact.contactPerson || "Bala")}</span>
+            </p>
+            <p className="text-sm text-black">
+              at <span className="font-bold text-blue-700 text-base">{String(agencyContact.phone || "80730757")}</span>
+            </p>
+          </div>
+
+          {/* Right: PDF Download + Photos */}
+          <div className="flex flex-col gap-3 items-start">
+            <button
+              onClick={handleExportPdf}
+              className="flex items-center gap-2 text-blue-700 underline text-sm font-medium hover:text-blue-900 transition-colors"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded bg-red-600 shrink-0">
+                <FileDown className="h-5 w-5 text-white" />
+              </span>
+              Download Maid Bio-data in PDF
+            </button>
+
+            <p className="text-sm font-bold text-black">{photos.length}/5 photos</p>
+
+            <div className="flex gap-2">
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  disabled={!passportOrTwoByTwoPhoto}
+                  onClick={() => passportOrTwoByTwoPhoto && setLightboxPhoto(passportOrTwoByTwoPhoto)}
+                  className="group relative flex h-36 w-28 items-center justify-center overflow-hidden rounded border-2 border-gray-400 bg-gray-100 transition hover:border-blue-400 disabled:cursor-default"
+                >
+                  {passportOrTwoByTwoPhoto ? (
+                    <>
+                      <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-contain" />
+                      <span className="absolute inset-0 flex items-end justify-center bg-black/20 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">View</span>
+                      </span>
+                    </>
+                  ) : <span className="text-sm text-black">No photo</span>}
                 </button>
-              )}
-              {showOtherLanguages && otherLanguages.map(([lang, level]) => (
-                <p key={lang}>{lang} <span className="text-black">({level})</span></p>
-              ))}
+                {maid.type && (
+                  <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded uppercase">
+                    {maid.type.replace(" maid", "").toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  disabled={!fullBodyPhoto}
+                  onClick={() => fullBodyPhoto && setLightboxPhoto(fullBodyPhoto)}
+                  className="group relative flex h-52 w-28 items-center justify-center overflow-hidden rounded border-2 border-gray-400 bg-gray-100 transition hover:border-blue-400 disabled:cursor-default"
+                >
+                  {fullBodyPhoto ? (
+                    <>
+                      <img src={fullBodyPhoto} alt="full body" className="h-full w-full object-contain" />
+                      <span className="absolute inset-0 flex items-end justify-center bg-black/20 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">View</span>
+                      </span>
+                    </>
+                  ) : <span className="text-sm text-black">No photo</span>}
+                </button>
+                {maid.type && (
+                  <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded uppercase">
+                    {maid.type.replace(" maid", "").toUpperCase()}
+                  </span>
+                )}
+              </div>
             </div>
+
+            {extraPhotos.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap">
+                {extraPhotos.map((photo, index) => (
+                  <button
+                    key={`${photo}-${index}`}
+                    type="button"
+                    onClick={() => setLightboxPhoto(photo)}
+                    className="group relative h-16 w-16 overflow-hidden rounded border border-gray-400 bg-gray-100 transition hover:border-blue-400"
+                  >
+                    <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-contain" />
+                    <span className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">
+        {/* ── Personal Details + Other Info ── */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px] mb-4">
           <div className="rounded border border-gray-300 overflow-hidden">
-            <SectionHeader>Other Information</SectionHeader>
-            <div className="p-3 space-y-2">
-              {availabilityRemarkItems.map((item) => {
-                const yes = item.keys.some((key) => Boolean(otherInformation[key]));
-                return (
-                  <div key={item.label} className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-black">{item.label}</span>
-                    <YesNoBadge yes={yes} />
-                  </div>
-                );
-              })}
+            <SectionHeader>Personal Details</SectionHeader>
+            <div className="grid grid-cols-[165px_1fr] p-4">
+              {detailRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
+              <p className="py-1.5 pr-3 text-sm font-bold text-black border-b border-dashed border-muted/60">Languages</p>
+              <div className="py-1.5 text-sm text-black border-b border-dashed border-muted/60 space-y-0.5">
+                {fixedLanguages.map(([lang, level]) => (
+                  <p key={lang}>{lang} <span className="text-black">({level})</span></p>
+                ))}
+                {otherLanguages.length > 0 && (
+                  <button type="button" className="text-blue-700 underline text-sm hover:text-blue-900" onClick={() => setShowOtherLanguages((p) => !p)}>
+                    {showOtherLanguages ? "Hide others" : `+${otherLanguages.length} more`}
+                  </button>
+                )}
+                {showOtherLanguages && otherLanguages.map(([lang, level]) => (
+                  <p key={lang}>{lang} <span className="text-black">({level})</span></p>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="rounded border border-gray-300 overflow-hidden">
-            <SectionHeader>Availability</SectionHeader>
-            <div className="grid grid-cols-[auto_1fr] p-3">
-              {availabilityRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* ── Skills Table ── */}
-      <div className="rounded border border-gray-300 overflow-hidden mb-4">
-        <SectionHeader>Maid Skills</SectionHeader>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-muted/30 text-sm font-bold uppercase tracking-wide text-black">
-                <th className="px-4 py-3 text-left">Area of Work</th>
-                <th className="px-4 py-3 text-center w-24">Willing</th>
-                <th className="px-4 py-3 text-center w-40">
-                  Experience<br />
-                  <span className="font-normal normal-case text-sm text-black">If yes, no. of years</span>
-                </th>
-                <th className="px-4 py-3 text-center w-44">
-                  Evaluation<br />
-                  <span className="font-normal normal-case text-sm text-black">Stars out of 5</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y text-sm">
-              {workAreas
-                .filter(([, config]) => {
-                  const ev = String(config.evaluation || "").trim();
-                  return Boolean(config.willing || config.experience || (ev && ev !== "-" && ev !== "N.A."));
-                })
-                .map(([area, config]) => {
-                  const rawAge = String(workAreaNotes["Care of infants/children"] || "").trim();
-                  const formattedAge = rawAge ? rawAge.replace(/\s*-\s*/g, "–") : "";
-                  const needsYears = formattedAge && !/year/i.test(formattedAge);
-                  const areaLabel = area === "Care of infants/children" && formattedAge
-                    ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})`
-                    : area;
-                  const yrs = String(config.yearsOfExperience || "").trim();
+          <div className="flex flex-col gap-4">
+            <div className="rounded border border-gray-300 overflow-hidden">
+              <SectionHeader>Other Information</SectionHeader>
+              <div className="p-3 space-y-2">
+                {availabilityRemarkItems.map((item) => {
+                  const yes = item.keys.some((key) => Boolean(otherInformation[key]));
                   return (
-                    <tr key={area} className="hover:bg-gray-50">
-                      <td className="px-4 py-2.5 text-black">{areaLabel}</td>
-                      <td className="px-4 py-2.5 text-center"><YesNoBadge yes={Boolean(config.willing)} /></td>
-                      <td className="px-4 py-2.5 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <YesNoBadge yes={Boolean(config.experience)} />
-                          {config.experience && yrs && (
-                            <span className="text-sm text-black">{yrs} {Number(yrs) === 1 ? "year" : "years"}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <StarDisplay evaluation={config.evaluation} />
-                      </td>
-                    </tr>
+                    <div key={item.label} className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-black">{item.label}</span>
+                      <YesNoBadge yes={yes} />
+                    </div>
                   );
                 })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Cooking / Other Skill Notes ── */}
-      {(workAreaNotes["Cooking"] || workAreaNotes["Other Skill"]) && (
-        <div className="grid gap-3 sm:grid-cols-2 mb-4">
-          {workAreaNotes["Cooking"] && (
-            <div className="rounded border border-gray-300 overflow-hidden">
-              <SectionHeader>Cooking Notes</SectionHeader>
-              <p className="p-3 text-sm whitespace-pre-wrap text-black">{workAreaNotes["Cooking"]}</p>
+              </div>
             </div>
-          )}
-          {workAreaNotes["Other Skill"] && (
             <div className="rounded border border-gray-300 overflow-hidden">
-              <SectionHeader>Other Skill Notes</SectionHeader>
-              <p className="p-3 text-sm whitespace-pre-wrap text-black">{workAreaNotes["Other Skill"]}</p>
+              <SectionHeader>Availability</SectionHeader>
+              <div className="grid grid-cols-[auto_1fr] p-3">
+                {availabilityRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
+              </div>
             </div>
-          )}
+          </div>
         </div>
-      )}
 
-      {/* ── Employment History ── */}
-      {employment.length > 0 && (
+        {/* ── Skills Table ── */}
         <div className="rounded border border-gray-300 overflow-hidden mb-4">
-          <SectionHeader>Employment History</SectionHeader>
+          <SectionHeader>Maid Skills</SectionHeader>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-muted/30 text-sm font-bold uppercase tracking-wide text-black">
-                  {["From","To","Country","Employer","Duties","Remarks"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left">{h}</th>
-                  ))}
+                  <th className="px-4 py-3 text-left">Area of Work</th>
+                  <th className="px-4 py-3 text-center w-24">Willing</th>
+                  <th className="px-4 py-3 text-center w-40">
+                    Experience<br />
+                    <span className="font-normal normal-case text-sm text-black">If yes, no. of years</span>
+                  </th>
+                  <th className="px-4 py-3 text-center w-44">
+                    Evaluation<br />
+                    <span className="font-normal normal-case text-sm text-black">Stars out of 5</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y text-sm">
-                {employment.map((e, i) => {
-                  const row = e as Record<string, string>;
-                  return (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 whitespace-nowrap text-black">{formatDate(row.from) === "N/A" ? "—" : formatDate(row.from)}</td>
-                      <td className="px-4 py-2 whitespace-nowrap text-black">{formatDate(row.to) === "N/A" ? "—" : formatDate(row.to)}</td>
-                      <td className="px-4 py-2 text-black">{row.country || "—"}</td>
-                      <td className="px-4 py-2 text-black">{row.employer || "—"}</td>
-                      <td className="px-4 py-2 text-black">{row.duties || "—"}</td>
-                      <td className="px-4 py-2 text-black">{row.remarks || "—"}</td>
-                    </tr>
-                  );
-                })}
+                {workAreas
+                  .filter(([, config]) => {
+                    const ev = String(config.evaluation || "").trim();
+                    return Boolean(config.willing || config.experience || (ev && ev !== "-" && ev !== "N.A."));
+                  })
+                  .map(([area, config]) => {
+                    const rawAge = String(workAreaNotes["Care of infants/children"] || "").trim();
+                    const formattedAge = rawAge ? rawAge.replace(/\s*-\s*/g, "–") : "";
+                    const needsYears = formattedAge && !/year/i.test(formattedAge);
+                    const areaLabel = area === "Care of infants/children" && formattedAge
+                      ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})`
+                      : area;
+                    const yrs = String(config.yearsOfExperience || "").trim();
+                    return (
+                      <tr key={area} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 text-black">{areaLabel}</td>
+                        <td className="px-4 py-2.5 text-center"><YesNoBadge yes={Boolean(config.willing)} /></td>
+                        <td className="px-4 py-2.5 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <YesNoBadge yes={Boolean(config.experience)} />
+                            {config.experience && yrs && (
+                              <span className="text-sm text-black">{yrs} {Number(yrs) === 1 ? "year" : "years"}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <StarDisplay evaluation={config.evaluation} />
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
         </div>
-      )}
 
-      {/* ── Medical / Private ── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 mb-4">
-        <div className="rounded border border-gray-300 overflow-hidden">
-          <SectionHeader>Medical / Dietary</SectionHeader>
-          <div className="grid grid-cols-[145px_1fr] p-4">
-            {medicalRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
-          </div>
-          {Object.keys(pastIllnesses).length > 0 && (
-            <div className="border-t p-3">
-              <p className="text-sm font-bold uppercase tracking-widest text-black mb-2">Past Illnesses</p>
-              <div className="space-y-1.5">
-                {Object.entries(pastIllnesses).map(([illness, value]) => (
-                  <div key={illness} className="flex items-center justify-between text-sm">
-                    <span className="text-black">{illness}</span>
-                    {value ? <Check className="h-4 w-4 text-green-600" /> : <span className="text-black">—</span>}
-                  </div>
-                ))}
+        {/* ── Cooking / Other Skill Notes ── */}
+        {(workAreaNotes["Cooking"] || workAreaNotes["Other Skill"]) && (
+          <div className="grid gap-3 sm:grid-cols-2 mb-4">
+            {workAreaNotes["Cooking"] && (
+              <div className="rounded border border-gray-300 overflow-hidden">
+                <SectionHeader>Cooking Notes</SectionHeader>
+                <p className="p-3 text-sm whitespace-pre-wrap text-black">{workAreaNotes["Cooking"]}</p>
               </div>
+            )}
+            {workAreaNotes["Other Skill"] && (
+              <div className="rounded border border-gray-300 overflow-hidden">
+                <SectionHeader>Other Skill Notes</SectionHeader>
+                <p className="p-3 text-sm whitespace-pre-wrap text-black">{workAreaNotes["Other Skill"]}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Employment History ── */}
+        {employment.length > 0 && (
+          <div className="rounded border border-gray-300 overflow-hidden mb-4">
+            <SectionHeader>Employment History</SectionHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-sm font-bold uppercase tracking-wide text-black">
+                    {["From","To","Country","Employer","Duties","Remarks"].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-sm">
+                  {employment.map((e, i) => {
+                    const row = e as Record<string, string>;
+                    return (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 whitespace-nowrap text-black">{formatDate(row.from) === "N/A" ? "—" : formatDate(row.from)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap text-black">{formatDate(row.to) === "N/A" ? "—" : formatDate(row.to)}</td>
+                        <td className="px-4 py-2 text-black">{row.country || "—"}</td>
+                        <td className="px-4 py-2 text-black">{row.employer || "—"}</td>
+                        <td className="px-4 py-2 text-black">{row.duties || "—"}</td>
+                        <td className="px-4 py-2 text-black">{row.remarks || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Medical / Private ── */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 mb-4">
+          <div className="rounded border border-gray-300 overflow-hidden">
+            <SectionHeader>Medical / Dietary</SectionHeader>
+            <div className="grid grid-cols-[145px_1fr] p-4">
+              {medicalRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
+            </div>
+            {Object.keys(pastIllnesses).length > 0 && (
+              <div className="border-t p-3">
+                <p className="text-sm font-bold uppercase tracking-widest text-black mb-2">Past Illnesses</p>
+                <div className="space-y-1.5">
+                  {Object.entries(pastIllnesses).map(([illness, value]) => (
+                    <div key={illness} className="flex items-center justify-between text-sm">
+                      <span className="text-black">{illness}</span>
+                      <YesNoBadge yes={Boolean(value)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="rounded border border-gray-300 overflow-hidden">
+            <SectionHeader>Private Information</SectionHeader>
+            <div className="grid grid-cols-[145px_1fr] p-4">
+              {privateRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Introductions ── */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 mb-4">
+          <div className="rounded border border-gray-300 overflow-hidden">
+            <SectionHeader>Public Introduction</SectionHeader>
+            <p className="p-4 text-sm whitespace-pre-wrap text-black leading-relaxed">
+              {String(introduction.publicIntro || "No public introduction added yet.")}
+            </p>
+          </div>
+          {canViewPrivateIntro && (
+            <div className="rounded border border-amber-300 bg-amber-50/30 overflow-hidden">
+              <SectionHeader>Private Introduction</SectionHeader>
+              <p className="p-4 text-sm whitespace-pre-wrap text-black leading-relaxed">
+                {String(introduction.intro || "—")}
+              </p>
             </div>
           )}
         </div>
-        <div className="rounded border border-gray-300 overflow-hidden">
-          <SectionHeader>Private Information</SectionHeader>
-          <div className="grid grid-cols-[145px_1fr] p-4">
-            {privateRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
-          </div>
-        </div>
-      </div>
 
-      {/* ── Introductions ── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 mb-4">
-        <div className="rounded border border-gray-300 overflow-hidden">
-          <SectionHeader>Public Introduction</SectionHeader>
-          <p className="p-4 text-sm whitespace-pre-wrap text-black leading-relaxed">
-            {String(introduction.publicIntro || "No public introduction added yet.")}
-          </p>
+        {/* ── Footer ── */}
+        <div className="flex items-center justify-between border-t pt-3 text-sm text-black">
+          <span>Last updated: {formatDate(maid.updatedAt)}</span>
+          <span>Hits: 1</span>
         </div>
-        {canViewPrivateIntro && (
-          <div className="rounded border border-amber-300 bg-amber-50/30 overflow-hidden">
-            <SectionHeader>Private Introduction</SectionHeader>
-            <p className="p-4 text-sm whitespace-pre-wrap text-black leading-relaxed">
-              {String(introduction.intro || "—")}
-            </p>
-          </div>
-        )}
-      </div>
 
-      {/* ── Footer ── */}
-      <div className="flex items-center justify-between border-t pt-3 text-sm text-black">
-        <span>Last updated: {formatDate(maid.updatedAt)}</span>
-        <span>Hits: 1</span>
       </div>
+      {/* ══ end bond paper ══ */}
 
       {/* ── Delete Dialog ── */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => { if (!isDeleting) setIsDeleteDialogOpen(open); }}>

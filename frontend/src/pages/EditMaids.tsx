@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,191 @@ type VisibilityTarget =
 
 const PAGE_SIZE = 10;
 
+const menuStyles = `
+  @keyframes float-icon {
+    0%, 100% { transform: translateY(0px) rotateX(0deg); }
+    50% { transform: translateY(-4px) rotateX(6deg); }
+  }
+  .card-public {
+    background: linear-gradient(135deg, hsl(var(--primary)/0.08) 0%, hsl(var(--primary)/0.03) 60%, transparent 100%);
+    border: 1.5px solid hsl(var(--primary)/0.25);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .card-public:hover {
+    background: linear-gradient(135deg, hsl(var(--primary)/0.14) 0%, hsl(var(--primary)/0.06) 60%, transparent 100%);
+    border-color: hsl(var(--primary)/0.55);
+    box-shadow: 0 8px 32px hsl(var(--primary)/0.18), 0 2px 8px hsl(var(--primary)/0.12), inset 0 1px 0 hsl(var(--primary)/0.2);
+    transform: translateY(-2px) scale(1.01);
+  }
+  .card-public:active { transform: translateY(0px) scale(0.99); }
+  .card-hidden {
+    background: linear-gradient(135deg, hsl(var(--muted)/0.8) 0%, hsl(var(--muted)/0.4) 100%);
+    border: 1.5px solid hsl(var(--border));
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .card-hidden:hover {
+    background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--muted)/0.6) 100%);
+    border-color: hsl(var(--muted-foreground)/0.35);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.1);
+    transform: translateY(-2px) scale(1.01);
+  }
+  .card-hidden:active { transform: translateY(0px) scale(0.99); }
+  .icon-3d-public {
+    width: 72px; height: 72px;
+    border-radius: 22px;
+    background: linear-gradient(145deg, hsl(var(--primary)/0.9), hsl(var(--primary)));
+    box-shadow:
+      0 4px 0 hsl(var(--primary)/0.4),
+      0 8px 20px hsl(var(--primary)/0.35),
+      inset 0 1px 0 rgba(255,255,255,0.3),
+      inset 0 -2px 0 rgba(0,0,0,0.15);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: all 0.3s ease;
+  }
+  .card-public:hover .icon-3d-public {
+    animation: float-icon 2s ease-in-out infinite;
+    box-shadow:
+      0 8px 0 hsl(var(--primary)/0.3),
+      0 14px 30px hsl(var(--primary)/0.4),
+      inset 0 1px 0 rgba(255,255,255,0.4),
+      inset 0 -2px 0 rgba(0,0,0,0.15);
+  }
+  .icon-3d-hidden {
+    width: 72px; height: 72px;
+    border-radius: 22px;
+    background: linear-gradient(145deg, hsl(var(--muted-foreground)/0.5), hsl(var(--muted-foreground)/0.35));
+    box-shadow:
+      0 4px 0 rgba(0,0,0,0.15),
+      0 8px 20px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.1);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: all 0.3s ease;
+  }
+  .card-hidden:hover .icon-3d-hidden {
+    animation: float-icon 2s ease-in-out infinite;
+    box-shadow:
+      0 8px 0 rgba(0,0,0,0.12),
+      0 14px 28px rgba(0,0,0,0.16),
+      inset 0 1px 0 rgba(255,255,255,0.25),
+      inset 0 -2px 0 rgba(0,0,0,0.1);
+  }
+  .icon-shine {
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    border-radius: 22px 22px 0 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+  .badge-live {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: hsl(var(--primary)/0.12);
+    border: 1px solid hsl(var(--primary)/0.3);
+    color: hsl(var(--primary));
+    border-radius: 99px; padding: 2px 10px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  }
+  .badge-live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: hsl(var(--primary));
+    animation: pulse-dot 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+  .badge-draft {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    border-radius: 99px; padding: 2px 10px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  }
+  .search-glow:focus-within {
+    box-shadow: 0 0 0 2px hsl(var(--primary)/0.2), 0 2px 8px hsl(var(--primary)/0.1);
+    border-color: hsl(var(--primary)/0.5) !important;
+  }
+  .card-arrow {
+    transition: transform 0.2s ease;
+  }
+  .card-public:hover .card-arrow,
+  .card-hidden:hover .card-arrow {
+    transform: translateX(3px);
+  }
+  .search-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0; right: 0;
+    background: hsl(var(--background));
+    border: 1.5px solid hsl(var(--primary)/0.3);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+    z-index: 50;
+    overflow: hidden;
+    animation: dropdown-in 0.15s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes dropdown-in {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)    scale(1); }
+  }
+  .search-result-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+    border-bottom: 1px solid hsl(var(--border)/0.5);
+  }
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover,
+  .search-result-item.active { background: hsl(var(--primary)/0.07); }
+  .search-result-avatar {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+  }
+  .search-result-avatar-placeholder {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: hsl(var(--muted-foreground));
+    font-weight: 600;
+  }
+  .search-highlight {
+    background: hsl(var(--primary)/0.18);
+    color: hsl(var(--primary));
+    border-radius: 3px;
+    padding: 0 1px;
+    font-weight: 600;
+  }
+  .search-badge-public {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: hsl(var(--primary)/0.1);
+    color: hsl(var(--primary));
+    border-radius: 99px; padding: 1px 7px;
+    font-size: 9px; font-weight: 600; letter-spacing: 0.03em;
+    flex-shrink: 0;
+  }
+  .search-badge-hidden {
+    display: inline-flex; align-items: center;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    border-radius: 99px; padding: 1px 7px;
+    font-size: 9px; font-weight: 600; letter-spacing: 0.03em;
+    flex-shrink: 0;
+  }
+`;
+
 const EditMaids = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,6 +234,73 @@ const EditMaids = () => {
 
   const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
   const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
+
+  // Menu quick-search state
+  const [menuSearch, setMenuSearch] = useState("");
+  const [menuSearchResults, setMenuSearchResults] = useState<(MaidProfile & { _vis?: string })[]>([]);
+  const [menuSearchLoading, setMenuSearchLoading] = useState(false);
+  const [menuSearchOpen, setMenuSearchOpen] = useState(false);
+  const [menuActiveIndex, setMenuActiveIndex] = useState(-1);
+  const menuSearchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuSearch.trim()) {
+      setMenuSearchResults([]);
+      setMenuSearchOpen(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        setMenuSearchLoading(true);
+        const params = new URLSearchParams({ search: menuSearch.trim() });
+        const [pubRes, hidRes] = await Promise.all([
+          fetch(`/api/maids?visibility=public&${params}`, { signal: controller.signal }),
+          fetch(`/api/maids?visibility=hidden&${params}`, { signal: controller.signal }),
+        ]);
+        const [pubData, hidData] = await Promise.all([
+          pubRes.json() as Promise<{ maids?: MaidProfile[] }>,
+          hidRes.json() as Promise<{ maids?: MaidProfile[] }>,
+        ]);
+        const combined = [
+          ...(pubData.maids ?? []).map((m) => ({ ...m, _vis: "public" as const })),
+          ...(hidData.maids ?? []).map((m) => ({ ...m, _vis: "hidden" as const })),
+        ].slice(0, 8);
+        setMenuSearchResults(combined);
+        setMenuSearchOpen(true);
+        setMenuActiveIndex(-1);
+      } catch {
+        // silently ignore abort errors
+      } finally {
+        setMenuSearchLoading(false);
+      }
+    }, 220);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [menuSearch]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuSearchRef.current && !menuSearchRef.current.contains(e.target as Node)) {
+        setMenuSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const highlightMatch = useCallback((text: string, query: string) => {
+    if (!query.trim()) return <>{text}</>;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return <>{text}</>;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="search-highlight">{text.slice(idx, idx + query.length)}</mark>
+        {text.slice(idx + query.length)}
+      </>
+    );
+  }, []);
 
   useEffect(() => {
     if (location.state?.fromView) {
@@ -492,7 +744,7 @@ const EditMaids = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation dialog — simple confirm, no typing required */}
+      {/* Delete confirmation dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -591,23 +843,105 @@ const EditMaids = () => {
   if (view === "menu") {
     return (
       <div className="page-container">
+        <style>{menuStyles}</style>
         <div className="content-card animate-fade-in-up space-y-6">
 
-          <div className="flex flex-wrap gap-2">
-            <div className="flex flex-1 min-w-48 items-center gap-2 rounded-lg border bg-background px-3 shadow-sm">
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <Input
-                placeholder="Search maid name or code…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border-0 shadow-none focus-visible:ring-0 px-0"
+          {/* Quick-search with live dropdown */}
+          <div ref={menuSearchRef} className="relative">
+            <div className={`search-glow flex items-center gap-2 rounded-xl border bg-background px-3 py-1 shadow-sm transition-all ${menuSearchOpen ? "border-primary/50" : ""}`}>
+              <Search className={`h-4 w-4 shrink-0 transition-colors ${menuSearchLoading ? "text-primary animate-pulse" : "text-muted-foreground"}`} />
+              <input
+                type="text"
+                placeholder="Quick-search any maid by name or reference code…"
+                value={menuSearch}
+                autoComplete="off"
+                spellCheck={false}
+                className="flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground/60"
+                onChange={(e) => setMenuSearch(e.target.value)}
+                onFocus={() => { if (menuSearchResults.length > 0) setMenuSearchOpen(true); }}
+                onKeyDown={(e) => {
+                  if (!menuSearchOpen || menuSearchResults.length === 0) return;
+                  if (e.key === "ArrowDown") { e.preventDefault(); setMenuActiveIndex((i) => Math.min(i + 1, menuSearchResults.length - 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setMenuActiveIndex((i) => Math.max(i - 1, 0)); }
+                  else if (e.key === "Enter" && menuActiveIndex >= 0) {
+                    const m = menuSearchResults[menuActiveIndex];
+                    if (m) navigate(adminPath(`/maid/${encodeURIComponent(m.referenceCode)}`), { state: { fromView: (m as MaidProfile & { _vis?: string })._vis ?? "public" } });
+                  }
+                  else if (e.key === "Escape") setMenuSearchOpen(false);
+                }}
               />
+              {menuSearch && (
+                <button
+                  type="button"
+                  onClick={() => { setMenuSearch(""); setMenuSearchOpen(false); setMenuSearchResults([]); }}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-colors text-[10px]"
+                >✕</button>
+              )}
             </div>
-            <Button variant="outline" onClick={requestExport} disabled={isExporting}>
+
+            {/* Dropdown results */}
+            {menuSearchOpen && menuSearchResults.length > 0 && (
+              <div className="search-dropdown">
+                {menuSearchResults.map((maid, idx) => {
+                  const photo = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
+                    ? maid.photoDataUrls[0]
+                    : maid.photoDataUrl;
+                  const age = calculateAge(maid.dateOfBirth);
+                  const vis = (maid as MaidProfile & { _vis?: string })._vis;
+                  return (
+                    <div
+                      key={maid.referenceCode}
+                      className={`search-result-item ${idx === menuActiveIndex ? "active" : ""}`}
+                      onMouseEnter={() => setMenuActiveIndex(idx)}
+                      onClick={() => {
+                        navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: vis ?? "public" } });
+                        setMenuSearchOpen(false);
+                      }}
+                    >
+                      {photo ? (
+                        <img src={photo} alt={maid.fullName} className="search-result-avatar" />
+                      ) : (
+                        <div className="search-result-avatar-placeholder">
+                          {maid.fullName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground leading-tight">
+                          {highlightMatch(maid.fullName, menuSearch)}
+                        </p>
+                        <p className="truncate text-[10px] text-muted-foreground mt-0.5">
+                          <span className="font-medium">{highlightMatch(String(maid.referenceCode), menuSearch)}</span>
+                          {maid.nationality ? ` · ${maid.nationality}` : ""}
+                          {age !== null ? ` · ${age} yrs` : ""}
+                        </p>
+                      </div>
+                      <span className={vis === "public" ? "search-badge-public" : "search-badge-hidden"}>
+                        {vis === "public" ? "Public" : "Hidden"}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div className="px-3 py-2 text-[10px] text-muted-foreground/60 text-center">
+                  {menuSearchResults.length === 8 ? "Showing top 8 results — refine your search" : `${menuSearchResults.length} result${menuSearchResults.length !== 1 ? "s" : ""} found`}
+                </div>
+              </div>
+            )}
+
+            {menuSearchOpen && !menuSearchLoading && menuSearchResults.length === 0 && menuSearch.trim() && (
+              <div className="search-dropdown px-4 py-5 text-center">
+                <p className="text-sm font-medium text-muted-foreground">No maids found</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Try a different name or reference code</p>
+              </div>
+            )}
+          </div>
+
+          {/* Export / Import toolbar */}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={requestExport} disabled={isExporting} className="flex-1 sm:flex-none">
               <Download className="mr-2 h-4 w-4" />
               {isExporting ? "Exporting…" : "Export"}
             </Button>
-            <label className="inline-flex cursor-pointer">
+            <label className="inline-flex flex-1 sm:flex-none cursor-pointer">
               <input
                 type="file"
                 accept=".csv,.xls,.xlsx,.doc,.docx,.pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
@@ -616,7 +950,7 @@ const EditMaids = () => {
                 multiple
                 onChange={(e) => { void requestImportFiles(e.target.files); e.currentTarget.value = ""; }}
               />
-              <span className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
+              <span className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
                 <Upload className="h-4 w-4" />
                 {isImporting ? "Importing…" : "Import"}
               </span>
@@ -630,30 +964,71 @@ const EditMaids = () => {
 
           <hr className="border-border" />
 
+          {/* Category cards with 3D icons */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <button
-              onClick={() => setView("public")}
-              className="group relative flex flex-col items-center gap-3 overflow-hidden border-2 border-primary/20 bg-primary/5 p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10 hover:shadow-md active:scale-[0.98]"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/10 transition-all group-hover:ring-primary/20">
-                <Eye className="h-7 w-7 text-primary" />
+
+            {/* Public Card */}
+            <button onClick={() => setView("public")} className="card-public group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center">
+              {/* Decorative bg glows */}
+              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full bg-primary/10 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full bg-primary/8 blur-xl" />
+
+              {/* 3D icon */}
+              <div className="icon-3d-public">
+                <div className="icon-shine" />
+                <Eye className="h-8 w-8 text-white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }} />
               </div>
-              <div>
-                <p className="text-base font-bold text-primary">Maids In Public</p>
-                <p className="mt-1 text-xs text-muted-foreground">View, edit or delete publicly visible maids</p>
+
+              <div className="space-y-1.5">
+                <div className="mb-2">
+                  <span className="badge-live">
+                    <span className="badge-live-dot" />
+                    Live
+                  </span>
+                </div>
+                <p className="text-lg font-bold tracking-tight text-primary">Maids in Public</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  View, edit or remove<br />publicly visible maids
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary/70 group-hover:text-primary transition-colors">
+                <span>Open list</span>
+                <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
+                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </div>
             </button>
 
-            <button
-              onClick={() => setView("hidden")}
-              className="group relative flex flex-col items-center gap-3 overflow-hidden border-2 border-border bg-muted/30 p-8 text-center transition-all hover:border-muted-foreground/30 hover:bg-muted/60 hover:shadow-md active:scale-[0.98]"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted ring-4 ring-muted transition-all group-hover:ring-muted-foreground/10">
-                <EyeOff className="h-7 w-7 text-muted-foreground" />
+            {/* Hidden Card */}
+            <button onClick={() => setView("hidden")} className="card-hidden group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center">
+              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full bg-muted-foreground/6 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full bg-muted-foreground/4 blur-xl" />
+
+              {/* 3D icon */}
+              <div className="icon-3d-hidden">
+                <div className="icon-shine" />
+                <EyeOff className="h-8 w-8 text-white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.25))" }} />
               </div>
-              <div>
-                <p className="text-base font-bold text-foreground">Maids Hidden</p>
-                <p className="mt-1 text-xs text-muted-foreground">View, edit or delete hidden/draft maids</p>
+
+              <div className="space-y-1.5">
+                <div className="mb-2">
+                  <span className="badge-draft">
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", opacity: 0.5, display: "inline-block", flexShrink: 0 }} />
+                    Draft
+                  </span>
+                </div>
+                <p className="text-lg font-bold tracking-tight text-foreground">Maids Hidden</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Manage drafts &amp; maids<br />hidden from public view
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                <span>Open list</span>
+                <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
+                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </div>
             </button>
           </div>
@@ -701,14 +1076,26 @@ const EditMaids = () => {
       <div className="content-card animate-fade-in-up space-y-4">
 
         <div className="flex flex-wrap gap-2">
-          <div className="flex flex-1 min-w-48 items-center gap-2 rounded-lg border bg-background px-3 shadow-sm">
+          <div className="search-glow flex flex-1 min-w-48 items-center gap-2 rounded-lg border bg-background px-3 shadow-sm transition-all">
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Input
-              placeholder="Search maid name or code…"
+              placeholder="Search by name or reference code…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="border-0 shadow-none focus-visible:ring-0 px-0"
+              autoComplete="off"
+              spellCheck={false}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-colors text-xs"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
           </div>
           <Button variant="outline" onClick={requestExport} disabled={isExporting}>
             <Download className="mr-2 h-4 w-4" />
@@ -807,7 +1194,7 @@ const EditMaids = () => {
                     opacity: 0,
                   }}
                 >
-                  {/* ── Photo area ── */}
+                  {/* Photo area */}
                   <div
                     className="relative w-full cursor-pointer bg-muted"
                     onClick={() =>

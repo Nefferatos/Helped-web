@@ -273,7 +273,6 @@ const EmploymentContracts = () => {
                 <th className="border-b px-3 py-2 text-left font-semibold text-xs">Employer Name</th>
                 <th className="border-b px-3 py-2 text-left font-semibold text-xs">Spouse Name</th>
                 <th className="border-b px-3 py-2 text-left font-semibold text-xs">Maid Name</th>
-                <th className="border-b px-3 py-2 text-left font-semibold text-xs w-40">Action</th>
                 <th className="border-b px-3 py-2 text-center font-semibold text-xs w-16">Select</th>
               </tr>
             </thead>
@@ -312,28 +311,6 @@ const EmploymentContracts = () => {
                   <td className="border-b px-3 py-2 text-xs font-medium text-primary">{emp.employer}</td>
                   <td className="border-b px-3 py-2 text-xs">{emp.spouse || "—"}</td>
                   <td className="border-b px-3 py-2 text-xs text-primary">{emp.maid}</td>
-                  <td className="border-b px-3 py-2 text-xs" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(emp.ref)}`))}
-                      >
-                        <Eye className="w-3 h-3 mr-1" />
-                        View
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(emp.ref)}/edit`))}
-                      >
-                        <Pencil className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
-                  </td>
                   <td className="border-b px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
