@@ -1,20 +1,691 @@
 {
-  "leads": [],
-  "inquiries": [],
-  "matches": [],
+  "leads": [
+    {
+      "id": 1,
+      "status": "new",
+      "createdAt": "2026-04-23T01:46:22.198Z",
+      "updatedAt": "2026-04-23T01:46:22.199Z",
+      "source": "website",
+      "message": "need a maid",
+      "name": "John Do",
+      "contact": "12334455",
+      "serviceType": "need_a_maid",
+      "budget": {
+        "min": null,
+        "max": null,
+        "currency": "SGD",
+        "text": ""
+      },
+      "urgency": "normal",
+      "location": "Singapore",
+      "summary": "Lead needs need a maid support in Singapore with normal urgency and budget not provided.",
+      "score": 65,
+      "classification": "MEDIUM",
+      "aiSummary": "Lead needs need a maid support in Singapore with normal urgency and budget not provided.",
+      "qualificationReasons": [
+        "Lead provided a name",
+        "Lead provided contact information",
+        "Service type identified"
+      ]
+    }
+  ],
+  "inquiries": [
+    {
+      "id": 4,
+      "createdAt": "2026-04-23T01:57:32.194Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "recommend me a maid",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 3,
+      "createdAt": "2026-04-23T01:56:27.854Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "Need maid",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 2,
+      "createdAt": "2026-04-23T01:43:38.361Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "check if there is a maid to hire",
+      "intent": "hiring",
+      "workflow": "maid_matching",
+      "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 1,
+      "createdAt": "2026-04-23T01:42:54.382Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "Need maid Makati 15000 childcare urgent",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    }
+  ],
+  "matches": [
+    {
+      "id": 1,
+      "createdAt": "2026-04-23T01:43:39.486Z",
+      "leadId": null,
+      "inquiryId": 2,
+      "employerId": null,
+      "maidId": 12,
+      "maidReferenceCode": "131414",
+      "maidName": "ddddf",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 2,
+      "createdAt": "2026-04-23T01:43:39.486Z",
+      "leadId": null,
+      "inquiryId": 2,
+      "employerId": null,
+      "maidId": 11,
+      "maidReferenceCode": "sdsd",
+      "maidName": "ddsd",
+      "score": 80,
+      "reasons": [
+        "Currently available",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 3,
+      "createdAt": "2026-04-23T01:43:39.486Z",
+      "leadId": null,
+      "inquiryId": 2,
+      "employerId": null,
+      "maidId": 22,
+      "maidReferenceCode": "23323",
+      "maidName": "adasdad",
+      "score": 80,
+      "reasons": [
+        "Currently available",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    }
+  ],
   "schedules": [],
   "contracts": [],
-  "notifications": [],
-  "automationLogs": [],
-  "makeDeliveries": [],
+  "notifications": [
+    {
+      "id": 1,
+      "status": "sent",
+      "createdAt": "2026-04-23T01:46:22.212Z",
+      "channel": "internal",
+      "recipient": "sales-team",
+      "message": "New MEDIUM lead received from website: John Do",
+      "referenceType": "lead",
+      "referenceId": "1"
+    }
+  ],
+  "automationLogs": [
+    {
+      "id": 18,
+      "createdAt": "2026-04-23T01:57:32.708Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario inquiry_pipeline failed",
+      "payload": {
+        "id": 5,
+        "createdAt": "2026-04-23T01:57:32.696Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/dj6atausr8hhjow7gzlvqc4nks84t18m",
+        "payload": {
+          "inquiryId": 4,
+          "intent": "inquiry",
+          "workflow": "general_inquiry",
+          "aiUsed": false,
+          "matches": [],
+          "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+          "contact": "test@gmail.com",
+          "name": "test",
+          "message": "recommend me a maid"
+        },
+        "success": false,
+        "statusCode": 410,
+        "durationMs": 451,
+        "responseBody": "Webhook not found.",
+        "error": "HTTP 410"
+      }
+    },
+    {
+      "id": 17,
+      "createdAt": "2026-04-23T01:57:32.209Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 16,
+      "createdAt": "2026-04-23T01:57:31.396Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "recommend me a maid",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
+    {
+      "id": 15,
+      "createdAt": "2026-04-23T01:56:28.786Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario inquiry_pipeline failed",
+      "payload": {
+        "id": 4,
+        "createdAt": "2026-04-23T01:56:28.772Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/dj6atausr8hhjow7gzlvqc4nks84t18m",
+        "payload": {
+          "inquiryId": 3,
+          "intent": "inquiry",
+          "workflow": "general_inquiry",
+          "aiUsed": false,
+          "matches": [],
+          "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+          "contact": "test@gmail.com",
+          "name": "test",
+          "message": "Need maid"
+        },
+        "success": false,
+        "statusCode": 410,
+        "durationMs": 882,
+        "responseBody": "Webhook not found.",
+        "error": "HTTP 410"
+      }
+    },
+    {
+      "id": 14,
+      "createdAt": "2026-04-23T01:56:27.862Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 13,
+      "createdAt": "2026-04-23T01:56:26.601Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Need maid",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
+    {
+      "id": 12,
+      "createdAt": "2026-04-23T01:46:23.165Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario lead_pipeline failed",
+      "payload": {
+        "id": 3,
+        "createdAt": "2026-04-23T01:46:23.163Z",
+        "scenario": "lead_pipeline",
+        "url": "https://hook.eu1.make.com/frd78hs7oglb3gvr108sf0md6z7t8a5p",
+        "payload": {
+          "leadId": 1,
+          "source": "website",
+          "classification": "MEDIUM",
+          "aiUsed": false,
+          "summary": "Lead needs need a maid support in Singapore with normal urgency and budget not provided.",
+          "name": "John Do",
+          "contact": "12334455",
+          "message": "need a maid"
+        },
+        "success": false,
+        "statusCode": 410,
+        "durationMs": 939,
+        "responseBody": "Webhook not found.",
+        "error": "HTTP 410"
+      }
+    },
+    {
+      "id": 11,
+      "createdAt": "2026-04-23T01:46:22.209Z",
+      "workflow": "lead_pipeline",
+      "step": "lead_stored",
+      "status": "success",
+      "message": "Structured lead 1 stored",
+      "payload": {
+        "leadId": 1,
+        "classification": "MEDIUM"
+      }
+    },
+    {
+      "id": 10,
+      "createdAt": "2026-04-23T01:46:22.194Z",
+      "workflow": "lead_pipeline",
+      "step": "qualification",
+      "status": "warning",
+      "message": "Lead qualification used fallback rules",
+      "payload": {
+        "score": 65,
+        "classification": "MEDIUM",
+        "reasons": [
+          "Lead provided a name",
+          "Lead provided contact information",
+          "Service type identified"
+        ]
+      }
+    },
+    {
+      "id": 9,
+      "createdAt": "2026-04-23T01:46:20.062Z",
+      "workflow": "lead_pipeline",
+      "step": "enrichment",
+      "status": "warning",
+      "message": "Lead enrichment used fallback rules",
+      "payload": {
+        "serviceType": "need_a_maid",
+        "budget": {
+          "min": null,
+          "max": null,
+          "currency": "SGD",
+          "text": ""
+        },
+        "urgency": "normal",
+        "location": "Singapore",
+        "summary": "Lead needs need a maid support in Singapore with normal urgency and budget not provided."
+      }
+    },
+    {
+      "id": 8,
+      "createdAt": "2026-04-23T01:46:18.576Z",
+      "workflow": "lead_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Raw lead received",
+      "payload": {
+        "source": "website",
+        "message": "need a maid",
+        "name": "John Do",
+        "contact": "12334455"
+      }
+    },
+    {
+      "id": 7,
+      "createdAt": "2026-04-23T01:43:40.235Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario inquiry_pipeline failed",
+      "payload": {
+        "id": 2,
+        "createdAt": "2026-04-23T01:43:40.231Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/dj6atausr8hhjow7gzlvqc4nks84t18m",
+        "payload": {
+          "inquiryId": 2,
+          "intent": "hiring",
+          "workflow": "maid_matching",
+          "aiUsed": false,
+          "matches": [
+            {
+              "id": 1,
+              "createdAt": "2026-04-23T01:43:39.486Z",
+              "leadId": null,
+              "inquiryId": 2,
+              "employerId": null,
+              "maidId": 12,
+              "maidReferenceCode": "131414",
+              "maidName": "ddddf",
+              "score": 85,
+              "reasons": [
+                "Currently available",
+                "Location fit for Singapore",
+                "Language profile available"
+              ]
+            },
+            {
+              "id": 2,
+              "createdAt": "2026-04-23T01:43:39.486Z",
+              "leadId": null,
+              "inquiryId": 2,
+              "employerId": null,
+              "maidId": 11,
+              "maidReferenceCode": "sdsd",
+              "maidName": "ddsd",
+              "score": 80,
+              "reasons": [
+                "Currently available",
+                "Location fit for Singapore",
+                "Language profile available"
+              ]
+            },
+            {
+              "id": 3,
+              "createdAt": "2026-04-23T01:43:39.486Z",
+              "leadId": null,
+              "inquiryId": 2,
+              "employerId": null,
+              "maidId": 22,
+              "maidReferenceCode": "23323",
+              "maidName": "adasdad",
+              "score": 80,
+              "reasons": [
+                "Currently available",
+                "Location fit for Singapore",
+                "Language profile available"
+              ]
+            }
+          ],
+          "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+          "contact": "test@gmail.com",
+          "name": "test",
+          "message": "check if there is a maid to hire"
+        },
+        "success": false,
+        "statusCode": 410,
+        "durationMs": 724,
+        "responseBody": "Webhook not found.",
+        "error": "HTTP 410"
+      }
+    },
+    {
+      "id": 6,
+      "createdAt": "2026-04-23T01:43:39.489Z",
+      "workflow": "inquiry_pipeline",
+      "step": "maid_matching",
+      "status": "success",
+      "message": "Generated 3 match candidates",
+      "payload": {
+        "inquiryId": 2,
+        "aiUsed": false
+      }
+    },
+    {
+      "id": 5,
+      "createdAt": "2026-04-23T01:43:38.363Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as hiring",
+      "payload": {
+        "intent": "hiring",
+        "workflow": "maid_matching",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly."
+      }
+    },
+    {
+      "id": 4,
+      "createdAt": "2026-04-23T01:43:36.825Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "check if there is a maid to hire",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
+    {
+      "id": 3,
+      "createdAt": "2026-04-23T01:42:55.555Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario inquiry_pipeline failed",
+      "payload": {
+        "id": 1,
+        "createdAt": "2026-04-23T01:42:55.551Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/dj6atausr8hhjow7gzlvqc4nks84t18m",
+        "payload": {
+          "inquiryId": 1,
+          "intent": "inquiry",
+          "workflow": "general_inquiry",
+          "aiUsed": false,
+          "matches": [],
+          "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+          "contact": "test@gmail.com",
+          "name": "test",
+          "message": "Need maid Makati 15000 childcare urgent"
+        },
+        "success": false,
+        "statusCode": 410,
+        "durationMs": 1142,
+        "responseBody": "Webhook not found.",
+        "error": "HTTP 410"
+      }
+    },
+    {
+      "id": 2,
+      "createdAt": "2026-04-23T01:42:54.385Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 1,
+      "createdAt": "2026-04-23T01:42:52.837Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Need maid Makati 15000 childcare urgent",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    }
+  ],
+  "makeDeliveries": [
+    {
+      "id": 5,
+      "createdAt": "2026-04-23T01:57:32.696Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/dj6atausr8hhjow7gzlvqc4nks84t18m",
+      "payload": {
+        "inquiryId": 4,
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "aiUsed": false,
+        "matches": [],
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "contact": "test@gmail.com",
+        "name": "test",
+        "message": "recommend me a maid"
+      },
+      "success": false,
+      "statusCode": 410,
+      "durationMs": 451,
+      "responseBody": "Webhook not found.",
+      "error": "HTTP 410"
+    },
+    {
+      "id": 4,
+      "createdAt": "2026-04-23T01:56:28.772Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/dj6atausr8hhjow7gzlvqc4nks84t18m",
+      "payload": {
+        "inquiryId": 3,
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "aiUsed": false,
+        "matches": [],
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "contact": "test@gmail.com",
+        "name": "test",
+        "message": "Need maid"
+      },
+      "success": false,
+      "statusCode": 410,
+      "durationMs": 882,
+      "responseBody": "Webhook not found.",
+      "error": "HTTP 410"
+    },
+    {
+      "id": 3,
+      "createdAt": "2026-04-23T01:46:23.163Z",
+      "scenario": "lead_pipeline",
+      "url": "https://hook.eu1.make.com/frd78hs7oglb3gvr108sf0md6z7t8a5p",
+      "payload": {
+        "leadId": 1,
+        "source": "website",
+        "classification": "MEDIUM",
+        "aiUsed": false,
+        "summary": "Lead needs need a maid support in Singapore with normal urgency and budget not provided.",
+        "name": "John Do",
+        "contact": "12334455",
+        "message": "need a maid"
+      },
+      "success": false,
+      "statusCode": 410,
+      "durationMs": 939,
+      "responseBody": "Webhook not found.",
+      "error": "HTTP 410"
+    },
+    {
+      "id": 2,
+      "createdAt": "2026-04-23T01:43:40.231Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/dj6atausr8hhjow7gzlvqc4nks84t18m",
+      "payload": {
+        "inquiryId": 2,
+        "intent": "hiring",
+        "workflow": "maid_matching",
+        "aiUsed": false,
+        "matches": [
+          {
+            "id": 1,
+            "createdAt": "2026-04-23T01:43:39.486Z",
+            "leadId": null,
+            "inquiryId": 2,
+            "employerId": null,
+            "maidId": 12,
+            "maidReferenceCode": "131414",
+            "maidName": "ddddf",
+            "score": 85,
+            "reasons": [
+              "Currently available",
+              "Location fit for Singapore",
+              "Language profile available"
+            ]
+          },
+          {
+            "id": 2,
+            "createdAt": "2026-04-23T01:43:39.486Z",
+            "leadId": null,
+            "inquiryId": 2,
+            "employerId": null,
+            "maidId": 11,
+            "maidReferenceCode": "sdsd",
+            "maidName": "ddsd",
+            "score": 80,
+            "reasons": [
+              "Currently available",
+              "Location fit for Singapore",
+              "Language profile available"
+            ]
+          },
+          {
+            "id": 3,
+            "createdAt": "2026-04-23T01:43:39.486Z",
+            "leadId": null,
+            "inquiryId": 2,
+            "employerId": null,
+            "maidId": 22,
+            "maidReferenceCode": "23323",
+            "maidName": "adasdad",
+            "score": 80,
+            "reasons": [
+              "Currently available",
+              "Location fit for Singapore",
+              "Language profile available"
+            ]
+          }
+        ],
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+        "contact": "test@gmail.com",
+        "name": "test",
+        "message": "check if there is a maid to hire"
+      },
+      "success": false,
+      "statusCode": 410,
+      "durationMs": 724,
+      "responseBody": "Webhook not found.",
+      "error": "HTTP 410"
+    },
+    {
+      "id": 1,
+      "createdAt": "2026-04-23T01:42:55.551Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/dj6atausr8hhjow7gzlvqc4nks84t18m",
+      "payload": {
+        "inquiryId": 1,
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "aiUsed": false,
+        "matches": [],
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "contact": "test@gmail.com",
+        "name": "test",
+        "message": "Need maid Makati 15000 childcare urgent"
+      },
+      "success": false,
+      "statusCode": 410,
+      "durationMs": 1142,
+      "responseBody": "Webhook not found.",
+      "error": "HTTP 410"
+    }
+  ],
   "counters": {
-    "leads": 1,
-    "inquiries": 1,
-    "matches": 1,
+    "leads": 2,
+    "inquiries": 5,
+    "matches": 4,
     "schedules": 1,
     "contracts": 1,
-    "notifications": 1,
-    "automationLogs": 1,
-    "makeDeliveries": 1
+    "notifications": 2,
+    "automationLogs": 19,
+    "makeDeliveries": 6
   }
 }

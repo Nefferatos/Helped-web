@@ -1,10 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { Send, User, Mail, Phone, MessageSquare } from "lucide-react";
 import { Menu } from "lucide-react";
-
+import AiInquiryPanel from "@/components/ai/AiInquiryPanel";
 
 import {
   Avatar,
@@ -28,25 +26,12 @@ import {
   type ClientUser
 } from "@/lib/clientAuth";
 
-const agencies = [
-  "All Agencies",
-  "Target Maid Rinzin At The Agency",
-];
-
 type EnquiryProps = {
   embedded?: boolean;
 };
 
 const Enquiry = ({ embedded = false }: EnquiryProps) => {
-  const [agency, setAgency] = useState("All Agencies");
-  const [requirements, setRequirements] = useState("");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [contactNumber, setContactNumber] = useState("");
-  const { toast } = useToast();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
 
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const navigate = useNavigate();
@@ -63,60 +48,6 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
     clearClientAuth();
     setClientUser(null);
     navigate("/");
-  };
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!requirements.trim() || !name.trim() || !email.trim() || !contactNumber.trim()) {
-      toast({
-        title: "Missing Fields",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const messageParts: string[] = [];
-    if (agency && agency !== "All Agencies") {
-      messageParts.push(`Agency: ${agency}`);
-    }
-    messageParts.push(requirements.trim());
-
-    try {
-      setIsSubmitting(true);
-      const response = await fetch("/api/enquiries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: name.trim(),
-          email: email.trim(),
-          phone: contactNumber.trim(),
-          message: messageParts.join("\n\n"),
-        }),
-      });
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to submit enquiry");
-      }
-
-      toast({
-        title: "Enquiry Submitted",
-        description: "Your enquiry has been sent to the agency inbox.",
-      });
-      setRequirements("");
-      setName("");
-      setEmail("");
-      setContactNumber("");
-      setAgency("All Agencies");
-    } catch (error) {
-      toast({
-        title: "Submission Failed",
-        description: error instanceof Error ? error.message : "Failed to submit enquiry",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   return (
@@ -262,64 +193,31 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
         )}
 
       <main className="flex-1 py-40 md:py-40">
-        <div className="container max-w-2xl">
+        <div className="container max-w-5xl">
           <div className="text-center mb-10">
             <h1 className="text-3xl md:text-4xl font-bold mb-3">
-              Submit Your <span className="text-primary">Enquiry</span>
+              Submit Your <span className="text-primary">AI Enquiry</span>
             </h1>
             <p className="text-muted-foreground">
-              Please leave your contacts and maid requirements.
+              Share your hiring request and let the AI workflow classify it, suggest matches, and trigger your automation pipeline.
             </p>
           </div>
 
-           <form onSubmit={(e) => void handleSubmit(e)} className="bg-card rounded-2xl shadow-lg p-8">
-             <div className="space-y-5">
- 
-               <select
-                 value={agency}
-                 onChange={(e) => setAgency(e.target.value)}
-                 className="w-full border rounded-lg px-3 py-2"
-               >
-                 {agencies.map((a) => (
-                   <option key={a}>{a}</option>
-                 ))}
-               </select>
+          <AiInquiryPanel
+            title="AI Maid Inquiry"
+            description="This form now uses `/api/inquiry` instead of the legacy enquiry endpoint. It shows the AI reply, intent detection, matching results, and Make trigger status in one place."
+            initialName={clientUser?.name ?? ""}
+            initialContact={clientUser?.email ?? ""}
+          />
 
-              <textarea
-                value={requirements}
-                onChange={(e) => setRequirements(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 h-32"
-                placeholder="Your requirements..."
-              />
-
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
-                placeholder="Name"
-              />
-
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
-                placeholder="Email"
-              />
-
-              <input
-                value={contactNumber}
-                onChange={(e) => setContactNumber(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
-                placeholder="Contact Number"
-              />
-
-               <Button className="w-full" disabled={isSubmitting}>
-                 <Send className="w-4 h-4 mr-2" />
-                 {isSubmitting ? "Submitting..." : "Submit Enquiry"}
-               </Button>
- 
-             </div>
-           </form>
+          <div className="mt-6 rounded-2xl border bg-card/80 p-5 text-sm text-muted-foreground shadow-sm">
+            <p className="font-semibold text-foreground">Automation coverage</p>
+            <p className="mt-2 leading-6">
+              Inquiry submissions now post into the AI workflow, then relay the successful result to Make with the
+              `inquiry_pipeline` scenario. If you need the older agency-specific note, include it at the top of the
+              message body.
+            </p>
+          </div>
          </div>
       </main>
       <footer className="bg-foreground py-12 text-primary-foreground">

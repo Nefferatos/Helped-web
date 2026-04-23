@@ -42,6 +42,7 @@ import NotFound from "@/pages/NotFound";
 import AuthCallback from "@/pages/AuthCallback";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import DataDeletion from "@/pages/DataDeletion";
+import AiAutomationPage from "@/pages/AiAutomationPage";
 import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
 import { getClientToken } from "@/lib/clientAuth";
 import { clearClientAuth } from "@/lib/clientAuth";
@@ -275,6 +276,7 @@ const App = () => {
             <Route path="/userportal" element={<ClientHomeRedirect />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/data-deletion" element={<DataDeletion />} />
+            <Route path="/ai-workflows" element={<AiAutomationPage />} />
             <Route path="/" element={<ClientHomeRedirect />} />
             <Route path="*" element={<NotFound />} />
             <Route path="/about" element={<AboutUs />} />

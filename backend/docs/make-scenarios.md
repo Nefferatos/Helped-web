@@ -6,15 +6,10 @@ This backend supports Make.com through `POST /api/send-to-make` and direct backe
 
 Use these keys in `backend/.env`:
 
-```env
-MAKE_WEBHOOK_URL=https://hook.make.com/your-default-webhook
-MAKE_WEBHOOK_URL_LEAD_PIPELINE=https://hook.make.com/your-lead-webhook
-MAKE_WEBHOOK_URL_INQUIRY_PIPELINE=https://hook.make.com/your-inquiry-webhook
-MAKE_WEBHOOK_URL_MATCHING_PIPELINE=https://hook.make.com/your-matching-webhook
-MAKE_WEBHOOK_URL_NOTIFICATION_PIPELINE=https://hook.make.com/your-notification-webhook
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-```
+ 
+
+# Lead pipeline (pick ONE correct lead webhook)
+ 
 
 ## Scenario 1: Lead Intake
 
