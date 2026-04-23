@@ -1,8 +1,10 @@
 import { Request } from 'express'
 import {
   AgencyAdminRecord,
+  AgencyAdminSessionRecord,
   ClientRecord,
   getAgencyAdminByTokenStore,
+  getAgencyAdminSessionByTokenStore,
   getClientByTokenStore,
   getOrCreateClientBySupabaseUserStore,
 } from './store'
@@ -91,6 +93,13 @@ export const getAuthenticatedAgencyAdmin = async (
 
   const token = getBearerToken(req)
   if (!token) {
+    return null
+  }
+
+  const session: AgencyAdminSessionRecord | null =
+    await getAgencyAdminSessionByTokenStore(token)
+  console.log('SESSION LOOKUP:', token, session?.adminId)
+  if (!session) {
     return null
   }
 

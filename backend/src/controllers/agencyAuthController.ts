@@ -57,6 +57,7 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
       agencyName: agencyName.trim(),
     })
     const session = await createAgencyAdminSessionStore(admin.id)
+    console.log('LOGIN:', admin.id, session.token)
 
     res.status(201).json({
       token: session.token,
@@ -101,6 +102,7 @@ export const loginAgencyAdmin = async (req: Request, res: Response) => {
     }
 
     const session = await createAgencyAdminSessionStore(admin.id)
+    console.log('LOGIN:', admin.id, session.token)
     res.status(200).json({
       token: session.token,
       admin: toSafeAgencyAdmin(admin),

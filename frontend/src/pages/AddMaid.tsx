@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,15 +14,13 @@ const AddMaid = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState<MaidProfile>(defaultMaidProfile);
-  // isSaving only blocks intermediate-tab saves; last-tab uses background save
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isManagePhotosOpen, setIsManagePhotosOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [maxUnlockedTab, setMaxUnlockedTab] = useState(0);
   const [isCreated, setIsCreated] = useState(false);
-  // Tracks in-flight background saves so we can warn on unmount if needed
-  const bgSaveRef = useRef<Promise<void> | null>(null);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -39,12 +37,15 @@ const AddMaid = () => {
 
   const handleUploadPhoto = useCallback(() => setIsManagePhotosOpen(true), []);
 
-  const photos =
-    Array.isArray(formData.photoDataUrls) && formData.photoDataUrls.length > 0
-      ? formData.photoDataUrls
-      : formData.photoDataUrl
-      ? [formData.photoDataUrl]
-      : [];
+  const photos = useMemo(
+    () =>
+      Array.isArray(formData.photoDataUrls) && formData.photoDataUrls.length > 0
+        ? formData.photoDataUrls
+        : formData.photoDataUrl
+        ? [formData.photoDataUrl]
+        : [],
+    [formData.photoDataUrl, formData.photoDataUrls],
+  );
   const passportOrTwoByTwoPhoto = photos[0] ?? "";
   const fullBodyPhoto = photos[1] ?? "";
   const extraPhotos = photos.slice(2);
@@ -140,44 +141,35 @@ const AddMaid = () => {
     placeOfBirth: String(formData.placeOfBirth || "").trim(),
   }), [formData]);
 
-  // ── Background save: fires-and-forgets after navigate on final tab ───────
+  // ── Persist maid profile before allowing the wizard to advance ──────
 
-  const runBackgroundSave = useCallback(
-    (payload: MaidProfile, shouldCreate: boolean) => {
+  const saveMaid = useCallback(
+    async (payload: MaidProfile, shouldCreate: boolean) => {
       const refCode = payload.referenceCode;
       const url = shouldCreate ? "/api/maids" : `/api/maids/${encodeURIComponent(refCode)}`;
       const method = shouldCreate ? "POST" : "PUT";
 
-      const promise = (async () => {
-        try {
-          const response = await fetch(url, {
-            method,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload), // only maid data — no app_data blob
-          });
-          const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
-          if (!response.ok || !data.maid) {
-            throw new Error(data.error || "Failed to save maid profile");
-          }
-          // Success is silent — user has already navigated away
-        } catch (err) {
-          // Log for debugging; show non-blocking retry toast
-          console.error("[AddMaid] Background save failed:", err);
-          toast.error(
-            err instanceof Error ? `Auto-save failed: ${err.message}` : "Auto-save failed — please re-open the profile and save again",
-            { duration: 10_000 },
-          );
-        }
-      })();
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
 
-      bgSaveRef.current = promise;
+      if (!response.ok || !data.maid) {
+        throw new Error(data.error || "Failed to save maid profile");
+      }
+
+      return data.maid;
     },
     [],
   );
 
   // ── Core save logic ───────────────────────────────────────────────────────
 
-  const performSave = useCallback(() => {
+  const performSave = useCallback(async () => {
+    if (isSaving) return;
+
     const payload = buildPayload();
 
     // Validate required fields before advancing
@@ -187,30 +179,38 @@ const AddMaid = () => {
     }
 
     const shouldCreate = activeTab === 0 && !isCreated;
+    setIsSaving(true);
+    setSaveError(null);
 
-    // ── OPTIMISTIC: ALL tabs ──────────────────────────────────────────────
-    // Advance / navigate immediately — the network call never blocks the UI.
-    if (activeTab >= tabs.length - 1) {
-      // Last tab → navigate away
-      toast.success("Maid profile completed — saving in background…");
-      navigate("/agencyadmin/edit-maids");
-    } else {
-      // Intermediate tabs → jump to next tab instantly
+    try {
+      const savedMaid = await saveMaid(payload, shouldCreate);
+
+      setFormData(savedMaid);
+
+      if (activeTab >= tabs.length - 1) {
+        toast.success("Maid profile saved successfully");
+        navigate("/agencyadmin/edit-maids");
+        return;
+      }
+
       if (shouldCreate) setIsCreated(true);
       setMaxUnlockedTab((prev) => Math.max(prev, Math.min(activeTab + 1, tabs.length - 1)));
       setActiveTab((t) => t + 1);
+    } catch (error) {
+      console.error("[AddMaid] Save failed:", error);
+      setSaveError("Failed to save maid. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Failed to save maid");
+    } finally {
+      setIsSaving(false);
     }
-
-    // Fire-and-forget background save for every tab
-    runBackgroundSave(payload, shouldCreate);
-  }, [buildPayload, activeTab, isCreated, navigate, runBackgroundSave]);
+  }, [buildPayload, activeTab, isCreated, isSaving, navigate, saveMaid]);
 
   // Opens confirm dialog on last tab; saves directly on intermediate tabs
   const handleSubmit = useCallback(() => {
     if (activeTab === tabs.length - 1) {
       setIsConfirmOpen(true);
     } else {
-      performSave();
+      void performSave();
     }
   }, [activeTab, performSave]);
 
@@ -243,6 +243,12 @@ const AddMaid = () => {
           </button>
         ))}
       </div>
+
+      {saveError ? (
+        <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {saveError}
+        </div>
+      ) : null}
 
       {/* ── Active tab (single render; eliminates 7 repeated conditionals) ── */}
       {(() => {
@@ -284,7 +290,7 @@ const AddMaid = () => {
               }}
               disabled={isSaving}
             >
-              Confirm
+              {isSaving ? "Saving..." : "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -366,7 +372,7 @@ const AddMaid = () => {
 /* ─── Helper components ─── */
 
 type TabSaveProps = {
-  onSave?: () => void;
+  onSave?: () => void | Promise<void>;
   isSaving?: boolean;
   onUploadPhoto?: () => void;
   isUploadingPhoto?: boolean;
@@ -531,12 +537,12 @@ const SaveButtons = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto, primar
   <div className="flex justify-center gap-4 pt-6">
     <Button
       type="button"
-      onClick={onSave}
+      onClick={() => void onSave?.()}
       disabled={isSaving || isUploadingPhoto}
       className="bg-yellow-300 text-black px-4 py-2 rounded-lg font-semibold shadow-sm hover:bg-yellow-400"
     >
       {/* Wizard: last tab uses "Save & Finish" */}
-      {primaryLabel || "Save & Continue"}
+      {isSaving ? "Saving..." : primaryLabel || "Save & Continue"}
     </Button>
     <Button
       type="button"

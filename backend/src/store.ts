@@ -437,8 +437,59 @@ const normalizeEmploymentContractRecord = (
   updatedAt: record.updatedAt ?? record.createdAt ?? now(),
 })
 
+const normalizeAgencyAdmins = (
+  records: AgencyAdminRecord[],
+  nextIdStart: number
+) => {
+  const usedIds = new Set<number>()
+  let nextId = Math.max(nextIdStart, 1)
+
+  const normalized = records.map((admin) => {
+    let id = Number(admin.id)
+    if (!Number.isInteger(id) || id <= 0 || usedIds.has(id)) {
+      while (usedIds.has(nextId)) {
+        nextId += 1
+      }
+      id = nextId
+      nextId += 1
+    }
+
+    usedIds.add(id)
+    if (id >= nextId) {
+      nextId = id + 1
+    }
+
+    return {
+      ...admin,
+      id,
+    }
+  })
+
+  return {
+    records: normalized,
+    nextId,
+  }
+}
+
 const mergeAppData = (raw: Partial<AppData>): AppData => {
   const defaults = defaultData()
+  const normalizedAgencyAdmins = normalizeAgencyAdmins(
+    (raw.agencyAdmins ?? defaults.agencyAdmins).map((admin) => ({
+      ...admin,
+      agencyId: normalizeAgencyId((admin as { agencyId?: unknown }).agencyId),
+      email:
+        typeof (admin as { email?: unknown }).email === 'string'
+          ? (admin as { email: string }).email.trim().toLowerCase()
+          : undefined,
+      passwordHash:
+        typeof (admin as { passwordHash?: unknown }).passwordHash === 'string'
+          ? (admin as { passwordHash: string }).passwordHash
+          : '',
+      role: (admin as { role?: unknown }).role === 'staff' ? 'staff' : 'admin',
+      supabaseUserId: admin.supabaseUserId || undefined,
+    })),
+    raw.counters?.agencyAdmins ?? defaults.counters.agencyAdmins
+  )
 
   return {
     companyProfile: {
@@ -485,22 +536,10 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       createdAt: client.createdAt ?? now(),
     })),
     clientSessions: raw.clientSessions ?? defaults.clientSessions,
-    agencyAdmins: (raw.agencyAdmins ?? defaults.agencyAdmins).map((admin) => ({
-      ...admin,
-      agencyId: normalizeAgencyId((admin as { agencyId?: unknown }).agencyId),
-      email:
-        typeof (admin as { email?: unknown }).email === 'string'
-          ? (admin as { email: string }).email.trim().toLowerCase()
-          : undefined,
-      passwordHash:
-        typeof (admin as { passwordHash?: unknown }).passwordHash === 'string'
-          ? (admin as { passwordHash: string }).passwordHash
-          : '',
-      role: (admin as { role?: unknown }).role === 'staff' ? 'staff' : 'admin',
-      supabaseUserId: admin.supabaseUserId || undefined,
-    })),
-    agencyAdminSessions:
-      raw.agencyAdminSessions ?? defaults.agencyAdminSessions,
+    agencyAdmins: normalizedAgencyAdmins.records,
+    agencyAdminSessions: (raw.agencyAdminSessions ?? defaults.agencyAdminSessions).filter(
+      (session) => normalizedAgencyAdmins.records.some((admin) => admin.id === session.adminId)
+    ),
     directSales: (raw.directSales ?? defaults.directSales).map((directSale) => ({
       ...directSale,
       agencyId: normalizeAgencyId((directSale as { agencyId?: unknown }).agencyId),
@@ -609,8 +648,7 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         raw.counters?.clients ??
         ((raw.clients?.length ?? 0) + 1 || defaults.counters.clients),
       agencyAdmins:
-        raw.counters?.agencyAdmins ??
-        ((raw.agencyAdmins?.length ?? 0) + 1 || defaults.counters.agencyAdmins),
+        normalizedAgencyAdmins.nextId,
       directSales:
         raw.counters?.directSales ??
         ((raw.directSales?.length ?? 0) + 1 || defaults.counters.directSales),
@@ -1053,7 +1091,7 @@ export const createAgencyAdminSessionStore = async (adminId: number) => {
 
   const session: AgencyAdminSessionRecord = {
     token: randomBytes(24).toString('hex'),
-    adminId,
+    adminId: Number(adminId),
     createdAt: now(),
   }
 
@@ -1079,7 +1117,29 @@ export const getAgencyAdminByTokenStore = async (token: string) => {
   const data = await loadData()
   const session = data.agencyAdminSessions.find((item) => item.token === token)
   if (!session) return null
-  return data.agencyAdmins.find((item) => item.id === session.adminId) ?? null
+  const sessionAdminId = Number(session.adminId)
+  if (!Number.isInteger(sessionAdminId)) {
+    return null
+  }
+  return data.agencyAdmins.find((item) => Number(item.id) === sessionAdminId) ?? null
+}
+
+export const getAgencyAdminSessionByTokenStore = async (token: string) => {
+  const data = await loadData()
+  const session = data.agencyAdminSessions.find((item) => item.token === token)
+  if (!session) {
+    return null
+  }
+
+  const adminId = Number(session.adminId)
+  if (!Number.isInteger(adminId)) {
+    return null
+  }
+
+  return {
+    ...session,
+    adminId,
+  }
 }
 
 export const registerClientStore = async (payload: {

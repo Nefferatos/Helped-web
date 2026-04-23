@@ -1,13 +1,7 @@
 import { Request, Response } from 'express'
 import { getAuthenticatedClient, getRequestToken } from '../auth'
-import { sendClientConfirmationCodeEmail } from '../email'
 import {
-  authenticateClientStore,
-  confirmClientEmailStore,
-  createClientSessionStore,
   deleteClientSessionStore,
-  registerClientStore,
-  setClientEmailConfirmationCodeStore,
   updateClientStore,
 } from '../store'
 
@@ -30,8 +24,6 @@ const toSafeClient = (client: {
   profileImageUrl: client.profileImageUrl ?? '',
   createdAt: client.createdAt,
 })
-
-const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
 
 export const registerClient = async (req: Request, res: Response) => {
   try {
