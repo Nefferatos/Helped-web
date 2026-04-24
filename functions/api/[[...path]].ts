@@ -1255,6 +1255,7 @@ const writeSseComment = (
 const csvColumns = [
   'referenceCode',
   'fullName',
+  'status',
   'type',
   'nationality',
   'dateOfBirth',
@@ -1268,9 +1269,39 @@ const csvColumns = [
   'homeAddress',
   'airportRepatriation',
   'educationLevel',
+  'languageSkills',
+  'skillsPreferences',
+  'workAreas',
+  'employmentHistory',
+  'introduction',
+  'agencyContact',
+  'photoDataUrl',
+  'photoDataUrls',
+  'videoDataUrl',
   'isPublic',
   'hasPhoto',
 ] as const
+
+const csvObjectColumns = new Set<(typeof csvColumns)[number]>([
+  'languageSkills',
+  'skillsPreferences',
+  'workAreas',
+  'employmentHistory',
+  'introduction',
+  'agencyContact',
+  'photoDataUrls',
+])
+
+const serializeCsvColumnValue = (
+  column: (typeof csvColumns)[number],
+  maid: MaidRecord
+) => {
+  const value = maid[column]
+  if (csvObjectColumns.has(column)) {
+    return JSON.stringify(value ?? (column === 'employmentHistory' || column === 'photoDataUrls' ? [] : {}))
+  }
+  return value ?? ''
+}
 
 const csvEscape = (value: unknown) => {
   const stringValue = String(value ?? '')
@@ -1336,6 +1367,34 @@ const parseNumber = (value: string | undefined, fallback: number) => {
   if (!value) return fallback
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const parseJsonObject = <T extends Record<string, unknown>>(
+  value: string | undefined,
+  fallback: T
+) => {
+  if (!value?.trim()) return fallback
+  try {
+    const parsed = JSON.parse(value)
+    return typeof parsed === 'object' && parsed && !Array.isArray(parsed)
+      ? (parsed as T)
+      : fallback
+  } catch {
+    return fallback
+  }
+}
+
+const parseJsonArray = <T>(
+  value: string | undefined,
+  fallback: T[]
+) => {
+  if (!value?.trim()) return fallback
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? (parsed as T[]) : fallback
+  } catch {
+    return fallback
+  }
 }
 
 const defaultMaidProfile = {
@@ -1413,13 +1472,16 @@ const normalizeReferenceCode = (value: unknown) => String(value ?? '').trim()
 const toMaidRecordPayload = (
   maid: Record<string, unknown>
 ): Omit<MaidRecord, 'id' | 'createdAt' | 'updatedAt'> => {
-  const photoDataUrl =
+  const rawPhotoDataUrl =
     typeof maid.photoDataUrl === 'string' ? maid.photoDataUrl : ''
   const photoDataUrls = Array.isArray(maid.photoDataUrls)
-    ? maid.photoDataUrls.filter((item): item is string => typeof item === 'string')
-    : photoDataUrl
-      ? [photoDataUrl]
+    ? maid.photoDataUrls.filter(
+        (item): item is string => typeof item === 'string' && item.trim().length > 0
+      )
+    : rawPhotoDataUrl
+      ? [rawPhotoDataUrl]
       : []
+  const photoDataUrl = photoDataUrls[0] ?? rawPhotoDataUrl
 
   return {
     fullName: String(maid.fullName).trim(),
@@ -1760,25 +1822,8 @@ app.get('/api/maids', safeApi(async (c) => {
 app.get('/api/maids/export.csv', safeApi(async (c) => {
   const data = await loadData(c.env)
   const rows = data.maids.map((maid) =>
-    [
-      maid.referenceCode,
-      maid.fullName,
-      maid.type,
-      maid.nationality,
-      maid.dateOfBirth,
-      maid.placeOfBirth,
-      maid.height,
-      maid.weight,
-      maid.religion,
-      maid.maritalStatus,
-      maid.numberOfChildren,
-      maid.numberOfSiblings,
-      maid.homeAddress,
-      maid.airportRepatriation,
-      maid.educationLevel,
-      maid.isPublic,
-      maid.hasPhoto,
-    ]
+    csvColumns
+      .map((column) => serializeCsvColumnValue(column, maid))
       .map(csvEscape)
       .join(',')
   )
@@ -1794,25 +1839,9 @@ app.get('/api/maids/export.csv', safeApi(async (c) => {
 app.get('/api/maids/export.xls', safeApi(async (c) => {
   const data = await loadData(c.env)
   const rows = data.maids.map((maid) =>
-    [
-      maid.referenceCode,
-      maid.fullName,
-      maid.type,
-      maid.nationality,
-      maid.dateOfBirth,
-      maid.placeOfBirth,
-      String(maid.height),
-      String(maid.weight),
-      maid.religion,
-      maid.maritalStatus,
-      String(maid.numberOfChildren),
-      String(maid.numberOfSiblings),
-      maid.homeAddress,
-      maid.airportRepatriation,
-      maid.educationLevel,
-      String(Boolean(maid.isPublic)),
-      String(Boolean(maid.hasPhoto)),
-    ].map((value) =>
+    csvColumns.map((column) =>
+      serializeCsvColumnValue(column, maid)
+    ).map((value) =>
       String(value ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -1824,25 +1853,8 @@ app.get('/api/maids/export.xls', safeApi(async (c) => {
 
   const csvHeader = csvColumns.join(',')
   const csvRows = data.maids.map((maid) =>
-    [
-      maid.referenceCode,
-      maid.fullName,
-      maid.type,
-      maid.nationality,
-      maid.dateOfBirth,
-      maid.placeOfBirth,
-      maid.height,
-      maid.weight,
-      maid.religion,
-      maid.maritalStatus,
-      maid.numberOfChildren,
-      maid.numberOfSiblings,
-      maid.homeAddress,
-      maid.airportRepatriation,
-      maid.educationLevel,
-      maid.isPublic,
-      maid.hasPhoto,
-    ]
+    csvColumns
+      .map((column) => serializeCsvColumnValue(column, maid))
       .map(csvEscape)
       .join(',')
   )
@@ -1931,10 +1943,42 @@ app.post('/api/maids/import.csv', safeApi(async (c) => {
     const existingIndex = data.maids.findIndex((maid) => maid.referenceCode === referenceCode)
     const existing = existingIndex === -1 ? null : data.maids[existingIndex]
     const base = existing ?? { ...defaultMaidProfile, fullName, referenceCode }
+    const languageSkills = parseJsonObject<Record<string, string>>(
+      rowMap.languageSkills,
+      base.languageSkills
+    )
+    const skillsPreferences = parseJsonObject<Record<string, unknown>>(
+      rowMap.skillsPreferences,
+      base.skillsPreferences
+    )
+    const workAreas = parseJsonObject<Record<string, unknown>>(
+      rowMap.workAreas,
+      base.workAreas
+    )
+    const employmentHistory = parseJsonArray<Record<string, unknown>>(
+      rowMap.employmentHistory,
+      base.employmentHistory
+    )
+    const introduction = parseJsonObject<Record<string, unknown>>(
+      rowMap.introduction,
+      base.introduction
+    )
+    const agencyContact = parseJsonObject<Record<string, unknown>>(
+      rowMap.agencyContact,
+      base.agencyContact
+    )
+    const photoDataUrls = parseJsonArray<string>(
+      rowMap.photoDataUrls,
+      existing?.photoDataUrls ?? base.photoDataUrls
+    ).filter(
+      (item): item is string => typeof item === 'string' && item.trim().length > 0
+    )
+    const photoDataUrl = rowMap.photoDataUrl?.trim() || photoDataUrls[0] || existing?.photoDataUrl || base.photoDataUrl
     const payload = {
       ...base,
       fullName,
       referenceCode,
+      status: rowMap.status || existing?.status || base.status,
       type: rowMap.type || base.type,
       nationality: rowMap.nationality || base.nationality,
       dateOfBirth: rowMap.dateOfBirth || base.dateOfBirth,
@@ -1948,18 +1992,20 @@ app.post('/api/maids/import.csv', safeApi(async (c) => {
       homeAddress: rowMap.homeAddress || base.homeAddress,
       airportRepatriation: rowMap.airportRepatriation || base.airportRepatriation,
       educationLevel: rowMap.educationLevel || base.educationLevel,
-      languageSkills: base.languageSkills,
-      skillsPreferences: base.skillsPreferences,
-      workAreas: base.workAreas,
-      employmentHistory: base.employmentHistory,
-      introduction: base.introduction,
-      agencyContact: base.agencyContact,
-      photoDataUrl: existing?.photoDataUrl ?? '',
-      photoDataUrls: existing?.photoDataUrls ?? [],
-      videoDataUrl: existing?.videoDataUrl ?? '',
+      languageSkills,
+      skillsPreferences,
+      workAreas,
+      employmentHistory,
+      introduction,
+      agencyContact,
+      photoDataUrl,
+      photoDataUrls,
+      videoDataUrl: rowMap.videoDataUrl || existing?.videoDataUrl || base.videoDataUrl,
       isPublic: parseBoolean(String(rowMap.isPublic ?? ''), base.isPublic),
-      hasPhoto: parseBoolean(String(rowMap.hasPhoto ?? ''), base.hasPhoto),
-      status: existing?.status ?? base.status,
+      hasPhoto: parseBoolean(
+        String(rowMap.hasPhoto ?? ''),
+        photoDataUrls.length > 0 || Boolean(photoDataUrl) || base.hasPhoto
+      ),
     }
 
     const recordPayload = toMaidRecordPayload(payload)

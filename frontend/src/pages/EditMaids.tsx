@@ -713,6 +713,7 @@ const EditMaids = () => {
             <DialogTitle>Export maids file?</DialogTitle>
             <DialogDescription>
               Download as an easy-to-read Excel table (<strong>.xls</strong>) or as a raw CSV (<strong>.csv</strong>).
+              Both exports now include the full maid profile data, including nested fields and stored photo data.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -730,7 +731,7 @@ const EditMaids = () => {
             <DialogTitle>Import maids file?</DialogTitle>
             <DialogDescription>
               Supported: <strong>.csv</strong>, <strong>.xls</strong>, <strong>.xlsx</strong>, <strong>.doc</strong>, <strong>.docx</strong>, <strong>.pdf</strong> exported from this system.<br />
-              Required columns: <strong>referenceCode</strong>, <strong>fullName</strong>. Existing maids are updated by referenceCode.
+              Required columns: <strong>referenceCode</strong>, <strong>fullName</strong>. Existing maids are updated by referenceCode, and system exports can restore full maid profiles including photos.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md border bg-muted/30 p-3 text-sm">
