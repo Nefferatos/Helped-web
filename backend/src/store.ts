@@ -1087,15 +1087,17 @@ export const authenticateAgencyAdminStore = async (
 }
 
 export const createAgencyAdminSessionStore = async (adminId: number) => {
-  const data = await loadData()
-
   const session: AgencyAdminSessionRecord = {
     token: randomBytes(24).toString('hex'),
     adminId: Number(adminId),
     createdAt: now(),
   }
 
-  data.agencyAdminSessions.unshift(session)
+  const data = await loadData()
+  data.agencyAdminSessions = [
+    session,
+    ...data.agencyAdminSessions.filter((item) => item.token !== session.token),
+  ]
   await saveData(data)
   return session
 }

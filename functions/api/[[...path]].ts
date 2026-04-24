@@ -138,6 +138,14 @@ interface AgencyAdminSessionRecord {
   createdAt: string
 }
 
+interface AgencyAdminSessionStoreRecord {
+  agencyAdminSessions: AgencyAdminSessionRecord[]
+}
+
+interface AgencyAdminAuthStoreRecord {
+  agencyAdmins: AgencyAdminRecord[]
+}
+
 interface DirectSaleRecord {
   id: number
   maidReferenceCode: string
@@ -565,11 +573,7 @@ const loadDataFromSupabase = async (config: SupabaseAppDataConfig): Promise<AppD
     return initial
   }
 
-  const merged = mergeAppData(raw)
-  if (JSON.stringify(raw) !== JSON.stringify(merged)) {
-    await saveDataToSupabase(config, merged)
-  }
-  return merged
+  return mergeAppData(raw)
 }
 
 const saveDataToSupabase = async (config: SupabaseAppDataConfig, data: AppData) => {
@@ -627,6 +631,211 @@ const saveData = async (env: Bindings, data: AppData) => {
   }
 
   await saveDataToKv(env.APP_DATA, data)
+}
+
+const mergeAgencyAdminSessions = (sessions: AgencyAdminSessionRecord[]) => {
+  const seen = new Set<string>()
+  return sessions.filter((session) => {
+    if (!session?.token || seen.has(session.token)) {
+      return false
+    }
+    seen.add(session.token)
+    return true
+  })
+}
+
+const getAgencyAdminSessionStoreRowId = (config: SupabaseAppDataConfig) =>
+  `${config.rowId}:agency-admin-sessions`
+
+const getAgencyAdminAuthStoreRowId = (config: SupabaseAppDataConfig) =>
+  `${config.rowId}:agency-admin-auth`
+
+const loadAgencyAdminSessionsFromSupabase = async (config: SupabaseAppDataConfig) => {
+  const table = encodeURIComponent(config.table)
+  const rowId = encodeURIComponent(getAgencyAdminSessionStoreRowId(config))
+  const url = `${config.baseUrl}/rest/v1/${table}?id=eq.${rowId}&select=data&limit=1`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: supabaseHeaders(config, { accept: 'application/json' }),
+  })
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response)
+    throw new Error(`Supabase session read failed (${response.status}): ${details}`)
+  }
+
+  const rows = (await response.json()) as Array<{ data?: AgencyAdminSessionStoreRecord }>
+  return mergeAgencyAdminSessions(rows[0]?.data?.agencyAdminSessions ?? [])
+}
+
+const loadAgencyAdminAuthFromSupabase = async (config: SupabaseAppDataConfig) => {
+  const table = encodeURIComponent(config.table)
+  const rowId = encodeURIComponent(getAgencyAdminAuthStoreRowId(config))
+  const url = `${config.baseUrl}/rest/v1/${table}?id=eq.${rowId}&select=data&limit=1`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: supabaseHeaders(config, { accept: 'application/json' }),
+  })
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response)
+    throw new Error(`Supabase auth read failed (${response.status}): ${details}`)
+  }
+
+  const rows = (await response.json()) as Array<{ data?: AgencyAdminAuthStoreRecord }>
+  return rows[0]?.data?.agencyAdmins ?? []
+}
+
+const saveAgencyAdminSessionsToSupabase = async (
+  config: SupabaseAppDataConfig,
+  sessions: AgencyAdminSessionRecord[]
+) => {
+  const table = encodeURIComponent(config.table)
+  const url = `${config.baseUrl}/rest/v1/${table}?on_conflict=id`
+  const payload = [
+    {
+      id: getAgencyAdminSessionStoreRowId(config),
+      data: { agencyAdminSessions: mergeAgencyAdminSessions(sessions) },
+      updated_at: now(),
+    },
+  ]
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: supabaseHeaders(config, {
+      'content-type': 'application/json',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+    }),
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response)
+    throw new Error(`Supabase session write failed (${response.status}): ${details}`)
+  }
+}
+
+const saveAgencyAdminAuthToSupabase = async (
+  config: SupabaseAppDataConfig,
+  agencyAdmins: AgencyAdminRecord[]
+) => {
+  const table = encodeURIComponent(config.table)
+  const url = `${config.baseUrl}/rest/v1/${table}?on_conflict=id`
+  const payload = [
+    {
+      id: getAgencyAdminAuthStoreRowId(config),
+      data: { agencyAdmins },
+      updated_at: now(),
+    },
+  ]
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: supabaseHeaders(config, {
+      'content-type': 'application/json',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+    }),
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response)
+    throw new Error(`Supabase auth write failed (${response.status}): ${details}`)
+  }
+}
+
+const loadAgencyAdminAuthData = async (env: Bindings) => {
+  const supabase = getSupabaseAppDataConfig(env)
+  if (supabase) {
+    const cached = loadAgencyAdminAuthFromSupabase(supabase)
+    const timeout = sleep(1500).then(() => null as AgencyAdminRecord[] | null)
+    const cachedAdmins = await Promise.race([cached, timeout])
+    if (cachedAdmins && cachedAdmins.length > 0) {
+      return cachedAdmins
+    }
+
+    const data = await loadData(env)
+    void saveAgencyAdminAuthToSupabase(supabase, data.agencyAdmins).catch((error) => {
+      console.error('Failed to refresh agency admin auth cache:', error)
+    })
+    return data.agencyAdmins
+  }
+
+  const data = await loadData(env)
+  return data.agencyAdmins
+}
+
+const loadAgencyAdminSessions = async (env: Bindings, fallbackData?: AppData) => {
+  const supabase = getSupabaseAppDataConfig(env)
+  if (supabase) {
+    const sessions = await loadAgencyAdminSessionsFromSupabase(supabase)
+    if (sessions.length > 0) {
+      return sessions
+    }
+    return mergeAgencyAdminSessions(fallbackData?.agencyAdminSessions ?? [])
+  }
+
+  if (!env.APP_DATA) {
+    throw new Error(
+      'No storage configured: set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, or bind APP_DATA KV.'
+    )
+  }
+
+  const data = fallbackData ?? (await loadData(env))
+  return mergeAgencyAdminSessions(data.agencyAdminSessions)
+}
+
+const saveAgencyAdminSessions = async (env: Bindings, sessions: AgencyAdminSessionRecord[]) => {
+  const supabase = getSupabaseAppDataConfig(env)
+  if (supabase) {
+    await saveAgencyAdminSessionsToSupabase(supabase, sessions)
+    return
+  }
+
+  const latest = await loadData(env)
+  latest.agencyAdminSessions = mergeAgencyAdminSessions(sessions)
+  await saveData(env, latest)
+}
+
+const createAgencyAdminSession = async (env: Bindings, adminId: number) => {
+  const session: AgencyAdminSessionRecord = {
+    token: crypto.randomUUID(),
+    adminId,
+    createdAt: now(),
+  }
+
+  const existing = await loadAgencyAdminSessions(env)
+  await saveAgencyAdminSessions(env, [session, ...existing])
+  return session
+}
+
+const saveAgencyAdminChangesWithSession = async (
+  env: Bindings,
+  data: AppData,
+  session: AgencyAdminSessionRecord
+) => {
+  const supabase = getSupabaseAppDataConfig(env)
+  const latest = await loadData(env)
+  latest.agencyAdmins = data.agencyAdmins
+  latest.counters = data.counters
+  await saveData(env, latest)
+  if (supabase) {
+    void saveAgencyAdminAuthToSupabase(supabase, latest.agencyAdmins).catch((error) => {
+      console.error('Failed to refresh agency admin auth cache:', error)
+    })
+  }
+  const existingSessions = await loadAgencyAdminSessions(env, latest)
+  await saveAgencyAdminSessions(env, [session, ...existingSessions])
+}
+
+const deleteAgencyAdminSession = async (env: Bindings, token: string) => {
+  const existing = await loadAgencyAdminSessions(env)
+  await saveAgencyAdminSessions(
+    env,
+    existing.filter((item) => item.token !== token)
+  )
 }
 
 const jsonError = (message: string, status = 400) =>
@@ -755,11 +964,11 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
   }
 
   try {
-    const data = await loadData(c.env)
-    console.log('requireAgencyAdminAuth: data loaded')
-    const session = data.agencyAdminSessions.find((item) => item.token === token)
+    const sessions = await loadAgencyAdminSessions(c.env)
+    const session = sessions.find((item) => item.token === token)
     if (session) {
-      const admin = data.agencyAdmins.find((item) => item.id === session.adminId)
+      const agencyAdmins = await loadAgencyAdminAuthData(c.env)
+      const admin = agencyAdmins.find((item) => item.id === session.adminId)
       if (!admin) {
         console.log('requireAgencyAdminAuth: session admin not found')
         return c.json({ error: 'Unauthorized' }, 401)
@@ -778,6 +987,7 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
       return c.json({ error: 'Unauthorized' }, 401)
     }
 
+    const data = await loadData(c.env)
     const normalizedEmail = supabaseUser.email ? normalizeEmail(supabaseUser.email) : ''
     const admin =
       data.agencyAdmins.find(
@@ -2422,13 +2632,7 @@ app.post('/api/agency-auth/confirm', async (c) => {
   }
 
   if (admin.emailVerified !== false) {
-    const session: AgencyAdminSessionRecord = {
-      token: crypto.randomUUID(),
-      adminId: admin.id,
-      createdAt: now(),
-    }
-      data.agencyAdminSessions.unshift(session)
-    await saveData(c.env, data)
+    const session = await createAgencyAdminSession(c.env, admin.id)
     return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 200)
   }
 
@@ -2455,8 +2659,7 @@ app.post('/api/agency-auth/confirm', async (c) => {
     adminId: admin.id,
     createdAt: now(),
   }
-    data.agencyAdminSessions.unshift(session)
-  await saveData(c.env, data)
+  await saveAgencyAdminChangesWithSession(c.env, data, session)
   return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 200)
 })
 
@@ -2502,20 +2705,20 @@ app.post('/api/agency-auth/login', safeApi(async (c) => {
     return c.json({ error: 'username and password are required' }, 400)
   }
 
-  let data
+  let agencyAdmins
   try {
-    data = await loadData(c.env)
+    agencyAdmins = await loadAgencyAdminAuthData(c.env)
   } catch (error) {
     console.error('/api/agency-auth/login loadData error:', error)
     return c.json({ error: 'Storage unavailable' }, 500)
   }
-  console.log('/api/agency-auth/login data loaded')
+  console.log('/api/agency-auth/login auth data loaded')
   const usernameOrEmail = body.username.trim()
   const normalizedIdentifier = usernameOrEmail.toLowerCase()
   const normalizedEmail = isEmailLike(usernameOrEmail) ? normalizeEmail(usernameOrEmail) : ''
   const password = body.password.trim()
 
-  const admin = data.agencyAdmins.find((item) => {
+  const admin = agencyAdmins.find((item) => {
     const username = typeof item.username === 'string' ? item.username.trim().toLowerCase() : ''
     const email = typeof item.email === 'string' ? normalizeEmail(item.email) : ''
     const matchesIdentifier =
@@ -2537,14 +2740,7 @@ app.post('/api/agency-auth/login', safeApi(async (c) => {
     )
   }
 
-  const session: AgencyAdminSessionRecord = {
-    token: crypto.randomUUID(),
-    adminId: admin.id,
-    createdAt: now(),
-  }
-
-  data.agencyAdminSessions.unshift(session)
-  await saveData(c.env, data)
+  const session = await createAgencyAdminSession(c.env, admin.id)
   console.log('/api/agency-auth/login success')
   return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) })
 }))
@@ -2555,9 +2751,10 @@ app.get('/api/agency-auth/me', requireAgencyAdminAuth, async (c) => {
 
 app.post('/api/agency-auth/logout', requireAgencyAdminAuth, async (c) => {
   const token = parseAuthorizationToken(c.req.raw)
-  const data = await loadData(c.env)
-  data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.token !== token)
-  await saveData(c.env, data)
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  await deleteAgencyAdminSession(c.env, token)
   return c.json({ message: 'Logged out successfully' })
 })
 
