@@ -405,7 +405,7 @@ const FormRow2Col = ({ left, right }: { left: React.ReactNode; right?: React.Rea
 /* Field wrapper */
 const Field = ({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) => (
   <div className="space-y-1.5 w-full">
-    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</Label>
+    <Label className="text-sm font-semibold text-slate-900 uppercase tracking-wide">{label}</Label>
     {children}
     {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
   </div>
@@ -416,11 +416,11 @@ const StyledInput = ({ className = "", ...props }: React.InputHTMLAttributes<HTM
   <input
     {...props}
     className={`
-      w-full h-11 rounded-xl border border-slate-200 bg-slate-50/80
+      w-full h-11 rounded-xl border border-slate-600 bg-slate-50/80
       px-3.5 text-sm text-slate-800 font-medium
       shadow-sm
       transition-all duration-200 ease-in-out
-      placeholder:text-slate-300 placeholder:font-normal
+      placeholder:text-slate-600 placeholder:font-normal
       focus:outline-none
       focus:border-amber-400 focus:bg-white
       focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18),0_1px_4px_rgba(0,0,0,0.06)]
@@ -450,7 +450,7 @@ const StyledSelect = ({
     value={value}
     onChange={onChange}
     className={`
-      w-full h-11 rounded-xl border border-slate-200 bg-slate-50/80
+      w-full h-11 rounded-xl border border-slate-500 bg-slate-50/80
       px-3.5 text-sm text-slate-800 font-medium
       shadow-sm appearance-none
       transition-all duration-200 ease-in-out
@@ -491,13 +491,13 @@ const RadioGroup = ({
           onClick={() => onValueChange?.(opt)}
           className={`
             relative inline-flex items-center justify-center
-            px-3.5 py-1.5 rounded-full text-xs font-semibold
+            px-3.5 py-1.5 rounded-full text-sm font-semibold
             border transition-all duration-150 ease-in-out
             select-none cursor-pointer
             focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1
             ${isSelected
               ? "bg-amber-400 border-amber-400 text-slate-900 shadow-sm shadow-amber-200/60"
-              : "bg-white border-slate-200 text-slate-500 hover:border-amber-300 hover:text-slate-700 hover:bg-amber-50/50"
+              : "bg-white border-slate-200 text-slate-900 hover:border-amber-300 hover:text-slate-700 hover:bg-amber-50/50"
             }
           `}
         >
@@ -537,7 +537,7 @@ const YesNo = ({
           aria-checked={isSelected}
           onClick={() => onValueChange?.(bool)}
           className={`
-            relative px-3.5 py-1 rounded-md text-xs font-semibold
+            relative px-3.5 py-1 rounded-md text-sm font-semibold
             transition-all duration-150 ease-in-out
             focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1
             min-w-[44px] text-center
@@ -545,7 +545,7 @@ const YesNo = ({
               ? bool
                 ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200/70"
                 : "bg-rose-400 text-white shadow-sm shadow-rose-200/70"
-              : "bg-transparent text-slate-400 hover:text-slate-600 hover:bg-white/60"
+              : "bg-transparent text-slate-900 hover:text-slate-600 hover:bg-white/60"
             }
           `}
         >
@@ -1028,7 +1028,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
         <div className="space-y-1 bg-slate-50 rounded-xl p-4 border border-slate-100">
           {fixedLanguages.map((lang) => (
             <div key={lang.key} className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 border-b border-slate-100 last:border-0">
-              <span className="text-sm font-medium text-slate-700 w-56 shrink-0">{lang.label}</span>
+              <span className="text-base font-medium text-slate-700 w-56 shrink-0">{lang.label}</span>
               <RadioGroup
                 name={`lang_${lang.key}`}
                 options={["Zero", "Poor", "Little", "Fair", "Good"]}
@@ -1076,7 +1076,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
             "Willing to work on off-days with compensation?",
           ].map((q) => (
             <div key={q} className="flex items-center justify-between gap-4 py-3 border-b border-slate-100 last:border-0">
-              <span className="text-sm text-slate-700">{q}</span>
+              <span className="text-base text-slate-900">{q}</span>
               <YesNo
                 name={`other_${q}`}
                 value={otherInformation[q]}
@@ -1091,10 +1091,10 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
             </div>
           ))}
           <div className="flex items-center justify-between gap-4 pt-3">
-            <span className="text-sm text-slate-700">Number of off-days per month</span>
+            <span className="text-base text-slate-700">Number of off-days per month</span>
             <div className="flex items-center gap-2">
               <StyledInput className="w-20" value={String(skillsPreferences.offDaysPerMonth || "")} onChange={(e) => setSkillsPreferencesField("offDaysPerMonth", e.target.value)} />
-              <span className="text-sm text-slate-500">day(s)</span>
+              <span className="text-base text-slate-700">day(s)</span>
             </div>
           </div>
         </div>
@@ -1159,11 +1159,11 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
               <Field label="Dietary Restrictions">
                 <StyledInput value={String(introduction.dietaryRestrictions || "")} onChange={(e) => setIntroductionField("dietaryRestrictions", e.target.value)} placeholder="None" />
               </Field>
-            }
+            } 
           />
 
           <div>
-            <p className="text-sm font-semibold text-slate-600 mb-2">Food handling preferences:</p>
+            <p className="text-base font-semibold text-slate-600 mb-2">Food handling preferences:</p>
             {(() => {
               const raw = String(introduction.foodHandlingPreferences || "");
               const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
