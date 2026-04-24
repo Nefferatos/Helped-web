@@ -43,7 +43,13 @@ import AuthCallback from "@/pages/AuthCallback";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import DataDeletion from "@/pages/DataDeletion";
 import AiAutomationPage from "@/pages/AiAutomationPage";
-import { clearAgencyAdminAuth, getAgencyAdminAuthHeaders, getAgencyAdminToken, saveAgencyAdminAuth } from "@/lib/agencyAdminAuth";
+import {
+  clearAgencyAdminAuth,
+  getAgencyAdminAuthHeaders,
+  getAgencyAdminToken,
+  getStoredAgencyAdmin,
+  saveAgencyAdminAuth,
+} from "@/lib/agencyAdminAuth";
 import { getClientToken } from "@/lib/clientAuth";
 import { clearClientAuth } from "@/lib/clientAuth";
 import { supabase } from "@/lib/supabaseClient";
@@ -75,8 +81,9 @@ interface AgencyAdminMeResponse {
 
 const ProtectedAdminRoute = ({ children }: { children: ReactNode }) => {
   const token = getAgencyAdminToken();
+  const storedAdmin = getStoredAgencyAdmin();
   const [status, setStatus] = useState<"checking" | "allowed" | "denied">(
-    token ? "checking" : "denied",
+    token ? (storedAdmin ? "allowed" : "checking") : "denied",
   );
 
   useEffect(() => {
@@ -86,6 +93,10 @@ const ProtectedAdminRoute = ({ children }: { children: ReactNode }) => {
     }
 
     let cancelled = false;
+
+    if (storedAdmin) {
+      setStatus("allowed");
+    }
 
     const validateSession = async () => {
       try {
@@ -115,7 +126,7 @@ const ProtectedAdminRoute = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, storedAdmin]);
 
   if (status === "checking") {
     return (

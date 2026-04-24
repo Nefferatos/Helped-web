@@ -135,6 +135,15 @@ interface AgencyAdminRecord {
 interface AgencyAdminSessionRecord {
   token: string
   adminId: number
+  admin?: {
+    id: number
+    username: string
+    email?: string
+    emailVerified?: boolean
+    agencyName: string
+    profileImageUrl?: string
+    createdAt: string
+  }
   createdAt: string
 }
 
@@ -799,10 +808,11 @@ const saveAgencyAdminSessions = async (env: Bindings, sessions: AgencyAdminSessi
   await saveData(env, latest)
 }
 
-const createAgencyAdminSession = async (env: Bindings, adminId: number) => {
+const createAgencyAdminSession = async (env: Bindings, admin: AgencyAdminRecord) => {
   const session: AgencyAdminSessionRecord = {
     token: crypto.randomUUID(),
-    adminId,
+    adminId: admin.id,
+    admin: toSafeAgencyAdmin(admin),
     createdAt: now(),
   }
 
@@ -967,13 +977,31 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
     const sessions = await loadAgencyAdminSessions(c.env)
     const session = sessions.find((item) => item.token === token)
     if (session) {
+      const admin = session.admin
+        ? {
+            id: session.admin.id,
+            username: session.admin.username,
+            email: session.admin.email ?? '',
+            password: '',
+            agencyName: session.admin.agencyName,
+            emailVerified: session.admin.emailVerified,
+            profileImageUrl: session.admin.profileImageUrl ?? '',
+            createdAt: session.admin.createdAt,
+          }
+        : null
+      if (admin) {
+        c.set('agencyAdmin', admin)
+        await next()
+        return
+      }
+
       const agencyAdmins = await loadAgencyAdminAuthData(c.env)
-      const admin = agencyAdmins.find((item) => item.id === session.adminId)
-      if (!admin) {
+      const matchedAdmin = agencyAdmins.find((item) => item.id === session.adminId)
+      if (!matchedAdmin) {
         console.log('requireAgencyAdminAuth: session admin not found')
         return c.json({ error: 'Unauthorized' }, 401)
       }
-      c.set('agencyAdmin', admin)
+      c.set('agencyAdmin', matchedAdmin)
       await next()
       return
     }
@@ -2632,7 +2660,7 @@ app.post('/api/agency-auth/confirm', async (c) => {
   }
 
   if (admin.emailVerified !== false) {
-    const session = await createAgencyAdminSession(c.env, admin.id)
+    const session = await createAgencyAdminSession(c.env, admin)
     return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 200)
   }
 
@@ -2657,6 +2685,7 @@ app.post('/api/agency-auth/confirm', async (c) => {
   const session: AgencyAdminSessionRecord = {
     token: crypto.randomUUID(),
     adminId: admin.id,
+    admin: toSafeAgencyAdmin(admin),
     createdAt: now(),
   }
   await saveAgencyAdminChangesWithSession(c.env, data, session)
@@ -2740,7 +2769,7 @@ app.post('/api/agency-auth/login', safeApi(async (c) => {
     )
   }
 
-  const session = await createAgencyAdminSession(c.env, admin.id)
+  const session = await createAgencyAdminSession(c.env, admin)
   console.log('/api/agency-auth/login success')
   return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) })
 }))
