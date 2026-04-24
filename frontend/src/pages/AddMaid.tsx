@@ -574,7 +574,7 @@ const StarRating = ({
           className="p-0.5 transition-transform hover:scale-110"
           onClick={() => onChange(value === sv ? null : sv)}
         >
-          <Star className={`h-4 w-4 ${active ? "fill-amber-400 text-amber-400" : "text-slate-300 hover:text-amber-300"}`} />
+          <Star className={`h-4 w-4 ${active ? "fill-amber-400 text-amber-400" : "text-slate-600 hover:text-amber-300"}`} />
         </button>
       );
     })}
@@ -1332,7 +1332,7 @@ const SkillsTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto
                     <p className="font-semibold text-slate-800">{row.label}</p>
                     {row.sub && (
                       <div className="mt-2">
-                        <p className="text-xs text-slate-500 mb-1">{row.sub}</p>
+                        <p className="text-sm text-slate-600 mb-1">{row.sub}</p>
                         {row.subField && (
                           <StyledInput
                             className="w-44 h-8 text-xs"
@@ -1373,7 +1373,7 @@ const SkillsTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto
                       <StarRating name={`assess_${row.no}`} value={rating} onChange={(nr) => updateEvaluation(nr, note)} />
                     </div>
                     <textarea
-                      className="w-full min-h-[52px] rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] focus:bg-white hover:border-slate-300 resize-none placeholder:text-slate-300"
+                      className="w-full min-h-[52px] rounded-xl border border-slate-500 bg-white px-2 py-1.5 text-xs text-slate-800 shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] focus:bg-white hover:border-slate-300 resize-none placeholder:text-slate-600"
                       value={note}
                       onChange={(e) => updateEvaluation(rating, e.target.value)}
                       placeholder="Notes (optional)"
@@ -1480,7 +1480,7 @@ const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, on
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <Field label="Main Duties">
                     <textarea
-                      className="w-full min-h-[80px] rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none placeholder:text-slate-300 placeholder:font-normal"
+                      className="w-full min-h-[80px] rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none placeholder:text-slate-600 placeholder:font-normal"
                       value={String(r.duties || "")}
                       onChange={(e) => updateEmployer(idx, "duties", e.target.value)}
                       placeholder="Describe main responsibilities..."
@@ -1488,7 +1488,7 @@ const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, on
                   </Field>
                   <Field label="Remarks">
                     <textarea
-                      className="w-full min-h-[80px] rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none placeholder:text-slate-300 placeholder:font-normal"
+                      className="w-full min-h-[80px] rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none placeholder:text-slate-600 placeholder:font-normal"
                       value={String(r.remarks || "")}
                       onChange={(e) => updateEmployer(idx, "remarks", e.target.value)}
                       placeholder="Any relevant notes..."
@@ -1525,7 +1525,7 @@ const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, on
               }
             />
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <p className="text-sm text-slate-700 leading-relaxed">
             The EA is required to obtain the FDW's employment history from MOM and furnish the employer with the employment history. The employer may also verify via WPOL using SingPass.
           </p>
         </div>
@@ -1582,7 +1582,7 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
                   className={`h-5 w-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-all duration-150 ${
                     checked
                       ? "bg-amber-400 border-amber-400"
-                      : "bg-white border-slate-300 group-hover:border-amber-400"
+                      : "bg-white border-slate-500 group-hover:border-amber-400"
                   }`}
                 >
                   {checked && (
@@ -1597,7 +1597,7 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
                     onChange={(e) => toggleOption(opt, e.target.checked)}
                   />
                 </div>
-                <span className={`transition-colors ${checked ? "text-slate-800 font-medium" : "text-slate-600"}`}>{opt}</span>
+                <span className={`transition-colors ${checked ? "text-slate-800 font-medium" : "text-slate-900"}`}>{opt}</span>
               </label>
             );
           })}
@@ -1608,7 +1608,7 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
         <SectionHeader>E. Other Remarks</SectionHeader>
         <Field label="Other Remarks">
           <textarea
-            className="w-full min-h-[120px] rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none placeholder:text-slate-300 placeholder:font-normal"
+            className="w-full min-h-[120px] rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none placeholder:text-slate-600 placeholder:font-normal"
             value={availabilityRemark}
             onChange={(e) =>
               setFormData((p) => ({
@@ -1633,12 +1633,12 @@ const IntroductionTab = memo(({ formData, setFormData, onSave, isSaving, onUploa
     <TabCard>
       <div className="text-center space-y-1">
         <h3 className="text-xl font-bold text-slate-800">Maid's Introduction</h3>
-        <p className="text-sm text-slate-400">This introduction is hidden from the public. Employers must log in to view it.</p>
+        <p className="text-sm text-slate-800">This introduction is hidden from the public. Employers must log in to view it.</p>
       </div>
 
       <Field label="Maid Introduction">
         <textarea
-          className="w-full min-h-[280px] rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none leading-relaxed placeholder:text-slate-300 placeholder:font-normal"
+          className="w-full min-h-[280px] rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none leading-relaxed placeholder:text-slate-600 placeholder:font-normal"
           value={String(introduction.intro || "")}
           onChange={(e) =>
             setFormData((p) => ({
@@ -1665,7 +1665,7 @@ const PublicIntroductionTab = memo(({ formData, setFormData, onSave, isSaving, o
         <p className="text-sm text-slate-400">Visible to all employers without login.</p>
       </div>
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 leading-relaxed space-y-2">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-base text-amber-800 leading-relaxed space-y-2">
         <p className="font-semibold">⚠️ MOM Compliance Notice</p>
         <p>
           EAs must comply with MOM's{" "}
@@ -1679,7 +1679,7 @@ const PublicIntroductionTab = memo(({ formData, setFormData, onSave, isSaving, o
 
       <Field label="Public Introduction">
         <textarea
-          className="w-full min-h-[280px] rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none leading-relaxed placeholder:text-slate-300 placeholder:font-normal"
+          className="w-full min-h-[280px] rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none leading-relaxed placeholder:text-slate-600 placeholder:font-normal"
           value={String(introduction.publicIntro || "")}
           onChange={(e) =>
             setFormData((p) => ({
@@ -1704,7 +1704,7 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
     <TabCard>
       <div className="text-center space-y-1">
         <h3 className="text-xl font-bold text-slate-800">Private Information</h3>
-        <p className="text-sm text-slate-400">Internal agency records — not visible to employers or the public.</p>
+        <p className="text-sm text-slate-800">Internal agency records — not visible to employers or the public.</p>
       </div>
 
       <div className="space-y-5">
@@ -1767,7 +1767,7 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
 
         <Field label="Agency's Historical Record of the Maid">
           <textarea
-            className="w-full min-h-[200px] rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none leading-relaxed placeholder:text-slate-300 placeholder:font-normal"
+            className="w-full min-h-[200px] rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-800 font-medium shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 resize-none leading-relaxed placeholder:text-slate-600 placeholder:font-normal"
             value={String(skillsPreferences.privateInfo || "")}
             onChange={(e) =>
               setFormData((p) => ({

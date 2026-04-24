@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Hand,
+  ClipboardList,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -112,11 +113,11 @@ const navItems = [
   },
   {
     label: "Request",
-    path: adminPath("/request"),
-    icon: PhoneIncoming,
-    iconBg: "linear-gradient(145deg, #86EFAC, #16A34A)",
-    iconShadow: "0 4px 0 #15803D, 0 6px 12px rgba(22,163,74,0.45)",
-    iconShadowActive: "0 2px 0 #15803D, 0 3px 8px rgba(22,163,74,0.4)",
+    path: adminPath("/requests"),
+    icon: ClipboardList,
+    iconBg: "linear-gradient(145deg, #60A5FA, #2563EB)",
+    iconShadow: "0 4px 0 #1D4ED8, 0 6px 12px rgba(37,99,235,0.45)",
+    iconShadowActive: "0 2px 0 #1D4ED8, 0 3px 8px rgba(37,99,235,0.4)",
     iconColor: "#fff",
   },
 ];
