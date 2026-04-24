@@ -3119,6 +3119,16 @@ app.get('/api/chats/client/conversations', requireClientAuth, async (c) => {
   })
 })
 
+app.get('/api/chats/client/summary', requireClientAuth, async (c) => {
+  const client = c.get('client')
+  const data = await loadData(c.env)
+  const unreadCount = data.chatMessages.filter(
+    (message) => message.clientId === client.id && message.senderRole === 'agency' && !message.readByClient
+  ).length
+
+  return c.json({ unreadCount })
+})
+
 app.get('/api/chats/client', requireClientAuth, async (c) => {
   const client = c.get('client')
   const { conversationType, agencyId } = getConversationContext(new URL(c.req.url))
@@ -3215,6 +3225,56 @@ app.get('/api/chats/admin', requireAgencyAdminAuth, async (c) => {
         new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime()
     ),
   })
+})
+
+app.get('/api/chats/admin/summary', requireAgencyAdminAuth, async (c) => {
+  const data = await loadData(c.env)
+  const unreadCount = data.chatMessages.filter(
+    (message) => message.senderRole === 'client' && !message.readByAgency
+  ).length
+
+  return c.json({ unreadCount })
+})
+
+app.get('/api/chats/admin/stream', requireAgencyAdminAuth, async (c) => {
+  const url = new URL(c.req.url)
+  const afterId = Number(url.searchParams.get('afterId') ?? 0)
+  if (!Number.isFinite(afterId) || afterId < 0) {
+    return c.json({ error: 'afterId must be a non-negative number' }, 400)
+  }
+
+  const startedAt = Date.now()
+  return createSseResponse(c.req.raw, async (controller) => {
+    let lastId = afterId
+    let lastHeartbeat = Date.now()
+    writeSseEvent(controller, 'ready', { ok: true })
+
+    while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
+      const data = await loadData(c.env)
+      const nextMessages = data.chatMessages
+        .filter((message) => message.id > lastId)
+        .sort((left, right) => left.id - right.id)
+
+      for (const message of nextMessages) {
+        writeSseEvent(controller, 'message', { message })
+        lastId = Math.max(lastId, message.id)
+      }
+
+      const nowTime = Date.now()
+      if (nowTime - lastHeartbeat > 15_000) {
+        writeSseComment(controller, 'keep-alive')
+        lastHeartbeat = nowTime
+      }
+
+      await sleep(1200)
+    }
+  })
+})
+
+app.get('/api/chats/admin/last-id', requireAgencyAdminAuth, async (c) => {
+  const data = await loadData(c.env)
+  const lastId = data.chatMessages.reduce((maxId, message) => Math.max(maxId, message.id), 0)
+  return c.json({ lastId })
 })
 
 app.get('/api/chats/admin/:clientId', requireAgencyAdminAuth, async (c) => {
