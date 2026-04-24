@@ -288,9 +288,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
             <nav className="hidden items-center gap-5 font-body text-sm font-medium lg:flex xl:gap-8">
               <a href="/" className="hover:text-primary transition-colors">Home</a>
-              <a href="#services" className="hover:text-primary transition-colors">Services</a>
-              <a href="#search" className="hover:text-primary transition-colors">Search Maids</a>
+              <a href="/client/maids" className="hover:text-primary transition-colors">Search Maids</a>
               <a href="/about" className="hover:text-primary transition-colors">About Us</a>
+              <a href="#services" className="hover:text-primary transition-colors">Agency</a>
               <a href="/enquiry2" className="hover:text-primary transition-colors">Enquiry</a>
               <a href="/faq" className="hover:text-primary transition-colors">FAQ</a>
               <a href="/contact" className="hover:text-primary transition-colors">Contact Us</a>
@@ -347,9 +347,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 <nav className="flex flex-col p-4 gap-1">
                   {[
                     { label: "Home", href: "/" },
-                    { label: "Services", href: "#services" },
-                    { label: "Search Maids", href: "#search" },
+                    { label: "Search Maids", href: "/client/maids" },
                     { label: "About Us", href: "/about" },
+                    { label: "Agency", href: "/about" },
                     { label: "FAQ", href: "/faq" },
                     { label: "Enquiry", href: "/enquiry2" },
                     { label: "Contact Us", href: "/contact" },
@@ -449,7 +449,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      <section className="border-y bg-background py-8 md:py-10">
+      {/* <section className="border-y bg-background py-8 md:py-10">
         <div className="container px-4 sm:px-6">
           <div className="mb-5 flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
@@ -529,7 +529,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </p>
           </div>
         </div>
-      </section>
+      </section> */}
 
       <section id="search" className="bg-muted py-8 md:py-10">
         <div className="container px-4 sm:px-6">

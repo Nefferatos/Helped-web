@@ -63,13 +63,13 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
       : [];
 
   // Use profile photo if available, otherwise fall back to embedded full-body
-  const photoSrc = photos[0] || FULLBODY_PHOTO;
+  const photoSrc = photos[1] || photos[0] || FULLBODY_PHOTO;
 
   const age = calcAge(maid.dateOfBirth);
   const importPayloadBase64 = encodeBase64Utf8(JSON.stringify(buildImportPayload(maid)));
 
   // ── Work-area rows ──────────────────────────────────────────────────────
-  const workAreaRows = (workAreas as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string }]>)
+  const workAreaRows = (workAreas as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string }]>)
     .map(([area, cfg], idx) => {
       const rating = cfg.evaluation ? String(cfg.evaluation) : "N.A";
       const dots = [1,2,3,4,5].map(n => {
@@ -80,7 +80,7 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
         <td class="sn">${idx + 1}</td>
         <td class="area-label">${esc(area)}</td>
         <td class="center">${esc(yesNo(cfg.willing ?? false))}</td>
-        <td class="center">${esc(yesNo(cfg.experience ?? false))}</td>
+        <td class="center">${esc(yesNo(cfg.experience ?? false))}${cfg.experience && cfg.yearsOfExperience ? `<br/><span style="font-size:8.5pt;">${esc(String(cfg.yearsOfExperience))} yr${String(cfg.yearsOfExperience) === "1" ? "" : "s"}</span>` : ""}</td>
         <td class="assess">${dots} &nbsp;${esc(cfg.evaluation ? "– " + cfg.evaluation : "N.A")}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="5" style="text-align:center;color:#888;">No skill records available.</td></tr>`;

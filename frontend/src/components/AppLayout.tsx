@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Menu,
   X,
+  Hand,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,18 +35,126 @@ import {
 } from "@/lib/agencyAdminAuth";
 import { fetchAdminUnreadChatCount } from "@/lib/chat";
 
+/* ─── 3D Icon config per nav item ──────────────────────────────────────── */
+
 const navItems = [
-  { label: "Home", path: adminPath("/dashboard"), icon: LayoutDashboard },
-  { label: "Agency Profile", path: adminPath("/agency-profile"), icon: Building2 },
-  { label: "Add Maid", path: adminPath("/add-maid"), icon: UserPlus },
-  { label: "Edit / Delete", path: adminPath("/edit-maids"), icon: Pencil },
-  { label: "Chat Support", path: adminPath("/chat-support"), icon: MessageSquare },
-  { label: "Password Management", path: adminPath("/change-password"), icon: Lock },
-  { label: "Employment Contracts", path: adminPath("/employment-contracts"), icon: FileText },
-  { label: "Incoming Inquiries", path: adminPath("/enquiry"), icon: PhoneIncoming },
+  {
+    label: "Home",
+    path: adminPath("/dashboard"),
+    icon: LayoutDashboard,
+    iconBg: "linear-gradient(145deg, #6EE7B7, #059669)",
+    iconShadow: "0 4px 0 #047857, 0 6px 12px rgba(5,150,105,0.45)",
+    iconShadowActive: "0 2px 0 #047857, 0 3px 8px rgba(5,150,105,0.4)",
+    iconColor: "#fff",
+  },
+  {
+    label: "Agency Profile",
+    path: adminPath("/agency-profile"),
+    icon: Building2,
+    iconBg: "linear-gradient(145deg, #93C5FD, #2563EB)",
+    iconShadow: "0 4px 0 #1D4ED8, 0 6px 12px rgba(37,99,235,0.45)",
+    iconShadowActive: "0 2px 0 #1D4ED8, 0 3px 8px rgba(37,99,235,0.4)",
+    iconColor: "#fff",
+  },
+  {
+    label: "Add Maid",
+    path: adminPath("/add-maid"),
+    icon: UserPlus,
+    iconBg: "linear-gradient(145deg, #FCA5A5, #DC2626)",
+    iconShadow: "0 4px 0 #B91C1C, 0 6px 12px rgba(220,38,38,0.45)",
+    iconShadowActive: "0 2px 0 #B91C1C, 0 3px 8px rgba(220,38,38,0.4)",
+    iconColor: "#fff",
+  },
+  {
+    label: "Edit / Delete",
+    path: adminPath("/edit-maids"),
+    icon: Pencil,
+    iconBg: "linear-gradient(145deg, #FDE68A, #D97706)",
+    iconShadow: "0 4px 0 #B45309, 0 6px 12px rgba(217,119,6,0.45)",
+    iconShadowActive: "0 2px 0 #B45309, 0 3px 8px rgba(217,119,6,0.4)",
+    iconColor: "#fff",
+  },
+  {
+    label: "Chat Support",
+    path: adminPath("/chat-support"),
+    icon: MessageSquare,
+    iconBg: "linear-gradient(145deg, #C4B5FD, #7C3AED)",
+    iconShadow: "0 4px 0 #6D28D9, 0 6px 12px rgba(124,58,237,0.45)",
+    iconShadowActive: "0 2px 0 #6D28D9, 0 3px 8px rgba(124,58,237,0.4)",
+    iconColor: "#fff",
+  },
+  {
+    label: "Password Management",
+    path: adminPath("/change-password"),
+    icon: Lock,
+    iconBg: "linear-gradient(145deg, #FDBA74, #EA580C)",
+    iconShadow: "0 4px 0 #C2410C, 0 6px 12px rgba(234,88,12,0.45)",
+    iconShadowActive: "0 2px 0 #C2410C, 0 3px 8px rgba(234,88,12,0.4)",
+    iconColor: "#fff",
+  },
+  {
+    label: "Employment Contracts",
+    path: adminPath("/employment-contracts"),
+    icon: FileText,
+    iconBg: "linear-gradient(145deg, #6EE7F9, #0891B2)",
+    iconShadow: "0 4px 0 #0E7490, 0 6px 12px rgba(8,145,178,0.45)",
+    iconShadowActive: "0 2px 0 #0E7490, 0 3px 8px rgba(8,145,178,0.4)",
+    iconColor: "#fff",
+  },
+  {
+    label: "Incoming Inquiries",
+    path: adminPath("/enquiry"),
+    icon: PhoneIncoming,
+    iconBg: "linear-gradient(145deg, #86EFAC, #16A34A)",
+    iconShadow: "0 4px 0 #15803D, 0 6px 12px rgba(22,163,74,0.45)",
+    iconShadowActive: "0 2px 0 #15803D, 0 3px 8px rgba(22,163,74,0.4)",
+    iconColor: "#fff",
+  },
+  {
+    label: "Request",
+    path: adminPath("/request"),
+    icon: PhoneIncoming,
+    iconBg: "linear-gradient(145deg, #86EFAC, #16A34A)",
+    iconShadow: "0 4px 0 #15803D, 0 6px 12px rgba(22,163,74,0.45)",
+    iconShadowActive: "0 2px 0 #15803D, 0 3px 8px rgba(22,163,74,0.4)",
+    iconColor: "#fff",
+  },
 ];
 
-/* ─── Sidebar content (reused in both desktop sidebar & mobile drawer) ── */
+/* ─── 3D Icon Badge ─────────────────────────────────────────────────────── */
+
+interface Icon3DProps {
+  icon: React.ElementType;
+  bg: string;
+  shadow: string;
+  shadowActive: string;
+  color: string;
+  isActive: boolean;
+}
+
+const Icon3D = ({ icon: IconComp, bg, shadow, shadowActive, color, isActive }: Icon3DProps) => (
+  <span
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      background: bg,
+      boxShadow: isActive ? shadowActive : shadow,
+      transform: isActive ? "translateY(2px)" : "translateY(0)",
+      transition: "box-shadow 0.15s ease, transform 0.15s ease",
+      flexShrink: 0,
+    }}
+  >
+    <IconComp
+      style={{ width: 17, height: 17, color, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.25))" }}
+    />
+  </span>
+);
+
+/* ─── Sidebar content ────────────────────────────────────────────────────── */
 
 interface SidebarContentProps {
   location: ReturnType<typeof useLocation>;
@@ -65,13 +174,13 @@ const SidebarContent = ({
   <>
     {/* Brand */}
     <div className="border-b border-gray-200 px-4 py-4">
-      <p className="text-[15px] font-semibold tracking-tight text-gray-900">Find Maids</p>
-      <span className="text-[11px] text-gray-400">Agency Management</span>
+      <p className="text-[18px] font-bold tracking-tight text-gray-900">Find Maids</p>
+      <span className="text-[13px] font-semibold text-gray-500">Agency Management</span>
     </div>
 
     {/* Agency identity */}
     <div className="flex items-center gap-3 border-b border-gray-200 bg-[#0D6E56] px-4 py-3">
-      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/20">
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/20">
         {agencyLogoUrl || agencyAdmin?.profileImageUrl ? (
           <img
             src={agencyLogoUrl || agencyAdmin?.profileImageUrl}
@@ -79,14 +188,14 @@ const SidebarContent = ({
             className="h-full w-full object-cover"
           />
         ) : (
-          <Building2 className="h-4 w-4 text-white" />
+          <Building2 className="h-5 w-5 text-white" />
         )}
       </div>
       <div className="min-w-0">
-        <p className="truncate text-[12px] font-medium text-white">
+        <p className="truncate text-[14px] font-bold text-white">
           {agencyAdmin?.agencyName ?? "Admin Portal"}
         </p>
-        <p className="text-[10px] text-white/70">Management Suite</p>
+        <p className="text-[12px] font-medium text-white/80">Management Suite</p>
       </div>
     </div>
 
@@ -94,7 +203,6 @@ const SidebarContent = ({
     <nav className="flex-1 overflow-y-auto py-2">
       <ul className="space-y-0.5">
         {navItems.map((item) => {
-          const Icon = item.icon;
           const isActive =
             location.pathname === item.path ||
             location.pathname.startsWith(`${item.path}/`);
@@ -106,22 +214,25 @@ const SidebarContent = ({
               <Link
                 to={item.path}
                 onClick={onNavClick}
-                className={`relative flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors ${
+                className={`relative flex items-center gap-2.5 px-3 py-2 text-[18px] transition-colors rounded-none ${
                   isActive
-                    ? "border-r-2 border-[#0D6E56] bg-[#E1F5EE] font-medium text-[#0D6E56]"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                    ? "border-r-2 border-[#0D6E56] bg-[#E1F5EE] font-bold text-[#0D6E56]"
+                    : "font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800"
                 }`}
               >
-                <Icon
-                  className={`h-4 w-4 flex-shrink-0 ${
-                    isActive ? "text-[#0D6E56]" : "text-[#0D6E56]/60"
-                  }`}
+                <Icon3D
+                  icon={item.icon}
+                  bg={item.iconBg}
+                  shadow={item.iconShadow}
+                  shadowActive={item.iconShadowActive}
+                  color={item.iconColor}
+                  isActive={isActive}
                 />
 
                 <span className="flex-1 truncate">{item.label}</span>
 
                 {hasUnread && (
-                  <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium text-white">
+                  <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
                     {unreadAgencyChats}
                   </span>
                 )}
@@ -146,7 +257,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   );
   const [agencyLogoUrl, setAgencyLogoUrl] = useState("");
 
-  // Close mobile drawer on route change
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
@@ -265,7 +375,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       </aside>
 
       {/* ── DESKTOP: persistent sidebar ── */}
-      <aside className="hidden lg:flex w-52 min-w-[208px] flex-col border-r border-gray-200 bg-white">
+      <aside className="hidden lg:flex w-52 min-w-[350px] flex-col border-r border-gray-200 bg-white">
         <SidebarContent {...sharedSidebarProps} />
       </aside>
 
@@ -273,9 +383,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* Top bar */}
-        <header className="flex h-[52px] flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
+        <header className="flex h-[86px] flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
           <div className="flex items-center gap-3 min-w-0">
-            {/* Hamburger — mobile only */}
             <button
               onClick={() => setSidebarOpen(true)}
               className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 lg:hidden"
@@ -283,7 +392,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <span className="truncate text-[13px] font-medium text-gray-800 sm:text-[14px]">
+            <span className="truncate text-[15px] font-bold text-gray-800 sm:text-[20px]">
               <span className="hidden sm:inline">Maid Agency Account Management</span>
               <span className="sm:hidden">Find Maids Admin</span>
             </span>
@@ -304,7 +413,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                       src={agencyLogoUrl || agencyAdmin?.profileImageUrl}
                       alt={agencyAdmin?.agencyName || "Agency"}
                     />
-                    <AvatarFallback className="bg-[#0D6E56] text-[12px] font-medium text-white">
+                    <AvatarFallback className="bg-[#0D6E56] text-[13px] font-bold text-white">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
@@ -317,15 +426,15 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                       src={agencyLogoUrl || agencyAdmin?.profileImageUrl}
                       alt={agencyAdmin?.agencyName || "Agency"}
                     />
-                    <AvatarFallback className="bg-[#0D6E56] text-[12px] font-medium text-white">
+                    <AvatarFallback className="bg-[#0D6E56] text-[13px] font-bold text-white">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-gray-900">
+                    <p className="truncate text-[14px] font-bold text-gray-100">
                       Welcome! {agencyAdmin?.username ?? "Agency Admin"}
                     </p>
-                    <p className="truncate whitespace-normal text-[12px] font-normal leading-snug text-gray-500">
+                    <p className="truncate whitespace-normal text-[13px] font-semibold leading-snug text-gray-500">
                       {agencyAdmin?.agencyName ?? "Agency"}
                     </p>
                   </div>
@@ -333,7 +442,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => void handleLogout()}
-                  className="cursor-pointer text-red-500 focus:bg-red-50 focus:text-red-600"
+                  className="cursor-pointer font-semibold text-[14px] text-red-500 focus:bg-red-50 focus:text-red-600"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
@@ -343,21 +452,22 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </header>
 
-        {/* Welcome bar */}
+       {/* Welcome bar */}
         <div className="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-2.5 lg:px-6">
-          <p className="text-[13px] text-gray-500">
-            Welcome:{" "}
-            <span className="font-medium text-[#0D6E56]">
+          <p className="flex items-center gap-2 text-[18px] font-medium text-gray-600">
+
+            Welcome:
+            <span className="font-bold text-[#0D6E56]">
               {agencyAdmin?.username ?? "Agency Admin"}
             </span>
+             <Hand className="h-5 w-5 text-[#0D6E56]" />
           </p>
         </div>
-
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
 
         {/* Footer */}
-        <footer className="flex-shrink-0 border-t border-gray-200 bg-white py-2.5 text-center text-[11px] text-gray-400">
+        <footer className="flex-shrink-0 border-t border-gray-200 bg-white py-2.5 text-center text-[12px] font-medium text-gray-500">
           © 2026 STREET PTE LTD. All Rights Reserved.
         </footer>
       </div>

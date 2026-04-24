@@ -102,7 +102,7 @@ const ContactRow = ({
         <Icon className="h-3.5 w-3.5 text-gray-400" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400">{label}</p>
+        <p className="text-[10px] font-large uppercase tracking-wide text-black">{label}</p>
         {href ? (
           <a
             href={href}
@@ -248,7 +248,7 @@ const AgencyProfile = () => {
                   Lic. {company.license_no || "N/A"}
                 </span>
                 {company.short_name && (
-                  <span className="text-[12px] text-gray-400">{company.short_name}</span>
+                  <span className="text-[16px] text-black">{company.short_name}</span>
                 )}
               </div>
             </div>
@@ -295,7 +295,7 @@ const AgencyProfile = () => {
                 key={label}
                 className="flex flex-col rounded-lg border border-gray-200 bg-white px-3 py-2.5 shadow-sm"
               >
-                <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+                <span className="text-[14px] font-medium uppercase tracking-wide text-black">
                   {label}
                 </span>
                 <span className="mt-0.5 text-[20px] font-bold text-gray-900">{value}</span>

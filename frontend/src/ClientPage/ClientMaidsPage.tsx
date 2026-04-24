@@ -8,6 +8,7 @@ import {
   X,
   Users,
   CheckCircle2,
+  Lock,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
@@ -85,6 +86,27 @@ interface Filters {
   relSikh: boolean;
   relOthers: boolean;
   relNoPreference: boolean;
+}
+
+// ── Maid data shape returned from your search API ────────────────────────────
+export interface MaidProfile {
+  id: number | string;
+  refCode?: string;
+  name: string;
+  photoUrl?: string;
+  nationality: string;
+  age?: number;
+  maidType?: string;
+  duties?: string[];
+  languages?: string[];
+  experience?: string[];
+  maritalStatus?: string;
+  education?: string;
+  height?: string;
+  religion?: string;
+  hasVideo?: boolean;
+  biodataCreatedAt?: string;
+  // add any extra fields your API returns
 }
 
 type RequirementsState = {
@@ -255,7 +277,7 @@ const getRequestHighlights = (draft: Filters) => {
   return items.slice(0, 6);
 };
 
-// ── Pill chip (replaces basic checkbox) ──────────────────────────────────────
+// ── Pill chip ─────────────────────────────────────────────────────────────────
 const Chip = ({
   label,
   checked,
@@ -307,7 +329,7 @@ const FilterTag = ({ label, onRemove }: { label: string; onRemove: () => void })
   </span>
 );
 
-// ── Accordion filter section ─────────────────────────────────────────────────
+// ── Accordion filter section ──────────────────────────────────────────────────
 const FilterSection = ({
   title,
   children,
@@ -345,7 +367,180 @@ const FilterSection = ({
   );
 };
 
-// ── Request Form ─────────────────────────────────────────────────────────────
+// ── Locked maid card (public / not logged in) ─────────────────────────────────
+const LockedMaidCard = ({ onLoginClick }: { onLoginClick: () => void }) => (
+  <div className="group relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
+    {/* Photo area — blurred placeholder */}
+    <div className="relative h-40 overflow-hidden bg-muted">
+      {/* Blurred silhouette shapes */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="h-20 w-20 rounded-full bg-muted-foreground/20 blur-xl" />
+      </div>
+      <div className="absolute bottom-0 left-1/2 h-16 w-32 -translate-x-1/2 rounded-t-full bg-muted-foreground/10 blur-lg" />
+      {/* Frosted overlay */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary shadow-sm">
+          <Lock className="h-4 w-4 text-primary-foreground" />
+        </div>
+        <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-[11px] font-semibold text-primary">
+          Login to view
+        </span>
+      </div>
+    </div>
+
+    {/* Card body — blurred text */}
+    <div className="p-4">
+      {/* Name row */}
+      <div className="mb-1 flex items-center justify-between">
+        <div className="h-4 w-28 rounded-md bg-muted blur-sm" />
+        <div className="h-4 w-12 rounded-full bg-muted blur-sm" />
+      </div>
+      {/* Meta line */}
+      <div className="mb-3 h-3 w-36 rounded-md bg-muted blur-sm" />
+      {/* Tag pills */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        <div className="h-5 w-16 rounded-full bg-muted blur-sm" />
+        <div className="h-5 w-20 rounded-full bg-muted blur-sm" />
+        <div className="h-5 w-14 rounded-full bg-muted blur-sm" />
+      </div>
+      {/* CTA button */}
+      <button
+        type="button"
+        onClick={onLoginClick}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 active:bg-primary/15"
+      >
+        <Lock className="h-3.5 w-3.5" />
+        Log in to view profile
+      </button>
+    </div>
+  </div>
+);
+
+// ── Real maid card (logged in) ────────────────────────────────────────────────
+// Replace the internals with your actual MaidCard component.
+// This is a fully-featured placeholder that matches the locked card's dimensions.
+const MaidCard = ({
+  maid,
+  onViewProfile,
+}: {
+  maid: MaidProfile;
+  onViewProfile: (maid: MaidProfile) => void;
+}) => {
+  const initials = maid.name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+
+  const typeColor =
+    maid.maidType === "New Maid"
+      ? "border-emerald-400/40 bg-emerald-50 text-emerald-700"
+      : maid.maidType === "Transfer Maid"
+        ? "border-blue-400/40 bg-blue-50 text-blue-700"
+        : "border-amber-400/40 bg-amber-50 text-amber-700";
+
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
+      {/* Photo / avatar area */}
+      <div className="relative h-40 overflow-hidden bg-muted flex items-center justify-center">
+        {maid.photoUrl ? (
+          <img
+            src={maid.photoUrl}
+            alt={maid.name}
+            className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20 text-xl font-semibold text-primary">
+            {initials}
+          </div>
+        )}
+        {maid.maidType && (
+          <span
+            className={`absolute bottom-2 left-2 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${typeColor}`}
+          >
+            {maid.maidType}
+          </span>
+        )}
+        {maid.hasVideo && (
+          <span className="absolute bottom-2 right-2 rounded-full border border-purple-400/40 bg-purple-50 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700">
+            📹 Video
+          </span>
+        )}
+      </div>
+
+      {/* Card body */}
+      <div className="p-4">
+        <div className="mb-0.5 flex items-start justify-between gap-2">
+          <p className="font-semibold text-foreground leading-tight">{maid.name}</p>
+          {maid.refCode && (
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+              {maid.refCode}
+            </span>
+          )}
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          {[maid.nationality, maid.age ? `${maid.age} yrs` : "", maid.experience?.[0]].filter(Boolean).join(" · ")}
+        </p>
+
+        {/* Duty / language tags */}
+        {(maid.duties?.length || maid.languages?.length) ? (
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {maid.duties?.slice(0, 2).map((d) => (
+              <span key={d} className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-foreground">
+                {d}
+              </span>
+            ))}
+            {maid.languages?.slice(0, 1).map((l) => (
+              <span key={l} className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+                {l}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="mb-4" />
+        )}
+
+        <button
+          type="button"
+          onClick={() => onViewProfile(maid)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 active:bg-primary/80"
+        >
+          View Full Profile
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── Login gate banner (shown above results when not logged in) ─────────────────
+const LoginGateBanner = ({ onLoginClick }: { onLoginClick: () => void }) => (
+  <div className="overflow-hidden rounded-2xl border border-primary/20 bg-primary/5 shadow-sm">
+    <div className="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6 sm:p-6">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <Lock className="h-4.5 w-4.5 text-primary" />
+        </div>
+        <div>
+          <p className="font-semibold text-foreground">Profiles are hidden until you log in</p>
+          <p className="mt-0.5 text-sm text-muted-foreground leading-relaxed">
+            Create a free account or log in to view names, photos, full biodata, contact details, and more.
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col">
+        <Button onClick={onLoginClick} size="sm" className="flex-1 sm:flex-none">
+          Log in to unlock
+        </Button>
+        <Button onClick={onLoginClick} size="sm" variant="outline" className="flex-1 sm:flex-none">
+          Create account
+        </Button>
+      </div>
+    </div>
+  </div>
+);
+
+// ── Request Form ──────────────────────────────────────────────────────────────
 interface RequestFormProps {
   prefillFilters: Filters;
   onBack: () => void;
@@ -455,7 +650,14 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
       if (!response.ok) throw new Error(data.error || data.message || `Request failed (${response.status})`);
       toast.success("Your request has been sent to the agency!");
       setRequirements(defaultRequirements);
-      setForm((prev) => ({ ...prev, nationality: derivedNationality, primaryDuty: derivedDuty, ageGroup: derivedAgeGroup, language: derivedLanguage, otherRequirements: "" }));
+      setForm((prev) => ({
+        ...prev,
+        nationality: derivedNationality,
+        primaryDuty: derivedDuty,
+        ageGroup: derivedAgeGroup,
+        language: derivedLanguage,
+        otherRequirements: "",
+      }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to submit request. Please try again.");
     } finally {
@@ -463,7 +665,8 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
     }
   };
 
-  const selectClass = "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground transition-colors focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/20";
+  const selectClass =
+    "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground transition-colors focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/20";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -498,17 +701,39 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
           <p className="mb-3 text-sm font-semibold text-foreground">Your Contact Details</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
-              <label className="text-sm font-medium text-foreground">Full Name <span className="text-destructive">*</span></label>
-              <Input placeholder="e.g. Sarah Tan" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
+              <label className="text-sm font-medium text-foreground">
+                Full Name <span className="text-destructive">*</span>
+              </label>
+              <Input
+                placeholder="e.g. Sarah Tan"
+                value={form.name}
+                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                required
+              />
             </div>
             <div className="grid gap-1.5">
-              <label className="text-sm font-medium text-foreground">Email Address <span className="text-destructive">*</span></label>
-              <Input type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} required />
+              <label className="text-sm font-medium text-foreground">
+                Email Address <span className="text-destructive">*</span>
+              </label>
+              <Input
+                type="email"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                required
+              />
             </div>
           </div>
           <div className="mt-4 grid gap-1.5">
-            <label className="text-sm font-medium text-foreground">Phone Number <span className="text-destructive">*</span></label>
-            <Input placeholder="e.g. +65 9123 4567" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} required />
+            <label className="text-sm font-medium text-foreground">
+              Phone Number <span className="text-destructive">*</span>
+            </label>
+            <Input
+              placeholder="e.g. +65 9123 4567"
+              value={form.phone}
+              onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+              required
+            />
           </div>
         </div>
 
@@ -545,14 +770,16 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
         <div>
           <p className="mb-3 text-sm font-semibold text-foreground">Special Requirements</p>
           <div className="flex flex-wrap gap-2">
-            {([
-              { key: "noOffDay", label: "No Off-day" },
-              { key: "hasChildren", label: "Has child(ren)" },
-              { key: "married", label: "Maid is Married" },
-              { key: "newMaid", label: "New Maid" },
-              { key: "transferMaid", label: "Transfer Maid" },
-              { key: "exSingaporeMaid", label: "Ex-Singapore Maid" },
-            ] as { key: keyof RequirementsState; label: string }[]).map((item) => (
+            {(
+              [
+                { key: "noOffDay", label: "No Off-day" },
+                { key: "hasChildren", label: "Has child(ren)" },
+                { key: "married", label: "Maid is Married" },
+                { key: "newMaid", label: "New Maid" },
+                { key: "transferMaid", label: "Transfer Maid" },
+                { key: "exSingaporeMaid", label: "Ex-Singapore Maid" },
+              ] as { key: keyof RequirementsState; label: string }[]
+            ).map((item) => (
               <Chip
                 key={item.key}
                 label={item.label}
@@ -574,7 +801,9 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
         </div>
 
         <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onBack} className="sm:w-auto">Cancel</Button>
+          <Button type="button" variant="outline" onClick={onBack} className="sm:w-auto">
+            Cancel
+          </Button>
           <Button type="submit" size="lg" className="sm:min-w-[180px]" disabled={isSubmitting}>
             {isSubmitting ? (
               <>
@@ -591,6 +820,90 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
   );
 };
 
+// ── Search Results Section ────────────────────────────────────────────────────
+// This is the component that renders after the user clicks "Search Maids".
+// Pass your actual maid data via props. Here it handles the locked vs. unlocked card logic.
+interface SearchResultsProps {
+  maids: MaidProfile[];
+  isLoggedIn: boolean;
+  isLoading: boolean;
+  onLoginClick: () => void;
+  onViewProfile: (maid: MaidProfile) => void;
+}
+
+const SearchResults = ({
+  maids,
+  isLoggedIn,
+  isLoading,
+  onLoginClick,
+  onViewProfile,
+}: SearchResultsProps) => {
+  if (isLoading) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-center py-20">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+            <span className="text-sm">Loading profiles…</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (maids.length === 0) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-dashed border-border bg-card shadow-sm">
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <Search className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">No profiles found</p>
+            <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters or search terms.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Login gate banner — only shown when not logged in */}
+      {!isLoggedIn && <LoginGateBanner onLoginClick={onLoginClick} />}
+
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        {/* Results header */}
+        <div className="flex items-center justify-between border-b bg-muted/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-semibold text-foreground">
+              {maids.length} profile{maids.length !== 1 ? "s" : ""} found
+            </span>
+          </div>
+          {!isLoggedIn && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Lock className="h-3 w-3" />
+              <span>Log in to see full details</span>
+            </div>
+          )}
+        </div>
+
+        {/* Cards grid */}
+        <div className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
+          {maids.map((maid) =>
+            isLoggedIn ? (
+              <MaidCard key={maid.id} maid={maid} onViewProfile={onViewProfile} />
+            ) : (
+              <LockedMaidCard key={maid.id} onLoginClick={onLoginClick} />
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const ClientMaidsPage = () => {
   const navigate = useNavigate();
@@ -603,6 +916,15 @@ const ClientMaidsPage = () => {
   const [requestOpen, setRequestOpen] = useState(searchParams.get("intent") === "request");
   const [searchedFilters, setSearchedFilters] = useState<Filters>(initialDraft);
 
+  // ── Search results state ──────────────────────────────────────────────────
+  const [searchResults, setSearchResults] = useState<MaidProfile[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  // The page is PUBLIC — no redirect. We only check login for card visibility.
+  const isLoggedIn = !!getClientToken();
+
   useEffect(() => {
     const nextDraft = parseDraftFromSearchParams(searchParams);
     if (nextDraft) { setDraft(nextDraft); setSearchedFilters(nextDraft); }
@@ -613,10 +935,6 @@ const ClientMaidsPage = () => {
     if (!requestOpen) return;
     requestRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [requestOpen]);
-
-  useEffect(() => {
-    if (!getClientToken()) navigate("/employer-login");
-  }, [navigate]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -633,7 +951,8 @@ const ClientMaidsPage = () => {
     const tags: { key: keyof Filters; label: string }[] = [];
     if (draft.keyword.trim()) tags.push({ key: "keyword", label: `"${draft.keyword.trim()}"` });
     if (draft.maidType) tags.push({ key: "maidType", label: `Type: ${draft.maidType}` });
-    if (draft.biodataCreatedWithin !== "No Preference") tags.push({ key: "biodataCreatedWithin", label: `Within: ${draft.biodataCreatedWithin}` });
+    if (draft.biodataCreatedWithin !== "No Preference")
+      tags.push({ key: "biodataCreatedWithin", label: `Within: ${draft.biodataCreatedWithin}` });
     for (const [key, label] of Object.entries(FILTER_LABELS) as [keyof Filters, string][]) {
       if (draft[key] === true) tags.push({ key, label });
     }
@@ -648,17 +967,20 @@ const ClientMaidsPage = () => {
   const toggle = (key: keyof Filters) =>
     setDraft((prev) => {
       const nextValue = !prev[key];
-      const group = PREFERENCE_GROUPS.find((item) => (item.specifics as readonly (keyof Filters)[]).includes(key));
+      const group = PREFERENCE_GROUPS.find((item) =>
+        (item.specifics as readonly (keyof Filters)[]).includes(key)
+      );
       if (!group) return { ...prev, [key]: nextValue };
       const next = { ...prev, [key]: nextValue, [group.noPreference]: false };
       const allOff = (group.specifics as readonly (keyof Filters)[]).every((groupKey) =>
-        groupKey === key ? !nextValue : !prev[groupKey],
+        groupKey === key ? !nextValue : !prev[groupKey]
       );
       if (allOff) next[group.noPreference] = true;
       return next;
     });
 
-  const countGroup = (keys: readonly (keyof Filters)[]) => keys.filter((key) => draft[key] === true).length;
+  const countGroup = (keys: readonly (keyof Filters)[]) =>
+    keys.filter((key) => draft[key] === true).length;
 
   const syncPageState = (intent?: "request") => {
     const next = new URLSearchParams();
@@ -671,7 +993,9 @@ const ClientMaidsPage = () => {
     if (key === "keyword") { set("keyword", ""); return; }
     if (key === "maidType") { set("maidType", ""); return; }
     if (key === "biodataCreatedWithin") { set("biodataCreatedWithin", "No Preference"); return; }
-    const group = PREFERENCE_GROUPS.find((item) => (item.specifics as readonly (keyof Filters)[]).includes(key));
+    const group = PREFERENCE_GROUPS.find((item) =>
+      (item.specifics as readonly (keyof Filters)[]).includes(key)
+    );
     if (group) { toggle(key); return; }
     set(key, false);
   };
@@ -679,17 +1003,53 @@ const ClientMaidsPage = () => {
   const clearAllFilters = () => {
     setDraft(defaultFilters);
     setSearchedFilters(defaultFilters);
+    setHasSearched(false);
+    setSearchResults([]);
     if (requestOpen) {
-      setSearchParams(new URLSearchParams([["intent", "request"], ["filters", JSON.stringify(defaultFilters)]]), { replace: true });
+      setSearchParams(
+        new URLSearchParams([["intent", "request"], ["filters", JSON.stringify(defaultFilters)]]),
+        { replace: true }
+      );
       return;
     }
     setSearchParams(new URLSearchParams([["filters", JSON.stringify(defaultFilters)]]), { replace: true });
   };
 
-  const handleSearch = () => {
+  // ── Search handler — calls your real API ───────────────────────────────────
+  const handleSearch = async () => {
     setRequestOpen(false);
     setSearchedFilters(draft);
-    navigate(`/client/maids/search?${buildSearchParamsFromFilters(draft).toString()}`);
+    setHasSearched(true);
+    setIsSearching(true);
+
+    // Update URL with search params
+    const params = buildSearchParamsFromFilters(draft);
+    navigate(`/client/maids/search?${params.toString()}`);
+
+    try {
+      // Replace this fetch with however your app loads maid data.
+      // The URL below mirrors the search params you were already building.
+      const response = await fetch(`/api/maids?${params.toString()}`, {
+        headers: {
+          // Include auth token if logged in so the API can return richer data.
+          // The page still renders even without a token — cards just stay locked.
+          ...(getClientToken() ? { Authorization: `Bearer ${getClientToken()}` } : {}),
+        },
+      });
+      if (!response.ok) throw new Error("Search failed");
+      const data = (await response.json()) as { maids?: MaidProfile[]; data?: MaidProfile[] };
+      // Support both { maids: [...] } and { data: [...] } response shapes
+      setSearchResults(data.maids ?? data.data ?? []);
+    } catch {
+      toast.error("Failed to load profiles. Please try again.");
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleViewProfile = (maid: MaidProfile) => {
+    navigate(`/client/maids/${maid.id}`);
   };
 
   const handleOpenRequest = () => {
@@ -702,6 +1062,10 @@ const ClientMaidsPage = () => {
     setRequestOpen(false);
     syncPageState();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleLoginClick = () => {
+    navigate("/employer-login");
   };
 
   return (
@@ -724,8 +1088,13 @@ const ClientMaidsPage = () => {
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {["Set filters", "Search profiles", "Request matching"].map((step, i) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-foreground">
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{i + 1}</span>
+                  <span
+                    key={i}
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-foreground"
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
+                      {i + 1}
+                    </span>
                     {step}
                   </span>
                 ))}
@@ -739,11 +1108,18 @@ const ClientMaidsPage = () => {
               </div>
               {activeFilterCount > 0 ? (
                 <>
-                  <p className="text-sm font-medium text-primary">{activeFilterCount} filter{activeFilterCount !== 1 ? "s" : ""} active</p>
+                  <p className="text-sm font-medium text-primary">
+                    {activeFilterCount} filter{activeFilterCount !== 1 ? "s" : ""} active
+                  </p>
                   {requestHighlights.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {requestHighlights.slice(0, 3).map((item) => (
-                        <span key={item} className="rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-foreground">{item}</span>
+                        <span
+                          key={item}
+                          className="rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-foreground"
+                        >
+                          {item}
+                        </span>
                       ))}
                     </div>
                   )}
@@ -806,18 +1182,24 @@ const ClientMaidsPage = () => {
               <div className="py-4 space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Keyword Search</label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Keyword Search
+                    </label>
                     <div className="relative">
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                       <input
                         value={draft.keyword}
                         onChange={(e) => set("keyword", e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                        onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
                         className="w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
                         placeholder="Name, reference code, nationality…"
                       />
                       {draft.keyword && (
-                        <button type="button" onClick={() => set("keyword", "")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <button
+                          type="button"
+                          onClick={() => set("keyword", "")}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       )}
@@ -825,7 +1207,9 @@ const ClientMaidsPage = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Profile Created Within</label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Profile Created Within
+                    </label>
                     <select
                       value={draft.biodataCreatedWithin}
                       onChange={(e) => set("biodataCreatedWithin", e.target.value)}
@@ -844,7 +1228,9 @@ const ClientMaidsPage = () => {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Maid Type</label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Maid Type
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
                       {(["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const).map((type) => (
                         <Chip
@@ -859,13 +1245,17 @@ const ClientMaidsPage = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Filters</label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Quick Filters
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
-                      {([
-                        ["willingOffDays", "Willing Off-days"],
-                        ["hasChildren", "Has Children"],
-                        ["withVideo", "Has Video"],
-                      ] as [keyof Filters, string][]).map(([key, label]) => (
+                      {(
+                        [
+                          ["willingOffDays", "Willing Off-days"],
+                          ["hasChildren", "Has Children"],
+                          ["withVideo", "Has Video"],
+                        ] as [keyof Filters, string][]
+                      ).map(([key, label]) => (
                         <Chip key={key} label={label} checked={!!draft[key]} onChange={() => toggle(key)} />
                       ))}
                     </div>
@@ -873,121 +1263,102 @@ const ClientMaidsPage = () => {
                 </div>
               </div>
 
-              {/* Detailed filter accordions – 2 column grid on sm+ */}
+              {/* Detailed filter accordions */}
               <div className="py-4">
-                <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Detailed Preferences</p>
+                <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Detailed Preferences
+                </p>
                 <div className="grid grid-cols-1 gap-x-8 gap-y-1 divide-y divide-border/40 sm:grid-cols-2 sm:divide-y-0 [&>*]:border-b [&>*]:border-border/40 sm:[&>*]:border-b-0">
 
-                  <FilterSection title="Nationality" count={countGroup(["natFilipino", "natIndonesian", "natMyanmar", "natIndian", "natSriLankan", "natCambodian", "natBangladeshi", "natOthers"])} defaultOpen>
+                  <FilterSection
+                    title="Nationality"
+                    count={countGroup(["natFilipino","natIndonesian","natMyanmar","natIndian","natSriLankan","natCambodian","natBangladeshi","natOthers"])}
+                    defaultOpen
+                  >
                     {[
-                      ["natFilipino", "Filipino"],
-                      ["natIndonesian", "Indonesian"],
-                      ["natMyanmar", "Myanmar"],
-                      ["natIndian", "Indian"],
-                      ["natSriLankan", "Sri Lankan"],
-                      ["natCambodian", "Cambodian"],
-                      ["natBangladeshi", "Bangladeshi"],
-                      ["natOthers", "Others"],
-                    ].map(([key, label]) => (
+                      ["natFilipino","Filipino"],["natIndonesian","Indonesian"],["natMyanmar","Myanmar"],
+                      ["natIndian","Indian"],["natSriLankan","Sri Lankan"],["natCambodian","Cambodian"],
+                      ["natBangladeshi","Bangladeshi"],["natOthers","Others"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection title="Work Experience" count={countGroup(["expHomeCountry", "expSingapore", "expMalaysia", "expHongKong", "expTaiwan", "expMiddleEast", "expOtherCountries"])} defaultOpen>
+                  <FilterSection
+                    title="Work Experience"
+                    count={countGroup(["expHomeCountry","expSingapore","expMalaysia","expHongKong","expTaiwan","expMiddleEast","expOtherCountries"])}
+                    defaultOpen
+                  >
                     {[
-                      ["expHomeCountry", "Home Country"],
-                      ["expSingapore", "Singapore"],
-                      ["expMalaysia", "Malaysia"],
-                      ["expHongKong", "Hong Kong"],
-                      ["expTaiwan", "Taiwan"],
-                      ["expMiddleEast", "Middle East"],
-                      ["expOtherCountries", "Others"],
-                    ].map(([key, label]) => (
+                      ["expHomeCountry","Home Country"],["expSingapore","Singapore"],["expMalaysia","Malaysia"],
+                      ["expHongKong","Hong Kong"],["expTaiwan","Taiwan"],["expMiddleEast","Middle East"],
+                      ["expOtherCountries","Others"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection title="Duties" count={countGroup(["dutyCareInfant", "dutyCareYoungChildren", "dutyCareElderlyDisabled", "dutyCooking", "dutyGeneralHousekeeping"])}>
+                  <FilterSection title="Duties" count={countGroup(["dutyCareInfant","dutyCareYoungChildren","dutyCareElderlyDisabled","dutyCooking","dutyGeneralHousekeeping"])}>
                     {[
-                      ["dutyCareInfant", "Infant Care"],
-                      ["dutyCareYoungChildren", "Young Children"],
-                      ["dutyCareElderlyDisabled", "Elderly / Disabled"],
-                      ["dutyCooking", "Cooking"],
-                      ["dutyGeneralHousekeeping", "Housekeeping"],
-                    ].map(([key, label]) => (
+                      ["dutyCareInfant","Infant Care"],["dutyCareYoungChildren","Young Children"],
+                      ["dutyCareElderlyDisabled","Elderly / Disabled"],["dutyCooking","Cooking"],
+                      ["dutyGeneralHousekeeping","Housekeeping"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection title="Language" count={countGroup(["langEnglish", "langMandarin", "langBahasaIndonesia", "langHindi", "langTamil"])}>
+                  <FilterSection title="Language" count={countGroup(["langEnglish","langMandarin","langBahasaIndonesia","langHindi","langTamil"])}>
                     {[
-                      ["langEnglish", "English"],
-                      ["langMandarin", "Mandarin"],
-                      ["langBahasaIndonesia", "Bahasa / Malay"],
-                      ["langHindi", "Hindi"],
-                      ["langTamil", "Tamil"],
-                    ].map(([key, label]) => (
+                      ["langEnglish","English"],["langMandarin","Mandarin"],
+                      ["langBahasaIndonesia","Bahasa / Malay"],["langHindi","Hindi"],["langTamil","Tamil"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection title="Age Group" count={countGroup(["age21to25", "age26to30", "age31to35", "age36to40", "age41above"])}>
+                  <FilterSection title="Age Group" count={countGroup(["age21to25","age26to30","age31to35","age36to40","age41above"])}>
                     {[
-                      ["age21to25", "21–25"],
-                      ["age26to30", "26–30"],
-                      ["age31to35", "31–35"],
-                      ["age36to40", "36–40"],
-                      ["age41above", "41+"],
-                    ].map(([key, label]) => (
+                      ["age21to25","21–25"],["age26to30","26–30"],["age31to35","31–35"],
+                      ["age36to40","36–40"],["age41above","41+"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection title="Marital Status" count={countGroup(["marSingle", "marMarried", "marWidowed", "marDivorced", "marSeparated"])}>
+                  <FilterSection title="Marital Status" count={countGroup(["marSingle","marMarried","marWidowed","marDivorced","marSeparated"])}>
                     {[
-                      ["marSingle", "Single"],
-                      ["marMarried", "Married"],
-                      ["marWidowed", "Widowed"],
-                      ["marDivorced", "Divorced"],
-                      ["marSeparated", "Separated"],
-                    ].map(([key, label]) => (
+                      ["marSingle","Single"],["marMarried","Married"],["marWidowed","Widowed"],
+                      ["marDivorced","Divorced"],["marSeparated","Separated"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection title="Education" count={countGroup(["eduCollege", "eduHighSchool", "eduSecondary", "eduPrimary"])}>
+                  <FilterSection title="Education" count={countGroup(["eduCollege","eduHighSchool","eduSecondary","eduPrimary"])}>
                     {[
-                      ["eduCollege", "College / Degree"],
-                      ["eduHighSchool", "High School"],
-                      ["eduSecondary", "Secondary"],
-                      ["eduPrimary", "Primary Level"],
-                    ].map(([key, label]) => (
+                      ["eduCollege","College / Degree"],["eduHighSchool","High School"],
+                      ["eduSecondary","Secondary"],["eduPrimary","Primary Level"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection title="Height (cm)" count={countGroup(["height150below", "height151to155", "height156to160", "height161above"])}>
+                  <FilterSection title="Height (cm)" count={countGroup(["height150below","height151to155","height156to160","height161above"])}>
                     {[
-                      ["height150below", "≤150 cm"],
-                      ["height151to155", "151–155 cm"],
-                      ["height156to160", "156–160 cm"],
-                      ["height161above", "161+ cm"],
-                    ].map(([key, label]) => (
+                      ["height150below","≤150 cm"],["height151to155","151–155 cm"],
+                      ["height156to160","156–160 cm"],["height161above","161+ cm"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection title="Religion" count={countGroup(["relFreeThinker", "relChristian", "relCatholic", "relBuddhist", "relMuslim", "relHindu", "relSikh", "relOthers"])}>
+                  <FilterSection title="Religion" count={countGroup(["relFreeThinker","relChristian","relCatholic","relBuddhist","relMuslim","relHindu","relSikh","relOthers"])}>
                     {[
-                      ["relFreeThinker", "Free Thinker"],
-                      ["relChristian", "Christian"],
-                      ["relCatholic", "Catholic"],
-                      ["relBuddhist", "Buddhist"],
-                      ["relMuslim", "Muslim"],
-                      ["relHindu", "Hindu"],
-                      ["relSikh", "Sikh"],
-                      ["relOthers", "Others"],
-                    ].map(([key, label]) => (
+                      ["relFreeThinker","Free Thinker"],["relChristian","Christian"],["relCatholic","Catholic"],
+                      ["relBuddhist","Buddhist"],["relMuslim","Muslim"],["relHindu","Hindu"],
+                      ["relSikh","Sikh"],["relOthers","Others"],
+                    ].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
@@ -1001,7 +1372,7 @@ const ClientMaidsPage = () => {
                   type="button"
                   size="lg"
                   className="flex-1 font-semibold sm:flex-none sm:min-w-[160px]"
-                  onClick={handleSearch}
+                  onClick={() => void handleSearch()}
                 >
                   <Search className="mr-2 h-4 w-4" />
                   Search Maids
@@ -1035,6 +1406,17 @@ const ClientMaidsPage = () => {
           )}
         </div>
 
+        {/* ── Search Results ── */}
+        {hasSearched && (
+          <SearchResults
+            maids={searchResults}
+            isLoggedIn={isLoggedIn}
+            isLoading={isSearching}
+            onLoginClick={handleLoginClick}
+            onViewProfile={handleViewProfile}
+          />
+        )}
+
         {/* ── Agency CTA (shown when request form is closed) ── */}
         {!requestOpen && (
           <div className="overflow-hidden rounded-2xl border border-dashed bg-card shadow-sm">
@@ -1066,6 +1448,7 @@ const ClientMaidsPage = () => {
             <RequestForm prefillFilters={searchedFilters} onBack={handleCloseRequest} />
           </div>
         )}
+
       </div>
     </div>
   );

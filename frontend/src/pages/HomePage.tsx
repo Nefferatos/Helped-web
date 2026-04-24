@@ -17,6 +17,7 @@ import {
   FileText,
   ChevronRight,
   TrendingUp,
+  BarChart3,
 } from "lucide-react";
 
 interface DashboardSummary {
@@ -33,29 +34,140 @@ interface DashboardSummary {
   galleryImages: number;
 }
 
+/* ─── Animated Counter ──────────────────────────────────────────────────── */
+
+const useCountUp = (target: number, duration = 900) => {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (target === 0) { setValue(0); return; }
+    let start = 0;
+    const step = Math.ceil(target / (duration / 16));
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= target) { setValue(target); clearInterval(timer); }
+      else setValue(start);
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+  return value;
+};
+
 /* ─── Stat Card ─────────────────────────────────────────────────────────── */
 
 interface StatCardProps {
   icon: React.ReactNode;
   label: string;
-  value: string | number;
-  iconBg: string;
-  iconColor: string;
+  value: number | string;
+  loading: boolean;
+  colorClass: string;        // e.g. "teal" | "blue" | "orange" | "red" | "violet" | "sky" | "pink" | "amber"
   sub?: string;
+  subUrgent?: boolean;
 }
 
-const StatCard = ({ icon, label, value, iconBg, iconColor, sub }: StatCardProps) => (
-  <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-    <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
-      <span className={iconColor}>{icon}</span>
+const colorMap: Record<string, { bg: string; shadow: string; iconBg: string; iconColor: string; border: string }> = {
+  teal:   { bg: "#E1F5EE", shadow: "#9FE1CB", iconBg: "rgba(13,110,86,0.14)",   iconColor: "#0D6E56", border: "#9FE1CB" },
+  blue:   { bg: "#E6F1FB", shadow: "#B5D4F4", iconBg: "rgba(24,95,165,0.14)",   iconColor: "#185FA5", border: "#B5D4F4" },
+  orange: { bg: "#FEF3E2", shadow: "#FAC775", iconBg: "rgba(186,117,23,0.14)",  iconColor: "#BA7517", border: "#FAC775" },
+  red:    { bg: "#FCEBEB", shadow: "#F7C1C1", iconBg: "rgba(163,45,45,0.14)",   iconColor: "#A32D2D", border: "#F7C1C1" },
+  violet: { bg: "#EEEDFE", shadow: "#CECBF6", iconBg: "rgba(83,74,183,0.14)",   iconColor: "#534AB7", border: "#CECBF6" },
+  sky:    { bg: "#E6F1FB", shadow: "#B5D4F4", iconBg: "rgba(24,95,165,0.12)",   iconColor: "#185FA5", border: "#B5D4F4" },
+  pink:   { bg: "#FBEAF0", shadow: "#F4C0D1", iconBg: "rgba(153,53,86,0.14)",   iconColor: "#993556", border: "#F4C0D1" },
+  amber:  { bg: "#FEF3E2", shadow: "#FAC775", iconBg: "rgba(133,79,11,0.14)",   iconColor: "#854F0B", border: "#FAC775" },
+};
+
+const StatCard = ({ icon, label, value, loading, colorClass, sub, subUrgent }: StatCardProps) => {
+  const numericValue = typeof value === "number" ? value : 0;
+  const animated = useCountUp(loading ? 0 : numericValue);
+  const c = colorMap[colorClass] ?? colorMap.teal;
+
+  return (
+    <div
+      style={{
+        background: c.bg,
+        border: `1.5px solid ${c.border}`,
+        boxShadow: `0 6px 0 ${c.shadow}, 0 12px 24px rgba(0,0,0,0.07)`,
+        borderRadius: 18,
+        padding: "18px 16px 16px",
+        transition: "transform 0.18s ease, box-shadow 0.18s ease",
+        cursor: "default",
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLDivElement).style.transform = "translateY(-4px) scale(1.025)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 0 ${c.shadow}, 0 8px 22px rgba(0,0,0,0.12)`;
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLDivElement).style.transform = "translateY(0) scale(1)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 0 ${c.shadow}, 0 12px 24px rgba(0,0,0,0.07)`;
+      }}
+    >
+      {/* Icon */}
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 13,
+          background: c.iconBg,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 12,
+          color: c.iconColor,
+        }}
+      >
+        {icon}
+      </div>
+
+      {/* Label */}
+      <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#555", marginBottom: 4 }}>
+        {label}
+      </p>
+
+      {/* Value */}
+      <p style={{ fontSize: 36, fontWeight: 800, color: "#111", lineHeight: 1, marginBottom: 4, fontFamily: "'Lexend', sans-serif" }}>
+        {loading ? "—" : animated}
+      </p>
+
+      {/* Sub */}
+      {sub && (
+        <p style={{ fontSize: 13, fontWeight: 600, color: subUrgent ? "#A32D2D" : "#555" }}>
+          {sub}
+        </p>
+      )}
     </div>
-    <div className="min-w-0">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="text-[22px] font-bold leading-tight text-gray-900">{value}</p>
-      {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+  );
+};
+
+/* ─── Analytics Bar ─────────────────────────────────────────────────────── */
+
+interface BarRowProps {
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+}
+
+const BarRow = ({ label, value, max, color }: BarRowProps) => {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+        <span style={{ fontSize: 15, fontWeight: 600, color: "#222" }}>{label}</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#111" }}>{value}</span>
+      </div>
+      <div style={{ height: 11, borderRadius: 8, background: "#EBEBEB", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            borderRadius: 8,
+            background: color,
+            transition: "width 1.1s cubic-bezier(.4,0,.2,1)",
+          }}
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /* ─── Menu Card ─────────────────────────────────────────────────────────── */
 
@@ -64,51 +176,79 @@ interface MenuCardProps {
   label: string;
   desc: string;
   path: string;
-  accent: string;
-  accentText: string;
-  accentBg: string;
+  iconBg: string;
+  iconColor: string;
   badge?: string;
   badgeUrgent?: boolean;
 }
 
-const MenuCard = ({
-  icon,
-  label,
-  desc,
-  path,
-  accent,
-  accentText,
-  accentBg,
-  badge,
-  badgeUrgent,
-}: MenuCardProps) => (
+const MenuCard = ({ icon, label, desc, path, iconBg, iconColor, badge, badgeUrgent }: MenuCardProps) => (
   <Link
     to={path}
-    className="group flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md no-underline"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      background: "#fff",
+      border: "1.5px solid #E4E9F0",
+      borderRadius: 18,
+      padding: "16px 18px",
+      boxShadow: "0 5px 0 #E4E9F0, 0 10px 22px rgba(0,0,0,0.05)",
+      textDecoration: "none",
+      color: "inherit",
+      transition: "transform 0.16s ease, box-shadow 0.16s ease",
+    }}
+    onMouseEnter={e => {
+      (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-3px)";
+      (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 2px 0 #E4E9F0, 0 8px 22px rgba(0,0,0,0.1)";
+    }}
+    onMouseLeave={e => {
+      (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(0)";
+      (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 5px 0 #E4E9F0, 0 10px 22px rgba(0,0,0,0.05)";
+    }}
   >
-    <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${accentBg}`}>
-      <span className={accentText}>{icon}</span>
+    {/* Icon */}
+    <div
+      style={{
+        width: 50,
+        height: 50,
+        borderRadius: 14,
+        background: iconBg,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        color: iconColor,
+      }}
+    >
+      {icon}
     </div>
-    <div className="min-w-0 flex-1">
-      <p className="text-[13.5px] font-semibold text-gray-800 group-hover:text-gray-900">
+
+    {/* Body */}
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <p style={{ fontSize: 16, fontWeight: 700, color: "#111", marginBottom: 2, fontFamily: "'Lexend', sans-serif" }}>
         {label}
       </p>
-      <p className="text-[12px] text-gray-400 mt-0.5 leading-snug">{desc}</p>
+      <p style={{ fontSize: 13, color: "#666", marginBottom: badge ? 6 : 0 }}>{desc}</p>
       {badge && (
         <span
-          className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-            badgeUrgent
-              ? "bg-red-50 text-red-600"
-              : `${accentBg} ${accentText}`
-          }`}
+          style={{
+            display: "inline-block",
+            fontSize: 12,
+            fontWeight: 700,
+            padding: "3px 10px",
+            borderRadius: 20,
+            background: badgeUrgent ? "#FCEBEB" : "#F1EFE8",
+            color: badgeUrgent ? "#791F1F" : "#444441",
+          }}
         >
           {badge}
         </span>
       )}
     </div>
-    <ChevronRight
-      className={`h-4 w-4 flex-shrink-0 text-gray-300 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:${accent}`}
-    />
+
+    {/* Arrow */}
+    <ChevronRight size={18} style={{ flexShrink: 0, color: "#CCC" }} />
   </Link>
 );
 
@@ -119,12 +259,18 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Load Lexend from Google Fonts
+    const link = document.createElement("link");
+    link.href = "https://fonts.googleapis.com/css2?family=Lexend:wght@700;800&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+  }, []);
+
+  useEffect(() => {
     const loadSummary = async () => {
       try {
         const response = await fetch("/api/company/summary");
-        const data = (await response.json().catch(() => ({}))) as Partial<DashboardSummary> & {
-          error?: string;
-        };
+        const data = (await response.json().catch(() => ({}))) as Partial<DashboardSummary> & { error?: string };
         if (!response.ok) throw new Error(data.error || "Failed to load dashboard summary");
         setSummary({
           publicMaids: data.publicMaids ?? 0,
@@ -149,167 +295,236 @@ const HomePage = () => {
   }, []);
 
   const s = summary;
-  const dash = (v?: number) => (loading ? "—" : (v ?? 0));
 
   return (
-    <div className="space-y-6">
+    <div style={{ padding: "4px 0 32px", background: "#F5F7FA", minHeight: "100vh" }}>
 
-      {/* ── Page title ───────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      {/* ── Page Header ───────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
         <div>
-          <h2 className="text-[18px] font-bold text-gray-900 tracking-tight">Dashboard</h2>
-          <p className="text-[13px] text-gray-400 mt-0.5">Agency overview at a glance</p>
+          <h2 style={{ fontSize: 28, fontWeight: 800, color: "#111", fontFamily: "'Lexend', sans-serif", margin: 0, lineHeight: 1.1 }}>
+            Dashboard
+          </h2>
+          <p style={{ fontSize: 15, color: "#666", marginTop: 4 }}>Agency overview at a glance</p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-[#0D6E56]/20 bg-[#E1F5EE] px-3 py-1.5">
-          <TrendingUp className="h-3.5 w-3.5 text-[#0D6E56]" />
-          <span className="text-[12px] font-semibold text-[#0D6E56]">Live</span>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "#E1F5EE",
+            border: "1.5px solid #9FE1CB",
+            borderRadius: 24,
+            padding: "8px 18px",
+          }}
+        >
+          <span
+            style={{
+              width: 9,
+              height: 9,
+              borderRadius: "50%",
+              background: "#1D9E75",
+              display: "inline-block",
+              animation: "livePulse 1.6s ease-in-out infinite",
+            }}
+          />
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#0D6E56", fontFamily: "'Lexend', sans-serif" }}>Live</span>
         </div>
       </div>
 
-      {/* ── Stat cards ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <style>{`
+        @keyframes livePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.45; transform: scale(1.5); }
+        }
+      `}</style>
+
+      {/* ── Primary Stat Cards ────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 14 }}>
         <StatCard
-          icon={<Users className="h-5 w-5" />}
+          icon={<Users size={22} />}
           label="Total Maids"
-          value={dash(s?.totalMaids)}
-          iconBg="bg-[#E1F5EE]"
-          iconColor="text-[#0D6E56]"
-          sub={`${dash(s?.maidsWithPhotos)} with photos`}
+          value={s?.totalMaids ?? 0}
+          loading={loading}
+          colorClass="teal"
+          sub={loading ? undefined : `${s?.maidsWithPhotos ?? 0} with photos`}
         />
         <StatCard
-          icon={<Eye className="h-5 w-5" />}
+          icon={<Eye size={22} />}
           label="Public"
-          value={dash(s?.publicMaids)}
-          iconBg="bg-blue-50"
-          iconColor="text-blue-600"
+          value={s?.publicMaids ?? 0}
+          loading={loading}
+          colorClass="blue"
           sub="Visible to clients"
         />
         <StatCard
-          icon={<EyeOff className="h-5 w-5" />}
+          icon={<EyeOff size={22} />}
           label="Hidden"
-          value={dash(s?.hiddenMaids)}
-          iconBg="bg-orange-50"
-          iconColor="text-orange-500"
+          value={s?.hiddenMaids ?? 0}
+          loading={loading}
+          colorClass="orange"
           sub="Not listed"
         />
         <StatCard
-          icon={<MessageCircle className="h-5 w-5" />}
+          icon={<MessageCircle size={22} />}
           label="Unread Chats"
-          value={dash(s?.unreadAgencyChats)}
-          iconBg={s?.unreadAgencyChats ? "bg-red-50" : "bg-gray-50"}
-          iconColor={s?.unreadAgencyChats ? "text-red-500" : "text-gray-400"}
-          sub={s?.unreadAgencyChats ? "Needs attention" : "All caught up"}
+          value={s?.unreadAgencyChats ?? 0}
+          loading={loading}
+          colorClass={s?.unreadAgencyChats ? "red" : "teal"}
+          sub={loading ? undefined : s?.unreadAgencyChats ? "Needs attention" : "All caught up"}
+          subUrgent={!!s?.unreadAgencyChats && s.unreadAgencyChats > 0}
         />
       </div>
 
-      {/* ── Secondary stats ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* ── Secondary Stat Cards ──────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
         <StatCard
-          icon={<PhoneIncoming className="h-5 w-5" />}
+          icon={<PhoneIncoming size={22} />}
           label="Enquiries"
-          value={dash(s?.enquiries)}
-          iconBg="bg-violet-50"
-          iconColor="text-violet-500"
+          value={s?.enquiries ?? 0}
+          loading={loading}
+          colorClass="violet"
         />
         <StatCard
-          icon={<FileText className="h-5 w-5" />}
+          icon={<FileText size={22} />}
           label="Requests"
-          value={dash(s?.requests)}
-          iconBg="bg-sky-50"
-          iconColor="text-sky-500"
-          sub={`${dash(s?.pendingRequests)} pending`}
+          value={s?.requests ?? 0}
+          loading={loading}
+          colorClass="sky"
+          sub={loading ? undefined : `${s?.pendingRequests ?? 0} pending`}
         />
         <StatCard
-          icon={<Image className="h-5 w-5" />}
+          icon={<Image size={22} />}
           label="Gallery"
-          value={dash(s?.galleryImages)}
-          iconBg="bg-pink-50"
-          iconColor="text-pink-500"
+          value={s?.galleryImages ?? 0}
+          loading={loading}
+          colorClass="pink"
           sub="Agency photos"
         />
         <StatCard
-          icon={<Users className="h-5 w-5" />}
+          icon={<Users size={22} />}
           label="MOM Personnel"
-          value={dash(s?.momPersonnel)}
-          iconBg="bg-amber-50"
-          iconColor="text-amber-500"
+          value={s?.momPersonnel ?? 0}
+          loading={loading}
+          colorClass="amber"
         />
       </div>
 
-      {/* ── Quick actions ─────────────────────────────────────────────────── */}
-      <div>
-        <h3 className="text-[13px] font-semibold uppercase tracking-wide text-gray-400 mb-3">
-          Quick Actions
-        </h3>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <MenuCard
-            icon={<Building2 className="h-5 w-5" />}
-            label="Agency Profile"
-            desc="View and edit your agency details"
-            path={adminPath("/agency-profile")}
-            accent="text-blue-500"
-            accentText="text-blue-600"
-            accentBg="bg-blue-50"
-            badge={s ? `${s.momPersonnel} MOM · ${s.galleryImages} photos` : undefined}
-          />
-          <MenuCard
-            icon={<UserPlus className="h-5 w-5" />}
-            label="Add Maid"
-            desc="Register a new maid profile"
-            path={adminPath("/add-maid")}
-            accent="text-[#0D6E56]"
-            accentText="text-[#0D6E56]"
-            accentBg="bg-[#E1F5EE]"
-            badge="Register new profiles"
-          />
-          <MenuCard
-            icon={<Pencil className="h-5 w-5" />}
-            label="Edit / Delete Maids"
-            desc="Manage existing maid records"
-            path={adminPath("/edit-maids")}
-            accent="text-orange-500"
-            accentText="text-orange-600"
-            accentBg="bg-orange-50"
-            badge={s ? `${s.publicMaids} public · ${s.hiddenMaids} hidden` : undefined}
-          />
-          <MenuCard
-            icon={<MessageSquare className="h-5 w-5" />}
-            label="Chat Support"
-            desc="Reply to client chat messages"
-            path={adminPath("/chat-support")}
-            accent="text-sky-500"
-            accentText="text-sky-600"
-            accentBg="bg-sky-50"
-            badge={
-              s
-                ? s.unreadAgencyChats > 0
-                  ? `${s.unreadAgencyChats} unread messages`
-                  : "No unread messages"
-                : undefined
-            }
-            badgeUrgent={!!s?.unreadAgencyChats && s.unreadAgencyChats > 0}
-          />
-          <MenuCard
-            icon={<PhoneIncoming className="h-5 w-5" />}
-            label="Incoming Inquiries"
-            desc="Review client enquiries"
-            path={adminPath("/enquiry")}
-            accent="text-violet-500"
-            accentText="text-violet-600"
-            accentBg="bg-violet-50"
-            badge={s ? `${s.enquiries} total enquiries` : undefined}
-          />
-          <MenuCard
-            icon={<Lock className="h-5 w-5" />}
-            label="Change Password"
-            desc="Update your account password"
-            path={adminPath("/change-password")}
-            accent="text-gray-500"
-            accentText="text-gray-500"
-            accentBg="bg-gray-100"
-            badge="Keep your account secure"
-          />
+      {/* ── Analytics Panel ───────────────────────────────────────────── */}
+      {!loading && s && (
+        <div
+          style={{
+            background: "#fff",
+            border: "1.5px solid #E4E9F0",
+            borderRadius: 20,
+            boxShadow: "0 6px 0 #E4E9F0, 0 14px 28px rgba(0,0,0,0.06)",
+            padding: "22px 24px",
+            marginBottom: 28,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <BarChart3 size={20} color="#0D6E56" />
+            <span style={{ fontSize: 18, fontWeight: 800, color: "#111", fontFamily: "'Lexend', sans-serif" }}>
+              Maid Roster Breakdown
+            </span>
+          </div>
+
+          <BarRow label="Public Maids"     value={s.publicMaids}     max={s.totalMaids} color="#1D9E75" />
+          <BarRow label="Hidden Maids"     value={s.hiddenMaids}     max={s.totalMaids} color="#EF9F27" />
+          <BarRow label="Maids with Photos" value={s.maidsWithPhotos} max={s.totalMaids} color="#378ADD" />
+
+          {/* Summary pills */}
+          <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+            {[
+              { label: `${s.totalMaids} Total`,           bg: "#E1F5EE", color: "#085041" },
+              { label: `${Math.round((s.publicMaids / (s.totalMaids || 1)) * 100)}% Public`,    bg: "#E6F1FB", color: "#0C447C" },
+              { label: `${Math.round((s.maidsWithPhotos / (s.totalMaids || 1)) * 100)}% w/ Photos`, bg: "#EEEDFE", color: "#3C3489" },
+            ].map(pill => (
+              <span
+                key={pill.label}
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  padding: "5px 14px",
+                  borderRadius: 20,
+                  background: pill.bg,
+                  color: pill.color,
+                }}
+              >
+                {pill.label}
+              </span>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* ── Quick Actions ─────────────────────────────────────────────── */}
+      <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "#999", marginBottom: 14 }}>
+        Quick Actions
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <MenuCard
+          icon={<Building2 size={22} />}
+          label="Agency Profile"
+          desc="View and edit your agency details"
+          path={adminPath("/agency-profile")}
+          iconBg="#E6F1FB"
+          iconColor="#185FA5"
+          badge={s ? `${s.momPersonnel} MOM · ${s.galleryImages} photos` : undefined}
+        />
+        <MenuCard
+          icon={<UserPlus size={22} />}
+          label="Add Maid"
+          desc="Register a new maid profile"
+          path={adminPath("/add-maid")}
+          iconBg="#E1F5EE"
+          iconColor="#0D6E56"
+          badge="Register new profiles"
+        />
+        <MenuCard
+          icon={<Pencil size={22} />}
+          label="Edit / Delete Maids"
+          desc="Manage existing maid records"
+          path={adminPath("/edit-maids")}
+          iconBg="#FEF3E2"
+          iconColor="#BA7517"
+          badge={s ? `${s.publicMaids} public · ${s.hiddenMaids} hidden` : undefined}
+        />
+        <MenuCard
+          icon={<MessageSquare size={22} />}
+          label="Chat Support"
+          desc="Reply to client chat messages"
+          path={adminPath("/chat-support")}
+          iconBg="#E6F1FB"
+          iconColor="#185FA5"
+          badge={
+            s
+              ? s.unreadAgencyChats > 0
+                ? `${s.unreadAgencyChats} unread messages`
+                : "No unread messages"
+              : undefined
+          }
+          badgeUrgent={!!s?.unreadAgencyChats && s.unreadAgencyChats > 0}
+        />
+        <MenuCard
+          icon={<PhoneIncoming size={22} />}
+          label="Incoming Inquiries"
+          desc="Review client enquiries"
+          path={adminPath("/enquiry")}
+          iconBg="#EEEDFE"
+          iconColor="#534AB7"
+          badge={s ? `${s.enquiries} total enquiries` : undefined}
+        />
+        <MenuCard
+          icon={<Lock size={22} />}
+          label="Change Password"
+          desc="Update your account password"
+          path={adminPath("/change-password")}
+          iconBg="#F1EFE8"
+          iconColor="#444441"
+          badge="Keep your account secure"
+        />
       </div>
     </div>
   );
