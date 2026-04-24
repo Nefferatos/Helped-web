@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, LogOut, Settings, UserRound } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { adminPath } from "@/lib/routes";
 import { toast } from "@/components/ui/sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,7 +15,6 @@ const navItems = [
   { label: "EDIT/DELETE", path: adminPath("/edit-maids") },
   // { label: "REQUESTS", path: adminPath("/requests") },
   { label: "CHAT SUPPORT", path: adminPath("/chat-support") },
-  { label: "STAFF", path: adminPath("/staff") },
   { label: "PASSWORD MANAGEMENT", path: adminPath("/change-password") },
   { label: "INCOMING INQUIRIES", path: adminPath("/enquiry") },
 ];

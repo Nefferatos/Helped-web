@@ -189,9 +189,6 @@ const AgencyProfile = () => {
               <Link to={adminPath("/employment-contracts")}>Contracts</Link>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <Link to={adminPath("/staff")}>Staff</Link>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
               <Link to={adminPath("/chat-support")}><MessageCircle className="h-3.5 w-3.5 mr-1" />Chat</Link>
             </Button>
           </div>

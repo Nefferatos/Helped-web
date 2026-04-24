@@ -122,6 +122,7 @@ interface AgencyAdminRecord {
   username: string
   email?: string
   password: string
+  passwordHash?: string
   agencyName: string
   emailVerified?: boolean
   emailVerificationCodeHash?: string
@@ -378,6 +379,8 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     ...admin,
     supabaseUserId: admin.supabaseUserId || undefined,
     email: admin.email ?? '',
+    password: typeof admin.password === 'string' ? admin.password : '',
+    passwordHash: typeof admin.passwordHash === 'string' ? admin.passwordHash : '',
     profileImageUrl: admin.profileImageUrl ?? '',
     createdAt: admin.createdAt ?? now(),
     // Back-compat: treat pre-existing admins as verified (or no-email).
@@ -391,6 +394,11 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         : admin
     )
   }
+  agencyAdmins = agencyAdmins.map((admin) =>
+    admin.username === 'attheagency'
+      ? { ...admin, password: '@atagency2026' }
+      : admin
+  )
   const directSales = raw.directSales ?? defaults.directSales
   const chatMessages = raw.chatMessages ?? defaults.chatMessages
 
@@ -2419,8 +2427,7 @@ app.post('/api/agency-auth/confirm', async (c) => {
       adminId: admin.id,
       createdAt: now(),
     }
-    data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.adminId !== admin.id)
-    data.agencyAdminSessions.unshift(session)
+      data.agencyAdminSessions.unshift(session)
     await saveData(c.env, data)
     return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 200)
   }
@@ -2448,8 +2455,7 @@ app.post('/api/agency-auth/confirm', async (c) => {
     adminId: admin.id,
     createdAt: now(),
   }
-  data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.adminId !== admin.id)
-  data.agencyAdminSessions.unshift(session)
+    data.agencyAdminSessions.unshift(session)
   await saveData(c.env, data)
   return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) }, 200)
 })
@@ -2537,7 +2543,6 @@ app.post('/api/agency-auth/login', safeApi(async (c) => {
     createdAt: now(),
   }
 
-  data.agencyAdminSessions = data.agencyAdminSessions.filter((item) => item.adminId !== admin.id)
   data.agencyAdminSessions.unshift(session)
   await saveData(c.env, data)
   console.log('/api/agency-auth/login success')

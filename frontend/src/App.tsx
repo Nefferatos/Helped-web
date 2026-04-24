@@ -31,7 +31,6 @@ import MaidProfileFullView from "@/pages/MaidProfileFullView";
 import EditMaid from "@/pages/EditMaidProfile";
 import PublicMaidProfile from "@/pages/PublicMaidProfile";
 import ChangePassword from "@/pages/ChangePassword";
-import StaffManagement from "@/pages/StaffManagement";
 import Enquiry from "@/pages/Enquiry";
 import EmploymentContracts from "@/pages/EmploymentContracts";
 import AddEmployment from "@/pages/AddEmployment";
@@ -148,6 +147,10 @@ const ClientHomeRedirect = () => {
 const App = () => {
   useEffect(() => {
     if (!supabase) return;
+    const path = window.location.pathname;
+    if (path.startsWith("/agencyadmin")) {
+      return;
+    }
 
     // On app load, fetch session (important after email confirmation redirect).
     void (async () => {
@@ -245,7 +248,6 @@ const App = () => {
             <Route path="/agencyadmin/enquiry" element={<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/staff" element={<ProtectedAdminRoute><AdminShell><StaffManagement /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts/new" element={<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>} />
             <Route path="/agencyadmin/employment-contracts/:refCode" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
