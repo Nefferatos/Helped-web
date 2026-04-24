@@ -812,7 +812,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
                           setFormData((p) => ({ ...p, dateOfBirth: dob }));
                           if (dob && errors.dateOfBirth) setErrors((p) => ({ ...p, dateOfBirth: undefined }));
                         }}
-                        className={`${w} h-11 rounded-xl border border-slate-200 bg-slate-50/80 px-2 text-sm font-medium text-slate-800 shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 hover:bg-white ${errors.dateOfBirth ? "border-red-400" : ""}`}
+                        className={`${w} h-11 rounded-xl border border-slate-500 bg-slate-50/80 px-2 text-sm font-medium text-slate-800 shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:border-slate-300 hover:bg-white ${errors.dateOfBirth ? "border-red-400" : ""}`}
                       >
                         {opts.map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
