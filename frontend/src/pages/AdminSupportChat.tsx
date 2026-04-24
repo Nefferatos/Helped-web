@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCheck, MessageCircle, Search, Send, Users } from "lucide-react";
+import { CheckCheck, MessageCircle, Search, Send, Users, ArrowLeft, Circle } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { useNavigate } from "react-router-dom";
 import { adminPath } from "@/lib/routes";
@@ -12,6 +12,7 @@ import {
 import type { AdminConversation, ChatMessage } from "@/lib/chat";
 import { streamSse } from "@/lib/sse";
 
+/* ─── Helpers ──────────────────────────────────────────────────────────── */
 
 function initials(name: string) {
   return name
@@ -70,149 +71,23 @@ function buildQueryString(
   return params.toString();
 }
 
-
-const THEME_STYLE = `
-@keyframes dotPulse {
-  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1); }
-}
-@keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-:root {
-  --asc-accent: #1D9E75;
-  --asc-accent-hover: #0F6E56;
-
-  --asc-avatar-client-bg:  #EEEDFE;
-  --asc-avatar-client-fg:  #3C3489;
-  --asc-avatar-agency-bg:  #E1F5EE;
-  --asc-avatar-agency-fg:  #085041;
-  --asc-avatar-support-bg: #E6F1FB;
-  --asc-avatar-support-fg: #0C447C;
-
-  --asc-badge-bg: #1D9E75;
-  --asc-badge-fg: #fff;
-
-  --asc-bubble-own-bg: #E1F5EE;
-  --asc-bubble-own-fg: #04342C;
-  --asc-bubble-them-bg: var(--color-background-secondary, #F5F5F3);
-
-  --asc-conv-active-bg: var(--color-background-primary, #fff);
-  --asc-conv-hover-bg:  rgba(0,0,0,0.03);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --asc-accent: #5DCAA5;
-    --asc-accent-hover: #9FE1CB;
-
-    --asc-avatar-client-bg:  #26215C;
-    --asc-avatar-client-fg:  #CECBF6;
-    --asc-avatar-agency-bg:  #04342C;
-    --asc-avatar-agency-fg:  #9FE1CB;
-    --asc-avatar-support-bg: #042C53;
-    --asc-avatar-support-fg: #B5D4F4;
-
-    --asc-badge-bg: #5DCAA5;
-    --asc-badge-fg: #04342C;
-
-    --asc-bubble-own-bg: #085041;
-    --asc-bubble-own-fg: #E1F5EE;
-  }
-}
-
-.asc-search-input {
-  width: 100%;
-  background: var(--color-background-primary, #fff);
-  border: 0.5px solid var(--color-border-secondary, rgba(0,0,0,0.18));
-  border-radius: 8px;
-  padding: 7px 10px 7px 30px;
-  font-size: 12px;
-  color: var(--color-text-primary);
-  outline: none;
-  transition: border-color 0.15s;
-  font-family: inherit;
-}
-.asc-search-input:focus { border-color: var(--asc-accent); }
-.asc-search-input::placeholder { color: var(--color-text-tertiary); }
-
-.asc-textarea {
-  width: 100%;
-  background: var(--color-background-secondary, #F5F5F3);
-  border: 0.5px solid var(--color-border-secondary, rgba(0,0,0,0.18));
-  border-radius: 20px;
-  padding: 9px 14px;
-  font-size: 13px;
-  font-family: inherit;
-  color: var(--color-text-primary);
-  resize: none;
-  outline: none;
-  line-height: 1.5;
-  max-height: 120px;
-  overflow-y: auto;
-  transition: border-color 0.15s;
-}
-.asc-textarea:focus { border-color: var(--asc-accent); }
-.asc-textarea::placeholder { color: var(--color-text-tertiary); }
-.asc-textarea:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.asc-send-btn {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  border-radius: 50%;
-  background: var(--asc-accent);
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.15s, transform 0.1s;
-  flex-shrink: 0;
-  align-self: flex-end;
-}
-.asc-send-btn:hover:not(:disabled) { opacity: 0.88; }
-.asc-send-btn:active:not(:disabled) { transform: scale(0.95); }
-.asc-send-btn:disabled { opacity: 0.35; cursor: default; }
-
-.asc-conv-btn {
-  width: 100%;
-  display: flex;
-  gap: 10px;
-  padding: 11px 14px;
-  border: none;
-  border-bottom: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.08));
-  cursor: pointer;
-  text-align: left;
-  align-items: flex-start;
-  transition: background 0.12s;
-  background: transparent;
-}
-.asc-conv-btn:hover { background: var(--asc-conv-hover-bg); }
-.asc-conv-btn.active {
-  background: var(--asc-conv-active-bg);
-  border-left: 2px solid var(--asc-accent);
-}
-.asc-conv-btn:not(.active) { border-left: 2px solid transparent; }
-
-.asc-msg-row { animation: fadeSlideUp 0.18s ease both; }
-`;
-
-function injectTheme() {
-  if (typeof document !== "undefined" && !document.getElementById("asc-theme")) {
-    const el = document.createElement("style");
-    el.id = "asc-theme";
-    el.textContent = THEME_STYLE;
-    document.head.appendChild(el);
-  }
-}
-
+/* ─── Tiny sub-components ──────────────────────────────────────────────── */
 
 type AvatarTone = "client" | "agency" | "support";
 
-function Avatar({
+const TONE_CLASSES: Record<AvatarTone, string> = {
+  client:  "bg-purple-100 text-purple-700",
+  agency:  "bg-[#E1F5EE] text-[#085041]",
+  support: "bg-blue-50 text-blue-700",
+};
+
+const SIZE_CLASSES: Record<"sm" | "md" | "lg", string> = {
+  sm: "h-7 w-7 text-[10px]",
+  md: "h-9 w-9 text-[12px]",
+  lg: "h-11 w-11 text-[14px]",
+};
+
+function AvatarBubble({
   name,
   tone = "client",
   size = "md",
@@ -221,29 +96,9 @@ function Avatar({
   tone?: AvatarTone;
   size?: "sm" | "md" | "lg";
 }) {
-  const px = { sm: 28, md: 36, lg: 44 }[size];
-  const colors: Record<AvatarTone, { bg: string; color: string }> = {
-    client:  { bg: "var(--asc-avatar-client-bg)",  color: "var(--asc-avatar-client-fg)" },
-    agency:  { bg: "var(--asc-avatar-agency-bg)",  color: "var(--asc-avatar-agency-fg)" },
-    support: { bg: "var(--asc-avatar-support-bg)", color: "var(--asc-avatar-support-fg)" },
-  };
   return (
     <div
-      style={{
-        width: px,
-        height: px,
-        minWidth: px,
-        borderRadius: "50%",
-        background: colors[tone].bg,
-        color: colors[tone].color,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: size === "sm" ? 10 : size === "md" ? 12 : 14,
-        fontWeight: 600,
-        letterSpacing: "0.02em",
-        flexShrink: 0,
-      }}
+      className={`flex flex-shrink-0 items-center justify-center rounded-full font-semibold tracking-wide ${TONE_CLASSES[tone]} ${SIZE_CLASSES[size]}`}
     >
       {initials(name)}
     </div>
@@ -253,24 +108,52 @@ function Avatar({
 function UnreadBadge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span
-      style={{
-        background: "var(--asc-badge-bg)",
-        color: "var(--asc-badge-fg)",
-        fontSize: 10,
-        fontWeight: 600,
-        borderRadius: 9999,
-        padding: "2px 6px",
-        minWidth: 18,
-        textAlign: "center",
-        lineHeight: "16px",
-        display: "inline-block",
-      }}
-    >
+    <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-[#0D6E56] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
       {count > 99 ? "99+" : count}
     </span>
   );
 }
+
+function LoadingDots() {
+  return (
+    <div className="flex items-center gap-1.5 px-4 py-5">
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="h-1.5 w-1.5 rounded-full bg-gray-300"
+          style={{ animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ label, icon }: { label: string; icon?: "message" | "user" }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E1F5EE]">
+        {icon === "user" ? (
+          <Users className="h-5 w-5 text-[#0D6E56]" />
+        ) : (
+          <MessageCircle className="h-5 w-5 text-[#0D6E56]" />
+        )}
+      </div>
+      <p className="max-w-[200px] text-center text-[13px] text-gray-400">{label}</p>
+    </div>
+  );
+}
+
+function DateDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 my-1">
+      <div className="h-px flex-1 bg-gray-100" />
+      <span className="whitespace-nowrap text-[11px] text-gray-400">{label}</span>
+      <div className="h-px flex-1 bg-gray-100" />
+    </div>
+  );
+}
+
+/* ─── Conversation list item ───────────────────────────────────────────── */
 
 function ConversationItem({
   conversation,
@@ -282,69 +165,37 @@ function ConversationItem({
   onClick: () => void;
 }) {
   return (
-    <button className={`asc-conv-btn${isActive ? " active" : ""}`} onClick={onClick}>
-      <Avatar name={conversation.clientName} tone="client" size="md" />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: isActive ? 600 : 500,
-            color: "var(--color-text-primary)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {conversation.clientName}
-        </div>
-        <div
-          style={{
-            fontSize: 11,
-            color: "var(--color-text-tertiary)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            marginTop: 1,
-          }}
-        >
-          {conversation.clientEmail}
-        </div>
-        {conversation.lastMessage && (
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--color-text-tertiary)",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              marginTop: 2,
-              opacity: 0.8,
-            }}
+    <button
+      onClick={onClick}
+      className={`flex w-full items-start gap-3 border-b border-gray-100 px-3 py-3 text-left transition-colors last:border-0 hover:bg-gray-50 ${
+        isActive ? "border-l-2 border-l-[#0D6E56] bg-white" : "border-l-2 border-l-transparent"
+      }`}
+    >
+      <AvatarBubble name={conversation.clientName} tone="client" size="md" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className={`truncate text-[13px] ${
+              isActive ? "font-semibold text-gray-900" : "font-medium text-gray-800"
+            }`}
           >
+            {conversation.clientName}
+          </p>
+          <span className="flex-shrink-0 text-[10px] text-gray-400">
+            {formatTime(conversation.lastMessageAt)}
+          </span>
+        </div>
+        <p className="truncate text-[11px] text-gray-400">{conversation.clientEmail}</p>
+        {conversation.lastMessage && (
+          <p className="mt-0.5 truncate text-[11px] text-gray-400 opacity-80">
             {conversation.lastMessage}
-          </div>
+          </p>
         )}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>
-          {formatTime(conversation.lastMessageAt)}
-        </span>
+      <div className="flex flex-shrink-0 flex-col items-end gap-1">
         <UnreadBadge count={conversation.unreadCount} />
         {conversation.conversationType === "agency" && conversation.agencyName && (
-          <span
-            style={{
-              fontSize: 10,
-              background: "var(--asc-avatar-agency-bg)",
-              color: "var(--asc-avatar-agency-fg)",
-              borderRadius: 4,
-              padding: "1px 5px",
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-              maxWidth: 72,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
+          <span className="max-w-[64px] truncate rounded bg-[#E1F5EE] px-1.5 py-0.5 text-[9px] font-medium text-[#085041]">
             {conversation.agencyName}
           </span>
         )}
@@ -353,132 +204,53 @@ function ConversationItem({
   );
 }
 
+/* ─── Message bubble ───────────────────────────────────────────────────── */
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isOwn = message.senderRole === "agency";
-  const tone: AvatarTone = isOwn ? "agency" : message.senderRole === "client" ? "client" : "support";
+  const tone: AvatarTone =
+    isOwn ? "agency" : message.senderRole === "client" ? "client" : "support";
 
   return (
     <div
-      style={{
-        display: "flex",
-        gap: 8,
-        maxWidth: "76%",
-        alignItems: "flex-end",
-        marginLeft: isOwn ? "auto" : undefined,
-        flexDirection: isOwn ? "row-reverse" : "row",
-      }}
+      className={`asc-msg-row flex items-end gap-2 ${isOwn ? "ml-auto flex-row-reverse" : ""}`}
+      style={{ maxWidth: "74%" }}
     >
-      <Avatar name={message.senderName} tone={tone} size="sm" />
-      <div>
+      <AvatarBubble name={message.senderName} tone={tone} size="sm" />
+      <div className="min-w-0">
         {!isOwn && (
-          <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 3, paddingLeft: 2 }}>
-            {message.senderName}
-          </div>
+          <p className="mb-1 pl-0.5 text-[11px] text-gray-400">{message.senderName}</p>
         )}
         <div
-          style={{
-            padding: "9px 13px",
-            borderRadius: 14,
-            borderBottomLeftRadius: isOwn ? 14 : 4,
-            borderBottomRightRadius: isOwn ? 4 : 14,
-            fontSize: 13,
-            lineHeight: 1.55,
-            background: isOwn ? "var(--asc-bubble-own-bg)" : "var(--asc-bubble-them-bg)",
-            color: isOwn ? "var(--asc-bubble-own-fg)" : "var(--color-text-primary)",
-          }}
+          className={`rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+            isOwn
+              ? "rounded-br-sm bg-[#E1F5EE] text-[#04342C]"
+              : "rounded-bl-sm bg-gray-100 text-gray-800"
+          }`}
         >
           {message.message}
         </div>
         <div
-          style={{
-            fontSize: 10,
-            color: "var(--color-text-tertiary)",
-            marginTop: 3,
-            paddingLeft: 2,
-            textAlign: isOwn ? "right" : "left",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            justifyContent: isOwn ? "flex-end" : "flex-start",
-          }}
+          className={`mt-1 flex items-center gap-1 text-[10px] text-gray-400 ${
+            isOwn ? "justify-end pr-0.5" : "pl-0.5"
+          }`}
         >
           {formatTime(message.createdAt)}
-          {isOwn && <CheckCheck size={12} color="var(--asc-accent)" />}
+          {isOwn && <CheckCheck className="h-3 w-3 text-[#0D6E56]" />}
         </div>
       </div>
     </div>
   );
 }
 
-function DateDivider({ label }: { label: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "4px 0" }}>
-      <div style={{ flex: 1, height: "0.5px", background: "var(--color-border-tertiary, rgba(0,0,0,0.08))" }} />
-      <span style={{ fontSize: 11, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>{label}</span>
-      <div style={{ flex: 1, height: "0.5px", background: "var(--color-border-tertiary, rgba(0,0,0,0.08))" }} />
-    </div>
-  );
-}
-
-function LoadingDots() {
-  return (
-    <div style={{ display: "flex", gap: 5, padding: "16px 18px" }}>
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: "var(--color-text-tertiary)",
-            animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function EmptyState({ label, icon }: { label: string; icon?: "message" | "user" }) {
-  return (
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-        padding: 40,
-      }}
-    >
-      <div
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: "50%",
-          background: "var(--asc-avatar-agency-bg)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {icon === "user"
-          ? <Users size={20} color="var(--asc-avatar-agency-fg)" />
-          : <MessageCircle size={20} color="var(--asc-avatar-agency-fg)" />}
-      </div>
-      <p style={{ fontSize: 13, color: "var(--color-text-tertiary)", textAlign: "center", maxWidth: 200 }}>
-        {label}
-      </p>
-    </div>
-  );
-}
-
+/* ─── Main component ───────────────────────────────────────────────────── */
 
 const AdminSupportChat = () => {
-  injectTheme();
-
   const navigate = useNavigate();
+
+  // Mobile: show conversation list OR message panel (not both)
+  const [mobileView, setMobileView] = useState<"list" | "chat">("list");
+
   const [conversations, setConversations] = useState<AdminConversation[]>([]);
   const [activeConversationKey, setActiveConversationKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -488,7 +260,9 @@ const AdminSupportChat = () => {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const activeConversationRef = useRef<AdminConversation | null>(null);
   const lastMessageSignatureRef = useRef("");
   const admin = getStoredAgencyAdmin();
@@ -544,7 +318,8 @@ const AdminSupportChat = () => {
           return data.conversations![0]?.key ?? null;
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load conversations";
+        const message =
+          error instanceof Error ? error.message : "Failed to load conversations";
         setErrorMessage(message);
         if (!silent) toast.error(message);
       } finally {
@@ -593,7 +368,8 @@ const AdminSupportChat = () => {
           ),
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load messages";
+        const message =
+          error instanceof Error ? error.message : "Failed to load messages";
         setErrorMessage(message);
         if (!silent) toast.error(message);
       } finally {
@@ -650,7 +426,6 @@ const AdminSupportChat = () => {
             },
           });
         } catch {
-          // no-op
           if (controller.signal.aborted) return;
           await new Promise((resolve) => window.setTimeout(resolve, 1200));
         }
@@ -714,11 +489,17 @@ const AdminSupportChat = () => {
       setConversations((prev) =>
         prev.map((item) =>
           item.key === activeConversation.key
-            ? { ...item, lastMessage: data.message!.message, lastMessageAt: data.message!.createdAt, unreadCount: 0 }
+            ? {
+                ...item,
+                lastMessage: data.message!.message,
+                lastMessageAt: data.message!.createdAt,
+                unreadCount: 0,
+              }
             : item,
         ),
       );
       setDraft("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
       await loadConversations(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send message";
@@ -736,6 +517,11 @@ const AdminSupportChat = () => {
     }
   };
 
+  const handleSelectConversation = (key: string) => {
+    setActiveConversationKey(key);
+    setMobileView("chat");
+  };
+
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
   const messageGroups = groupMessagesByDate(messages);
 
@@ -745,267 +531,200 @@ const AdminSupportChat = () => {
       : "Support thread"
     : "Choose a conversation to begin";
 
-
   return (
-    <div className="page-container">
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-        <MessageCircle size={18} color="var(--asc-accent)" />
-        <h1 style={{ fontSize: 22, fontWeight: 500, color: "var(--color-text-primary)", margin: 0 }}>
-          User chat desk
-        </h1>
-        {totalUnread > 0 && (
-          <span
-            style={{
-              background: "var(--asc-badge-bg)",
-              color: "var(--asc-badge-fg)",
-              fontSize: 11,
-              fontWeight: 600,
-              borderRadius: 9999,
-              padding: "2px 8px",
-            }}
-          >
-            {totalUnread} unread
-          </span>
-        )}
-      </div>
+    <>
+      <style>{`
+        @keyframes dotPulse {
+          0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+          40% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(5px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .asc-msg-row { animation: fadeSlideUp 0.18s ease both; }
+        .asc-scrollbar::-webkit-scrollbar { width: 4px; }
+        .asc-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
+        .asc-textarea { field-sizing: content; }
+      `}</style>
 
-      <div
-        style={{
-          display: "flex",
-          height: 660,
-          border: "0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.08))",
-          borderRadius: 14,
-          overflow: "hidden",
-          background: "var(--color-background-primary)",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        }}
-      >
-        <div
-          style={{
-            width: 288,
-            minWidth: 288,
-            display: "flex",
-            flexDirection: "column",
-            borderRight: "0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.08))",
-            background: "var(--color-background-secondary, #F5F5F3)",
-          }}
-        >
+      <div className="flex flex-col" style={{ height: "calc(100vh - 130px)", minHeight: 400 }}>
+
+        {/* ── Page title bar ── */}
+        <div className="mb-3 flex flex-shrink-0 items-center gap-2.5">
+          <MessageCircle className="h-[18px] w-[18px] text-[#0D6E56]" />
+          <h2 className="text-[18px] font-bold tracking-tight text-gray-900">Chat Support</h2>
+          {totalUnread > 0 && (
+            <span className="rounded-full bg-[#0D6E56] px-2.5 py-0.5 text-[11px] font-semibold text-white">
+              {totalUnread} unread
+            </span>
+          )}
+        </div>
+
+        {/* ── Chat shell ── */}
+        <div className="flex flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+          {/* ── Sidebar / Conversation List ── */}
           <div
-            style={{
-              padding: "14px 14px 12px",
-              borderBottom: "0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.08))",
-            }}
+            className={`flex flex-col border-r border-gray-100 bg-gray-50/60 ${
+              // On mobile: full width when showing list, hidden when showing chat
+              mobileView === "chat"
+                ? "hidden md:flex md:w-72 md:min-w-[272px]"
+                : "flex w-full md:w-72 md:min-w-[272px]"
+            }`}
           >
-            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 2 }}>
-              Live user conversations
-            </p>
-            <p style={{ fontSize: 11, color: "var(--color-text-tertiary)", lineHeight: 1.4 }}>
-              Support and agency-specific chats in one inbox.
-            </p>
-          </div>
+            {/* Sidebar header */}
+            <div className="flex-shrink-0 border-b border-gray-100 px-4 py-3">
+              <p className="text-[13px] font-semibold text-gray-800">Conversations</p>
+              <p className="text-[11px] text-gray-400">
+                {conversations.length} thread{conversations.length !== 1 ? "s" : ""}
+                {totalUnread > 0 && ` · ${totalUnread} unread`}
+              </p>
+            </div>
 
-          <div
-            style={{
-              padding: "10px 12px",
-              borderBottom: "0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.08))",
-              position: "relative",
-            }}
-          >
-            <Search
-              size={13}
-              color="var(--color-text-tertiary)"
-              style={{ position: "absolute", left: 22, top: "50%", transform: "translateY(-50%)" }}
-            />
-            <input
-              className="asc-search-input"
-              type="text"
-              placeholder="Search by name, email, or message"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {isLoadingConversations ? (
-              <LoadingDots />
-            ) : filteredConversations.length === 0 ? (
-              <EmptyState label="No user conversations yet." icon="user" />
-            ) : (
-              filteredConversations.map((conv) => (
-                <ConversationItem
-                  key={conv.key}
-                  conversation={conv}
-                  isActive={conv.key === activeConversationKey}
-                  onClick={() => setActiveConversationKey(conv.key)}
+            {/* Search */}
+            <div className="flex-shrink-0 border-b border-gray-100 px-3 py-2.5">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search conversations…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-8 pr-3 text-[12px] text-gray-800 outline-none placeholder:text-gray-400 focus:border-[#0D6E56]/50 focus:ring-0 transition-colors"
                 />
-              ))
-            )}
+              </div>
+            </div>
+
+            {/* List */}
+            <div className="asc-scrollbar flex-1 overflow-y-auto">
+              {isLoadingConversations ? (
+                <LoadingDots />
+              ) : filteredConversations.length === 0 ? (
+                <EmptyState label="No conversations found." icon="user" />
+              ) : (
+                filteredConversations.map((conv) => (
+                  <ConversationItem
+                    key={conv.key}
+                    conversation={conv}
+                    isActive={conv.key === activeConversationKey}
+                    onClick={() => handleSelectConversation(conv.key)}
+                  />
+                ))
+              )}
+            </div>
+
+            {/* Sidebar footer stats */}
+            <div className="flex-shrink-0 grid grid-cols-2 gap-2 border-t border-gray-100 bg-white p-3">
+              <div className="rounded-lg bg-gray-50 px-3 py-2 text-center">
+                <p className="text-[17px] font-bold text-gray-900">{conversations.length}</p>
+                <p className="text-[10px] text-gray-400">Threads</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 px-3 py-2 text-center">
+                <p className="text-[17px] font-bold text-[#0D6E56]">{totalUnread}</p>
+                <p className="text-[10px] text-gray-400">Unread</p>
+              </div>
+            </div>
           </div>
 
+          {/* ── Message panel ── */}
           <div
-            style={{
-              display: "flex",
-              borderTop: "0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.08))",
-              padding: "10px 14px",
-              gap: 8,
-            }}
+            className={`flex min-w-0 flex-1 flex-col ${
+              mobileView === "list" ? "hidden md:flex" : "flex"
+            }`}
           >
-            {[
-              { label: "Open threads", value: conversations.length },
-              { label: "Unread", value: totalUnread },
-              { label: "Active user", value: activeConversation?.clientName ?? "None" },
-            ].map(({ label, value }) => (
-              <div
-                key={label}
-                style={{
-                  flex: 1,
-                  textAlign: "center",
-                  background: "var(--color-background-primary)",
-                  borderRadius: 8,
-                  padding: "6px 4px",
-                }}
+            {/* Chat header */}
+            <div className="flex flex-shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 py-3">
+              {/* Back button — mobile only */}
+              <button
+                onClick={() => setMobileView("list")}
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 md:hidden"
               >
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "var(--color-text-primary)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {value}
-                </div>
-                <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginTop: 1 }}>
-                  {label}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+                <ArrowLeft className="h-4 w-4" />
+              </button>
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <div
-            style={{
-              padding: "12px 18px",
-              borderBottom: "0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.08))",
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            {activeConversation ? (
-              <>
-                <Avatar name={activeConversation.clientName} tone="client" size="md" />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>
-                    {activeConversation.clientName}
+              {activeConversation ? (
+                <>
+                  <AvatarBubble name={activeConversation.clientName} tone="client" size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-semibold text-gray-900">
+                      {activeConversation.clientName}
+                    </p>
+                    <p className="truncate text-[11px] text-gray-400">{headerSubtitle}</p>
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
-                    {headerSubtitle}
+                  <div className="flex-shrink-0 text-right">
+                    <p className="text-[12px] font-medium text-gray-700">
+                      {admin?.agencyName ?? "Agency"}
+                    </p>
+                    <p className="text-[11px] text-gray-400">{activeConversation.clientEmail}</p>
                   </div>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>
-                    {admin?.agencyName ?? "Agency"}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
-                    {activeConversation.clientEmail}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-                {headerSubtitle}
-              </div>
-            )}
-          </div>
+                </>
+              ) : (
+                <p className="text-[13px] text-gray-400">{headerSubtitle}</p>
+              )}
+            </div>
 
-          <div
-            ref={scrollRef}
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              padding: "16px 18px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-            }}
-          >
-            {isLoadingMessages ? (
-              <LoadingDots />
-            ) : errorMessage ? (
-              <div
-                style={{
-                  margin: "auto",
-                  padding: "12px 16px",
-                  background: "var(--color-background-danger, #FCEBEB)",
-                  color: "var(--color-text-danger, #A32D2D)",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  maxWidth: 320,
-                  textAlign: "center",
-                }}
-              >
-                {errorMessage}
-              </div>
-            ) : !activeConversation ? (
-              <EmptyState label="Select a conversation from the left to get started." />
-            ) : messages.length === 0 ? (
-              <EmptyState label="No messages in this thread yet." />
-            ) : (
-              messageGroups.map(({ label, messages: groupMsgs }) => (
-                <div key={label} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <DateDivider label={label} />
-                  {groupMsgs.map((msg) => (
-                    <div key={msg.id} className="asc-msg-row">
-                      <MessageBubble message={msg} />
-                    </div>
-                  ))}
-                </div>
-              ))
-            )}
-          </div>
-
-          <div
-            style={{
-              padding: "10px 16px 12px",
-              borderTop: "0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.08))",
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 10,
-            }}
-          >
-            <textarea
-              className="asc-textarea"
-              placeholder={
-                activeConversation
-                  ? `Reply to ${activeConversation.clientName}…`
-                  : "Select a conversation to reply…"
-              }
-              value={draft}
-              rows={1}
-              disabled={!activeConversation || isSending}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                e.target.style.height = "auto";
-                e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-              }}
-              onKeyDown={handleKeyDown}
-            />
-            <button
-              className="asc-send-btn"
-              onClick={() => void sendMessage()}
-              disabled={isSending || !draft.trim() || !activeConversation}
-              title="Send message"
+            {/* Messages area */}
+            <div
+              ref={scrollRef}
+              className="asc-scrollbar flex flex-1 flex-col gap-3 overflow-y-auto p-4"
             >
-              <Send size={15} color="#fff" />
-            </button>
+              {isLoadingMessages ? (
+                <LoadingDots />
+              ) : errorMessage ? (
+                <div className="mx-auto max-w-xs rounded-lg bg-red-50 px-4 py-3 text-center text-[13px] text-red-600">
+                  {errorMessage}
+                </div>
+              ) : !activeConversation ? (
+                <EmptyState label="Select a conversation from the left to get started." />
+              ) : messages.length === 0 ? (
+                <EmptyState label="No messages in this thread yet." />
+              ) : (
+                messageGroups.map(({ label, messages: groupMsgs }) => (
+                  <div key={label} className="flex flex-col gap-3">
+                    <DateDivider label={label} />
+                    {groupMsgs.map((msg) => (
+                      <MessageBubble key={msg.id} message={msg} />
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Compose bar */}
+            <div className="flex flex-shrink-0 items-end gap-2.5 border-t border-gray-100 bg-white px-4 py-3">
+              <textarea
+                ref={textareaRef}
+                placeholder={
+                  activeConversation
+                    ? `Reply to ${activeConversation.clientName}…`
+                    : "Select a conversation to reply…"
+                }
+                value={draft}
+                rows={1}
+                disabled={!activeConversation || isSending}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+                }}
+                onKeyDown={handleKeyDown}
+                className="asc-textarea asc-scrollbar flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-[13px] text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-[#0D6E56]/50 focus:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ lineHeight: 1.5, maxHeight: 120, minHeight: 40 }}
+              />
+              <button
+                onClick={() => void sendMessage()}
+                disabled={isSending || !draft.trim() || !activeConversation}
+                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#0D6E56] text-white transition-all hover:bg-[#0a5c47] active:scale-95 disabled:cursor-default disabled:opacity-30"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
