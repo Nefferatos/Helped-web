@@ -1,14 +1,23 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { clearClientAuth, getClientToken } from "@/lib/clientAuth";
-import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
+import { supabase } from "@/lib/supabaseClient";
+import {
+  clearSupabaseSessionStorage,
+  finalizeClientLoginFromSupabase,
+  isClientLogoutPending,
+} from "@/lib/supabaseAuth";
 
 const ProtectedClientRoute = ({ children }: { children: ReactNode }) => {
   const token = getClientToken();
-  const [status, setStatus] = useState<"checking" | "allowed" | "denied">(token ? "checking" : "denied");
+  const [status, setStatus] = useState<"checking" | "allowed" | "denied">(
+    token && !isClientLogoutPending() ? "checking" : "denied",
+  );
 
   useEffect(() => {
-    if (!token) {
+    if (!token || isClientLogoutPending() || !supabase) {
+      clearClientAuth();
+      clearSupabaseSessionStorage();
       setStatus("denied");
       return;
     }
@@ -17,10 +26,16 @@ const ProtectedClientRoute = ({ children }: { children: ReactNode }) => {
 
     const validate = async () => {
       try {
-        await finalizeClientLoginFromSupabase(token);
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data.session?.access_token) {
+          throw error || new Error("No active Supabase session");
+        }
+
+        await finalizeClientLoginFromSupabase(data.session.access_token);
         if (!cancelled) setStatus("allowed");
       } catch {
         clearClientAuth();
+        clearSupabaseSessionStorage();
         if (!cancelled) setStatus("denied");
       }
     };
@@ -42,7 +57,7 @@ const ProtectedClientRoute = ({ children }: { children: ReactNode }) => {
   }
 
   if (status === "denied") {
-    return <Navigate to="/employer-login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

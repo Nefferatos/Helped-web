@@ -21,10 +21,9 @@ import {
 
 import {
   getStoredClient,
-  clearClientAuth,
-  getClientAuthHeaders,
   type ClientUser
 } from "@/lib/clientAuth";
+import { logoutClientPortal } from "@/lib/supabaseAuth";
 
 type AboutUsProps = {
   embedded?: boolean;
@@ -36,17 +35,7 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
-    try {
-      await fetch("/api/client-auth/logout", {
-        method: "POST",
-        headers: { ...getClientAuthHeaders() },
-      });
-    } catch {
-      // Ignore logout errors; we'll clear local session regardless.
-    }
-    clearClientAuth();
-    setClientUser(null);
-    navigate("/");
+    await logoutClientPortal("/");
   };
 
   return (

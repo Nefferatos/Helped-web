@@ -1,5 +1,10 @@
 import { requireSupabase, supabase } from "@/lib/supabaseClient";
-import { saveClientAuth, type ClientUser } from "@/lib/clientAuth";
+import {
+  clearClientAuth,
+  getClientAuthHeaders,
+  saveClientAuth,
+  type ClientUser,
+} from "@/lib/clientAuth";
 
 // Social + Phone auth helpers.
 // These functions keep your existing app token storage (`client_auth_token`) working by
@@ -7,6 +12,40 @@ import { saveClientAuth, type ClientUser } from "@/lib/clientAuth";
 // the Supabase JWT.
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const LEGACY_SUPABASE_TOKEN_KEY = "supabase.auth.token";
+const CLIENT_LOGOUT_MARKER_KEY = "client_portal_logout_pending";
+
+const setClientLogoutMarker = () => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CLIENT_LOGOUT_MARKER_KEY, "true");
+};
+
+const clearClientLogoutMarker = () => {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(CLIENT_LOGOUT_MARKER_KEY);
+};
+
+export const isClientLogoutPending = () => {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(CLIENT_LOGOUT_MARKER_KEY) === "true";
+};
+
+export const clearSupabaseSessionStorage = () => {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.removeItem(LEGACY_SUPABASE_TOKEN_KEY);
+
+  const keysToRemove: string[] = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith("sb-") && key.endsWith("-auth-token")) {
+      keysToRemove.push(key);
+    }
+  }
+
+  keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+  window.sessionStorage.clear();
+};
 
 const getSupabaseAccessToken = async (fallbackToken?: string) => {
   // Preferred: current Supabase session token (freshest, works after OAuth redirect).
@@ -48,8 +87,37 @@ export const finalizeClientLoginFromSupabase = async (accessToken?: string) => {
   // Fetch the app-facing client record (creates one on first login).
   const token = await getSupabaseAccessToken(accessToken);
   const client = await getClientMe(token);
+  clearClientLogoutMarker();
   saveClientAuth(token, client);
   return client;
+};
+
+export const logoutClientPortal = async (redirectTo = "/") => {
+  setClientLogoutMarker();
+
+  try {
+    await fetch("/api/client-auth/logout", {
+      method: "POST",
+      headers: { ...getClientAuthHeaders() },
+    });
+  } catch {
+    // Ignore API logout errors; local sign-out still needs to finish.
+  }
+
+  try {
+    if (supabase) {
+      await supabase.auth.signOut({ scope: "global" });
+    }
+  } catch {
+    // Continue clearing local state even if Supabase sign-out fails.
+  }
+
+  clearSupabaseSessionStorage();
+  clearClientAuth();
+
+  if (typeof window !== "undefined") {
+    window.location.href = redirectTo;
+  }
 };
 
 export const signInWithGoogle = async () => {

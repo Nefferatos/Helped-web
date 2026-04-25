@@ -38,6 +38,7 @@ import {
   getClientToken,
   type ClientUser,
 } from "@/lib/clientAuth";
+import { logoutClientPortal } from "@/lib/supabaseAuth";
 import { useToast } from "@/hooks/use-toast";
 import "./ClientTheme.css";
 
@@ -200,11 +201,11 @@ const ClientDashboard = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
-    const token = getClientToken();
-    if (!token) {
-      navigate("/employer-login");
-      return;
-    }
+      const token = getClientToken();
+      if (!token) {
+        navigate("/");
+        return;
+      }
 
     const loadDashboard = async () => {
       try {
@@ -248,7 +249,7 @@ const ClientDashboard = () => {
           description: error instanceof Error ? error.message : "Please sign in again",
           variant: "destructive",
         });
-        navigate("/employer-login");
+        navigate("/");
       } finally {
         setIsLoading(false);
       }
@@ -335,15 +336,7 @@ const ClientDashboard = () => {
   };
 
   const handleLogout = async () => {
-    try {
-      await fetch("/api/client-auth/logout", {
-        method: "POST",
-        headers: { ...getClientAuthHeaders() },
-      });
-    } finally {
-      clearClientAuth();
-      navigate("/employer-login");
-    }
+    await logoutClientPortal("/");
   };
 
   const pendingCount = assignments.filter(

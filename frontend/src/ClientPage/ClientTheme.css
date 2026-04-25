@@ -52,3 +52,9 @@
 .client-page-theme .font-body {
   font-family: "DM Sans", sans-serif;
 }
+
+.client-page-theme .blur-protected {
+  filter: blur(8px);
+  pointer-events: none;
+  user-select: none;
+}

@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle, HeartHandshake, Search, Settings, ShieldCheck, UserRound, Users, Menu, X } from "lucide-react";
+import { ArrowRight, CheckCircle, ChevronDown, HeartHandshake, Menu, Search, Settings, ShieldCheck, SlidersHorizontal, UserRound, Users, X } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { toast } from "@/components/ui/sonner";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
+import { logoutClientPortal } from "@/lib/supabaseAuth";
 import culinaryImg from "./assets/culinary.png";
 import elderlyImg from "./assets/elderly-care.png";
 import familyImg from "./assets/family.jpg";
@@ -103,6 +104,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(true);
 
   const [keyword, setKeyword] = useState("");
   const [maidTypes, setMaidTypes] = useState<string[]>([]);
@@ -110,6 +112,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const isLoggedIn = Boolean(clientUser);
+  const searchMaidsHref = isLoggedIn ? "/client/maids" : "/search-maids";
 
   const location = useLocation();
   useEffect(() => {
@@ -217,6 +220,11 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     });
   }, [allPublicMaids, keyword, maidTypes, nationality]);
 
+  const activeFilterCount = useMemo(
+    () => [keyword.trim() !== "", maidTypes.length > 0, nationality !== "No Preference"].filter(Boolean).length,
+    [keyword, maidTypes.length, nationality]
+  );
+
   useEffect(() => { setCurrentPage(1); }, [keyword, maidTypes, nationality]);
 
   const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
@@ -238,10 +246,44 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   }, [totalPages, currentPage]);
 
   const handleSearch = () => {
+    const params = new URLSearchParams();
+    const draft: Record<string, unknown> = {};
+
+    if (keyword.trim()) {
+      params.set("q", keyword.trim());
+      draft.keyword = keyword.trim();
+    }
+
+    if (maidTypes.length === 1) {
+      params.set("type", maidTypes[0]);
+      draft.maidType = maidTypes[0];
+    }
+
+    if (nationality !== "No Preference") {
+      params.set("nationality", nationality);
+      draft.natNoPreference = false;
+
+      if (nationality === "Filipino") draft.natFilipino = true;
+      if (nationality === "Indonesian") draft.natIndonesian = true;
+      if (nationality === "Myanmar") draft.natMyanmar = true;
+      if (nationality === "Indian") draft.natIndian = true;
+      if (nationality === "Sri Lankan") draft.natSriLankan = true;
+      if (nationality === "Cambodian") draft.natCambodian = true;
+      if (nationality === "Bangladeshi") draft.natBangladeshi = true;
+    }
+
+    if (Object.keys(draft).length > 0) {
+      params.set("filters", JSON.stringify(draft));
+    }
+
+    navigate(`${searchMaidsHref}${params.toString() ? `?${params.toString()}` : ""}`);
+  };
+
+  const clearSearchFilters = () => {
+    setKeyword("");
+    setMaidTypes([]);
+    setNationality("No Preference");
     setCurrentPage(1);
-    window.setTimeout(() => {
-      document.getElementById("maid-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
   };
 
   const handlePageChange = (page: number) => {
@@ -256,19 +298,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   };
 
   const handleLogout = async () => {
-    try {
-      await fetch("/api/client-auth/logout", {
-        method: "POST",
-        headers: { ...getClientAuthHeaders() },
-      });
-    } catch {
-      // ignore
-    } finally {
-      clearClientAuth();
-      setClientUser(null);
-      toast.success("Client account logged out");
-      navigate("/");
-    }
+    toast.success("Client account logged out");
+    await logoutClientPortal("/");
   };
 
   return (
@@ -286,9 +317,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               <span className="sm:hidden">Find Maids</span>
             </Link>
 
-            <nav className="hidden items-center gap-5 font-body text-sm font-medium lg:flex xl:gap-8">
-              <a href="/" className="hover:text-primary transition-colors">Home</a>
-              <a href="/client/maids" className="hover:text-primary transition-colors">Search Maids</a>
+              <nav className="hidden items-center gap-5 font-body text-sm font-medium lg:flex xl:gap-8">
+                <a href="/" className="hover:text-primary transition-colors">Home</a>
+                <a href={searchMaidsHref} className="hover:text-primary transition-colors">Search Maids</a>
               <a href="/about" className="hover:text-primary transition-colors">About Us</a>
               <a href="#services" className="hover:text-primary transition-colors">Agency</a>
               <a href="/enquiry2" className="hover:text-primary transition-colors">Enquiry</a>
@@ -347,7 +378,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 <nav className="flex flex-col p-4 gap-1">
                   {[
                     { label: "Home", href: "/" },
-                    { label: "Search Maids", href: "/client/maids" },
+                    { label: "Search Maids", href: searchMaidsHref },
                     { label: "About Us", href: "/about" },
                     { label: "Agency", href: "/about" },
                     { label: "FAQ", href: "/faq" },
@@ -533,82 +564,175 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section> */}
 
-      <section id="search" className="bg-muted py-8 md:py-10">
-        <div className="container px-4 sm:px-6">
-          <div className="mb-5">
-            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
-              Maid <span className="text-primary">Search</span>
-            </h2>
-          </div>
+        <section id="search" className="bg-muted py-8 md:py-10">
+          <div className="container px-4 sm:px-6">
+            <div className="mb-5">
+              <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
+                Maid <span className="text-primary">Search</span>
+              </h2>
+            </div>
 
-          <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
-            <div className="p-5 sm:p-6 space-y-5">
-
-              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
-                <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">Keywords</label>
-                <input
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className="flex-1 rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="Enter search keywords such as: Filipino maid, baby sitter, etc."
-                />
+            {!isLoggedIn && (
+              <div className="mb-4 rounded-2xl border bg-muted/30 p-5 text-center">
+                <p className="font-display text-lg font-semibold text-foreground sm:text-xl">
+                  Login to Unlock Full Maid Profiles
+                </p>
+                <p className="mt-2 font-body text-sm text-muted-foreground">
+                  The landing-page search stays open for guests. Login to remove the blur from available maid profiles and continue hiring.
+                </p>
+                <div className="mt-4">
+                  <Button asChild className="w-full sm:w-auto">
+                    <Link to="/employer-login">Employer Login</Link>
+                  </Button>
+                </div>
               </div>
+            )}
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">Maid Type</label>
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                  {MAID_TYPES.map((type) => (
-                    <label key={type} className="flex cursor-pointer items-center gap-2 font-body text-sm text-foreground select-none">
-                      <input
-                        type="radio"
-                        name="maidType"
-                        value={type}
-                        checked={maidTypes.includes(type)}
-                        onChange={() => toggleMaidType(type)}
-                        className="h-4 w-4 accent-primary cursor-pointer"
-                      />
-                      {type}
-                    </label>
-                  ))}
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold text-foreground">Filters</span>
+                  {activeFilterCount > 0 && (
+                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {activeFilterCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearSearchFilters}
+                      className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      <X className="h-3 w-3" />
+                      Clear all
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setFiltersOpen((value) => !value)}
+                    className="flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                  >
+                    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`} />
+                    {filtersOpen ? "Collapse" : "Expand"}
+                  </button>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
-                <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">Nationality</label>
-                <select
-                  value={nationality}
-                  onChange={(e) => setNationality(e.target.value)}
-                  className="w-full sm:w-52 rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                >
-                  {nationalityOptions.map((opt) => (
-                    <option key={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
+              {filtersOpen && (
+                <div className="space-y-0 divide-y divide-border/60 px-4 sm:px-5">
+                  <div className="py-4 space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                          Keyword Search
+                        </label>
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            value={keyword}
+                            onChange={(e) => setKeyword(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                            className="w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            placeholder="Name, reference code, nationality..."
+                          />
+                          {keyword && (
+                            <button
+                              type="button"
+                              onClick={() => setKeyword("")}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                          Nationality
+                        </label>
+                        <select
+                          value={nationality}
+                          onChange={(e) => setNationality(e.target.value)}
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        >
+                          {nationalityOptions.map((opt) => (
+                            <option key={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                        Maid Type
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {MAID_TYPES.map((type) => {
+                          const checked = maidTypes.includes(type);
+                          const colorClass = type === "New Maid"
+                            ? checked
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                              : "border-border bg-background text-foreground hover:border-emerald-200 hover:bg-emerald-50/60"
+                            : type === "Transfer Maid"
+                              ? checked
+                                ? "border-blue-300 bg-blue-50 text-blue-700"
+                                : "border-border bg-background text-foreground hover:border-blue-200 hover:bg-blue-50/60"
+                              : checked
+                                ? "border-amber-300 bg-amber-50 text-amber-700"
+                                : "border-border bg-background text-foreground hover:border-amber-200 hover:bg-amber-50/60";
+
+                          return (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => toggleMaidType(type)}
+                              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${colorClass}`}
+                            >
+                              {type}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 py-4">
+                    <Button
+                      type="button"
+                      size="lg"
+                      className="flex-1 font-semibold sm:flex-none sm:min-w-[160px]"
+                      onClick={handleSearch}
+                    >
+                      <Search className="mr-2 h-4 w-4" />
+                      Search Maids
+                      {activeFilterCount > 0 && (
+                        <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary-foreground/20 px-1.5 text-[10px] font-bold">
+                          {activeFilterCount}
+                        </span>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="flex-1 sm:flex-none"
+                      onClick={handleRequestMaid}
+                    >
+                      Request Agency Help
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 border-t">
-              <button
-                onClick={handleRequestMaid}
-                className="flex items-center justify-center gap-2 bg-primary px-4 py-3.5 font-body text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 sm:py-4 sm:text-base border-r border-primary/20"
-              >
-                Request Maid
-              </button>
-              <button
-                onClick={handleSearch}
-                className="flex items-center justify-center gap-2 bg-primary px-4 py-3.5 font-body text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 sm:py-4 sm:text-base"
-              >
-                <Search className="h-4 w-4 shrink-0" />
-                Search Maid Now
-              </button>
-            </div>
-          </div>
-
-          <p className="mt-3 font-body text-sm text-muted-foreground">
-            {isLoading
-              ? "Loading available public maids..."
-              : `${filteredMaids.length} public maid${filteredMaids.length !== 1 ? "s" : ""} matched your search.`}
+            <p className="mt-3 font-body text-sm text-muted-foreground">
+              {isLoading
+                ? "Loading available public maids..."
+                : `${filteredMaids.length} public maid${filteredMaids.length !== 1 ? "s" : ""} matched your search.`}
           </p>
         </div>
       </section>
@@ -669,11 +793,16 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-                {pagedMaids.map((maid) => {
-                  const photo = getPrimaryPhoto(maid);
-                  const age = calculateAge(maid.dateOfBirth);
-                  const typeLower = (maid.type || "").toLowerCase();
+                <div className="relative">
+                  {!isLoggedIn && (
+                    <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-background/35" />
+                  )}
+
+                  <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 ${!isLoggedIn ? "blur-protected" : ""}`}>
+                    {pagedMaids.map((maid) => {
+                      const photo = getPrimaryPhoto(maid);
+                      const age = calculateAge(maid.dateOfBirth);
+                      const typeLower = (maid.type || "").toLowerCase();
                   const typeColor = typeLower.includes("new")
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : typeLower.includes("transfer")
@@ -743,7 +872,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                     </article>
                   );
                 })}
-              </div>
+                  </div>
+                </div>
 
               {isLoggedIn && totalPages > 1 && (
                 <div className="mt-8 flex items-center justify-center gap-1.5 flex-wrap">

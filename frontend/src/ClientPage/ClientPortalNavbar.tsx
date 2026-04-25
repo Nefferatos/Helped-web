@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
-import { clearClientAuth, getClientAuthHeaders, getStoredClient, type ClientUser } from "@/lib/clientAuth";
+import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
+import { logoutClientPortal } from "@/lib/supabaseAuth";
 import "./ClientTheme.css";
 
 const tabs = [
@@ -50,18 +51,8 @@ const ClientPortalNavbar = () => {
   }, [isActive]);
 
   const handleLogout = async () => {
-    try {
-      await fetch("/api/client-auth/logout", {
-        method: "POST",
-        headers: { ...getClientAuthHeaders() },
-      });
-    } catch {
-      // no-op
-    } finally {
-      clearClientAuth();
-      toast.success("Logged out");
-      navigate("/employer-login");
-    }
+    toast.success("Logged out");
+    await logoutClientPortal("/");
   };
 
   return (

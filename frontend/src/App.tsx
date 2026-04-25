@@ -15,7 +15,11 @@ import {
 import { getClientToken } from "@/lib/clientAuth";
 import { clearClientAuth } from "@/lib/clientAuth";
 import { supabase } from "@/lib/supabaseClient";
-import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
+import {
+  clearSupabaseSessionStorage,
+  finalizeClientLoginFromSupabase,
+  isClientLogoutPending,
+} from "@/lib/supabaseAuth";
 import { getSessionFromUrlCompat } from "@/lib/supabaseSessionFromUrl";
 import { adminPath } from "@/lib/routes";
 import ProtectedClientRoute from "@/components/ProtectedClientRoute";
@@ -171,7 +175,49 @@ const AdminIndexRedirect = () => {
 
 const ClientHomeRedirect = () => {
   const token = getClientToken();
-  return token ? <Navigate to="/client/home" replace /> : <ClientLandingPage />;
+  const [status, setStatus] = useState<"checking" | "portal" | "landing">(
+    token && !isClientLogoutPending() ? "checking" : "landing",
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveHome = async () => {
+      if (!token || isClientLogoutPending() || !supabase) {
+        clearClientAuth();
+        clearSupabaseSessionStorage();
+        if (!cancelled) setStatus("landing");
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data.session?.access_token) {
+          throw error || new Error("No active Supabase session");
+        }
+
+        if (!cancelled) {
+          setStatus("portal");
+        }
+      } catch {
+        clearClientAuth();
+        clearSupabaseSessionStorage();
+        if (!cancelled) setStatus("landing");
+      }
+    };
+
+    void resolveHome();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  if (status === "checking") {
+    return <RouteLoader />;
+  }
+
+  return status === "portal" ? <Navigate to="/client/home" replace /> : <ClientLandingPage />;
 };
 
 const App = () => {
@@ -216,6 +262,21 @@ const App = () => {
         console.error("Error getting session from URL:", error);
       }
 
+      if (isClientLogoutPending()) {
+        clearClientAuth();
+        clearSupabaseSessionStorage();
+
+        try {
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            await supabase.auth.signOut({ scope: "global" });
+          }
+        } catch (error) {
+          console.error("Failed to clear Supabase session after logout:", error);
+        }
+        return;
+      }
+
       // 2) Fallback: existing session check
       const { data: { session } = { session: null } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -233,7 +294,21 @@ const App = () => {
     // Keep app auth in sync with Supabase auth state changes.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state changed:", event, session);
+      if (event === "SIGNED_OUT") {
+        clearClientAuth();
+        clearSupabaseSessionStorage();
+        return;
+      }
+
       if (session?.user) {
+        if (isClientLogoutPending()) {
+          void supabase.auth.signOut({ scope: "global" }).finally(() => {
+            clearClientAuth();
+            clearSupabaseSessionStorage();
+          });
+          return;
+        }
+
         console.log("User logged in:", session.user);
         if (session.access_token) {
           void finalizeClientLoginFromSupabase(session.access_token).catch((error) => {
@@ -241,10 +316,6 @@ const App = () => {
           });
         }
         return;
-      }
-
-      if (event === "SIGNED_OUT") {
-        clearClientAuth();
       }
     });
 
@@ -308,6 +379,8 @@ const App = () => {
             <Route path="/agencyadminportal" element={<Navigate to="/agencyadmin/login" replace />} />
             <Route path="/user-portal" element={withRouteLoader(<ClientHomeRedirect />)} />
             <Route path="/userportal" element={withRouteLoader(<ClientHomeRedirect />)} />
+            <Route path="/search-maids" element={withRouteLoader(<ClientMaidsPage resultsPath="/search-maids/results" />)} />
+            <Route path="/search-maids/results" element={withRouteLoader(<MaidSearchPage basePath="/search-maids" />)} />
             <Route path="/privacy-policy" element={withRouteLoader(<PrivacyPolicy />)} />
             <Route path="/data-deletion" element={withRouteLoader(<DataDeletion />)} />
             <Route path="/ai-workflows" element={withRouteLoader(<AiAutomationPage />)} />

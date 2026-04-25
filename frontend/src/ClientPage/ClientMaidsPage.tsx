@@ -88,6 +88,11 @@ interface Filters {
   relNoPreference: boolean;
 }
 
+type ClientMaidsPageProps = {
+  resultsPath?: string;
+  loginPath?: string;
+};
+
 // ── Maid data shape returned from your search API ────────────────────────────
 export interface MaidProfile {
   id: number | string;
@@ -151,6 +156,9 @@ const defaultRequirements: RequirementsState = {
   noOffDay: false, hasChildren: false, married: false,
   newMaid: false, transferMaid: false, exSingaporeMaid: false,
 };
+
+const getPublicProfilePath = (maid: MaidProfile) =>
+  maid.refCode ? `/maids/${encodeURIComponent(maid.refCode)}` : null;
 
 const PREFERENCE_GROUPS = [
   { noPreference: "natNoPreference" as const, specifics: ["natFilipino", "natIndonesian", "natMyanmar", "natIndian", "natSriLankan", "natCambodian", "natBangladeshi", "natOthers"] as const },
@@ -422,9 +430,13 @@ const LockedMaidCard = ({ onLoginClick }: { onLoginClick: () => void }) => (
 const MaidCard = ({
   maid,
   onViewProfile,
+  locked = false,
+  onLoginClick,
 }: {
   maid: MaidProfile;
   onViewProfile: (maid: MaidProfile) => void;
+  locked?: boolean;
+  onLoginClick?: () => void;
 }) => {
   const initials = maid.name
     .split(" ")
@@ -440,21 +452,34 @@ const MaidCard = ({
         ? "border-blue-400/40 bg-blue-50 text-blue-700"
         : "border-amber-400/40 bg-amber-50 text-amber-700";
 
+  const handlePrimaryAction = () => {
+    if (locked) {
+      onLoginClick?.();
+      return;
+    }
+    onViewProfile(maid);
+  };
+
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
       {/* Photo / avatar area */}
       <div className="relative h-40 overflow-hidden bg-muted flex items-center justify-center">
-        {maid.photoUrl ? (
-          <img
-            src={maid.photoUrl}
-            alt={maid.name}
-            className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20 text-xl font-semibold text-primary">
-            {initials}
-          </div>
-        )}
+        <div className={`absolute inset-0 ${locked ? "scale-105 blur-[10px]" : ""}`}>
+          {maid.photoUrl ? (
+            <img
+              src={maid.photoUrl}
+              alt={maid.name}
+              className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20 text-xl font-semibold text-primary">
+                {initials}
+              </div>
+            </div>
+          )}
+        </div>
+        {locked && <div className="absolute inset-0 bg-background/25 backdrop-blur-[1px]" />}
         {maid.maidType && (
           <span
             className={`absolute bottom-2 left-2 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${typeColor}`}
@@ -467,10 +492,17 @@ const MaidCard = ({
             📹 Video
           </span>
         )}
+        {locked && (
+          <div className="absolute inset-x-0 top-3 flex justify-center">
+            <span className="rounded-full border border-primary/25 bg-background/85 px-3 py-1 text-[11px] font-semibold text-primary shadow-sm backdrop-blur">
+              Login to unlock
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Card body */}
-      <div className="p-4">
+      <div className={`p-4 ${locked ? "select-none blur-[8px]" : ""}`}>
         <div className="mb-0.5 flex items-start justify-between gap-2">
           <p className="font-semibold text-foreground leading-tight">{maid.name}</p>
           {maid.refCode && (
@@ -480,7 +512,7 @@ const MaidCard = ({
           )}
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
-          {[maid.nationality, maid.age ? `${maid.age} yrs` : "", maid.experience?.[0]].filter(Boolean).join(" · ")}
+          {[maid.nationality, maid.age ? `${maid.age} yrs` : "", maid.experience?.[0]].filter(Boolean).join(" | ")}
         </p>
 
         {/* Duty / language tags */}
@@ -501,12 +533,25 @@ const MaidCard = ({
           <div className="mb-4" />
         )}
 
+      </div>
+      <div className={`px-4 pb-4 ${locked ? "relative z-10 -mt-[3.2rem]" : ""}`}>
         <button
           type="button"
-          onClick={() => onViewProfile(maid)}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 active:bg-primary/80"
+          onClick={handlePrimaryAction}
+          className={`flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
+            locked
+              ? "border border-primary/40 bg-background/90 text-primary shadow-sm backdrop-blur hover:bg-background"
+              : "border border-primary bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80"
+          }`}
         >
-          View Full Profile
+          {locked ? (
+            <>
+              <Lock className="h-3.5 w-3.5" />
+              Log in to view profile
+            </>
+          ) : (
+            "View Full Profile"
+          )}
         </button>
       </div>
     </div>
@@ -891,13 +936,15 @@ const SearchResults = ({
 
         {/* Cards grid */}
         <div className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
-          {maids.map((maid) =>
-            isLoggedIn ? (
-              <MaidCard key={maid.id} maid={maid} onViewProfile={onViewProfile} />
-            ) : (
-              <LockedMaidCard key={maid.id} onLoginClick={onLoginClick} />
-            )
-          )}
+          {maids.map((maid) => (
+            <MaidCard
+              key={maid.id}
+              maid={maid}
+              onViewProfile={onViewProfile}
+              locked={!isLoggedIn}
+              onLoginClick={onLoginClick}
+            />
+          ))}
         </div>
       </div>
     </div>
@@ -905,7 +952,10 @@ const SearchResults = ({
 };
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-const ClientMaidsPage = () => {
+const ClientMaidsPage = ({
+  resultsPath = "/client/maids/search",
+  loginPath = "/employer-login",
+}: ClientMaidsPageProps) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestRef = useRef<HTMLDivElement | null>(null);
@@ -1024,7 +1074,7 @@ const ClientMaidsPage = () => {
 
     // Update URL with search params
     const params = buildSearchParamsFromFilters(draft);
-    navigate(`/client/maids/search?${params.toString()}`);
+    navigate(`${resultsPath}?${params.toString()}`);
 
     try {
       // Replace this fetch with however your app loads maid data.
@@ -1049,7 +1099,12 @@ const ClientMaidsPage = () => {
   };
 
   const handleViewProfile = (maid: MaidProfile) => {
-    navigate(`/client/maids/${maid.id}`);
+    const profilePath = getPublicProfilePath(maid);
+    if (!profilePath) {
+      toast.error("Profile link is unavailable for this maid.");
+      return;
+    }
+    navigate(profilePath);
   };
 
   const handleOpenRequest = () => {
@@ -1065,7 +1120,7 @@ const ClientMaidsPage = () => {
   };
 
   const handleLoginClick = () => {
-    navigate("/employer-login");
+    navigate(loginPath);
   };
 
   return (

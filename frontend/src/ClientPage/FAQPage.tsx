@@ -31,10 +31,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   getStoredClient,
-  clearClientAuth,
-  getClientAuthHeaders,
   type ClientUser,
 } from "@/lib/clientAuth";
+import { logoutClientPortal } from "@/lib/supabaseAuth";
 
 const CATEGORIES = [
   { id: "all",        label: "All Topics",       Icon: Home },
@@ -344,15 +343,7 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
   const [search, setSearch] = useState("");
 
   const handleLogout = async () => {
-    try {
-      await fetch("/api/client-auth/logout", {
-        method: "POST",
-        headers: { ...getClientAuthHeaders() },
-      });
-    } catch {}
-    clearClientAuth();
-    setClientUser(null);
-    navigate("/");
+    await logoutClientPortal("/");
   };
 
   const filteredItems = useMemo(() => {

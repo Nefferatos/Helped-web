@@ -6,7 +6,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { calculateAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
 import { toast } from "@/components/ui/sonner";
+import { getClientToken } from "@/lib/clientAuth";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
+import "./ClientTheme.css";
 
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
 const PAGE_SIZE = 18;
@@ -146,6 +148,11 @@ type SidebarFilters = {
   willingOffDays: boolean;
   hasChildren: boolean;
   withVideo: boolean;
+};
+
+type MaidSearchPageProps = {
+  basePath?: string;
+  loginPath?: string;
 };
 
 const defaultSidebarFilters: SidebarFilters = {
@@ -573,11 +580,15 @@ const MaidCard = ({
   isShortlisted,
   onToggleShortlist,
   onNavigate,
+  isLoggedIn,
+  loginPath,
 }: {
   maid: MaidProfile;
   isShortlisted: boolean;
   onToggleShortlist: (ref: string) => void;
   onNavigate?: () => void;
+  isLoggedIn: boolean;
+  loginPath: string;
 }) => {
   const photo = getPrimaryPhoto(maid);
   const age = calculateAge(maid.dateOfBirth);
@@ -591,30 +602,57 @@ const MaidCard = ({
   return (
     <article className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
       <div className="relative w-full bg-muted">
-        <Link
-          to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
-          onClick={onNavigate}
-        >
-          {photo ? (
-            <img
-              src={photo}
-              alt={maid.fullName}
-              className="block h-auto w-full cursor-pointer object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-            />
-          ) : (
-            <div className="flex aspect-[3/4] items-center justify-center bg-muted">
-              <svg
-                className="h-8 w-8 text-muted-foreground/20"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-              </svg>
+        {isLoggedIn ? (
+          <Link
+            to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
+            onClick={onNavigate}
+          >
+            {photo ? (
+              <img
+                src={photo}
+                alt={maid.fullName}
+                className="block h-auto w-full cursor-pointer object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              />
+            ) : (
+              <div className="flex aspect-[3/4] items-center justify-center bg-muted">
+                <svg
+                  className="h-8 w-8 text-muted-foreground/20"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+                </svg>
+              </div>
+            )}
+          </Link>
+        ) : (
+          <div className="relative">
+            <div className="blur-[8px] scale-[1.02]">
+              {photo ? (
+                <img
+                  src={photo}
+                  alt={maid.fullName}
+                  className="block h-auto w-full object-cover"
+                />
+              ) : (
+                <div className="flex aspect-[3/4] items-center justify-center bg-muted">
+                  <svg
+                    className="h-8 w-8 text-muted-foreground/20"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+                  </svg>
+                </div>
+              )}
             </div>
-          )}
-        </Link>
+            <div className="absolute inset-0 bg-background/15 backdrop-blur-[1px]" />
+          </div>
+        )}
 
         {/* Type badge */}
         {maid.type && (
@@ -626,20 +664,28 @@ const MaidCard = ({
         )}
 
         {/* Shortlist button */}
-        <button
-          onClick={() => onToggleShortlist(maid.referenceCode)}
-          className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
-            isShortlisted
-              ? "bg-amber-500"
-              : "bg-black/60 opacity-0 group-hover:opacity-100"
-          }`}
-        >
-          <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
-          {isShortlisted ? "Shortlisted" : "Shortlist"}
-        </button>
+        {isLoggedIn ? (
+          <button
+            onClick={() => onToggleShortlist(maid.referenceCode)}
+            className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
+              isShortlisted
+                ? "bg-amber-500"
+                : "bg-black/60 opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
+            {isShortlisted ? "Shortlisted" : "Shortlist"}
+          </button>
+        ) : (
+          <div className="absolute inset-x-0 top-2 flex justify-center">
+            <span className="rounded-full border border-primary/20 bg-background/90 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-primary shadow-sm backdrop-blur">
+              Login to unlock
+            </span>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col gap-0.5 p-2">
+      <div className={`flex flex-col gap-0.5 p-2 ${isLoggedIn ? "" : "blur-[6px] select-none"}`}>
         <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
           {maid.fullName || "Unnamed maid"}
         </p>
@@ -653,11 +699,24 @@ const MaidCard = ({
           {maid.referenceCode}{age !== null ? ` • ${age} yrs` : ""}
         </p>
       </div>
+      {!isLoggedIn && (
+        <div className="px-2 pb-2">
+          <Link
+            to={loginPath}
+            className="flex w-full items-center justify-center rounded-lg border border-primary/30 bg-background/90 px-2 py-1.5 text-[10px] font-semibold text-primary shadow-sm backdrop-blur hover:bg-background"
+          >
+            Log in to view full profile
+          </Link>
+        </div>
+      )}
     </article>
   );
 };
 
-const MaidSearchPage = () => {
+const MaidSearchPage = ({
+  basePath = "/client/maids",
+  loginPath = "/employer-login",
+}: MaidSearchPageProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const advancedFilters = useMemo(() => parseAdvancedFilters(searchParams), [searchParams]);
   const advancedFiltersRaw = searchParams.get("filters") || "";
@@ -670,6 +729,7 @@ const MaidSearchPage = () => {
   const [isShortlistOpen, setIsShortlistOpen] = useState(false);
   const [shortlistRefs, setShortlistRefs] = useState<string[]>(() => getSavedShortlistRefs());
   const shortlist = useMemo(() => new Set(shortlistRefs), [shortlistRefs]);
+  const isLoggedIn = !!getClientToken();
 
   useEffect(() => {
     setShortlistRefs(getSavedShortlistRefs());
@@ -986,7 +1046,7 @@ const MaidSearchPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="client-page-theme min-h-screen bg-background">
       <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur md:hidden">
         <p className="text-sm font-medium text-foreground">
           {isLoading ? "Loading…" : `${filteredMaids.length} result${filteredMaids.length !== 1 ? "s" : ""}`}
@@ -1040,7 +1100,7 @@ const MaidSearchPage = () => {
                 </p>
               </div>
               <Button variant="outline" size="sm" asChild>
-                <Link to={advancedFiltersRaw ? `/client/maids?filters=${encodeURIComponent(advancedFiltersRaw)}` : "/client/maids"}>
+                <Link to={advancedFiltersRaw ? `${basePath}?filters=${encodeURIComponent(advancedFiltersRaw)}` : basePath}>
                   Edit Advanced Filters
                 </Link>
               </Button>
@@ -1123,6 +1183,8 @@ const MaidSearchPage = () => {
                   maid={maid}
                   isShortlisted={shortlist.has(maid.referenceCode)}
                   onToggleShortlist={handleToggleShortlist}
+                  isLoggedIn={isLoggedIn}
+                  loginPath={loginPath}
                 />
               ))}
             </div>
@@ -1176,6 +1238,8 @@ const MaidSearchPage = () => {
                         isShortlisted={true}
                         onToggleShortlist={handleToggleShortlist}
                         onNavigate={() => setIsShortlistOpen(false)}
+                        isLoggedIn={isLoggedIn}
+                        loginPath={loginPath}
                       />
                     ))}
 

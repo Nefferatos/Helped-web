@@ -14,10 +14,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   getStoredClient,
-  clearClientAuth,
-  getClientAuthHeaders,
   type ClientUser,
 } from "@/lib/clientAuth";
+import { logoutClientPortal } from "@/lib/supabaseAuth";
 
 type ContactUsProps = {
   embedded?: boolean;
@@ -35,15 +34,7 @@ const ContactUs = ({ embedded = false }: ContactUsProps) => {
   const { toast } = useToast();
 
   const handleLogout = async () => {
-    try {
-      await fetch("/api/client-auth/logout", {
-        method: "POST",
-        headers: { ...getClientAuthHeaders() },
-      });
-    } catch {}
-    clearClientAuth();
-    setClientUser(null);
-    navigate("/");
+    await logoutClientPortal("/");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
