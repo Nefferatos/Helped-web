@@ -217,8 +217,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       keyword,
       nationality: nationality === "No Preference" ? [] : [nationality],
       maidTypes,
+      language,
     });
-  }, [allPublicMaids, keyword, maidTypes, nationality]);
+  }, [allPublicMaids, keyword, maidTypes, nationality, language ]);
 
   useEffect(() => { setCurrentPage(1); }, [keyword, maidTypes, nationality, language]);
 
