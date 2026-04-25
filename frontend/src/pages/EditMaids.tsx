@@ -24,13 +24,16 @@ type VisibilityTarget =
 
 const PAGE_SIZE = 10;
 
-let jsZipLoader: Promise<typeof import("jszip")> | null = null;
 let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
 
+let jsZipLoader: Promise<any> | null = null;
+
 const loadJsZip = async () => {
-  jsZipLoader ??= import("jszip");
+  if (!jsZipLoader) {
+    jsZipLoader = import("jszip");
+  }
   const module = await jsZipLoader;
-  return module.default;
+  return module.default ?? module;
 };
 
 const loadXlsx = async () => {

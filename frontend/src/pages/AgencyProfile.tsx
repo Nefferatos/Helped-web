@@ -14,7 +14,6 @@ import {
   Mail,
   Printer,
   Facebook,
-  ChevronRight,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -78,9 +77,21 @@ interface AgencySummary {
 /* ─── Sub-components ─────────────────────────────────────────────────── */
 
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex items-center gap-2 mb-3">
-    <h2 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{children}</h2>
-    <div className="flex-1 h-px bg-gray-100" />
+  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.75rem" }}>
+    <h2
+      style={{
+        fontSize: "0.8rem",
+        fontWeight: 800,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        color: "#64748b",
+        margin: 0,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </h2>
+    <div style={{ flex: 1, height: "2px", background: "linear-gradient(90deg, #e2e8f0 0%, transparent 100%)" }} />
   </div>
 );
 
@@ -97,28 +108,64 @@ const ContactRow = ({
 }) => {
   if (!value) return null;
   return (
-    <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-gray-50">
-        <Icon className="h-3.5 w-3.5 text-gray-400" />
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "0.85rem",
+        padding: "0.75rem 0",
+        borderBottom: "1px solid #f1f5f9",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "36px",
+          width: "36px",
+          flexShrink: 0,
+          borderRadius: "0.5rem",
+          background: "#f0fdf4",
+          border: "1.5px solid #bbf7d0",
+        }}
+      >
+        <Icon size={16} color="#16a34a" />
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-large uppercase tracking-wide text-black">{label}</p>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{ fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#94a3b8", margin: "0 0 2px" }}>
+          {label}
+        </p>
         {href ? (
           <a
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="text-[13px] text-[#0D6E56] hover:underline break-all leading-snug"
+            style={{ fontSize: "1rem", color: "#0D6E56", textDecoration: "none", wordBreak: "break-all", lineHeight: 1.5, fontWeight: 600 }}
           >
             {value}
           </a>
         ) : (
-          <p className="text-[13px] text-gray-800 leading-snug break-all">{value}</p>
+          <p style={{ fontSize: "1rem", color: "#1e293b", wordBreak: "break-all", lineHeight: 1.5, margin: 0, fontWeight: 500 }}>
+            {value}
+          </p>
         )}
       </div>
     </div>
   );
 };
+
+/* ─── Stat Chip ─────────────────────────────────────────────────────── */
+const statColors: { bg: string; text: string; border: string }[] = [
+  { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe" },
+  { bg: "#f0fdf4", text: "#16a34a", border: "#bbf7d0" },
+  { bg: "#fef3c7", text: "#d97706", border: "#fde68a" },
+  { bg: "#fdf4ff", text: "#9333ea", border: "#e9d5ff" },
+  { bg: "#fff1f2", text: "#e11d48", border: "#fecdd3" },
+  { bg: "#f0fdfa", text: "#0d9488", border: "#99f6e4" },
+  { bg: "#fff7ed", text: "#ea580c", border: "#fed7aa" },
+  { bg: "#f8fafc", text: "#475569", border: "#e2e8f0" },
+];
 
 /* ─── Main Component ─────────────────────────────────────────────────── */
 
@@ -140,9 +187,7 @@ const AgencyProfile = () => {
         fetch("/api/company"),
         fetch("/api/company/summary"),
       ]);
-      const data = (await response.json().catch(() => ({}))) as Partial<CompanyResponse> & {
-        error?: string;
-      };
+      const data = (await response.json().catch(() => ({}))) as Partial<CompanyResponse> & { error?: string };
       if (!response.ok || !data.companyProfile)
         throw new Error(data.error || "Failed to load company profile");
       setCompany(data.companyProfile);
@@ -162,8 +207,7 @@ const AgencyProfile = () => {
         });
       }
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load company profile";
+      const message = error instanceof Error ? error.message : "Failed to load company profile";
       setLoadError(message);
       toast.error(message);
     } finally {
@@ -177,234 +221,484 @@ const AgencyProfile = () => {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center text-[13px] text-gray-400">
-        Loading agency profile…
+      <div style={{ display: "flex", height: "16rem", alignItems: "center", justifyContent: "center", fontSize: "1.05rem", color: "#94a3b8" }}>
+        ⏳ Loading agency profile…
       </div>
     );
   }
 
   if (loadError || !company) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4">
-        <p className="text-[13px] text-red-500">{loadError || "Failed to load company profile"}</p>
-        <Button variant="outline" size="sm" onClick={() => void loadCompanyProfile()}>
-          Retry
-        </Button>
+      <div style={{ display: "flex", height: "16rem", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
+        <p style={{ fontSize: "1rem", color: "#ef4444", fontWeight: 600 }}>{loadError || "Failed to load company profile"}</p>
+        <button
+          onClick={() => void loadCompanyProfile()}
+          style={{
+            fontSize: "1rem",
+            padding: "0.55rem 1.3rem",
+            borderRadius: "0.5rem",
+            border: "2px solid #cbd5e1",
+            background: "#fff",
+            color: "#475569",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          🔄 Retry
+        </button>
       </div>
     );
   }
 
   const gallery = company.gallery_image_data_urls ?? [];
+  const statItems = summary
+    ? [
+        { label: "Total Maids", value: summary.totalMaids },
+        { label: "Public", value: summary.publicMaids },
+        { label: "Hidden", value: summary.hiddenMaids },
+        { label: "With Photos", value: summary.maidsWithPhotos },
+        { label: "Enquiries", value: summary.enquiries },
+        { label: "MOM Staff", value: summary.momPersonnel },
+        { label: "Testimonials", value: summary.testimonials },
+        { label: "Gallery", value: summary.galleryImages },
+      ]
+    : [];
 
   return (
     <>
       {/* ── Lightbox ── */}
       {lightboxImage && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.82)",
+          }}
           onClick={() => setLightboxImage(null)}
         >
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
+          <div style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
             <img
               src={lightboxImage}
               alt="Gallery preview"
-              className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
+              style={{ maxHeight: "90vh", maxWidth: "90vw", borderRadius: "1rem", objectFit: "contain", boxShadow: "0 25px 60px rgba(0,0,0,0.5)" }}
             />
             <button
-              className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-lg"
+              style={{
+                position: "absolute",
+                top: "-14px",
+                right: "-14px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "34px",
+                width: "34px",
+                borderRadius: "50%",
+                background: "#fff",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
+              }}
               onClick={() => setLightboxImage(null)}
             >
-              <X className="h-4 w-4 text-gray-700" />
+              <X size={16} color="#374151" />
             </button>
           </div>
         </div>
       )}
 
-      <div className="space-y-5">
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", fontSize: "1rem", color: "#1e293b", lineHeight: 1.65 }}>
 
         {/* ── Header strip ── */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            background: "linear-gradient(135deg, #0f2942 0%, #0D6E56 100%)",
+            borderRadius: "1rem",
+            padding: "1.25rem 1.5rem",
+            boxShadow: "0 4px 20px rgba(13,110,86,0.2)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "1.1rem" }}>
             {/* Logo */}
-            <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-sm">
+            <div
+              style={{
+                height: "68px",
+                width: "68px",
+                flexShrink: 0,
+                overflow: "hidden",
+                borderRadius: "0.75rem",
+                border: "3px solid rgba(255,255,255,0.25)",
+                background: "rgba(255,255,255,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               {company.logo_data_url ? (
-                <img
-                  src={company.logo_data_url}
-                  alt={`${company.company_name} logo`}
-                  className="h-full w-full object-contain"
-                />
+                <img src={company.logo_data_url} alt={`${company.company_name} logo`} style={{ height: "100%", width: "100%", objectFit: "contain" }} />
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Building2 className="h-6 w-6 text-gray-300" />
-                </div>
+                <Building2 size={28} color="rgba(255,255,255,0.5)" />
               )}
             </div>
             <div>
-              <h1 className="text-[18px] font-bold tracking-tight text-gray-900">
+              <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>
                 {company.company_name || "Agency Profile"}
               </h1>
-              <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-md bg-[#E1F5EE] px-2 py-0.5 text-[11px] font-semibold text-[#0D6E56]">
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", marginTop: "0.3rem" }}>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    borderRadius: "0.4rem",
+                    background: "rgba(255,255,255,0.18)",
+                    padding: "2px 10px",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    color: "#a7f3d0",
+                    letterSpacing: "0.04em",
+                  }}
+                >
                   Lic. {company.license_no || "N/A"}
                 </span>
                 {company.short_name && (
-                  <span className="text-[16px] text-black">{company.short_name}</span>
+                  <span style={{ fontSize: "1rem", color: "rgba(255,255,255,0.75)", fontWeight: 500 }}>
+                    {company.short_name}
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
           {/* Action buttons */}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild className="h-8 text-[12px]">
-              <Link to={adminPath("/agency-profile/edit")}>
-                <Edit className="mr-1.5 h-3.5 w-3.5" />
-                Edit Profile
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" asChild className="h-8 text-[12px]">
-              <Link to={adminPath("/employment-contracts")}>Contracts</Link>
-            </Button>
-            <Button
-              size="sm"
-              asChild
-              className="h-8 bg-[#0D6E56] text-[12px] text-white hover:bg-[#0a5c47]"
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+            <Link
+              to={adminPath("/agency-profile/edit")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                padding: "0.55rem 1.1rem",
+                borderRadius: "0.5rem",
+                border: "2px solid rgba(255,255,255,0.4)",
+                background: "rgba(255,255,255,0.12)",
+                color: "#fff",
+                textDecoration: "none",
+              }}
             >
-              <Link to={adminPath("/chat-support")}>
-                <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
-                Chat
-              </Link>
-            </Button>
+              <Edit size={15} /> Edit Profile
+            </Link>
+            <Link
+              to={adminPath("/employment-contracts")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                padding: "0.55rem 1.1rem",
+                borderRadius: "0.5rem",
+                border: "2px solid rgba(255,255,255,0.4)",
+                background: "rgba(255,255,255,0.12)",
+                color: "#fff",
+                textDecoration: "none",
+              }}
+            >
+              Contracts
+            </Link>
+            <Link
+              to={adminPath("/chat-support")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                padding: "0.55rem 1.1rem",
+                borderRadius: "0.5rem",
+                border: "none",
+                background: "#fff",
+                color: "#0D6E56",
+                textDecoration: "none",
+              }}
+            >
+              <MessageCircle size={15} /> Chat
+            </Link>
           </div>
         </div>
 
         {/* ── Stat chips ── */}
         {summary && (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-            {[
-              { label: "Total Maids", value: summary.totalMaids },
-              { label: "Public", value: summary.publicMaids },
-              { label: "Hidden", value: summary.hiddenMaids },
-              { label: "With Photos", value: summary.maidsWithPhotos },
-              { label: "Enquiries", value: summary.enquiries },
-              { label: "MOM Staff", value: summary.momPersonnel },
-              { label: "Testimonials", value: summary.testimonials },
-              { label: "Gallery", value: summary.galleryImages },
-            ].map(({ label, value }) => (
-              <div
-                key={label}
-                className="flex flex-col rounded-lg border border-gray-200 bg-white px-3 py-2.5 shadow-sm"
-              >
-                <span className="text-[14px] font-medium uppercase tracking-wide text-black">
-                  {label}
-                </span>
-                <span className="mt-0.5 text-[20px] font-bold text-gray-900">{value}</span>
-              </div>
-            ))}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+              gap: "0.75rem",
+            }}
+          >
+            {statItems.map(({ label, value }, i) => {
+              const c = statColors[i % statColors.length];
+              return (
+                <div
+                  key={label}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    borderRadius: "0.75rem",
+                    border: `1.5px solid ${c.border}`,
+                    background: c.bg,
+                    padding: "0.85rem 1rem",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: c.text, opacity: 0.75 }}>
+                    {label}
+                  </span>
+                  <span style={{ marginTop: "0.25rem", fontSize: "1.65rem", fontWeight: 800, color: c.text, lineHeight: 1 }}>
+                    {value}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* ── Main two-column layout ── */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px]">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "1.5rem", alignItems: "start" }}>
 
           {/* LEFT column */}
-          <div className="space-y-5">
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
-            {/* Intro video */}
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <SectionTitle>Introduction Video</SectionTitle>
+            {/* ── Intro Video ── */}
+            <div
+              style={{
+                borderRadius: "1rem",
+                overflow: "hidden",
+                border: "1.5px solid #e2e8f0",
+                background: "#fff",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+              }}
+            >
+              <div style={{ borderBottom: "1.5px solid #f1f5f9", padding: "0.85rem 1.1rem" }}>
+                <SectionTitle>🎬 Introduction Video</SectionTitle>
               </div>
-              <div className="p-4">
+              <div style={{ padding: "1rem" }}>
                 {company.intro_video_data_url ? (
-                  <video
-                    controls
-                    className="w-full rounded-lg object-cover"
-                    style={{ maxHeight: 320 }}
-                    src={company.intro_video_data_url}
-                  />
+                  /* Colorful gradient-border video player */
+                  <div
+                    style={{
+                      borderRadius: "0.85rem",
+                      padding: "4px",
+                      background: "linear-gradient(135deg, #6366f1 0%, #06b6d4 50%, #10b981 100%)",
+                      boxShadow: "0 4px 20px rgba(99,102,241,0.2)",
+                      width: "100%",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <div style={{ background: "#0f172a", borderRadius: "0.6rem", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          background: "linear-gradient(90deg, #4f46e5 0%, #0891b2 55%, #059669 100%)",
+                          padding: "0.4rem 1rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span style={{ fontSize: "0.9rem", color: "#fff", fontWeight: 700, letterSpacing: "0.04em" }}>
+                          🎬 Introduction Video
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            background: "rgba(255,255,255,0.18)",
+                            color: "#e0f2fe",
+                            padding: "2px 10px",
+                            borderRadius: "999px",
+                            fontWeight: 700,
+                            letterSpacing: "0.06em",
+                          }}
+                        >
+                          PREVIEW
+                        </span>
+                      </div>
+                      <video
+                        controls
+                        style={{ display: "block", width: "100%", maxHeight: "320px", background: "#000" }}
+                        src={company.intro_video_data_url}
+                      />
+                    </div>
+                  </div>
                 ) : (
-                  <div className="flex h-40 items-center justify-center rounded-lg border-2 border-dashed border-gray-200 text-[13px] text-gray-400">
-                    No introduction video uploaded yet
+                  <div
+                    style={{
+                      borderRadius: "0.85rem",
+                      padding: "4px",
+                      background: "linear-gradient(135deg, #6366f1 0%, #06b6d4 50%, #10b981 100%)",
+                      boxSizing: "border-box",
+                      width: "100%",
+                    }}
+                  >
+                    <div style={{ background: "#0f172a", borderRadius: "0.6rem", overflow: "hidden" }}>
+                      <div style={{ background: "linear-gradient(90deg, #4f46e5 0%, #0891b2 55%, #059669 100%)", padding: "0.4rem 1rem" }}>
+                        <span style={{ fontSize: "0.9rem", color: "#fff", fontWeight: 700 }}>🎬 Introduction Video</span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          height: "120px",
+                          gap: "0.4rem",
+                          color: "#64748b",
+                        }}
+                      >
+                        <span style={{ fontSize: "2rem" }}>🎥</span>
+                        <span style={{ fontSize: "0.95rem", color: "#94a3b8" }}>No introduction video uploaded yet</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* About Us */}
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-4 py-3">
-                <SectionTitle>About Us</SectionTitle>
+            {/* ── About Us ── */}
+            <div
+              style={{
+                borderRadius: "1rem",
+                overflow: "hidden",
+                border: "1.5px solid #e2e8f0",
+                background: "#fff",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+              }}
+            >
+              <div style={{ borderBottom: "1.5px solid #f1f5f9", padding: "0.85rem 1.1rem" }}>
+                <SectionTitle>📋 About Us</SectionTitle>
               </div>
-              <p className="p-4 text-[13px] leading-relaxed text-gray-700 whitespace-pre-wrap">
-                {company.about_us || (
-                  <span className="text-gray-400">No about us content yet.</span>
-                )}
+              <p
+                style={{
+                  padding: "1.1rem",
+                  fontSize: "1rem",
+                  lineHeight: 1.75,
+                  color: "#374151",
+                  whiteSpace: "pre-wrap",
+                  margin: 0,
+                }}
+              >
+                {company.about_us || <span style={{ color: "#94a3b8" }}>No about us content yet.</span>}
               </p>
             </div>
 
-            {/* Gallery */}
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-4 py-3">
-                <SectionTitle>Gallery ({gallery.length})</SectionTitle>
+            {/* ── Gallery ── */}
+            <div
+              style={{
+                borderRadius: "1rem",
+                overflow: "hidden",
+                border: "1.5px solid #e2e8f0",
+                background: "#fff",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+              }}
+            >
+              <div style={{ borderBottom: "1.5px solid #f1f5f9", padding: "0.85rem 1.1rem" }}>
+                <SectionTitle>🖼 Gallery ({gallery.length})</SectionTitle>
               </div>
               {gallery.length === 0 ? (
-                <div className="flex h-24 items-center justify-center gap-2 text-[13px] text-gray-400">
-                  <ImageIcon className="h-4 w-4" />
-                  No gallery images uploaded yet
+                <div style={{ display: "flex", height: "6rem", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "1rem", color: "#94a3b8" }}>
+                  <ImageIcon size={18} /> No gallery images uploaded yet
                 </div>
               ) : (
-                <div className="grid grid-cols-4 gap-2 p-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-6 xl:grid-cols-8">
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))",
+                    gap: "0.6rem",
+                    padding: "1rem",
+                  }}
+                >
                   {gallery.map((image, index) => (
                     <button
                       key={`${image.slice(-12)}-${index}`}
                       type="button"
                       onClick={() => setLightboxImage(image)}
-                      className="group relative aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-50 transition hover:border-[#0D6E56]/40 hover:shadow-md"
+                      style={{
+                        position: "relative",
+                        aspectRatio: "1 / 1",
+                        overflow: "hidden",
+                        borderRadius: "0.6rem",
+                        border: "2px solid #e2e8f0",
+                        background: "#f8fafc",
+                        cursor: "pointer",
+                        padding: 0,
+                        transition: "border-color 0.15s, box-shadow 0.15s",
+                      }}
+                      onMouseOver={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = "#0D6E56";
+                        (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 10px rgba(13,110,86,0.18)";
+                      }}
+                      onMouseOut={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = "#e2e8f0";
+                        (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+                      }}
                     >
                       <img
                         src={image}
                         alt={`Gallery ${index + 1}`}
-                        className="h-full w-full object-cover"
+                        style={{ height: "100%", width: "100%", objectFit: "cover", display: "block" }}
                       />
-                      <span className="absolute inset-0 bg-black/0 transition group-hover:bg-black/15" />
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* MOM Personnel + Testimonials side by side on large screens */}
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            {/* ── MOM Personnel + Testimonials ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", alignItems: "start" }}>
 
               {/* MOM Personnel */}
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="border-b border-gray-100 px-4 py-3">
-                  <SectionTitle>MOM Personnel ({momPersonnel.length})</SectionTitle>
+              <div
+                style={{
+                  borderRadius: "1rem",
+                  overflow: "hidden",
+                  border: "1.5px solid #e2e8f0",
+                  background: "#fff",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+                }}
+              >
+                <div style={{ borderBottom: "1.5px solid #f1f5f9", padding: "0.85rem 1.1rem" }}>
+                  <SectionTitle>👤 MOM Personnel ({momPersonnel.length})</SectionTitle>
                 </div>
                 {momPersonnel.length === 0 ? (
-                  <div className="flex h-20 items-center justify-center gap-2 text-[13px] text-gray-400">
-                    <Users className="h-4 w-4" />
-                    No MOM personnel added yet
+                  <div style={{ display: "flex", height: "5rem", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "1rem", color: "#94a3b8" }}>
+                    <Users size={18} /> No MOM personnel added yet
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
-                        <tr className="border-b border-gray-100 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                          <th className="px-4 py-2.5 text-left w-8">#</th>
-                          <th className="px-4 py-2.5 text-left">Name</th>
-                          <th className="px-4 py-2.5 text-left">Reg. No.</th>
+                        <tr style={{ borderBottom: "1.5px solid #f1f5f9", background: "#f8fafc" }}>
+                          <th style={{ padding: "0.65rem 1rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94a3b8", width: "2rem" }}>#</th>
+                          <th style={{ padding: "0.65rem 1rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94a3b8" }}>Name</th>
+                          <th style={{ padding: "0.65rem 1rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94a3b8" }}>Reg. No.</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50 text-[13px]">
+                      <tbody>
                         {momPersonnel.map((person, i) => (
-                          <tr key={person.id} className="hover:bg-gray-50/70">
-                            <td className="px-4 py-2.5 text-gray-400">{i + 1}</td>
-                            <td className="px-4 py-2.5 font-medium text-gray-800">{person.name}</td>
-                            <td className="px-4 py-2.5 font-mono text-[12px] text-gray-500">
-                              {person.registration_number}
-                            </td>
+                          <tr
+                            key={person.id}
+                            style={{ borderBottom: "1px solid #f1f5f9" }}
+                          >
+                            <td style={{ padding: "0.7rem 1rem", fontSize: "0.9rem", color: "#94a3b8" }}>{i + 1}</td>
+                            <td style={{ padding: "0.7rem 1rem", fontSize: "1rem", fontWeight: 600, color: "#1e293b" }}>{person.name}</td>
+                            <td style={{ padding: "0.7rem 1rem", fontSize: "0.9rem", fontFamily: "monospace", color: "#64748b" }}>{person.registration_number}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -414,76 +708,67 @@ const AgencyProfile = () => {
               </div>
 
               {/* Testimonials */}
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="border-b border-gray-100 px-4 py-3">
-                  <SectionTitle>Testimonials ({testimonials.length})</SectionTitle>
+              <div
+                style={{
+                  borderRadius: "1rem",
+                  overflow: "hidden",
+                  border: "1.5px solid #e2e8f0",
+                  background: "#fff",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+                }}
+              >
+                <div style={{ borderBottom: "1.5px solid #f1f5f9", padding: "0.85rem 1.1rem" }}>
+                  <SectionTitle>💬 Testimonials ({testimonials.length})</SectionTitle>
                 </div>
                 {testimonials.length === 0 ? (
-                  <div className="flex h-20 items-center justify-center gap-2 text-[13px] text-gray-400">
-                    <Star className="h-4 w-4" />
-                    No testimonials added yet
+                  <div style={{ display: "flex", height: "5rem", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "1rem", color: "#94a3b8" }}>
+                    <Star size={18} /> No testimonials added yet
                   </div>
                 ) : (
-                  <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
+                  <div style={{ maxHeight: "320px", overflowY: "auto" }}>
                     {testimonials.map((t) => (
-                      <div key={t.id} className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <div className="flex gap-0.5">
+                      <div key={t.id} style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid #f1f5f9" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                          <div style={{ display: "flex", gap: "2px" }}>
                             {[...Array(5)].map((_, i) => (
-                              <Star
-                                key={i}
-                                className="h-3 w-3 fill-amber-400 text-amber-400"
-                              />
+                              <Star key={i} size={13} fill="#f59e0b" color="#f59e0b" />
                             ))}
                           </div>
-                          <p className="text-[12px] font-semibold text-gray-800">{t.author}</p>
+                          <p style={{ fontSize: "0.95rem", fontWeight: 700, color: "#1e293b", margin: 0 }}>{t.author}</p>
                         </div>
-                        <p className="text-[12px] text-gray-500 leading-relaxed">{t.message}</p>
+                        <p style={{ fontSize: "0.95rem", color: "#64748b", margin: 0, lineHeight: 1.65 }}>{t.message}</p>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-
             </div>
           </div>
 
           {/* RIGHT column — contact sidebar */}
-          <div className="space-y-5">
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
-            {/* Quick contact card */}
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-4 py-3">
-                <SectionTitle>Contact Details</SectionTitle>
+            {/* Contact Details */}
+            <div
+              style={{
+                borderRadius: "1rem",
+                overflow: "hidden",
+                border: "1.5px solid #e2e8f0",
+                background: "#fff",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+              }}
+            >
+              <div style={{ borderBottom: "1.5px solid #f1f5f9", padding: "0.85rem 1.1rem" }}>
+                <SectionTitle>📞 Contact Details</SectionTitle>
               </div>
-              <div className="px-4 py-3">
+              <div style={{ padding: "0.25rem 1rem 0.5rem" }}>
                 <ContactRow icon={Building2} label="Company" value={company.company_name} />
                 <ContactRow icon={Users} label="Contact Person" value={company.contact_person} />
-                <ContactRow
-                  icon={Phone}
-                  label="Phone"
-                  value={company.contact_phone}
-                  href={`tel:${company.contact_phone}`}
-                />
-                <ContactRow
-                  icon={Mail}
-                  label="Email"
-                  value={company.contact_email}
-                  href={`mailto:${company.contact_email}`}
-                />
+                <ContactRow icon={Phone} label="Phone" value={company.contact_phone} href={`tel:${company.contact_phone}`} />
+                <ContactRow icon={Mail} label="Email" value={company.contact_email} href={`mailto:${company.contact_email}`} />
                 <ContactRow icon={Printer} label="Fax" value={company.contact_fax} />
-                <ContactRow
-                  icon={Globe}
-                  label="Website"
-                  value={company.contact_website}
-                  href={company.contact_website}
-                />
-                <ContactRow
-                  icon={Facebook}
-                  label="Facebook"
-                  value={company.social_facebook}
-                  href={company.social_facebook}
-                />
+                <ContactRow icon={Globe} label="Website" value={company.contact_website} href={company.contact_website} />
+                <ContactRow icon={Facebook} label="Facebook" value={company.social_facebook} href={company.social_facebook} />
                 <ContactRow
                   icon={MessageCircle}
                   label="WhatsApp"
@@ -493,22 +778,25 @@ const AgencyProfile = () => {
               </div>
             </div>
 
-            {/* Address card */}
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-4 py-3">
-                <SectionTitle>Location</SectionTitle>
+            {/* Location */}
+            <div
+              style={{
+                borderRadius: "1rem",
+                overflow: "hidden",
+                border: "1.5px solid #e2e8f0",
+                background: "#fff",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+              }}
+            >
+              <div style={{ borderBottom: "1.5px solid #f1f5f9", padding: "0.85rem 1.1rem" }}>
+                <SectionTitle>📍 Location</SectionTitle>
               </div>
-              <div className="px-4 py-3 space-y-0">
+              <div style={{ padding: "0.25rem 1rem 0.5rem" }}>
                 <ContactRow
                   icon={MapPin}
                   label="Address"
                   value={
-                    [
-                      company.address_line1,
-                      company.address_line2,
-                      company.postal_code,
-                      company.country,
-                    ]
+                    [company.address_line1, company.address_line2, company.postal_code, company.country]
                       .filter(Boolean)
                       .join(", ") || undefined
                   }
@@ -518,12 +806,20 @@ const AgencyProfile = () => {
               </div>
             </div>
 
-            {/* License info */}
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-4 py-3">
-                <SectionTitle>Registration</SectionTitle>
+            {/* Registration */}
+            <div
+              style={{
+                borderRadius: "1rem",
+                overflow: "hidden",
+                border: "1.5px solid #e2e8f0",
+                background: "#fff",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+              }}
+            >
+              <div style={{ borderBottom: "1.5px solid #f1f5f9", padding: "0.85rem 1.1rem" }}>
+                <SectionTitle>🏛 Registration</SectionTitle>
               </div>
-              <div className="px-4 py-3 space-y-0">
+              <div style={{ padding: "0.25rem 1rem 0.5rem" }}>
                 <ContactRow icon={Building2} label="License No." value={company.license_no} />
                 <ContactRow icon={Building2} label="Short Name" value={company.short_name} />
               </div>

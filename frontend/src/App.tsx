@@ -88,6 +88,7 @@ const ContactUS = lazyRoute(() => import("./ClientPage/ContactUs"));
 const Enquiry2 = lazyRoute(() => import("./ClientPage/Enquiry"));
 const ServiceDetail = lazyRoute(() => import("./ClientPage/ServiceDetails"));
 const FaqPage = lazyRoute(() => import("./ClientPage/FAQPage"));
+const AgencyPortal = lazyRoute(() => import("./ClientPage/AgencyPortal"));
 
 const AdminShell = ({ children }: { children: ReactNode }) => <AppLayout>{children}</AppLayout>;
 const withRouteLoader = (element: ReactNode) => <Suspense fallback={<RouteLoader />}>{element}</Suspense>;
@@ -393,6 +394,7 @@ const App = () => {
             <Route path="/employer/new" element={<Navigate to="/agencyadmin/employment-contracts/new" replace />} />
             <Route path="/employer/:refCode" element={<Navigate to="/agencyadmin/employment-contracts" replace />} />
             <Route path="/faq" element={withRouteLoader(<FaqPage />)} />
+            <Route path="/agency" element={withRouteLoader(<AgencyPortal />)} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

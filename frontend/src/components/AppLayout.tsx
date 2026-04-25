@@ -16,6 +16,8 @@ import {
   X,
   Hand,
   ClipboardList,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,8 +36,26 @@ import {
   getStoredAgencyAdmin,
   type AgencyAdminUser,
 } from "@/lib/agencyAdminAuth";
+import { fetchAdminUnreadChatCount } from "@/lib/chat";
 
-/* ─── 3D Icon config per nav item ──────────────────────────────────────── */
+/* ─── Responsive breakpoint hook ─────────────────────────────────────────
+   Uses a MediaQueryList so it reacts to window resize without polling.
+   Returns true when viewport >= breakpoint (default 1024px = Tailwind "lg").
+───────────────────────────────────────────────────────────────────────── */
+function useIsDesktop(breakpoint = 1024) {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && window.innerWidth >= breakpoint
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${breakpoint}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [breakpoint]);
+  return isDesktop;
+}
+
+/* ─── Nav items ─────────────────────────────────────────────────────────── */
 
 const navItems = [
   {
@@ -121,18 +141,23 @@ const navItems = [
   },
 ];
 
-/* ─── 3D Icon Badge ─────────────────────────────────────────────────────── */
+/* ─── 3D Icon ────────────────────────────────────────────────────────────── */
 
-interface Icon3DProps {
+const Icon3D = ({
+  icon: IconComp,
+  bg,
+  shadow,
+  shadowActive,
+  color,
+  isActive,
+}: {
   icon: React.ElementType;
   bg: string;
   shadow: string;
   shadowActive: string;
   color: string;
   isActive: boolean;
-}
-
-const Icon3D = ({ icon: IconComp, bg, shadow, shadowActive, color, isActive }: Icon3DProps) => (
+}) => (
   <span
     style={{
       display: "inline-flex",
@@ -149,76 +174,247 @@ const Icon3D = ({ icon: IconComp, bg, shadow, shadowActive, color, isActive }: I
     }}
   >
     <IconComp
-      style={{ width: 17, height: 17, color, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.25))" }}
+      style={{
+        width: 17,
+        height: 17,
+        color,
+        filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.25))",
+      }}
     />
   </span>
 );
 
-/* ─── Sidebar content ────────────────────────────────────────────────────── */
+/* ─── Tooltip (shown on collapsed icon hover) ───────────────────────────── */
 
-interface SidebarContentProps {
-  location: ReturnType<typeof useLocation>;
-  unreadAgencyChats: number;
-  agencyLogoUrl: string;
-  agencyAdmin: AgencyAdminUser | null;
-  onNavClick?: () => void;
-}
+const Tooltip = ({ label }: { label: string }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: "calc(100% + 10px)",
+      top: "50%",
+      transform: "translateY(-50%)",
+      background: "#1e293b",
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: 600,
+      padding: "4px 10px",
+      borderRadius: 6,
+      whiteSpace: "nowrap",
+      pointerEvents: "none",
+      zIndex: 200,
+      boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+    }}
+  >
+    {label}
+    <span
+      style={{
+        position: "absolute",
+        left: -5,
+        top: "50%",
+        transform: "translateY(-50%)",
+        width: 0,
+        height: 0,
+        borderTop: "5px solid transparent",
+        borderBottom: "5px solid transparent",
+        borderRight: "5px solid #1e293b",
+      }}
+    />
+  </div>
+);
+
+/* ─── Sidebar inner content ──────────────────────────────────────────────── */
 
 const SidebarContent = ({
   location,
   unreadAgencyChats,
   agencyLogoUrl,
   agencyAdmin,
+  collapsed,
   onNavClick,
-}: SidebarContentProps) => (
-  <>
-    {/* Brand */}
-    <div className="border-b border-gray-200 px-4 py-4">
-      <p className="text-[18px] font-bold tracking-tight text-gray-900">Find Maids</p>
-      <span className="text-[13px] font-semibold text-gray-500">Agency Management</span>
-    </div>
+}: {
+  location: ReturnType<typeof useLocation>;
+  unreadAgencyChats: number;
+  agencyLogoUrl: string;
+  agencyAdmin: AgencyAdminUser | null;
+  collapsed: boolean;
+  onNavClick?: () => void;
+}) => {
+  const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
-    {/* Agency identity */}
-    <div className="flex items-center gap-3 border-b border-gray-200 bg-[#0D6E56] px-4 py-3">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/20">
-        {agencyLogoUrl || agencyAdmin?.profileImageUrl ? (
-          <img
-            src={agencyLogoUrl || agencyAdmin?.profileImageUrl}
-            alt="Agency logo"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <Building2 className="h-5 w-5 text-white" />
-        )}
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-[14px] font-bold text-white">
-          {agencyAdmin?.agencyName ?? "Admin Portal"}
-        </p>
-        <p className="text-[12px] font-medium text-white/80">Management Suite</p>
-      </div>
-    </div>
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
+      {/* Brand */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: collapsed ? "center" : "flex-start",
+          gap: 8,
+          padding: collapsed ? "14px 0" : "14px 16px",
+          borderBottom: "1px solid #E5E7EB",
+          transition: "padding 0.3s ease",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 9,
+            background: "linear-gradient(145deg, #6EE7B7, #0D6E56)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            boxShadow: "0 2px 6px rgba(13,110,86,0.4)",
+          }}
+        >
+          <Building2 style={{ width: 16, height: 16, color: "#fff" }} />
+        </div>
 
-    {/* Nav links */}
-    <nav className="flex-1 overflow-y-auto py-2">
-      <ul className="space-y-0.5">
+        <div
+          style={{
+            overflow: "hidden",
+            maxWidth: collapsed ? 0 : 160,
+            opacity: collapsed ? 0 : 1,
+            transition: "max-width 0.3s ease, opacity 0.2s ease",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: 17,
+              fontWeight: 700,
+              color: "#111827",
+              lineHeight: 1.2,
+            }}
+          >
+            Find Maids
+          </p>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#6B7280" }}>
+            Agency Management
+          </span>
+        </div>
+      </div>
+
+      {/* Agency identity strip */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: collapsed ? "center" : "flex-start",
+          gap: 10,
+          padding: collapsed ? "10px 0" : "10px 12px",
+          background: "#0D6E56",
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          transition: "padding 0.3s ease",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            flexShrink: 0,
+            borderRadius: 8,
+            overflow: "hidden",
+            background: "rgba(255,255,255,0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {agencyLogoUrl || agencyAdmin?.profileImageUrl ? (
+            <img
+              src={agencyLogoUrl || agencyAdmin?.profileImageUrl}
+              alt="Agency logo"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <Building2 style={{ width: 18, height: 18, color: "#fff" }} />
+          )}
+        </div>
+
+        <div
+          style={{
+            overflow: "hidden",
+            maxWidth: collapsed ? 0 : 160,
+            opacity: collapsed ? 0 : 1,
+            transition: "max-width 0.3s ease, opacity 0.2s ease",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}>
+            {agencyAdmin?.agencyName ?? "Admin Portal"}
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 11,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.75)",
+            }}
+          >
+            Management Suite
+          </p>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          overflowX: "hidden",
+          paddingTop: 6,
+          paddingBottom: 6,
+        }}
+      >
         {navItems.map((item) => {
           const isActive =
             location.pathname === item.path ||
             location.pathname.startsWith(`${item.path}/`);
           const hasUnread =
             item.path === adminPath("/chat-support") && unreadAgencyChats > 0;
+          const isHovered = hoveredPath === item.path;
 
           return (
-            <li key={item.path}>
+            <div
+              key={item.path}
+              style={{ position: "relative" }}
+              onMouseEnter={() => setHoveredPath(item.path)}
+              onMouseLeave={() => setHoveredPath(null)}
+            >
               <Link
                 to={item.path}
                 onClick={onNavClick}
-                className={`relative flex items-center gap-2.5 px-3 py-2 text-[18px] transition-colors rounded-none ${
-                  isActive
-                    ? "border-r-2 border-[#0D6E56] bg-[#E1F5EE] font-bold text-[#0D6E56]"
-                    : "font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                }`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: collapsed ? "8px 0" : "8px 12px",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  textDecoration: "none",
+                  borderRight: isActive
+                    ? "3px solid #0D6E56"
+                    : "3px solid transparent",
+                  background: isActive
+                    ? "#E1F5EE"
+                    : isHovered
+                    ? "#F8FAFC"
+                    : "transparent",
+                  transition:
+                    "background 0.15s ease, padding 0.3s ease, border-color 0.15s ease",
+                  position: "relative",
+                }}
               >
                 <Icon3D
                   icon={item.icon}
@@ -229,111 +425,138 @@ const SidebarContent = ({
                   isActive={isActive}
                 />
 
-                <span className="flex-1 truncate">{item.label}</span>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: isActive ? 700 : 600,
+                    color: isActive ? "#0D6E56" : "#4B5563",
+                    flex: 1,
+                    overflow: "hidden",
+                    maxWidth: collapsed ? 0 : 200,
+                    opacity: collapsed ? 0 : 1,
+                    transition: "max-width 0.3s ease, opacity 0.2s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {item.label}
+                </span>
 
-                {hasUnread && (
-                  <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
+                {hasUnread && !collapsed && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      height: 18,
+                      minWidth: 18,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 9999,
+                      background: "#EF4444",
+                      padding: "0 5px",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "#fff",
+                    }}
+                  >
                     {unreadAgencyChats}
                   </span>
                 )}
+
+                {hasUnread && collapsed && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 6,
+                      right: 6,
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#EF4444",
+                      border: "2px solid #fff",
+                    }}
+                  />
+                )}
               </Link>
-            </li>
+
+              {collapsed && isHovered && <Tooltip label={item.label} />}
+            </div>
           );
         })}
-      </ul>
-    </nav>
-  </>
-);
+      </nav>
+    </div>
+  );
+};
 
-/* ─── Main Layout ─────────────────────────────────────────────────────── */
+/* ─── AppLayout ──────────────────────────────────────────────────────────── */
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [unreadAgencyChats, setUnreadAgencyChats] = useState<number>(0);
+
+  // JS-driven responsive: avoids ALL Tailwind/inline-style conflicts
+  const isDesktop = useIsDesktop(1024);
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [unreadAgencyChats, setUnreadAgencyChats] = useState(0);
   const [agencyAdmin, setAgencyAdmin] = useState<AgencyAdminUser | null>(
     getStoredAgencyAdmin()
   );
   const [agencyLogoUrl, setAgencyLogoUrl] = useState("");
 
+  // Close mobile drawer on route change
   useEffect(() => {
-    setSidebarOpen(false);
+    setMobileOpen(false);
   }, [location.pathname]);
 
+  // Polling: notifications + logo
   useEffect(() => {
     let active = true;
-    let pollTimer: number | null = null;
 
     const loadSummary = async (silent = false) => {
       try {
-        const [response, companyResponse] = await Promise.all([fetch("/api/company/summary"), fetch("/api/company")]);
-        const data = (await response.json().catch(() => ({}))) as {
-          pendingRequests?: number;
+        const [res, compRes] = await Promise.all([
+          fetch("/api/company/summary"),
+          fetch("/api/company"),
+        ]);
+        const data = (await res.json().catch(() => ({}))) as {
           unreadAgencyChats?: number;
           error?: string;
         };
-        if (!response.ok) throw new Error(data.error || "Failed to load notifications");
+        if (!res.ok) throw new Error(data.error || "Failed to load notifications");
         if (!active) return;
         setUnreadAgencyChats(data.unreadAgencyChats ?? 0);
-
-        if (companyResponse.ok) {
-          const companyData = (await companyResponse.json().catch(() => ({}))) as {
+        if (compRes.ok) {
+          const compData = (await compRes.json().catch(() => ({}))) as {
             companyProfile?: { logo_data_url?: string };
           };
-          if (active) setAgencyLogoUrl(companyData.companyProfile?.logo_data_url || "");
+          if (active) setAgencyLogoUrl(compData.companyProfile?.logo_data_url || "");
         }
-      } catch (error) {
+      } catch (err) {
         if (!silent)
-          toast.error(error instanceof Error ? error.message : "Failed to load notifications");
+          toast.error(err instanceof Error ? err.message : "Failed to load notifications");
       }
     };
 
-    const refreshSummary = (silent = false) => {
-      if (document.visibilityState === "hidden") {
-        return;
-      }
-
-      void loadSummary(silent);
-    };
-
-    const startPolling = () => {
-      if (pollTimer !== null) {
-        return;
-      }
-
-      pollTimer = window.setInterval(() => {
-        refreshSummary(true);
-      }, 30_000);
-    };
-
-    const stopPolling = () => {
-      if (pollTimer !== null) {
-        window.clearInterval(pollTimer);
-        pollTimer = null;
+    const loadUnread = async (silent = false) => {
+      try {
+        const count = await fetchAdminUnreadChatCount();
+        if (active) setUnreadAgencyChats(count);
+      } catch (err) {
+        if (!silent)
+          toast.error(err instanceof Error ? err.message : "Failed to load unread chats");
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refreshSummary(true);
-        startPolling();
-        return;
-      }
-
-      stopPolling();
-    };
-
-    refreshSummary(false);
-    startPolling();
-    window.addEventListener("focus", handleVisibilityChange);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    void loadSummary(false);
+    void loadUnread(false);
+    const iv = window.setInterval(() => {
+      void loadSummary(true);
+      void loadUnread(true);
+    }, 5000);
 
     return () => {
       active = false;
-      stopPolling();
-      window.removeEventListener("focus", handleVisibilityChange);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(iv);
     };
   }, [location.pathname]);
 
@@ -348,7 +571,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         headers: { ...getAgencyAdminAuthHeaders() },
       });
     } catch {
-      // Local auth is cleared even if the request fails.
+      // swallow — auth cleared regardless
     } finally {
       clearAgencyAdminAuth();
       toast.success("Agency admin logged out");
@@ -357,8 +580,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   const initials = (agencyAdmin?.agencyName || "A").slice(0, 2).toUpperCase();
+  const desktopWidth = collapsed ? 64 : 230;
 
-  const sharedSidebarProps: SidebarContentProps = {
+  const sharedSidebarProps = {
     location,
     unreadAgencyChats,
     agencyLogoUrl,
@@ -366,72 +590,237 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
-
-      {/* ── MOBILE: backdrop ── */}
-      {sidebarOpen && (
+    <div
+      style={{
+        display: "flex",
+        height: "100vh",
+        overflow: "hidden",
+        background: "#F8FAFC",
+      }}
+    >
+      {/* ══ MOBILE: backdrop + drawer ══════════════════════════════════════ */}
+      {!isDesktop && mobileOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 30,
+            background: "rgba(0,0,0,0.4)",
+          }}
           aria-hidden="true"
         />
       )}
 
-      {/* ── MOBILE: slide-in drawer ── */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 ease-in-out lg:hidden ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-        aria-label="Navigation drawer"
-      >
-        <button
-          onClick={() => setSidebarOpen(false)}
-          className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"
-          aria-label="Close menu"
+      {!isDesktop && (
+        <aside
+          aria-label="Navigation drawer"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: 240,
+            zIndex: 40,
+            background: "#fff",
+            borderRight: "1px solid #E5E7EB",
+            boxShadow: "4px 0 24px rgba(0,0,0,0.12)",
+            transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
+            transition: "transform 0.3s ease",
+          }}
         >
-          <X className="h-4 w-4" />
-        </button>
-        <SidebarContent
-          {...sharedSidebarProps}
-          onNavClick={() => setSidebarOpen(false)}
-        />
-      </aside>
+          <button
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 10,
+              width: 28,
+              height: 28,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 6,
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              color: "#9CA3AF",
+            }}
+          >
+            <X style={{ width: 16, height: 16 }} />
+          </button>
+          <SidebarContent
+            {...sharedSidebarProps}
+            collapsed={false}
+            onNavClick={() => setMobileOpen(false)}
+          />
+        </aside>
+      )}
 
-      {/* ── DESKTOP: persistent sidebar ── */}
-      <aside className="hidden lg:flex w-52 min-w-[350px] flex-col border-r border-gray-200 bg-white">
-        <SidebarContent {...sharedSidebarProps} />
-      </aside>
+      {/* ══ DESKTOP: persistent collapsible sidebar ════════════════════════ */}
+      {isDesktop && (
+        <aside
+          style={{
+            width: desktopWidth,
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            borderRight: "1px solid #E5E7EB",
+            background: "#fff",
+            transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
+            position: "relative",
+            overflow: "visible",
+          }}
+        >
+          <SidebarContent {...sharedSidebarProps} collapsed={collapsed} />
 
-      {/* ── MAIN AREA ── */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Collapse toggle knob on the right edge */}
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            style={{
+              position: "absolute",
+              right: -14,
+              top: 72,
+              zIndex: 50,
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              border: "2px solid #E5E7EB",
+              background: "#fff",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#0D6E56",
+              transition: "background 0.15s ease, border-color 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#E1F5EE";
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "#0D6E56";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#fff";
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "#E5E7EB";
+            }}
+          >
+            {collapsed ? (
+              <ChevronRight style={{ width: 14, height: 14 }} />
+            ) : (
+              <ChevronLeft style={{ width: 14, height: 14 }} />
+            )}
+          </button>
+        </aside>
+      )}
 
-        {/* Top bar */}
-        <header className="flex h-[86px] flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 lg:hidden"
-              aria-label="Open menu"
+      {/* ══ MAIN AREA ══════════════════════════════════════════════════════ */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+        }}
+      >
+        {/* Top header */}
+        <header
+          style={{
+            height: 86,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: "1px solid #E5E7EB",
+            background: "#fff",
+            padding: "0 24px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            {/* Hamburger only on mobile */}
+            {!isDesktop && (
+              <button
+                onClick={() => setMobileOpen(true)}
+                aria-label="Open menu"
+                style={{
+                  display: "flex",
+                  width: 32,
+                  height: 32,
+                  flexShrink: 0,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  color: "#6B7280",
+                }}
+              >
+                <Menu style={{ width: 20, height: 20 }} />
+              </button>
+            )}
+
+            <span
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#1F2937",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
             >
-              <Menu className="h-5 w-5" />
-            </button>
-            <span className="truncate text-[15px] font-bold text-gray-800 sm:text-[20px]">
-              <span className="hidden sm:inline">Maid Agency Account Management</span>
-              <span className="sm:hidden">Find Maids Admin</span>
+              {isDesktop ? "Maid Agency Account Management" : "Find Maids Admin"}
             </span>
           </div>
 
-          <div className="flex flex-shrink-0 items-center gap-2 lg:gap-3">
-            <button className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:bg-gray-50">
-              <Bell className="h-[15px] w-[15px]" />
+          <div style={{ display: "flex", flexShrink: 0, alignItems: "center", gap: 10 }}>
+            <button
+              style={{
+                width: 32,
+                height: 32,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "50%",
+                border: "1px solid #E5E7EB",
+                background: "transparent",
+                cursor: "pointer",
+                color: "#9CA3AF",
+              }}
+            >
+              <Bell style={{ width: 15, height: 15 }} />
             </button>
-            <button className="hidden sm:flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:bg-gray-50">
-              <HelpCircle className="h-[15px] w-[15px]" />
-            </button>
+
+            {isDesktop && (
+              <button
+                style={{
+                  width: 32,
+                  height: 32,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "50%",
+                  border: "1px solid #E5E7EB",
+                  background: "transparent",
+                  cursor: "pointer",
+                  color: "#9CA3AF",
+                }}
+              >
+                <HelpCircle style={{ width: 15, height: 15 }} />
+              </button>
+            )}
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0D6E56] rounded-full">
-                  <Avatar className="h-8 w-8 cursor-pointer">
+                <button
+                  style={{ background: "none", border: "none", cursor: "pointer" }}
+                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0D6E56] rounded-full"
+                >
+                  <Avatar className="h-8 w-8">
                     <AvatarImage
                       src={agencyLogoUrl || agencyAdmin?.profileImageUrl}
                       alt={agencyAdmin?.agencyName || "Agency"}
@@ -457,7 +846,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                     <p className="truncate text-[14px] font-bold text-gray-100">
                       Welcome! {agencyAdmin?.username ?? "Agency Admin"}
                     </p>
-                    <p className="truncate whitespace-normal text-[13px] font-semibold leading-snug text-gray-500">
+                    <p className="truncate text-[13px] font-semibold leading-snug text-gray-500">
                       {agencyAdmin?.agencyName ?? "Agency"}
                     </p>
                   </div>
@@ -475,22 +864,50 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </header>
 
-       {/* Welcome bar */}
-        <div className="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-2.5 lg:px-6">
-          <p className="flex items-center gap-2 text-[18px] font-medium text-gray-600">
-
+        {/* Welcome bar */}
+        <div
+          style={{
+            flexShrink: 0,
+            borderBottom: "1px solid #E5E7EB",
+            background: "#fff",
+            padding: "10px 24px",
+          }}
+        >
+          <p
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 16,
+              fontWeight: 500,
+              color: "#4B5563",
+              margin: 0,
+            }}
+          >
             Welcome:
-            <span className="font-bold text-[#0D6E56]">
+            <span style={{ fontWeight: 700, color: "#0D6E56" }}>
               {agencyAdmin?.username ?? "Agency Admin"}
             </span>
-             <Hand className="h-5 w-5 text-[#0D6E56]" />
+            <Hand style={{ width: 18, height: 18, color: "#0D6E56" }} />
           </p>
         </div>
+
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main style={{ flex: 1, overflowY: "auto", padding: 24 }}>{children}</main>
 
         {/* Footer */}
-        <footer className="flex-shrink-0 border-t border-gray-200 bg-white py-2.5 text-center text-[12px] font-medium text-gray-500">
+        <footer
+          style={{
+            flexShrink: 0,
+            borderTop: "1px solid #E5E7EB",
+            background: "#fff",
+            padding: "10px 0",
+            textAlign: "center",
+            fontSize: 12,
+            fontWeight: 500,
+            color: "#9CA3AF",
+          }}
+        >
           © 2026 STREET PTE LTD. All Rights Reserved.
         </footer>
       </div>

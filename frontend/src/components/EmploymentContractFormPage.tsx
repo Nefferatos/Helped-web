@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -25,7 +23,14 @@ import {
   FileText,
   FileCheck2,
   Printer,
-  Pencil,
+  ChevronRight,
+  ChevronLeft,
+  Save,
+  Users,
+  Building2,
+  Home,
+  FilePlus2,
+  AlertCircle,
 } from "lucide-react";
 import { downloadMergedEmployerPdf, printMergedEmployerPdf } from "@/lib/employerPdf";
 import { adminPath } from "@/lib/routes";
@@ -107,7 +112,6 @@ const getPrimaryPhoto = (maid: Record<string, unknown>) => {
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 
-const fillIfEmpty = (current: string, next: string) => (current.trim() ? current : next);
 const getMaidExperienceLabel = (maid: MaidSearchResult | MaidProfile) => getExperienceBucket(maid as MaidProfile);
 const getMaidPassportNo = (maid: MaidSearchResult) =>
   toText((maid.agencyContact as Record<string, unknown> | undefined)?.passportNo);
@@ -122,98 +126,130 @@ const normalizeEmploymentDateParts = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return { day: "", month: "", year: "" };
   const match = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-  if (match) {
-    return { day: match[1], month: match[2], year: match[3] };
-  }
-  if (/^\d{4}$/.test(trimmed)) {
-    return { day: "", month: "", year: trimmed };
-  }
+  if (match) return { day: match[1], month: match[2], year: match[3] };
+  if (/^\d{4}$/.test(trimmed)) return { day: "", month: "", year: trimmed };
   return { day: "", month: "", year: "" };
 };
 
-/* ─────────────────── shared primitives ─────────────────── */
-const SectionHeader = ({ title, children }: { title: string; children?: React.ReactNode }) => (
-  <div className="mt-4 mb-0 rounded-t-sm bg-[#4a7bb5] px-3 py-1.5 flex items-center justify-between">
-    <h3 className="text-sm font-semibold text-white">{title}</h3>
-    {children}
-  </div>
-);
+/* ─────────────────── shared UI primitives ─────────────────── */
 
-const SectionBody = ({
+const inp = [
+  "h-11 w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-3.5",
+  "text-[15px] text-gray-900 font-medium outline-none transition-all",
+  "placeholder:text-gray-400 placeholder:font-normal",
+  "focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100",
+  "disabled:bg-white disabled:opacity-100 disabled:border-gray-200",
+].join(" ");
+
+const selTrigger = [
+  "h-11 rounded-xl border-2 border-gray-200 bg-gray-50 px-3.5",
+  "text-[15px] text-gray-900 font-medium",
+  "focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100",
+  "disabled:bg-white disabled:opacity-100",
+].join(" ");
+
+function SectionCard({
+  title,
+  icon,
+  color = "emerald",
   children,
-  disabled = false,
+  action,
 }: {
+  title: string;
+  icon: React.ReactNode;
+  color?: "emerald" | "sky" | "violet" | "amber" | "slate";
   children: React.ReactNode;
-  disabled?: boolean;
-}) => (
-  <div className="rounded-b-sm border border-[#c5d3e8] bg-white px-4 py-3">
-    <fieldset disabled={disabled}>
-      {children}
-    </fieldset>
-  </div>
-);
+  action?: React.ReactNode;
+}) {
+  const colors: Record<string, { header: string; border: string; icon: string }> = {
+    emerald: { header: "bg-gradient-to-r from-emerald-600 to-teal-600", border: "border-emerald-100", icon: "bg-emerald-100 text-emerald-700" },
+    sky:     { header: "bg-gradient-to-r from-sky-600 to-blue-600",     border: "border-sky-100",     icon: "bg-sky-100 text-sky-700" },
+    violet:  { header: "bg-gradient-to-r from-violet-600 to-purple-600",border: "border-violet-100",  icon: "bg-violet-100 text-violet-700" },
+    amber:   { header: "bg-gradient-to-r from-amber-500 to-orange-500", border: "border-amber-100",   icon: "bg-amber-100 text-amber-700" },
+    slate:   { header: "bg-gradient-to-r from-slate-600 to-gray-700",   border: "border-slate-100",   icon: "bg-slate-100 text-slate-700" },
+  };
+  const c = colors[color];
+  return (
+    <div className={`overflow-hidden rounded-2xl border-2 ${c.border} shadow-sm`}>
+      <div className={`${c.header} px-5 py-3.5 flex items-center justify-between`}>
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20">
+            {icon}
+          </div>
+          <h3 className="text-[16px] font-bold text-white">{title}</h3>
+        </div>
+        {action && <div>{action}</div>}
+      </div>
+      <div className="bg-white px-5 py-5">{children}</div>
+    </div>
+  );
+}
 
-const Field = ({
+function Field({
   label, required, hint, children,
 }: {
   label: string; required?: boolean; hint?: string; children: React.ReactNode;
-}) => (
-  <div className="grid grid-cols-[220px_1fr] items-start gap-x-2 py-0.5">
-    <label className="pt-1.5 text-right text-xs text-gray-600">
-      {label}{required && <span className="ml-0.5 text-rose-500">*</span>}
-    </label>
-    <div className="space-y-0.5">
-      {children}
-      {hint && <p className="text-[10px] text-gray-400">{hint}</p>}
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[200px_1fr] sm:items-start sm:gap-x-4 py-1">
+      <label className="pt-2.5 text-[14px] font-bold text-gray-700 sm:text-right">
+        {label}{required && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
+      <div className="space-y-1">
+        {children}
+        {hint && <p className="text-[12px] text-gray-400 leading-snug">{hint}</p>}
+      </div>
     </div>
-  </div>
-);
+  );
+}
 
-const RadioGroup = ({
+function RadioGroup({
   name, options, value, onChange,
 }: {
   name: string; options: string[]; value: string; onChange: (v: string) => void;
-}) => (
-  <div className="flex flex-wrap gap-2 pt-0.5">
-    {options.map((opt) => (
-      <label
-        key={opt}
-        className={`flex cursor-pointer items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition-colors ${
-          value === opt
-            ? "border-blue-300 bg-blue-50 font-semibold text-blue-700"
-            : "border-gray-200 text-gray-600 hover:border-gray-300"
-        }`}
-      >
-        <input type="radio" name={name} checked={value === opt} onChange={() => onChange(opt)} className="sr-only" />
-        {value === opt && <Check className="h-2.5 w-2.5 text-blue-500" />}
-        {opt}
-      </label>
-    ))}
-  </div>
-);
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 pt-1">
+      {options.map((opt) => (
+        <label
+          key={opt}
+          className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-4 py-2 text-[14px] font-semibold transition-all ${
+            value === opt
+              ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+              : "border-gray-200 text-gray-600 hover:border-gray-300 bg-gray-50"
+          }`}
+        >
+          <input type="radio" name={name} checked={value === opt} onChange={() => onChange(opt)} className="sr-only" />
+          {value === opt && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+          {opt}
+        </label>
+      ))}
+    </div>
+  );
+}
 
-const DatePicker = ({
-  day, month, year, onDay, onMonth, onYear,
-}: {
+function DatePicker({ day, month, year, onDay, onMonth, onYear }: {
   day: string; month: string; year: string;
   onDay: (v: string) => void; onMonth: (v: string) => void; onYear: (v: string) => void;
-}) => (
-  <div className="flex flex-wrap items-center gap-1.5">
-    <Select value={day || undefined} onValueChange={onDay}>
-      <SelectTrigger className="h-7 w-16 text-xs"><SelectValue placeholder="01" /></SelectTrigger>
-      <SelectContent>{Array.from({ length: 31 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
-    </Select>
-    <Select value={month || undefined} onValueChange={onMonth}>
-      <SelectTrigger className="h-7 w-16 text-xs"><SelectValue placeholder="01" /></SelectTrigger>
-      <SelectContent>{Array.from({ length: 12 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
-    </Select>
-    <Select value={year || undefined} onValueChange={onYear}>
-      <SelectTrigger className="h-7 w-20 text-xs"><SelectValue placeholder="1910" /></SelectTrigger>
-      <SelectContent>{Array.from({ length: 120 }, (_, i) => <SelectItem key={i} value={String(1910 + i)}>{1910 + i}</SelectItem>)}</SelectContent>
-    </Select>
-    <span className="text-[10px] text-gray-400">(day-month-year)</span>
-  </div>
-);
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Select value={day || undefined} onValueChange={onDay}>
+        <SelectTrigger className={`${selTrigger} w-[80px]`}><SelectValue placeholder="DD" /></SelectTrigger>
+        <SelectContent>{Array.from({ length: 31 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
+      </Select>
+      <Select value={month || undefined} onValueChange={onMonth}>
+        <SelectTrigger className={`${selTrigger} w-[80px]`}><SelectValue placeholder="MM" /></SelectTrigger>
+        <SelectContent>{Array.from({ length: 12 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
+      </Select>
+      <Select value={year || undefined} onValueChange={onYear}>
+        <SelectTrigger className={`${selTrigger} w-[100px]`}><SelectValue placeholder="YYYY" /></SelectTrigger>
+        <SelectContent>{Array.from({ length: 120 }, (_, i) => <SelectItem key={i} value={String(1910 + i)}>{1910 + i}</SelectItem>)}</SelectContent>
+      </Select>
+      <span className="text-[12px] text-gray-400 font-medium">(day / month / year)</span>
+    </div>
+  );
+}
 
 /* ─────────────────── category file upload ─────────────────── */
 const CategoryFileUpload = ({
@@ -248,37 +284,38 @@ const CategoryFileUpload = ({
   const removeUpload = (idx: number) => onUpload(uploads.filter((_, i) => i !== idx));
 
   return (
-    <div className="space-y-1.5 py-1">
+    <div className="space-y-2 py-1.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <FileText className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
-          <span className="truncate text-xs text-gray-700">{category}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+          <span className="truncate text-[14px] font-semibold text-gray-700">{category}</span>
         </div>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={isUploading}
-          className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
         >
-          {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+          {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           {hasTemplate ? "Upload Signed File" : "Upload File"}
         </button>
       </div>
       <input ref={inputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handleFileChange} />
       {uploads.length > 0 && (
-        <div className="space-y-1 pl-5">
+        <div className="space-y-1.5 pl-6">
           {uploads.map((u, i) => (
-            <div key={i} className="flex items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-1 text-xs">
-              <FileCheck2 className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
-              <Printer className="h-3.5 w-3.5 flex-shrink-0 text-[#4a7bb5]" />
-              <a href={u.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-blue-600 hover:underline">{u.name}</a>
-              <a href={u.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-50">
-                <Eye className="h-2.5 w-2.5" />View
+            <div key={i} className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+              <FileCheck2 className="h-4 w-4 shrink-0 text-emerald-500" />
+              <a href={u.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-[13px] font-semibold text-sky-700 hover:underline">{u.name}</a>
+              <a href={u.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-2 py-1 text-[12px] font-semibold text-sky-700 hover:bg-sky-50 transition-colors">
+                <Eye className="h-3 w-3" />View
               </a>
-              <a href={u.url} download={u.name} className="inline-flex items-center rounded border border-gray-200 bg-white p-0.5 text-gray-500 hover:bg-gray-50">
-                <Download className="h-2.5 w-2.5" />
+              <a href={u.url} download={u.name} className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-1 text-gray-500 hover:bg-gray-50 transition-colors">
+                <Download className="h-3.5 w-3.5" />
               </a>
-              <button type="button" onClick={() => removeUpload(i)} className="text-gray-300 hover:text-rose-400"><X className="h-3 w-3" /></button>
+              <button type="button" onClick={() => removeUpload(i)} className="text-gray-300 hover:text-red-400 transition-colors">
+                <X className="h-4 w-4" />
+              </button>
             </div>
           ))}
         </div>
@@ -345,63 +382,100 @@ const BulkUploadModal = ({
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
-      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-[#c5d3e8] bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="rounded-t-xl bg-[#4a7bb5] px-4 py-2.5">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+        {/* Modal header */}
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">Bulk File Upload</h2>
-            <button type="button" onClick={handleClose} disabled={isUploading} className="text-white/70 hover:text-white disabled:opacity-40"><X className="h-4 w-4" /></button>
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
+                <Upload className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <h2 className="text-[16px] font-bold text-white">Bulk File Upload</h2>
+                <p className="text-[12px] text-white/70">Assign each file to a document category</p>
+              </div>
+            </div>
+            <button type="button" onClick={handleClose} disabled={isUploading} className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 text-white hover:bg-white/30 disabled:opacity-40 transition-colors">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <p className="text-[10px] text-blue-100">Add files and assign each to a document category</p>
         </div>
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          {/* Drop zone */}
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onClick={() => bulkInputRef.current?.click()}
-            className={`flex cursor-pointer select-none flex-col items-center gap-2 rounded border-2 border-dashed py-7 px-4 transition-all ${isDragging ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-gray-50 hover:border-gray-300"}`}
+            className={`flex cursor-pointer select-none flex-col items-center gap-3 rounded-2xl border-2 border-dashed py-10 px-6 transition-all ${
+              isDragging ? "border-emerald-400 bg-emerald-50" : "border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100"
+            }`}
           >
-            <Upload className={`h-5 w-5 ${isDragging ? "text-blue-500" : "text-gray-400"}`} />
-            <p className="text-xs font-medium text-gray-600">{isDragging ? "Release to add files" : "Click or drag & drop files here"}</p>
-            <p className="text-[10px] text-gray-400">PDF, images, documents — select multiple at once</p>
+            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${isDragging ? "bg-emerald-100" : "bg-gray-200"}`}>
+              <Upload className={`h-5 w-5 ${isDragging ? "text-emerald-600" : "text-gray-400"}`} />
+            </div>
+            <p className="text-[15px] font-bold text-gray-600">{isDragging ? "Release to add files" : "Click or drag & drop files here"}</p>
+            <p className="text-[13px] text-gray-400">PDF documents — select multiple at once</p>
             <input ref={bulkInputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handleFileInput} />
           </div>
+
           {pendingFiles.length > 0 && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {pendingFiles.map((pf) => (
-                <div key={pf.id} className={`flex items-start gap-2 rounded border px-2.5 py-2 text-xs ${pf.status === "done" ? "border-emerald-100 bg-emerald-50" : pf.status === "error" ? "border-rose-100 bg-rose-50" : pf.status === "uploading" ? "border-blue-100 bg-blue-50" : "border-gray-100 bg-gray-50"}`}>
-                  <div className="mt-0.5 flex-shrink-0">
-                    {pf.status === "done" && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                    {pf.status === "error" && <X className="h-3.5 w-3.5 text-rose-400" />}
-                    {pf.status === "uploading" && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
-                    {pf.status === "pending" && <FileText className="h-3.5 w-3.5 text-gray-400" />}
+                <div key={pf.id} className={`flex items-start gap-3 rounded-xl border-2 px-4 py-3 ${
+                  pf.status === "done" ? "border-emerald-100 bg-emerald-50"
+                  : pf.status === "error" ? "border-red-100 bg-red-50"
+                  : pf.status === "uploading" ? "border-sky-100 bg-sky-50"
+                  : "border-gray-100 bg-white"
+                }`}>
+                  <div className="mt-0.5 shrink-0">
+                    {pf.status === "done" && <Check className="h-4 w-4 text-emerald-500" />}
+                    {pf.status === "error" && <X className="h-4 w-4 text-red-400" />}
+                    {pf.status === "uploading" && <Loader2 className="h-4 w-4 animate-spin text-sky-500" />}
+                    {pf.status === "pending" && <FileText className="h-4 w-4 text-gray-400" />}
                   </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate font-medium text-gray-700">{pf.file.name}</p>
-                    {pf.status === "error" && <p className="text-rose-500">{pf.errorMsg}</p>}
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p className="truncate text-[14px] font-bold text-gray-800">{pf.file.name}</p>
+                    {pf.status === "error" && <p className="text-[13px] text-red-500 font-medium">{pf.errorMsg}</p>}
                     {pf.status === "pending" && (
-                      <select value={pf.category} onChange={(e) => updateCategory(pf.id, e.target.value)} className="w-full rounded border border-gray-200 bg-white px-1.5 py-1 text-[10px] text-gray-700 focus:border-blue-400 focus:outline-none">
+                      <select value={pf.category} onChange={(e) => updateCategory(pf.id, e.target.value)}
+                        className="w-full rounded-xl border-2 border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-700 focus:border-emerald-400 focus:outline-none">
                         {CATEGORY_NAMES.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     )}
-                    {pf.status === "done" && <p className="text-[10px] font-medium text-emerald-600">Saved to "{pf.category}"</p>}
-                    {pf.status === "uploading" && <p className="text-[10px] text-blue-500">Uploading to "{pf.category}"…</p>}
+                    {pf.status === "done" && <p className="text-[13px] font-bold text-emerald-700">Saved to "{pf.category}"</p>}
+                    {pf.status === "uploading" && <p className="text-[13px] text-sky-600 font-medium">Uploading to "{pf.category}"…</p>}
                   </div>
                   {(pf.status === "pending" || pf.status === "error") && (
-                    <button type="button" onClick={() => removeFile(pf.id)} className="mt-0.5 flex-shrink-0 text-gray-300 hover:text-rose-400"><X className="h-3 w-3" /></button>
+                    <button type="button" onClick={() => removeFile(pf.id)} className="mt-0.5 shrink-0 text-gray-300 hover:text-red-400 transition-colors">
+                      <X className="h-4 w-4" />
+                    </button>
                   )}
                 </div>
               ))}
             </div>
           )}
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-[#c5d3e8] bg-gray-50 px-4 py-3">
-          <button type="button" onClick={handleClose} disabled={isUploading} className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-40">{allDone ? "Close" : "Cancel"}</button>
-          <div className="flex items-center gap-2">
-            {pendingFiles.length > 0 && !allDone && doneCount > 0 && <span className="text-[10px] text-gray-400">{doneCount}/{pendingFiles.length} done</span>}
-            <button type="button" onClick={uploadAll} disabled={pendingCount === 0 || isUploading} className={`flex items-center gap-1.5 rounded px-4 py-1.5 text-xs font-semibold transition-all ${pendingCount > 0 && !isUploading ? "bg-[#4a7bb5] text-white hover:bg-[#3a6aa5]" : "cursor-not-allowed bg-gray-100 text-gray-400"}`}>
-              {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-              {isUploading ? "Uploading…" : pendingCount === 0 && allDone ? "All Done" : `Upload ${pendingCount} File${pendingCount !== 1 ? "s" : ""}`}
+
+        {/* Modal footer */}
+        <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-5 py-4">
+          <button type="button" onClick={handleClose} disabled={isUploading}
+            className="text-[14px] font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-40">
+            {allDone ? "Close" : "Cancel"}
+          </button>
+          <div className="flex items-center gap-3">
+            {pendingFiles.length > 0 && !allDone && doneCount > 0 && (
+              <span className="text-[13px] text-gray-400 font-medium">{doneCount}/{pendingFiles.length} done</span>
+            )}
+            <button type="button" onClick={uploadAll} disabled={pendingCount === 0 || isUploading}
+              className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-bold transition-all ${
+                pendingCount > 0 && !isUploading
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                  : "cursor-not-allowed bg-gray-100 text-gray-400"
+              }`}>
+              {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {isUploading ? "Uploading…" : pendingCount === 0 && allDone ? "All Done ✓" : `Upload ${pendingCount} File${pendingCount !== 1 ? "s" : ""}`}
             </button>
           </div>
         </div>
@@ -412,7 +486,7 @@ const BulkUploadModal = ({
 };
 
 /* ═══════════════════════════════════════════════════════ */
-/*              EmploymentContractView (editable)         */
+/*              EmploymentContractPage (always editable)  */
 /* ═══════════════════════════════════════════════════════ */
 export const EmploymentContractPage = ({
   mode = "view",
@@ -423,8 +497,6 @@ export const EmploymentContractPage = ({
   const location = useLocation();
   const navigate = useNavigate();
   const isCreateMode = mode === "create";
-  const isEditMode = mode === "edit";
-  const isReadOnly = !isCreateMode && !isEditMode;
   const requestedStep = Number(new URLSearchParams(location.search).get("step") || "");
   const hasStepQuery = Number.isInteger(requestedStep) && requestedStep >= 1 && requestedStep <= 4;
   const showStepTabs = isCreateMode || hasStepQuery;
@@ -451,7 +523,8 @@ export const EmploymentContractPage = ({
   });
 
   const [agency, setAgency] = useState({
-    caseReferenceNumber: isCreateMode ? DEFAULT_CASE_REFERENCE_NUMBER : refCode || "", contractDate: todayIsoDate(),
+    caseReferenceNumber: isCreateMode ? DEFAULT_CASE_REFERENCE_NUMBER : refCode || "",
+    contractDate: todayIsoDate(),
     dateOfEmploymentDay: "", dateOfEmploymentMonth: "", dateOfEmploymentYear: "",
     invoiceNumber: "", serviceFee: "", deposit: "", sipFee: "", medicalFee: "",
     transportFee: "", documentFee: "", placementFee: "", insuranceFee: "",
@@ -483,29 +556,17 @@ export const EmploymentContractPage = ({
   });
 
   const [familyMembers, setFamilyMembers] = useState([emptyFamilyMember()]);
-
-  /* ── document selection state ── */
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
 
   const uploadedDocuments = useMemo(() => Object.values(categoryUploads).flat(), [categoryUploads]);
-
   const docKey = (file: UploadedFile) => `${file.category}||${file.name}`;
   const allDocKeys = useMemo(() => uploadedDocuments.map(docKey), [uploadedDocuments]);
   const allSelected = allDocKeys.length > 0 && allDocKeys.every((k) => selectedDocs.has(k));
 
   const toggleDoc = (key: string) =>
-    setSelectedDocs((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
+    setSelectedDocs((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
 
-  const handleSelectAll = () =>
-    setSelectedDocs(allSelected ? new Set() : new Set(allDocKeys));
+  const handleSelectAll = () => setSelectedDocs(allSelected ? new Set() : new Set(allDocKeys));
 
   const handleDownloadSelected = () => {
     const toDownload = uploadedDocuments.filter((f) => selectedDocs.has(docKey(f)));
@@ -519,7 +580,6 @@ export const EmploymentContractPage = ({
   const applyMaidResult = useCallback((selectedMaid: MaidSearchResult) => {
     const introduction = (selectedMaid.introduction as Record<string, unknown> | undefined) ?? {};
     const skillsPreferences = (selectedMaid.skillsPreferences as Record<string, unknown> | undefined) ?? {};
-
     setMaid((current) => ({
       ...current,
       referenceCode: toText(selectedMaid.referenceCode),
@@ -534,29 +594,12 @@ export const EmploymentContractPage = ({
         ? selectedMaid.photoDataUrls.filter((item): item is string => typeof item === "string")
         : [],
     }));
-
-    setAgency((current) => ({
-      ...current,
-      maidId: selectedMaid.id ? String(selectedMaid.id) : current.maidId,
-    }));
-
+    setAgency((current) => ({ ...current, maidId: selectedMaid.id ? String(selectedMaid.id) : current.maidId }));
     setSelectedMaidExperience(getMaidExperienceLabel(selectedMaid));
     setMaidSearch(`${toText(selectedMaid.fullName)} (${toText(selectedMaid.referenceCode)})`);
     setShowMaidResults(false);
     toast.success("Maid details added to the employment form");
   }, []);
-
-  const handleMaidSearchChange = (value: string) => {
-    setMaidSearch(value);
-    setShowMaidResults(true);
-  };
-
-  const handleMaidSearchOpen = () => {
-    setShowMaidResults(true);
-    if (maidSearch.trim().length > 0 && maidSearch.trim().length < 2) {
-      toast.info("Type at least 2 characters to search maids");
-    }
-  };
 
   /* ── load data ── */
   useEffect(() => {
@@ -568,63 +611,34 @@ export const EmploymentContractPage = ({
         const data = (await res.json().catch(() => ({}))) as { employer?: EmployerContractRecord; error?: string };
         if (!res.ok || !data.employer) throw new Error(data.error || "Failed to load employment contract");
         const r = data.employer;
-
         if (r.maid) {
           const maidRecord = r.maid as Record<string, unknown>;
-          const nextMaid = {
-            ...maid,
-            ...(r.maid as typeof maid),
+          setMaid((p) => ({
+            ...p, ...(r.maid as typeof maid),
             name: toText(maidRecord.name ?? maidRecord.fullName),
-            compensationNoOffday: toText(
-              maidRecord.compensationNoOffday ?? maidRecord.compensationForOffDay,
-            ),
-            passportOfMaid: toText(
-              maidRecord.passportOfMaid ?? maidRecord.passportOfReplacement,
-            ),
-          };
-          setMaid(nextMaid);
-          const savedMaidName = toText(maidRecord.name ?? maidRecord.fullName);
-          const savedMaidRef = toText(maidRecord.referenceCode);
-          if (savedMaidName || savedMaidRef) {
-            setMaidSearch(
-              savedMaidName && savedMaidRef
-                ? `${savedMaidName} (${savedMaidRef})`
-                : savedMaidName || savedMaidRef,
-            );
-          }
+            compensationNoOffday: toText(maidRecord.compensationNoOffday ?? maidRecord.compensationForOffDay),
+            passportOfMaid: toText(maidRecord.passportOfMaid ?? maidRecord.passportOfReplacement),
+          }));
+          const savedName = toText(maidRecord.name ?? maidRecord.fullName);
+          const savedRef = toText(maidRecord.referenceCode);
+          if (savedName || savedRef) setMaidSearch(savedName && savedRef ? `${savedName} (${savedRef})` : savedName || savedRef);
         }
         if (r.agency) {
           const agencyRecord = r.agency as Record<string, unknown>;
-          const normalizedEmploymentDate = normalizeEmploymentDateParts(
-            toText(agencyRecord.dateOfEmployment),
-          );
+          const norm = normalizeEmploymentDateParts(toText(agencyRecord.dateOfEmployment));
           setAgency((p) => ({
-            ...p,
-            ...(r.agency as typeof agency),
-            dateOfEmploymentDay:
-              toText(agencyRecord.dateOfEmploymentDay) || normalizedEmploymentDate.day,
-            dateOfEmploymentMonth:
-              toText(agencyRecord.dateOfEmploymentMonth) || normalizedEmploymentDate.month,
-            dateOfEmploymentYear:
-              toText(agencyRecord.dateOfEmploymentYear) || normalizedEmploymentDate.year,
+            ...p, ...(r.agency as typeof agency),
+            dateOfEmploymentDay: toText(agencyRecord.dateOfEmploymentDay) || norm.day,
+            dateOfEmploymentMonth: toText(agencyRecord.dateOfEmploymentMonth) || norm.month,
+            dateOfEmploymentYear: toText(agencyRecord.dateOfEmploymentYear) || norm.year,
           }));
         }
         if (r.employer) {
-          const employerRecord = r.employer as Record<string, unknown>;
-          setEmployer((p) => ({
-            ...p,
-            ...(r.employer as typeof employer),
-            monthlyContribution:
-              toText(employerRecord.monthlyContribution) ||
-              toText(employerRecord.monthlyCombinedIncome),
-          }));
+          const empRecord = r.employer as Record<string, unknown>;
+          setEmployer((p) => ({ ...p, ...(r.employer as typeof employer), monthlyContribution: toText(empRecord.monthlyContribution) || toText(empRecord.monthlyCombinedIncome) }));
           if (!r.notificationDate) {
-            const normalizedNotificationDate = parseNotificationOfAssessment(
-              toText(employerRecord.notificationOfAssessment),
-            );
-            if (normalizedNotificationDate.month || normalizedNotificationDate.year) {
-              setNotificationDate(normalizedNotificationDate);
-            }
+            const nd = parseNotificationOfAssessment(toText(empRecord.notificationOfAssessment));
+            if (nd.month || nd.year) setNotificationDate(nd);
           }
         }
         if (r.spouse) setSpouse((p) => ({ ...p, ...(r.spouse as typeof spouse) }));
@@ -639,14 +653,12 @@ export const EmploymentContractPage = ({
           })));
         }
         if (Array.isArray(r.documents)) {
-          setCategoryUploads(
-            r.documents.reduce<Record<string, UploadedFile[]>>((acc, doc) => {
-              const cat = toText(doc.category); const url = toText(doc.fileUrl); const name = toText(doc.fileName);
-              if (!cat || !url || !name) return acc;
-              acc[cat] = [...(acc[cat] ?? []), { category: cat, url, name }];
-              return acc;
-            }, {})
-          );
+          setCategoryUploads(r.documents.reduce<Record<string, UploadedFile[]>>((acc, doc) => {
+            const cat = toText(doc.category); const url = toText(doc.fileUrl); const name = toText(doc.fileName);
+            if (!cat || !url || !name) return acc;
+            acc[cat] = [...(acc[cat] ?? []), { category: cat, url, name }];
+            return acc;
+          }, {}));
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load employment contract";
@@ -658,56 +670,28 @@ export const EmploymentContractPage = ({
 
   useEffect(() => {
     const term = maidSearch.trim();
-    if (term.length < 2) {
-      setMaidResults([]);
-      return;
-    }
-
+    if (term.length < 2) { setMaidResults([]); return; }
     let cancelled = false;
     const controller = new AbortController();
-
     const loadMaids = async () => {
       try {
         setMaidSearchLoading(true);
-        const response = await fetch(`/api/maids?search=${encodeURIComponent(term)}`, {
-          signal: controller.signal,
-        });
+        const response = await fetch(`/api/maids?search=${encodeURIComponent(term)}`, { signal: controller.signal });
         const data = (await response.json().catch(() => ({}))) as { maids?: MaidSearchResult[] };
-        if (!response.ok || !Array.isArray(data.maids)) {
-          throw new Error("Failed to search maids");
-        }
-        if (!cancelled) {
-          setMaidResults(data.maids.slice(0, 8));
-        }
+        if (!response.ok || !Array.isArray(data.maids)) throw new Error("Failed to search maids");
+        if (!cancelled) setMaidResults(data.maids.slice(0, 8));
       } catch (error) {
         if (controller.signal.aborted) return;
-        if (!cancelled) {
-          setMaidResults([]);
-        }
-        console.error(error);
-      } finally {
-        if (!cancelled) {
-          setMaidSearchLoading(false);
-        }
-      }
+        if (!cancelled) setMaidResults([]);
+      } finally { if (!cancelled) setMaidSearchLoading(false); }
     };
-
     void loadMaids();
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
+    return () => { cancelled = true; controller.abort(); };
   }, [maidSearch]);
 
   useEffect(() => {
-    if (hasStepQuery) {
-      setActiveStep(requestedStep as 1 | 2 | 3 | 4);
-      return;
-    }
-    if (isCreateMode) {
-      setActiveStep(1);
-    }
+    if (hasStepQuery) { setActiveStep(requestedStep as 1 | 2 | 3 | 4); return; }
+    if (isCreateMode) setActiveStep(1);
   }, [hasStepQuery, isCreateMode, requestedStep]);
 
   useEffect(() => {
@@ -718,30 +702,21 @@ export const EmploymentContractPage = ({
   }, []);
 
   const scrollToTop = useCallback(() => window.scrollTo({ top: 0, behavior: "smooth" }), []);
-
   const addFamilyMember = () => setFamilyMembers((p) => [...p, emptyFamilyMember()]);
   const removeFamilyMember = (idx: number) => setFamilyMembers((p) => p.filter((_, i) => i !== idx));
   const updateFamilyMember = (idx: number, field: string, value: string) =>
     setFamilyMembers((p) => p.map((fm, i) => i === idx ? { ...fm, [field]: value } : fm));
-
   const updateCategoryUploads = (cat: string, files: UploadedFile[]) =>
     setCategoryUploads((p) => ({ ...p, [cat]: files }));
-
   const handleBulkUploadComplete = (by: Record<string, UploadedFile[]>) => {
-    setCategoryUploads((p) => {
-      const m = { ...p };
-      for (const [c, fs] of Object.entries(by)) m[c] = [...(m[c] ?? []), ...fs];
-      return m;
-    });
+    setCategoryUploads((p) => { const m = { ...p }; for (const [c, fs] of Object.entries(by)) m[c] = [...(m[c] ?? []), ...fs]; return m; });
   };
 
   const transformFamilyMembers = (members: typeof familyMembers) =>
     members.map(({ name, relationship, dateOfBirthDay: day, dateOfBirthMonth: month, dateOfBirthYear: year }) => ({
-      name,
-      type: ['Daughter', 'Son'].includes(relationship) ? 'child' : 'parent',
-      relationship,
-      dateOfBirth: `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`
-    } as const));
+      name, type: ['Daughter', 'Son'].includes(relationship) ? 'child' : 'parent' as const,
+      relationship, dateOfBirth: `${day.padStart(2,'0')}-${month.padStart(2,'0')}-${year}`,
+    }));
 
   const submitContract = async () => {
     if (isSubmitting) return;
@@ -750,12 +725,7 @@ export const EmploymentContractPage = ({
       setIsSubmitting(true);
       const body = {
         refCode: refCode || agency.caseReferenceNumber || null,
-        maid,
-        agency,
-        employer,
-        spouse,
-        familyMembers,
-        notificationDate,
+        maid, agency, employer, spouse, familyMembers, notificationDate,
         documents: uploadedDocuments.map((f) => ({ category: f.category, fileUrl: f.url, fileName: f.name })),
       };
       const r = await fetch("/api/employers", {
@@ -765,7 +735,7 @@ export const EmploymentContractPage = ({
       });
       const d = (await r.json().catch(() => ({}))) as { error?: string; employer?: { refCode?: string } };
       if (!r.ok || !d.employer?.refCode) throw new Error(d.error || "Failed to save employer contract");
-      toast.success("Employer contract saved");
+      toast.success("Employer contract saved successfully!");
       if (showStepTabs) {
         navigate(adminPath(`/employment-contracts/${encodeURIComponent(d.employer.refCode)}/edit?step=4`));
       } else {
@@ -780,8 +750,7 @@ export const EmploymentContractPage = ({
     if (!uploadedDocuments.length) { toast.error("Upload at least one document first"); return; }
     try {
       const { skippedCount } = await downloadMergedEmployerPdf(uploadedDocuments, `employer-${refCode || "temp"}-forms.pdf`);
-      if (skippedCount > 0) { toast.success(`Merged PDF downloaded. Skipped ${skippedCount} non-PDF file${skippedCount === 1 ? "" : "s"}.`); return; }
-      toast.success("Merged PDF downloaded");
+      toast.success(skippedCount > 0 ? `Merged PDF downloaded. Skipped ${skippedCount} non-PDF file${skippedCount === 1 ? "" : "s"}.` : "Merged PDF downloaded");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to download forms"); }
   };
 
@@ -789,666 +758,665 @@ export const EmploymentContractPage = ({
     if (!uploadedDocuments.length) { toast.error("Upload at least one document first"); return; }
     try {
       const { skippedCount } = await printMergedEmployerPdf(uploadedDocuments, { maid, agency, employer, spouse, familyMembers: transformFamilyMembers(familyMembers), notificationDate });
-      if (skippedCount > 0) { toast.success(`Print preview opened. Skipped ${skippedCount} non-PDF file${skippedCount === 1 ? "" : "s"}.`); return; }
-      toast.success("Print preview opened");
+      toast.success(skippedCount > 0 ? `Print preview opened. Skipped ${skippedCount} non-PDF file${skippedCount === 1 ? "" : "s"}.` : "Print preview opened");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed to print forms"); }
   };
 
-  const ordinal = (n: number) => ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"][n - 1] ?? `${n}th`;
-
+  const ordinal = (n: number) => ["1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th"][n - 1] ?? `${n}th`;
   const maidPhoto = useMemo(() => getPrimaryPhoto(maid as unknown as Record<string, unknown>), [maid]);
   const displayReferenceNumber = isCreateMode ? agency.caseReferenceNumber : refCode || agency.caseReferenceNumber;
+
   const showStepOne = !showStepTabs || activeStep === 1;
   const showStepTwo = !showStepTabs || activeStep === 2;
   const showStepThree = !showStepTabs || activeStep === 3;
   const showStepFour = !showStepTabs || activeStep === 4;
-  const stepItems: Array<{ id: 1 | 2 | 3 | 4; label: string }> = [
-    { id: 1, label: "1. Maid" },
-    { id: 2, label: "2. Agency" },
-    { id: 3, label: "3. Employer" },
-    { id: 4, label: "4. Upload PDF" },
-  ];
 
-  const inp = "h-7 rounded border border-gray-300 bg-white px-2 py-0 text-xs text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/30 disabled:border-gray-200 disabled:bg-white disabled:text-gray-900 disabled:opacity-100";
-  const sel = "h-7 text-xs disabled:border-gray-200 disabled:bg-white disabled:text-gray-900 disabled:opacity-100";
+  const stepItems: Array<{ id: 1 | 2 | 3 | 4; label: string; icon: React.ReactNode; color: string }> = [
+    { id: 1, label: "Maid Details",   icon: <User className="h-4 w-4" />,      color: "emerald" },
+    { id: 2, label: "Agency Info",    icon: <Building2 className="h-4 w-4" />, color: "sky" },
+    { id: 3, label: "Employer Info",  icon: <Home className="h-4 w-4" />,      color: "violet" },
+    { id: 4, label: "Upload Forms",   icon: <FilePlus2 className="h-4 w-4" />, color: "amber" },
+  ];
 
   /* ── loading / error ── */
   if (isLoading) return (
-    <div className="page-container max-w-4xl flex min-h-[30vh] items-center justify-center text-sm text-gray-400">
-      <Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading employment contract…
-    </div>
-  );
-  if (loadError) return (
-    <div className="page-container max-w-4xl">
-      <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-600">{loadError}</div>
+    <div className="flex min-h-[40vh] items-center justify-center gap-3">
+      <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+      <span className="text-[16px] font-semibold text-gray-500">Loading employment contract…</span>
     </div>
   );
 
-  /* ── render ── */
+  if (loadError) return (
+    <div className="mx-auto max-w-2xl p-6">
+      <div className="flex items-start gap-3 rounded-2xl border-2 border-red-100 bg-red-50 p-5">
+        <AlertCircle className="h-6 w-6 shrink-0 text-red-500 mt-0.5" />
+        <div>
+          <p className="text-[16px] font-bold text-red-700">Failed to load contract</p>
+          <p className="text-[14px] text-red-600 mt-1">{loadError}</p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <div className="page-container max-w-4xl py-4 text-sm">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+        .ecp-root, .ecp-root * { font-family: 'DM Sans', sans-serif; }
+        @keyframes ecpFadeUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .ecp-section { animation: ecpFadeUp 0.28s cubic-bezier(0.16,1,0.3,1) both; }
+      `}</style>
 
-        {/* breadcrumb */}
-        <div className="mb-1">
-          <Link to={adminPath("/employment-contracts")} className="text-xs text-blue-600 hover:underline">
-            ← Back to Employment Listing
-          </Link>
+      <div className="ecp-root max-w-4xl mx-auto px-4 py-5 space-y-5">
+
+        {/* ── Breadcrumb ── */}
+        <Link to={adminPath("/employment-contracts")}
+          className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition-colors">
+          <ChevronLeft className="h-4 w-4" /> Back to Employment Listing
+        </Link>
+
+        {/* ── Page header ── */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg">
+              <FileText className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <h2 className="text-[22px] font-bold text-gray-900 leading-tight">
+                {isCreateMode ? "Add New Employment Contract" : "Employment Contract Form"}
+              </h2>
+              <p className="text-[14px] text-gray-500 font-medium mt-0.5">
+                Reference:{" "}
+                <span className="font-bold text-emerald-700">{displayReferenceNumber || "—"}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Save button always visible */}
+          <button
+            type="button"
+            onClick={() => void submitContract()}
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-[15px] font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all"
+          >
+            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+            {isSubmitting ? "Saving…" : isCreateMode ? "Save Contract" : "Save Changes"}
+          </button>
         </div>
 
-        {/* page title */}
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 className="text-base font-bold text-gray-800">{isCreateMode ? "Add Employer Employment Form" : "Employment Contract Form"}</h2>
-            <p className="text-xs text-gray-500">
-              Reference Number: <span className="font-semibold text-[#4a7bb5]">{displayReferenceNumber || "—"}</span>
-            </p>
+        {/* ── Step tabs ── */}
+        {showStepTabs && (
+          <div className="flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-2.5">
+            {stepItems.map((step) => {
+              const isActive = activeStep === step.id;
+              const colorMap: Record<string, string> = {
+                emerald: isActive ? "bg-emerald-600 text-white shadow-sm" : "text-gray-500 hover:bg-emerald-50 hover:text-emerald-700",
+                sky:     isActive ? "bg-sky-600 text-white shadow-sm"     : "text-gray-500 hover:bg-sky-50 hover:text-sky-700",
+                violet:  isActive ? "bg-violet-600 text-white shadow-sm"  : "text-gray-500 hover:bg-violet-50 hover:text-violet-700",
+                amber:   isActive ? "bg-amber-500 text-white shadow-sm"   : "text-gray-500 hover:bg-amber-50 hover:text-amber-700",
+              };
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => setActiveStep(step.id)}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-[14px] font-bold transition-all ${colorMap[step.color]}`}
+                >
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-black ${isActive ? "bg-white/20" : "bg-gray-200"}`}>
+                    {step.id}
+                  </span>
+                  {step.label}
+                </button>
+              );
+            })}
           </div>
-          {isReadOnly && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(refCode || "")}/edit`))}
-              className="flex items-center gap-1.5"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              Edit Contract
-            </Button>
-          )}
-        </div>
+        )}
 
-        {/* ══ THE MAID EMPLOYED ══ */}
-        {showStepTabs ? (
-          <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-[#c5d3e8] bg-[#f7fbff] p-2">
-            {stepItems.map((step) => (
-              <button
-                key={step.id}
-                type="button"
-                onClick={() => setActiveStep(step.id)}
-                className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
-                  activeStep === step.id
-                    ? "bg-[#4a7bb5] text-white"
-                    : "bg-white text-[#4a7bb5] hover:bg-blue-50"
-                }`}
-              >
-                {step.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {showStepOne ? <SectionHeader title="The Maid Employed" /> : null}
-        {showStepOne ? (
-        <SectionBody disabled={isReadOnly}>
-          <div className="mb-3 flex gap-2">
-            <div className="relative flex-1">
-              <Input
-                className={`${inp} w-full`}
-                value={maidSearch}
-                onChange={(e) => handleMaidSearchChange(e.target.value)}
-                onFocus={isReadOnly ? undefined : handleMaidSearchOpen}
-                readOnly={isReadOnly}
-                placeholder="Please search the Name or Ref. Code of the Maid hired."
-              />
-              {!isReadOnly && showMaidResults && maidSearch.trim().length > 0 ? (
-                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-md border border-[#c5d3e8] bg-white shadow-lg">
-                  {maidSearch.trim().length < 2 ? (
-                    <div className="px-3 py-2 text-xs text-gray-500">Type at least 2 characters to search maids.</div>
-                  ) : maidSearchLoading ? (
-                    <div className="px-3 py-2 text-xs text-gray-500">Searching maids...</div>
-                  ) : maidResults.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-gray-500">No maids found.</div>
-                  ) : (
-                    maidResults.map((result) => (
-                      <button
-                        key={`${result.referenceCode}-${result.id ?? "maid"}`}
-                        type="button"
-                        className="flex w-full items-start gap-3 border-b border-gray-100 px-3 py-2 text-left last:border-b-0 hover:bg-blue-50"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => applyMaidResult(result)}
-                      >
-                        <div className="h-12 w-10 overflow-hidden rounded border border-gray-200 bg-gray-50">
-                          {getPrimaryPhoto(result as unknown as Record<string, unknown>) ? (
-                            <img
-                              src={getPrimaryPhoto(result as unknown as Record<string, unknown>)}
-                              alt={result.fullName}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-gray-300">
-                              <User className="h-4 w-4" />
+        {/* ═══ STEP 1: MAID ═══ */}
+        {showStepOne && (
+          <div className="ecp-section space-y-4">
+            <SectionCard title="The Maid Employed" icon={<User className="h-4 w-4 text-white" />} color="emerald">
+
+              {/* Maid search */}
+              <div className="mb-5 flex gap-2.5">
+                <div className="relative flex-1">
+                  <input
+                    className={`${inp} pr-4`}
+                    value={maidSearch}
+                    onChange={(e) => { setMaidSearch(e.target.value); setShowMaidResults(true); }}
+                    onFocus={() => setShowMaidResults(true)}
+                    placeholder="Search maid by name or reference code…"
+                  />
+                  {showMaidResults && maidSearch.trim().length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl border-2 border-gray-200 bg-white shadow-xl">
+                      {maidSearch.trim().length < 2 ? (
+                        <div className="px-4 py-3 text-[14px] text-gray-400">Type at least 2 characters…</div>
+                      ) : maidSearchLoading ? (
+                        <div className="flex items-center gap-2 px-4 py-3 text-[14px] text-gray-400">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Searching maids…
+                        </div>
+                      ) : maidResults.length === 0 ? (
+                        <div className="px-4 py-3 text-[14px] text-gray-400">No maids found.</div>
+                      ) : (
+                        maidResults.map((result) => (
+                          <button
+                            key={`${result.referenceCode}-${result.id ?? "maid"}`}
+                            type="button"
+                            className="flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left last:border-b-0 hover:bg-emerald-50 transition-colors"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => applyMaidResult(result)}
+                          >
+                            <div className="h-14 w-11 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shrink-0">
+                              {getPrimaryPhoto(result as unknown as Record<string, unknown>) ? (
+                                <img src={getPrimaryPhoto(result as unknown as Record<string, unknown>)} alt={result.fullName} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-gray-300">
+                                  <User className="h-5 w-5" />
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-xs font-semibold text-gray-800">{result.fullName || "Unnamed maid"}</div>
-                          <div className="mt-0.5 text-[11px] text-gray-500">
-                            Experience: {getMaidExperienceLabel(result)} | Nationality: {result.nationality || "Not set"}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-blue-600">
-                            Ref: {result.referenceCode || "N/A"} | Salary: {toText((result.introduction as Record<string, unknown> | undefined)?.expectedSalary) || "Default display"}
-                          </div>
-                        </div>
-                      </button>
-                    ))
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[15px] font-bold text-gray-900 truncate">{result.fullName || "Unnamed maid"}</p>
+                              <p className="text-[13px] text-gray-500 mt-0.5">
+                                {result.nationality || "Unknown"} · {getMaidExperienceLabel(result)} exp
+                              </p>
+                              <p className="text-[13px] text-emerald-700 font-semibold">
+                                Ref: {result.referenceCode || "N/A"} · Salary: {toText((result.introduction as Record<string, unknown> | undefined)?.expectedSalary) || "—"}
+                              </p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
                   )}
                 </div>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded bg-[#4a7bb5] px-3 py-1 text-xs font-semibold text-white hover:bg-[#3a6aa5]"
-              onClick={handleMaidSearchOpen}
-              disabled={isReadOnly}
-            >
-              <Search className="h-3 w-3" />SEARCH MAID
-            </button>
-          </div>
-
-
-          <div className="grid grid-cols-[1fr_130px] gap-4">
-            <dl className="space-y-1">
-              <Field label="Maid's Name">
-                <Input className={inp} value={maid.name} onChange={(e) => setMaid({ ...maid, name: e.target.value })} placeholder="Full name as per passport" />
-              </Field>
-              <Field label="Maid's Nationality">
-                <Select value={maid.nationality || undefined} onValueChange={(v) => setMaid({ ...maid, nationality: v })}>
-                  <SelectTrigger className={`${sel} w-44`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Filipino maid">Filipino maid</SelectItem>
-                    <SelectItem value="Indian maid">Indian maid</SelectItem>
-                    <SelectItem value="Indonesian maid">Indonesian maid</SelectItem>
-                    <SelectItem value="Myanmar maid">Myanmar maid</SelectItem>
-                    <SelectItem value="Sri Lankan maid">Sri Lankan maid</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Maid's Work Permit No.">
-                <Input className={inp} value={maid.workPermitNo} onChange={(e) => setMaid({ ...maid, workPermitNo: e.target.value })} placeholder="e.g. G1234567P" />
-              </Field>
-              <Field label="Maid's FIN No.">
-                <Input className={inp} value={maid.finNo} onChange={(e) => setMaid({ ...maid, finNo: e.target.value })} placeholder="e.g. G1234567P" />
-              </Field>
-              <Field label="Maid's Passport No.">
-                <Input className={inp} value={maid.passportNo} onChange={(e) => setMaid({ ...maid, passportNo: e.target.value })} placeholder="Passport number" />
-              </Field>
-              <Field label="Salary">
-                <Input className={`${inp} max-w-[200px]`} value={maid.salary} onChange={(e) => setMaid({ ...maid, salary: e.target.value })} placeholder="e.g. 800" />
-              </Field>
-              <Field label="Number of Off-days">
-                <Input className={`${inp} max-w-[200px]`} value={maid.numberOfOffDays} onChange={(e) => setMaid({ ...maid, numberOfOffDays: e.target.value })} placeholder="e.g. 4" />
-              </Field>
-              <Field label="Compensation for No Offday">
-                <Input className={`${inp} max-w-[200px]`} value={maid.compensationNoOffday} onChange={(e) => setMaid({ ...maid, compensationNoOffday: e.target.value })} placeholder="0" />
-              </Field>
-              <Field label="Name of Maid Replaced">
-                <Input className={inp} value={maid.nameOfReplacement} onChange={(e) => setMaid({ ...maid, nameOfReplacement: e.target.value })} placeholder="Previous maid's name (if applicable)" />
-              </Field>
-              <Field label="Passport of Maid Replaced">
-                <Input className={inp} value={maid.passportOfMaid} onChange={(e) => setMaid({ ...maid, passportOfMaid: e.target.value })} placeholder="Previous maid's passport no." />
-              </Field>
-            </dl>
-            {/* photo */}
-            <div className="flex flex-col items-center pt-1">
-              <div className="overflow-hidden rounded border border-gray-300 bg-gray-100" style={{ width: 120, height: 150 }}>
-                {maidPhoto ? (
-                  <img src={maidPhoto} alt={maid.name} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center text-gray-300">
-                    <User className="h-10 w-10" />
-                    <span className="mt-1 text-[10px]">No photo</span>
-                  </div>
-                )}
-              </div>
-              {maid.referenceCode && (
-                <span className="mt-1 text-[10px] text-gray-500">Ref: {maid.referenceCode}</span>
-              )}
-            </div>
-          </div>
-        </SectionBody>
-        ) : null}
-
-        {/* ══ AGENCY ══ */}
-        {showStepTabs && showStepOne ? (
-          <div className="mt-3 flex justify-end">
-            <Button type="button" onClick={() => setActiveStep(2)}>Next: Agency</Button>
-          </div>
-        ) : null}
-        {showStepTwo ? <SectionHeader title="Agency" /> : null}
-        {showStepTwo ? (
-        <SectionBody disabled={isReadOnly}>
-          <dl className="space-y-1">
-            <Field label="Case Reference Number">
-              <Input
-                className={`${inp} max-w-[160px]`}
-                value={agency.caseReferenceNumber}
-                onChange={(e) => setAgency({ ...agency, caseReferenceNumber: e.target.value })}
-                placeholder="e.g. 06583"
-              />
-            </Field>
-            <Field label="Contract Date">
-              <Input className={`${inp} max-w-[160px]`} value={agency.contractDate} onChange={(e) => setAgency({ ...agency, contractDate: e.target.value })} placeholder="e.g. 13-04-2026" />
-            </Field>
-            <Field label="Date Of Employment">
-              <div className="flex flex-wrap items-center gap-1">
-                <Select value={agency.dateOfEmploymentDay || undefined} onValueChange={(v) => setAgency({ ...agency, dateOfEmploymentDay: v })}>
-                  <SelectTrigger className={`${sel} w-16`}><SelectValue placeholder="01" /></SelectTrigger>
-                  <SelectContent>{Array.from({ length: 31 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={agency.dateOfEmploymentMonth || undefined} onValueChange={(v) => setAgency({ ...agency, dateOfEmploymentMonth: v })}>
-                  <SelectTrigger className={`${sel} w-16`}><SelectValue placeholder="01" /></SelectTrigger>
-                  <SelectContent>{Array.from({ length: 12 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={agency.dateOfEmploymentYear || undefined} onValueChange={(v) => setAgency({ ...agency, dateOfEmploymentYear: v })}>
-                  <SelectTrigger className={`${sel} w-20`}><SelectValue placeholder="2014" /></SelectTrigger>
-                  <SelectContent>{Array.from({ length: 20 }, (_, i) => <SelectItem key={i} value={String(2010 + i)}>{2010 + i}</SelectItem>)}</SelectContent>
-                </Select>
-                <span className="text-[10px] text-gray-400">(day-month-year)</span>
-              </div>
-            </Field>
-            <div className="my-1 rounded border border-[#b8cde8] bg-[#dce8f5] px-3 py-2 space-y-1">
-              <Field label="Invoice Number">
-                <Input className={`${inp} max-w-[140px] bg-white`} value={agency.invoiceNumber} onChange={(e) => setAgency({ ...agency, invoiceNumber: e.target.value })} placeholder="1" />
-              </Field>
-              <Field label="Service Fee">
-                <Input className={`${inp} max-w-[140px] bg-white`} value={agency.serviceFee} onChange={(e) => setAgency({ ...agency, serviceFee: e.target.value })} placeholder="1" />
-              </Field>
-              <Field label="Deposit">
-                <Input className={`${inp} max-w-[140px] bg-white`} value={agency.deposit} onChange={(e) => setAgency({ ...agency, deposit: e.target.value })} placeholder="0" />
-              </Field>
-              <Field label="Settling In Program (SIP) Fee">
-                <Input className={`${inp} max-w-[140px] bg-white`} value={agency.sipFee} onChange={(e) => setAgency({ ...agency, sipFee: e.target.value })} placeholder="1" />
-              </Field>
-              <Field label="Medical Fee">
-                <Input className={`${inp} max-w-[140px] bg-white`} value={agency.medicalFee} onChange={(e) => setAgency({ ...agency, medicalFee: e.target.value })} placeholder="1" />
-              </Field>
-              <Field label="Transport Fee">
-                <Input className={`${inp} max-w-[140px] bg-white`} value={agency.transportFee} onChange={(e) => setAgency({ ...agency, transportFee: e.target.value })} placeholder="1" />
-              </Field>
-              <Field label="Document Fee">
-                <Input className={`${inp} max-w-[140px] bg-white`} value={agency.documentFee} onChange={(e) => setAgency({ ...agency, documentFee: e.target.value })} placeholder="1" />
-              </Field>
-            </div>
-            <Field label="Placement Fee (Maid Loan)">
-              <Input className={`${inp} max-w-[140px]`} value={agency.placementFee} onChange={(e) => setAgency({ ...agency, placementFee: e.target.value })} placeholder="0" />
-            </Field>
-            <Field label="Insurance Fee">
-              <Input className={`${inp} max-w-[140px]`} value={agency.insuranceFee} onChange={(e) => setAgency({ ...agency, insuranceFee: e.target.value })} placeholder="0.00" />
-            </Field>
-            <Field label="Agency Witness">
-              <Select value={agency.agencyWitness || undefined} onValueChange={(v) => setAgency({ ...agency, agencyWitness: v })}>
-                <SelectTrigger className={sel}><SelectValue placeholder="Select witness" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Balamurugan S/O Subramaniam (R1218275)">Balamurugan S/O Subramaniam (R1218275)</SelectItem>
-                  <SelectItem value="Rahimunisha Binti Muhammadhan (R1107570)">Rahimunisha Binti Muhammadhan (R1107570)</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </dl>
-        </SectionBody>
-
-        ) : null}
-        {showStepTabs && showStepTwo ? (
-          <div className="mt-3 flex justify-between">
-            <Button type="button" variant="outline" onClick={() => setActiveStep(1)}>Back</Button>
-            <Button type="button" onClick={() => setActiveStep(3)}>Next: Employer</Button>
-          </div>
-        ) : null}
-        {showStepThree ? <SectionHeader title="Employer" /> : null}
-        {showStepThree ? (
-        <SectionBody disabled={isReadOnly}>
-          <dl className="space-y-1">
-            <Field label="Name" required>
-              <Input className={inp} value={employer.name} onChange={(e) => setEmployer({ ...employer, name: e.target.value })} placeholder="Employer's full legal name" />
-            </Field>
-            <Field label="Gender">
-              <RadioGroup name="emp-gender" options={["Male", "Female"]} value={employer.gender} onChange={(v) => setEmployer({ ...employer, gender: v })} />
-            </Field>
-            <Field label="Date Of Birth">
-              <DatePicker
-                day={employer.dateOfBirthDay} month={employer.dateOfBirthMonth} year={employer.dateOfBirthYear}
-                onDay={(v) => setEmployer({ ...employer, dateOfBirthDay: v })}
-                onMonth={(v) => setEmployer({ ...employer, dateOfBirthMonth: v })}
-                onYear={(v) => setEmployer({ ...employer, dateOfBirthYear: v })}
-              />
-            </Field>
-            <Field label="Nationality">
-              <Select value={employer.nationality || undefined} onValueChange={(v) => setEmployer({ ...employer, nationality: v })}>
-                <SelectTrigger className={`${sel} w-48`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
-                <SelectContent>{NATIONALITY_OPTIONS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
-              </Select>
-            </Field>
-            <Field label="Residential Status">
-              <Select value={employer.residentialStatus || undefined} onValueChange={(v) => setEmployer({ ...employer, residentialStatus: v })}>
-                <SelectTrigger className={`${sel} w-56`}><SelectValue placeholder="Select status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Singapore Citizen">Singapore Citizen</SelectItem>
-                  <SelectItem value="Singapore Permanent Resident">Singapore Permanent Resident</SelectItem>
-                  <SelectItem value="Employment Pass">Employment Pass</SelectItem>
-                  <SelectItem value="S Pass">S Pass</SelectItem>
-                  <SelectItem value="Work Permit">Work Permit</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="NRIC / FIN / PP">
-              <Input className={`${inp} max-w-[180px]`} value={employer.nric} onChange={(e) => setEmployer({ ...employer, nric: e.target.value })} placeholder="e.g. S1234567A" />
-            </Field>
-            <Field label="Address (Line 1)">
-              <Input className={inp} value={employer.addressLine1} onChange={(e) => setEmployer({ ...employer, addressLine1: e.target.value })} placeholder="Street address, unit no." />
-            </Field>
-            <Field label="Address (Line 2)">
-              <Input className={inp} value={employer.addressLine2} onChange={(e) => setEmployer({ ...employer, addressLine2: e.target.value })} placeholder="Block / building name (optional)" />
-            </Field>
-            <Field label="Postal Code">
-              <Input className={`${inp} max-w-[120px]`} value={employer.postalCode} onChange={(e) => setEmployer({ ...employer, postalCode: e.target.value })} placeholder="6-digit postal code" />
-            </Field>
-            <Field label="Type Of Residence">
-              <div className="flex flex-wrap gap-1.5">
-                {["HDB 2-ROOM", "HDB 3-ROOM", "HDB 4-ROOM", "HDB 5-ROOM", "HDB Executive", "Condo", "Terrace", "Bungalow"].map((t) => (
-                  <label key={t} className={`flex cursor-pointer items-center gap-1 text-xs ${employer.typeOfResidence === t ? "font-semibold text-blue-700" : "text-gray-600"}`}>
-                    <input type="radio" name="residence" checked={employer.typeOfResidence === t} onChange={() => setEmployer({ ...employer, typeOfResidence: t })} className="h-3 w-3 accent-blue-600" />
-                    {t}
-                  </label>
-                ))}
-              </div>
-            </Field>
-            <Field label="Occupation">
-              <Input className={inp} value={employer.occupation} onChange={(e) => setEmployer({ ...employer, occupation: e.target.value })} placeholder="e.g. Manager" />
-            </Field>
-            <Field label="Name Of Company">
-              <Input className={inp} value={employer.company} onChange={(e) => setEmployer({ ...employer, company: e.target.value })} placeholder="Company name" />
-            </Field>
-            <Field label="E-mail Address">
-              <Input type="email" className={inp} value={employer.email} onChange={(e) => setEmployer({ ...employer, email: e.target.value })} placeholder="email@example.com" />
-            </Field>
-            <Field label="Residential Phone">
-              <Input className={`${inp} max-w-[200px]`} value={employer.residentialPhone} onChange={(e) => setEmployer({ ...employer, residentialPhone: e.target.value })} placeholder="e.g. 64643212" />
-            </Field>
-            <Field label="Handphone Number">
-              <Input className={`${inp} max-w-[200px]`} value={employer.mobileNumber} onChange={(e) => setEmployer({ ...employer, mobileNumber: e.target.value })} placeholder="e.g. 91234567" />
-            </Field>
-            <Field label="Monthly Combined Income">
-              <Select value={employer.monthlyContribution || undefined} onValueChange={(v) => setEmployer({ ...employer, monthlyContribution: v })}>
-                <SelectTrigger className={`${sel} w-48`}><SelectValue placeholder="-- Select --" /></SelectTrigger>
-                <SelectContent>{INCOME_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-              </Select>
-            </Field>
-            <Field label="Notification of Assessment" hint="Based on Annual Income or Bank Statement">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Select value={notificationDate.year || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, year: v })}>
-                  <SelectTrigger className={`${sel} w-24`}><SelectValue placeholder="Year" /></SelectTrigger>
-                  <SelectContent>{Array.from({ length: 20 }, (_, i) => <SelectItem key={i} value={String(2010 + i)}>{2010 + i}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={notificationDate.month || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, month: v })}>
-                  <SelectTrigger className={`${sel} w-36`}><SelectValue placeholder="-- Select --" /></SelectTrigger>
-                  <SelectContent>{MONTHS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </Field>
-            <Field label="Existing Employer">
-              <Input className={inp} value={employer.existingEmployer} onChange={(e) => setEmployer({ ...employer, existingEmployer: e.target.value })} placeholder="Previous employer name (if applicable)" />
-            </Field>
-            <Field label="Existing Employer's NRIC">
-              <Input className={inp} value={employer.existingEmployerNric} onChange={(e) => setEmployer({ ...employer, existingEmployerNric: e.target.value })} placeholder="e.g. S1234567A" />
-            </Field>
-          </dl>
-        </SectionBody>
-
-        ) : null}
-        {showStepThree ? <SectionHeader title="Spouse" /> : null}
-        {showStepThree ? (
-        <SectionBody disabled={isReadOnly}>
-          <dl className="space-y-1">
-            <Field label="Spouse's Name">
-              <Input className={inp} value={spouse.name} onChange={(e) => setSpouse({ ...spouse, name: e.target.value })} placeholder="Full legal name" />
-            </Field>
-            <Field label="Gender">
-              <RadioGroup name="sp-gender" options={["Male", "Female"]} value={spouse.gender} onChange={(v) => setSpouse({ ...spouse, gender: v })} />
-            </Field>
-            <Field label="Date Of Birth">
-              <DatePicker
-                day={spouse.dateOfBirthDay} month={spouse.dateOfBirthMonth} year={spouse.dateOfBirthYear}
-                onDay={(v) => setSpouse({ ...spouse, dateOfBirthDay: v })}
-                onMonth={(v) => setSpouse({ ...spouse, dateOfBirthMonth: v })}
-                onYear={(v) => setSpouse({ ...spouse, dateOfBirthYear: v })}
-              />
-            </Field>
-            <Field label="Nationality">
-              <Select value={spouse.nationality || undefined} onValueChange={(v) => setSpouse({ ...spouse, nationality: v })}>
-                <SelectTrigger className={`${sel} w-48`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
-                <SelectContent>{NATIONALITY_OPTIONS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
-              </Select>
-            </Field>
-            <Field label="Residential Status">
-              <Select value={spouse.residentialStatus || undefined} onValueChange={(v) => setSpouse({ ...spouse, residentialStatus: v })}>
-                <SelectTrigger className={`${sel} w-56`}><SelectValue placeholder="Select status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Singapore Citizen">Singapore Citizen</SelectItem>
-                  <SelectItem value="Singapore Permanent Resident">Singapore Permanent Resident</SelectItem>
-                  <SelectItem value="Employment Pass">Employment Pass</SelectItem>
-                  <SelectItem value="S Pass">S Pass</SelectItem>
-                  <SelectItem value="Work Permit">Work Permit</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Spouse's NRIC / FIN / PP">
-              <Input className={`${inp} max-w-[180px]`} value={spouse.nric} onChange={(e) => setSpouse({ ...spouse, nric: e.target.value })} placeholder="e.g. S1234567B" />
-            </Field>
-            <Field label="Occupation">
-              <Input className={inp} value={spouse.occupation} onChange={(e) => setSpouse({ ...spouse, occupation: e.target.value })} placeholder="e.g. Housewife" />
-            </Field>
-            <Field label="Name Of Company">
-              <Input className={inp} value={spouse.company} onChange={(e) => setSpouse({ ...spouse, company: e.target.value })} placeholder="Company name (if applicable)" />
-            </Field>
-          </dl>
-        </SectionBody>
-        ) : null}
-
-        {/* ══ FAMILY MEMBERS ══ */}
-        {showStepThree ? familyMembers.map((fm, idx) => (
-          <div key={idx}>
-            <SectionHeader title={`${ordinal(idx + 1)} Family Member`}>
-              {familyMembers.length > 1 && (
                 <button
                   type="button"
-                  onClick={() => removeFamilyMember(idx)}
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+                  onClick={() => setShowMaidResults(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm"
                 >
-                  <X className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">Remove</span>
+                  <Search className="h-4 w-4" /> Search
                 </button>
-              )}
-            </SectionHeader>
-            <SectionBody disabled={isReadOnly}>
-              <dl className="space-y-1">
-                <Field label="Name">
-                  <Input className={inp} value={fm.name} onChange={(e) => updateFamilyMember(idx, "name", e.target.value)} placeholder="Full name" />
-                </Field>
-                <Field label="Relationship">
-                  <div className="space-y-1 pt-0.5">
-                    {[["Daughter", "Son"], ["Father", "Mother"], ["Father-in-Law", "Mother-in-Law"]].map((row, ri) => (
-                      <div key={ri} className="flex gap-4">
-                        {row.map((opt) => (
-                          <label key={opt} className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-700">
-                            <input type="radio" name={`fm-type-${idx}`} checked={fm.relationship === opt} onChange={() => updateFamilyMember(idx, "relationship", opt)} className="h-3 w-3 accent-blue-600" />
-                            {opt}
-                          </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_140px]">
+                <div className="space-y-2">
+                  <Field label="Maid's Full Name">
+                    <input className={inp} value={maid.name} onChange={(e) => setMaid({ ...maid, name: e.target.value })} placeholder="Full name as per passport" />
+                  </Field>
+                  <Field label="Nationality">
+                    <Select value={maid.nationality || undefined} onValueChange={(v) => setMaid({ ...maid, nationality: v })}>
+                      <SelectTrigger className={`${selTrigger} w-52`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
+                      <SelectContent>
+                        {["Filipino maid","Indian maid","Indonesian maid","Myanmar maid","Sri Lankan maid"].map((n) => (
+                          <SelectItem key={n} value={n}>{n}</SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Work Permit No.">
+                    <input className={`${inp} max-w-[220px]`} value={maid.workPermitNo} onChange={(e) => setMaid({ ...maid, workPermitNo: e.target.value })} placeholder="e.g. G1234567P" />
+                  </Field>
+                  <Field label="FIN No.">
+                    <input className={`${inp} max-w-[220px]`} value={maid.finNo} onChange={(e) => setMaid({ ...maid, finNo: e.target.value })} placeholder="e.g. G1234567P" />
+                  </Field>
+                  <Field label="Passport No.">
+                    <input className={`${inp} max-w-[220px]`} value={maid.passportNo} onChange={(e) => setMaid({ ...maid, passportNo: e.target.value })} placeholder="Passport number" />
+                  </Field>
+                  <Field label="Monthly Salary">
+                    <input className={`${inp} max-w-[200px]`} value={maid.salary} onChange={(e) => setMaid({ ...maid, salary: e.target.value })} placeholder="e.g. $800" />
+                  </Field>
+                  <Field label="Number of Off-days">
+                    <input className={`${inp} max-w-[200px]`} value={maid.numberOfOffDays} onChange={(e) => setMaid({ ...maid, numberOfOffDays: e.target.value })} placeholder="e.g. 4" />
+                  </Field>
+                  <Field label="Compensation (No Offday)">
+                    <input className={`${inp} max-w-[200px]`} value={maid.compensationNoOffday} onChange={(e) => setMaid({ ...maid, compensationNoOffday: e.target.value })} placeholder="0" />
+                  </Field>
+                  <Field label="Name of Maid Replaced">
+                    <input className={inp} value={maid.nameOfReplacement} onChange={(e) => setMaid({ ...maid, nameOfReplacement: e.target.value })} placeholder="Previous maid's name (if applicable)" />
+                  </Field>
+                  <Field label="Passport of Maid Replaced">
+                    <input className={inp} value={maid.passportOfMaid} onChange={(e) => setMaid({ ...maid, passportOfMaid: e.target.value })} placeholder="Previous maid's passport no." />
+                  </Field>
+                </div>
+
+                {/* Photo */}
+                <div className="flex flex-col items-center pt-1">
+                  <div className="overflow-hidden rounded-2xl border-2 border-gray-200 bg-gray-50 shadow-sm" style={{ width: 130, height: 160 }}>
+                    {maidPhoto ? (
+                      <img src={maidPhoto} alt={maid.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center text-gray-300">
+                        <User className="h-10 w-10" />
+                        <span className="mt-2 text-[12px] text-gray-400 font-medium">No photo</span>
                       </div>
+                    )}
+                  </div>
+                  {maid.referenceCode && (
+                    <span className="mt-2 rounded-xl bg-emerald-100 px-3 py-1 text-[12px] font-bold text-emerald-800">
+                      Ref: {maid.referenceCode}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
+
+            {showStepTabs && (
+              <div className="flex justify-end">
+                <button onClick={() => setActiveStep(2)} className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-sky-700 transition-colors">
+                  Next: Agency Info <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ STEP 2: AGENCY ═══ */}
+        {showStepTwo && (
+          <div className="ecp-section space-y-4">
+            <SectionCard title="Agency Information" icon={<Building2 className="h-4 w-4 text-white" />} color="sky">
+              <div className="space-y-2">
+                <Field label="Case Reference Number">
+                  <input className={`${inp} max-w-[180px]`} value={agency.caseReferenceNumber} onChange={(e) => setAgency({ ...agency, caseReferenceNumber: e.target.value })} placeholder="e.g. 06583" />
+                </Field>
+                <Field label="Contract Date">
+                  <input className={`${inp} max-w-[180px]`} value={agency.contractDate} onChange={(e) => setAgency({ ...agency, contractDate: e.target.value })} placeholder="YYYY-MM-DD" />
+                </Field>
+                <Field label="Date of Employment">
+                  <DatePicker
+                    day={agency.dateOfEmploymentDay} month={agency.dateOfEmploymentMonth} year={agency.dateOfEmploymentYear}
+                    onDay={(v) => setAgency({ ...agency, dateOfEmploymentDay: v })}
+                    onMonth={(v) => setAgency({ ...agency, dateOfEmploymentMonth: v })}
+                    onYear={(v) => setAgency({ ...agency, dateOfEmploymentYear: v })}
+                  />
+                </Field>
+
+                {/* Fee box */}
+                <div className="mt-3 rounded-2xl border-2 border-sky-100 bg-sky-50 p-4 space-y-2">
+                  <p className="text-[13px] font-bold uppercase tracking-wider text-sky-700 mb-3">Fee Breakdown</p>
+                  {[
+                    { label: "Invoice Number", key: "invoiceNumber", ph: "1" },
+                    { label: "Service Fee", key: "serviceFee", ph: "$0.00" },
+                    { label: "Deposit", key: "deposit", ph: "$0.00" },
+                    { label: "SIP Fee", key: "sipFee", ph: "$0.00" },
+                    { label: "Medical Fee", key: "medicalFee", ph: "$0.00" },
+                    { label: "Transport Fee", key: "transportFee", ph: "$0.00" },
+                    { label: "Document Fee", key: "documentFee", ph: "$0.00" },
+                  ].map(({ label, key, ph }) => (
+                    <Field key={key} label={label}>
+                      <input className={`${inp} max-w-[180px] bg-white`} value={agency[key as keyof typeof agency] as string}
+                        onChange={(e) => setAgency({ ...agency, [key]: e.target.value })} placeholder={ph} />
+                    </Field>
+                  ))}
+                </div>
+
+                <Field label="Placement Fee (Maid Loan)">
+                  <input className={`${inp} max-w-[180px]`} value={agency.placementFee} onChange={(e) => setAgency({ ...agency, placementFee: e.target.value })} placeholder="$0.00" />
+                </Field>
+                <Field label="Insurance Fee">
+                  <input className={`${inp} max-w-[180px]`} value={agency.insuranceFee} onChange={(e) => setAgency({ ...agency, insuranceFee: e.target.value })} placeholder="$0.00" />
+                </Field>
+                <Field label="Agency Witness">
+                  <Select value={agency.agencyWitness || undefined} onValueChange={(v) => setAgency({ ...agency, agencyWitness: v })}>
+                    <SelectTrigger className={selTrigger}><SelectValue placeholder="Select witness" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Balamurugan S/O Subramaniam (R1218275)">Balamurugan S/O Subramaniam (R1218275)</SelectItem>
+                      <SelectItem value="Rahimunisha Binti Muhammadhan (R1107570)">Rahimunisha Binti Muhammadhan (R1107570)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+            </SectionCard>
+
+            {showStepTabs && (
+              <div className="flex justify-between">
+                <button onClick={() => setActiveStep(1)} className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-5 py-2.5 text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-colors">
+                  <ChevronLeft className="h-4 w-4" /> Back
+                </button>
+                <button onClick={() => setActiveStep(3)} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-violet-700 transition-colors">
+                  Next: Employer Info <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ STEP 3: EMPLOYER, SPOUSE, FAMILY ═══ */}
+        {showStepThree && (
+          <div className="ecp-section space-y-4">
+            <SectionCard title="Employer Details" icon={<User className="h-4 w-4 text-white" />} color="violet">
+              <div className="space-y-2">
+                <Field label="Full Name" required>
+                  <input className={inp} value={employer.name} onChange={(e) => setEmployer({ ...employer, name: e.target.value })} placeholder="Employer's full legal name" />
+                </Field>
+                <Field label="Gender">
+                  <RadioGroup name="emp-gender" options={["Male","Female"]} value={employer.gender} onChange={(v) => setEmployer({ ...employer, gender: v })} />
+                </Field>
+                <Field label="Date of Birth">
+                  <DatePicker day={employer.dateOfBirthDay} month={employer.dateOfBirthMonth} year={employer.dateOfBirthYear}
+                    onDay={(v) => setEmployer({ ...employer, dateOfBirthDay: v })}
+                    onMonth={(v) => setEmployer({ ...employer, dateOfBirthMonth: v })}
+                    onYear={(v) => setEmployer({ ...employer, dateOfBirthYear: v })} />
+                </Field>
+                <Field label="Nationality">
+                  <Select value={employer.nationality || undefined} onValueChange={(v) => setEmployer({ ...employer, nationality: v })}>
+                    <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
+                    <SelectContent>{NATIONALITY_OPTIONS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Residential Status">
+                  <Select value={employer.residentialStatus || undefined} onValueChange={(v) => setEmployer({ ...employer, residentialStatus: v })}>
+                    <SelectTrigger className={`${selTrigger} w-64`}><SelectValue placeholder="Select status" /></SelectTrigger>
+                    <SelectContent>
+                      {["Singapore Citizen","Singapore Permanent Resident","Employment Pass","S Pass","Work Permit"].map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="NRIC / FIN / Passport">
+                  <input className={`${inp} max-w-[200px]`} value={employer.nric} onChange={(e) => setEmployer({ ...employer, nric: e.target.value })} placeholder="e.g. S1234567A" />
+                </Field>
+                <Field label="Address (Line 1)">
+                  <input className={inp} value={employer.addressLine1} onChange={(e) => setEmployer({ ...employer, addressLine1: e.target.value })} placeholder="Street address, unit no." />
+                </Field>
+                <Field label="Address (Line 2)">
+                  <input className={inp} value={employer.addressLine2} onChange={(e) => setEmployer({ ...employer, addressLine2: e.target.value })} placeholder="Block / building name (optional)" />
+                </Field>
+                <Field label="Postal Code">
+                  <input className={`${inp} max-w-[140px]`} value={employer.postalCode} onChange={(e) => setEmployer({ ...employer, postalCode: e.target.value })} placeholder="6-digit code" />
+                </Field>
+                <Field label="Type of Residence">
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {["HDB 2-ROOM","HDB 3-ROOM","HDB 4-ROOM","HDB 5-ROOM","HDB Executive","Condo","Terrace","Bungalow"].map((t) => (
+                      <label key={t} className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 text-[13px] font-semibold transition-all ${
+                        employer.typeOfResidence === t ? "border-violet-400 bg-violet-50 text-violet-800" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-gray-50"
+                      }`}>
+                        <input type="radio" name="residence" checked={employer.typeOfResidence === t} onChange={() => setEmployer({ ...employer, typeOfResidence: t })} className="sr-only" />
+                        {employer.typeOfResidence === t && <Check className="h-3 w-3 text-violet-600" />}
+                        {t}
+                      </label>
                     ))}
                   </div>
                 </Field>
-                <Field label="Birth Cert. / IC / FIN">
-                  <Input className={inp} value={fm.birthCertIcFin} onChange={(e) => updateFamilyMember(idx, "birthCertIcFin", e.target.value)} placeholder="Birth cert / IC / FIN number" />
+                <Field label="Occupation">
+                  <input className={inp} value={employer.occupation} onChange={(e) => setEmployer({ ...employer, occupation: e.target.value })} placeholder="e.g. Manager" />
                 </Field>
-                <Field label="Date Of Birth">
-                  <DatePicker
-                    day={fm.dateOfBirthDay} month={fm.dateOfBirthMonth} year={fm.dateOfBirthYear}
-                    onDay={(v) => updateFamilyMember(idx, "dateOfBirthDay", v)}
-                    onMonth={(v) => updateFamilyMember(idx, "dateOfBirthMonth", v)}
-                    onYear={(v) => updateFamilyMember(idx, "dateOfBirthYear", v)}
-                  />
+                <Field label="Company Name">
+                  <input className={inp} value={employer.company} onChange={(e) => setEmployer({ ...employer, company: e.target.value })} placeholder="Company name" />
                 </Field>
-              </dl>
-            </SectionBody>
-          </div>
-        )) : null}
+                <Field label="Email Address">
+                  <input type="email" className={inp} value={employer.email} onChange={(e) => setEmployer({ ...employer, email: e.target.value })} placeholder="email@example.com" />
+                </Field>
+                <Field label="Residential Phone">
+                  <input className={`${inp} max-w-[220px]`} value={employer.residentialPhone} onChange={(e) => setEmployer({ ...employer, residentialPhone: e.target.value })} placeholder="e.g. 64643212" />
+                </Field>
+                <Field label="Handphone Number">
+                  <input className={`${inp} max-w-[220px]`} value={employer.mobileNumber} onChange={(e) => setEmployer({ ...employer, mobileNumber: e.target.value })} placeholder="e.g. 91234567" />
+                </Field>
+                <Field label="Monthly Combined Income">
+                  <Select value={employer.monthlyContribution || undefined} onValueChange={(v) => setEmployer({ ...employer, monthlyContribution: v })}>
+                    <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="-- Select --" /></SelectTrigger>
+                    <SelectContent>{INCOME_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Notification of Assessment" hint="Based on Annual Income or Bank Statement">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select value={notificationDate.year || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, year: v })}>
+                      <SelectTrigger className={`${selTrigger} w-28`}><SelectValue placeholder="Year" /></SelectTrigger>
+                      <SelectContent>{Array.from({ length: 20 }, (_, i) => <SelectItem key={i} value={String(2010 + i)}>{2010 + i}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={notificationDate.month || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, month: v })}>
+                      <SelectTrigger className={`${selTrigger} w-40`}><SelectValue placeholder="-- Select Month --" /></SelectTrigger>
+                      <SelectContent>{MONTHS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </Field>
+                <Field label="Existing Employer">
+                  <input className={inp} value={employer.existingEmployer} onChange={(e) => setEmployer({ ...employer, existingEmployer: e.target.value })} placeholder="Previous employer name (if any)" />
+                </Field>
+                <Field label="Existing Employer NRIC">
+                  <input className={inp} value={employer.existingEmployerNric} onChange={(e) => setEmployer({ ...employer, existingEmployerNric: e.target.value })} placeholder="e.g. S1234567A" />
+                </Field>
+              </div>
+            </SectionCard>
 
-        {showStepThree ? (
-        <button
-          type="button"
-          onClick={addFamilyMember}
-          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded border border-dashed border-[#4a7bb5] bg-white px-3 py-2 text-xs font-medium text-[#4a7bb5] transition-colors hover:bg-blue-50 hover:border-[#3a6aa5]"
-        >
-          <Plus className="h-3.5 w-3.5" />Add Family Member
-        </button>
-        ) : null}
+            {/* Spouse */}
+            <SectionCard title="Spouse Details" icon={<Users className="h-4 w-4 text-white" />} color="violet">
+              <div className="space-y-2">
+                <Field label="Spouse's Full Name">
+                  <input className={inp} value={spouse.name} onChange={(e) => setSpouse({ ...spouse, name: e.target.value })} placeholder="Full legal name" />
+                </Field>
+                <Field label="Gender">
+                  <RadioGroup name="sp-gender" options={["Male","Female"]} value={spouse.gender} onChange={(v) => setSpouse({ ...spouse, gender: v })} />
+                </Field>
+                <Field label="Date of Birth">
+                  <DatePicker day={spouse.dateOfBirthDay} month={spouse.dateOfBirthMonth} year={spouse.dateOfBirthYear}
+                    onDay={(v) => setSpouse({ ...spouse, dateOfBirthDay: v })}
+                    onMonth={(v) => setSpouse({ ...spouse, dateOfBirthMonth: v })}
+                    onYear={(v) => setSpouse({ ...spouse, dateOfBirthYear: v })} />
+                </Field>
+                <Field label="Nationality">
+                  <Select value={spouse.nationality || undefined} onValueChange={(v) => setSpouse({ ...spouse, nationality: v })}>
+                    <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
+                    <SelectContent>{NATIONALITY_OPTIONS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Residential Status">
+                  <Select value={spouse.residentialStatus || undefined} onValueChange={(v) => setSpouse({ ...spouse, residentialStatus: v })}>
+                    <SelectTrigger className={`${selTrigger} w-64`}><SelectValue placeholder="Select status" /></SelectTrigger>
+                    <SelectContent>
+                      {["Singapore Citizen","Singapore Permanent Resident","Employment Pass","S Pass","Work Permit"].map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Spouse NRIC / FIN / PP">
+                  <input className={`${inp} max-w-[200px]`} value={spouse.nric} onChange={(e) => setSpouse({ ...spouse, nric: e.target.value })} placeholder="e.g. S1234567B" />
+                </Field>
+                <Field label="Occupation">
+                  <input className={inp} value={spouse.occupation} onChange={(e) => setSpouse({ ...spouse, occupation: e.target.value })} placeholder="e.g. Housewife" />
+                </Field>
+                <Field label="Company Name">
+                  <input className={inp} value={spouse.company} onChange={(e) => setSpouse({ ...spouse, company: e.target.value })} placeholder="Company name (if applicable)" />
+                </Field>
+              </div>
+            </SectionCard>
 
-        {/* ══ ACTION BUTTONS ══ */}
-        {showStepThree ? (
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 rounded border border-[#c5d3e8] bg-gray-50 px-4 py-3">
-          {!isReadOnly ? (
-            <>
-              <Button size="sm" onClick={() => void submitContract()} disabled={isSubmitting} className="flex items-center gap-1.5">
-                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                {isCreateMode ? "Save Employer Form" : "Save Changes"}
-              </Button>
-              {showStepTabs && (
-                <Button type="button" variant="outline" size="sm" onClick={() => setActiveStep(2)}>
-                  Back
-                </Button>
-              )}
-            </>
-          ) : (
-            <Button
-              type="button"
-              onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(refCode || "")}/edit`))}
-            >
-              Edit Employer Contract
-            </Button>
-          )}
+            {/* Family members */}
+            {familyMembers.map((fm, idx) => (
+              <SectionCard
+                key={idx}
+                title={`${ordinal(idx + 1)} Family Member`}
+                icon={<User className="h-4 w-4 text-white" />}
+                color="amber"
+                action={
+                  familyMembers.length > 1 ? (
+                    <button type="button" onClick={() => removeFamilyMember(idx)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-[13px] font-bold text-white hover:bg-white/30 transition-colors">
+                      <X className="h-3.5 w-3.5" /> Remove
+                    </button>
+                  ) : undefined
+                }
+              >
+                <div className="space-y-2">
+                  <Field label="Full Name">
+                    <input className={inp} value={fm.name} onChange={(e) => updateFamilyMember(idx, "name", e.target.value)} placeholder="Full name" />
+                  </Field>
+                  <Field label="Relationship">
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {["Daughter","Son","Father","Mother","Father-in-Law","Mother-in-Law"].map((opt) => (
+                        <label key={opt} className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 text-[13px] font-semibold transition-all ${
+                          fm.relationship === opt ? "border-amber-400 bg-amber-50 text-amber-800" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-gray-50"
+                        }`}>
+                          <input type="radio" name={`fm-type-${idx}`} checked={fm.relationship === opt} onChange={() => updateFamilyMember(idx, "relationship", opt)} className="sr-only" />
+                          {fm.relationship === opt && <Check className="h-3 w-3 text-amber-600" />}
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="Birth Cert / IC / FIN">
+                    <input className={inp} value={fm.birthCertIcFin} onChange={(e) => updateFamilyMember(idx, "birthCertIcFin", e.target.value)} placeholder="ID number" />
+                  </Field>
+                  <Field label="Date of Birth">
+                    <DatePicker day={fm.dateOfBirthDay} month={fm.dateOfBirthMonth} year={fm.dateOfBirthYear}
+                      onDay={(v) => updateFamilyMember(idx, "dateOfBirthDay", v)}
+                      onMonth={(v) => updateFamilyMember(idx, "dateOfBirthMonth", v)}
+                      onYear={(v) => updateFamilyMember(idx, "dateOfBirthYear", v)} />
+                  </Field>
+                </div>
+              </SectionCard>
+            ))}
 
-          {!showStepTabs && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                {allSelected ? "Deselect All" : "Select All"}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleDownloadSelected} disabled={selectedDocs.size === 0} className="flex items-center gap-1.5">
-                <Download className="h-3.5 w-3.5" />
-                Download Forms and Print
-                {selectedDocs.size > 0 && <span className="ml-0.5 rounded-full bg-[#4a7bb5]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#4a7bb5]">{selectedDocs.size}</span>}
-              </Button>
-            </>
-          )}     
-        </div>
-        ) : null}
+            <button type="button" onClick={addFamilyMember}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3.5 text-[14px] font-bold text-amber-700 hover:bg-amber-100 transition-colors">
+              <Plus className="h-4 w-4" /> Add Family Member
+            </button>
 
-        {showStepFour ? (
-        <>
-        <p className="mt-1 text-center text-[10px] text-gray-400">
-          The PDF Forms are for demo purposes only. Please approach admin for customization works.
-        </p>
-
-        {/* ══ DOCUMENTS & FORMS ══ */}
-        {/* <div className="mt-1 flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => setBulkUploadOpen(true)}
-            className="mt-3 flex items-center gap-1.5 rounded border border-[#4a7bb5] bg-[#4a7bb5] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#3a6aa5]"
-          >
-            <Upload className="h-3 w-3" />Bulk Upload
-          </button>
-        </div> */}
-
-        {!isReadOnly ? (
-        <div className="mt-3 rounded border border-[#c5d3e8] bg-[#f7fbff] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-[#2f5f97]">4 Steps For Uploading Employer PDF Documents</h3>
-              <div className="mt-2 grid gap-2 text-xs text-gray-600 md:grid-cols-2">
-                <div><span className="font-semibold text-[#2f5f97]">1.</span> Save the employer form first so the contract gets a reference number.</div>
-                <div><span className="font-semibold text-[#2f5f97]">2.</span> Search the maid and confirm the preview before uploading files.</div>
-                <div><span className="font-semibold text-[#2f5f97]">3.</span> Use bulk upload and choose the required PDF documents only.</div>
-                <div><span className="font-semibold text-[#2f5f97]">4.</span> Review the uploaded forms, then select files for download or print.</div>
+            {/* Save button */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+              <p className="text-[13px] text-gray-400 font-medium">All changes are saved when you click Save Contract</p>
+              <div className="flex items-center gap-3">
+                {showStepTabs && (
+                  <button onClick={() => setActiveStep(2)} className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-colors">
+                    <ChevronLeft className="h-4 w-4" /> Back
+                  </button>
+                )}
+                <button type="button" onClick={() => void submitContract()} disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-[15px] font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all">
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {isSubmitting ? "Saving…" : "Save Contract"}
+                </button>
+                {showStepTabs && (
+                  <button onClick={() => setActiveStep(4)} className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-amber-600 transition-colors">
+                    Next: Upload Forms <ChevronRight className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setBulkUploadOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded border border-[#4a7bb5] bg-[#4a7bb5] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#3a6aa5]"
-            >
-              <Upload className="h-3 w-3" />Bulk Upload PDF
-            </button>
           </div>
-        </div>
-        ) : null}
+        )}
 
-        {GENERATED_FORMS.map((cat) => {
-          const uploads = categoryUploads[cat.category] ?? [];
-          return (
-            <div key={cat.category}>
-              <SectionHeader title={cat.category} />
-              <SectionBody>
-                <CategoryFileUpload
-                  category={cat.category}
-                  hasTemplate={cat.hasTemplate}
-                  refCode={refCode || agency.caseReferenceNumber || "temp"}
-                  uploads={uploads}
-                  onUpload={(files) => updateCategoryUploads(cat.category, files)}
-                />
-                {/* checkbox selection for uploaded files */}
-                {uploads.length > 0 && (
-                  <div className="mt-1 pl-5 space-y-0.5">
-                    {uploads.map((file) => {
-                      const key = docKey(file);
-                      return (
-                        <label key={key} className="flex items-center gap-2 text-[11px] text-gray-500 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={selectedDocs.has(key)}
-                            onChange={() => toggleDoc(key)}
-                            className="h-3 w-3 accent-[#4a7bb5]"
-                          />
-                          Select for bulk download
-                        </label>
-                      );
-                    })}
+        {/* ═══ STEP 4: DOCUMENTS ═══ */}
+        {showStepFour && (
+          <div className="ecp-section space-y-4">
+
+            {/* Instructions */}
+            <div className="rounded-2xl border-2 border-amber-100 bg-amber-50 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[16px] font-bold text-amber-800 mb-3">4 Steps For Uploading Employer PDF Documents</p>
+                  <div className="grid gap-2 text-[14px] text-amber-700 sm:grid-cols-2">
+                    {[
+                      "Save the employer form first so the contract gets a reference number.",
+                      "Search the maid and confirm the preview before uploading files.",
+                      "Use bulk upload and choose the required PDF documents only.",
+                      "Review the uploaded forms, then select files for download or print.",
+                    ].map((step, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[12px] font-black text-white">{i + 1}</span>
+                        <span className="font-medium leading-snug">{step}</span>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </SectionBody>
+                </div>
+                <button type="button" onClick={() => setBulkUploadOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-[14px] font-bold text-white hover:bg-amber-700 shadow-sm transition-colors">
+                  <Upload className="h-4 w-4" /> Bulk Upload PDF
+                </button>
+              </div>
             </div>
-          );
-        })}
 
-        <BulkUploadModal
-          open={bulkUploadOpen}
-          onClose={() => setBulkUploadOpen(false)}
-          refCode={refCode || agency.caseReferenceNumber || "temp"}
-          onUploadComplete={handleBulkUploadComplete}
-        />
-        {showStepTabs && !isReadOnly ? (
-          <div className="mt-3 flex justify-between">
-            <Button type="button" variant="outline" onClick={() => setActiveStep(3)}>Back</Button>
-            <div className="flex gap-2">
-              <Button variant="outline" type="button" onClick={handleSelectAll}>
-                {allSelected ? "Deselect All" : "Select All"}
-              </Button>
-              <Button variant="outline" type="button" onClick={handleDownloadSelected} disabled={selectedDocs.size === 0} className="flex items-center gap-1.5">
-                <Download className="h-3.5 w-3.5" />
-                Download Forms
-              </Button>
+            {/* Document categories */}
+            <div className="rounded-2xl border-2 border-slate-100 overflow-hidden shadow-sm">
+              <div className="bg-gradient-to-r from-slate-600 to-gray-700 px-5 py-3.5 flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20">
+                  <FilePlus2 className="h-4 w-4 text-white" />
+                </div>
+                <h3 className="text-[16px] font-bold text-white">Documents &amp; Forms</h3>
+              </div>
+              <div className="bg-white divide-y divide-gray-100 px-5">
+                {GENERATED_FORMS.map((cat, i) => {
+                  const uploads = categoryUploads[cat.category] ?? [];
+                  return (
+                    <div key={cat.category} className="py-2.5">
+                      <CategoryFileUpload
+                        category={cat.category}
+                        hasTemplate={cat.hasTemplate}
+                        refCode={refCode || agency.caseReferenceNumber || "temp"}
+                        uploads={uploads}
+                        onUpload={(files) => updateCategoryUploads(cat.category, files)}
+                      />
+                      {uploads.length > 0 && (
+                        <div className="mt-1.5 pl-6 space-y-1">
+                          {uploads.map((file) => {
+                            const key = docKey(file);
+                            return (
+                              <label key={key} className="flex cursor-pointer items-center gap-2 text-[13px] text-gray-500 font-medium select-none">
+                                <input type="checkbox" checked={selectedDocs.has(key)} onChange={() => toggleDoc(key)} className="h-4 w-4 accent-emerald-600 rounded" />
+                                Select for bulk download
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <p className="text-center text-[13px] text-gray-400 font-medium">
+              PDF forms are for demo purposes only. Contact admin for customization.
+            </p>
+
+            {/* Download / print actions */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+              {showStepTabs && (
+                <button onClick={() => setActiveStep(3)} className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-colors">
+                  <ChevronLeft className="h-4 w-4" /> Back
+                </button>
+              )}
+              <div className="flex flex-wrap gap-2.5 ml-auto">
+                <button type="button" onClick={handleSelectAll}
+                  className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:border-gray-300 transition-colors">
+                  {allSelected ? "Deselect All" : "Select All"}
+                </button>
+                <button type="button" onClick={handleDownloadSelected} disabled={selectedDocs.size === 0}
+                  className="inline-flex items-center gap-2 rounded-xl border-2 border-sky-200 bg-sky-50 px-4 py-2.5 text-[14px] font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-40 disabled:cursor-default transition-colors">
+                  <Download className="h-4 w-4" />
+                  Download Selected
+                  {selectedDocs.size > 0 && (
+                    <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[12px]">{selectedDocs.size}</span>
+                  )}
+                </button>
+                <button type="button" onClick={() => void handlePrintForms()}
+                  className="inline-flex items-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-[14px] font-bold text-violet-700 hover:bg-violet-100 transition-colors">
+                  <Printer className="h-4 w-4" /> Print All
+                </button>
+              </div>
             </div>
           </div>
-        ) : null}
-        </>
-        ) : null}
+        )}
       </div>
 
+      <BulkUploadModal
+        open={bulkUploadOpen}
+        onClose={() => setBulkUploadOpen(false)}
+        refCode={refCode || agency.caseReferenceNumber || "temp"}
+        onUploadComplete={handleBulkUploadComplete}
+      />
+
+      {/* Back to top */}
       {showBackToTop && (
-        <button
-          type="button"
-          onClick={scrollToTop}
-          className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 rounded-full bg-[#4a7bb5] px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:bg-[#3a6aa5]"
-        >
-          <ArrowUp className="h-3.5 w-3.5" />Top
+        <button type="button" onClick={scrollToTop}
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-[14px] font-bold text-white shadow-xl hover:bg-emerald-700 active:scale-95 transition-all">
+          <ArrowUp className="h-4 w-4" /> Back to Top
         </button>
       )}
     </>

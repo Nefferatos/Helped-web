@@ -1,10 +1,8 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle, ChevronDown, HeartHandshake, Menu, Search, Settings, ShieldCheck, SlidersHorizontal, UserRound, Users, X } from "lucide-react";
+import { ArrowRight, CheckCircle, ChevronDown, HeartHandshake, Menu, Search, Users, X } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/sonner";
 import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { calculateAge, MaidProfile } from "@/lib/maids";
@@ -63,8 +61,8 @@ const features = [
   },
 ];
 
-const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
-const ITEMS_PER_PAGE = 21;
+const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid", "Willing to work on off-days"] as const;
+const ITEMS_PER_PAGE = 14; // 2 rows × 7 cards
 
 const getPrimaryPhoto = (maid: MaidProfile) =>
   Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
@@ -104,11 +102,11 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [filtersOpen, setFiltersOpen] = useState(true);
 
   const [keyword, setKeyword] = useState("");
   const [maidTypes, setMaidTypes] = useState<string[]>([]);
   const [nationality, setNationality] = useState("No Preference");
+  const [language, setLanguage] = useState("No Preference");
   const [currentPage, setCurrentPage] = useState(1);
 
   const isLoggedIn = Boolean(clientUser);
@@ -206,6 +204,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     return ["No Preference", ...values];
   }, [allPublicMaids]);
 
+  const languageOptions = ["No Preference", "English", "Mandarin/Chinese-Dialect", "Bahasa Indonesia/Malaysia", "Hindi", "Tamil"];
+
   const toggleMaidType = (type: string) => {
     setMaidTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
@@ -220,12 +220,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     });
   }, [allPublicMaids, keyword, maidTypes, nationality]);
 
-  const activeFilterCount = useMemo(
-    () => [keyword.trim() !== "", maidTypes.length > 0, nationality !== "No Preference"].filter(Boolean).length,
-    [keyword, maidTypes.length, nationality]
-  );
-
-  useEffect(() => { setCurrentPage(1); }, [keyword, maidTypes, nationality]);
+  useEffect(() => { setCurrentPage(1); }, [keyword, maidTypes, nationality, language]);
 
   const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
   const pagedMaids = filteredMaids.slice(
@@ -253,16 +248,13 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       params.set("q", keyword.trim());
       draft.keyword = keyword.trim();
     }
-
     if (maidTypes.length === 1) {
       params.set("type", maidTypes[0]);
       draft.maidType = maidTypes[0];
     }
-
     if (nationality !== "No Preference") {
       params.set("nationality", nationality);
       draft.natNoPreference = false;
-
       if (nationality === "Filipino") draft.natFilipino = true;
       if (nationality === "Indonesian") draft.natIndonesian = true;
       if (nationality === "Myanmar") draft.natMyanmar = true;
@@ -271,11 +263,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       if (nationality === "Cambodian") draft.natCambodian = true;
       if (nationality === "Bangladeshi") draft.natBangladeshi = true;
     }
-
     if (Object.keys(draft).length > 0) {
       params.set("filters", JSON.stringify(draft));
     }
-
     navigate(`${searchMaidsHref}${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
@@ -283,6 +273,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     setKeyword("");
     setMaidTypes([]);
     setNationality("No Preference");
+    setLanguage("No Preference");
     setCurrentPage(1);
   };
 
@@ -317,11 +308,11 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               <span className="sm:hidden">Find Maids</span>
             </Link>
 
-              <nav className="hidden items-center gap-5 font-body text-sm font-medium lg:flex xl:gap-8">
-                <a href="/" className="hover:text-primary transition-colors">Home</a>
-                <a href={searchMaidsHref} className="hover:text-primary transition-colors">Search Maids</a>
+            <nav className="hidden items-center gap-5 font-body text-sm font-medium lg:flex xl:gap-8">
+              <a href="/" className="hover:text-primary transition-colors">Home</a>
+              <a href={searchMaidsHref} className="hover:text-primary transition-colors">Search Maids</a>
               <a href="/about" className="hover:text-primary transition-colors">About Us</a>
-              <a href="#services" className="hover:text-primary transition-colors">Agency</a>
+              <a href="/agency" className="hover:text-primary transition-colors">Agency</a>
               <a href="/enquiry2" className="hover:text-primary transition-colors">Enquiry</a>
               <a href="/faq" className="hover:text-primary transition-colors">FAQ</a>
               <a href="/contact" className="hover:text-primary transition-colors">Contact Us</a>
@@ -330,27 +321,21 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             <div className="flex items-center gap-2 shrink-0">
               <div className="hidden md:flex">
                 {clientUser ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-2 border px-2 py-1 rounded-full hover:bg-muted transition-colors">
-                        <Avatar className="h-7 w-7 md:h-8 md:w-8">
-                          <AvatarImage src={clientUser.profileImageUrl} />
-                          <AvatarFallback className="text-xs">
-                            {clientUser.name.slice(0, 1)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm max-w-[120px] truncate hidden lg:inline">{clientUser.name}</span>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <Link to="/client/dashboard">Dashboard</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => void handleLogout()}>
-                        Logout
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="relative group">
+                    <button className="flex items-center gap-2 border px-2 py-1 rounded-full hover:bg-muted transition-colors">
+                      <Avatar className="h-7 w-7 md:h-8 md:w-8">
+                        <AvatarImage src={clientUser.profileImageUrl} />
+                        <AvatarFallback className="text-xs">
+                          {clientUser.name.slice(0, 1)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm max-w-[120px] truncate hidden lg:inline">{clientUser.name}</span>
+                    </button>
+                    <div className="absolute right-0 top-full mt-1 w-40 rounded-lg border bg-card shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity z-50">
+                      <Link to="/client/dashboard" className="block px-3 py-2 text-sm hover:bg-muted rounded-t-lg">Dashboard</Link>
+                      <button onClick={() => void handleLogout()} className="block w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-b-lg">Logout</button>
+                    </div>
+                  </div>
                 ) : (
                   <Link to="/employer-login">
                     <Button size="sm" className="text-xs md:text-sm">Employer Login</Button>
@@ -380,7 +365,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                     { label: "Home", href: "/" },
                     { label: "Search Maids", href: searchMaidsHref },
                     { label: "About Us", href: "/about" },
-                    { label: "Agency", href: "/about" },
+                    { label: "Agency", href: "/agency" },
                     { label: "FAQ", href: "/faq" },
                     { label: "Enquiry", href: "/enquiry2" },
                     { label: "Contact Us", href: "/contact" },
@@ -432,6 +417,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </header>
       )}
 
+      {/* ── HERO ── */}
       <section className="bg-card">
         <div className="container grid items-center gap-8 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-2 md:gap-10 md:py-20 lg:py-24">
           <div className="order-2 md:order-1">
@@ -482,261 +468,147 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* <section className="border-y bg-background py-8 md:py-10">
+      {/* ── SEARCH FILTER ── */}
+      <section id="search" className="bg-muted py-8 md:py-10">
         <div className="container px-4 sm:px-6">
-          <div className="mb-5 flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
-            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">Portal Access</h2>
+
+          {/* Section heading */}
+          <div className="mb-4">
+            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
+              Maid <span className="text-primary">Search</span>
+            </h2>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 mb-4">
-            <Link
-              to="/employer-login"
-              className="group rounded-xl border bg-card p-5 transition-colors hover:border-border/60 hover:bg-muted/20"
-            >
-              <div className="mb-4 flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "#EAF3DE" }}>
-                  <UserRound className="h-5 w-5" style={{ color: "#3B6D11" }} />
-                </div>
-                <span className="rounded-full px-2.5 py-1 font-body text-[11px] font-medium" style={{ background: "#EAF3DE", color: "#3B6D11" }}>
-                  For employers
-                </span>
-              </div>
-              <p className="font-display text-base font-semibold text-foreground mb-1.5">Employer / Client Login</p>
-              <p className="font-body text-sm text-muted-foreground mb-4 leading-relaxed">
-                Hire a maid, view biodata, track your applications, and chat with support.
-              </p>
-              <ul className="space-y-1.5 mb-5">
-                {["Browse & shortlist maid profiles", "Track hiring progress", "Message & get support"].map(item => (
-                  <li key={item} className="flex items-center gap-2 font-body text-xs text-muted-foreground">
-                    <CheckCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "#3B6D11" }} />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px]" style={{ color: "#3B6D11" }}>/employer-login</span>
-                <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: "#EAF3DE" }}>
-                  <ArrowRight className="h-3.5 w-3.5" style={{ color: "#3B6D11" }} />
-                </div>
-              </div>
-            </Link>
+          {/* Search panel — styled like the reference screenshot */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
 
-            <Link
-              to="/agencyadmin/login"
-              className="group rounded-xl border bg-card p-5 transition-colors hover:border-border/60 hover:bg-muted/20"
-            >
-              <div className="mb-4 flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "#FAEEDA" }}>
-                  <Settings className="h-5 w-5" style={{ color: "#854F0B" }} />
-                </div>
-                <span className="rounded-full px-2.5 py-1 font-body text-[11px] font-medium" style={{ background: "#FAEEDA", color: "#854F0B" }}>
-                  Agency staff only
-                </span>
-              </div>
-              <p className="font-display text-base font-semibold text-foreground mb-1.5">Agency Admin Portal</p>
-              <p className="font-body text-sm text-muted-foreground mb-4 leading-relaxed">
-                Manage maid listings, client accounts, applications, and agency settings.
-              </p>
-              <ul className="space-y-1.5 mb-5">
-                {["Add & publish maid profiles", "Manage client accounts", "Full agency dashboard"].map(item => (
-                  <li key={item} className="flex items-center gap-2 font-body text-xs text-muted-foreground">
-                    <CheckCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "#854F0B" }} />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px]" style={{ color: "#854F0B" }}>/agencyadmin/login</span>
-                <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: "#FAEEDA" }}>
-                  <ArrowRight className="h-3.5 w-3.5" style={{ color: "#854F0B" }} />
-                </div>
-              </div>
-            </Link>
-          </div>
-
-          <div className="flex items-start gap-2.5 rounded-lg p-3" style={{ borderLeft: "3px solid #639922", background: "rgb(234 243 222 / 0.4)" }}>
-            <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "#3B6D11" }} />
-            <p className="font-body text-xs text-muted-foreground leading-relaxed">
-              Looking for work as a maid? Contact the agency directly — maid registration is handled by agency staff.
-            </p>
-          </div>
-        </div>
-      </section> */}
-
-        <section id="search" className="bg-muted py-8 md:py-10">
-          <div className="container px-4 sm:px-6">
-            <div className="mb-5">
-              <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
-                Maid <span className="text-primary">Search</span>
-              </h2>
+            {/* Panel header */}
+            <div className="border-b bg-[#4a7c1f] px-5 py-2.5">
+              <span className="font-body text-sm font-semibold text-white tracking-wide">Maid Search</span>
             </div>
 
-            {!isLoggedIn && (
-              <div className="mb-4 rounded-2xl border bg-muted/30 p-5 text-center">
-                <p className="font-display text-lg font-semibold text-foreground sm:text-xl">
-                  Login to Unlock Full Maid Profiles
-                </p>
-                <p className="mt-2 font-body text-sm text-muted-foreground">
-                  The landing-page search stays open for guests. Login to remove the blur from available maid profiles and continue hiring.
-                </p>
-                <div className="mt-4">
-                  <Button asChild className="w-full sm:w-auto">
-                    <Link to="/employer-login">Employer Login</Link>
-                  </Button>
-                </div>
-              </div>
-            )}
+            {/* Filter rows */}
+            <div className="divide-y divide-border/50">
 
-            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-semibold text-foreground">Filters</span>
-                  {activeFilterCount > 0 && (
-                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {activeFilterCount > 0 && (
+              {/* Row 1: Keywords */}
+              <div className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center">
+                <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">
+                  Keywords
+                </label>
+                <div className="relative flex-1">
+                  <input
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    className="w-full rounded border border-border bg-background px-3 py-1.5 font-body text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="Enter search keywords such as: Filipino maid, baby sitter, etc."
+                  />
+                  {keyword && (
                     <button
                       type="button"
-                      onClick={clearSearchFilters}
-                      className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                      onClick={() => setKeyword("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
-                      <X className="h-3 w-3" />
-                      Clear all
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setFiltersOpen((value) => !value)}
-                    className="flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-                  >
-                    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`} />
-                    {filtersOpen ? "Collapse" : "Expand"}
-                  </button>
                 </div>
               </div>
 
-              {filtersOpen && (
-                <div className="space-y-0 divide-y divide-border/60 px-4 sm:px-5">
-                  <div className="py-4 space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                          Keyword Search
-                        </label>
-                        <div className="relative">
-                          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <input
-                            value={keyword}
-                            onChange={(e) => setKeyword(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                            className="w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                            placeholder="Name, reference code, nationality..."
-                          />
-                          {keyword && (
-                            <button
-                              type="button"
-                              onClick={() => setKeyword("")}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                          Nationality
-                        </label>
-                        <select
-                          value={nationality}
-                          onChange={(e) => setNationality(e.target.value)}
-                          className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        >
-                          {nationalityOptions.map((opt) => (
-                            <option key={opt}>{opt}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                        Maid Type
+              {/* Row 2: Maid Type */}
+              <div className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center">
+                <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">
+                  Maid Type
+                </label>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  {MAID_TYPES.map((type) => {
+                    const checked = maidTypes.includes(type);
+                    return (
+                      <label key={type} className="flex cursor-pointer items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleMaidType(type)}
+                          className="h-3.5 w-3.5 cursor-pointer accent-[#4a7c1f]"
+                        />
+                        <span className="font-body text-sm text-foreground select-none">{type}</span>
                       </label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {MAID_TYPES.map((type) => {
-                          const checked = maidTypes.includes(type);
-                          const colorClass = type === "New Maid"
-                            ? checked
-                              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                              : "border-border bg-background text-foreground hover:border-emerald-200 hover:bg-emerald-50/60"
-                            : type === "Transfer Maid"
-                              ? checked
-                                ? "border-blue-300 bg-blue-50 text-blue-700"
-                                : "border-border bg-background text-foreground hover:border-blue-200 hover:bg-blue-50/60"
-                              : checked
-                                ? "border-amber-300 bg-amber-50 text-amber-700"
-                                : "border-border bg-background text-foreground hover:border-amber-200 hover:bg-amber-50/60";
-
-                          return (
-                            <button
-                              key={type}
-                              type="button"
-                              onClick={() => toggleMaidType(type)}
-                              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${colorClass}`}
-                            >
-                              {type}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 py-4">
-                    <Button
-                      type="button"
-                      size="lg"
-                      className="flex-1 font-semibold sm:flex-none sm:min-w-[160px]"
-                      onClick={handleSearch}
-                    >
-                      <Search className="mr-2 h-4 w-4" />
-                      Search Maids
-                      {activeFilterCount > 0 && (
-                        <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary-foreground/20 px-1.5 text-[10px] font-bold">
-                          {activeFilterCount}
-                        </span>
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="lg"
-                      className="flex-1 sm:flex-none"
-                      onClick={handleRequestMaid}
-                    >
-                      Request Agency Help
-                    </Button>
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+              </div>
 
-            <p className="mt-3 font-body text-sm text-muted-foreground">
-              {isLoading
-                ? "Loading available public maids..."
-                : `${filteredMaids.length} public maid${filteredMaids.length !== 1 ? "s" : ""} matched your search.`}
+              {/* Row 3: Nationality + Language */}
+              <div className="flex flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:gap-6">
+                <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                  <label className="w-28 shrink-0 font-body text-sm font-semibold text-foreground">
+                    Nationality
+                  </label>
+                  <select
+                    value={nationality}
+                    onChange={(e) => setNationality(e.target.value)}
+                    className="flex-1 rounded border border-border bg-background px-2.5 py-1.5 font-body text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    {nationalityOptions.map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                  <label className="w-24 shrink-0 font-body text-sm font-semibold text-foreground">
+                    Language
+                  </label>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="flex-1 rounded border border-border bg-background px-2.5 py-1.5 font-body text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    {languageOptions.map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 4: Action buttons */}
+              <div className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <button
+                  type="button"
+                  onClick={handleRequestMaid}
+                  className="flex-1 rounded bg-[#4a7c1f] px-5 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-[#3b6411] sm:flex-none sm:min-w-[160px]"
+                >
+                  Request Maid
+                </button>
+               <button
+                  type="button"
+                  onClick={() => navigate(searchMaidsHref)}
+                  className="flex-1 rounded bg-[#4a7c1f] px-5 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-[#3b6411] sm:flex-none sm:min-w-[160px]"
+                >
+                  Search Maid Now
+                </button>
+                {(keyword || maidTypes.length > 0 || nationality !== "No Preference" || language !== "No Preference") && (
+                  <button
+                    type="button"
+                    onClick={clearSearchFilters}
+                    className="flex items-center gap-1 font-body text-xs text-muted-foreground underline hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-3 font-body text-sm text-muted-foreground">
+            {isLoading
+              ? "Loading available public maids..."
+              : `${filteredMaids.length} public maid${filteredMaids.length !== 1 ? "s" : ""} matched your search.`}
           </p>
         </div>
       </section>
 
+      {/* ── MAID RESULTS ── */}
       <section id="maid-results" className="bg-card py-10 md:py-12">
         <div className="container px-4 sm:px-6">
           <div className="mb-6 flex items-end justify-between gap-4 md:mb-8">
@@ -756,9 +628,10 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+            /* Skeleton: exactly 14 cards (2 rows × 7) */
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
               {Array.from({ length: 14 }).map((_, i) => (
-                <div key={i} className="flex flex-col overflow-hidden border bg-card shadow-sm animate-pulse">
+                <div key={i} className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm animate-pulse">
                   <div className="aspect-[3/4] bg-muted" />
                   <div className="p-2.5 space-y-2">
                     <div className="h-2.5 w-3/4 rounded bg-muted" />
@@ -793,89 +666,93 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 </div>
               )}
 
-                <div className="relative">
-                  {!isLoggedIn && (
-                    <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-background/35" />
-                  )}
+              <div className="relative">
+                {!isLoggedIn && (
+                  <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-background/35" />
+                )}
 
-                  <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 ${!isLoggedIn ? "blur-protected" : ""}`}>
-                    {pagedMaids.map((maid) => {
-                      const photo = getPrimaryPhoto(maid);
-                      const age = calculateAge(maid.dateOfBirth);
-                      const typeLower = (maid.type || "").toLowerCase();
-                  const typeColor = typeLower.includes("new")
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : typeLower.includes("transfer")
-                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                    : "bg-amber-50 text-amber-700 border-amber-200";
+                {/* 7-column grid → exactly 2 rows per page at xl+ */}
+                <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 ${!isLoggedIn ? "blur-protected" : ""}`}>
+                  {pagedMaids.map((maid) => {
+                    const photo = getPrimaryPhoto(maid);
+                    const age = calculateAge(maid.dateOfBirth);
+                    const typeLower = (maid.type || "").toLowerCase();
+                    const typeColor = typeLower.includes("new")
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : typeLower.includes("transfer")
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200";
 
-                  return (
-                    <article
-                      key={maid.referenceCode}
-                      className={`group flex flex-col overflow-hidden border bg-card shadow-sm transition-shadow hover:shadow-md ${!isLoggedIn ? "pointer-events-none" : ""}`}>
-                      <div className={`${!isLoggedIn ? "blur-[3px] opacity-80" : ""}`}>
-
-                      <div className="relative w-full bg-muted">
-                        {photo ? (
-                          <img
-                            src={photo}
-                            alt={maid.fullName}
-                            className="block h-auto w-full"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        ) : (
-                          <div className="flex h-48 items-center justify-center flex-col gap-1 text-muted-foreground/50">
-                            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                            </svg>
-                            <span className="text-[9px]">No photo</span>
+                    return (
+                      <article
+                        key={maid.referenceCode}
+                        className={`group flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md ${!isLoggedIn ? "pointer-events-none" : ""}`}
+                      >
+                        <div className={`${!isLoggedIn ? "blur-[3px] opacity-80" : ""}`}>
+                          {/* Photo */}
+                          <div className="relative w-full bg-muted">
+                            {photo ? (
+                              <img
+                                src={photo}
+                                alt={maid.fullName}
+                                className="block h-auto w-full"
+                                loading="lazy"
+                                decoding="async"
+                              />
+                            ) : (
+                              <div className="flex h-44 items-center justify-center flex-col gap-1 text-muted-foreground/50">
+                                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                                </svg>
+                                <span className="text-[9px]">No photo</span>
+                              </div>
+                            )}
+                            {maid.type && (
+                              <div className="absolute top-1.5 left-1.5">
+                                <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColor}`}>
+                                  {maid.type}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {maid.type && (
-                          <div className="absolute top-1.5 left-1.5">
-                            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColor}`}>
-                              {maid.type}
-                            </span>
-                          </div>
-                        )}
-                      </div>
 
-                      <div className="flex flex-col gap-1 p-2.5 flex-1">
-                        <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
-                          {maid.fullName}
-                        </h3>
-                        <p className="text-[10px] text-muted-foreground font-mono leading-tight">
-                          {maid.referenceCode}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-0.5">
-                          {maid.nationality && (
-                            <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
-                              {maid.nationality}
-                            </span>
-                          )}
-                          {age && (
-                            <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
-                              {age} yrs
-                            </span>
-                          )}
+                          {/* Info */}
+                          <div className="flex flex-col gap-1 p-2.5 flex-1">
+                            <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
+                              {maid.fullName}
+                            </h3>
+                            <p className="text-[10px] text-muted-foreground font-mono leading-tight">
+                              {maid.referenceCode}
+                            </p>
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {maid.nationality && (
+                                <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
+                                  {maid.nationality}
+                                </span>
+                              )}
+                              {age && (
+                                <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
+                                  {age} yrs
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-auto pt-2">
+                              <Button size="sm" asChild className="h-7 w-full text-[10px] px-1 font-semibold">
+                                <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
+                                  View Profile
+                                </Link>
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-auto pt-2">
-                          <Button size="sm" asChild className="h-7 w-full text-[10px] px-1 font-semibold">
-                            <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
-                              View Profile
-                            </Link>
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    </article>
-                  );
-                })}
-                  </div>
+                      </article>
+                    );
+                  })}
                 </div>
+              </div>
 
-              {isLoggedIn && totalPages > 1 && (
+              {/* Pagination */}
+              {totalPages > 1 && (
                 <div className="mt-8 flex items-center justify-center gap-1.5 flex-wrap">
                   <button
                     onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
@@ -895,7 +772,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                         onClick={() => handlePageChange(page as number)}
                         className={`min-w-[2.25rem] rounded-lg border px-3 py-2 font-body text-sm transition-colors ${
                           page === currentPage
-                            ? "bg-primary text-primary-foreground border-primary font-semibold"
+                            ? "bg-[#4a7c1f] text-white border-[#4a7c1f] font-semibold"
                             : "bg-card text-foreground hover:bg-muted"
                         }`}
                       >
@@ -917,6 +794,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
+      {/* ── SERVICES ── */}
       <section id="services" className="bg-card py-12 md:py-16 lg:py-24">
         <div className="container px-4 sm:px-6">
           <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between md:mb-10">
@@ -957,6 +835,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
+      {/* ── WHY CHOOSE US ── */}
       <section id="why" className="bg-muted py-12 md:py-16 lg:py-24">
         <div className="container grid items-center gap-8 px-4 sm:px-6 md:grid-cols-2 md:gap-12">
           <div className="relative">
@@ -996,49 +875,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* <section id="contact" className="bg-card py-12 md:py-16 lg:py-24">
-        <div className="container max-w-2xl px-4 text-center sm:px-6">
-          <h2 className="mb-3 font-display text-2xl font-bold text-foreground sm:text-3xl md:text-4xl">
-            Initiate Your Search Today
-          </h2>
-          <p className="mb-8 font-body text-sm text-muted-foreground sm:text-base md:mb-10">
-            Tell us your requirements and our experts will shortlist the best candidates for you within 24 hours.
-          </p>
-          <div className="rounded-2xl bg-muted p-5 text-left sm:p-8">
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-              <div>
-                <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Your Full Name</label>
-                <input className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="John Doe" />
-              </div>
-              <div>
-                <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Email Address</label>
-                <input className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="john@example.org" />
-              </div>
-              <div>
-                <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Phone Number</label>
-                <input className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="+1 (555) 000-0000" />
-              </div>
-              <div>
-                <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Main Requirement</label>
-                <select className="w-full rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
-                  <option>Housekeeping</option>
-                  <option>Elderly Care</option>
-                  <option>Infant Care</option>
-                  <option>Kid Care</option>
-                </select>
-              </div>
-            </div>
-            <div className="mb-5">
-              <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Message (Optional)</label>
-              <textarea className="h-24 w-full resize-none rounded-lg border bg-card px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="Tell us more about your care needs..." />
-            </div>
-            <Button size="lg" className="w-full font-body">
-              Submit My Request
-            </Button>
-          </div>
-        </div>
-      </section> */}
-
+      {/* ── FOOTER ── */}
       <footer className="bg-foreground py-10 text-primary-foreground md:py-12">
         <div className="container px-4 sm:px-6">
           <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4 md:gap-8">
