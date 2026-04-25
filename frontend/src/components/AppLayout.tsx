@@ -34,7 +34,6 @@ import {
   getStoredAgencyAdmin,
   type AgencyAdminUser,
 } from "@/lib/agencyAdminAuth";
-import { fetchAdminUnreadChatCount } from "@/lib/chat";
 
 /* ─── 3D Icon config per nav item ──────────────────────────────────────── */
 
@@ -264,13 +263,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let active = true;
+    let pollTimer: number | null = null;
 
     const loadSummary = async (silent = false) => {
       try {
-        const [response, companyResponse] = await Promise.all([
-          fetch("/api/company/summary"),
-          fetch("/api/company"),
-        ]);
+        const [response, companyResponse] = await Promise.all([fetch("/api/company/summary"), fetch("/api/company")]);
         const data = (await response.json().catch(() => ({}))) as {
           pendingRequests?: number;
           unreadAgencyChats?: number;
@@ -292,26 +289,51 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    const loadUnreadChats = async (silent = false) => {
-      try {
-        const unreadCount = await fetchAdminUnreadChatCount();
-        if (active) setUnreadAgencyChats(unreadCount);
-      } catch (error) {
-        if (!silent)
-          toast.error(error instanceof Error ? error.message : "Failed to load unread chats");
+    const refreshSummary = (silent = false) => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+
+      void loadSummary(silent);
+    };
+
+    const startPolling = () => {
+      if (pollTimer !== null) {
+        return;
+      }
+
+      pollTimer = window.setInterval(() => {
+        refreshSummary(true);
+      }, 30_000);
+    };
+
+    const stopPolling = () => {
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
       }
     };
 
-    void loadSummary(false);
-    void loadUnreadChats(false);
-    const interval = window.setInterval(() => {
-      void loadSummary(true);
-      void loadUnreadChats(true);
-    }, 5000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshSummary(true);
+        startPolling();
+        return;
+      }
+
+      stopPolling();
+    };
+
+    refreshSummary(false);
+    startPolling();
+    window.addEventListener("focus", handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       active = false;
-      window.clearInterval(interval);
+      stopPolling();
+      window.removeEventListener("focus", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [location.pathname]);
 

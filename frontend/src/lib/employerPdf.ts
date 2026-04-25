@@ -1,9 +1,14 @@
-import { PDFDocument } from "pdf-lib";
-
 export type EmployerDocumentFile = {
   name: string;
   url: string;
   category: string;
+};
+
+let pdfLibLoader: Promise<typeof import("pdf-lib")> | null = null;
+
+const loadPdfLib = async () => {
+  pdfLibLoader ??= import("pdf-lib");
+  return await pdfLibLoader;
 };
 
 interface FormData {
@@ -96,6 +101,7 @@ const fetchPdfBytes = async (file: EmployerDocumentFile) => {
 
 export const mergeEmployerPdfFiles = async (files: EmployerDocumentFile[]) => {
   const pdfFiles = getPdfFiles(files);
+  const { PDFDocument } = await loadPdfLib();
   const mergedPdf = await PDFDocument.create();
 
   for (const file of pdfFiles) {

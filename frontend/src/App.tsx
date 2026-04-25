@@ -1,48 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AppLayout from "@/components/AppLayout";
-import ClientEmployerLogin from "@/ClientPage/ClientEmployerLogin";
-import ClientSupportChat from "@/ClientPage/ClientSupportChat";
-import ClientDashboard from "@/ClientPage/ClientDashboard";
-import ClientHistoryPage from "@/ClientPage/ClientHistoryPage";
-import ClientLandingPage from "@/ClientPage/ClientLandingPage";
-import ClientMaidsPage from "@/ClientPage/ClientMaidsPage";
-import MaidSearchPage from "@/ClientPage/MaidSearchPage";
-import ClientProfilePage from "@/ClientPage/ClientProfilePage";
-import ClientPortalLayout from "@/ClientPage/ClientPortalLayout";
-import ClientPortalHome from "@/ClientPage/ClientPortalHome";
-import ClientRequestsPage from "@/ClientPage/ClientRequestsPage";
-import ClientChangePasswordPage from "@/ClientPage/ClientChangePasswordPage";
-import AgenciesPage from "@/pages/AgenciesPage";
-import AgencyDetailsPage from "@/pages/AgencyDetailsPage";
-import HiringProcessPage from "@/pages/HiringProcessPage";
-import HomePage from "@/pages/HomePage";
-import AgencyProfile from "@/pages/AgencyProfile";
-import AgencyProfileEdit from "@/pages/AgencyProfileEdit";
-import AgencyAdminLogin from "@/pages/AgencyAdminLogin";
-import AddMaid from "@/pages/AddMaid";
-import EditMaids from "@/pages/EditMaids";
-import MaidProfile from "@/pages/MaidProfile";
-import MaidProfileFullView from "@/pages/MaidProfileFullView";
-import EditMaid from "@/pages/EditMaidProfile";
-import PublicMaidProfile from "@/pages/PublicMaidProfile";
-import ChangePassword from "@/pages/ChangePassword";
-import Enquiry from "@/pages/Enquiry";
-import EmploymentContracts from "@/pages/EmploymentContracts";
-import AddEmployment from "@/pages/AddEmployment";
-import EmploymentContractView from "@/pages/EmploymentContractView";
-import EditEmployer from "@/pages/EditEmployer";
-import AdminSupportChat from "@/pages/AdminSupportChat";
-import RequestsPage from "@/pages/RequestsPage";
-import NotFound from "@/pages/NotFound";
-import AuthCallback from "@/pages/AuthCallback";
-import PrivacyPolicy from "@/pages/PrivacyPolicy";
-import DataDeletion from "@/pages/DataDeletion";
-import AiAutomationPage from "@/pages/AiAutomationPage";
 import {
   clearAgencyAdminAuth,
   getAgencyAdminAuthHeaders,
@@ -57,17 +19,74 @@ import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import { getSessionFromUrlCompat } from "@/lib/supabaseSessionFromUrl";
 import { adminPath } from "@/lib/routes";
 import ProtectedClientRoute from "@/components/ProtectedClientRoute";
-import AboutUs from "./ClientPage/AboutUs";
-import ContactUS from "./ClientPage/ContactUs";
-import Enquiry2 from "./ClientPage/Enquiry";
-import ServiceDetail from "./ClientPage/ServiceDetails";
-import FaqPage from "./ClientPage/FAQPage";
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
+const RouteLoader = () => (
+  <div className="flex min-h-[40vh] items-center justify-center p-6">
+    <div className="rounded-xl border bg-card px-5 py-4 text-sm text-muted-foreground shadow-sm">
+      Loading...
+    </div>
+  </div>
+);
 
+const lazyRoute = <T extends ComponentType<object>>(
+  factory: () => Promise<{ default: T }>,
+): LazyExoticComponent<T> => lazy(factory);
 
-const queryClient = new QueryClient();
+const AgenciesPage = lazyRoute(() => import("@/pages/AgenciesPage"));
+const AgencyDetailsPage = lazyRoute(() => import("@/pages/AgencyDetailsPage"));
+const HiringProcessPage = lazyRoute(() => import("@/pages/HiringProcessPage"));
+const HomePage = lazyRoute(() => import("@/pages/HomePage"));
+const AgencyProfile = lazyRoute(() => import("@/pages/AgencyProfile"));
+const AgencyProfileEdit = lazyRoute(() => import("@/pages/AgencyProfileEdit"));
+const AgencyAdminLogin = lazyRoute(() => import("@/pages/AgencyAdminLogin"));
+const AddMaid = lazyRoute(() => import("@/pages/AddMaid"));
+const EditMaids = lazyRoute(() => import("@/pages/EditMaids"));
+const MaidProfile = lazyRoute(() => import("@/pages/MaidProfile"));
+const MaidProfileFullView = lazyRoute(() => import("@/pages/MaidProfileFullView"));
+const EditMaid = lazyRoute(() => import("@/pages/EditMaidProfile"));
+const PublicMaidProfile = lazyRoute(() => import("@/pages/PublicMaidProfile"));
+const ChangePassword = lazyRoute(() => import("@/pages/ChangePassword"));
+const Enquiry = lazyRoute(() => import("@/pages/Enquiry"));
+const EmploymentContracts = lazyRoute(() => import("@/pages/EmploymentContracts"));
+const AddEmployment = lazyRoute(() => import("@/pages/AddEmployment"));
+const EmploymentContractView = lazyRoute(() => import("@/pages/EmploymentContractView"));
+const EditEmployer = lazyRoute(() => import("@/pages/EditEmployer"));
+const AdminSupportChat = lazyRoute(() => import("@/pages/AdminSupportChat"));
+const RequestsPage = lazyRoute(() => import("@/pages/RequestsPage"));
+const NotFound = lazyRoute(() => import("@/pages/NotFound"));
+const AuthCallback = lazyRoute(() => import("@/pages/AuthCallback"));
+const PrivacyPolicy = lazyRoute(() => import("@/pages/PrivacyPolicy"));
+const DataDeletion = lazyRoute(() => import("@/pages/DataDeletion"));
+const AiAutomationPage = lazyRoute(() => import("@/pages/AiAutomationPage"));
+const ClientEmployerLogin = lazyRoute(() => import("@/ClientPage/ClientEmployerLogin"));
+const ClientSupportChat = lazyRoute(() => import("@/ClientPage/ClientSupportChat"));
+const ClientDashboard = lazyRoute(() => import("@/ClientPage/ClientDashboard"));
+const ClientHistoryPage = lazyRoute(() => import("@/ClientPage/ClientHistoryPage"));
+const ClientLandingPage = lazyRoute(() => import("@/ClientPage/ClientLandingPage"));
+const ClientMaidsPage = lazyRoute(() => import("@/ClientPage/ClientMaidsPage"));
+const MaidSearchPage = lazyRoute(() => import("@/ClientPage/MaidSearchPage"));
+const ClientProfilePage = lazyRoute(() => import("@/ClientPage/ClientProfilePage"));
+const ClientPortalLayout = lazyRoute(() => import("@/ClientPage/ClientPortalLayout"));
+const ClientPortalHome = lazyRoute(() => import("@/ClientPage/ClientPortalHome"));
+const ClientRequestsPage = lazyRoute(() => import("@/ClientPage/ClientRequestsPage"));
+const ClientChangePasswordPage = lazyRoute(() => import("@/ClientPage/ClientChangePasswordPage"));
+const AboutUs = lazyRoute(() => import("./ClientPage/AboutUs"));
+const ContactUS = lazyRoute(() => import("./ClientPage/ContactUs"));
+const Enquiry2 = lazyRoute(() => import("./ClientPage/Enquiry"));
+const ServiceDetail = lazyRoute(() => import("./ClientPage/ServiceDetails"));
+const FaqPage = lazyRoute(() => import("./ClientPage/FAQPage"));
 
 const AdminShell = ({ children }: { children: ReactNode }) => <AppLayout>{children}</AppLayout>;
+const withRouteLoader = (element: ReactNode) => <Suspense fallback={<RouteLoader />}>{element}</Suspense>;
 
 interface AgencyAdminMeResponse {
   error?: string;
@@ -241,66 +260,66 @@ const App = () => {
         <Sonner />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
-            <Route path="/employer-login" element={<ClientEmployerLogin />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/agencies" element={<AgenciesPage />} />
-            <Route path="/agencies/:id" element={<AgencyDetailsPage />} />
-            <Route path="/agencyadmin/login" element={<AgencyAdminLogin />} />
+            <Route path="/employer-login" element={withRouteLoader(<ClientEmployerLogin />)} />
+            <Route path="/auth/callback" element={withRouteLoader(<AuthCallback />)} />
+            <Route path="/agencies" element={withRouteLoader(<AgenciesPage />)} />
+            <Route path="/agencies/:id" element={withRouteLoader(<AgencyDetailsPage />)} />
+            <Route path="/agencyadmin/login" element={withRouteLoader(<AgencyAdminLogin />)} />
             <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
-            <Route path="/agencyadmin/dashboard" element={<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/agency-profile" element={<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/agency-profile/edit" element={<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/add-maid" element={<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/edit-maids" element={<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/maid/:refCode" element={<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/maid/:refCode/full" element={<ProtectedAdminRoute><AdminShell><MaidProfileFullView /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/maid/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditMaid /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/change-password" element={<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/enquiry" element={<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/requests" element={<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/chat-support" element={<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/employment-contracts" element={<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/employment-contracts/new" element={<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/employment-contracts/:refCode" element={<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>} />
-            <Route path="/client" element={<ProtectedClientRoute><ClientPortalLayout /></ProtectedClientRoute>}>
+            <Route path="/agencyadmin/dashboard" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/agency-profile" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/agency-profile/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/add-maid" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/edit-maids" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/maid/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/maid/:refCode/full" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><MaidProfileFullView /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/maid/:refCode/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditMaid /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/change-password" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/enquiry" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/requests" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/chat-support" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/employment-contracts" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/employment-contracts/new" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/employment-contracts/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/client" element={withRouteLoader(<ProtectedClientRoute><ClientPortalLayout /></ProtectedClientRoute>)}>
               <Route index element={<Navigate to="home" replace />} />
-              <Route path="home" element={<ClientPortalHome />} />
-              <Route path="about" element={<AboutUs embedded />} />
-              <Route path="enquiry" element={<Enquiry2 embedded />} />
-              <Route path="contact" element={<ContactUS embedded />} />
-              <Route path="maids" element={<ClientMaidsPage />} />
-              <Route path="maids/search" element={<MaidSearchPage />} />
-              <Route path="faq" element={<FaqPage />} />
-              <Route path="requests" element={<ClientRequestsPage />} />
+              <Route path="home" element={withRouteLoader(<ClientPortalHome />)} />
+              <Route path="about" element={withRouteLoader(<AboutUs embedded />)} />
+              <Route path="enquiry" element={withRouteLoader(<Enquiry2 embedded />)} />
+              <Route path="contact" element={withRouteLoader(<ContactUS embedded />)} />
+              <Route path="maids" element={withRouteLoader(<ClientMaidsPage />)} />
+              <Route path="maids/search" element={withRouteLoader(<MaidSearchPage />)} />
+              <Route path="faq" element={withRouteLoader(<FaqPage />)} />
+              <Route path="requests" element={withRouteLoader(<ClientRequestsPage />)} />
               <Route path="messages" element={<Navigate to="../support-chat" replace />} />
-              <Route path="support-chat" element={<ClientSupportChat />} />
-              <Route path="profile" element={<ClientProfilePage />} />
-              <Route path="change-password" element={<ClientChangePasswordPage />} />
-              <Route path="history" element={<ClientHistoryPage />} />
+              <Route path="support-chat" element={withRouteLoader(<ClientSupportChat />)} />
+              <Route path="profile" element={withRouteLoader(<ClientProfilePage />)} />
+              <Route path="change-password" element={withRouteLoader(<ClientChangePasswordPage />)} />
+              <Route path="history" element={withRouteLoader(<ClientHistoryPage />)} />
               {/* Keep existing dashboard route working */}
-              <Route path="dashboard" element={<ClientDashboard />} />
+              <Route path="dashboard" element={withRouteLoader(<ClientDashboard />)} />
             </Route>
-            <Route path="/hire/:refCode" element={<HiringProcessPage />} />
-            <Route path="/maids/:refCode" element={<PublicMaidProfile />} />
-            <Route path="/agency-portal" element={<AgenciesPage />} />
-            <Route path="/agencyportal" element={<AgenciesPage />} />
+            <Route path="/hire/:refCode" element={withRouteLoader(<HiringProcessPage />)} />
+            <Route path="/maids/:refCode" element={withRouteLoader(<PublicMaidProfile />)} />
+            <Route path="/agency-portal" element={withRouteLoader(<AgenciesPage />)} />
+            <Route path="/agencyportal" element={withRouteLoader(<AgenciesPage />)} />
             <Route path="/agency-admin-portal" element={<Navigate to="/agencyadmin/login" replace />} />
             <Route path="/agencyadminportal" element={<Navigate to="/agencyadmin/login" replace />} />
-            <Route path="/user-portal" element={<ClientHomeRedirect />} />
-            <Route path="/userportal" element={<ClientHomeRedirect />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/data-deletion" element={<DataDeletion />} />
-            <Route path="/ai-workflows" element={<AiAutomationPage />} />
-            <Route path="/" element={<ClientHomeRedirect />} />
-            <Route path="*" element={<NotFound />} />
-            <Route path="/about" element={<AboutUs />} />
-            <Route path="/contact" element={<ContactUS />} />
-            <Route path="/enquiry2" element={<Enquiry2 />} />
-            <Route path="/services/:slug" element={<ServiceDetail />} />
+            <Route path="/user-portal" element={withRouteLoader(<ClientHomeRedirect />)} />
+            <Route path="/userportal" element={withRouteLoader(<ClientHomeRedirect />)} />
+            <Route path="/privacy-policy" element={withRouteLoader(<PrivacyPolicy />)} />
+            <Route path="/data-deletion" element={withRouteLoader(<DataDeletion />)} />
+            <Route path="/ai-workflows" element={withRouteLoader(<AiAutomationPage />)} />
+            <Route path="/" element={withRouteLoader(<ClientHomeRedirect />)} />
+            <Route path="*" element={withRouteLoader(<NotFound />)} />
+            <Route path="/about" element={withRouteLoader(<AboutUs />)} />
+            <Route path="/contact" element={withRouteLoader(<ContactUS />)} />
+            <Route path="/enquiry2" element={withRouteLoader(<Enquiry2 />)} />
+            <Route path="/services/:slug" element={withRouteLoader(<ServiceDetail />)} />
             <Route path="/employer/new" element={<Navigate to="/agencyadmin/employment-contracts/new" replace />} />
             <Route path="/employer/:refCode" element={<Navigate to="/agencyadmin/employment-contracts" replace />} />
-            <Route path="/faq" element={<FaqPage />} />
+            <Route path="/faq" element={withRouteLoader(<FaqPage />)} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

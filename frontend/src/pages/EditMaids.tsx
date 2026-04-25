@@ -16,8 +16,6 @@ import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 import { scanUploadedFile } from "@/lib/fileScan";
-import JSZip from "jszip";
-import * as XLSX from "xlsx";
 
 type ViewMode = "menu" | "public" | "hidden";
 type VisibilityTarget =
@@ -25,6 +23,20 @@ type VisibilityTarget =
   | { bulk: true; makePublic: boolean };
 
 const PAGE_SIZE = 10;
+
+let jsZipLoader: Promise<typeof import("jszip")> | null = null;
+let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
+
+const loadJsZip = async () => {
+  jsZipLoader ??= import("jszip");
+  const module = await jsZipLoader;
+  return module.default;
+};
+
+const loadXlsx = async () => {
+  xlsxLoader ??= import("xlsx");
+  return await xlsxLoader;
+};
 
 const menuStyles = `
   @keyframes float-icon {
@@ -617,6 +629,7 @@ const EditMaids = () => {
       return;
     }
     if (ext === "docx") {
+      const JSZip = await loadJsZip();
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
       const docXml = await zip.file("word/document.xml")?.async("text");
       if (!docXml) throw new Error("DOCX does not contain importable data");
@@ -638,6 +651,7 @@ const EditMaids = () => {
       return;
     }
     if (ext === "xlsx") {
+      const XLSX = await loadXlsx();
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const sheetName = workbook.SheetNames[0];
       const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;

@@ -434,6 +434,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 src={heroImage}
                 alt="Professional domestic helper"
                 className="h-56 w-full object-cover sm:h-72 md:h-[400px] lg:h-[480px] xl:h-[520px]"
+                fetchPriority="high"
+                decoding="async"
               />
             </div>
             <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-xl bg-card px-3 py-2.5 shadow-lg sm:bottom-6 sm:left-6 sm:px-4 sm:py-3">
@@ -689,7 +691,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                           <img
                             src={photo}
                             alt={maid.fullName}
-                            className="block w-full h-auto"
+                            className="block h-auto w-full"
+                            loading="lazy"
+                            decoding="async"
                           />
                         ) : (
                           <div className="flex h-48 items-center justify-center flex-col gap-1 text-muted-foreground/50">
@@ -806,6 +810,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                     src={service.image}
                     alt={service.title}
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
                 <div className="p-4 sm:p-5">
@@ -829,6 +835,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 src={familyImg}
                 alt="Happy family"
                 className="h-64 w-full rounded-2xl object-cover sm:h-80 md:h-[400px]"
+                loading="lazy"
+                decoding="async"
               />
             </div>
             <div className="absolute bottom-4 left-4 rounded-xl bg-primary px-4 py-3 text-primary-foreground sm:bottom-6 sm:left-6 sm:px-5 sm:py-4">

@@ -259,14 +259,6 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load Lexend from Google Fonts
-    const link = document.createElement("link");
-    link.href = "https://fonts.googleapis.com/css2?family=Lexend:wght@700;800&display=swap";
-    link.rel = "stylesheet";
-    document.head.appendChild(link);
-  }, []);
-
-  useEffect(() => {
     const loadSummary = async () => {
       try {
         const response = await fetch("/api/company/summary");

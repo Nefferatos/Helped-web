@@ -3572,6 +3572,33 @@ app.get('/api/chats/admin/stream/:clientId', requireAgencyAdminAuth, async (c) =
 
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404))
 
+const withHeaders = (response: Response, headers: Record<string, string>) => {
+  const nextHeaders = new Headers(response.headers)
+  for (const [key, value] of Object.entries(headers)) {
+    nextHeaders.set(key, value)
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: nextHeaders,
+  })
+}
+
+const withSpaHeaders = (response: Response) =>
+  withHeaders(response, {
+    'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=30',
+  })
+
+const withAssetHeaders = (response: Response, pathname: string) => {
+  const isVersionedBuildAsset = pathname.startsWith('/assets/')
+  const cacheControl = isVersionedBuildAsset
+    ? 'public, max-age=31536000, immutable'
+    : 'public, max-age=3600, stale-while-revalidate=86400'
+
+  return withHeaders(response, { 'Cache-Control': cacheControl })
+}
+
 export default {
   async fetch(request: Request, env: Bindings, executionContext: ExecutionContext) {
     const url = new URL(request.url)
@@ -3580,16 +3607,18 @@ export default {
         return await app.fetch(request, env, executionContext)
       } catch (error) {
         console.error('Unhandled worker error', error)
-        const publicMessage =
-          error instanceof Error && error.message.startsWith('No storage configured:')
-            ? error.message
-            : error instanceof Error &&
-                (error.message.startsWith('Supabase read failed') ||
-                  error.message.startsWith('Supabase write failed'))
-              ? error.message
-              : null
+        if (error instanceof Error) {
+          const isPublicError =
+            error.message.startsWith('No storage configured:') ||
+            error.message.startsWith('Supabase read failed') ||
+            error.message.startsWith('Supabase write failed')
 
-        return jsonError(publicMessage ?? 'Something went wrong!', 500)
+          if (isPublicError) {
+            return jsonError(error.message, 500)
+          }
+        }
+
+        return jsonError('Something went wrong!', 500)
       }
     }
 
@@ -3618,15 +3647,17 @@ export default {
 
     if (!isAssetRequest) {
       const spaRequest = new Request(new URL('/', url).toString(), request)
-      return env.ASSETS.fetch(spaRequest)
+      const spaResponse = await env.ASSETS.fetch(spaRequest)
+      return withSpaHeaders(spaResponse)
     }
 
     const assetResponse = await env.ASSETS.fetch(request)
     if (assetResponse.status !== 404) {
-      return assetResponse
+      return withAssetHeaders(assetResponse, url.pathname)
     }
 
     const spaRequest = new Request(new URL('/', url).toString(), request)
-    return env.ASSETS.fetch(spaRequest)
+    const spaResponse = await env.ASSETS.fetch(spaRequest)
+    return withSpaHeaders(spaResponse)
   },
 }

@@ -10,10 +10,6 @@ const supabaseUrl = (env.VITE_SUPABASE_URL || env.SUPABASE_URL)?.trim().replace(
 // IMPORTANT: use the anon key (public). Do NOT use the service_role key in the frontend.
 const supabaseAnonKey = (env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY)?.trim();
 
-// Safe debug logs (do NOT log actual values)
-console.log("Supabase URL loaded:", !!supabaseUrl);
-console.log("Supabase Key loaded:", !!supabaseAnonKey);
-
 export const supabase: SupabaseClient | null =
   supabaseUrl && supabaseAnonKey
     ? createClient(supabaseUrl, supabaseAnonKey, {
