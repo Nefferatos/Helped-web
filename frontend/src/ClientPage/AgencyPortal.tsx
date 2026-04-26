@@ -109,718 +109,253 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
   };
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+    <div className="min-h-screen bg-[#f8f6f1] font-sans">
+      {!isEmbedded && <PublicSiteNavbar />}
 
-        :root {
-          --forest: #1a3c2e;
-          --forest-deep: #0d2b1e;
-          --forest-mid: #2a5c46;
-          --gold: #c9a84c;
-          --gold-light: #e8c97a;
-          --gold-pale: #fdf6e3;
-          --cream: #f8f6f1;
-          --border: #e0dcd2;
-          --text: #1a1a1a;
-          --muted: #666;
-        }
+      {/* ── Body ── */}
+      <div className="max-w-[1080px] mx-auto px-6 py-9 pb-16 grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-8 items-start">
 
-        * { box-sizing: border-box; }
+        {/* ── Left: Testimonials ── */}
+        <aside className="flex flex-col gap-4">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <Star size={13} className="text-[#c9a84c] fill-[#c9a84c]" />
+            <span className="text-[10.5px] font-bold uppercase tracking-widest text-[#5a4a00]">
+              What agencies say
+            </span>
+          </div>
 
-        .ap-page {
-          min-height: 100vh;
-          background: var(--cream);
-          background-image:
-            radial-gradient(ellipse at 10% 0%, rgba(26,60,46,0.06) 0%, transparent 55%),
-            radial-gradient(ellipse at 90% 100%, rgba(201,168,76,0.08) 0%, transparent 55%);
-          font-family: 'DM Sans', sans-serif;
-        }
-
-        /* ── Hero stripe ── */
-        .ap-hero {
-          background: linear-gradient(135deg, var(--forest-deep) 0%, var(--forest) 55%, var(--forest-mid) 100%);
-          padding: 40px 24px 44px;
-          text-align: center;
-          position: relative;
-          overflow: hidden;
-        }
-        .ap-hero::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background-image:
-            radial-gradient(circle at 20% 50%, rgba(201,168,76,0.12) 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, rgba(255,255,255,0.04) 0%, transparent 45%);
-          pointer-events: none;
-        }
-        .ap-hero-eyebrow {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          background: rgba(201,168,76,0.15);
-          border: 1px solid rgba(201,168,76,0.35);
-          border-radius: 100px;
-          padding: 5px 14px;
-          margin-bottom: 14px;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--gold-light);
-          position: relative;
-        }
-        .ap-hero-title {
-          font-family: 'Playfair Display', serif;
-          font-size: 32px;
-          font-weight: 800;
-          color: #fff;
-          margin: 0 0 10px;
-          line-height: 1.2;
-          letter-spacing: -0.3px;
-          position: relative;
-        }
-        .ap-hero-title span {
-          background: linear-gradient(90deg, var(--gold-light), #fff6cc);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-        .ap-hero-sub {
-          font-size: 14px;
-          color: rgba(255,255,255,0.6);
-          margin: 0;
-          position: relative;
-        }
-        .ap-hero-stats {
-          display: flex;
-          justify-content: center;
-          gap: 32px;
-          margin-top: 24px;
-          position: relative;
-        }
-        .ap-stat {
-          text-align: center;
-        }
-        .ap-stat-num {
-          font-family: 'Playfair Display', serif;
-          font-size: 22px;
-          font-weight: 700;
-          color: var(--gold-light);
-          display: block;
-          line-height: 1;
-        }
-        .ap-stat-label {
-          font-size: 10.5px;
-          color: rgba(255,255,255,0.5);
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          margin-top: 3px;
-          display: block;
-        }
-        .ap-stat-divider {
-          width: 1px;
-          background: rgba(255,255,255,0.12);
-          align-self: stretch;
-        }
-
-        /* ── Body layout ── */
-        .ap-body-wrap {
-          max-width: 1080px;
-          margin: 0 auto;
-          padding: 36px 24px 64px;
-          display: grid;
-          grid-template-columns: 280px 1fr;
-          gap: 32px;
-          align-items: start;
-        }
-
-        /* ── Info banner ── */
-        .ap-info-banner {
-          background: linear-gradient(135deg, #fffbeb, #fef9e0);
-          border: 1px solid #f0d060;
-          border-left: 3px solid #c9a84c;
-          border-radius: 10px;
-          padding: 11px 15px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        .ap-info-banner p {
-          font-size: 13px;
-          color: #1a1a1a;
-          font-family: 'DM Sans', sans-serif;
-          margin: 0;
-          line-height: 1.5;
-        }
-
-        /* ── Cards ── */
-        .ap-cards-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          align-items: stretch;
-        }
-
-        .ap-card {
-          background: #ffffff;
-          border-radius: 20px;
-          border: 1px solid var(--border);
-          box-shadow: 0 4px 28px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          transition: box-shadow 0.25s;
-        }
-        .ap-card:hover {
-          box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        /* ── Card header ── */
-        .ap-card-header-dark {
-          background: linear-gradient(135deg, var(--forest-deep), var(--forest));
-          padding: 16px 22px;
-          display: flex;
-          align-items: center;
-          gap: 10;
-          flex-shrink: 0;
-        }
-        .ap-card-header-gold {
-          background: linear-gradient(135deg, #b8922e, var(--gold), var(--gold-light), var(--gold));
-          padding: 16px 22px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-shrink: 0;
-        }
-
-        /* ── Image banner — tighter ── */
-        .ap-img-banner {
-          width: 100%;
-          height: 118px;
-          position: relative;
-          overflow: hidden;
-          flex-shrink: 0;
-        }
-        .ap-img-banner img {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .ap-img-banner::after {
-          content: '';
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 40px;
-          background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.9));
-          pointer-events: none;
-        }
-
-        /* ── Form ── */
-        .ap-form-inner {
-          padding: 18px 22px 20px;
-          display: flex;
-          flex-direction: column;
-          flex: 1;
-        }
-
-        .ap-field-label {
-          display: block;
-          font-size: 11px;
-          font-weight: 700;
-          color: var(--forest);
-          font-family: 'DM Sans', sans-serif;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          margin-bottom: 7px;
-        }
-
-        .ap-input-wrap {
-          position: relative;
-        }
-
-        .ap-input {
-          width: 100%;
-          border-radius: 10px;
-          border: 1.5px solid var(--border);
-          background: #fafaf8;
-          padding: 10px 12px 10px 38px;
-          font-size: 14px;
-          color: var(--text);
-          font-family: 'DM Sans', sans-serif;
-          outline: none;
-          transition: all 0.2s;
-        }
-        .ap-input:focus {
-          border-color: var(--forest);
-          background: #f4faf7;
-          box-shadow: 0 0 0 3px rgba(26,60,46,0.08);
-        }
-        .ap-input::placeholder { color: #bbb; }
-
-        .ap-input-icon {
-          position: absolute;
-          left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          transition: color 0.2s;
-          pointer-events: none;
-        }
-
-        .ap-submit-btn {
-          width: 100%;
-          background: linear-gradient(135deg, var(--forest), var(--forest-deep));
-          color: #fff;
-          border: none;
-          border-radius: 10px;
-          padding: 13px 20px;
-          font-size: 14px;
-          font-weight: 700;
-          font-family: 'DM Sans', sans-serif;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          letter-spacing: 0.02em;
-          transition: all 0.2s;
-          position: relative;
-          overflow: hidden;
-        }
-        .ap-submit-btn::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
-          opacity: 0;
-          transition: opacity 0.2s;
-        }
-        .ap-submit-btn:hover:not(:disabled)::before { opacity: 1; }
-        .ap-submit-btn:hover:not(:disabled) {
-          box-shadow: 0 6px 20px rgba(26,60,46,0.35);
-          transform: translateY(-1px);
-        }
-        .ap-submit-btn:active:not(:disabled) { transform: translateY(0); }
-        .ap-submit-btn:disabled { opacity: 0.65; cursor: not-allowed; }
-
-        /* Security badge */
-        .ap-security-badge {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          justify-content: center;
-          margin-top: 10px;
-        }
-        .ap-security-badge span {
-          font-size: 11px;
-          color: #999;
-          font-family: 'DM Sans', sans-serif;
-        }
-
-        /* ── Benefits ── */
-        .ap-benefits-inner {
-          padding: 18px 22px 20px;
-          display: flex;
-          flex-direction: column;
-          flex: 1;
-        }
-
-        .ap-benefit-item {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          padding: 8px 10px;
-          border-radius: 8px;
-          background: #f8f6f1;
-          border: 1px solid #ece8de;
-          transition: all 0.18s;
-        }
-        .ap-benefit-item:hover {
-          background: #f1ede4;
-          border-color: #d9d3c4;
-          transform: translateX(2px);
-        }
-
-        /* ── Testimonials ── */
-        .ap-aside {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .ap-testimonial {
-          background: #ffffff;
-          border-radius: 16px;
-          border: 1px solid #e8e2d4;
-          padding: 20px 22px;
-          box-shadow: 0 2px 16px rgba(0,0,0,0.06);
-          position: relative;
-          overflow: hidden;
-          transition: box-shadow 0.2s, transform 0.2s;
-        }
-        .ap-testimonial:hover {
-          box-shadow: 0 6px 28px rgba(0,0,0,0.1);
-          transform: translateY(-2px);
-        }
-        .ap-testimonial::before {
-          content: '"';
-          position: absolute;
-          top: -8px;
-          right: 16px;
-          font-family: 'Playfair Display', serif;
-          font-size: 80px;
-          color: rgba(201,168,76,0.12);
-          line-height: 1;
-          pointer-events: none;
-        }
-        .ap-testimonial-bar {
-          position: absolute;
-          top: 0; left: 0; bottom: 0;
-          width: 3px;
-          background: linear-gradient(180deg, var(--gold), var(--gold-light));
-          border-radius: 3px 0 0 3px;
-        }
-
-        /* ── Employer bar ── */
-        .ap-employer-bar {
-          text-align: center;
-          padding: 14px 20px;
-          background: #fff;
-          border-radius: 12px;
-          border: 1px solid var(--border);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-        .ap-employer-bar p {
-          font-size: 13px;
-          color: #444;
-          font-family: 'DM Sans', sans-serif;
-          margin: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-          flex-wrap: wrap;
-        }
-
-        /* ── Responsive ── */
-        @media (max-width: 1023px) {
-          .ap-body-wrap {
-            grid-template-columns: 1fr;
-            padding: 28px 20px 56px;
-            gap: 24px;
-          }
-          .ap-aside {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-          }
-          .ap-aside-label { grid-column: 1 / -1; }
-          .ap-hero-title { font-size: 28px; }
-        }
-
-        @media (max-width: 640px) {
-          .ap-hero { padding: 30px 20px 34px; }
-          .ap-hero-title { font-size: 24px; }
-          .ap-hero-stats { gap: 20px; }
-          .ap-body-wrap { padding: 20px 16px 48px; gap: 18px; }
-          .ap-aside { display: flex; flex-direction: column; gap: 12px; }
-          .ap-cards-row { grid-template-columns: 1fr; }
-          .ap-card { border-radius: 16px; }
-          .ap-form-inner, .ap-benefits-inner { padding: 16px 18px 18px; }
-          .ap-img-banner { height: 100px; }
-        }
-      `}</style>
-
-      <div className="ap-page">
-        {!isEmbedded && <PublicSiteNavbar />}
-
-        
-
-        {/* ── Body ── */}
-        <div className="ap-body-wrap">
-
-          {/* ── Left: Testimonials ── */}
-          <aside className="ap-aside">
+          {testimonials.map((t) => (
             <div
-              className="ap-aside-label"
-              style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}
+              key={t.agency}
+              className="bg-white rounded-2xl border border-[#e8e2d4] p-5 shadow-sm relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
-              <Star size={13} color="#c9a84c" fill="#c9a84c" />
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontFamily: "'DM Sans', sans-serif",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: "#5a4a00",
-                  fontWeight: 700,
-                }}
-              >
-                What agencies say
+              {/* Gold left bar */}
+              <div className="absolute top-0 left-0 bottom-0 w-[3px] bg-gradient-to-b from-[#c9a84c] to-[#e8c97a] rounded-l-sm" />
+              {/* Decorative quote */}
+              <span className="absolute top-[-8px] right-4 font-serif text-[80px] leading-none text-[#c9a84c]/10 pointer-events-none select-none">
+                "
               </span>
+              {/* Stars */}
+              <div className="flex gap-0.5 mb-2.5 pl-3">
+                {Array.from({ length: t.rating }).map((_, i) => (
+                  <Star key={i} size={11} className="text-[#c9a84c] fill-[#c9a84c]" />
+                ))}
+              </div>
+              <p className="text-[13px] leading-relaxed text-[#1a1a1a] mb-3 pl-3">
+                "{t.quote}"
+              </p>
+              <div className="pl-3">
+                <p className="text-xs font-bold text-[#1a3c2e] m-0">{t.agency}</p>
+                <p className="text-[11.5px] text-[#777] mt-0.5">— {t.author}</p>
+              </div>
             </div>
+          ))}
+        </aside>
 
-            {testimonials.map((t) => (
-              <div key={t.agency} className="ap-testimonial">
-                <div className="ap-testimonial-bar" />
-                <div style={{ display: "flex", gap: 3, marginBottom: 9, paddingLeft: 12 }}>
-                  {Array.from({ length: t.rating }).map((_, i) => (
-                    <Star key={i} size={11} color="#c9a84c" fill="#c9a84c" />
-                  ))}
+        {/* ── Right: Sign-in + Benefits ── */}
+        <main className="flex flex-col gap-4">
+
+          {/* Info banner */}
+          <div className="flex items-center gap-3 bg-gradient-to-r from-[#fffbeb] to-[#fef9e0] border border-[#f0d060] border-l-[3px] border-l-[#c9a84c] rounded-xl px-4 py-3">
+            <div className="w-7 h-7 rounded-full bg-[#b45309]/10 flex items-center justify-center shrink-0">
+              <Info size={14} className="text-[#b45309]" strokeWidth={2} />
+            </div>
+            <p className="text-[13px] text-[#1a1a1a] leading-relaxed m-0">
+              Sign in with your{" "}
+              <strong className="text-[#1a3c2e]">FindMaid agency account</strong> to access
+              your dashboard, listings, and documents.
+            </p>
+          </div>
+
+          {/* ── Cards row ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
+
+            {/* ── Sign-in Card ── */}
+            <div className="bg-white rounded-2xl border border-[#e0dcd2] shadow-[0_4px_28px_rgba(0,0,0,0.08)] overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_8px_40px_rgba(0,0,0,0.12)]">
+
+              {/* Card header */}
+              <div className="bg-gradient-to-br from-[#0d2b1e] to-[#1a3c2e] px-5 py-4 flex items-center gap-3 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#c9a84c]/30 to-[#c9a84c]/10 border border-[#c9a84c]/40 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+                  <KeyRound size={18} className="text-[#e8c97a]" strokeWidth={1.75} />
                 </div>
-                <p
-                  style={{
-                    fontSize: 13,
-                    lineHeight: 1.65,
-                    color: "#1a1a1a",
-                    marginBottom: 11,
-                    paddingLeft: 12,
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  "{t.quote}"
-                </p>
-                <div style={{ paddingLeft: 12 }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: "#1a3c2e", fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
-                    {t.agency}
-                  </p>
-                  <p style={{ fontSize: 11.5, color: "#777", fontFamily: "'DM Sans', sans-serif", margin: "2px 0 0" }}>
-                    — {t.author}
-                  </p>
+                <div>
+                  <p className="text-white text-sm font-bold m-0 tracking-tight">Agency Sign In</p>
+                  <p className="text-white/45 text-[11px] m-0">Secure login portal</p>
                 </div>
               </div>
-            ))}
-          </aside>
 
-          {/* ── Right: Sign-in + Benefits ── */}
-          <main style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              {/* Banner image */}
+              <div className="w-full h-[118px] relative overflow-hidden shrink-0">
+                <img
+                  src={FindMaidImg}
+                  alt="Agency banner"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-b from-transparent to-white/90 pointer-events-none" />
+              </div>
 
-            {/* Info banner */}
-            <div className="ap-info-banner">
-              <Info size={15} color="#b45309" style={{ flexShrink: 0 }} />
-              <p>
-                Sign in with your{" "}
-                <strong style={{ color: "#1a3c2e" }}>FindMaid agency account</strong> to access
-                your dashboard, listings, and documents.
-              </p>
-            </div>
+              {/* Form */}
+              <form onSubmit={(e) => void handleSubmit(e)} className="px-5 py-4 flex flex-col flex-1">
 
-            {/* ── Cards ── */}
-            <div className="ap-cards-row">
-
-              {/* Sign-in Card */}
-              <div className="ap-card">
-                {/* Header */}
-                <div className="ap-card-header-dark" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 8,
-                      background: "rgba(201,168,76,0.18)",
-                      border: "1px solid rgba(201,168,76,0.38)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <KeyRound size={14} color="#c9a84c" />
-                  </div>
-                  <div>
-                    <p style={{ color: "#fff", fontSize: 14, fontWeight: 700, margin: 0, fontFamily: "'DM Sans', sans-serif" }}>
-                      Agency Sign In
-                    </p>
-                    <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, margin: 0, fontFamily: "'DM Sans', sans-serif" }}>
-                      Secure login portal
-                    </p>
-                  </div>
-                </div>
-
-                {/* Banner image — tighter height, fade bottom */}
-                <div className="ap-img-banner">
-                  <img src={FindMaidImg} alt="Agency banner" />
-                </div>
-
-                {/* Form — no extra top padding so it sits flush under image */}
-                <form onSubmit={(e) => void handleSubmit(e)} className="ap-form-inner">
-                  {/* Username */}
-                  <div style={{ marginBottom: 14 }}>
-                    <label htmlFor="username" className="ap-field-label">Username</label>
-                    <div className="ap-input-wrap">
+                {/* Username */}
+                <div className="mb-3.5">
+                  <label htmlFor="username" className="block text-[11px] font-bold text-[#1a3c2e] uppercase tracking-wider mb-1.5">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <div
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none w-6 h-6 rounded-md flex items-center justify-center transition-all duration-200"
+                      style={{ background: focused === "username" ? "rgba(26,60,46,0.08)" : "transparent" }}
+                    >
                       <User
                         size={14}
-                        color={focused === "username" ? "#1a3c2e" : "#bbb"}
-                        className="ap-input-icon"
-                      />
-                      <input
-                        id="username"
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        onFocus={() => setFocused("username")}
-                        onBlur={() => setFocused(null)}
-                        placeholder="Enter your username"
-                        required
-                        disabled={isSubmitting}
-                        className="ap-input"
+                        strokeWidth={1.75}
+                        className={`transition-colors duration-200 ${focused === "username" ? "text-[#1a3c2e]" : "text-[#c0bdb8]"}`}
                       />
                     </div>
+                    <input
+                      id="username"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      onFocus={() => setFocused("username")}
+                      onBlur={() => setFocused(null)}
+                      placeholder="Enter your username"
+                      required
+                      disabled={isSubmitting}
+                      className="w-full rounded-[10px] border-[1.5px] border-[#e0dcd2] bg-[#fafaf8] py-2.5 pl-10 pr-3 text-sm text-[#1a1a1a] outline-none transition-all duration-200 placeholder:text-[#c0bdb8] focus:border-[#1a3c2e] focus:bg-[#f4faf7] focus:shadow-[0_0_0_3px_rgba(26,60,46,0.08)] disabled:opacity-60"
+                    />
                   </div>
+                </div>
 
-                  {/* Password */}
-                  <div style={{ marginBottom: 18 }}>
-                    <label htmlFor="password" className="ap-field-label">Password</label>
-                    <div className="ap-input-wrap">
+                {/* Password */}
+                <div className="mb-4">
+                  <label htmlFor="password" className="block text-[11px] font-bold text-[#1a3c2e] uppercase tracking-wider mb-1.5">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <div
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none w-6 h-6 rounded-md flex items-center justify-center transition-all duration-200"
+                      style={{ background: focused === "password" ? "rgba(26,60,46,0.08)" : "transparent" }}
+                    >
                       <Lock
                         size={14}
-                        color={focused === "password" ? "#1a3c2e" : "#bbb"}
-                        className="ap-input-icon"
-                      />
-                      <input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        onFocus={() => setFocused("password")}
-                        onBlur={() => setFocused(null)}
-                        placeholder="Enter your password"
-                        required
-                        disabled={isSubmitting}
-                        className="ap-input"
+                        strokeWidth={1.75}
+                        className={`transition-colors duration-200 ${focused === "password" ? "text-[#1a3c2e]" : "text-[#c0bdb8]"}`}
                       />
                     </div>
-                  </div>
-
-                  {/* Submit */}
-                  <button type="submit" disabled={isSubmitting} className="ap-submit-btn">
-                    {isSubmitting ? "Signing in..." : "Sign in to Dashboard"}
-                    {!isSubmitting && <ArrowRight size={15} />}
-                  </button>
-
-                  {/* Security note */}
-                  <div className="ap-security-badge">
-                    <Shield size={11} color="#bbb" />
-                    <span>256-bit SSL encrypted</span>
-                  </div>
-                </form>
-              </div>
-
-              {/* Benefits Card */}
-              <div className="ap-card">
-                <div className="ap-card-header-gold">
-                  <Sparkles size={17} color="rgba(80,50,0,0.7)" />
-                  <div style={{ marginLeft: 10 }}>
-                    <p
-                      style={{
-                        color: "rgba(60,40,0,0.9)",
-                        fontSize: 14,
-                        fontWeight: 700,
-                        margin: 0,
-                        fontFamily: "'DM Sans', sans-serif",
-                        textShadow: "0 1px 0 rgba(255,255,255,0.3)",
-                      }}
-                    >
-                      New to FindMaid?
-                    </p>
-                    <p style={{ color: "rgba(60,40,0,0.55)", fontSize: 11, margin: 0, fontFamily: "'DM Sans', sans-serif" }}>
-                      Join 500+ agencies on the platform
-                    </p>
+                    <input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onFocus={() => setFocused("password")}
+                      onBlur={() => setFocused(null)}
+                      placeholder="Enter your password"
+                      required
+                      disabled={isSubmitting}
+                      className="w-full rounded-[10px] border-[1.5px] border-[#e0dcd2] bg-[#fafaf8] py-2.5 pl-10 pr-3 text-sm text-[#1a1a1a] outline-none transition-all duration-200 placeholder:text-[#c0bdb8] focus:border-[#1a3c2e] focus:bg-[#f4faf7] focus:shadow-[0_0_0_3px_rgba(26,60,46,0.08)] disabled:opacity-60"
+                    />
                   </div>
                 </div>
 
-                <div className="ap-benefits-inner">
-                  <p style={{ fontSize: 13, color: "#1a1a1a", fontFamily: "'DM Sans', sans-serif", marginBottom: 14, lineHeight: 1.5 }}>
-                    <Link
-                      to="/login"
-                      style={{
-                        color: "#1a3c2e",
-                        fontWeight: 700,
-                        textDecorationThickness: "2px",
-                        textUnderlineOffset: "3px",
-                      }}
-                    >
-                      Sign up for a FindMaid plan
-                    </Link>{" "}
-                    and unlock all features:
-                  </p>
-
-                  <ul
-                    style={{
-                      listStyle: "none",
-                      margin: 0,
-                      padding: 0,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                      flex: 1,
-                    }}
-                  >
-                    {benefits.map((b) => (
-                      <li key={b.text} className="ap-benefit-item">
-                        <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1.4 }}>{b.icon}</span>
-                        <span
-                          style={{
-                            fontSize: 13,
-                            color: "#1a1a1a",
-                            fontFamily: "'DM Sans', sans-serif",
-                            lineHeight: 1.4,
-                            flex: 1,
-                          }}
-                        >
-                          {b.text}
-                        </span>
-                        <Check size={13} color="#1a3c2e" style={{ flexShrink: 0, marginTop: 2, marginLeft: "auto" }} />
-                      </li>
-                    ))}
-                  </ul>
-
-                  <p
-                    style={{
-                      marginTop: 14,
-                      fontSize: 11,
-                      color: "#888",
-                      fontFamily: "'DM Sans', sans-serif",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    By creating an account you agree to our{" "}
-                    <Link
-                      to="/faq"
-                      style={{ color: "#1a3c2e", fontWeight: 600, textUnderlineOffset: "2px" }}
-                    >
-                      Terms of Service
-                    </Link>.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Employer redirect */}
-            <div className="ap-employer-bar">
-              <p>
-                Looking for the employer login?&nbsp;
-                <Link
-                  to="/employer-login"
-                  style={{
-                    color: "#1a3c2e",
-                    fontWeight: 700,
-                    textUnderlineOffset: "3px",
-                    textDecorationThickness: "2px",
-                  }}
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-gradient-to-br from-[#1a3c2e] to-[#0d2b1e] text-white border-none rounded-[10px] py-3 px-5 text-sm font-bold flex items-center justify-center gap-2 tracking-wide transition-all duration-200 hover:shadow-[0_6px_20px_rgba(26,60,46,0.35)] hover:-translate-y-px active:translate-y-0 disabled:opacity-65 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  Go to Employer Login →
-                </Link>
-              </p>
+                  {isSubmitting ? "Signing in..." : "Sign in to Dashboard"}
+                  {!isSubmitting && <ArrowRight size={15} strokeWidth={2.5} />}
+                </button>
+
+                {/* Security badge */}
+                <div className="flex items-center justify-center gap-1.5 mt-3">
+                  <div className="w-5 h-5 rounded-full bg-[#f0f0ee] flex items-center justify-center">
+                    <Shield size={11} className="text-[#aaa]" strokeWidth={2} />
+                  </div>
+                  <span className="text-[11px] text-[#999]">256-bit SSL encrypted</span>
+                </div>
+              </form>
             </div>
-          </main>
-        </div>
+
+            {/* ── Benefits Card ── */}
+            <div className="bg-white rounded-2xl border border-[#e0dcd2] shadow-[0_4px_28px_rgba(0,0,0,0.08)] overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_8px_40px_rgba(0,0,0,0.12)]">
+
+              {/* Gold header */}
+              <div className="bg-gradient-to-br from-[#b8922e] via-[#c9a84c] to-[#e8c97a] px-5 py-4 flex items-center gap-3 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
+                  <Sparkles size={18} className="text-[rgba(60,35,0,0.75)]" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <p
+                    className="text-[rgba(60,40,0,0.9)] text-sm font-bold m-0 tracking-tight"
+                    style={{ textShadow: "0 1px 0 rgba(255,255,255,0.3)" }}
+                  >
+                    New to FindMaid?
+                  </p>
+                  <p className="text-[rgba(60,40,0,0.55)] text-[11px] m-0">
+                    Join 500+ agencies on the platform
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-5 py-4 flex flex-col flex-1">
+                <p className="text-[13px] text-[#1a1a1a] mb-3.5 leading-relaxed">
+                  <Link
+                    to="/login"
+                    className="text-[#1a3c2e] font-bold underline decoration-2 underline-offset-[3px]"
+                  >
+                    Sign up for a FindMaid plan
+                  </Link>{" "}
+                  and unlock all features:
+                </p>
+
+                <ul className="list-none m-0 p-0 flex flex-col gap-2 flex-1">
+                  {benefits.map((b) => (
+                    <li
+                      key={b.text}
+                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-[#f8f6f1] border border-[#ece8de] transition-all duration-[180ms] hover:bg-[#f1ede4] hover:border-[#d9d3c4] hover:translate-x-0.5"
+                    >
+                      <span className="text-sm shrink-0 leading-none w-5 text-center">{b.icon}</span>
+                      <span className="text-[13px] text-[#1a1a1a] leading-snug flex-1">
+                        {b.text}
+                      </span>
+                      {/* Check icon with badge background */}
+                      <div className="w-5 h-5 rounded-full bg-[#1a3c2e]/10 flex items-center justify-center shrink-0 ml-auto">
+                        <Check size={11} className="text-[#1a3c2e]" strokeWidth={2.5} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="mt-3.5 text-[11px] text-[#888] leading-relaxed">
+                  By creating an account you agree to our{" "}
+                  <Link
+                    to="/faq"
+                    className="text-[#1a3c2e] font-semibold underline underline-offset-[2px]"
+                  >
+                    Terms of Service
+                  </Link>.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Employer redirect */}
+          <div className="text-center px-5 py-3.5 bg-white rounded-xl border border-[#e0dcd2] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <p className="text-[13px] text-[#444] m-0 flex items-center justify-center gap-1 flex-wrap">
+              Looking for the employer login?&nbsp;
+              <Link
+                to="/employer-login"
+                className="text-[#1a3c2e] font-bold underline decoration-2 underline-offset-[3px]"
+              >
+                Go to Employer Login →
+              </Link>
+            </p>
+          </div>
+        </main>
       </div>
-    </>
+    </div>
   );
 }

@@ -62,17 +62,20 @@ const StatCard = ({ icon, label, value, loading, gradient, shadowColor, sub, sub
           display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", flexShrink: 0 }}>
           {icon}
         </div>
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em",
-          textTransform: "uppercase", color: "rgba(255,255,255,0.82)", margin: 0 }}>
+        {/* CHANGED: fontSize 10 → 11, color 0.82 → 0.97 */}
+        <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.07em",
+          textTransform: "uppercase", color: "rgba(255,255,255,0.97)", margin: 0 }}>
           {label}
         </p>
       </div>
-      <p style={{ fontSize: 28, fontWeight: 800, color: "#fff", lineHeight: 1, margin: "0 0 2px" }}>
+      {/* CHANGED: fontSize 28 → 30 */}
+      <p style={{ fontSize: 32, fontWeight: 800, color: "#fff", lineHeight: 1, margin: "0 0 2px" }}>
         {loading ? "—" : animated}
       </p>
       {sub && (
-        <p style={{ fontSize: 11, fontWeight: 600,
-          color: subUrgent ? "#FFD6D6" : "rgba(255,255,255,0.75)", margin: 0 }}>
+        /* CHANGED: fontSize 11 → 12, color 0.75 → 0.92 */
+        <p style={{ fontSize: 13, fontWeight: 600,
+          color: subUrgent ? "#FFD6D6" : "rgba(255,255,255,0.92)", margin: 0 }}>
           {sub}
         </p>
       )}
@@ -120,11 +123,13 @@ const DonutChart = ({ slices, total, centerLabel, size = 200 }: DonutChartProps)
         </svg>
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-          <span style={{ fontSize: hovSlice ? size * 0.09 : size * 0.11, fontWeight: 800,
-            color: hovSlice ? hovSlice.color : "#111", transition: "all 0.2s" }}>
+          {/* CHANGED: center value font size slightly larger */}
+          <span style={{ fontSize: hovSlice ? size * 0.11 : size * 0.13, fontWeight: 800,
+            color: hovSlice ? hovSlice.color : "#000", transition: "all 0.2s" }}>
             {hovSlice ? hovSlice.value : total}
           </span>
-          <span style={{ fontSize: size * 0.042, fontWeight: 600, color: "#777",
+          {/* CHANGED: center label font size slightly larger, color darker */}
+          <span style={{ fontSize: size * 0.054, fontWeight: 700, color: "#555",
             marginTop: 2, textAlign: "center", maxWidth: size * 0.42 }}>
             {hovSlice ? hovSlice.label : centerLabel}
           </span>
@@ -143,13 +148,15 @@ const DonutChart = ({ slices, total, centerLabel, size = 200 }: DonutChartProps)
                 transform: isHov ? "scale(1.3)" : "scale(1)", transition: "transform 0.2s" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#111", whiteSpace: "nowrap",
+                  {/* CHANGED: fontSize 12 → 13, color #111 → #000 */}
+                  <span style={{ fontSize: 18, fontWeight: 700, color: "#000", whiteSpace: "nowrap",
                     overflow: "hidden", textOverflow: "ellipsis" }}>{slice.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: slice.color, marginLeft: 6, flexShrink: 0 }}>
+                  {/* CHANGED: fontSize 12 → 13 */}
+                  <span style={{ fontSize: 14, fontWeight: 800, color: slice.color, marginLeft: 6, flexShrink: 0 }}>
                     {slice.value}
                   </span>
                 </div>
-                <div style={{ height: 4, borderRadius: 4, background: "#F0F2F5", overflow: "hidden", marginTop: 3 }}>
+                <div style={{ height: 15, borderRadius: 4, background: "#F0F2F5", overflow: "hidden", marginTop: 3 }}>
                   <div style={{ height: "100%", width: `${pct}%`, background: slice.color, borderRadius: 4,
                     transition: "width 1s cubic-bezier(.4,0,.2,1)" }} />
                 </div>
@@ -188,17 +195,20 @@ const MenuCard = ({ icon, label, desc, path, accentColor, iconBg, iconColor, bad
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: "#111", margin: 0,
+        {/* CHANGED: fontSize 13 → 14, color #111 → #000 */}
+        <p style={{ fontSize: 20, fontWeight: 700, color: "#000", margin: 0,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</p>
         {badge && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 20, flexShrink: 0,
+          /* CHANGED: fontSize 10 → 11 */
+          <span style={{ fontSize: 13, fontWeight: 700, padding: "1px 7px", borderRadius: 20, flexShrink: 0,
             background: badgeUrgent ? "#FCEBEB" : "#F1F5F9",
-            color: badgeUrgent ? "#991B1B" : "#475569" }}>{badge}</span>
+            color: badgeUrgent ? "#7F1D1D" : "#334155" }}>{badge}</span>
         )}
       </div>
-      <p style={{ fontSize: 11, color: "#777", margin: 0 }}>{desc}</p>
+      {/* CHANGED: fontSize 11 → 12, color #777 → #555 */}
+      <p style={{ fontSize: 15, color: "#000", margin: 0 }}>{desc}</p>
     </div>
-    <ChevronRight size={13} style={{ flexShrink: 0, color: "#CCC" }} />
+    <ChevronRight size={13} style={{ flexShrink: 0, color: "#999" }} />
   </Link>
 );
 
@@ -209,8 +219,8 @@ const HomePage = () => {
   const width = useWindowWidth();
 
   // Breakpoints
-  const isSm  = width < 768;   // mobile / small tablet → stack layout, scrollable
-  const isMd  = width < 1024;  // tablet → 2 cols but compact donut
+  const isSm  = width < 768;
+  const isMd  = width < 1024;
 
   useEffect(() => {
     const loadSummary = async () => {
@@ -244,15 +254,14 @@ const HomePage = () => {
     { label: "Public Maids",     value: s.publicMaids,     color: "#1aa37e" },
     { label: "Hidden Maids",     value: s.hiddenMaids,     color: "#EF9F27" },
     { label: "With Photos",      value: s.maidsWithPhotos, color: "#378ADD" },
+    { label: "Enquiries", value: s.enquiries, color: "#D97706" },
     { label: "Pending Requests", value: s.pendingRequests, color: "#7F77DD" },
-    { label: "MOM Personnel",    value: s.momPersonnel,    color: "#D97706" },
   ] : [];
 
   return (
     <div style={{
       padding: isSm ? "0 0 20px" : "0 0 12px",
       background: "#F5F7FA",
-      // On desktop: fixed viewport height, no scroll. On mobile: natural scroll.
       height: isSm ? "auto" : "100vh",
       minHeight: isSm ? "100vh" : undefined,
       boxSizing: "border-box",
@@ -262,14 +271,13 @@ const HomePage = () => {
     }}>
       <style>{`@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.6)}}`}</style>
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
         marginBottom: 10, flexShrink: 0 }}>
         <div>
-          <h2 style={{ fontSize: isSm ? 20 : 22, fontWeight: 800, color: "#111", margin: 0, lineHeight: 1.15 }}>
+          <h2 style={{ fontSize: isSm ? 22 : 24, fontWeight: 800, color: "#000", margin: 0, lineHeight: 1.15 }}>
             Dashboard
           </h2>
-          <p style={{ fontSize: 12, color: "#777", marginTop: 1, marginBottom: 0 }}>
+          <p style={{ fontSize: 14, color: "#444", marginTop: 1, marginBottom: 0 }}>
             Agency overview at a glance
           </p>
         </div>
@@ -278,7 +286,7 @@ const HomePage = () => {
           border: "1.5px solid #9FE1CB", borderRadius: 20, padding: "5px 13px" }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1D9E75",
             display: "inline-block", animation: "livePulse 1.6s ease-in-out infinite" }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#0D6E56" }}>Live</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#0D6E56" }}>Live</span>
         </div>
       </div>
 
@@ -318,7 +326,6 @@ const HomePage = () => {
         display: "grid",
         gridTemplateColumns: isSm ? "1fr" : "1fr 1fr",
         gap: 12,
-        // On desktop: stretch to fill the remaining height
         flex: isSm ? "none" : 1,
         minHeight: 0,
         alignItems: "start",
@@ -327,7 +334,7 @@ const HomePage = () => {
         {/* LEFT: Maid Roster Breakdown */}
         <div style={{ background: "#fff", border: "1.5px solid #E4E9F0", borderRadius: 16,
           boxShadow: "0 4px 0 #E4E9F0, 0 10px 20px rgba(0,0,0,0.05)",
-          padding: "14px 16px 16px", display: "flex", flexDirection: "column", height: 460, boxSizing: "border-box" }}>
+          padding: "14px 16px 16px", display: "flex", flexDirection: "column", height: 575, boxSizing: "border-box" }}>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
             marginBottom: 14, flexShrink: 0 }}>
@@ -337,10 +344,11 @@ const HomePage = () => {
                 display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <BarChart3 size={14} color="#fff" />
               </div>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#111" }}>Maid Roster Breakdown</span>
+              {/* CHANGED: fontSize 14 → 15, color #111 → #000 */}
+              <span style={{ fontSize: 16, fontWeight: 800, color: "#000" }}>Maid Roster Breakdown</span>
             </div>
             {!loading && s && (
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#0D6E56",
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#0D6E56",
                 background: "#E1F5EE", border: "1px solid #9FE1CB",
                 padding: "2px 9px", borderRadius: 20 }}>
                 {s.totalMaids} total
@@ -348,7 +356,6 @@ const HomePage = () => {
             )}
           </div>
 
-          {/* Chart centered vertically in remaining space */}
           <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
             {!loading && s ? (
               <DonutChart total={s.totalMaids} centerLabel="Total Maids"
@@ -373,7 +380,7 @@ const HomePage = () => {
           </div>
         </div>
 
-        {/* RIGHT: Quick Actions — fills full height, cards spaced evenly */}
+        {/* RIGHT: Quick Actions */}
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7,
             marginBottom: 8, flexShrink: 0 }}>
@@ -382,10 +389,10 @@ const HomePage = () => {
               display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Zap size={14} color="#fff" />
             </div>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#111" }}>Quick Actions</span>
+            {/* CHANGED: fontSize 14 → 15, color #111 → #000 */}
+            <span style={{ fontSize: 16, fontWeight: 800, color: "#000" }}>Quick Actions</span>
           </div>
 
-          {/* Cards */}
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             <MenuCard icon={<Building2 size={17} />} label="Agency Profile"
               desc="View and edit agency details"
