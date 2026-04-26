@@ -16,6 +16,7 @@ import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 import { scanUploadedFile } from "@/lib/fileScan";
+import { exportMaidProfilesToPdf } from "@/lib/maidExport";
 
 type ViewMode = "menu" | "public" | "hidden";
 type VisibilityTarget =
@@ -26,19 +27,28 @@ const PAGE_SIZE = 10;
 
 let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
 
-let jsZipLoader: Promise<any> | null = null;
+type JSZipConstructor = { new(): { loadAsync: (data: ArrayBuffer) => Promise<{ file: (path: string) => { async: (type: "text") => Promise<string> } | null }> }; loadAsync: (data: ArrayBuffer) => Promise<{ file: (path: string) => { async: (type: "text") => Promise<string> } | null }> };
 
-const loadJsZip = async () => {
+let jsZipLoader: Promise<unknown> | null = null;
+
+const loadJsZip = async (): Promise<JSZipConstructor> => {
   if (!jsZipLoader) {
     jsZipLoader = import("jszip");
   }
-  const module = await jsZipLoader;
-  return module.default ?? module;
+  const module = await jsZipLoader as { default?: unknown };
+  return (module.default ?? module) as JSZipConstructor;
 };
 
 const loadXlsx = async () => {
   xlsxLoader ??= import("xlsx");
   return await xlsxLoader;
+};
+
+const decodePdfUtf16Hex = (hex: string) => {
+  const cleaned = hex.replace(/\s+/g, "");
+  const bytes = new Uint8Array(cleaned.match(/.{1,2}/g)?.map((pair) => parseInt(pair, 16)) ?? []);
+  const payload = bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff ? bytes.slice(2) : bytes;
+  return new TextDecoder("utf-16be").decode(payload);
 };
 
 const menuStyles = `
@@ -249,6 +259,10 @@ const EditMaids = () => {
 
   const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
   const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
+
+  // Manual PDF import dialog — shown when an external PDF has no embedded marker
+  const [manualImportOpen, setManualImportOpen] = useState(false);
+  const [manualImportFields, setManualImportFields] = useState({ name: "", nationality: "", referenceCode: "" });
 
   // Menu quick-search state
   const [menuSearch, setMenuSearch] = useState("");
@@ -475,27 +489,23 @@ const EditMaids = () => {
     }
   };
 
-  const handleExportCsv = async () => {
+  const handleExportPdf = async () => {
     try {
       setIsExporting(true);
-      const response = await fetch("/api/maids/export.csv");
+      const params = new URLSearchParams();
+      if (visibility) params.set("visibility", visibility);
+      if (search.trim()) params.set("search", search.trim());
+      const response = await fetch(`/api/maids${params.toString() ? `?${params.toString()}` : ""}`);
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || "Failed to export CSV");
+        throw new Error(data.error || "Failed to load maids for PDF export");
       }
-      const csv = await response.text();
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `maids-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      toast.success("CSV exported");
+      const data = (await response.json().catch(() => ({}))) as { error?: string; maids?: MaidProfile[] };
+      if (!data.maids) throw new Error(data.error || "Failed to prepare PDF export");
+      await exportMaidProfilesToPdf(data.maids);
+      toast.success("PDF exported");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export CSV");
+      toast.error(error instanceof Error ? error.message : "Failed to export PDF");
     } finally {
       setIsExporting(false);
     }
@@ -512,13 +522,60 @@ const EditMaids = () => {
     return match?.[1] ?? null;
   };
 
+  // ── CSV field-name normalizer ──────────────────────────────────────────────
+  // Maps common/alternative column headers to canonical MaidProfile field names.
+  const CSV_FIELD_MAP: Record<string, string> = {
+    // name variants
+    name: "fullName",
+    full_name: "fullName",
+    maid_name: "fullName",
+    maidname: "fullName",
+    fullname: "fullName",
+    // age (informational; kept as-is, server ignores it)
+    age: "age",
+    // nationality
+    nationality: "nationality",
+    country: "nationality",
+    // experience / years
+    experience: "experience",
+    years: "experience",
+    years_of_experience: "experience",
+    // photo
+    photo: "photoDataUrl",
+    photo_url: "photoDataUrl",
+    image: "photoDataUrl",
+    image_url: "photoDataUrl",
+    picture: "photoDataUrl",
+  };
+
+  const normalizeCsv = (csvText: string): string => {
+    const lines = csvText.split(/\r?\n/);
+    if (lines.length < 1) return csvText;
+    const headerLine = lines[0];
+    if (!headerLine) return csvText;
+
+    // Parse header cells (simple CSV split — no quoted commas in headers)
+    const headers = headerLine.split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+    let changed = false;
+    const normalizedHeaders = headers.map((h) => {
+      const key = h.toLowerCase().replace(/[\s-]/g, "_");
+      const mapped = CSV_FIELD_MAP[key];
+      if (mapped && mapped !== h) { changed = true; return mapped; }
+      return h;
+    });
+
+    if (!changed) return csvText;
+    return [normalizedHeaders.join(","), ...lines.slice(1)].join("\n");
+  };
+
   const importCsvText = async (csvText: string) => {
+    const normalizedCsv = normalizeCsv(csvText);
     try {
       setIsImporting(true);
       const response = await fetch("/api/maids/import.csv", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv: csvText }),
+        body: JSON.stringify({ csv: normalizedCsv }),
       });
       const data = (await response.json()) as {
         error?: string;
@@ -533,44 +590,21 @@ const EditMaids = () => {
       const failed = data.failed ?? 0;
       toast.success(`Import done: ${created} created, ${updated} updated${failed ? `, ${failed} failed` : ""}`);
       if (failed && data.errors?.length) toast.error(data.errors.slice(0, 2).join(" | "));
-      if (visibility) {
-        const params = new URLSearchParams({ visibility });
-        if (search.trim()) params.set("search", search.trim());
-        const reload = await fetch(`/api/maids?${params.toString()}`);
-        const reloadData = (await reload.json()) as { maids?: MaidProfile[] };
-        if (reload.ok && reloadData.maids) setMaids(reloadData.maids);
+      // Auto-display: always reload the current view after import
+      const reloadVisibility = visibility ?? "public";
+      const params = new URLSearchParams({ visibility: reloadVisibility });
+      if (search.trim()) params.set("search", search.trim());
+      const reload = await fetch(`/api/maids?${params.toString()}`);
+      const reloadData = (await reload.json()) as { maids?: MaidProfile[] };
+      if (reload.ok && reloadData.maids) {
+        setMaids(reloadData.maids);
+        // If user is on menu, switch to the view that has data
+        if (view === "menu" && reloadData.maids.length > 0) setView(reloadVisibility === "hidden" ? "hidden" : "public");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to import CSV");
     } finally {
       setIsImporting(false);
-    }
-  };
-
-  const handleExportXls = async () => {
-    try {
-      setIsExporting(true);
-      const response = await fetch("/api/maids/export.xls");
-      if (!response.ok) {
-        if (response.status === 404) { await handleExportCsv(); return; }
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || "Failed to export Excel");
-      }
-      const html = await response.text();
-      const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `maids-${new Date().toISOString().slice(0, 10)}.xls`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      toast.success("Excel exported");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export Excel");
-    } finally {
-      setIsExporting(false);
     }
   };
 
@@ -592,12 +626,17 @@ const EditMaids = () => {
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
       if (!response.ok || !data.maid) throw new Error(data.error || "Failed to import maid profile");
       toast.success(exists ? "Maid profile updated" : "Maid profile created");
-      if (visibility) {
-        const params = new URLSearchParams({ visibility });
-        if (search.trim()) params.set("search", search.trim());
-        const reload = await fetch(`/api/maids?${params.toString()}`);
-        const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[] };
-        if (reload.ok && reloadData.maids) setMaids(reloadData.maids);
+      // Always reload — use the imported maid's own visibility to pick the right view
+      const importedVisibility = data.maid.isPublic ? "public" : "hidden";
+      const reloadVisibility = visibility ?? importedVisibility;
+      const params = new URLSearchParams({ visibility: reloadVisibility });
+      if (search.trim()) params.set("search", search.trim());
+      const reload = await fetch(`/api/maids?${params.toString()}`);
+      const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[] };
+      if (reload.ok && reloadData.maids) {
+        setMaids(reloadData.maids);
+        // If on menu, switch to the view that contains the imported maid
+        if (view === "menu") setView(reloadVisibility === "hidden" ? "hidden" : "public");
       }
     } finally {
       setIsImporting(false);
@@ -609,26 +648,64 @@ const EditMaids = () => {
     const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
     if (ext === "pdf") {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const max = Math.min(bytes.length, 1024 * 1024);
+      const rawPdf = Array.from(bytes, (value) => String.fromCharCode(value)).join("");
+
+      // pdf-lib writes /Subject <FEFF...> (UTF-16BE hex)
+      const subjectHexMatch = rawPdf.match(/\/Subject\s*<([0-9A-Fa-f]+)>/);
+      const subjectHex = subjectHexMatch ? decodePdfUtf16Hex(subjectHexMatch[1]) : "";
+
+      // jsPDF writes /Subject (plain ASCII string)
+      const subjectStrMatch = rawPdf.match(/\/Subject\s*\(([^)]*)\)/);
+      const subjectStr = subjectStrMatch ? subjectStrMatch[1] : "";
+
+      const subject = subjectHex || subjectStr;
+
+      if (subject.startsWith("MAIDS_CSV_BASE64:")) {
+        await importCsvText(decodeBase64Utf8(subject.slice("MAIDS_CSV_BASE64:".length)));
+        return;
+      }
+      if (subject.startsWith("MAID_PROFILE_JSON_BASE64:")) {
+        await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(subject.slice("MAID_PROFILE_JSON_BASE64:".length))) as MaidProfile);
+        return;
+      }
+      // ── External PDF: extract whatever we can and let the user confirm ──
+      const max = Math.min(bytes.length, 2 * 1024 * 1024);
       let printable = "";
-      for (let i = 0; i < max && printable.length < 6000; i += 1) {
+      for (let i = 0; i < max && printable.length < 12000; i += 1) {
         const b = bytes[i];
         if (b === 0x0a || b === 0x0d || b === 0x09) printable += " ";
         else if (b >= 0x20 && b <= 0x7e) printable += String.fromCharCode(b);
         else printable += " ";
       }
       const text = printable.replace(/\s+/g, " ").trim();
-      const refMatch = text.match(/\breference\s*code\b\s*[:-]?\s*([a-z0-9_-]{2,})/i);
-      const nameMatch = text.match(/\bfull\s*name\b\s*[:-]?\s*([a-z][^:]{1,80}?)(?=\s{2,}|$)/i);
-      if (!text || text.length < 40 || !refMatch?.[1] || !nameMatch?.[1]) {
-        throw new Error("PDF does not contain importable data");
-      }
-      const escapeCsv = (value: string) => {
-        const v = String(value ?? "");
-        if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
-        return v;
+
+      // Best-effort field extraction from common biodata label patterns
+      const extract = (patterns: RegExp[]) => {
+        for (const re of patterns) {
+          const m = text.match(re);
+          if (m?.[1]?.trim()) return m[1].trim().slice(0, 120);
+        }
+        return "";
       };
-      await importCsvText(`referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`);
+
+      const guessedName = extract([
+        /(?:maid\s*name|full\s*name|name\s*of\s*fdw|fdw\s*name|name)\s*[:-]?\s*([A-Za-z][A-Za-z\s'.–-]{1,60}?)(?=\s{2,}|\d|$)/i,
+        /1\.\s*Name\s*[:-]?\s*([A-Za-z][A-Za-z\s'.–-]{1,60}?)(?=\s{2,}|\d|$)/i,
+      ]);
+      const guessedNationality = extract([
+        /nationality\s*[:-]?\s*([A-Za-z][A-Za-z\s]{1,40}?)(?=\s{2,}|\d|$)/i,
+      ]);
+      const guessedRef = extract([
+        /(?:reference\s*code|ref\.?\s*code|ref\.?\s*no\.?)\s*[:-]?\s*([A-Za-z0-9_-]{2,30})/i,
+      ]);
+
+      // Open manual dialog pre-filled with guesses — user confirms before import
+      setManualImportFields({
+        name: guessedName,
+        nationality: guessedNationality,
+        referenceCode: guessedRef,
+      });
+      setManualImportOpen(true);
       return;
     }
     if (ext === "docx") {
@@ -683,8 +760,7 @@ const EditMaids = () => {
   };
 
   const requestExport = () => { if (!isExporting) setConfirmExportOpen(true); };
-  const confirmExportCsv = () => { setConfirmExportOpen(false); void handleExportCsv(); };
-  const confirmExportXls = () => { setConfirmExportOpen(false); void handleExportXls(); };
+  const confirmExportPdf = () => { setConfirmExportOpen(false); void handleExportPdf(); };
   const requestImportFiles = async (files?: FileList | File[]) => {
     if (!files || isImporting) return;
     const all = Array.from(files);
@@ -721,22 +797,31 @@ const EditMaids = () => {
     }
   };
 
+  const confirmManualImport = async () => {
+    const { name, nationality, referenceCode } = manualImportFields;
+    if (!name.trim()) { toast.error("Name is required"); return; }
+    setManualImportOpen(false);
+    // Build a minimal ref code from name if missing
+    const ref = referenceCode.trim() || `EXT-${Date.now()}`;
+    const escapeCsv = (v: string) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    await importCsvText(`referenceCode,fullName,nationality\n${escapeCsv(ref)},${escapeCsv(name.trim())},${escapeCsv(nationality.trim())}`);
+  };
+
   const SharedDialogs = () => (
     <>
       {/* Export */}
       <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Export maids file?</DialogTitle>
+            <DialogTitle>Export maids PDF?</DialogTitle>
             <DialogDescription>
-              Download as an easy-to-read Excel table (<strong>.xls</strong>) or as a raw CSV (<strong>.csv</strong>).
-              Both exports now include the full maid profile data, including nested fields and stored photo data.
+              Download a PDF summary of your maid records.
+              The PDF also carries import data so it can be uploaded back into the maids manager later.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>Cancel</Button>
-            <Button variant="outline" onClick={confirmExportCsv} disabled={isExporting}>{isExporting ? "Exporting..." : "Download CSV"}</Button>
-            <Button onClick={confirmExportXls} disabled={isExporting}>{isExporting ? "Exporting..." : "Download Excel (.xls)"}</Button>
+            <Button onClick={confirmExportPdf} disabled={isExporting}>{isExporting ? "Exporting..." : "Download PDF"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -745,10 +830,10 @@ const EditMaids = () => {
       <Dialog open={confirmImportOpen} onOpenChange={(open) => { setConfirmImportOpen(open); if (!open) setPendingImportFiles([]); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import maids file?</DialogTitle>
+            <DialogTitle>Upload maid file?</DialogTitle>
             <DialogDescription>
-              Supported: <strong>.csv</strong>, <strong>.xls</strong>, <strong>.xlsx</strong>, <strong>.doc</strong>, <strong>.docx</strong>, <strong>.pdf</strong> exported from this system.<br />
-              Required columns: <strong>referenceCode</strong>, <strong>fullName</strong>. Existing maids are updated by referenceCode, and system exports can restore full maid profiles including photos.
+              Recommended: upload a <strong>.pdf</strong> exported from this system.<br />
+              Legacy <strong>.csv</strong>, <strong>.xls</strong>, <strong>.xlsx</strong>, <strong>.doc</strong>, and <strong>.docx</strong> files are still accepted.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md border bg-muted/30 p-3 text-sm">
@@ -757,7 +842,7 @@ const EditMaids = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>Cancel</Button>
-            <Button onClick={() => void confirmImportFiles()} disabled={isImporting || pendingImportFiles.length === 0}>{isImporting ? "Importing..." : "Import"}</Button>
+            <Button onClick={() => void confirmImportFiles()} disabled={isImporting || pendingImportFiles.length === 0}>{isImporting ? "Uploading..." : "Upload File"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -851,6 +936,57 @@ const EditMaids = () => {
               {pendingVisibilityTarget?.makePublic
                 ? <><Eye className="mr-2 h-4 w-4" /> Publish</>
                 : <><EyeOff className="mr-2 h-4 w-4" /> Hide</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Manual PDF import — for external PDFs with no embedded marker */}
+      <Dialog open={manualImportOpen} onOpenChange={(open) => { if (!open) setManualImportOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Import External PDF</DialogTitle>
+            <DialogDescription className="text-sm">
+              This PDF wasn't exported from this system. Review the extracted fields below, fill in anything missing, then click Import.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>Photos cannot be extracted from external PDFs. After importing, open the maid profile and use <strong>Manage Photos</strong> to upload them manually.</span>
+          </div>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Full Name <span className="text-destructive">*</span></label>
+              <Input
+                value={manualImportFields.name}
+                onChange={(e) => setManualImportFields((p) => ({ ...p, name: e.target.value }))}
+                placeholder="e.g. Maria Santos"
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nationality</label>
+              <Input
+                value={manualImportFields.nationality}
+                onChange={(e) => setManualImportFields((p) => ({ ...p, nationality: e.target.value }))}
+                placeholder="e.g. Filipino"
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reference Code</label>
+              <Input
+                value={manualImportFields.referenceCode}
+                onChange={(e) => setManualImportFields((p) => ({ ...p, referenceCode: e.target.value }))}
+                placeholder="Leave blank to auto-generate"
+                className="text-sm font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground">If blank, a temporary code will be assigned — you can edit it later.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualImportOpen(false)} disabled={isImporting}>Cancel</Button>
+            <Button onClick={() => void confirmManualImport()} disabled={isImporting || !manualImportFields.name.trim()}>
+              {isImporting ? "Importing…" : "Import"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -957,7 +1093,7 @@ const EditMaids = () => {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={requestExport} disabled={isExporting} className="flex-1 sm:flex-none">
               <Download className="mr-2 h-4 w-4" />
-              {isExporting ? "Exporting…" : "Export"}
+              {isExporting ? "Exporting PDF…" : "Export PDF"}
             </Button>
             <label className="inline-flex flex-1 sm:flex-none cursor-pointer">
               <input
@@ -970,14 +1106,14 @@ const EditMaids = () => {
               />
               <span className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
                 <Upload className="h-4 w-4" />
-                {isImporting ? "Importing…" : "Import"}
+                {isImporting ? "Uploading…" : "Upload PDF"}
               </span>
             </label>
           </div>
 
           <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-            Import supports <strong>.csv</strong> (recommended), or <strong>.xls</strong>/<strong>.xlsx</strong>/<strong>.doc</strong>/<strong>.docx</strong>/<strong>.pdf</strong> exported from this system.
-            Required columns: <strong>referenceCode</strong>, <strong>fullName</strong>. Photos &amp; history are not imported.
+            PDF is now the main maid export/import format here.
+            Legacy <strong>.csv</strong>, <strong>.xls</strong>/<strong>.xlsx</strong>, and <strong>.doc</strong>/<strong>.docx</strong> files are still supported for older exports.
           </p>
 
           <hr className="border-border" />
@@ -1117,7 +1253,7 @@ const EditMaids = () => {
           </div>
           <Button variant="outline" onClick={requestExport} disabled={isExporting}>
             <Download className="mr-2 h-4 w-4" />
-            {isExporting ? "Exporting…" : "Export"}
+            {isExporting ? "Exporting PDF…" : "Export PDF"}
           </Button>
           <label className="inline-flex cursor-pointer">
             <input
@@ -1130,7 +1266,7 @@ const EditMaids = () => {
             />
             <span className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
               <Upload className="h-4 w-4" />
-              {isImporting ? "Importing…" : "Import"}
+              {isImporting ? "Uploading…" : "Upload PDF"}
             </span>
           </label>
         </div>

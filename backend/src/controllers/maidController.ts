@@ -227,16 +227,21 @@ const parseNumber = (value: string | undefined, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+const parsePositiveInteger = (value: unknown) => {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
 export const getMaidList = async (req: Request, res: Response) => {
   try {
     const { search, visibility } = req.query
-    const requestedAgencyId = Number(req.query.agencyId ?? '')
+    const requestedAgencyId = parsePositiveInteger(req.query.agencyId)
     const admin = await getAuthenticatedAgencyAdmin(req)
     const shouldUseAllPublic =
       !admin &&
       typeof visibility === 'string' &&
       visibility === 'public' &&
-      !Number.isInteger(requestedAgencyId)
+      requestedAgencyId == null
 
     const maids = shouldUseAllPublic
       ? await getAllMaidsStore(
@@ -246,9 +251,7 @@ export const getMaidList = async (req: Request, res: Response) => {
       : await getMaidsStore(
           typeof search === 'string' ? search : undefined,
           typeof visibility === 'string' ? visibility : undefined,
-          Number.isInteger(requestedAgencyId)
-            ? requestedAgencyId
-            : await getRequestAgencyId(req)
+          requestedAgencyId ?? (await getRequestAgencyId(req))
         )
 
     const payload = await Promise.all(
@@ -533,9 +536,9 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
 export const getMaidByReferenceCode = async (req: Request, res: Response) => {
   try {
     const admin = await getAuthenticatedAgencyAdmin(req)
-    const requestedAgencyId = Number(req.query.agencyId ?? '')
+    const requestedAgencyId = parsePositiveInteger(req.query.agencyId)
     const referenceCode = String(req.params.referenceCode ?? '').trim()
-    const result = Number.isInteger(requestedAgencyId)
+    const result = requestedAgencyId != null
       ? await getMaidByReferenceCodeStore(referenceCode, requestedAgencyId)
       : admin
       ? await getMaidByReferenceCodeStore(referenceCode, admin.agencyId)

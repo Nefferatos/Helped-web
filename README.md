@@ -173,6 +173,8 @@ In the Cloudflare Worker deployment, the following app data is stored in Supabas
 
 Legacy note: `backend/` contains an old Node/Express server and is not used in the Cloudflare Worker deployment.
 
+For local Express testing, you can keep a separate JSON dataset by setting `APP_DATA_FILE` in `backend/.env`, for example `APP_DATA_FILE=./data/app-data.local.json`. The local diagnostics route `http://localhost:3000/api/diagnostics` will show which file is active.
+
 ## Beginner Troubleshooting
 
 ### Problem: "I pasted schema.sql into Supabase, but live data is not appearing there"

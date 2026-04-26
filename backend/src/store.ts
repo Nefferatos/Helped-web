@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { copyFile, mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
 
@@ -400,7 +400,11 @@ const defaultData = (): AppData => ({
 })
 
 const dataDir = path.resolve(__dirname, '../data')
-const dataFile = path.join(dataDir, 'app-data.json')
+const configuredDataFile = process.env.APP_DATA_FILE?.trim()
+const dataFile = configuredDataFile
+  ? path.resolve(configuredDataFile)
+  : path.join(dataDir, 'app-data.json')
+const defaultDataFile = path.join(dataDir, 'app-data.json')
 
 let cache: AppData | null = null
 
@@ -749,11 +753,21 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
 }
 
 const ensureDataFile = async () => {
-  await mkdir(dataDir, { recursive: true })
+  await mkdir(path.dirname(dataFile), { recursive: true })
 
   try {
     await readFile(dataFile, 'utf8')
   } catch {
+    if (configuredDataFile && path.resolve(dataFile) !== path.resolve(defaultDataFile)) {
+      try {
+        await readFile(defaultDataFile, 'utf8')
+        await copyFile(defaultDataFile, dataFile)
+        return
+      } catch {
+        // Fall back to generating a fresh empty dataset below.
+      }
+    }
+
     await writeFile(dataFile, JSON.stringify(defaultData(), null, 2), 'utf8')
   }
 }
@@ -778,6 +792,17 @@ const saveData = async (data: AppData) => {
 export const initializeStore = async () => {
   await ensureDataFile()
   await loadData()
+}
+
+export const getStoreDiagnostics = async () => {
+  const data = await loadData()
+  return {
+    storageMode: 'local-json' as const,
+    dataFile,
+    maidsCount: data.maids.length,
+    clientsCount: data.clients.length,
+    agencyAdminsCount: data.agencyAdmins.length,
+  }
 }
 
 export const getCompanyBundle = async () => {

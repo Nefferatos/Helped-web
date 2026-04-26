@@ -256,9 +256,13 @@ const MaidProfilePage = () => {
     }
   };
 
-  const handleExportPdf = () => {
-    try { exportMaidProfileToPdf(maid); toast.success("Print dialog opened"); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "Export failed"); }
+  const handleExportPdf = async () => {
+    try {
+      await exportMaidProfileToPdf(maid);
+      toast.success("PDF downloaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed");
+    }
   };
 
   if (!maid) {
@@ -914,12 +918,12 @@ const MaidProfilePage = () => {
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-black">Export PDF?</DialogTitle>
             <DialogDescription className="text-sm text-black">
-              Export bio-data for <span className="font-bold">{maid.fullName}</span> ({maid.referenceCode}). This will open the print dialog.
+              Download bio-data for <span className="font-bold">{maid.fullName}</span> ({maid.referenceCode}) as a PDF file.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmExportOpen(false)}>Cancel</Button>
-            <Button onClick={() => { setConfirmExportOpen(false); handleExportPdf(); }}>Export PDF</Button>
+            <Button onClick={() => { setConfirmExportOpen(false); void handleExportPdf(); }}>Export PDF</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

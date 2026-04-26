@@ -25,7 +25,12 @@ import inquiryWorkflowRoutes from './routes/inquiryWorkflowRoutes'
 import matchingWorkflowRoutes from './routes/matchingWorkflowRoutes'
 import automationRoutes from './routes/automationRoutes'
 import { initializeDatabase } from './db'
-import { getAgencyAdminsStore, getMaidsStore, initializeStore } from './store'
+import {
+  getAgencyAdminsStore,
+  getMaidsStore,
+  getStoreDiagnostics,
+  initializeStore,
+} from './store'
 import { syncAgencyAdminsFromStoreRecords } from './repositories/agencyAdminRepository'
 import { initializeWorkflowStore } from './store/workflowStore'
 import { saveEmployerContract } from './controllers/employerController'
@@ -59,6 +64,19 @@ app.use(express.urlencoded({ extended: true, limit: '120mb' }))
 
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'Server is running' })
+})
+
+app.get('/api/diagnostics', async (_req: Request, res: Response) => {
+  try {
+    const store = await getStoreDiagnostics()
+    res.json({
+      runtime: 'express',
+      ...store,
+    })
+  } catch (error) {
+    console.error('Error building diagnostics:', error)
+    res.status(500).json({ error: 'Failed to load diagnostics' })
+  }
 })
 
 app.get('/api', (req: Request, res: Response) => {

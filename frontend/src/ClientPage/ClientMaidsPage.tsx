@@ -18,7 +18,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
-import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
 interface Filters {
@@ -509,7 +508,7 @@ const MaidCard = ({
       </div>
 
       {/* Card body */}
-      <div className={`p-4 ${locked ? "select-none blur-[8px]" : ""}`}>
+      <div className="p-4">
         <div className="mb-0.5 flex items-start justify-between gap-2">
           <p className="font-semibold text-foreground leading-tight">{maid.name}</p>
           {maid.refCode && (
@@ -518,13 +517,13 @@ const MaidCard = ({
             </span>
           )}
         </div>
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className={`mb-3 text-xs text-muted-foreground ${locked ? "select-none blur-[4px]" : ""}`}>
           {[maid.nationality, maid.age ? `${maid.age} yrs` : "", maid.experience?.[0]].filter(Boolean).join(" | ")}
         </p>
 
         {/* Duty / language tags */}
         {(maid.duties?.length || maid.languages?.length) ? (
-          <div className="mb-4 flex flex-wrap gap-1.5">
+          <div className={`mb-4 flex flex-wrap gap-1.5 ${locked ? "select-none blur-[4px]" : ""}`}>
             {maid.duties?.slice(0, 2).map((d) => (
               <span key={d} className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-foreground">
                 {d}

@@ -591,7 +591,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 )}
 
                 {/* 7-column grid → exactly 2 rows per page at xl+ */}
-                <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 ${!isLoggedIn ? "blur-protected" : ""}`}>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
                   {pagedMaids.map((maid) => {
                     const photo = getPrimaryPhoto(maid);
                     const age = calculateAge(maid.dateOfBirth);
@@ -664,6 +664,16 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                             </div>
                           </div>
                         </div>
+                        {!isLoggedIn && (
+                          <div className="border-t bg-card px-2.5 py-2">
+                            <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
+                              {maid.fullName}
+                            </h3>
+                            <p className="text-[10px] text-muted-foreground font-mono leading-tight">
+                              {maid.referenceCode}
+                            </p>
+                          </div>
+                        )}
                       </article>
                     );
                   })}

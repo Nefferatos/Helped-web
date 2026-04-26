@@ -67,7 +67,7 @@ const navItems = [
     iconColor: "#fff",
   },
   {
-    label: "Agency Profile",
+    label: "Our Profile",
     path: adminPath("/agency-profile"),
     icon: Building2,
     iconBg: "linear-gradient(145deg, #93C5FD, #2563EB)",
@@ -76,7 +76,7 @@ const navItems = [
     iconColor: "#fff",
   },
   {
-    label: "Add Maid",
+    label: "New Maid",
     path: adminPath("/add-maid"),
     icon: UserPlus,
     iconBg: "linear-gradient(145deg, #FCA5A5, #DC2626)",
@@ -85,7 +85,7 @@ const navItems = [
     iconColor: "#fff",
   },
   {
-    label: "Edit / Delete",
+    label: "Manage Maids",
     path: adminPath("/edit-maids"),
     icon: Pencil,
     iconBg: "linear-gradient(145deg, #FDE68A, #D97706)",
@@ -94,7 +94,7 @@ const navItems = [
     iconColor: "#fff",
   },
   {
-    label: "Chat Support",
+    label: "Messages",
     path: adminPath("/chat-support"),
     icon: MessageSquare,
     iconBg: "linear-gradient(145deg, #C4B5FD, #7C3AED)",
@@ -103,7 +103,7 @@ const navItems = [
     iconColor: "#fff",
   },
   {
-    label: "Password Management",
+    label: "Security",
     path: adminPath("/change-password"),
     icon: Lock,
     iconBg: "linear-gradient(145deg, #FDBA74, #EA580C)",
@@ -112,7 +112,7 @@ const navItems = [
     iconColor: "#fff",
   },
   {
-    label: "Employment Contracts",
+    label: "Contracts",
     path: adminPath("/employment-contracts"),
     icon: FileText,
     iconBg: "linear-gradient(145deg, #6EE7F9, #0891B2)",
@@ -121,7 +121,7 @@ const navItems = [
     iconColor: "#fff",
   },
   {
-    label: "Incoming Inquiries",
+    label: "Enquiries",
     path: adminPath("/enquiry"),
     icon: PhoneIncoming,
     iconBg: "linear-gradient(145deg, #86EFAC, #16A34A)",
@@ -130,7 +130,7 @@ const navItems = [
     iconColor: "#fff",
   },
   {
-    label: "Request",
+    label: "Requests",
     path: adminPath("/requests"),
     icon: ClipboardList,
     iconBg: "linear-gradient(145deg, #60A5FA, #2563EB)",

@@ -306,8 +306,8 @@ const App = () => {
               <Route path="about" element={withRouteLoader(<AboutUs embedded />)} />
               <Route path="enquiry" element={withRouteLoader(<Enquiry2 embedded />)} />
               <Route path="contact" element={withRouteLoader(<ContactUS embedded />)} />
-              <Route path="maids" element={withRouteLoader(<ClientMaidsPage />)} />
-              <Route path="maids/search" element={withRouteLoader(<MaidSearchPage />)} />
+              <Route path="maids" element={withRouteLoader(<ClientMaidsPage embedded />)} />
+              <Route path="maids/search" element={withRouteLoader(<MaidSearchPage embedded />)} />
               <Route path="faq" element={withRouteLoader(<FaqPage />)} />
               <Route path="requests" element={withRouteLoader(<ClientRequestsPage />)} />
               <Route path="messages" element={<Navigate to="../support-chat" replace />} />

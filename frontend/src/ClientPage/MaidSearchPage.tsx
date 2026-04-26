@@ -9,7 +9,6 @@ import { toast } from "@/components/ui/sonner";
 import { getClientToken } from "@/lib/clientAuth";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
-import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
@@ -385,10 +384,21 @@ const MaidCard = ({
         </div>
 
         {/* Card body — skeleton placeholder rows */}
-        <div className="flex flex-col gap-1.5 p-2 pb-1">
-          <div className="h-2.5 w-4/5 rounded-full bg-muted" />
-          <div className="h-2 w-3/5 rounded-full bg-muted/70" />
-          <div className="h-2 w-2/5 rounded-full bg-muted/50" />
+        <div className="flex flex-col gap-0.5 p-2">
+          <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
+            {maid.fullName || "Unnamed maid"}
+          </p>
+          <p className="font-mono text-[9px] leading-tight text-muted-foreground/70">
+            {maid.referenceCode}{age !== null ? ` • ${age} yrs` : ""}
+          </p>
+          <div className="mt-1 select-none blur-[4px]">
+            <p className="truncate text-[10px] leading-tight text-muted-foreground">
+              {getExperienceBucket(maid)}
+            </p>
+            <p className="truncate text-[10px] leading-tight text-muted-foreground">
+              {maid.nationality || "—"}
+            </p>
+          </div>
         </div>
 
         {/* CTA button */}
