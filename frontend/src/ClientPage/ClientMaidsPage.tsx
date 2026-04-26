@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
+import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
 interface Filters {
@@ -92,6 +94,10 @@ interface Filters {
 type ClientMaidsPageProps = {
   resultsPath?: string;
   loginPath?: string;
+  /** Same convention as ClientLandingPage: when false (default) the page
+   *  renders its own navbar. Pass embedded={true} when the page is already
+   *  inside a layout that provides a navbar (e.g. ClientPortalLayout). */
+  embedded?: boolean;
 };
 
 // ── Maid data shape returned from your search API ────────────────────────────
@@ -986,6 +992,7 @@ const SearchResults = ({
 const ClientMaidsPage = ({
   resultsPath = "/client/maids/search",
   loginPath = "/employer-login",
+  embedded = false,
 }: ClientMaidsPageProps) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1156,6 +1163,11 @@ const ClientMaidsPage = ({
 
   return (
     <div className="client-page-theme min-h-screen bg-background">
+
+      {/* Navbar — same embedded pattern as ClientLandingPage.
+          When not embedded: PublicSiteNavbar for guests, ClientPortalNavbar for logged-in users. */}
+      {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
+
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-7">
 
         {/* ── Hero Banner ── */}
