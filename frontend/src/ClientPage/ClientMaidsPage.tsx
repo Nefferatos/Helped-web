@@ -1166,7 +1166,7 @@ const ClientMaidsPage = ({
 
       {/* Navbar — same embedded pattern as ClientLandingPage.
           When not embedded: PublicSiteNavbar for guests, ClientPortalNavbar for logged-in users. */}
-      {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
+      {!embedded && !isLoggedIn && <PublicSiteNavbar />}
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-7">
 

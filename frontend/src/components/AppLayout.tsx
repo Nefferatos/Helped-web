@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LogOut,
@@ -14,10 +14,11 @@ import {
   HelpCircle,
   Menu,
   X,
-  Hand,
   ClipboardList,
   ChevronLeft,
   ChevronRight,
+  Hand,
+  Sparkles,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -38,10 +39,8 @@ import {
 } from "@/lib/agencyAdminAuth";
 import { fetchAdminUnreadChatCount } from "@/lib/chat";
 
-/* ─── Responsive breakpoint hook ─────────────────────────────────────────
-   Uses a MediaQueryList so it reacts to window resize without polling.
-   Returns true when viewport >= breakpoint (default 1024px = Tailwind "lg").
-───────────────────────────────────────────────────────────────────────── */
+/* ─── Responsive breakpoint hook ─────────────────────────────────────────── */
+
 function useIsDesktop(breakpoint = 1024) {
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== "undefined" && window.innerWidth >= breakpoint
@@ -55,7 +54,7 @@ function useIsDesktop(breakpoint = 1024) {
   return isDesktop;
 }
 
-/* ─── Nav items ─────────────────────────────────────────────────────────── */
+/* ─── Nav items ──────────────────────────────────────────────────────────── */
 
 const navItems = [
   {
@@ -184,7 +183,7 @@ const Icon3D = ({
   </span>
 );
 
-/* ─── Tooltip (shown on collapsed icon hover) ───────────────────────────── */
+/* ─── Tooltip ────────────────────────────────────────────────────────────── */
 
 const Tooltip = ({ label }: { label: string }) => (
   <div
@@ -222,41 +221,278 @@ const Tooltip = ({ label }: { label: string }) => (
   </div>
 );
 
+/* ─── Display name helpers ───────────────────────────────────────────────── */
+
 const getAgencyDisplayName = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Agency";
-
-  if (agencyAdmin.role === "admin") {
-    return agencyAdmin.agencyName || "Main Agency";
-  }
-
+  if (agencyAdmin.role === "admin") return agencyAdmin.agencyName || "Main Agency";
   return agencyAdmin.agencyName || agencyAdmin.username || "Agency";
 };
 
 const getAgencyDisplaySubtitle = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Management Suite";
-
-  if (agencyAdmin.role === "admin") {
-    return "Main Agency";
-  }
-
-  if (agencyAdmin.role === "agency") {
-    return "Agency Account";
-  }
-
+  if (agencyAdmin.role === "admin") return "Main Agency";
+  if (agencyAdmin.role === "agency") return "Agency Account";
   return "Management Suite";
 };
 
 const getAgencyDisplayWelcomeName = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Agency";
-
-  if (agencyAdmin.role === "admin") {
-    return agencyAdmin.agencyName || "Main Agency";
-  }
-
+  if (agencyAdmin.role === "admin") return agencyAdmin.agencyName || "Main Agency";
   return agencyAdmin.username || agencyAdmin.agencyName || "Agency";
 };
 
-/* ─── Sidebar inner content ──────────────────────────────────────────────── */
+/* ─── Welcome Modal ──────────────────────────────────────────────────────── */
+
+const WelcomeModal = ({
+  agencyAdmin,
+  agencyLogoUrl,
+  onClose,
+}: {
+  agencyAdmin: AgencyAdminUser | null;
+  agencyLogoUrl: string;
+  onClose: () => void;
+}) => {
+  const name = getAgencyDisplayWelcomeName(agencyAdmin);
+  const subtitle = getAgencyDisplaySubtitle(agencyAdmin);
+  const initials = (agencyAdmin?.agencyName || "A").slice(0, 2).toUpperCase();
+  const logoSrc = agencyLogoUrl || agencyAdmin?.profileImageUrl || "";
+
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 20);
+    return () => clearTimeout(t);
+  }, []);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 260);
+  };
+
+  return (
+    <div
+      onClick={handleClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: visible ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0)",
+        transition: "background 0.26s ease",
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          background: "#fff",
+          borderRadius: 20,
+          overflow: "hidden",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+          transform: visible
+            ? "scale(1) translateY(0)"
+            : "scale(0.92) translateY(24px)",
+          opacity: visible ? 1 : 0,
+          transition:
+            "transform 0.26s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease",
+        }}
+      >
+        {/* Green header band — avatar lives inside */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #0D6E56 0%, #1aa37e 100%)",
+            padding: "28px 28px 24px",
+            textAlign: "center",
+            position: "relative",
+          }}
+        >
+          <Sparkles
+            style={{
+              width: 20,
+              height: 20,
+              color: "rgba(255,255,255,0.5)",
+              position: "absolute",
+              top: 18,
+              left: 22,
+            }}
+          />
+          <Sparkles
+            style={{
+              width: 14,
+              height: 14,
+              color: "rgba(255,255,255,0.3)",
+              position: "absolute",
+              bottom: 20,
+              left: 38,
+            }}
+          />
+          <Sparkles
+            style={{
+              width: 16,
+              height: 16,
+              color: "rgba(255,255,255,0.35)",
+              position: "absolute",
+              bottom: 24,
+              right: 32,
+            }}
+          />
+
+          <p
+            style={{
+              margin: "0 0 4px",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "rgba(255,255,255,0.75)",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            Find Maids · Agency Portal
+          </p>
+          <p
+            style={{
+              margin: "0 0 20px",
+              fontSize: 26,
+              fontWeight: 800,
+              color: "#fff",
+              lineHeight: 1.25,
+            }}
+          >
+            Welcome back!{" "}
+            <Hand
+              style={{
+                width: 26,
+                height: 26,
+                display: "inline",
+                verticalAlign: "middle",
+              }}
+            />
+          </p>
+
+          {/* Avatar — fully inside the band */}
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                border: "4px solid rgba(255,255,255,0.9)",
+                overflow: "hidden",
+                background: "#085041",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              {logoSrc ? (
+                <img
+                  src={logoSrc}
+                  alt={name}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : (
+                <span
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 800,
+                    color: "#fff",
+                    lineHeight: 1,
+                  }}
+                >
+                  {initials}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 28px 28px", textAlign: "center" }}>
+          <p
+            style={{
+              margin: "0 0 4px",
+              fontSize: 20,
+              fontWeight: 800,
+              color: "#111827",
+            }}
+          >
+            {name}
+          </p>
+          <p
+            style={{
+              margin: "0 0 20px",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "#6B7280",
+            }}
+          >
+            {subtitle}
+          </p>
+
+          <div
+            style={{
+              background: "#F0FDF9",
+              border: "1px solid #BBFAE3",
+              borderRadius: 12,
+              padding: "12px 16px",
+              marginBottom: 22,
+              textAlign: "left",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "#065F46",
+                fontWeight: 500,
+                lineHeight: 1.6,
+              }}
+            >
+              You're signed in to your agency dashboard. Manage your maids,
+              contracts, and inquiries all in one place.
+            </p>
+          </div>
+
+          <button
+            onClick={handleClose}
+            style={{
+              width: "100%",
+              padding: "12px 0",
+              borderRadius: 10,
+              border: "none",
+              background: "linear-gradient(135deg, #0D6E56 0%, #1aa37e 100%)",
+              color: "#fff",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(13,110,86,0.35)",
+              transition: "opacity 0.15s ease, transform 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "0.9";
+              (e.currentTarget as HTMLButtonElement).style.transform =
+                "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+              (e.currentTarget as HTMLButtonElement).style.transform =
+                "translateY(0)";
+            }}
+          >
+            Get Started
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ─── Sidebar content ────────────────────────────────────────────────────── */
 
 const SidebarContent = ({
   location,
@@ -388,7 +624,9 @@ const SidebarContent = ({
             whiteSpace: "nowrap",
           }}
         >
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}>
+          <p
+            style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}
+          >
             {agencyDisplayName}
           </p>
           <p
@@ -527,17 +765,24 @@ const SidebarContent = ({
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
-
-  // JS-driven responsive: avoids ALL Tailwind/inline-style conflicts
   const isDesktop = useIsDesktop(1024);
+  const hasWelcomed = useRef(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [unreadAgencyChats, setUnreadAgencyChats] = useState(0);
   const [agencyAdmin, setAgencyAdmin] = useState<AgencyAdminUser | null>(
     getStoredAgencyAdmin()
   );
   const [agencyLogoUrl, setAgencyLogoUrl] = useState("");
+
+  // One-time welcome modal on mount
+  useEffect(() => {
+    if (hasWelcomed.current) return;
+    hasWelcomed.current = true;
+    setShowWelcomeModal(true);
+  }, []);
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -550,30 +795,34 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
     const loadSummary = async (silent = false) => {
       try {
-          const [res, compRes] = await Promise.all([
-            fetch("/api/company/summary", {
-              headers: { ...getAgencyAdminAuthHeaders() },
-            }),
-            fetch("/api/company", {
-              headers: { ...getAgencyAdminAuthHeaders() },
-            }),
-          ]);
+        const [res, compRes] = await Promise.all([
+          fetch("/api/company/summary", {
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }),
+          fetch("/api/company", {
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }),
+        ]);
         const data = (await res.json().catch(() => ({}))) as {
           unreadAgencyChats?: number;
           error?: string;
         };
-        if (!res.ok) throw new Error(data.error || "Failed to load notifications");
+        if (!res.ok)
+          throw new Error(data.error || "Failed to load notifications");
         if (!active) return;
         setUnreadAgencyChats(data.unreadAgencyChats ?? 0);
         if (compRes.ok) {
           const compData = (await compRes.json().catch(() => ({}))) as {
             companyProfile?: { logo_data_url?: string };
           };
-          if (active) setAgencyLogoUrl(compData.companyProfile?.logo_data_url || "");
+          if (active)
+            setAgencyLogoUrl(compData.companyProfile?.logo_data_url || "");
         }
       } catch (err) {
         if (!silent)
-          toast.error(err instanceof Error ? err.message : "Failed to load notifications");
+          toast.error(
+            err instanceof Error ? err.message : "Failed to load notifications"
+          );
       }
     };
 
@@ -583,7 +832,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         if (active) setUnreadAgencyChats(count);
       } catch (err) {
         if (!silent)
-          toast.error(err instanceof Error ? err.message : "Failed to load unread chats");
+          toast.error(
+            err instanceof Error ? err.message : "Failed to load unread chats"
+          );
       }
     };
 
@@ -611,7 +862,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         headers: { ...getAgencyAdminAuthHeaders() },
       });
     } catch {
-      // swallow — auth cleared regardless
+      // swallow
     } finally {
       clearAgencyAdminAuth();
       toast.success("Agency admin logged out");
@@ -640,6 +891,15 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         background: "#F8FAFC",
       }}
     >
+      {/* Welcome Modal */}
+      {showWelcomeModal && (
+        <WelcomeModal
+          agencyAdmin={agencyAdmin}
+          agencyLogoUrl={agencyLogoUrl}
+          onClose={() => setShowWelcomeModal(false)}
+        />
+      )}
+
       {/* ══ MOBILE: backdrop + drawer ══════════════════════════════════════ */}
       {!isDesktop && mobileOpen && (
         <div
@@ -718,7 +978,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         >
           <SidebarContent {...sharedSidebarProps} collapsed={collapsed} />
 
-          {/* Collapse toggle knob on the right edge */}
           <button
             onClick={() => setCollapsed((c) => !c)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -741,12 +1000,15 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               transition: "background 0.15s ease, border-color 0.15s ease",
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#E1F5EE";
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#0D6E56";
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "#E1F5EE";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "#0D6E56";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLButtonElement).style.background = "#fff";
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#E5E7EB";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "#E5E7EB";
             }}
           >
             {collapsed ? (
@@ -768,99 +1030,183 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           overflow: "hidden",
         }}
       >
-        {/* Top header */}
+        {/* ── Top header ─────────────────────────────────────────────────── */}
         <header
           style={{
-            height: 86,
+            height: 64,
             flexShrink: 0,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             borderBottom: "1px solid #E5E7EB",
             background: "#fff",
-            padding: "0 24px",
+            padding: "0 20px",
+            gap: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-            {/* Hamburger only on mobile */}
+          {/* Left: hamburger + title */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              minWidth: 0,
+            }}
+          >
             {!isDesktop && (
               <button
                 onClick={() => setMobileOpen(true)}
                 aria-label="Open menu"
                 style={{
                   display: "flex",
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   flexShrink: 0,
                   alignItems: "center",
                   justifyContent: "center",
-                  borderRadius: 6,
-                  border: "none",
+                  borderRadius: 8,
+                  border: "1px solid #E5E7EB",
                   background: "transparent",
                   cursor: "pointer",
                   color: "#6B7280",
                 }}
               >
-                <Menu style={{ width: 20, height: 20 }} />
+                <Menu style={{ width: 18, height: 18 }} />
               </button>
             )}
 
             <span
               style={{
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: 700,
-                color: "#1F2937",
+                color: "#111827",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
               }}
             >
-              {isDesktop ? "Maid Agency Account Management" : "Find Maids Admin"}
+              {isDesktop
+                ? "Maid Agency Account Management"
+                : "Find Maids Admin"}
             </span>
           </div>
 
-          <div style={{ display: "flex", flexShrink: 0, alignItems: "center", gap: 10 }}>
+          {/* Right: actions */}
+          <div
+            style={{
+              display: "flex",
+              flexShrink: 0,
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {/* Notification bell */}
             <button
+              aria-label="Notifications"
               style={{
-                width: 32,
-                height: 32,
+                width: 38,
+                height: 38,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: "50%",
+                borderRadius: 10,
                 border: "1px solid #E5E7EB",
-                background: "transparent",
+                background: "#F9FAFB",
                 cursor: "pointer",
-                color: "#9CA3AF",
+                color: "#6B7280",
+                transition: "background 0.15s, border-color 0.15s",
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "#F3F4F6";
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  "#D1D5DB";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "#F9FAFB";
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  "#E5E7EB";
               }}
             >
-              <Bell style={{ width: 15, height: 15 }} />
+              <Bell style={{ width: 17, height: 17 }} />
             </button>
 
+            {/* Help */}
             {isDesktop && (
               <button
+                aria-label="Help"
                 style={{
-                  width: 32,
-                  height: 32,
+                  width: 38,
+                  height: 38,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  borderRadius: "50%",
+                  borderRadius: 10,
                   border: "1px solid #E5E7EB",
-                  background: "transparent",
+                  background: "#F9FAFB",
                   cursor: "pointer",
-                  color: "#9CA3AF",
+                  color: "#6B7280",
+                  transition: "background 0.15s, border-color 0.15s",
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    "#F3F4F6";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor =
+                    "#D1D5DB";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    "#F9FAFB";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor =
+                    "#E5E7EB";
                 }}
               >
-                <HelpCircle style={{ width: 15, height: 15 }} />
+                <HelpCircle style={{ width: 17, height: 17 }} />
               </button>
             )}
 
+            {/* Divider */}
+            <div
+              style={{
+                width: 1,
+                height: 28,
+                background: "#E5E7EB",
+                margin: "0 4px",
+                flexShrink: 0,
+              }}
+            />
+
+            {/* Avatar dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  style={{ background: "none", border: "none", cursor: "pointer" }}
-                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0D6E56] rounded-full"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "4px 10px 4px 4px",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 10,
+                    background: "#F9FAFB",
+                    cursor: "pointer",
+                    transition: "background 0.15s, border-color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      "#F3F4F6";
+                    (e.currentTarget as HTMLButtonElement).style.borderColor =
+                      "#D1D5DB";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      "#F9FAFB";
+                    (e.currentTarget as HTMLButtonElement).style.borderColor =
+                      "#E5E7EB";
+                  }}
+                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0D6E56]"
                 >
                   <Avatar className="h-8 w-8">
                     <AvatarImage
@@ -871,24 +1217,60 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                       {initials}
                     </AvatarFallback>
                   </Avatar>
+                  {isDesktop && (
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#111827",
+                        maxWidth: 120,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {agencyWelcomeName}
+                    </span>
+                  )}
                 </button>
               </DropdownMenuTrigger>
+
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel className="flex items-center gap-3 py-3">
-                  <Avatar className="h-10 w-10 flex-shrink-0">
+                <DropdownMenuLabel className="flex items-center gap-3 py-3 px-3">
+                  <Avatar className="h-11 w-11 flex-shrink-0">
                     <AvatarImage
                       src={agencyLogoUrl || agencyAdmin?.profileImageUrl}
                       alt={agencyAdmin?.agencyName || "Agency"}
                     />
-                    <AvatarFallback className="bg-[#0D6E56] text-[13px] font-bold text-white">
+                    <AvatarFallback className="bg-[#0D6E56] text-[14px] font-bold text-white">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="truncate text-[14px] font-bold text-gray-100">
-                      Welcome! {agencyWelcomeName}
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: "#111827",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {agencyWelcomeName}
                     </p>
-                    <p className="truncate text-[13px] font-semibold leading-snug text-gray-500">
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: "#6B7280",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {agencyDisplayName}
                     </p>
                   </div>
@@ -896,7 +1278,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => void handleLogout()}
-                  className="cursor-pointer font-semibold text-[14px] text-red-500 focus:bg-red-50 focus:text-red-600"
+                  className="cursor-pointer font-semibold text-[14px] text-red-500 focus:bg-red-50 focus:text-red-600 mx-1 mb-1 rounded-md"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
@@ -906,36 +1288,10 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </header>
 
-        {/* Welcome bar */}
-        <div
-          style={{
-            flexShrink: 0,
-            borderBottom: "1px solid #E5E7EB",
-            background: "#fff",
-            padding: "10px 24px",
-          }}
-        >
-          <p
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 16,
-              fontWeight: 500,
-              color: "#4B5563",
-              margin: 0,
-            }}
-          >
-            Welcome:
-            <span style={{ fontWeight: 700, color: "#0D6E56" }}>
-              {agencyWelcomeName}
-            </span>
-            <Hand style={{ width: 18, height: 18, color: "#0D6E56" }} />
-          </p>
-        </div>
-
         {/* Page content */}
-        <main style={{ flex: 1, overflowY: "auto", padding: 24 }}>{children}</main>
+        <main style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+          {children}
+        </main>
 
         {/* Footer */}
         <footer

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, NavLink } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -22,7 +22,6 @@ const links = [
   { label: "Agency", to: "/agency" },
   { label: "Enquiry", to: "/enquiry2" },
   { label: "FAQ", to: "/faq" },
-  { label: "Contact Us", to: "/contact" },
 ];
 
 const PublicSiteNavbar = () => {
@@ -57,9 +56,20 @@ const PublicSiteNavbar = () => {
 
         <nav className="hidden items-center gap-5 font-body text-sm font-medium lg:flex xl:gap-8">
           {links.map((link) => (
-            <Link key={link.to} to={link.to} className="transition-colors hover:text-primary">
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.to === "/"}
+              className={({ isActive }) =>
+                [
+                  "relative pb-0.5 transition-colors hover:text-primary",
+                  "after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:rounded-full after:bg-primary after:transition-opacity",
+                  isActive ? "text-primary font-semibold after:opacity-100" : "after:opacity-0",
+                ].join(" ")
+              }
+            >
               {link.label}
-            </Link>
+            </NavLink>
           ))}
         </nav>
 
@@ -119,14 +129,22 @@ const PublicSiteNavbar = () => {
           <div className="fixed left-0 right-0 top-14 z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-t bg-card shadow-xl md:hidden">
             <nav className="flex flex-col gap-1 p-4">
               {links.map((link) => (
-                <Link
+                <NavLink
                   key={link.to}
                   to={link.to}
-                  className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                  end={link.to === "/"}
+                  className={({ isActive }) =>
+                    [
+                      "flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary font-semibold border-l-2 border-primary"
+                        : "text-foreground hover:bg-muted",
+                    ].join(" ")
+                  }
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   {link.label}
-                </Link>
+                </NavLink>
               ))}
 
               <div className="my-2 border-t" />

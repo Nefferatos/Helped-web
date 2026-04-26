@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle, ChevronDown, HeartHandshake, Search, Users } from "lucide-react";
+import { ArrowRight, CheckCircle, ChevronDown, HeartHandshake, Search, Users, X } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {

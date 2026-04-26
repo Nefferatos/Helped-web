@@ -1,185 +1,21 @@
 import { useState } from "react";
-import { NavLink, Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
 import AiInquiryPanel from "@/components/ai/AiInquiryPanel";
-
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage
-} from "@/components/ui/avatar";
-
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-
-import {
-  getStoredClient,
-  type ClientUser
-} from "@/lib/clientAuth";
-import { logoutClientPortal } from "@/lib/supabaseAuth";
+import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
 
 type EnquiryProps = {
   embedded?: boolean;
 };
 
 const Enquiry = ({ embedded = false }: EnquiryProps) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    await logoutClientPortal("/");
-  };
+  const [clientUser] = useState<ClientUser | null>(getStoredClient());
 
   return (
-      <div className="client-page-theme min-h-screen flex flex-col">
-  
-        {!embedded && (
-        <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur">
-          <div className="container flex h-16 items-center justify-between">
+    <div className="client-page-theme min-h-screen flex flex-col">
 
-            <Link to="/" className="font-display text-xl font-bold text-foreground">
-              Find Maids At The Agency
-            </Link>
-
-            <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-
-              <a href="/" className="hover:text-primary">Home</a>
-              <a href="/#services" className="hover:text-primary">Services</a>
-              <a href="/#search" className="hover:text-primary">Search Maids</a>
-
-              <NavLink to="/about" className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}>
-                About Us
-              </NavLink>
-
-              <NavLink to="/enquiry2" className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}>
-                Enquiry
-              </NavLink>
-
-              <NavLink to="/faq" className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}>
-                FAQ
-              </NavLink>
-
-
-              <NavLink to="/contact" className={({ isActive }) => isActive ? "text-primary font-semibold" : "hover:text-primary"}>
-                Contact Us
-              </NavLink>
-            </nav>
-
-            <div className="flex items-center gap-2">
-
-              <div className="hidden md:flex">
-                {clientUser ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-2 border px-2 py-1 rounded-full hover:bg-muted transition">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={clientUser.profileImageUrl} />
-                          <AvatarFallback>
-                            {clientUser.name.slice(0, 1).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm">{clientUser.name}</span>
-                      </button>
-                    </DropdownMenuTrigger>
-
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-
-                      <DropdownMenuItem asChild>
-                        <Link to="/client/dashboard">Dashboard</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to="/client/profile">Profile</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to="/client/history">History</Link>
-                      </DropdownMenuItem>
-
-                      <DropdownMenuSeparator />
-
-                      <DropdownMenuItem onClick={() => void handleLogout()}>
-                        Logout
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  <Link to="/employer-login">
-                    <Button size="sm">Employer Login</Button>
-                  </Link>
-                )}
-              </div>
-
-              <button
-                className="md:hidden"
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              >
-                <Menu />
-              </button>
-            </div>
-          </div>
-
-          {isMobileMenuOpen && (
-            <div className="md:hidden absolute top-16 left-0 w-full bg-white shadow-lg border-t animate-in slide-in-from-top duration-200">
-
-              <div className="flex flex-col p-4 space-y-3 text-sm font-medium">
-
-                <Link to="/" className="py-2 px-3 rounded-lg hover:bg-muted">
-                  Home
-                </Link>
-
-                <a href="/#services" className="py-2 px-3 rounded-lg hover:bg-muted">
-                  Services
-                </a>
-
-                <a href="/#search" className="py-2 px-3 rounded-lg hover:bg-muted">
-                  Search Maids
-                </a>
-
-                <Link to="/about" className="py-2 px-3 rounded-lg hover:bg-muted">
-                  About Us
-                </Link>
-
-                <Link to="/enquiry2" className="py-2 px-3 rounded-lg hover:bg-muted">
-                  Enquiry
-                </Link>
-
-                <Link to="/faq" className="py-2 px-3 rounded-lg hover:bg-muted">
-                  FAQ
-                </Link>
-
-                <Link to="/contact" className="py-2 px-3 rounded-lg hover:bg-muted">
-                  Contact
-                </Link>
-
-                <div className="border-t pt-3">
-                  {!clientUser ? (
-                    <Button className="w-40 mx-auto rounded-lg text-sm font-semibold shadow-sm">
-                      <Link to="/employer-login" className="w-full block text-center">
-                        Employer Login
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button variant="destructive" className="w-full" onClick={handleLogout}>
-                      Logout
-                    </Button>
-                  )}
-                </div>
-
-              </div>
-            </div>
-          )}
-        </header>
-        )}
+      {!embedded && <PublicSiteNavbar />}
 
       <main className="flex-1 py-40 md:py-40">
         <div className="container max-w-5xl">
@@ -207,8 +43,9 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
               message body.
             </p>
           </div>
-         </div>
+        </div>
       </main>
+
       <footer className="bg-foreground py-12 text-primary-foreground">
         <div className="container">
           <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4">
@@ -246,6 +83,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
           </div>
         </div>
       </footer>
+
     </div>
   );
 };
