@@ -1,5 +1,27 @@
 import type { MaidProfile } from "./maids";
 import { getStoredClient } from "./clientAuth";
+import { getClientAuthHeaders } from "./clientAuth";
+
+export interface PublicAgencyOption {
+  id: number;
+  name: string;
+  email: string;
+  createdAt: string;
+  totalMaids: number;
+  publicMaids: number;
+}
+
+export const fetchAgencyOptions = async (): Promise<PublicAgencyOption[]> => {
+  const response = await fetch("/api/agencies");
+  const data = (await response.json().catch(() => ({}))) as {
+    agencies?: PublicAgencyOption[];
+    error?: string;
+  };
+  if (!response.ok || !data.agencies) {
+    throw new Error(data.error || "Failed to fetch agencies");
+  }
+  return data.agencies;
+};
 
 export interface CompanyProfileApi {
   id?: number;
@@ -61,43 +83,42 @@ const getLocationLabel = (company: CompanyProfileApi) =>
   [company.address_line1, company.address_line2, company.country].filter(Boolean).join(", ") || "Singapore";
 
 export const fetchAgencies = async (): Promise<AgencySummary[]> => {
-  const [companyResponse, maidsResponse] = await Promise.all([fetch("/api/company"), fetch("/api/maids?visibility=public")]);
+  const [agenciesResponse, maidsResponse] = await Promise.all([fetch("/api/agencies"), fetch("/api/maids?visibility=public")]);
 
-  if (!companyResponse.ok) {
+  if (!agenciesResponse.ok) {
     throw new Error("Failed to fetch agencies");
   }
 
-  const companyData = (await companyResponse.json()) as { companyProfile?: CompanyProfileApi };
+  const agenciesData = (await agenciesResponse.json()) as { agencies?: PublicAgencyOption[] };
   const maidsData = maidsResponse.ok ? ((await maidsResponse.json()) as { maids?: MaidProfile[] }) : { maids: [] };
-  const company = companyData.companyProfile;
-
-  if (!company) {
+  const agencies = agenciesData.agencies ?? [];
+  if (agencies.length === 0) {
     throw new Error("No agency found");
   }
 
   const publicMaids = (maidsData.maids ?? []).filter((maid) => maid.isPublic);
-  const featuredSkills = uniqueStrings(publicMaids.flatMap((maid) => getMaidSkills(maid))).slice(0, 6);
 
-  return [
-    {
-      id: company.id ?? 1,
-      name: company.company_name || company.short_name || "Agency",
-      shortName: company.short_name || company.company_name || "AG",
-      licenseNo: company.license_no || "N/A",
-      contactPhone: company.contact_phone || "N/A",
-      contactPerson: company.contact_person || "N/A",
-      contactEmail: company.contact_email || "N/A",
-      website: company.contact_website || "",
-      location: getLocationLabel(company),
-      rating: publicMaids.length > 0 ? 4.8 : 4.5,
-      publicMaidsCount: publicMaids.length,
-      availableMaidsCount: publicMaids.filter((maid) => !maid.status || maid.status === "available").length,
-      previewMaids: publicMaids.slice(0, 3),
-      featuredSkills,
-      logoUrl: company.logo_data_url,
-      about: company.about_us || "",
-    },
-  ];
+  return agencies.map((agency) => {
+    const agencyMaids = publicMaids.filter((maid) => maid.agencyId === agency.id);
+    return {
+      id: agency.id,
+      name: agency.name,
+      shortName: agency.name,
+      licenseNo: "N/A",
+      contactPhone: "N/A",
+      contactPerson: agency.name,
+      contactEmail: agency.email || "N/A",
+      website: "",
+      location: "Singapore",
+      rating: agencyMaids.length > 0 ? 4.8 : 4.5,
+      publicMaidsCount: agency.publicMaids,
+      availableMaidsCount: agencyMaids.filter((maid) => !maid.status || maid.status === "available").length,
+      previewMaids: agencyMaids.slice(0, 3),
+      featuredSkills: uniqueStrings(agencyMaids.flatMap((maid) => getMaidSkills(maid))).slice(0, 6),
+      logoUrl: "",
+      about: "",
+    };
+  });
 };
 
 export const fetchAgencyDetails = async (agencyId: number) => {
@@ -121,7 +142,7 @@ export const fetchAgencyDetails = async (agencyId: number) => {
 };
 
 export const fetchAgencyMaids = async (_agencyId: number): Promise<MaidProfile[]> => {
-  const response = await fetch("/api/maids?visibility=public");
+  const response = await fetch(`/api/maids?visibility=public&agencyId=${encodeURIComponent(String(_agencyId))}`);
   if (!response.ok) {
     throw new Error("Failed to fetch agency maids");
   }
@@ -132,6 +153,7 @@ export const fetchAgencyMaids = async (_agencyId: number): Promise<MaidProfile[]
 
 export const submitHiringRequest = async (
   maidRefCode: string,
+  agencyId: number | undefined,
   formData: Record<string, string | number | boolean>,
 ) => {
   const client = getStoredClient();
@@ -140,23 +162,27 @@ export const submitHiringRequest = async (
     throw new Error("Please log in as a client before submitting a hiring request");
   }
 
-  const response = await fetch("/api/direct-sales", {
+  const response = await fetch("/api/requests", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...getClientAuthHeaders(),
+    },
     body: JSON.stringify({
-      referenceCode: maidRefCode,
       clientId: client.id,
-      status: "pending",
-      formData,
+      type: "direct",
+      ...(typeof agencyId === "number" ? { agencyId } : {}),
+      maidReferences: [maidRefCode],
+      details: formData,
     }),
   });
 
   const data = (await response.json().catch(() => ({}))) as {
     error?: string;
-    directSale?: { id: number; status: string };
+    data?: { id: string; status: string };
   };
 
-  if (!response.ok || !data.directSale) {
+  if (!response.ok || !data.data) {
     throw new Error(data.error || "Failed to submit hiring request");
   }
 

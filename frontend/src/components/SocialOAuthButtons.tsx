@@ -5,6 +5,7 @@ import { toast } from "@/components/ui/sonner";
 type Props = {
   disabled?: boolean;
   enableFacebook?: boolean;
+  redirectTo?: string;
 };
 
 const GoogleIcon = () => (
@@ -22,10 +23,10 @@ const FacebookIcon = () => (
   </svg>
 );
 
-const SocialOAuthButtons = ({ disabled, enableFacebook = false }: Props) => {
+const SocialOAuthButtons = ({ disabled, enableFacebook = false, redirectTo }: Props) => {
   const onGoogle = async () => {
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(redirectTo);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Google sign-in failed");
     }
@@ -33,7 +34,7 @@ const SocialOAuthButtons = ({ disabled, enableFacebook = false }: Props) => {
 
   const onFacebook = async () => {
     try {
-      await signInWithFacebook();
+      await signInWithFacebook(redirectTo);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Facebook sign-in failed");
     }

@@ -12,15 +12,14 @@ import {
   getStoredAgencyAdmin,
   saveAgencyAdminAuth,
 } from "@/lib/agencyAdminAuth";
-import { getClientToken } from "@/lib/clientAuth";
 import { clearClientAuth } from "@/lib/clientAuth";
 import { supabase } from "@/lib/supabaseClient";
 import {
   clearSupabaseSessionStorage,
-  finalizeClientLoginFromSupabase,
+  hasActiveClientSession,
   isClientLogoutPending,
+  syncClientProfileFromSession,
 } from "@/lib/supabaseAuth";
-import { getSessionFromUrlCompat } from "@/lib/supabaseSessionFromUrl";
 import { adminPath } from "@/lib/routes";
 import ProtectedClientRoute from "@/components/ProtectedClientRoute";
 const queryClient = new QueryClient({
@@ -95,11 +94,15 @@ const withRouteLoader = (element: ReactNode) => <Suspense fallback={<RouteLoader
 
 interface AgencyAdminMeResponse {
   error?: string;
-  admin?: {
-    id: number;
-    username: string;
-    agencyName: string;
-    createdAt: string;
+    admin?: {
+      id: number;
+      agencyId: number;
+      username: string;
+      email?: string;
+      role?: "admin" | "agency" | "staff";
+      agencyName: string;
+      profileImageUrl?: string;
+      createdAt: string;
   };
 }
 
@@ -175,33 +178,18 @@ const AdminIndexRedirect = () => {
 };
 
 const ClientHomeRedirect = () => {
-  const token = getClientToken();
   const [status, setStatus] = useState<"checking" | "portal" | "landing">(
-    token && !isClientLogoutPending() ? "checking" : "landing",
+    "checking",
   );
 
   useEffect(() => {
     let cancelled = false;
 
     const resolveHome = async () => {
-      if (!token || isClientLogoutPending() || !supabase) {
-        clearClientAuth();
-        clearSupabaseSessionStorage();
-        if (!cancelled) setStatus("landing");
-        return;
-      }
-
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error || !data.session?.access_token) {
-          throw error || new Error("No active Supabase session");
-        }
-
-        if (!cancelled) {
-          setStatus("portal");
-        }
+        const isAuthenticated = await hasActiveClientSession();
+        if (!cancelled) setStatus(isAuthenticated ? "portal" : "landing");
       } catch {
-        clearClientAuth();
         clearSupabaseSessionStorage();
         if (!cancelled) setStatus("landing");
       }
@@ -212,7 +200,7 @@ const ClientHomeRedirect = () => {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, []);
 
   if (status === "checking") {
     return <RouteLoader />;
@@ -229,42 +217,8 @@ const App = () => {
       return;
     }
 
-    // On app load, fetch session (important after email confirmation redirect).
     void (async () => {
-      // 1) Restore session from URL (email confirmation / OAuth PKCE redirects).
-      // Requested behavior:
-      //   const { data, error } = await supabase.auth.getSessionFromUrl();
-      //   if (data?.session) console.log("Session restored:", data.session);
-      //   window.history.replaceState({}, document.title, window.location.pathname);
-      try {
-        const compat = await getSessionFromUrlCompat(supabase);
-        const authAny = supabase.auth as unknown as {
-          getSessionFromUrl?: () => Promise<{ data?: { session?: unknown | null }; error?: unknown | null }>;
-        };
-
-        if (!authAny.getSessionFromUrl) {
-          authAny.getSessionFromUrl = async () => {
-            return { data: compat.data, error: compat.error };
-          };
-        }
-
-        const { data, error } = await authAny.getSessionFromUrl();
-        if (error) {
-          console.error("Error getting session from URL:", error);
-        }
-        if (data?.session) {
-          console.log("Session restored:", data.session);
-        }
-
-        if (compat.urlHadAuthParams) {
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      } catch (error) {
-        console.error("Error getting session from URL:", error);
-      }
-
       if (isClientLogoutPending()) {
-        clearClientAuth();
         clearSupabaseSessionStorage();
 
         try {
@@ -278,25 +232,18 @@ const App = () => {
         return;
       }
 
-      // 2) Fallback: existing session check
       const { data: { session } = { session: null } } = await supabase.auth.getSession();
-      if (session?.user) {
-        console.log("Existing session:", session.user);
-        if (session.access_token) {
-          try {
-            await finalizeClientLoginFromSupabase(session.access_token);
-          } catch (error) {
-            console.error("Failed to mirror Supabase session into app auth:", error);
-          }
+      if (session?.access_token) {
+        try {
+          await syncClientProfileFromSession();
+        } catch (error) {
+          console.error("Failed to sync Supabase session:", error);
         }
       }
     })();
 
-    // Keep app auth in sync with Supabase auth state changes.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Auth state changed:", event, session);
       if (event === "SIGNED_OUT") {
-        clearClientAuth();
         clearSupabaseSessionStorage();
         return;
       }
@@ -310,10 +257,9 @@ const App = () => {
           return;
         }
 
-        console.log("User logged in:", session.user);
         if (session.access_token) {
-          void finalizeClientLoginFromSupabase(session.access_token).catch((error) => {
-            console.error("Failed to mirror Supabase session into app auth:", error);
+          void syncClientProfileFromSession().catch((error) => {
+            console.error("Failed to sync Supabase session:", error);
           });
         }
         return;

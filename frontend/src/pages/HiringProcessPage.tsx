@@ -294,7 +294,7 @@ const HiringProcessPage = () => {
 
     try {
       setIsSubmitting(true);
-      await submitHiringRequest(refCode, {
+      await submitHiringRequest(refCode, maid.agencyId, {
         ...formData,
         selectedCandidates: selectedCandidates.map((candidate) => candidate.name).join(", "),
         chosenCandidateName: chosenCandidate.name,

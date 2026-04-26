@@ -1,13 +1,22 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle, ChevronDown, HeartHandshake, Menu, Search, Users, X } from "lucide-react";
+import { ArrowRight, CheckCircle, ChevronDown, HeartHandshake, Search, Users } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import { toast } from "@/components/ui/sonner";
-import { clearClientAuth, getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
+import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
+import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
-import { logoutClientPortal } from "@/lib/supabaseAuth";
+import { hasActiveClientSession, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import culinaryImg from "./assets/culinary.png";
 import elderlyImg from "./assets/elderly-care.png";
 import familyImg from "./assets/family.jpg";
@@ -100,8 +109,10 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
   const [company, setCompany] = useState<CompanyProfileApi | null>(null);
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [requestNotes, setRequestNotes] = useState("");
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+  const [pendingLoginPath, setPendingLoginPath] = useState("/employer-login");
 
   const [keyword, setKeyword] = useState("");
   const [maidTypes, setMaidTypes] = useState<string[]>([]);
@@ -121,19 +132,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       }
     }
   }, [location]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768) setIsMobileMenuOpen(false);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [isMobileMenuOpen]);
 
   useEffect(() => {
     const loadLandingData = async () => {
@@ -169,23 +167,16 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
   useEffect(() => {
     const loadClientProfile = async () => {
-      const token = getClientToken();
-      if (!token) { setClientUser(null); return; }
-
       try {
-        const response = await fetch("/api/client-auth/me", {
-          headers: { ...getClientAuthHeaders() },
-        });
-        const data = (await response.json().catch(() => ({}))) as {
-          error?: string;
-          client?: ClientUser;
-        };
-        if (!response.ok || !data.client) {
-          throw new Error(data.error || "Failed to load client profile");
+        const isAuthenticated = await hasActiveClientSession();
+        if (!isAuthenticated) {
+          setClientUser(null);
+          return;
         }
-        setClientUser(data.client);
+
+        const client = await syncClientProfileFromSession();
+        setClientUser(client ?? null);
       } catch {
-        clearClientAuth();
         setClientUser(null);
       }
     };
@@ -264,6 +255,15 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       if (nationality === "Cambodian") draft.natCambodian = true;
       if (nationality === "Bangladeshi") draft.natBangladeshi = true;
     }
+    if (language !== "No Preference") {
+      params.set("language", language);
+      draft.langNoPreference = false;
+      if (language === "English") draft.langEnglish = true;
+      if (language === "Mandarin/Chinese-Dialect") draft.langMandarin = true;
+      if (language === "Bahasa Indonesia/Malaysia") draft.langBahasaIndonesia = true;
+      if (language === "Hindi") draft.langHindi = true;
+      if (language === "Tamil") draft.langTamil = true;
+    }
     if (Object.keys(draft).length > 0) {
       params.set("filters", JSON.stringify(draft));
     }
@@ -286,137 +286,55 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   };
 
   const handleRequestMaid = () => {
-    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
-  };
+    const params = new URLSearchParams();
+    const draft: Record<string, unknown> = {};
 
-  const handleLogout = async () => {
-    toast.success("Client account logged out");
-    await logoutClientPortal("/");
+    if (keyword.trim()) {
+      draft.keyword = keyword.trim();
+      params.set("q", keyword.trim());
+    }
+    if (maidTypes.length === 1) {
+      draft.maidType = maidTypes[0];
+    }
+    if (nationality !== "No Preference") {
+      draft.natNoPreference = false;
+      if (nationality === "Filipino") draft.natFilipino = true;
+      if (nationality === "Indonesian") draft.natIndonesian = true;
+      if (nationality === "Myanmar") draft.natMyanmar = true;
+      if (nationality === "Indian") draft.natIndian = true;
+      if (nationality === "Sri Lankan") draft.natSriLankan = true;
+      if (nationality === "Cambodian") draft.natCambodian = true;
+      if (nationality === "Bangladeshi") draft.natBangladeshi = true;
+    }
+    if (language !== "No Preference") {
+      draft.langNoPreference = false;
+      if (language === "English") draft.langEnglish = true;
+      if (language === "Mandarin/Chinese-Dialect") draft.langMandarin = true;
+      if (language === "Bahasa Indonesia/Malaysia") draft.langBahasaIndonesia = true;
+      if (language === "Hindi") draft.langHindi = true;
+      if (language === "Tamil") draft.langTamil = true;
+    }
+    if (Object.keys(draft).length > 0) {
+      params.set("filters", JSON.stringify(draft));
+    }
+    if (requestNotes.trim()) {
+      params.set("notes", requestNotes.trim());
+    }
+    params.set("intent", "request");
+
+    const targetPath = `/client/maids?${params.toString()}`;
+    if (!isLoggedIn) {
+      setPendingLoginPath(buildEmployerLoginPath(targetPath));
+      setLoginPromptOpen(true);
+      return;
+    }
+
+    navigate(targetPath);
   };
 
   return (
     <div className="client-page-theme min-h-screen">
-
-      {!embedded && (
-        <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-          <div className="container flex h-14 items-center justify-between gap-4 px-4 sm:px-6 md:h-16">
-
-            <Link
-              to="/"
-              className="font-display text-base font-bold text-foreground sm:text-lg md:text-xl shrink-0 leading-tight"
-            >
-              <span className="hidden sm:inline">Find Maids At The Agency</span>
-              <span className="sm:hidden">Find Maids</span>
-            </Link>
-
-            <nav className="hidden items-center gap-5 font-body text-sm font-medium lg:flex xl:gap-8">
-              <a href="/" className="hover:text-primary transition-colors">Home</a>
-              <a href={searchMaidsHref} className="hover:text-primary transition-colors">Search Maids</a>
-              <a href="/about" className="hover:text-primary transition-colors">About Us</a>
-              <a href="/agency" className="hover:text-primary transition-colors">Agency</a>
-              <a href="/enquiry2" className="hover:text-primary transition-colors">Enquiry</a>
-              <a href="/faq" className="hover:text-primary transition-colors">FAQ</a>
-              <a href="/contact" className="hover:text-primary transition-colors">Contact Us</a>
-            </nav>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="hidden md:flex">
-                {clientUser ? (
-                  <div className="relative group">
-                    <button className="flex items-center gap-2 border px-2 py-1 rounded-full hover:bg-muted transition-colors">
-                      <Avatar className="h-7 w-7 md:h-8 md:w-8">
-                        <AvatarImage src={clientUser.profileImageUrl} />
-                        <AvatarFallback className="text-xs">
-                          {clientUser.name.slice(0, 1)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm max-w-[120px] truncate hidden lg:inline">{clientUser.name}</span>
-                    </button>
-                    <div className="absolute right-0 top-full mt-1 w-40 rounded-lg border bg-card shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity z-50">
-                      <Link to="/client/dashboard" className="block px-3 py-2 text-sm hover:bg-muted rounded-t-lg">Dashboard</Link>
-                      <button onClick={() => void handleLogout()} className="block w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-b-lg">Logout</button>
-                    </div>
-                  </div>
-                ) : (
-                  <Link to="/employer-login">
-                    <Button size="sm" className="text-xs md:text-sm">Employer Login</Button>
-                  </Link>
-                )}
-              </div>
-
-              <button
-                className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted transition-colors md:hidden"
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-              >
-                {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
-            </div>
-          </div>
-
-          {isMobileMenuOpen && (
-            <>
-              <div
-                className="fixed inset-0 top-14 z-40 bg-black/30 md:hidden"
-                onClick={() => setIsMobileMenuOpen(false)}
-              />
-              <div className="fixed left-0 right-0 top-14 z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto bg-card border-t shadow-xl md:hidden animate-in slide-in-from-top-2 duration-200">
-                <nav className="flex flex-col p-4 gap-1">
-                  {[
-                    { label: "Home", href: "/" },
-                    { label: "Search Maids", href: searchMaidsHref },
-                    { label: "About Us", href: "/about" },
-                    { label: "Agency", href: "/agency" },
-                    { label: "FAQ", href: "/faq" },
-                    { label: "Enquiry", href: "/enquiry2" },
-                    { label: "Contact Us", href: "/contact" },
-                  ].map((item) => (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {item.label}
-                    </a>
-                  ))}
-
-                  <div className="my-2 border-t" />
-
-                  {clientUser ? (
-                    <div className="space-y-2 px-1">
-                      <div className="flex items-center gap-3 py-2">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={clientUser.profileImageUrl} />
-                          <AvatarFallback>{clientUser.name.slice(0, 1)}</AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{clientUser.name}</p>
-                          <p className="text-xs text-muted-foreground">Logged in</p>
-                        </div>
-                      </div>
-                      <Button className="w-full" asChild>
-                        <Link to="/client/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
-                          Open Dashboard
-                        </Link>
-                      </Button>
-                      <Button variant="outline" className="w-full" onClick={() => { void handleLogout(); setIsMobileMenuOpen(false); }}>
-                        Logout
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button className="mx-1" asChild>
-                      <Link to="/employer-login" onClick={() => setIsMobileMenuOpen(false)}>
-                        Employer Login
-                      </Link>
-                    </Button>
-                  )}
-                </nav>
-              </div>
-            </>
-          )}
-        </header>
-      )}
+      {!embedded && <PublicSiteNavbar />}
 
       {/* ── HERO ── */}
       <section className="bg-card">

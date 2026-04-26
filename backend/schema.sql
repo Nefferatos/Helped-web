@@ -1,6 +1,8 @@
 -- Maid Agency Database Schema
 -- Run this SQL script to create all required tables
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Create company_profile table
 CREATE TABLE IF NOT EXISTS company_profile (
   id SERIAL PRIMARY KEY,
@@ -123,6 +125,56 @@ ALTER TABLE agency_admins
   ADD COLUMN IF NOT EXISTS profile_image_url TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_maids_agency_id ON maids(agency_id);
+
+-- Normalized request messaging support
+CREATE TABLE IF NOT EXISTS requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id INTEGER NOT NULL,
+  agency_id INTEGER NOT NULL,
+  type VARCHAR(20) NOT NULL DEFAULT 'general',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  maid_references TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  updated_by VARCHAR(100) NOT NULL DEFAULT 'system',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE requests
+  ALTER COLUMN agency_id SET DEFAULT 1;
+
+UPDATE requests
+SET agency_id = 1
+WHERE agency_id IS NULL OR agency_id <= 0;
+
+CREATE INDEX IF NOT EXISTS idx_requests_agency_id ON requests(agency_id);
+CREATE INDEX IF NOT EXISTS idx_requests_client_id ON requests(client_id);
+CREATE INDEX IF NOT EXISTS idx_requests_agency_updated_at ON requests(agency_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_client_updated_at ON requests(client_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id UUID NOT NULL UNIQUE REFERENCES requests(id) ON DELETE CASCADE,
+  agency_id INTEGER NOT NULL,
+  client_id INTEGER NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_type TEXT NOT NULL CHECK (sender_type IN ('client', 'admin', 'staff', 'system')),
+  sender_id INTEGER NOT NULL,
+  message TEXT NOT NULL,
+  attachments JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
+  ON messages(conversation_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_request ON conversations(request_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_client ON conversations(client_id);
 
 -- Apply the same ownership pattern to other agency-owned tables in production:
 -- enquiries.agency_id

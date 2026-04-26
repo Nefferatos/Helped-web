@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { getClientPostLoginPath } from "@/lib/clientNavigation";
 import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import { toast } from "@/components/ui/sonner";
 import { saveAgencyAdminAuth, type AgencyAdminUser } from "@/lib/agencyAdminAuth";
@@ -15,7 +16,9 @@ const AuthCallback = () => {
 
   useEffect(() => {
     let cancelled = false;
-    const mode = new URLSearchParams(window.location.search).get("mode");
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get("mode");
+    const redirectTo = getClientPostLoginPath(params.get("redirectTo"));
 
     const run = async () => {
       try {
@@ -50,9 +53,9 @@ const AuthCallback = () => {
           return;
         }
 
-        await finalizeClientLoginFromSupabase(accessToken);
+        await finalizeClientLoginFromSupabase();
         toast.success("Signed in successfully");
-        navigate("/client/dashboard", { replace: true });
+        navigate(redirectTo, { replace: true });
       } catch (err) {
         const message = err instanceof Error ? err.message : "OAuth sign-in failed";
         if (!cancelled) setErrorMessage(message);

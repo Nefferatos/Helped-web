@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { saveClientAuth } from "@/lib/clientAuth";
-import { supabase, requireSupabase } from "@/lib/supabaseClient";
+import { getClientPostLoginPath } from "@/lib/clientNavigation";
+import { requireSupabase } from "@/lib/supabaseClient";
 import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import SocialOAuthButtons from "@/components/SocialOAuthButtons";
 import "./ClientTheme.css";
@@ -30,6 +30,7 @@ interface AuthResponse {
 
 const ClientEmployerLogin = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
   const [step, setStep] = useState<"auth" | "confirm">("auth");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,6 +46,7 @@ const ClientEmployerLogin = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const { toast } = useToast();
+  const redirectTo = getClientPostLoginPath(searchParams.get("redirectTo"));
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -94,12 +96,12 @@ const ClientEmployerLogin = () => {
           throw new Error("No session returned from Supabase");
         }
 
-        await finalizeClientLoginFromSupabase(accessToken);
+        await finalizeClientLoginFromSupabase();
         toast({
           title: "Login Successful",
           description: "You can now view your assigned maids.",
         });
-        navigate("/client/home");
+        navigate(redirectTo, { replace: true });
         return;
       }
 
@@ -107,6 +109,15 @@ const ClientEmployerLogin = () => {
         const { data, error } = await sb.auth.signUp({
           email: normalizedEmail,
           password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
+            data: {
+              full_name: name.trim(),
+              name: name.trim(),
+              phone: phone.trim(),
+              company: company.trim(),
+            },
+          },
         });
 
         if (error) {
@@ -263,7 +274,7 @@ const ClientEmployerLogin = () => {
             </form>
           ) : (
             <div className="space-y-4">
-              <SocialOAuthButtons disabled={isSubmitting} enableFacebook />
+              <SocialOAuthButtons disabled={isSubmitting} enableFacebook redirectTo={redirectTo} />
 
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
@@ -294,6 +305,17 @@ const ClientEmployerLogin = () => {
                         onChange={(event) => setPhone(event.target.value)}
                         className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="+65 9123 4567"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block font-body text-xs uppercase tracking-wider text-muted-foreground">Company</label>
+                      <input
+                        type="text"
+                        value={company}
+                        onChange={(event) => setCompany(event.target.value)}
+                        className="w-full rounded-lg border bg-background px-3 py-2.5 font-body text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="Optional"
                       />
                     </div>
                   </>

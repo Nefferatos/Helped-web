@@ -8,9 +8,13 @@ import companyRoutes from './routes/companyRoutes'
 import maidRoutes from './routes/maidRoutes'
 import enquiryRoutes from './routes/enquiryRoutes'
 import directSaleRoutes from './routes/directSaleRoutes'
+import requestRoutes from './routes/requestRoutes'
+import requestConversationRoutes from './routes/requestConversationRoutes'
+import requestMessageRoutes from './routes/requestMessageRoutes'
 import clientAuthRoutes from './routes/clientAuthRoutes'
 import agencyAuthRoutes from './routes/agencyAuthRoutes'
 import agencyRoutes from './routes/agencyRoutes'
+import agencyDirectoryRoutes from './routes/agencyDirectoryRoutes'
 import clientRoutes from './routes/clientRoutes'
 import chatRoutes from './routes/chatRoutes'
 import dashboardRoutes from './routes/dashboardRoutes'
@@ -20,7 +24,9 @@ import leadWorkflowRoutes from './routes/leadWorkflowRoutes'
 import inquiryWorkflowRoutes from './routes/inquiryWorkflowRoutes'
 import matchingWorkflowRoutes from './routes/matchingWorkflowRoutes'
 import automationRoutes from './routes/automationRoutes'
-import { getMaidsStore, initializeStore } from './store'
+import { initializeDatabase } from './db'
+import { getAgencyAdminsStore, getMaidsStore, initializeStore } from './store'
+import { syncAgencyAdminsFromStoreRecords } from './repositories/agencyAdminRepository'
 import { initializeWorkflowStore } from './store/workflowStore'
 import { saveEmployerContract } from './controllers/employerController'
 
@@ -29,18 +35,16 @@ const port = process.env.PORT || 3000
 const frontendDist = path.resolve(__dirname, '../../frontend/dist')
 const hasFrontendSite = fs.existsSync(frontendDist)
 
-const requireEnv = (key: string) => {
-  const value = process.env[key]?.trim()
-  if (!value) {
-    console.error(`Missing required environment variable: ${key}`)
-    process.exit(1)
+const logOptionalEnv = (key: string) => {
+  if (!process.env[key]?.trim()) {
+    console.warn(
+      `[server] Optional environment variable ${key} is missing. Supabase-backed client JWT verification may be unavailable.`
+    )
   }
-  return value
 }
 
-// Required for Supabase JWT verification and server-side Supabase operations.
-requireEnv('SUPABASE_URL')
-requireEnv('SUPABASE_SERVICE_ROLE_KEY')
+logOptionalEnv('SUPABASE_URL')
+logOptionalEnv('SUPABASE_SERVICE_ROLE_KEY')
 
 // Middleware
 app.use(
@@ -76,9 +80,13 @@ app.use('/api/maids', maidRoutes)
 app.use('/api/enquiries', enquiryRoutes)
 app.use('/api/direct-sales', directSaleRoutes)
 app.use('/api/direct-sell', directSaleRoutes)
+app.use('/api/requests', requestRoutes)
+app.use('/api/conversations', requestConversationRoutes)
+app.use('/api/messages', requestMessageRoutes)
 app.use('/api/client-auth', clientAuthRoutes)
 app.use('/api/agency-auth', agencyAuthRoutes)
 app.use('/api/agency', agencyRoutes)
+app.use('/api/agencies', agencyDirectoryRoutes)
 app.use('/api/client', clientRoutes)
 app.use('/api/chats', chatRoutes)
 app.use('/api', dashboardRoutes)
@@ -136,6 +144,8 @@ app.use(errorHandler)
 const startServer = async () => {
   try {
     await initializeStore()
+    await initializeDatabase()
+    await syncAgencyAdminsFromStoreRecords(await getAgencyAdminsStore())
     await initializeWorkflowStore()
 
     app.listen(port, () => {

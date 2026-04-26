@@ -9,12 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getClientToken, getStoredClient } from "@/lib/clientAuth";
+import { getStoredClient } from "@/lib/clientAuth";
 import { calculateAge, formatDate, getPublicIntro, MaidProfile } from "@/lib/maids";
 import { sendMaidToClient } from "@/lib/maidShare";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import { toast } from "@/components/ui/sonner";
-import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
+import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import { hasActiveClientSession, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 
 interface CompanyProfileApi {
   company_name?: string;
@@ -135,7 +136,7 @@ const PublicMaidProfile = () => {
   const [isShortlistOpen, setIsShortlistOpen] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const [showOtherLanguages, setShowOtherLanguages] = useState(false);
-  const isLoggedIn = Boolean(getClientToken());
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -198,6 +199,17 @@ const PublicMaidProfile = () => {
 
   useEffect(() => { setShowOtherLanguages(false); }, [maid?.referenceCode]);
 
+  useEffect(() => {
+    void hasActiveClientSession()
+      .then((active) => {
+        setIsLoggedIn(active);
+        if (active) {
+          void syncClientProfileFromSession();
+        }
+      })
+      .catch(() => setIsLoggedIn(false));
+  }, []);
+
   const agencyContact = useMemo(() => (maid ? maid.agencyContact as Record<string, unknown> : null), [maid]);
   const isShortlisted = Boolean(maid?.referenceCode && shortlistRefs.includes(maid.referenceCode));
   const shortlistedMaidMap = useMemo(
@@ -245,7 +257,7 @@ const PublicMaidProfile = () => {
   if (isLoading) {
     return (
       <div className="client-page-theme min-h-screen bg-card">
-        <ClientPortalNavbar />
+        <PublicSiteNavbar />
         <div className="page-container">
           <div className="content-card py-10 text-center text-muted-foreground text-sm">Loading maid profile…</div>
         </div>
@@ -256,7 +268,7 @@ const PublicMaidProfile = () => {
   if (!maid) {
     return (
       <div className="client-page-theme min-h-screen bg-card">
-        <ClientPortalNavbar />
+        <PublicSiteNavbar />
         <div className="page-container">
           <div className="mb-3">
             <Link to="/client/maids" className="group inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
@@ -297,7 +309,7 @@ const PublicMaidProfile = () => {
   const youtubeEmbedUrl = getYouTubeEmbedUrl(maid.videoDataUrl);
 
   const storedClient = getStoredClient() as (ReturnType<typeof getStoredClient> & { emailVerified?: boolean }) | null;
-  const canViewPrivateIntro = Boolean(getClientToken() && storedClient?.emailVerified === true);
+  const canViewPrivateIntro = Boolean(isLoggedIn && storedClient?.emailVerified === true);
 
   const agencyName = company?.company_name || company?.short_name || String(agencyContact?.companyName || "Agency");
   const publicIntro = getPublicIntro(maid);
@@ -349,7 +361,7 @@ const PublicMaidProfile = () => {
 
   return (
     <div className="client-page-theme min-h-screen bg-card">
-      <ClientPortalNavbar />
+      <PublicSiteNavbar />
 
       {/* ── Lightbox ───────────────────────────────────────── */}
       {lightboxPhoto && (
@@ -399,7 +411,13 @@ const PublicMaidProfile = () => {
             </button>
             <span className="mx-1 text-muted-foreground/30 select-none">|</span>
             <Link
-              to={isLoggedIn ? `/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(agencyName)}` : "/employer-login"}
+              to={
+                isLoggedIn
+                  ? `/client/support-chat?type=agency&agencyId=${encodeURIComponent(
+                      String(maid.agencyId ?? 1),
+                    )}&agencyName=${encodeURIComponent(maid.agencyName || agencyName)}`
+                  : "/employer-login"
+              }
               className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"
             >
               <MessageCircle className="h-3 w-3" />Contact Agency

@@ -9,13 +9,13 @@ import {
   deleteMomPersonnelStore,
   deleteTestimonialStore,
   getCompanyBundle,
-  getDirectSalesStore,
   getEnquiriesStore,
   getMaidsStore,
   getUnreadAgencyChatCountStore,
   updateCompanyProfileStore,
   updateMomPersonnelStore,
 } from '../store'
+import { getRequestMetricsByAgencyId } from '../repositories/requestRepository'
 
 interface CompanyProfile {
   id?: number
@@ -61,11 +61,11 @@ export const getCompanyProfile = async (req: Request, res: Response) => {
 export const getCompanySummary = async (req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(req)
-    const [companyBundle, maids, enquiries, directSales, unreadAgencyChats] = await Promise.all([
+    const [companyBundle, maids, enquiries, requestMetrics, unreadAgencyChats] = await Promise.all([
       getCompanyBundle(),
       getMaidsStore(undefined, undefined, agencyId),
       getEnquiriesStore(undefined, agencyId),
-      getDirectSalesStore(agencyId),
+      getRequestMetricsByAgencyId(agencyId),
       getUnreadAgencyChatCountStore(agencyId),
     ])
 
@@ -86,8 +86,8 @@ export const getCompanySummary = async (req: Request, res: Response) => {
       totalMaids: maids.length,
       maidsWithPhotos,
       enquiries: enquiries.length,
-      requests: directSales.length,
-      pendingRequests: directSales.filter((request) => request.status === 'pending').length,
+      requests: requestMetrics.total,
+      pendingRequests: requestMetrics.pending,
       unreadAgencyChats,
       momPersonnel: companyBundle.momPersonnel.length,
       testimonials: companyBundle.testimonials.length,

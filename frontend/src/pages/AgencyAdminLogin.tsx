@@ -13,13 +13,16 @@ import { adminPath } from "@/lib/routes";
 interface AgencyAuthResponse {
   error?: string;
   token?: string;
-  admin?: {
-    id: number;
-    username: string;
-    email?: string;
-    emailVerified?: boolean;
-    agencyName: string;
-    createdAt: string;
+    admin?: {
+      id: number;
+      agencyId: number;
+      username: string;
+      email?: string;
+      emailVerified?: boolean;
+      role?: "admin" | "agency" | "staff";
+      agencyName: string;
+      profileImageUrl?: string;
+      createdAt: string;
   };
 }
 

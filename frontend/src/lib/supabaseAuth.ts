@@ -1,17 +1,12 @@
 import { requireSupabase, supabase } from "@/lib/supabaseClient";
 import {
   clearClientAuth,
-  getClientAuthHeaders,
+  getStoredClient,
+  refreshClientToken,
   saveClientAuth,
   type ClientUser,
 } from "@/lib/clientAuth";
 
-// Social + Phone auth helpers.
-// These functions keep your existing app token storage (`client_auth_token`) working by
-// reusing the Supabase access token as the Bearer token. The backend accepts it by verifying
-// the Supabase JWT.
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const LEGACY_SUPABASE_TOKEN_KEY = "supabase.auth.token";
 const CLIENT_LOGOUT_MARKER_KEY = "client_portal_logout_pending";
 
@@ -38,7 +33,11 @@ export const clearSupabaseSessionStorage = () => {
   const keysToRemove: string[] = [];
   for (let index = 0; index < window.localStorage.length; index += 1) {
     const key = window.localStorage.key(index);
-    if (key?.startsWith("sb-") && key.endsWith("-auth-token")) {
+    if (
+      key === CLIENT_LOGOUT_MARKER_KEY ||
+      key?.startsWith("sb-") ||
+      key?.startsWith("supabase.auth.")
+    ) {
       keysToRemove.push(key);
     }
   }
@@ -47,27 +46,8 @@ export const clearSupabaseSessionStorage = () => {
   window.sessionStorage.clear();
 };
 
-const getSupabaseAccessToken = async (fallbackToken?: string) => {
-  // Preferred: current Supabase session token (freshest, works after OAuth redirect).
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { data, error } = await requireSupabase().auth.getSession();
-    if (error) throw error;
-    const token = data.session?.access_token;
-    if (token) return token;
-    await wait(150);
-  }
-
-  // Fallback: caller-provided token (e.g. persisted app token).
-  if (fallbackToken?.trim()) return fallbackToken.trim();
-
-  throw new Error("No Supabase session found. Please sign in again.");
-};
-
-const getClientMe = async (fallbackAccessToken?: string) => {
-  const accessToken = await getSupabaseAccessToken(fallbackAccessToken);
-  const meUrl = new URL("/api/client-auth/me", window.location.origin).toString();
-
-  const response = await fetch(meUrl, {
+const getClientMe = async (accessToken: string) => {
+  const response = await fetch("/api/client-auth/me", {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
@@ -77,63 +57,174 @@ const getClientMe = async (fallbackAccessToken?: string) => {
     client?: ClientUser;
     error?: string;
   };
+
   if (!response.ok || !data.client) {
     throw new Error(data.error || "Failed to load client profile");
   }
+
   return data.client;
 };
 
-export const finalizeClientLoginFromSupabase = async (accessToken?: string) => {
-  // Fetch the app-facing client record (creates one on first login).
-  const token = await getSupabaseAccessToken(accessToken);
+export const primeClientAuth = async () => {
+  const token = await refreshClientToken();
+  if (!token) {
+    saveClientAuth(null, null);
+    return null;
+  }
+
+  return token;
+};
+
+export const getCurrentClientSession = async () => {
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session ?? null;
+};
+
+export const hasActiveClientSession = async () => {
+  const session = await getCurrentClientSession();
+  return Boolean(session?.access_token) && !isClientLogoutPending();
+};
+
+export const finalizeClientLoginFromSupabase = async () => {
+  const token = await primeClientAuth();
+  if (!token) {
+    throw new Error("No Supabase session found. Please sign in again.");
+  }
+
   const client = await getClientMe(token);
   clearClientLogoutMarker();
   saveClientAuth(token, client);
   return client;
 };
 
-export const logoutClientPortal = async (redirectTo = "/") => {
-  setClientLogoutMarker();
-
-  try {
-    await fetch("/api/client-auth/logout", {
-      method: "POST",
-      headers: { ...getClientAuthHeaders() },
-    });
-  } catch {
-    // Ignore API logout errors; local sign-out still needs to finish.
+export const syncClientProfileFromSession = async () => {
+  const token = await primeClientAuth();
+  if (!token) {
+    saveClientAuth(null, null);
+    return null;
   }
 
   try {
+    const client = await getClientMe(token);
+    saveClientAuth(token, client);
+    return client;
+  } catch {
+    const fallback = getStoredClient();
+    saveClientAuth(token, fallback);
+    return fallback;
+  }
+};
+
+export const handleInvalidClientSession = async (redirectTo = "/employer-login") => {
+  setClientLogoutMarker();
+
+  try {
     if (supabase) {
-      await supabase.auth.signOut({ scope: "global" });
+      await supabase.auth.signOut();
     }
   } catch {
-    // Continue clearing local state even if Supabase sign-out fails.
+    // Keep clearing local state even when Supabase rejects the sign-out.
   }
 
   clearSupabaseSessionStorage();
   clearClientAuth();
 
   if (typeof window !== "undefined") {
-    window.location.href = redirectTo;
+    window.location.replace(redirectTo);
   }
 };
 
-export const signInWithGoogle = async () => {
-  // OAuth redirect flow. Supabase will store the session in localStorage.
+export const clientFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const token = await primeClientAuth();
+  if (!token || isClientLogoutPending()) {
+    await handleInvalidClientSession();
+    throw new Error("No active Supabase session");
+  }
+
+  const headers = new Headers(init.headers || {});
+  headers.set("Authorization", `Bearer ${token}`);
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
+
+  const response = await fetch(input, {
+    ...init,
+    headers,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    const cloned = response.clone();
+    const payload = (await cloned.json().catch(() => ({}))) as { error?: string; message?: string };
+    const errorText = String(payload.error || payload.message || "").toLowerCase();
+
+    if (errorText.includes("session_not_found") || response.status === 403 || response.status === 401) {
+      await handleInvalidClientSession();
+    }
+  }
+
+  return response;
+};
+
+export const logoutClientPortal = async (redirectTo = "/") => {
+  setClientLogoutMarker();
+
+  try {
+    const token = await primeClientAuth();
+    if (token) {
+      await fetch("/api/client-auth/logout", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+    }
+  } catch {
+    // API logout is best effort.
+  }
+
+  try {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+  } catch {
+    // Continue with local cleanup.
+  }
+
+  clearSupabaseSessionStorage();
+  clearClientAuth();
+
+  if (typeof window !== "undefined") {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.location.replace(redirectTo);
+  }
+};
+
+export const signInWithGoogle = async (redirectPath?: string) => {
+  const callbackUrl = new URL("/auth/callback", window.location.origin);
+  if (redirectPath?.trim()) {
+    callbackUrl.searchParams.set("redirectTo", redirectPath.trim());
+  }
+
   const { error } = await requireSupabase().auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${window.location.origin}/auth/callback` },
+    options: { redirectTo: callbackUrl.toString() },
   });
   if (error) throw error;
 };
 
-export const signInWithFacebook = async () => {
-  const supabase = requireSupabase();
-  const { error } = await supabase.auth.signInWithOAuth({
+export const signInWithFacebook = async (redirectPath?: string) => {
+  const callbackUrl = new URL("/auth/callback", window.location.origin);
+  if (redirectPath?.trim()) {
+    callbackUrl.searchParams.set("redirectTo", redirectPath.trim());
+  }
+
+  const { error } = await requireSupabase().auth.signInWithOAuth({
     provider: "facebook",
-    options: { redirectTo: `${window.location.origin}/auth/callback` },
+    options: { redirectTo: callbackUrl.toString() },
   });
   if (error) throw error;
 };
@@ -153,28 +244,6 @@ export const verifyPhoneOtp = async (phone: string, code: string) => {
   if (!data.session?.access_token) {
     throw new Error("No session returned from Supabase");
   }
+  await finalizeClientLoginFromSupabase();
   return data.session.access_token;
-};
-
-export const bootstrapClientAuthFromSupabase = async () => {
-  // Persist login across refresh: if Supabase has a session, mirror it into existing local storage.
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (!accessToken) return null;
-
-  // Save a full client record if possible.
-  try {
-    return await finalizeClientLoginFromSupabase(accessToken);
-  } catch {
-    // Worst case: keep token only; app can recover when `/api/client-auth/me` succeeds.
-    const fallback: ClientUser = {
-      id: 0,
-      name: "",
-      email: data.session?.user?.email || "",
-      createdAt: new Date().toISOString(),
-    };
-    saveClientAuth(accessToken, fallback);
-    return fallback;
-  }
 };

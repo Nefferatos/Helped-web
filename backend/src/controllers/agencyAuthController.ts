@@ -1,24 +1,28 @@
 import { Request, Response } from 'express'
 import { getAuthenticatedAgencyAdmin, getRequestToken } from '../auth'
 import {
-  authenticateAgencyAdminStore,
-  createAgencyAdminSessionStore,
-  deleteAgencyAdminSessionStore,
   registerAgencyAdminStore,
 } from '../store'
+import {
+  authenticateAgencyAdminRecord,
+  createAgencyAdminSessionRecord,
+  deleteAgencyAdminSessionRecord,
+  syncAgencyAdminsFromStoreRecords,
+} from '../repositories/agencyAdminRepository'
 
 const toSafeAgencyAdmin = (admin: {
   id: number
   agencyId: number
   username: string
   email?: string
-  role?: 'admin' | 'staff'
+  role?: 'admin' | 'agency' | 'staff'
   agencyName: string
   profileImageUrl?: string
   createdAt: string
 }) => ({
   id: admin.id,
   agencyId: admin.agencyId,
+  agency_id: admin.agencyId,
   username: admin.username,
   email: admin.email ?? '',
   role: admin.role ?? 'admin',
@@ -56,12 +60,17 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
       password: password.trim(),
       agencyName: agencyName.trim(),
     })
-    const session = await createAgencyAdminSessionStore(admin.id)
-    console.log('LOGIN:', admin.id, session.token)
+    await syncAgencyAdminsFromStoreRecords([admin])
+    const sqlAdmin = await authenticateAgencyAdminRecord(username.trim(), password.trim())
+    if (!sqlAdmin) {
+      throw new Error('AGENCY_ADMIN_SYNC_FAILED')
+    }
+    const session = await createAgencyAdminSessionRecord(sqlAdmin.id)
+    console.log('LOGIN:', sqlAdmin.id, session.token)
 
     res.status(201).json({
       token: session.token,
-      admin: toSafeAgencyAdmin(admin),
+      admin: toSafeAgencyAdmin(sqlAdmin),
     })
   } catch (error) {
     if (
@@ -81,28 +90,40 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
 
 export const loginAgencyAdmin = async (req: Request, res: Response) => {
   try {
-    const body = (req.body ?? null) as { username?: unknown; password?: unknown } | null
+    const body = (req.body ?? null) as {
+      username?: unknown
+      email?: unknown
+      password?: unknown
+    } | null
     if (!body || typeof body !== 'object') {
       return res.status(400).json({ error: 'Invalid JSON body' })
     }
 
-    const username = typeof body.username === 'string' ? body.username : ''
+    const username =
+      typeof body.username === 'string'
+        ? body.username
+        : typeof body.email === 'string'
+        ? body.email
+        : ''
     const password = typeof body.password === 'string' ? body.password : ''
 
     if (!username.trim() || !password.trim()) {
       return res.status(400).json({ error: 'username/email and password are required' })
     }
 
-    const admin = await authenticateAgencyAdminStore(
-      username.trim(),
-      password.trim()
-    )
+    console.log('[agency-auth] login identifier:', username.trim().toLowerCase())
+
+    const admin = await authenticateAgencyAdminRecord(username.trim(), password.trim())
     if (!admin) {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    const session = await createAgencyAdminSessionStore(admin.id)
-    console.log('LOGIN:', admin.id, session.token)
+    const session = await createAgencyAdminSessionRecord(admin.id)
+    console.log('[agency-auth] login success:', {
+      adminId: admin.id,
+      agencyId: admin.agencyId,
+      token: session.token,
+    })
     res.status(200).json({
       token: session.token,
       admin: toSafeAgencyAdmin(admin),
@@ -134,7 +155,7 @@ export const logoutAgencyAdmin = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    await deleteAgencyAdminSessionStore(token)
+    await deleteAgencyAdminSessionRecord(token)
     res.status(200).json({ message: 'Logged out successfully' })
   } catch (error) {
     console.error('Error logging out agency admin:', error)
@@ -163,7 +184,8 @@ export const createAgencyAdminForAgency = async (req: Request, res: Response) =>
     const username =
       typeof body.username === 'string' ? body.username.trim() : email.split('@')[0] || ''
     const password = typeof body.password === 'string' ? body.password.trim() : ''
-    const role = body.role === 'staff' ? 'staff' : 'admin'
+    const role =
+      body.role === 'staff' ? 'staff' : body.role === 'agency' ? 'agency' : 'admin'
 
     if (!email || !password) {
       return res.status(400).json({ error: 'email and password are required' })
@@ -177,6 +199,7 @@ export const createAgencyAdminForAgency = async (req: Request, res: Response) =>
       password,
       role,
     })
+    await syncAgencyAdminsFromStoreRecords([admin])
 
     res.status(201).json({ admin: toSafeAgencyAdmin(admin) })
   } catch (error) {

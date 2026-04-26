@@ -1,11 +1,14 @@
 import { Request, Response } from 'express'
-import { getRequestAgencyId } from '../auth'
+import { getAuthenticatedAgencyAdmin, getRequestAgencyId } from '../auth'
 import {
   addMaidPhotoStore,
   createMaidStore,
   deleteMaidStore,
+  getAgencyNameByIdStore,
+  getAllMaidsStore,
   getMaidByReferenceCodeStore,
   getMaidsStore,
+  getPublicMaidByReferenceCodeStore,
   MaidRecord,
   updateMaidPhotoStore,
   updateMaidVideoStore,
@@ -227,13 +230,34 @@ const parseNumber = (value: string | undefined, fallback: number) => {
 export const getMaidList = async (req: Request, res: Response) => {
   try {
     const { search, visibility } = req.query
-    const agencyId = await getRequestAgencyId(req)
-    const maids = await getMaidsStore(
-      typeof search === 'string' ? search : undefined,
-      typeof visibility === 'string' ? visibility : undefined,
-      agencyId
+    const requestedAgencyId = Number(req.query.agencyId ?? '')
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    const shouldUseAllPublic =
+      !admin &&
+      typeof visibility === 'string' &&
+      visibility === 'public' &&
+      !Number.isInteger(requestedAgencyId)
+
+    const maids = shouldUseAllPublic
+      ? await getAllMaidsStore(
+          typeof search === 'string' ? search : undefined,
+          typeof visibility === 'string' ? visibility : undefined
+        )
+      : await getMaidsStore(
+          typeof search === 'string' ? search : undefined,
+          typeof visibility === 'string' ? visibility : undefined,
+          Number.isInteger(requestedAgencyId)
+            ? requestedAgencyId
+            : await getRequestAgencyId(req)
+        )
+
+    const payload = await Promise.all(
+      maids.map(async (maid) => ({
+        ...maid,
+        agencyName: await getAgencyNameByIdStore(maid.agencyId),
+      }))
     )
-    res.status(200).json({ maids })
+    res.status(200).json({ maids: payload })
   } catch (error) {
     console.error('Error fetching maids:', error)
     res.status(500).json({ error: 'Failed to fetch maids' })
@@ -508,15 +532,25 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
 
 export const getMaidByReferenceCode = async (req: Request, res: Response) => {
   try {
-    const agencyId = await getRequestAgencyId(req)
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    const requestedAgencyId = Number(req.query.agencyId ?? '')
     const referenceCode = String(req.params.referenceCode ?? '').trim()
-    const result = await getMaidByReferenceCodeStore(referenceCode, agencyId)
+    const result = Number.isInteger(requestedAgencyId)
+      ? await getMaidByReferenceCodeStore(referenceCode, requestedAgencyId)
+      : admin
+      ? await getMaidByReferenceCodeStore(referenceCode, admin.agencyId)
+      : await getPublicMaidByReferenceCodeStore(referenceCode)
 
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
     }
 
-    res.status(200).json({ maid: result })
+    res.status(200).json({
+      maid: {
+        ...result,
+        agencyName: await getAgencyNameByIdStore(result.agencyId),
+      },
+    })
   } catch (error) {
     console.error('Error fetching maid:', error)
     res.status(500).json({ error: 'Failed to fetch maid' })

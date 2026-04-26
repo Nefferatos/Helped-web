@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import {
   Edit,
   MessageCircle,
@@ -183,10 +184,14 @@ const AgencyProfile = () => {
     try {
       setIsLoading(true);
       setLoadError(null);
-      const [response, summaryResponse] = await Promise.all([
-        fetch("/api/company"),
-        fetch("/api/company/summary"),
-      ]);
+        const [response, summaryResponse] = await Promise.all([
+          fetch("/api/company", {
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }),
+          fetch("/api/company/summary", {
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }),
+        ]);
       const data = (await response.json().catch(() => ({}))) as Partial<CompanyResponse> & { error?: string };
       if (!response.ok || !data.companyProfile)
         throw new Error(data.error || "Failed to load company profile");

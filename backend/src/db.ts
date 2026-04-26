@@ -11,31 +11,89 @@ const { Pool } = pkg
 // Load environment variables from .env file
 dotenv.config()
 
-const connectionString = process.env.DATABASE_URL
-const sslEnabled = process.env.DB_SSL === 'true' || connectionString?.includes('supabase.co')
+const connectionString = process.env.DATABASE_URL?.trim()
+const localDbHost = process.env.DB_HOST?.trim() || 'localhost'
+const localDbPort = parseInt(process.env.DB_PORT || '5432')
+const localDbUser = process.env.DB_USER?.trim() || 'postgres'
+const localDbPassword = process.env.DB_PASSWORD ?? 'postgres'
+const localDbName = process.env.DB_NAME?.trim() || 'maid_agency_db'
+const localDbSslEnabled = process.env.DB_SSL === 'true'
 
-// Create a connection pool for better performance
-// The pool manages multiple connections to the database automatically
-const pool = new Pool(
-  connectionString
-    ? {
+const attachPoolErrorHandler = (pool: InstanceType<typeof Pool>) => {
+  pool.on('error', (err) => {
+    console.error('Unexpected error on idle client', err)
+  })
+}
+
+const createPool = (config: ConstructorParameters<typeof Pool>[0]) => {
+  const pool = new Pool(config)
+  attachPoolErrorHandler(pool)
+  return pool
+}
+
+const buildPoolCandidates = () => {
+  const candidates: Array<{
+    label: string
+    config: ConstructorParameters<typeof Pool>[0]
+  }> = []
+
+  if (connectionString) {
+    candidates.push({
+      label: 'DATABASE_URL',
+      config: {
         connectionString,
-        ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
-      }
-    : {
-        user: process.env.DB_USER || 'postgres',
-        password: process.env.DB_PASSWORD || 'postgres',
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT || '5432'),
-        database: process.env.DB_NAME || 'maid_agency_db',
-        ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
-      }
-)
+        ssl:
+          localDbSslEnabled || connectionString.includes('supabase.co')
+            ? { rejectUnauthorized: false }
+            : undefined,
+      },
+    })
+  }
 
-// Handle connection errors
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err)
-})
+  candidates.push({
+    label: 'DB_*',
+    config: {
+      user: localDbUser,
+      password: localDbPassword,
+      host: localDbHost,
+      port: localDbPort,
+      database: localDbName,
+      ssl: localDbSslEnabled ? { rejectUnauthorized: false } : undefined,
+    },
+  })
+
+  return candidates
+}
+
+let pool: InstanceType<typeof Pool> | null = null
+
+const ensurePool = async () => {
+  if (pool) {
+    return pool
+  }
+
+  let lastError: unknown = null
+
+  for (const candidate of buildPoolCandidates()) {
+    const candidatePool = createPool(candidate.config)
+
+    try {
+      const client = await candidatePool.connect()
+      client.release()
+      pool = candidatePool
+      console.info(`[db] Connected using ${candidate.label}`)
+      return pool
+    } catch (error) {
+      lastError = error
+      const message =
+        error instanceof Error ? error.message : 'Unknown database connection error'
+      console.error(`[db] Failed to connect using ${candidate.label}: ${message}`)
+      await candidatePool.end().catch(() => undefined)
+    }
+  }
+
+  throw lastError
+}
 
 /**
  * Execute a database query
@@ -45,7 +103,8 @@ pool.on('error', (err) => {
  */
 export const query = async (text: string, params: unknown[] = []) => {
   try {
-    const result = await pool.query(text, params)
+    const activePool = await ensurePool()
+    const result = await activePool.query(text, params)
     return result
   } catch (error) {
     console.error('Database query error:', error)
@@ -58,11 +117,13 @@ export const query = async (text: string, params: unknown[] = []) => {
  * @returns Database client for manual transaction management
  */
 export const getClient = async () => {
-  return await pool.connect()
+  const activePool = await ensurePool()
+  return await activePool.connect()
 }
 
 export const initializeDatabase = async () => {
-  const client = await pool.connect()
+  const activePool = await ensurePool()
+  const client = await activePool.connect()
 
   try {
     const schemaPath = path.resolve(__dirname, '../schema.sql')
@@ -134,5 +195,3 @@ export const initializeDatabase = async () => {
     client.release()
   }
 }
-
-export default pool

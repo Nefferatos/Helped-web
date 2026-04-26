@@ -1,40 +1,32 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { clearClientAuth, getClientToken } from "@/lib/clientAuth";
-import { supabase } from "@/lib/supabaseClient";
 import {
   clearSupabaseSessionStorage,
-  finalizeClientLoginFromSupabase,
+  hasActiveClientSession,
   isClientLogoutPending,
+  syncClientProfileFromSession,
 } from "@/lib/supabaseAuth";
 
 const ProtectedClientRoute = ({ children }: { children: ReactNode }) => {
-  const token = getClientToken();
-  const [status, setStatus] = useState<"checking" | "allowed" | "denied">(
-    token && !isClientLogoutPending() ? "checking" : "denied",
-  );
+  const [status, setStatus] = useState<"checking" | "allowed" | "denied">("checking");
 
   useEffect(() => {
-    if (!token || isClientLogoutPending() || !supabase) {
-      clearClientAuth();
-      clearSupabaseSessionStorage();
-      setStatus("denied");
-      return;
-    }
-
     let cancelled = false;
 
     const validate = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error || !data.session?.access_token) {
-          throw error || new Error("No active Supabase session");
+        if (isClientLogoutPending()) {
+          throw new Error("Logout in progress");
         }
 
-        await finalizeClientLoginFromSupabase(data.session.access_token);
+        const isAuthenticated = await hasActiveClientSession();
+        if (!isAuthenticated) {
+          throw new Error("No active Supabase session");
+        }
+
+        await syncClientProfileFromSession();
         if (!cancelled) setStatus("allowed");
       } catch {
-        clearClientAuth();
         clearSupabaseSessionStorage();
         if (!cancelled) setStatus("denied");
       }
@@ -44,7 +36,7 @@ const ProtectedClientRoute = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, []);
 
   if (status === "checking") {
     return (

@@ -23,14 +23,20 @@ export const getEnquiries = async (req: Request, res: Response) => {
 
 export const createEnquiry = async (req: Request, res: Response) => {
   try {
-    const agencyId = await getRequestAgencyId(req)
-    const { username, date, email, phone, message } = req.body as {
+    const body = req.body as {
+      agencyId?: number
       username?: string
       date?: string
       email?: string
       phone?: string
       message?: string
     }
+    const requestedAgencyId = Number(body.agencyId)
+    const agencyId =
+      Number.isInteger(requestedAgencyId) && requestedAgencyId > 0
+        ? requestedAgencyId
+        : await getRequestAgencyId(req)
+    const { username, date, email, phone, message } = body
 
     if (!username || !email || !phone || !message) {
       return res

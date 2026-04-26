@@ -14,12 +14,13 @@ import {
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
-import { logoutClientPortal } from "@/lib/supabaseAuth";
+import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import "./ClientTheme.css";
 
 const tabs = [
   { label: "Home", to: "/client/home" },
   { label: "Search Maid", to: "/client/maids" },
+  { label: "My Requests", to: "/client/requests" },
   { label: "Messages", to: "/client/support-chat" },
   { label: "FAQ", to: "/client/faq" },
   { label: "Enquiry", to: "/client/enquiry" },
@@ -41,7 +42,7 @@ const ClientPortalNavbar = () => {
   }, [location.hash, location.pathname]);
 
   useEffect(() => {
-    setClientUser(getStoredClient());
+    void syncClientProfileFromSession().then((client) => setClientUser(client ?? getStoredClient()));
     setIsMobileMenuOpen(false);
   }, [location.pathname, location.hash]);
 

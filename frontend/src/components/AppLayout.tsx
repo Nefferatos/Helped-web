@@ -222,6 +222,40 @@ const Tooltip = ({ label }: { label: string }) => (
   </div>
 );
 
+const getAgencyDisplayName = (agencyAdmin: AgencyAdminUser | null) => {
+  if (!agencyAdmin) return "Agency";
+
+  if (agencyAdmin.role === "admin") {
+    return agencyAdmin.agencyName || "Main Agency";
+  }
+
+  return agencyAdmin.agencyName || agencyAdmin.username || "Agency";
+};
+
+const getAgencyDisplaySubtitle = (agencyAdmin: AgencyAdminUser | null) => {
+  if (!agencyAdmin) return "Management Suite";
+
+  if (agencyAdmin.role === "admin") {
+    return "Main Agency";
+  }
+
+  if (agencyAdmin.role === "agency") {
+    return "Agency Account";
+  }
+
+  return "Management Suite";
+};
+
+const getAgencyDisplayWelcomeName = (agencyAdmin: AgencyAdminUser | null) => {
+  if (!agencyAdmin) return "Agency";
+
+  if (agencyAdmin.role === "admin") {
+    return agencyAdmin.agencyName || "Main Agency";
+  }
+
+  return agencyAdmin.username || agencyAdmin.agencyName || "Agency";
+};
+
 /* ─── Sidebar inner content ──────────────────────────────────────────────── */
 
 const SidebarContent = ({
@@ -240,6 +274,8 @@ const SidebarContent = ({
   onNavClick?: () => void;
 }) => {
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
+  const agencyDisplayName = getAgencyDisplayName(agencyAdmin);
+  const agencyDisplaySubtitle = getAgencyDisplaySubtitle(agencyAdmin);
 
   return (
     <div
@@ -353,7 +389,7 @@ const SidebarContent = ({
           }}
         >
           <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}>
-            {agencyAdmin?.agencyName ?? "Admin Portal"}
+            {agencyDisplayName}
           </p>
           <p
             style={{
@@ -363,7 +399,7 @@ const SidebarContent = ({
               color: "rgba(255,255,255,0.75)",
             }}
           >
-            Management Suite
+            {agencyDisplaySubtitle}
           </p>
         </div>
       </div>
@@ -514,10 +550,14 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
     const loadSummary = async (silent = false) => {
       try {
-        const [res, compRes] = await Promise.all([
-          fetch("/api/company/summary"),
-          fetch("/api/company"),
-        ]);
+          const [res, compRes] = await Promise.all([
+            fetch("/api/company/summary", {
+              headers: { ...getAgencyAdminAuthHeaders() },
+            }),
+            fetch("/api/company", {
+              headers: { ...getAgencyAdminAuthHeaders() },
+            }),
+          ]);
         const data = (await res.json().catch(() => ({}))) as {
           unreadAgencyChats?: number;
           error?: string;
@@ -580,6 +620,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   const initials = (agencyAdmin?.agencyName || "A").slice(0, 2).toUpperCase();
+  const agencyDisplayName = getAgencyDisplayName(agencyAdmin);
+  const agencyWelcomeName = getAgencyDisplayWelcomeName(agencyAdmin);
   const desktopWidth = collapsed ? 64 : 230;
 
   const sharedSidebarProps = {
@@ -844,10 +886,10 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                   </Avatar>
                   <div className="min-w-0">
                     <p className="truncate text-[14px] font-bold text-gray-100">
-                      Welcome! {agencyAdmin?.username ?? "Agency Admin"}
+                      Welcome! {agencyWelcomeName}
                     </p>
                     <p className="truncate text-[13px] font-semibold leading-snug text-gray-500">
-                      {agencyAdmin?.agencyName ?? "Agency"}
+                      {agencyDisplayName}
                     </p>
                   </div>
                 </DropdownMenuLabel>
@@ -886,7 +928,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           >
             Welcome:
             <span style={{ fontWeight: 700, color: "#0D6E56" }}>
-              {agencyAdmin?.username ?? "Agency Admin"}
+              {agencyWelcomeName}
             </span>
             <Hand style={{ width: 18, height: 18, color: "#0D6E56" }} />
           </p>

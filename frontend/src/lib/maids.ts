@@ -1,5 +1,7 @@
 export interface MaidProfile {
   id?: number;
+  agencyId?: number;
+  agencyName?: string;
   fullName: string;
   referenceCode: string;
   status?: string;

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, MessageCircle } from "lucide-react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { MessageCircle } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChatWorkspace, type ChatWorkspaceConversation, type ChatWorkspaceMessage } from "@/components/chat/ChatWorkspace";
 import { toast } from "@/components/ui/sonner";
-import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
+import { getStoredClient } from "@/lib/clientAuth";
 import type { ChatMessage, ClientConversation, ConversationType } from "@/lib/chat";
 import { streamSse } from "@/lib/sse";
+import { clientFetch, hasActiveClientSession, primeClientAuth, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import "./ClientTheme.css";
 
 const defaultConversation: ClientConversation = {
@@ -69,9 +70,7 @@ const ClientSupportChat = () => {
 
   const loadConversations = useCallback(async (silent = false) => {
     try {
-      const response = await fetch("/api/chats/client/conversations", {
-        headers: { ...getClientAuthHeaders() },
-      });
+      const response = await clientFetch("/api/chats/client/conversations");
       const data = (await response.json().catch(() => ({}))) as {
         conversations?: ClientConversation[];
         error?: string;
@@ -111,9 +110,7 @@ const ClientSupportChat = () => {
       }
       setErrorMessage("");
 
-      const response = await fetch(`/api/chats/client?${queryString}`, {
-        headers: { ...getClientAuthHeaders() },
-      });
+      const response = await clientFetch(`/api/chats/client?${queryString}`);
       const data = (await response.json().catch(() => ({}))) as {
         messages?: ChatMessage[];
         error?: string;
@@ -148,30 +145,43 @@ const ClientSupportChat = () => {
   }, [queryString]);
 
   useEffect(() => {
-    if (!getClientToken()) {
-      navigate("/employer-login");
-      return;
-    }
+    let cancelled = false;
 
-    lastSignatureRef.current = "";
-    void loadConversations(false);
-    void loadMessages(false);
+    const boot = async () => {
+      const isAuthenticated = await hasActiveClientSession();
+      if (!isAuthenticated) {
+        if (!cancelled) navigate("/employer-login");
+        return;
+      }
+
+      await syncClientProfileFromSession();
+      lastSignatureRef.current = "";
+      if (!cancelled) {
+        void loadConversations(false);
+        void loadMessages(false);
+      }
+    };
+
+    void boot();
+
+    return () => {
+      cancelled = true;
+    };
   }, [loadConversations, loadMessages, navigate]);
 
   useEffect(() => {
-    const token = getClientToken();
-    if (!token) {
-      navigate("/employer-login");
-      return;
-    }
-
     const controller = new AbortController();
     let lastId = 0;
 
     const run = async () => {
       try {
-        const response = await fetch("/api/chats/client/last-id", {
-          headers: { ...getClientAuthHeaders() },
+        const token = await primeClientAuth();
+        if (!token) {
+          navigate("/employer-login");
+          return;
+        }
+
+        const response = await clientFetch("/api/chats/client/last-id", {
           signal: controller.signal,
         });
         const data = (await response.json().catch(() => ({}))) as { lastId?: number };
@@ -186,8 +196,14 @@ const ClientSupportChat = () => {
 
       while (!controller.signal.aborted) {
         try {
+          const token = await primeClientAuth();
+          if (!token) {
+            navigate("/employer-login");
+            return;
+          }
+
           await streamSse(`/api/chats/client/stream?all=1&afterId=${lastId}`, {
-            headers: { ...getClientAuthHeaders() },
+            headers: { Authorization: `Bearer ${token}` },
             signal: controller.signal,
             onEvent: (event) => {
               if (event.event !== "message" || !event.data) return;
@@ -242,11 +258,10 @@ const ClientSupportChat = () => {
 
     try {
       setIsSending(true);
-      const response = await fetch(`/api/chats/client?${queryString}`, {
+      const response = await clientFetch(`/api/chats/client?${queryString}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getClientAuthHeaders(),
         },
         body: JSON.stringify({ message: draft.trim() }),
       });

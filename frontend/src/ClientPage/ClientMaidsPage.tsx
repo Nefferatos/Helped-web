@@ -15,7 +15,8 @@ import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { getClientToken, getStoredClient } from "@/lib/clientAuth";
+import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
+import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
 import "./ClientTheme.css";
 
 interface Filters {
@@ -635,12 +636,14 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
     name: storedClient?.name || "",
     email: storedClient?.email || "",
     phone: storedClient?.phone || "",
+    agencyId: "",
     nationality: derivedNationality,
     primaryDuty: derivedDuty,
     ageGroup: derivedAgeGroup,
     language: derivedLanguage,
     otherRequirements: "",
   });
+  const [agencyOptions, setAgencyOptions] = useState<PublicAgencyOption[]>([]);
 
   const [requirements, setRequirements] = useState<RequirementsState>({
     ...defaultRequirements,
@@ -652,6 +655,12 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
   });
 
   const highlights = useMemo(() => getRequestHighlights(prefillFilters), [prefillFilters]);
+
+  useEffect(() => {
+    void fetchAgencyOptions()
+      .then(setAgencyOptions)
+      .catch(() => setAgencyOptions([]));
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -671,10 +680,10 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
     try {
       setIsSubmitting(true);
       const payload = {
-        referenceCode: "GENERAL",
         ...(storedClient?.id != null && { clientId: storedClient.id }),
-        status: "pending",
-        formData: {
+        agencyId: form.agencyId ? Number(form.agencyId) : 1,
+        type: "general",
+        details: {
           clientName: form.name.trim(),
           clientEmail: form.email.trim(),
           clientPhone: form.phone.trim(),
@@ -686,9 +695,12 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
           ...(requirementsList.length > 0 && { requirements: requirementsList.join(", ") }),
         },
       };
-      const response = await fetch("/api/direct-sales", {
+      const response = await fetch("/api/requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getClientAuthHeaders(),
+        },
         body: JSON.stringify(payload),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
@@ -697,6 +709,7 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
       setRequirements(defaultRequirements);
       setForm((prev) => ({
         ...prev,
+        agencyId: "",
         nationality: derivedNationality,
         primaryDuty: derivedDuty,
         ageGroup: derivedAgeGroup,
@@ -768,6 +781,24 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
                 required
               />
             </div>
+          </div>
+          <div className="mt-4 grid gap-1.5">
+            <label className="text-sm font-medium text-foreground">
+              Agency <span className="text-destructive">*</span>
+            </label>
+            <select
+              className={selectClass}
+              value={form.agencyId}
+              onChange={(e) => setForm((p) => ({ ...p, agencyId: e.target.value }))}
+              required
+            >
+              <option value="">Choose an agency</option>
+              {agencyOptions.map((agency) => (
+                <option key={agency.id} value={agency.id}>
+                  {agency.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="mt-4 grid gap-1.5">
             <label className="text-sm font-medium text-foreground">

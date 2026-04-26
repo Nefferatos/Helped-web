@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
-import { clearClientAuth, getClientAuthHeaders, getClientToken, getStoredClient, saveClientAuth, type ClientUser } from "@/lib/clientAuth";
+import { getStoredClient, saveClientAuth, type ClientUser } from "@/lib/clientAuth";
+import { clientFetch, hasActiveClientSession } from "@/lib/supabaseAuth";
 import "./ClientTheme.css";
 
 const ClientProfilePage = () => {
@@ -23,28 +24,20 @@ const ClientProfilePage = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const token = getClientToken();
-    if (!token) {
-      navigate("/employer-login");
-      return;
-    }
-
     const loadProfile = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch("/api/client-auth/me", {
-          headers: { ...getClientAuthHeaders() },
-        });
+        const isAuthenticated = await hasActiveClientSession();
+        if (!isAuthenticated) {
+          navigate("/employer-login");
+          return;
+        }
+
+        const response = await clientFetch("/api/client-auth/me");
         const data = (await response.json().catch(() => ({}))) as {
           client?: ClientUser;
           error?: string;
         };
-
-        if (response.status === 401) {
-          clearClientAuth();
-          navigate("/employer-login");
-          return;
-        }
 
         if (!response.ok || !data.client) {
           throw new Error(data.error || "Failed to load profile");
@@ -69,19 +62,17 @@ const ClientProfilePage = () => {
   }, [navigate]);
 
   const handleSave = async () => {
-    const token = getClientToken();
-    if (!token) {
+    if (!(await hasActiveClientSession())) {
       navigate("/employer-login");
       return;
     }
 
     try {
       setIsSaving(true);
-      const response = await fetch("/api/client-auth/me", {
+      const response = await clientFetch("/api/client-auth/me", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...getClientAuthHeaders(),
         },
         body: JSON.stringify(form),
       });
@@ -94,7 +85,7 @@ const ClientProfilePage = () => {
         throw new Error(data.error || "Failed to update profile");
       }
 
-      saveClientAuth(token, data.client);
+      saveClientAuth(null, data.client);
       setClient(data.client);
       toast.success("Profile updated");
     } catch (error) {

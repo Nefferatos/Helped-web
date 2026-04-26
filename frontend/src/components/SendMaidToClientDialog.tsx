@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 
 interface ClientOption {
   id: number;
@@ -67,31 +68,61 @@ const SendMaidToClientDialog = ({
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/direct-sales/${encodeURIComponent(maid.referenceCode)}`, {
+      const createResponse = await fetch("/api/requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId: Number(selectedClientId), status: actionType }),
+        headers: {
+          "Content-Type": "application/json",
+          ...getAgencyAdminAuthHeaders(),
+        },
+        body: JSON.stringify({
+          clientId: Number(selectedClientId),
+          type: "direct",
+          ...(typeof maid.agencyId === "number" ? { agencyId: maid.agencyId } : {}),
+          maidReferences: [maid.referenceCode],
+          details: {},
+        }),
       });
+      const createData = (await createResponse.json().catch(() => ({}))) as {
+        error?: string;
+        data?: { id: string };
+      };
+      if (!createResponse.ok || !createData.data) {
+        throw new Error(createData.error || "Failed to create request");
+      }
 
-      const data = (await response.json().catch(() => ({}))) as {
+      if (actionType !== "pending") {
+        const statusResponse = await fetch(`/api/requests/${encodeURIComponent(createData.data.id)}/status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAgencyAdminAuthHeaders(),
+          },
+          body: JSON.stringify({ status: actionType }),
+        });
+        const statusData = (await statusResponse.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!statusResponse.ok) {
+          throw new Error(statusData.error || "Failed to update request status");
+        }
+      }
+
+      const data = {
+        maid: {
+          ...maid,
+          status:
+            actionType === "interested"
+              ? "interested"
+              : actionType === "direct_hire"
+                ? "reserved"
+                : actionType === "rejected"
+                  ? "rejected"
+                  : maid.status,
+        },
+      } as {
         error?: string;
         maid?: MaidProfile;
       };
-
-      if (!response.ok || !data.maid) {
-        throw new Error(
-          data.error ||
-            `Failed to ${
-              actionType === "interested"
-                ? "mark maid as interested"
-                : actionType === "direct_hire"
-                ? "start direct hire"
-                : actionType === "rejected"
-                ? "reject maid"
-                : "send maid to client"
-            }`
-        );
-      }
 
       onSuccess?.(data.maid);
       toast.success(

@@ -1,44 +1,66 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Bell,
-  Search,
-  UserRound,
-  CalendarDays,
-  Tag,
-  ChevronLeft,
-  ChevronRight,
-  X,
-  ClipboardList,
-  FileText,
-} from "lucide-react";
+import { Component, type ErrorInfo, type ReactNode, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Search, UserRound, ChevronLeft, ChevronRight, Sparkles, BriefcaseBusiness } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import {
+  createRequestMessage,
+  fetchRequestConversation,
+  fetchRequestMessages,
+  type RequestRecord,
+  type RequestMessageRecord,
+  type RequestStatus,
+  fetchRequests,
+  subscribeToRequestsChanged,
+  requestStatusMeta,
+  requestStateMessage,
+  updateRequestMaids,
+  updateRequestStatus,
+} from "@/lib/requests";
+import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
 import { toast } from "@/components/ui/sonner";
 
-interface MaidRequest {
-  id: number;
-  maidReferenceCode: string;
-  maidName: string;
-  clientId: number;
-  clientName: string;
-  clientEmail: string;
-  clientPhone: string;
-  status: string;
-  requestDetails?: Record<string, string>;
-  formData?: Record<string, string>;
-  createdAt: string;
-}
+type DrawerMode = "details" | "match";
 
-const PAGE_SIZE = 8;
+type MaidOption = {
+  referenceCode: string;
+  fullName: string;
+  nationality: string;
+  status?: string;
+  type?: string;
+  photoDataUrl?: string;
+};
 
-const formatFieldLabel = (value: string) =>
+const PAGE_SIZE = 9;
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat("en-SG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+
+const detailEntries = (details: Record<string, unknown>) =>
+  Object.entries(details).filter(([, value]) => {
+    if (typeof value === "string") return value.trim().length > 0;
+    if (typeof value === "number") return Number.isFinite(value);
+    return Boolean(value);
+  });
+
+const formatDetailLabel = (value: string) =>
   value
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
@@ -46,497 +68,786 @@ const formatFieldLabel = (value: string) =>
     .trim()
     .replace(/^./, (char) => char.toUpperCase());
 
-const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string; label: string; tabActive: string }> = {
-  pending:     { bg: "bg-amber-50 border-amber-200",     text: "text-amber-700",   dot: "bg-amber-400",   label: "Pending",     tabActive: "bg-amber-500 text-white border-amber-500" },
-  interested:  { bg: "bg-sky-50 border-sky-200",         text: "text-sky-700",     dot: "bg-sky-400",     label: "Interested",  tabActive: "bg-sky-500 text-white border-sky-500" },
-  direct_hire: { bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", dot: "bg-emerald-500", label: "Direct Hire", tabActive: "bg-emerald-600 text-white border-emerald-600" },
-  rejected:    { bg: "bg-red-50 border-red-200",         text: "text-red-600",     dot: "bg-red-400",     label: "Rejected",    tabActive: "bg-red-500 text-white border-red-500" },
+const applyRequestPatch = (
+  previous: { data: RequestRecord[]; pageInfo: { page: number; pageSize: number; total: number; totalPages: number } } | undefined,
+  requestId: string,
+  patch: Partial<RequestRecord>,
+) => {
+  if (!previous) return previous;
+  return {
+    ...previous,
+    data: previous.data.map((request) =>
+      request.id === requestId ? { ...request, ...patch } : request,
+    ),
+  };
 };
 
-const getStatusStyle = (status: string) =>
-  STATUS_STYLES[status.toLowerCase()] ?? {
-    bg: "bg-gray-50 border-gray-200", text: "text-gray-600", dot: "bg-gray-400", label: status, tabActive: "bg-gray-500 text-white border-gray-500",
-  };
+type RequestsPageInfo = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
 
-const isGeneralRequest = (r: MaidRequest) =>
-  r.maidReferenceCode === "GENERAL" ||
-  r.maidReferenceCode === "DIRECT-REQUEST" ||
-  !r.maidReferenceCode;
+class RequestsPageErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
 
-/* ─── Skeleton loader ──────────────────────────────────────────────────── */
-function SkeletonCard() {
-  return (
-    <div className="animate-pulse rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="flex items-start gap-3">
-          <div className="h-11 w-11 rounded-full bg-gray-100" />
-          <div className="space-y-2">
-            <div className="h-4 w-36 rounded-lg bg-gray-100" />
-            <div className="h-3 w-48 rounded-lg bg-gray-100" />
-          </div>
-        </div>
-        <div className="h-7 w-24 rounded-full bg-gray-100" />
-      </div>
-      <div className="h-16 rounded-xl bg-gray-50" />
-    </div>
-  );
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("[RequestsPage] render error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return null;
+    }
+
+    return this.props.children;
+  }
 }
 
-/* ─── Main component ───────────────────────────────────────────────────── */
-const RequestsPage = () => {
-  const [requests, setRequests] = useState<MaidRequest[]>([]);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+const RequestsPageContent = () => {
+  const queryClient = useQueryClient();
+  const admin = useMemo(() => getStoredAgencyAdmin(), []);
+  const isMainAdmin = admin?.role === "admin";
+  const agencyId = typeof admin?.agencyId === "number" ? admin.agencyId : undefined;
+
+  // FIX 1: Always use agencyId directly. When agencyId is undefined (true
+  // platform super-admin), no filter is applied and all records are returned.
+  const agencyFilter = agencyId;
+
   const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedRequest, setSelectedRequest] = useState<MaidRequest | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<RequestStatus | "all">("all");
+  const [search, setSearch] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>("details");
+  const [selectedRequest, setSelectedRequest] = useState<RequestRecord | null>(null);
+  const [maidSearch, setMaidSearch] = useState("");
+  const [selectedMaidReferences, setSelectedMaidReferences] = useState<string[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const loadRequests = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch("/api/direct-sales", { signal: controller.signal });
-        const data = (await response.json().catch(() => ({}))) as {
-          directSales?: MaidRequest[];
-          error?: string;
-        };
-        if (!response.ok || !data.directSales)
-          throw new Error(data.error || "Failed to load requests");
-        setRequests(data.directSales);
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          toast.error(error instanceof Error ? error.message : "Failed to load requests");
-        }
-      } finally {
-        setIsLoading(false);
+  const deferredSearch = useDeferredValue(search);
+  const deferredMaidSearch = useDeferredValue(maidSearch);
+
+  const requestQueryKey = [
+    "agency-requests",
+    agencyFilter ?? "all",
+    page,
+    statusFilter,
+    deferredSearch,
+  ] as const;
+
+  // Main paginated + filtered query
+  const requestsQuery = useQuery({
+    queryKey: requestQueryKey,
+    enabled: typeof agencyFilter === "number" || isMainAdmin,
+    queryFn: () =>
+      fetchRequests({
+        agencyId: agencyFilter,
+        page,
+        pageSize: PAGE_SIZE,
+        status: statusFilter,
+        query: deferredSearch,
+      }),
+    refetchInterval: 5000,
+    placeholderData: (previous) => previous,
+  });
+
+  // FIX 2: Separate unfiltered counts query — always fetches all statuses
+  // regardless of which tab is active, so badge counts stay accurate.
+  const countsQuery = useQuery({
+    queryKey: ["agency-requests-counts", agencyFilter ?? "all"],
+    enabled: typeof agencyFilter === "number" || isMainAdmin,
+    queryFn: () =>
+      fetchRequests({
+        agencyId: agencyFilter,
+        page: 1,
+        pageSize: 100,
+        status: "all",
+      }),
+    refetchInterval: 5000,
+    placeholderData: (previous) => previous,
+  });
+
+  const maidOptionsQuery = useQuery({
+    queryKey: ["maids", "request-matching"],
+    enabled: drawerOpen && drawerMode === "match",
+    staleTime: 60_000,
+    queryFn: async () => {
+      const response = await fetch("/api/maids", {
+        headers: { ...getAgencyAdminAuthHeaders() },
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        maids?: MaidOption[];
+        error?: string;
+      };
+      if (!response.ok || !data.maids) {
+        throw new Error(data.error || "Failed to load maids");
       }
-    };
-    void loadRequests();
-    return () => controller.abort();
-  }, []);
+      return data.maids;
+    },
+  });
 
-  const filteredRequests = useMemo(() => {
-    let result = requests;
-    if (statusFilter !== "all")
-      result = result.filter((r) => r.status.toLowerCase() === statusFilter);
-    const term = search.trim().toLowerCase();
-    if (term) {
-      result = result.filter((r) =>
-        [r.clientName, r.clientEmail, r.clientPhone, r.maidName, r.maidReferenceCode, r.status]
-          .join(" ")
-          .toLowerCase()
-          .includes(term),
-      );
-    }
-    return result;
-  }, [requests, search, statusFilter]);
+  const conversationQuery = useQuery({
+    queryKey: ["admin-request-conversation", selectedRequest?.id],
+    enabled: drawerOpen && drawerMode === "details" && Boolean(selectedRequest?.id),
+    queryFn: () => fetchRequestConversation(selectedRequest!.id),
+    refetchInterval: 5000,
+  });
 
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const visibleRequests = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredRequests.slice(start, start + PAGE_SIZE);
-  }, [currentPage, filteredRequests]);
+  const messagesQuery = useQuery({
+    queryKey: ["admin-request-messages", conversationQuery.data?.id],
+    enabled: drawerOpen && drawerMode === "details" && Boolean(conversationQuery.data?.id),
+    queryFn: () => fetchRequestMessages(conversationQuery.data!.id),
+    refetchInterval: 5000,
+  });
+
+  const requests = requestsQuery.data?.data ?? [];
+  const pageInfo: RequestsPageInfo | null = requestsQuery.data?.pageInfo ?? null;
 
   useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter]);
+    const unsubscribe = subscribeToRequestsChanged(() => {
+      void requestsQuery.refetch();
+      void countsQuery.refetch();
+    });
+    return unsubscribe;
+  }, [requestsQuery.refetch, countsQuery.refetch]);
 
-  const detailEntries = useMemo(() => {
-    if (!selectedRequest) return [];
-    const source = selectedRequest.formData ?? selectedRequest.requestDetails ?? {};
-    return Object.entries(source)
-      .filter(([, value]) => String(value ?? "").trim().length > 0)
-      .sort(([a], [b]) => a.localeCompare(b));
-  }, [selectedRequest]);
+  const statusMutation = useMutation({
+    mutationFn: ({ requestId, status }: { requestId: string; status: RequestStatus }) =>
+      updateRequestStatus(requestId, status),
+    onMutate: async ({ requestId, status }) => {
+      await queryClient.cancelQueries({ queryKey: requestQueryKey });
+      const previous = queryClient.getQueryData<Awaited<ReturnType<typeof fetchRequests>>>(requestQueryKey);
+      queryClient.setQueryData(requestQueryKey, applyRequestPatch(previous, requestId, { status }));
+      if (selectedRequest?.id === requestId) {
+        setSelectedRequest((current) => (current ? { ...current, status } : current));
+      }
+      return { previous };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(requestQueryKey, context.previous);
+      toast.error(error instanceof Error ? error.message : "Failed to update request");
+    },
+    onSuccess: (request) => {
+      queryClient.setQueryData<Awaited<ReturnType<typeof fetchRequests>> | undefined>(requestQueryKey, (previous) =>
+        applyRequestPatch(previous, request.id, request),
+      );
+      if (selectedRequest?.id === request.id) setSelectedRequest(request);
+      void countsQuery.refetch();
+    },
+  });
 
-  const counts = useMemo(
-    () => ({
-      all:         requests.length,
-      pending:     requests.filter((r) => r.status === "pending").length,
-      interested:  requests.filter((r) => r.status === "interested").length,
-      direct_hire: requests.filter((r) => r.status === "direct_hire").length,
-      rejected:    requests.filter((r) => r.status === "rejected").length,
-    }),
-    [requests],
-  );
+  const matchMutation = useMutation({
+    mutationFn: async ({
+      requestId,
+      maidReferences,
+    }: {
+      requestId: string;
+      maidReferences: string[];
+    }) => {
+      await updateRequestMaids(requestId, maidReferences);
+      return updateRequestStatus(requestId, "interested");
+    },
+    onMutate: async ({ requestId, maidReferences }) => {
+      await queryClient.cancelQueries({ queryKey: requestQueryKey });
+      const previous = queryClient.getQueryData<Awaited<ReturnType<typeof fetchRequests>>>(requestQueryKey);
+      const maids = (maidOptionsQuery.data ?? [])
+        .filter((maid) => maidReferences.includes(maid.referenceCode))
+        .map((maid) => ({
+          referenceCode: maid.referenceCode,
+          fullName: maid.fullName,
+          nationality: maid.nationality,
+          status: maid.status ?? "available",
+          type: maid.type ?? "",
+          photoDataUrl: maid.photoDataUrl,
+        }));
+      queryClient.setQueryData(
+        requestQueryKey,
+        applyRequestPatch(previous, requestId, {
+          maidReferences,
+          status: "interested",
+          maids,
+        }),
+      );
+      if (selectedRequest?.id === requestId) {
+        setSelectedRequest((current) =>
+          current ? { ...current, maidReferences, maids, status: "interested" } : current,
+        );
+      }
+      return { previous };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(requestQueryKey, context.previous);
+      toast.error(error instanceof Error ? error.message : "Failed to save maid suggestions");
+    },
+    onSuccess: (request) => {
+      queryClient.setQueryData<Awaited<ReturnType<typeof fetchRequests>> | undefined>(requestQueryKey, (previous) =>
+        applyRequestPatch(previous, request.id, request),
+      );
+      setSelectedRequest(request);
+      setDrawerOpen(false);
+      toast.success("Request moved to Interested");
+      void countsQuery.refetch();
+    },
+  });
 
-  const STATUS_TABS = [
-    { key: "all",         label: "All",         count: counts.all },
-    { key: "pending",     label: "Pending",     count: counts.pending },
-    { key: "interested",  label: "Interested",  count: counts.interested },
-    { key: "direct_hire", label: "Direct Hire", count: counts.direct_hire },
-    { key: "rejected",    label: "Rejected",    count: counts.rejected },
-  ];
+  const messageMutation = useMutation({
+    mutationFn: async () => {
+      if (!conversationQuery.data?.id) throw new Error("Conversation not found");
+      if (!chatDraft.trim()) throw new Error("Message cannot be empty");
+      return createRequestMessage({
+        conversationId: conversationQuery.data.id,
+        message: chatDraft.trim(),
+      });
+    },
+    onSuccess: (message) => {
+      queryClient.setQueryData<RequestMessageRecord[] | undefined>(
+        ["admin-request-messages", message.conversationId],
+        (previous) => [...(previous ?? []), message],
+      );
+      setChatDraft("");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to send message");
+    },
+  });
+
+  // FIX 3: Use the unfiltered countsQuery so badge numbers stay correct
+  // on every tab, including when the active tab is empty.
+  const statusCounts = useMemo(() => {
+    const all = countsQuery.data?.data ?? [];
+    return {
+      pending:     all.filter((r) => r.status === "pending").length,
+      interested:  all.filter((r) => r.status === "interested").length,
+      direct_hire: all.filter((r) => r.status === "direct_hire").length,
+      rejected:    all.filter((r) => r.status === "rejected").length,
+    };
+  }, [countsQuery.data]);
+
+  const filteredMaids = useMemo(() => {
+    const term = deferredMaidSearch.trim().toLowerCase();
+    const items = maidOptionsQuery.data ?? [];
+    if (!term) return items;
+    return items.filter((maid) =>
+      [maid.referenceCode, maid.fullName, maid.nationality, maid.type, maid.status]
+        .join(" ")
+        .toLowerCase()
+        .includes(term),
+    );
+  }, [deferredMaidSearch, maidOptionsQuery.data]);
+
+  const openDrawer = (request: RequestRecord, mode: DrawerMode) => {
+    setSelectedRequest(request);
+    setDrawerMode(mode);
+    setSelectedMaidReferences(request.maidReferences);
+    setMaidSearch("");
+    setChatDraft("");
+    setDrawerOpen(true);
+  };
+
+  useEffect(() => {
+    if (!chatScrollRef.current) return;
+    chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+  }, [messagesQuery.data]);
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        .rp-root, .rp-root * { font-family: 'DM Sans', sans-serif; }
-
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .rp-card-enter {
-          animation: fadeUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-      `}</style>
-
-      <div className="rp-root space-y-5">
-
-        {/* ── Page Header ── */}
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 shadow-md">
-            <Bell className="h-5 w-5 text-white" />
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 rounded-[28px] border bg-card p-6 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-[22px] font-bold leading-tight text-gray-900">Maid Requests</h2>
-            <p className="text-[14px] text-gray-500 mt-0.5 font-medium">
-              {counts.all} total &middot;{" "}
-              <span className="text-amber-600 font-semibold">{counts.pending} pending</span>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Requests</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground">Action-first request queue</h1>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              Review, match, and close requests without leaving the list. Each action updates in place so the queue stays fast.
             </p>
           </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {([
+              ["pending", "Pending"],
+              ["interested", "Interested"],
+              ["direct_hire", "Direct Hire"],
+              ["rejected", "Rejected"],
+            ] as const).map(([status, label]) => (
+              <Card key={status} className="border-border/70 shadow-none">
+                <CardContent className="px-4 py-3">
+                  <p className={cn("text-2xl font-semibold", requestStatusMeta[status].accentClassName)}>
+                    {statusCounts[status]}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
 
-        {/* ── Stats strip ── */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { label: "Pending",     value: counts.pending,     color: "text-amber-600",   bg: "bg-amber-50 border-amber-100" },
-            { label: "Interested",  value: counts.interested,  color: "text-sky-600",     bg: "bg-sky-50 border-sky-100" },
-            { label: "Direct Hire", value: counts.direct_hire, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
-            { label: "Rejected",    value: counts.rejected,    color: "text-red-500",     bg: "bg-red-50 border-red-100" },
-          ].map((s) => (
-            <div key={s.label} className={`rounded-2xl border px-4 py-3 ${s.bg}`}>
-              <p className={`text-[26px] font-bold leading-none ${s.color}`}>{s.value}</p>
-              <p className="mt-1 text-[13px] font-semibold text-gray-500">{s.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Main card ── */}
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-
-          {/* Toolbar */}
-          <div className="border-b border-gray-100 bg-gray-50/60 px-5 py-4 space-y-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-400 pointer-events-none" style={{ height: 18, width: 18 }} />
-              <input
-                type="text"
-                placeholder="Search by name, email, phone, maid, or status…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-10 text-[15px] text-gray-800 outline-none placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter tabs */}
-            <div className="flex flex-wrap gap-2">
-              {STATUS_TABS.map((tab) => {
-                const st = getStatusStyle(tab.key);
-                const isActive = statusFilter === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setStatusFilter(tab.key)}
-                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[13px] font-semibold transition-all ${
-                      isActive
-                        ? tab.key === "all"
-                          ? "bg-gray-800 text-white border-gray-800 shadow-sm"
-                          : st.tabActive + " shadow-sm"
-                        : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-800"
-                    }`}
-                  >
-                    {tab.label}
-                    <span
-                      className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
-                        isActive ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => {
+                setPage(1);
+                setSearch(event.target.value);
+              }}
+              placeholder="Search client, summary, notes, or maid reference"
+              className="h-11 rounded-2xl pl-10"
+            />
           </div>
 
-          {/* List body */}
-          <div className="p-4">
-            {isLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <SkeletonCard key={i} />
-                ))}
-              </div>
-            ) : visibleRequests.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 py-16 text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
-                  <ClipboardList className="h-6 w-6 text-gray-400" />
-                </div>
-                <p className="text-[16px] font-bold text-gray-700">No requests found</p>
-                <p className="mt-1.5 text-[14px] text-gray-400 max-w-[260px] leading-relaxed">
-                  {search || statusFilter !== "all"
-                    ? "Try adjusting your search or filters."
-                    : "Client requests will appear here once submitted."}
-                </p>
-                {(search || statusFilter !== "all") && (
-                  <button
-                    type="button"
-                    onClick={() => { setSearch(""); setStatusFilter("all"); }}
-                    className="mt-4 rounded-xl bg-emerald-600 px-5 py-2 text-[14px] font-semibold text-white hover:bg-emerald-700 transition-colors"
-                  >
-                    Clear filters
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {visibleRequests.map((request, index) => {
-                  const st = getStatusStyle(request.status);
-                  const isGeneral = isGeneralRequest(request);
-                  return (
-                    <button
-                      key={request.id}
-                      type="button"
-                      onClick={() => { setSelectedRequest(request); setIsDialogOpen(true); }}
-                      className="rp-card-enter group w-full rounded-2xl border border-gray-100 bg-white text-left shadow-sm hover:shadow-md hover:border-emerald-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 transition-all"
-                      style={{ animationDelay: `${index * 0.045}s` }}
-                    >
-                      <div className="p-4 sm:p-5">
-                        {/* Top row */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 font-bold text-[15px]">
-                              {request.clientName.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[15px] font-bold text-gray-900 truncate leading-snug">
-                                {request.clientName}
-                              </p>
-                              <p className="text-[13px] text-gray-500 truncate">{request.clientEmail}</p>
-                              {request.clientPhone && (
-                                <p className="text-[13px] text-gray-400">{request.clientPhone}</p>
-                              )}
-                            </div>
-                          </div>
-                          <span
-                            className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-bold ${st.bg} ${st.text}`}
-                          >
-                            <span className={`h-2 w-2 rounded-full ${st.dot}`} />
-                            {st.label}
-                          </span>
-                        </div>
-
-                        {/* Info grid */}
-                        <div className="mt-4 grid grid-cols-2 gap-2.5 rounded-xl bg-gray-50 p-3.5 sm:grid-cols-3">
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">
-                              {isGeneral ? "Request Type" : "Maid Requested"}
-                            </p>
-                            <p className="text-[14px] font-bold text-gray-800 truncate">
-                              {isGeneral ? "General" : request.maidName}
-                            </p>
-                            {!isGeneral && (
-                              <p className="text-[12px] font-mono text-gray-400 truncate">
-                                {request.maidReferenceCode}
-                              </p>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Request ID</p>
-                            <p className="text-[14px] font-bold text-gray-800 font-mono">#{request.id}</p>
-                          </div>
-                          <div className="col-span-2 min-w-0 sm:col-span-1">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1 flex items-center gap-1">
-                              <CalendarDays className="h-3 w-3" /> Submitted
-                            </p>
-                            <p className="text-[13px] font-semibold text-gray-700">
-                              {new Date(request.createdAt).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-
-                        <p className="mt-3 text-[12px] text-gray-400 font-medium text-right group-hover:text-emerald-600 transition-colors">
-                          View full details →
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+          <div className="flex flex-wrap gap-2">
+            {(["all", "pending", "interested", "direct_hire", "rejected"] as const).map((status) => (
+              <Button
+                key={status}
+                type="button"
+                variant={statusFilter === status ? "default" : "outline"}
+                className="rounded-full"
+                onClick={() => {
+                  setPage(1);
+                  setStatusFilter(status);
+                }}
+              >
+                {status === "all" ? "All" : requestStatusMeta[status].label}
+              </Button>
+            ))}
           </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/50 px-5 py-3.5">
-              <button
-                disabled={currentPage <= 1}
-                onClick={() => setPage((p) => Math.max(p - 1, 1))}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[14px] font-semibold text-gray-700 hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-40 disabled:cursor-default transition-all"
-              >
-                <ChevronLeft className="h-4 w-4" /> Previous
-              </button>
-              <span className="text-[14px] font-medium text-gray-500">
-                Page <span className="font-bold text-gray-800">{currentPage}</span> of{" "}
-                <span className="font-bold text-gray-800">{totalPages}</span>
-              </span>
-              <button
-                disabled={currentPage >= totalPages}
-                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[14px] font-semibold text-gray-700 hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-40 disabled:cursor-default transition-all"
-              >
-                Next <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* ── Detail Dialog ── */}
-      <Dialog
-        open={isDialogOpen}
-        onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) setSelectedRequest(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl rounded-3xl p-0 overflow-hidden">
-          {selectedRequest &&
-            (() => {
-              const st = getStatusStyle(selectedRequest.status);
-              const isGeneral = isGeneralRequest(selectedRequest);
-              return (
-                <>
-                  {/* Dialog header */}
-                  <div className="border-b border-gray-100 bg-white px-6 py-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
-                          <FileText className="h-5 w-5 text-emerald-700" />
+      <div className="grid gap-4">
+        {requestsQuery.isLoading ? (
+          Array.from({ length: 5 }).map((_, index) => (
+            <Card key={index} className="animate-pulse rounded-[24px] border-border/70">
+              <CardContent className="h-40" />
+            </Card>
+          ))
+        ) : requests.length === 0 ? (
+          <Card className="rounded-[28px] border-dashed border-border/80 shadow-none">
+            <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <BriefcaseBusiness className="h-10 w-10 text-muted-foreground" />
+              <div>
+                <p className="text-lg font-semibold text-foreground">No requests in this view</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  No rows matched the current filters.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          requests.map((request) => {
+            const statusMeta = requestStatusMeta[request.status];
+            const isUpdatingStatus =
+              statusMutation.isPending && statusMutation.variables?.requestId === request.id;
+            const isMatching =
+              matchMutation.isPending && matchMutation.variables?.requestId === request.id;
+
+            return (
+              <Card
+                key={request.id}
+                className="rounded-[28px] border-border/70 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <CardContent className="space-y-5 p-6">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                          <UserRound className="h-5 w-5" />
                         </div>
                         <div>
-                          <p className="text-[18px] font-bold text-gray-900">
-                            Request #{selectedRequest.id}
+                          <p className="text-base font-semibold text-foreground">
+                            {request.client?.name || "Client request"}
                           </p>
-                          <p className="text-[13px] text-gray-400 font-medium mt-0.5">
-                            {new Date(selectedRequest.createdAt).toLocaleString()}
+                          <p className="text-sm text-muted-foreground">
+                            {request.client?.email || "No email"}{request.client?.phone ? ` • ${request.client.phone}` : ""}
                           </p>
+                          <p className="text-xs text-muted-foreground">{request.agencyName}</p>
+                        </div>
+                        <Badge className={cn("rounded-full border px-3 py-1 text-xs font-medium", statusMeta.badgeClassName)}>
+                          {statusMeta.label}
+                        </Badge>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-2xl bg-muted/50 px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Summary</p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{request.summary}</p>
+                        </div>
+                        <div className="rounded-2xl bg-muted/50 px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Budget</p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{request.budget || "Not specified"}</p>
+                        </div>
+                        <div className="rounded-2xl bg-muted/50 px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Updated</p>
+                          <p className="mt-1 text-sm font-medium text-foreground">{formatDate(request.updatedAt)}</p>
                         </div>
                       </div>
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[14px] font-bold ${st.bg} ${st.text}`}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 xl:max-w-[340px] xl:justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => openDrawer(request, "details")}
                       >
-                        <span className={`h-2.5 w-2.5 rounded-full ${st.dot}`} />
-                        {st.label}
-                      </span>
+                        View details
+                      </Button>
+                      <Button
+                        type="button"
+                        className="rounded-full"
+                        onClick={() => openDrawer(request, "match")}
+                        disabled={isMatching}
+                      >
+                        {isMatching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                        Mark Interested
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-full"
+                        disabled={isUpdatingStatus}
+                        onClick={() => statusMutation.mutate({ requestId: request.id, status: "direct_hire" })}
+                      >
+                        {isUpdatingStatus && statusMutation.variables?.status === "direct_hire" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : null}
+                        Move to Direct Hire
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-full border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+                        disabled={isUpdatingStatus}
+                        onClick={() => statusMutation.mutate({ requestId: request.id, status: "rejected" })}
+                      >
+                        {isUpdatingStatus && statusMutation.variables?.status === "rejected" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : null}
+                        Reject
+                      </Button>
                     </div>
                   </div>
 
-                  {/* Dialog body */}
-                  <div className="max-h-[68vh] overflow-y-auto p-6 space-y-5">
-
-                    {/* Client + Maid info */}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
-                          Client Info
-                        </p>
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 font-bold text-[14px]">
-                            {selectedRequest.clientName.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
-                          </div>
-                          <p className="text-[16px] font-bold text-gray-900 leading-tight">
-                            {selectedRequest.clientName}
-                          </p>
-                        </div>
-                        <div className="space-y-1.5">
-                          <p className="text-[14px] text-gray-600 font-medium">{selectedRequest.clientEmail}</p>
-                          <p className="text-[14px] text-gray-500">
-                            {selectedRequest.clientPhone || "No phone provided"}
-                          </p>
-                          <p className="text-[12px] text-gray-400">Client ID: {selectedRequest.clientId}</p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
-                          {isGeneral ? "Request Type" : "Maid Requested"}
-                        </p>
-                        {isGeneral ? (
-                          <span className="inline-flex rounded-xl bg-emerald-100 px-4 py-2 text-[15px] font-bold text-emerald-800">
-                            General Request
-                          </span>
-                        ) : (
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-800 font-bold text-[13px]">
-                              {selectedRequest.maidName.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="text-[16px] font-bold text-gray-900 leading-tight">
-                                {selectedRequest.maidName}
-                              </p>
-                              <p className="text-[13px] font-mono text-gray-500 mt-0.5">
-                                {selectedRequest.maidReferenceCode}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                  {request.maids.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {request.maids.map((maid) => (
+                        <span
+                          key={maid.referenceCode}
+                          className="rounded-full border bg-background px-3 py-1 text-xs font-medium text-foreground"
+                        >
+                          {maid.fullName} ({maid.referenceCode})
+                        </span>
+                      ))}
                     </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
 
-                    {/* Detail fields */}
-                    <div className="rounded-2xl border border-gray-100 bg-white p-5">
-                      <p className="text-[15px] font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-emerald-600" />
-                        Request Details
-                      </p>
-                      {detailEntries.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                          <ClipboardList className="h-8 w-8 text-gray-300 mb-2" />
-                          <p className="text-[14px] text-gray-400 font-medium">No additional details were submitted.</p>
-                        </div>
-                      ) : (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {detailEntries.map(([key, value]) => (
-                            <div
-                              key={key}
-                              className="rounded-xl border border-gray-100 bg-gray-50 p-3.5"
-                            >
-                              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">
-                                {formatFieldLabel(key)}
+      <div className="flex items-center justify-between rounded-[24px] border bg-card px-4 py-3">
+        <p className="text-sm text-muted-foreground">
+          {pageInfo ? `Page ${pageInfo.page} of ${pageInfo.totalPages} • ${pageInfo.total} total requests` : "Loading..."}
+        </p>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            disabled={page <= 1 || requestsQuery.isFetching}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            disabled={!pageInfo || page >= pageInfo.totalPages || requestsQuery.isFetching}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Next
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent side="right" className="w-full max-w-[560px] border-l bg-background/95 p-0 backdrop-blur-sm duration-200">
+          {selectedRequest ? (
+            <>
+              <SheetHeader className="border-b px-6 py-5">
+                <SheetTitle>{drawerMode === "match" ? "Match request with maids" : "Request details"}</SheetTitle>
+                <SheetDescription>
+                  {drawerMode === "match"
+                    ? "Select suitable maids and move the request into Interested."
+                    : requestStateMessage(selectedRequest.status)}
+                </SheetDescription>
+              </SheetHeader>
+
+              <ScrollArea className="h-[calc(100vh-88px)]">
+                <div className="space-y-6 px-6 py-5">
+                  <Card className="rounded-[24px] border-border/70 shadow-none">
+                    <CardHeader className="space-y-2">
+                      <CardTitle className="text-lg">{selectedRequest.client?.name || "Client request"}</CardTitle>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className={cn("rounded-full border px-3 py-1 text-xs font-medium", requestStatusMeta[selectedRequest.status].badgeClassName)}>
+                          {requestStatusMeta[selectedRequest.status].label}
+                        </Badge>
+                        <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
+                          {selectedRequest.type === "direct" ? "Direct request" : "General request"}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 text-sm text-muted-foreground">
+                      <p>{selectedRequest.summary}</p>
+                      <p>{selectedRequest.client?.email || "No email"}{selectedRequest.client?.phone ? ` • ${selectedRequest.client.phone}` : ""}</p>
+                      <p>{selectedRequest.agencyName}</p>
+                      <p>Budget: {selectedRequest.budget || "Not specified"}</p>
+                    </CardContent>
+                  </Card>
+
+                  {drawerMode === "details" ? (
+                    <div className="space-y-6">
+                      <Card className="rounded-[24px] border-border/70 shadow-none">
+                        <CardHeader>
+                          <CardTitle className="text-base">Normalized details</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {detailEntries(selectedRequest.details).map(([key, value]) => (
+                            <div key={key} className="rounded-2xl bg-muted/40 px-4 py-3">
+                              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                                {formatDetailLabel(key)}
                               </p>
-                              <p className="whitespace-pre-wrap text-[14px] font-semibold text-gray-800 leading-relaxed">
-                                {String(value)}
-                              </p>
+                              <p className="mt-1 text-sm text-foreground">{String(value)}</p>
                             </div>
                           ))}
-                        </div>
-                      )}
+                          {detailEntries(selectedRequest.details).length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No extra details were captured for this request.</p>
+                          ) : null}
+                        </CardContent>
+                      </Card>
+
+                      <Card className="rounded-[24px] border-border/70 shadow-none">
+                        <CardHeader>
+                          <CardTitle className="text-base">Request conversation</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div
+                            ref={chatScrollRef}
+                            className="max-h-[360px] space-y-3 overflow-y-auto rounded-[24px] border bg-muted/20 p-4"
+                          >
+                            {messagesQuery.isLoading || conversationQuery.isLoading ? (
+                              <div className="py-8 text-center text-sm text-muted-foreground">
+                                Loading conversation...
+                              </div>
+                            ) : (messagesQuery.data ?? []).length === 0 ? (
+                              <div className="py-8 text-center text-sm text-muted-foreground">
+                                No messages yet.
+                              </div>
+                            ) : (
+                              (messagesQuery.data ?? []).map((message) => {
+                                if (message.senderType === "system") {
+                                  return (
+                                    <div key={message.id} className="flex justify-center">
+                                      <div className="max-w-[90%] rounded-full bg-muted px-4 py-2 text-center text-xs text-muted-foreground">
+                                        {message.message}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                const isOwn = message.senderType === "admin" || message.senderType === "staff";
+
+                                return (
+                                  <div key={message.id} className={cn("flex", isOwn ? "justify-start" : "justify-end")}>
+                                    <div
+                                      className={cn(
+                                        "max-w-[82%] rounded-[22px] px-4 py-3 text-sm shadow-sm",
+                                        isOwn
+                                          ? "rounded-bl-md border bg-background text-foreground"
+                                          : "rounded-br-md bg-primary text-primary-foreground",
+                                      )}
+                                    >
+                                      <p className="mb-1 text-[11px] opacity-70">
+                                        {message.senderType === "staff"
+                                          ? "Staff"
+                                          : message.senderType === "admin"
+                                            ? "Admin"
+                                            : "Client"}
+                                      </p>
+                                      <p className="whitespace-pre-wrap leading-6">{message.message}</p>
+                                      <p className="mt-2 text-right text-[11px] opacity-70">
+                                        {new Date(message.createdAt).toLocaleTimeString([], {
+                                          hour: "numeric",
+                                          minute: "2-digit",
+                                        })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+
+                          <div className="rounded-[24px] border bg-background p-3">
+                            <Textarea
+                              value={chatDraft}
+                              onChange={(event) => setChatDraft(event.target.value)}
+                              placeholder="Reply to the client on this request..."
+                              className="min-h-[96px] resize-none border-0 p-0 shadow-none focus-visible:ring-0"
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" && !event.shiftKey) {
+                                  event.preventDefault();
+                                  messageMutation.mutate();
+                                }
+                              }}
+                            />
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                              <p className="text-xs text-muted-foreground">
+                                System messages stay centered. Client replies appear on the right.
+                              </p>
+                              <Button
+                                type="button"
+                                className="rounded-full"
+                                disabled={
+                                  messageMutation.isPending ||
+                                  !chatDraft.trim() ||
+                                  !conversationQuery.data?.id
+                                }
+                                onClick={() => messageMutation.mutate()}
+                              >
+                                {messageMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  "Send reply"
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                     </div>
-                  </div>
-                </>
-              );
-            })()}
-        </DialogContent>
-      </Dialog>
-    </>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          value={maidSearch}
+                          onChange={(event) => setMaidSearch(event.target.value)}
+                          placeholder="Search maid name, nationality, or reference"
+                          className="h-11 rounded-2xl pl-10"
+                        />
+                      </div>
+
+                      <Card className="rounded-[24px] border-border/70 shadow-none">
+                        <CardContent className="space-y-3 p-4">
+                          {maidOptionsQuery.isLoading ? (
+                            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Loading maid list...
+                            </div>
+                          ) : filteredMaids.length === 0 ? (
+                            <div className="py-10 text-center text-sm text-muted-foreground">
+                              No maids match this search.
+                            </div>
+                          ) : (
+                            filteredMaids.map((maid) => {
+                              const checked = selectedMaidReferences.includes(maid.referenceCode);
+                              return (
+                                <label
+                                  key={maid.referenceCode}
+                                  className="flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-all duration-200 ease-out hover:border-foreground/20 hover:bg-muted/40"
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(nextChecked) => {
+                                      setSelectedMaidReferences((current) =>
+                                        nextChecked
+                                          ? [...current, maid.referenceCode]
+                                          : current.filter((referenceCode) => referenceCode !== maid.referenceCode),
+                                      );
+                                    }}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="truncate text-sm font-medium text-foreground">{maid.fullName}</p>
+                                      <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+                                        {maid.referenceCode}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {maid.nationality} • {maid.type || "Maid"} • {maid.status || "available"}
+                                    </p>
+                                  </div>
+                                </label>
+                              );
+                            })
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <div className="flex gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 rounded-2xl"
+                          onClick={() => setDrawerOpen(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          className="flex-1 rounded-2xl"
+                          disabled={!selectedRequest || matchMutation.isPending}
+                          onClick={() =>
+                            selectedRequest &&
+                            matchMutation.mutate({
+                              requestId: selectedRequest.id,
+                              maidReferences: selectedMaidReferences,
+                            })
+                          }
+                        >
+                          {matchMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            "Save and mark Interested"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 };
+
+const RequestsPage = () => (
+  <RequestsPageErrorBoundary>
+    <RequestsPageContent />
+  </RequestsPageErrorBoundary>
+);
 
 export default RequestsPage;

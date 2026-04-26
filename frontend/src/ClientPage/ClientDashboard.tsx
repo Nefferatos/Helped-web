@@ -32,13 +32,10 @@ import { Input } from "@/components/ui/input";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { fetchClientUnreadChatCount } from "@/lib/chat";
 import {
-  clearClientAuth,
-  getClientAuthHeaders,
   getStoredClient,
-  getClientToken,
   type ClientUser,
 } from "@/lib/clientAuth";
-import { logoutClientPortal } from "@/lib/supabaseAuth";
+import { clientFetch, hasActiveClientSession, logoutClientPortal } from "@/lib/supabaseAuth";
 import { useToast } from "@/hooks/use-toast";
 import "./ClientTheme.css";
 
@@ -201,19 +198,25 @@ const ClientDashboard = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
-      const token = getClientToken();
-      if (!token) {
-        navigate("/");
-        return;
-      }
+      void hasActiveClientSession().then((active) => {
+        if (!active) {
+          navigate("/");
+        }
+      });
 
     const loadDashboard = async () => {
       try {
         setIsLoading(true);
+
+        if (!(await hasActiveClientSession())) {
+          navigate("/");
+          return;
+        }
+
         const [meResponse, maidsResponse, publicMaidsResponse, companyResponse, unreadChats] =
           await Promise.all([
-            fetch("/api/client-auth/me", { headers: { ...getClientAuthHeaders() } }),
-            fetch("/api/client/my-maids", { headers: { ...getClientAuthHeaders() } }),
+            clientFetch("/api/client-auth/me"),
+            clientFetch("/api/client/my-maids"),
             fetch("/api/maids?visibility=public"),
             fetch("/api/company"),
             fetchClientUnreadChatCount().catch(() => 0),
@@ -243,14 +246,14 @@ const ClientDashboard = () => {
         setCompany(companyData.companyProfile ?? null);
         setUnreadChatCount(unreadChats);
       } catch (error) {
-        clearClientAuth();
         toast({
           title: "Session Expired",
           description: error instanceof Error ? error.message : "Please sign in again",
           variant: "destructive",
         });
         navigate("/");
-      } finally {
+      }
+      finally {
         setIsLoading(false);
       }
     };
@@ -297,9 +300,8 @@ const ClientDashboard = () => {
   ) => {
     try {
       setActioningId(id);
-      const response = await fetch(`/api/client/direct-sales/${id}/${action}`, {
+      const response = await clientFetch(`/api/client/direct-sales/${id}/${action}`, {
         method: "PATCH",
-        headers: { ...getClientAuthHeaders() },
       });
       const data = (await response.json().catch(() => ({}))) as {
         error?: string;

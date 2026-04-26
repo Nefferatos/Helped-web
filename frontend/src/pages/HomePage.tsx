@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { adminPath } from "@/lib/routes";
 import { toast } from "@/components/ui/sonner";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import {
   Building2,
   UserPlus,
@@ -261,7 +262,9 @@ const HomePage = () => {
   useEffect(() => {
     const loadSummary = async () => {
       try {
-        const response = await fetch("/api/company/summary");
+          const response = await fetch("/api/company/summary", {
+            headers: { ...getAgencyAdminAuthHeaders() },
+          });
         const data = (await response.json().catch(() => ({}))) as Partial<DashboardSummary> & { error?: string };
         if (!response.ok) throw new Error(data.error || "Failed to load dashboard summary");
         setSummary({

@@ -464,7 +464,11 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
         : [];
     const natList = nat.map((v) => String(v || "").trim()).filter((v) => v && v !== "No Preference");
     if (natList.length > 0) {
-      if (!natList.includes(String(maid.nationality || "").trim())) return false;
+      const normalizedMaidNationality = normalizeNationality(String(maid.nationality || "").trim());
+      const hasNationalityMatch = natList.some(
+        (value) => normalizeNationality(value) === normalizedMaidNationality
+      );
+      if (!hasNationalityMatch) return false;
     }
 
     const type = f.type?.trim() || "";

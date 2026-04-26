@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
 
 const DEFAULT_AGENCY_ID = 1
 
@@ -123,7 +123,7 @@ export interface AgencyAdminRecord {
   email?: string
   passwordHash?: string
   password: string
-  role?: 'admin' | 'staff'
+  role?: 'admin' | 'agency' | 'staff'
   agencyName: string
   profileImageUrl?: string
   createdAt: string
@@ -145,9 +145,13 @@ export interface DirectSaleRecord {
   clientEmail: string
   clientPhone: string
   status: string
+  requestType?: 'general' | 'direct'
+  maidReferences?: string[]
   requestDetails?: Record<string, string>
   formData?: Record<string, string>
   createdAt: string
+  updatedAt?: string
+  updatedBy?: string
 }
 
 export interface ChatMessageRecord {
@@ -162,6 +166,24 @@ export interface ChatMessageRecord {
   createdAt: string
   readByAgency: boolean
   readByClient: boolean
+}
+
+export interface RequestConversationRecord {
+  id: string
+  requestId: string
+  agencyId: number
+  clientId: number
+  createdAt: string
+}
+
+export interface RequestMessageRecord {
+  id: string
+  conversationId: string
+  senderType: 'client' | 'admin' | 'staff' | 'system'
+  senderId: number
+  message: string
+  createdAt: string
+  attachments?: unknown
 }
 
 export interface EmployerContractRecord {
@@ -228,6 +250,8 @@ interface AppData {
   agencyAdminSessions: AgencyAdminSessionRecord[]
   directSales: DirectSaleRecord[]
   chatMessages: ChatMessageRecord[]
+  requestConversations: RequestConversationRecord[]
+  requestMessages: RequestMessageRecord[]
   employers: EmployerContractRecord[]
   employmentContracts: EmploymentContractRecord[]
   employerContractFiles: EmployerContractFileRecord[]
@@ -355,6 +379,8 @@ const defaultData = (): AppData => ({
   agencyAdminSessions: [],
   directSales: [],
   chatMessages: [],
+  requestConversations: [],
+  requestMessages: [],
   employers: [],
   employmentContracts: [],
   employerContractFiles: [],
@@ -402,6 +428,10 @@ const verifyPassword = (password: string, passwordHash?: string) => {
 }
 
 const toTrimmedString = (value: unknown) => String(value ?? '').trim()
+const isRequestMessageSenderType = (
+  value: unknown
+): value is RequestMessageRecord['senderType'] =>
+  value === 'client' || value === 'admin' || value === 'staff' || value === 'system'
 const toNullableNumber = (value: unknown) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
@@ -485,7 +515,12 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         typeof (admin as { passwordHash?: unknown }).passwordHash === 'string'
           ? (admin as { passwordHash: string }).passwordHash
           : '',
-      role: (admin as { role?: unknown }).role === 'staff' ? 'staff' : 'admin',
+      role:
+        (admin as { role?: unknown }).role === 'staff'
+          ? 'staff'
+          : (admin as { role?: unknown }).role === 'agency'
+          ? 'agency'
+          : 'admin',
       supabaseUserId: admin.supabaseUserId || undefined,
     })),
     raw.counters?.agencyAdmins ?? defaults.counters.agencyAdmins
@@ -543,6 +578,19 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     directSales: (raw.directSales ?? defaults.directSales).map((directSale) => ({
       ...directSale,
       agencyId: normalizeAgencyId((directSale as { agencyId?: unknown }).agencyId),
+      requestType:
+        directSale.requestType === 'direct' || directSale.maidReferenceCode !== 'GENERAL'
+          ? 'direct'
+          : 'general',
+      maidReferences: Array.isArray(directSale.maidReferences)
+        ? directSale.maidReferences.filter(
+            (item): item is string => typeof item === 'string' && item.trim().length > 0
+          )
+        : directSale.maidReferenceCode && directSale.maidReferenceCode !== 'GENERAL'
+        ? [directSale.maidReferenceCode]
+        : [],
+      updatedAt: directSale.updatedAt ?? directSale.createdAt ?? now(),
+      updatedBy: directSale.updatedBy ?? 'migration',
     })),
     chatMessages:
       raw.chatMessages?.map((message) => ({
@@ -551,6 +599,36 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         agencyId: normalizeAgencyId(message.agencyId),
         agencyName: message.agencyName ?? '',
       })) ?? defaults.chatMessages,
+    requestConversations: (raw.requestConversations ?? defaults.requestConversations)
+      .map((conversation) => ({
+        id:
+          typeof conversation.id === 'string' && conversation.id.trim()
+            ? conversation.id.trim()
+            : randomUUID(),
+        requestId: toTrimmedString(conversation.requestId),
+        agencyId: normalizeAgencyId(conversation.agencyId),
+        clientId: Number(conversation.clientId) || 0,
+        createdAt: conversation.createdAt ?? now(),
+      }))
+      .filter((conversation) => conversation.requestId.length > 0),
+    requestMessages: (raw.requestMessages ?? defaults.requestMessages)
+      .map((message) => ({
+        id:
+          typeof message.id === 'string' && message.id.trim()
+            ? message.id.trim()
+            : randomUUID(),
+        conversationId: toTrimmedString(message.conversationId),
+        senderType: isRequestMessageSenderType(message.senderType)
+          ? message.senderType
+          : 'system',
+        senderId: Number.isInteger(Number(message.senderId)) ? Number(message.senderId) : 0,
+        message: toTrimmedString(message.message),
+        createdAt: message.createdAt ?? now(),
+        attachments: message.attachments,
+      }))
+      .filter(
+        (message) => message.conversationId.length > 0 && message.message.length > 0
+      ),
     employers: (raw.employers ?? defaults.employers).map((record) => ({
       ...record,
       agencyId: normalizeAgencyId((record as { agencyId?: unknown }).agencyId),
@@ -813,6 +891,33 @@ export const getMaidsStore = async (
   )
 }
 
+export const getAllMaidsStore = async (
+  search?: string,
+  visibility?: string
+) => {
+  const data = await loadData()
+  let maids = [...data.maids]
+
+  if (search?.trim()) {
+    const term = search.trim().toLowerCase()
+    maids = maids.filter(
+      (maid) =>
+        maid.fullName.toLowerCase().includes(term) ||
+        maid.referenceCode.toLowerCase().includes(term)
+    )
+  }
+
+  if (visibility === 'public' || visibility === 'hidden') {
+    const isPublic = visibility === 'public'
+    maids = maids.filter((maid) => maid.isPublic === isPublic)
+  }
+
+  return maids.sort(
+    (a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+}
+
 export const getMaidByReferenceCodeStore = async (
   referenceCode: string,
   agencyId: number = DEFAULT_AGENCY_ID
@@ -821,6 +926,15 @@ export const getMaidByReferenceCodeStore = async (
   return (
     data.maids.find(
       (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
+    ) ?? null
+  )
+}
+
+export const getPublicMaidByReferenceCodeStore = async (referenceCode: string) => {
+  const data = await loadData()
+  return (
+    data.maids.find(
+      (maid) => maid.referenceCode === referenceCode && maid.isPublic
     ) ?? null
   )
 }
@@ -1021,7 +1135,7 @@ export const registerAgencyAdminStore = async (payload: {
   password: string
   agencyName: string
   agencyId?: number
-  role?: 'admin' | 'staff'
+  role?: 'admin' | 'agency' | 'staff'
 }) => {
   const data = await loadData()
   const agencyId = normalizeAgencyId(payload.agencyId)
@@ -1407,6 +1521,61 @@ export const getDirectSalesStore = async (agencyId: number = DEFAULT_AGENCY_ID) 
   )
 }
 
+export const getAllDirectSalesStore = async () => {
+  const data = await loadData()
+  return [...data.directSales].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+}
+
+export const getAgencySummariesStore = async () => {
+  const data = await loadData()
+  const maidsByAgency = new Map<number, MaidRecord[]>()
+
+  data.maids.forEach((maid) => {
+    const current = maidsByAgency.get(maid.agencyId) ?? []
+    current.push(maid)
+    maidsByAgency.set(maid.agencyId, current)
+  })
+
+  const uniqueAgencies = new Map<
+    number,
+    { id: number; name: string; email: string; createdAt: string }
+  >()
+
+  data.agencyAdmins.forEach((admin) => {
+    if (!uniqueAgencies.has(admin.agencyId)) {
+      uniqueAgencies.set(admin.agencyId, {
+        id: admin.agencyId,
+        name: admin.agencyName || `Agency ${admin.agencyId}`,
+        email: admin.email ?? '',
+        createdAt: admin.createdAt,
+      })
+    }
+  })
+
+  return Array.from(uniqueAgencies.values())
+    .map((agency) => {
+      const maids = maidsByAgency.get(agency.id) ?? []
+      return {
+        ...agency,
+        totalMaids: maids.length,
+        publicMaids: maids.filter((maid) => maid.isPublic).length,
+      }
+    })
+    .sort((left, right) => left.name.localeCompare(right.name))
+}
+
+export const getAgencyNameByIdStore = async (agencyId: number) => {
+  const agencies = await getAgencySummariesStore()
+  return agencies.find((agency) => agency.id === agencyId)?.name ?? `Agency ${agencyId}`
+}
+
+export const getAgencyAdminsStore = async () => {
+  const data = await loadData()
+  return [...data.agencyAdmins]
+}
+
 export const getChatMessagesForClientStore = async (
   clientId: number,
   conversationType: 'support' | 'agency' = 'support',
@@ -1600,8 +1769,12 @@ export const createDirectSaleStore = async (
       clientEmail: formData?.clientEmail ?? client?.email ?? '',
       clientPhone: formData?.clientPhone ?? client?.phone ?? '',
       status,
+      requestType: 'general',
+      maidReferences: [],
       formData,
       createdAt: now(),
+      updatedAt: now(),
+      updatedBy: client?.id ? `client:${client.id}` : 'client:guest',
     }
 
     data.directSales.unshift(record)
@@ -1632,8 +1805,12 @@ export const createDirectSaleStore = async (
     clientEmail: client.email,
     clientPhone: client.phone || '',
     status,
+    requestType: 'direct',
+    maidReferences: [maidReferenceCode],
     formData,
     createdAt: now(),
+    updatedAt: now(),
+    updatedBy: `client:${client.id}`,
   }
 
   data.directSales.unshift(record)
@@ -1658,6 +1835,113 @@ export const createDirectSaleStore = async (
   }
 }
 
+const ensureRequestConversationForSale = (
+  data: AppData,
+  sale: DirectSaleRecord
+): RequestConversationRecord => {
+  const requestId = String(sale.id)
+  const existing = data.requestConversations.find(
+    (conversation) => conversation.requestId === requestId
+  )
+
+  if (existing) {
+    return existing
+  }
+
+  const conversation: RequestConversationRecord = {
+    id: randomUUID(),
+    requestId,
+    agencyId: normalizeAgencyId(sale.agencyId),
+    clientId: Number(sale.clientId) || 0,
+    createdAt: sale.createdAt ?? now(),
+  }
+
+  data.requestConversations.push(conversation)
+  return conversation
+}
+
+const ensureInitialRequestSystemMessage = (
+  data: AppData,
+  conversation: RequestConversationRecord,
+  text = 'Your request has been received. Our agency will review it shortly.'
+) => {
+  const hasMessages = data.requestMessages.some(
+    (message) => message.conversationId === conversation.id
+  )
+  if (hasMessages) {
+    return
+  }
+
+  data.requestMessages.push({
+    id: randomUUID(),
+    conversationId: conversation.id,
+    senderType: 'system',
+    senderId: 0,
+    message: text,
+    createdAt: now(),
+  })
+}
+
+export const ensureRequestConversationStore = async (
+  requestId: string,
+  systemMessage = 'Your request has been received. Our agency will review it shortly.'
+) => {
+  const data = await loadData()
+  const sale = data.directSales.find((item) => String(item.id) === String(requestId).trim())
+  if (!sale) {
+    return null
+  }
+
+  const conversation = ensureRequestConversationForSale(data, sale)
+  ensureInitialRequestSystemMessage(data, conversation, systemMessage)
+  await saveData(data)
+  return conversation
+}
+
+export const getRequestConversationByIdStore = async (conversationId: string) => {
+  const data = await loadData()
+  return (
+    data.requestConversations.find((conversation) => conversation.id === conversationId) ?? null
+  )
+}
+
+export const getRequestMessagesStore = async (conversationId: string) => {
+  const data = await loadData()
+  return data.requestMessages
+    .filter((message) => message.conversationId === conversationId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+}
+
+export const createRequestMessageStore = async (payload: {
+  conversationId: string
+  senderType: RequestMessageRecord['senderType']
+  senderId: number
+  message: string
+  attachments?: unknown
+}) => {
+  const data = await loadData()
+  const conversation = data.requestConversations.find(
+    (item) => item.id === payload.conversationId
+  )
+  if (!conversation) {
+    throw new Error('CONVERSATION_NOT_FOUND')
+  }
+
+  const record: RequestMessageRecord = {
+    id: randomUUID(),
+    conversationId: conversation.id,
+    senderType: payload.senderType,
+    senderId: Number.isInteger(payload.senderId) ? payload.senderId : 0,
+    message: payload.message.trim(),
+    createdAt: now(),
+    ...(payload.attachments !== undefined ? { attachments: payload.attachments } : {}),
+  }
+
+  data.requestMessages.push(record)
+  await saveData(data)
+  return record
+}
+
 export const updateDirectSaleStatusStore = async (
   id: number,
   status: string,
@@ -1674,6 +1958,7 @@ export const updateDirectSaleStatusStore = async (
   data.directSales[directSaleIndex] = {
     ...data.directSales[directSaleIndex],
     status,
+    updatedAt: now(),
   }
 
   const maidIndex = data.maids.findIndex(
@@ -1860,6 +2145,55 @@ export const updateDirectSaleStatusForClientStore = async (
   }
 
   return updateDirectSaleStatusStore(id, status, sale.agencyId)
+}
+
+export const getDirectSaleByIdStore = async (
+  id: number,
+  agencyId?: number
+) => {
+  const data = await loadData()
+  return (
+    data.directSales.find(
+      (item) => item.id === id && (agencyId == null || item.agencyId === agencyId)
+    ) ?? null
+  )
+}
+
+export const updateDirectSaleMaidsStore = async (
+  id: number,
+  maidReferences: string[],
+  updatedBy: string,
+  agencyId: number = DEFAULT_AGENCY_ID
+) => {
+  const data = await loadData()
+  const directSaleIndex = data.directSales.findIndex(
+    (item) => item.id === id && item.agencyId === agencyId
+  )
+  if (directSaleIndex === -1) {
+    return null
+  }
+
+  const normalizedReferences = maidReferences.filter((item) => item.trim().length > 0)
+  const firstReference = normalizedReferences[0] ?? 'GENERAL'
+  const matchedMaid =
+    firstReference === 'GENERAL'
+      ? null
+      : data.maids.find(
+          (maid) => maid.referenceCode === firstReference && maid.agencyId === agencyId
+        ) ?? null
+
+  data.directSales[directSaleIndex] = {
+    ...data.directSales[directSaleIndex],
+    maidReferences: normalizedReferences,
+    maidReferenceCode: firstReference,
+    maidName: matchedMaid?.fullName ?? data.directSales[directSaleIndex].maidName ?? '',
+    requestType: normalizedReferences.length > 0 ? 'direct' : 'general',
+    updatedAt: now(),
+    updatedBy,
+  }
+
+  await saveData(data)
+  return data.directSales[directSaleIndex]
 }
 
 export const addEnquiryStore = async (

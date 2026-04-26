@@ -8,8 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getClientToken } from "@/lib/clientAuth";
 import { MaidProfile } from "@/lib/maids";
+import { hasActiveClientSession } from "@/lib/supabaseAuth";
 
 interface Props {
   maid: MaidProfile | null;
@@ -20,9 +20,9 @@ interface Props {
 const HireConfirmationDialog = ({ maid, open, onOpenChange }: Props) => {
   const navigate = useNavigate();
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     if (maid?.referenceCode) {
-      if (!getClientToken()) {
+      if (!(await hasActiveClientSession())) {
         navigate("/employer-login");
       } else {
         navigate(`/hire/${encodeURIComponent(maid.referenceCode)}`);
@@ -46,7 +46,7 @@ const HireConfirmationDialog = ({ maid, open, onOpenChange }: Props) => {
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleAccept}>Accept and Continue</Button>
+          <Button onClick={() => void handleAccept()}>Accept and Continue</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabaseClient";
+
 export interface ClientUser {
   id: number;
   name: string;
@@ -9,30 +11,37 @@ export interface ClientUser {
   createdAt: string;
 }
 
-const TOKEN_KEY = "client_auth_token";
-const CLIENT_KEY = "client_auth_user";
+let clientUserCache: ClientUser | null = null;
+let clientAccessTokenCache: string | null = null;
 
-export const saveClientAuth = (token: string, client: ClientUser) => {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(CLIENT_KEY, JSON.stringify(client));
+export const saveClientAuth = (token: string | null, client: ClientUser | null) => {
+  clientAccessTokenCache = token || null;
+  clientUserCache = client;
 };
 
 export const clearClientAuth = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(CLIENT_KEY);
+  clientAccessTokenCache = null;
+  clientUserCache = null;
 };
 
-export const getClientToken = () => localStorage.getItem(TOKEN_KEY);
+export const getClientToken = () => clientAccessTokenCache;
 
-export const getStoredClient = (): ClientUser | null => {
-  const raw = localStorage.getItem(CLIENT_KEY);
-  if (!raw) return null;
+export const getStoredClient = (): ClientUser | null => clientUserCache;
 
-  try {
-    return JSON.parse(raw) as ClientUser;
-  } catch {
+export const refreshClientToken = async () => {
+  if (!supabase) {
+    clientAccessTokenCache = null;
     return null;
   }
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    clientAccessTokenCache = null;
+    throw error;
+  }
+
+  clientAccessTokenCache = data.session?.access_token || null;
+  return clientAccessTokenCache;
 };
 
 export const getClientAuthHeaders = () => {
