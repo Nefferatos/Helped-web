@@ -855,20 +855,22 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     setAgencyAdmin(getStoredAgencyAdmin());
   }, [location.pathname]);
 
-  const handleLogout = async () => {
-    try {
-      await fetch("/api/agency-auth/logout", {
-        method: "POST",
-        headers: { ...getAgencyAdminAuthHeaders() },
-      });
-    } catch {
-      // swallow
-    } finally {
-      clearAgencyAdminAuth();
-      toast.success("Agency admin logged out");
-      navigate(adminPath("/login"), { replace: true });
-    }
-  };
+    const handleLogout = async () => {
+      try {
+        await fetch("/api/agency-auth/logout", {
+          method: "POST",
+          headers: { ...getAgencyAdminAuthHeaders() },
+        });
+      } catch {
+        // ignore error
+      } finally {
+        clearAgencyAdminAuth();
+        toast.success("Agency admin logged out");
+
+        // ✅ go to AgencyPortal
+        navigate("/agency", { replace: true });
+      }
+    };
 
   const initials = (agencyAdmin?.agencyName || "A").slice(0, 2).toUpperCase();
   const agencyDisplayName = getAgencyDisplayName(agencyAdmin);

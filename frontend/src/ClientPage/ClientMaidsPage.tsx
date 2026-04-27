@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
 // ── Nationality → ISO 3166-1 alpha-2 country code ──────────────────────────
@@ -1137,7 +1138,7 @@ const ClientMaidsPage = ({
 
   return (
     <div className="client-page-theme min-h-screen bg-background">
-      {!embedded && !isLoggedIn && <PublicSiteNavbar />}
+      {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-7">
 

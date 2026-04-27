@@ -9,7 +9,91 @@ import { toast } from "@/components/ui/sonner";
 import { getClientToken } from "@/lib/clientAuth";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
+
+// ── Nationality → ISO 3166-1 alpha-2 country code ──────────────────────────
+const NATIONALITY_FLAGS: Record<string, string> = {
+  filipino: "ph", philippines: "ph",
+  indonesian: "id", indonesia: "id",
+  myanmar: "mm", burmese: "mm",
+  cambodian: "kh", cambodia: "kh",
+  vietnamese: "vn", vietnam: "vn",
+  thai: "th", thailand: "th",
+  malaysian: "my", malaysia: "my",
+  singaporean: "sg", singapore: "sg",
+  indian: "in", india: "in",
+  "sri lankan": "lk", "sri lanka": "lk",
+  bangladeshi: "bd", bangladesh: "bd",
+  nepali: "np", nepalese: "np", nepal: "np",
+  pakistani: "pk", pakistan: "pk",
+  chinese: "cn", china: "cn",
+  hongkong: "hk", "hong kong": "hk",
+  taiwanese: "tw", taiwan: "tw",
+  korean: "kr", "south korea": "kr",
+  japanese: "jp", japan: "jp",
+  ethiopian: "et", ethiopia: "et",
+  kenyan: "ke", kenya: "ke",
+  ugandan: "ug", uganda: "ug",
+  ghanaian: "gh", ghana: "gh",
+  nigerian: "ng", nigeria: "ng",
+};
+
+const getNationalityCode = (nationality?: string): string => {
+  if (!nationality) return "";
+  const key = nationality.toLowerCase().trim();
+  if (NATIONALITY_FLAGS[key]) return NATIONALITY_FLAGS[key];
+  for (const [k, code] of Object.entries(NATIONALITY_FLAGS)) {
+    if (key.includes(k)) return code;
+  }
+  return "";
+};
+
+/** Circular flag using flagcdn.com */
+const FlagCircle = ({ code }: { code: string }) => {
+  if (!code) return null;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 14,
+        height: 14,
+        borderRadius: "50%",
+        overflow: "hidden",
+        border: "1px solid rgba(0,0,0,0.13)",
+        flexShrink: 0,
+        verticalAlign: "middle",
+        background: "#e5e7eb",
+      }}
+    >
+      <img
+        src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
+        alt={code}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
+    </span>
+  );
+};
+
+// ── Lock icon SVG ─────────────────────────────────────────────────────────────
+const LockIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
 const PAGE_SIZE = 18;
@@ -132,7 +216,6 @@ type ClientDraft = {
   relNoPreference: boolean;
 };
 
-// ── Simplified sidebar filters (matches Image 1) ──────────────────────────────
 type SidebarFilters = {
   keyword: string;
   maidType: string;
@@ -144,9 +227,6 @@ type SidebarFilters = {
 type MaidSearchPageProps = {
   basePath?: string;
   loginPath?: string;
-  /** Same convention as ClientLandingPage: when false (default) the page
-   *  renders its own navbar. Pass embedded={true} when the page is already
-   *  inside a layout that provides a navbar (e.g. ClientPortalLayout). */
   embedded?: boolean;
 };
 
@@ -305,6 +385,13 @@ const getTypeLabel = (type: string) => {
   return type.toUpperCase();
 };
 
+const getMaidTypeBadgeClass = (type?: string) => {
+  const t = (type || "").toLowerCase();
+  if (t.includes("new")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (t.includes("transfer")) return "bg-blue-50 text-blue-700 border-blue-200";
+  return "bg-amber-50 text-amber-700 border-amber-200";
+};
+
 const pageNumbers = (current: number, total: number): (number | "...")[] => {
   if (total <= 10) return Array.from({ length: total }, (_, index) => index + 1);
   const pages: (number | "...")[] = [1];
@@ -316,15 +403,55 @@ const pageNumbers = (current: number, total: number): (number | "...")[] => {
   return pages;
 };
 
-// ── Lock icon SVG ─────────────────────────────────────────────────────────────
-const LockIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
+// ── Locked maid card ──────────────────────────────────────────────────────────
+const LockedMaidCard = ({ loginPath }: { loginPath: string }) => (
+  <article className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50">
+    {/* Blurred photo placeholder */}
+    <div className="relative w-full bg-muted blur-[4px] opacity-75 select-none pointer-events-none">
+      <div
+        className="w-full flex items-center justify-center bg-gray-100"
+        style={{ aspectRatio: "3/4", minHeight: 130 }}
+      >
+        <svg
+          className="h-10 w-10 text-gray-300"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={1}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+          />
+        </svg>
+      </div>
+    </div>
+
+    {/* Censored info panel */}
+    <div className="flex flex-col gap-1 p-2.5 flex-1 bg-white">
+      <div className="h-2.5 w-3/4 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+      <div className="mt-1 h-2 w-1/2 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+      <div className="mt-1 flex gap-1">
+        <div className="h-4 w-12 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+        <div className="h-4 w-8 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+      </div>
+    </div>
+
+    {/* CTA button */}
+    <div className="px-2 pb-2 pt-0">
+      <Link
+        to={loginPath}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90 active:bg-primary/80"
+      >
+        <LockIcon className="h-3 w-3" />
+        Log in to view
+      </Link>
+    </div>
+  </article>
 );
 
-// ── Maid card ─────────────────────────────────────────────────────────────────
+// ── Real maid card ─────────────────────────────────────────────────────────────
 const MaidCard = ({
   maid,
   isShortlisted,
@@ -340,111 +467,77 @@ const MaidCard = ({
   isLoggedIn: boolean;
   loginPath: string;
 }) => {
+  if (!isLoggedIn) return <LockedMaidCard loginPath={loginPath} />;
+
   const photo = getPrimaryPhoto(maid);
   const age = calculateAge(maid.dateOfBirth);
-  const typeLower = (maid.type || "").toLowerCase();
-  const typeBadgeColor = typeLower.includes("new")
-    ? "bg-emerald-500"
-    : typeLower.includes("transfer")
-    ? "bg-blue-500"
-    : "bg-amber-500";
+  const flagCode = getNationalityCode(maid.nationality);
+  const typeColorClass = getMaidTypeBadgeClass(maid.type);
+  const experienceBucket = getExperienceBucket(maid);
 
-  // ── Locked card ──────────────────────────────────────────────────────────────
-  if (!isLoggedIn) {
-    return (
-      <article className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/40">
-        {/* Photo area — blurred with centred lock overlay */}
-        <div className="relative w-full overflow-hidden bg-muted">
-          {/* Blurred photo or placeholder */}
-          <div className="blur-[10px] brightness-90 scale-110 pointer-events-none select-none">
-            {photo ? (
-              <img src={photo} alt="" aria-hidden className="block h-auto w-full object-cover" />
-            ) : (
-              <div className="flex aspect-[3/4] items-center justify-center bg-gradient-to-b from-muted to-muted-foreground/10">
-                <svg className="h-10 w-10 text-muted-foreground/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-                </svg>
-              </div>
-            )}
-          </div>
-
-          {/* Maid type badge — still visible so user knows what category */}
-          {maid.type && (
-            <span className={`absolute left-1.5 top-1.5 rounded px-1.5 py-px text-[8px] font-bold uppercase tracking-wider text-white shadow ${typeBadgeColor}`}>
-              {getTypeLabel(maid.type)}
-            </span>
-          )}
-
-          {/* Lock overlay — centred */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/50">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary shadow-sm">
-              <LockIcon className="h-4 w-4 text-primary-foreground" />
-            </div>
-          </div>
-        </div>
-
-        {/* Card body — skeleton placeholder rows */}
-        <div className="flex flex-col gap-0.5 p-2">
-          <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
-            {maid.fullName || "Unnamed maid"}
-          </p>
-          <p className="font-mono text-[9px] leading-tight text-muted-foreground/70">
-            {maid.referenceCode}{age !== null ? ` • ${age} yrs` : ""}
-          </p>
-          <div className="mt-1 select-none blur-[4px]">
-            <p className="truncate text-[10px] leading-tight text-muted-foreground">
-              {getExperienceBucket(maid)}
-            </p>
-            <p className="truncate text-[10px] leading-tight text-muted-foreground">
-              {maid.nationality || "—"}
-            </p>
-          </div>
-        </div>
-
-        {/* CTA button */}
-        <div className="px-2 pb-2 pt-1">
-          <Link
-            to={loginPath}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90 active:bg-primary/80"
-          >
-            <LockIcon className="h-3 w-3" />
-            Log in to view
-          </Link>
-        </div>
-      </article>
-    );
-  }
-
-  // ── Logged-in card ────────────────────────────────────────────────────────────
   return (
-    <article className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <div className="relative w-full bg-muted">
+    <article className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer">
+      {/* Photo */}
+      <div className="relative w-full bg-white">
         <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
           {photo ? (
             <img
               src={photo}
               alt={maid.fullName}
-              className="block h-auto w-full cursor-pointer object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              className="block w-full h-auto"
+              style={{
+                aspectRatio: "3/4",
+                objectFit: "contain",
+                objectPosition: "top center",
+                minHeight: 130,
+                background: "#fff",
+              }}
+              loading="lazy"
+              decoding="async"
             />
           ) : (
-            <div className="flex aspect-[3/4] items-center justify-center bg-muted">
-              <svg className="h-8 w-8 text-muted-foreground/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+            <div
+              className="w-full flex items-center justify-center bg-gray-50"
+              style={{ aspectRatio: "3/4", minHeight: 130 }}
+            >
+              <svg
+                className="h-8 w-8 text-gray-300"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+                />
               </svg>
             </div>
           )}
         </Link>
 
+        {/* Maid type badge — top-left overlay */}
         {maid.type && (
-          <span className={`absolute left-1.5 top-1.5 rounded px-1.5 py-px text-[8px] font-bold uppercase tracking-wider text-white shadow ${typeBadgeColor}`}>
-            {getTypeLabel(maid.type)}
-          </span>
+          <div className="absolute top-1.5 left-1.5">
+            <span
+              className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}
+            >
+              {getTypeLabel(maid.type)}
+            </span>
+          </div>
         )}
 
+        {/* Shortlist button — bottom bar, visible on hover or when active */}
         <button
-          onClick={() => onToggleShortlist(maid.referenceCode)}
+          onClick={(e) => {
+            e.preventDefault();
+            onToggleShortlist(maid.referenceCode);
+          }}
           className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
-            isShortlisted ? "bg-amber-500" : "bg-black/60 opacity-0 group-hover:opacity-100"
+            isShortlisted
+              ? "bg-amber-500"
+              : "bg-black/60 opacity-0 group-hover:opacity-100"
           }`}
         >
           <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
@@ -452,19 +545,37 @@ const MaidCard = ({
         </button>
       </div>
 
-      <div className="flex flex-col gap-0.5 p-2">
-        <p className="truncate text-[11px] font-semibold leading-tight text-foreground">
+      {/* Info */}
+      <div className="flex flex-col gap-1 p-2.5 flex-1 bg-white">
+        {/* Name */}
+        <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
           {maid.fullName || "Unnamed maid"}
-        </p>
-        <p className="truncate text-[10px] leading-tight text-muted-foreground">
-          {getExperienceBucket(maid)}
-        </p>
-        <p className="truncate text-[10px] leading-tight text-muted-foreground">
-          {maid.nationality || "—"}
-        </p>
-        <p className="font-mono text-[9px] leading-tight text-muted-foreground/70">
-          {maid.referenceCode}{age !== null ? ` • ${age} yrs` : ""}
-        </p>
+        </h3>
+
+        {/* Ref code + age */}
+        {maid.referenceCode && (
+          <p className="text-[10px] text-gray-600 font-mono leading-tight">
+            {maid.referenceCode}
+            {age !== null ? ` · ${age} yrs` : ""}
+          </p>
+        )}
+
+        {/* Nationality badge with flag */}
+        {maid.nationality && (
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            <span className="inline-flex items-center gap-1 bg-gray-100 px-1.5 py-px text-[9px] text-black border border-gray-300">
+              <FlagCircle code={flagCode} />
+              {maid.nationality}
+            </span>
+          </div>
+        )}
+
+        {/* Experience bucket */}
+        {experienceBucket && (
+          <p className="text-[9px] text-gray-500 leading-tight mt-0.5 line-clamp-1">
+            {experienceBucket}
+          </p>
+        )}
       </div>
     </article>
   );
@@ -549,7 +660,10 @@ const MaidSearchPage = ({
     [allMaids, shortlistRefs]
   );
   const missingShortlistRefs = useMemo(
-    () => shortlistRefs.filter((ref) => !shortlistedMaids.some((maid) => maid.referenceCode === ref)),
+    () =>
+      shortlistRefs.filter(
+        (ref) => !shortlistedMaids.some((maid) => maid.referenceCode === ref)
+      ),
     [shortlistRefs, shortlistedMaids]
   );
 
@@ -602,13 +716,11 @@ const MaidSearchPage = ({
         : "border-border bg-background text-foreground"
     }`;
 
-  // ── Compact sidebar matching Image 1 ─────────────────────────────────────────
+  // ── Sidebar ───────────────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <div className="space-y-0">
-
       {/* Search box card */}
       <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-        {/* Green header */}
         <div className="bg-primary px-3 py-2">
           <p className="text-sm font-bold text-primary-foreground">
             Maid <span className="font-normal opacity-90">Search</span>
@@ -763,7 +875,9 @@ const MaidSearchPage = ({
       </button>
       {pages.map((item, index) =>
         item === "..." ? (
-          <span key={`ellipsis-${index}`} className="px-1 text-xs text-muted-foreground">…</span>
+          <span key={`ellipsis-${index}`} className="px-1 text-xs text-muted-foreground">
+            …
+          </span>
         ) : (
           <button
             key={item}
@@ -790,15 +904,14 @@ const MaidSearchPage = ({
 
   return (
     <div className="client-page-theme min-h-screen bg-background">
-
-      {/* Navbar — same embedded pattern as ClientLandingPage.
-          When not embedded: show PublicSiteNavbar for guests, ClientPortalNavbar for logged-in users. */}
-      {!embedded && !isLoggedIn && <PublicSiteNavbar />}
+      {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
       {/* Mobile top bar */}
       <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur md:hidden">
         <p className="text-sm font-medium text-foreground">
-          {isLoading ? "Loading…" : `${filteredMaids.length} result${filteredMaids.length !== 1 ? "s" : ""}`}
+          {isLoading
+            ? "Loading…"
+            : `${filteredMaids.length} result${filteredMaids.length !== 1 ? "s" : ""}`}
         </p>
         <button
           type="button"
@@ -818,7 +931,10 @@ const MaidSearchPage = ({
       {/* Mobile sidebar drawer */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-30 md:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
           <div className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-background p-4">
             <div className="mb-4 flex items-center justify-between">
               <p className="font-semibold">Filters</p>
@@ -832,8 +948,7 @@ const MaidSearchPage = ({
       )}
 
       <div className="container mx-auto flex flex-col gap-4 px-3 py-4 sm:px-4 md:flex-row md:gap-5 md:py-6">
-
-        {/* Desktop sidebar — w-56 (224px) */}
+        {/* Desktop sidebar */}
         <aside className="hidden w-56 shrink-0 md:block">
           <div className="sticky top-4">
             <SidebarContent />
@@ -842,7 +957,6 @@ const MaidSearchPage = ({
 
         {/* Main content */}
         <main className="min-w-0 flex-1">
-
           {/* Advanced filters banner */}
           {advancedFilters ? (
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
@@ -910,7 +1024,10 @@ const MaidSearchPage = ({
           {isLoading ? (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: PAGE_SIZE }).map((_, index) => (
-                <div key={index} className="overflow-hidden rounded-xl border border-border bg-muted animate-pulse">
+                <div
+                  key={index}
+                  className="overflow-hidden rounded-xl border border-border bg-muted animate-pulse"
+                >
                   <div className="aspect-[3/4] bg-muted-foreground/10" />
                   <div className="space-y-1.5 p-2">
                     <div className="h-2 w-3/4 rounded-full bg-muted-foreground/15" />
@@ -1011,11 +1128,19 @@ const MaidSearchPage = ({
                         className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-3 text-center"
                         style={{ aspectRatio: "3 / 4" }}
                       >
-                        <svg className="h-6 w-6 text-muted-foreground/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg
+                          className="h-6 w-6 text-muted-foreground/25"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                        >
                           <circle cx="12" cy="12" r="10" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
                         </svg>
-                        <p className="break-all font-mono text-[9px] text-muted-foreground/70">{ref}</p>
+                        <p className="break-all font-mono text-[9px] text-muted-foreground/70">
+                          {ref}
+                        </p>
                         <p className="text-[9px] text-muted-foreground/50">Profile not found</p>
                         <button
                           type="button"
@@ -1040,7 +1165,9 @@ const MaidSearchPage = ({
                     </p>
                     <button
                       type="button"
-                      onClick={() => { shortlistRefs.forEach((ref) => handleToggleShortlist(ref)); }}
+                      onClick={() => {
+                        shortlistRefs.forEach((ref) => handleToggleShortlist(ref));
+                      }}
                       className="text-xs font-medium text-destructive hover:underline"
                     >
                       Clear all
@@ -1050,7 +1177,6 @@ const MaidSearchPage = ({
               )}
             </DialogContent>
           </Dialog>
-
         </main>
       </div>
     </div>

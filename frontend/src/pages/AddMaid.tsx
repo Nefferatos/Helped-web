@@ -1394,10 +1394,29 @@ const SkillsTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto
 
 const employmentCountries = [
   { value: "", label: "Select Country", disabled: true },
-  { value: "Myanmar", label: "Myanmar" },
+  { value: "Singapore", label: "Singapore" },
   { value: "India", label: "India" },
   { value: "Indonesia", label: "Indonesia" },
   { value: "Philippines", label: "Philippines" },
+  { value: "Malaysia", label: "Malaysia" },
+  { value: "Myanmar", label: "Myanmar" },
+  { value: "Taiwan", label: "Taiwan" },
+  { value: "Brunei", label: "Brunei" },
+  { value: "Kuwait", label: "Kuwait" },
+  { value: "Qatar", label: "Qatar" },
+  { value: "Egypt", label: "Egypt" },
+  { value: "United Arab Emirates", label: "United Arab Emirate" },
+  { value: "Saudi Arabia", label: "Saudi Arabia" },
+  { value: "China", label: "China" },
+  { value: "South Korea", label: "South Korea" },
+  { value: "United Kingdom", label: "United Kingdom" },
+  { value: "United States", label: "United States" },
+  { value: "Canada", label: "Canada" },
+  { value: "Australia", label: "Australia" },
+  { value: "Japan", label: "Japan" },
+  { value: "New Zealand", label: "New Zealand" },
+  { value: "South Africa", label: "South Africa" },
+  { value: "Other Countries", label: "Other Countries" },
 ];
 
 const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {

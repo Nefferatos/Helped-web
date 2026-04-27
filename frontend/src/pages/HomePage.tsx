@@ -258,7 +258,9 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: "flex", flexDirection: "column",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
         background: hovered
           ? `linear-gradient(145deg, ${gradientFrom}, ${gradientTo})`
           : "#fff",
@@ -275,12 +277,10 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
           ? `0 8px 24px ${accentColor}40, 0 2px 8px rgba(0,0,0,0.08)`
           : "0 1px 3px rgba(0,0,0,0.06)",
         position: "relative",
-        minHeight: compact ? 84 : 96,
         minWidth: 0,
         boxSizing: "border-box",
       }}
     >
-      {/* Decorative blobs */}
       <div style={{ position: "absolute", inset: 0, borderRadius: 12, overflow: "hidden", pointerEvents: "none" }}>
         <div style={{
           position: "absolute", bottom: -16, right: -16, width: 64, height: 64,
@@ -297,7 +297,6 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
         }} />
       </div>
 
-      {/* Top row: icon + arrow */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: compact ? 6 : 8, position: "relative" }}>
         <div style={{
           width: compact ? 32 : 36, height: compact ? 32 : 36, borderRadius: 10,
@@ -323,7 +322,6 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
         </div>
       </div>
 
-      {/* Label */}
       <p style={{
         fontSize: compact ? 12 : 13, fontWeight: 800,
         color: hovered ? "#fff" : "#0F172A",
@@ -334,18 +332,16 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
         position: "relative",
       }}>{label}</p>
 
-      {/* Desc */}
       <p style={{
         fontSize: compact ? 11 : 12, fontWeight: 600,
-        color: hovered ? "rgb(255, 255, 255)" : "#000000",
+        color: hovered ? "rgb(255,255,255)" : "#000000",
         margin: 0,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         position: "relative",
       }}>{desc}</p>
 
-      {/* Badge */}
-      {badge && (
-        <div style={{ marginTop: 5, position: "relative" }}>
+      <div style={{ marginTop: 5, position: "relative", minHeight: badge ? undefined : 0 }}>
+        {badge && (
           <span style={{
             fontSize: 9, fontWeight: 800,
             padding: "2px 7px", borderRadius: 20,
@@ -366,8 +362,8 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
             )}
             {badge}
           </span>
-        </div>
-      )}
+        )}
+      </div>
     </Link>
   );
 };
@@ -376,7 +372,7 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
 const SectionHeader = ({ icon, label, iconGradient, badge }: {
   icon: React.ReactNode; label: string; iconGradient: string; badge?: React.ReactNode;
 }) => (
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexShrink: 0 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <div style={{ width: 24, height: 24, borderRadius: 7, background: iconGradient, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(0,0,0,0.15)" }}>
         {icon}
@@ -416,7 +412,6 @@ const HomePage = () => {
   const isSm = width < 768;
   const isMd = width < 1024;
 
-  // Detect short viewports and scale down further
   const isShort = height < 700;
   const compact = isShort || isMd;
 
@@ -469,20 +464,33 @@ const HomePage = () => {
   const gap = compact ? 6 : 8;
   const pad = isSm ? "10px 10px 16px" : compact ? "10px 14px" : "12px 16px";
 
+  // On mobile: natural scroll. On desktop: fixed viewport with overflow hidden.
+  const outerStyles: React.CSSProperties = isSm
+    ? {
+        padding: pad,
+        background: "#F0F4F8",
+        width: "100%",
+        minHeight: "100vh",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        gap,
+      }
+    : {
+        padding: pad,
+        background: "#F0F4F8",
+        width: "100%",
+        height: "100vh",
+        maxHeight: "100vh",
+        overflow: "hidden",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        gap,
+      };
+
   return (
-    <div style={{
-      padding: pad,
-      background: "#F0F4F8",
-      /* Lock to viewport — no scroll at all */
-      width: "100%",
-      height: "100vh",
-      maxHeight: "100vh",
-      overflow: "hidden",
-      boxSizing: "border-box",
-      display: "flex",
-      flexDirection: "column",
-      gap,
-    }}>
+    <div style={outerStyles}>
       <style>{`
         @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.7)} }
         @keyframes shimmer   { 0%,100%{opacity:1} 50%{opacity:0.5} }
@@ -534,8 +542,9 @@ const HomePage = () => {
         display: "grid",
         gridTemplateColumns: isSm ? "1fr" : "1fr 1fr",
         gap,
-        flex: 1,
-        minHeight: 0, // critical: lets flex children shrink below content size
+        // On desktop: flex:1 + minHeight:0 keeps it inside the fixed viewport.
+        // On mobile: auto height, no flex stretching needed.
+        ...(isSm ? {} : { flex: 1, minHeight: 0 }),
       }}>
 
         {/* LEFT: Chart */}
@@ -543,8 +552,8 @@ const HomePage = () => {
           background: "#fff", border: "1.5px solid #E2E8F0", borderRadius: 14,
           boxShadow: "0 4px 24px rgba(0,0,0,0.05)", padding: compact ? "10px 12px" : "12px 14px",
           display: "flex", flexDirection: "column",
-          minHeight: 0,
-          overflow: "hidden",
+          // On mobile, let height be natural (auto). On desktop, fill remaining space.
+          ...(isSm ? {} : { minHeight: 0, overflow: "hidden" }),
           boxSizing: "border-box",
         }}>
           <SectionHeader
@@ -557,7 +566,7 @@ const HomePage = () => {
               </span>
             ) : undefined}
           />
-          <div style={{ flex: 1, display: "flex", alignItems: "center", minHeight: 0, overflow: "hidden" }}>
+          <div style={{ ...(isSm ? {} : { flex: 1, minHeight: 0, overflow: "hidden" }), display: "flex", alignItems: "center" }}>
             {!loading && s ? (
               <DonutChart total={s.totalMaids} centerLabel="Total Maids" slices={slices} size={donutSize} />
             ) : (
@@ -585,8 +594,9 @@ const HomePage = () => {
           boxShadow: "0 4px 24px rgba(0,0,0,0.05)",
           padding: compact ? "10px 12px 12px" : "12px 14px 14px",
           display: "flex", flexDirection: "column",
-          minHeight: 0,
-          overflow: "hidden",
+          // On mobile: let height be auto so all 8 cards are fully visible with no scroll.
+          // On desktop: fill remaining space.
+          ...(isSm ? {} : { minHeight: 0, overflow: "hidden" }),
           boxSizing: "border-box",
           minWidth: 0,
         }}>
@@ -595,16 +605,24 @@ const HomePage = () => {
             label="Quick Actions"
             iconGradient="linear-gradient(135deg, #4C1D95, #7C3AED)"
           />
+          {/*
+            Mobile: fixed row height via auto rows so all 8 cards show without any scroll.
+            The grid intrinsically sizes to its content — no overflow, no flex stretching.
+            Desktop: gridAutoRows:"1fr" keeps equal row heights inside the flex container.
+          */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+            // On mobile, use a fixed compact row height so all 4 rows fit naturally.
+            // On desktop keep 1fr to fill available space evenly.
+            gridAutoRows: isSm ? "80px" : "1fr",
             gap: compact ? 6 : 7,
-            flex: 1,
-            alignContent: "start",
-            minHeight: 0,
+            // Desktop only: flex:1 + minHeight:0 lets the grid stretch to fill the panel.
+            ...(isSm ? {} : { flex: 1, minHeight: 0 }),
             minWidth: 0,
             boxSizing: "border-box",
-            // No overflow here — cards scale to fill
+            // No overflow on either breakpoint — cards must all be visible.
+            overflow: "visible",
           }}>
             {loading
               ? Array.from({ length: 8 }).map((_, i) => <SkeletonMenuCard key={i} />)
