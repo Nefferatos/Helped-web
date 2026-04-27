@@ -23,12 +23,7 @@ import { streamSse } from "@/lib/sse";
 /* ─── Helpers ──────────────────────────────────────────────────────────── */
 
 function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
+  return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
 
 function formatTime(iso: string) {
@@ -84,15 +79,15 @@ function buildQueryString(
 type AvatarTone = "client" | "agency" | "support";
 
 const TONE_CLASSES: Record<AvatarTone, string> = {
-  client:  "bg-violet-100 text-violet-700",
-  agency:  "bg-emerald-100 text-emerald-800",
-  support: "bg-sky-100 text-sky-700",
+  client:  "bg-violet-100 text-violet-800",
+  agency:  "bg-emerald-100 text-emerald-900",
+  support: "bg-sky-100 text-sky-800",
 };
 
 const SIZE_CLASSES: Record<"sm" | "md" | "lg", string> = {
-  sm: "h-9 w-9 text-[13px]",
-  md: "h-11 w-11 text-[15px]",
-  lg: "h-14 w-14 text-[18px]",
+  sm: "h-10 w-10 text-[15px]",   // was h-9 w-9 text-[13px]
+  md: "h-12 w-12 text-[17px]",   // was h-11 w-11 text-[15px]
+  lg: "h-16 w-16 text-[20px]",   // was h-14 w-14 text-[18px]
 };
 
 function AvatarBubble({
@@ -116,7 +111,7 @@ function AvatarBubble({
 function UnreadBadge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-emerald-600 px-2 py-0.5 text-[12px] font-bold leading-none text-white shadow-sm">
+    <span className="inline-flex min-w-[26px] items-center justify-center rounded-full bg-emerald-600 px-2.5 py-1 text-[14px] font-bold leading-none text-white shadow-sm">
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -124,11 +119,11 @@ function UnreadBadge({ count }: { count: number }) {
 
 function LoadingDots() {
   return (
-    <div className="flex items-center justify-center gap-2 px-4 py-8">
+    <div className="flex items-center justify-center gap-2 px-4 py-10">
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="h-2.5 w-2.5 rounded-full bg-emerald-300"
+          className="h-3.5 w-3.5 rounded-full bg-emerald-300"
           style={{ animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
         />
       ))}
@@ -138,27 +133,27 @@ function LoadingDots() {
 
 function EmptyState({ label, icon }: { label: string; icon?: "message" | "user" }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 shadow-sm">
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 p-12">
+      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-50 shadow-sm">
         {icon === "user" ? (
-          <Users className="h-7 w-7 text-emerald-600" />
+          <Users className="h-9 w-9 text-emerald-600" />
         ) : (
-          <Inbox className="h-7 w-7 text-emerald-600" />
+          <Inbox className="h-9 w-9 text-emerald-600" />
         )}
       </div>
-      <p className="max-w-[220px] text-center text-[15px] leading-relaxed text-gray-400 font-medium">{label}</p>
+      <p className="max-w-[260px] text-center text-[17px] leading-relaxed text-gray-600 font-semibold">{label}</p>
     </div>
   );
 }
 
 function DateDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 my-2">
-      <div className="h-px flex-1 bg-gray-150" />
-      <span className="whitespace-nowrap rounded-full bg-gray-100 px-3 py-1 text-[13px] font-semibold text-gray-400">
+    <div className="flex items-center gap-3 my-3">
+      <div className="h-px flex-1 bg-gray-200" />
+      <span className="whitespace-nowrap rounded-full bg-gray-100 px-4 py-1.5 text-[14px] font-700 text-gray-600 font-bold">
         {label}
       </span>
-      <div className="h-px flex-1 bg-gray-150" />
+      <div className="h-px flex-1 bg-gray-200" />
     </div>
   );
 }
@@ -177,33 +172,33 @@ function ConversationItem({
   return (
     <button
       onClick={onClick}
-      className={`group relative flex w-full items-start gap-3.5 border-b border-gray-100 px-4 py-4 text-left transition-all last:border-0 ${
+      className={`group relative flex w-full items-start gap-4 border-b border-gray-100 px-4 py-5 text-left transition-all last:border-0 ${
         isActive
-          ? "bg-emerald-50 before:absolute before:left-0 before:top-3 before:bottom-3 before:w-1 before:rounded-r-full before:bg-emerald-600"
+          ? "bg-emerald-50 before:absolute before:left-0 before:top-3 before:bottom-3 before:w-1.5 before:rounded-r-full before:bg-emerald-600"
           : "hover:bg-gray-50/80"
       }`}
     >
       <AvatarBubble name={conversation.clientName} tone="client" size="md" />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2 mb-0.5">
-          <p className={`truncate text-[15px] leading-snug ${isActive ? "font-bold text-emerald-900" : "font-semibold text-gray-800"}`}>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <p className={`truncate text-[17px] leading-snug ${isActive ? "font-bold text-emerald-900" : "font-bold text-gray-900"}`}>
             {conversation.clientName}
           </p>
-          <span className={`flex-shrink-0 text-[12px] font-medium ${isActive ? "text-emerald-700" : "text-gray-400"}`}>
+          <span className={`flex-shrink-0 text-[14px] font-semibold ${isActive ? "text-emerald-700" : "text-gray-500"}`}>
             {formatTime(conversation.lastMessageAt)}
           </span>
         </div>
-        <p className="truncate text-[13px] text-gray-500 mb-1">{conversation.clientEmail}</p>
+        <p className="truncate text-[14px] font-medium text-gray-600 mb-1">{conversation.clientEmail}</p>
         {conversation.lastMessage && (
-          <p className="truncate text-[13px] text-gray-400 leading-snug">
+          <p className="truncate text-[14px] text-gray-500 leading-snug font-medium">
             {conversation.lastMessage}
           </p>
         )}
       </div>
-      <div className="flex flex-shrink-0 flex-col items-end gap-1.5 pt-0.5">
+      <div className="flex flex-shrink-0 flex-col items-end gap-2 pt-0.5">
         <UnreadBadge count={conversation.unreadCount} />
         {conversation.conversationType === "agency" && conversation.agencyName && (
-          <span className="max-w-[72px] truncate rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+          <span className="max-w-[80px] truncate rounded-md bg-emerald-100 px-2.5 py-1 text-[12px] font-bold text-emerald-900">
             {conversation.agencyName}
           </span>
         )}
@@ -221,30 +216,30 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div
-      className={`asc-msg-row flex items-end gap-2.5 ${isOwn ? "ml-auto flex-row-reverse" : ""}`}
+      className={`asc-msg-row flex items-end gap-3 ${isOwn ? "ml-auto flex-row-reverse" : ""}`}
       style={{ maxWidth: "72%" }}
     >
       <AvatarBubble name={message.senderName} tone={tone} size="sm" />
       <div className="min-w-0">
         {!isOwn && (
-          <p className="mb-1.5 pl-1 text-[13px] font-semibold text-gray-500">{message.senderName}</p>
+          <p className="mb-2 pl-1 text-[14px] font-bold text-gray-700">{message.senderName}</p>
         )}
         <div
-          className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed shadow-sm ${
+          className={`rounded-2xl px-5 py-3.5 text-[17px] leading-relaxed shadow-sm ${
             isOwn
               ? "rounded-br-md bg-emerald-700 text-white"
-              : "rounded-bl-md bg-white text-gray-800 border border-gray-100"
+              : "rounded-bl-md bg-white text-gray-900 border border-gray-200"
           }`}
         >
           {message.message}
         </div>
         <div
-          className={`mt-1.5 flex items-center gap-1 text-[12px] text-gray-400 font-medium ${
+          className={`mt-2 flex items-center gap-1.5 text-[13px] text-gray-500 font-semibold ${
             isOwn ? "justify-end pr-1" : "pl-1"
           }`}
         >
           {formatTime(message.createdAt)}
-          {isOwn && <CheckCheck className="h-3.5 w-3.5 text-emerald-400" />}
+          {isOwn && <CheckCheck className="h-4 w-4 text-emerald-400" />}
         </div>
       </div>
     </div>
@@ -287,9 +282,7 @@ const AdminSupportChat = () => {
     if (!term) return conversations;
     return conversations.filter((c) =>
       [c.clientName, c.clientEmail, c.clientCompany, c.agencyName, c.lastMessage]
-        .join(" ")
-        .toLowerCase()
-        .includes(term),
+        .join(" ").toLowerCase().includes(term),
     );
   }, [conversations, search]);
 
@@ -324,8 +317,7 @@ const AdminSupportChat = () => {
           return data.conversations![0]?.key ?? null;
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to load conversations";
+        const message = error instanceof Error ? error.message : "Failed to load conversations";
         setErrorMessage(message);
         if (!silent) toast.error(message);
       } finally {
@@ -374,8 +366,7 @@ const AdminSupportChat = () => {
           ),
         );
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to load messages";
+        const message = error instanceof Error ? error.message : "Failed to load messages";
         setErrorMessage(message);
         if (!silent) toast.error(message);
       } finally {
@@ -402,9 +393,7 @@ const AdminSupportChat = () => {
         });
         const data = (await response.json().catch(() => ({}))) as { lastId?: number };
         if (response.ok && typeof data.lastId === "number") lastId = data.lastId;
-      } catch {
-        // no-op
-      }
+      } catch { /* no-op */ }
       while (!controller.signal.aborted) {
         try {
           await streamSse(`/api/chats/admin/stream?afterId=${lastId}`, {
@@ -441,9 +430,7 @@ const AdminSupportChat = () => {
     return () => controller.abort();
   }, [loadConversations, loadMessages, navigate]);
 
-  useEffect(() => {
-    void loadConversations(false);
-  }, [loadConversations]);
+  useEffect(() => { void loadConversations(false); }, [loadConversations]);
 
   useEffect(() => {
     if (activeConversation) {
@@ -540,7 +527,7 @@ const AdminSupportChat = () => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
 
         .asc-root * { font-family: 'DM Sans', sans-serif; }
 
@@ -560,10 +547,10 @@ const AdminSupportChat = () => {
         .asc-msg-row { animation: fadeSlideUp 0.2s ease both; }
         .asc-conv-item { animation: slideIn 0.18s ease both; }
 
-        .asc-scrollbar::-webkit-scrollbar { width: 5px; }
+        .asc-scrollbar::-webkit-scrollbar { width: 6px; }
         .asc-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 8px; }
-        .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 8px; }
+        .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 
         .asc-textarea { field-sizing: content; }
 
@@ -583,42 +570,42 @@ const AdminSupportChat = () => {
 
         {/* ── Page title bar ── */}
         <div className="mb-4 flex flex-shrink-0 items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 shadow-sm">
-            <MessageCircle className="h-5 w-5 text-white" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600 shadow-sm">
+            <MessageCircle className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h2 className="text-[22px] font-bold leading-tight tracking-tight text-gray-900">
+            <h2 className="text-[26px] font-bold leading-tight tracking-tight text-gray-900">
               Chat Support
             </h2>
-            <p className="text-[13px] text-gray-500 leading-none mt-0.5">
+            <p className="text-[15px] text-gray-600 font-semibold leading-none mt-1">
               Manage client conversations
             </p>
           </div>
           {totalUnread > 0 && (
-            <span className="ml-1 rounded-full bg-emerald-600 px-3 py-1 text-[14px] font-bold text-white shadow-sm">
+            <span className="ml-1 rounded-full bg-emerald-600 px-4 py-1.5 text-[16px] font-bold text-white shadow-sm">
               {totalUnread} unread
             </span>
           )}
         </div>
 
         {/* ── Chat shell ── */}
-        <div className="flex flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-md">
+        <div className="flex flex-1 overflow-hidden rounded-2xl border-2 border-gray-200 bg-white shadow-md">
 
           {/* ── Sidebar ── */}
           <div
-            className={`flex flex-col border-r border-gray-100 bg-gray-50/70 ${
+            className={`flex flex-col border-r-2 border-gray-100 bg-gray-50/70 ${
               mobileView === "chat"
                 ? "hidden md:flex md:w-80 md:min-w-[300px]"
                 : "flex w-full md:w-80 md:min-w-[300px]"
             }`}
           >
             {/* Sidebar header */}
-            <div className="flex-shrink-0 border-b border-gray-100 px-5 py-4">
-              <p className="text-[16px] font-bold text-gray-900">Conversations</p>
-              <p className="text-[13px] text-gray-500 mt-0.5">
+            <div className="flex-shrink-0 border-b-2 border-gray-100 px-5 py-5">
+              <p className="text-[20px] font-bold text-gray-900">Conversations</p>
+              <p className="text-[15px] text-gray-600 font-semibold mt-1">
                 {conversations.length} thread{conversations.length !== 1 ? "s" : ""}
                 {totalUnread > 0 && (
-                  <span className="ml-1.5 text-emerald-700 font-semibold">
+                  <span className="ml-2 text-emerald-800 font-bold">
                     · {totalUnread} unread
                   </span>
                 )}
@@ -626,15 +613,15 @@ const AdminSupportChat = () => {
             </div>
 
             {/* Search */}
-            <div className="flex-shrink-0 border-b border-gray-100 px-4 py-3">
+            <div className="flex-shrink-0 border-b-2 border-gray-100 px-4 py-3">
               <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
                 <input
                   type="text"
                   placeholder="Search conversations…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-[14px] text-gray-800 outline-none placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                  className="h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-4 text-[16px] font-medium text-gray-900 outline-none placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
                 />
               </div>
             </div>
@@ -663,14 +650,14 @@ const AdminSupportChat = () => {
             </div>
 
             {/* Sidebar stats footer */}
-            <div className="flex-shrink-0 grid grid-cols-2 gap-3 border-t border-gray-100 bg-white/80 p-4">
-              <div className="rounded-xl bg-gray-50 px-4 py-3 text-center border border-gray-100">
-                <p className="text-[22px] font-bold text-gray-800 leading-none">{conversations.length}</p>
-                <p className="text-[12px] text-gray-500 mt-1 font-medium">Total Threads</p>
+            <div className="flex-shrink-0 grid grid-cols-2 gap-3 border-t-2 border-gray-100 bg-white/80 p-4">
+              <div className="rounded-xl bg-gray-50 px-4 py-4 text-center border-2 border-gray-100">
+                <p className="text-[28px] font-bold text-gray-900 leading-none">{conversations.length}</p>
+                <p className="text-[14px] text-gray-600 mt-1.5 font-bold">Total Threads</p>
               </div>
-              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-center border border-emerald-100">
-                <p className="text-[22px] font-bold text-emerald-700 leading-none">{totalUnread}</p>
-                <p className="text-[12px] text-emerald-600 mt-1 font-medium">Unread</p>
+              <div className="rounded-xl bg-emerald-50 px-4 py-4 text-center border-2 border-emerald-100">
+                <p className="text-[28px] font-bold text-emerald-800 leading-none">{totalUnread}</p>
+                <p className="text-[14px] text-emerald-700 mt-1.5 font-bold">Unread</p>
               </div>
             </div>
           </div>
@@ -682,47 +669,47 @@ const AdminSupportChat = () => {
             }`}
           >
             {/* Chat header */}
-            <div className="flex flex-shrink-0 items-center gap-4 border-b border-gray-100 bg-white px-5 py-3.5 shadow-sm">
+            <div className="flex flex-shrink-0 items-center gap-4 border-b-2 border-gray-100 bg-white px-5 py-4 shadow-sm">
               {/* Back button — mobile only */}
               <button
                 onClick={() => setMobileView("list")}
-                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-100 active:scale-95 transition-all md:hidden"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-100 active:scale-95 transition-all md:hidden"
               >
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft className="h-6 w-6" />
               </button>
 
               {activeConversation ? (
                 <>
                   <AvatarBubble name={activeConversation.clientName} tone="client" size="lg" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[18px] font-bold text-gray-900 leading-tight">
+                    <p className="truncate text-[20px] font-bold text-gray-900 leading-tight">
                       {activeConversation.clientName}
                     </p>
-                    <p className="truncate text-[13px] text-gray-500 mt-0.5 font-medium">
+                    <p className="truncate text-[15px] text-gray-600 mt-0.5 font-semibold">
                       {headerSubtitle}
                     </p>
                   </div>
                   <div className="flex-shrink-0 text-right hidden sm:block">
-                    <p className="text-[15px] font-bold text-gray-800">
+                    <p className="text-[17px] font-bold text-gray-900">
                       {admin?.agencyName ?? "Agency"}
                     </p>
-                    <p className="text-[13px] text-gray-400 mt-0.5">{activeConversation.clientEmail}</p>
+                    <p className="text-[14px] text-gray-500 font-semibold mt-0.5">{activeConversation.clientEmail}</p>
                   </div>
                 </>
               ) : (
-                <p className="text-[15px] text-gray-400 font-medium">{headerSubtitle}</p>
+                <p className="text-[17px] text-gray-600 font-semibold">{headerSubtitle}</p>
               )}
             </div>
 
             {/* Messages area */}
             <div
               ref={scrollRef}
-              className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-4 overflow-y-auto p-5"
+              className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-5 overflow-y-auto p-6"
             >
               {isLoadingMessages ? (
                 <LoadingDots />
               ) : errorMessage ? (
-                <div className="mx-auto max-w-sm rounded-xl bg-red-50 border border-red-100 px-5 py-4 text-center text-[15px] text-red-600 font-medium">
+                <div className="mx-auto max-w-sm rounded-xl bg-red-50 border-2 border-red-100 px-5 py-4 text-center text-[17px] text-red-700 font-semibold">
                   {errorMessage}
                 </div>
               ) : !activeConversation ? (
@@ -731,7 +718,7 @@ const AdminSupportChat = () => {
                 <EmptyState label="No messages in this thread yet." />
               ) : (
                 messageGroups.map(({ label, messages: groupMsgs }) => (
-                  <div key={label} className="flex flex-col gap-3.5">
+                  <div key={label} className="flex flex-col gap-4">
                     <DateDivider label={label} />
                     {groupMsgs.map((msg) => (
                       <MessageBubble key={msg.id} message={msg} />
@@ -742,7 +729,7 @@ const AdminSupportChat = () => {
             </div>
 
             {/* Compose bar */}
-            <div className="flex flex-shrink-0 items-end gap-3 border-t border-gray-100 bg-white px-5 py-4">
+            <div className="flex flex-shrink-0 items-end gap-3 border-t-2 border-gray-100 bg-white px-5 py-4">
               <textarea
                 ref={textareaRef}
                 placeholder={
@@ -756,18 +743,18 @@ const AdminSupportChat = () => {
                 onChange={(e) => {
                   setDraft(e.target.value);
                   e.target.style.height = "auto";
-                  e.target.style.height = Math.min(e.target.scrollHeight, 130) + "px";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px";
                 }}
                 onKeyDown={handleKeyDown}
-                className="asc-textarea asc-scrollbar flex-1 resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] leading-relaxed text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ lineHeight: 1.6, maxHeight: 130, minHeight: 48 }}
+                className="asc-textarea asc-scrollbar flex-1 resize-none rounded-2xl border-2 border-gray-200 bg-gray-50 px-5 py-3.5 text-[17px] leading-relaxed text-gray-900 font-medium outline-none transition-all placeholder:text-gray-400 placeholder:font-normal focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ lineHeight: 1.7, maxHeight: 140, minHeight: 54 }}
               />
               <button
                 onClick={() => void sendMessage()}
                 disabled={isSending || !draft.trim() || !activeConversation}
-                className="asc-send-btn flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm disabled:cursor-default disabled:opacity-30"
+                className="asc-send-btn flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm disabled:cursor-default disabled:opacity-30"
               >
-                <Send className="h-5 w-5" />
+                <Send className="h-6 w-6" />
               </button>
             </div>
           </div>

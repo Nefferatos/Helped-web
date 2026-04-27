@@ -701,9 +701,9 @@ const SidebarContent = ({
 
                 <span
                   style={{
-                    fontSize: 13,
+                    fontSize: 15,
                     fontWeight: isActive ? 700 : 600,
-                    color: isActive ? "#0D6E56" : "#4B5563",
+                    color: isActive ? "#0D6E56" : "#000000",
                     flex: 1,
                     overflow: "hidden",
                     maxWidth: collapsed ? 0 : 200,

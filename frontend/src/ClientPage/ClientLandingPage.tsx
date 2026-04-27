@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle, ChevronDown, HeartHandshake, Search, Users, X } from "lucide-react";
+import { ArrowRight, CheckCircle, HeartHandshake, Users, X } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,77 @@ import heroImage from "./assets/maid1.png";
 import housekeepingImg from "./assets/housekeeping.png";
 import infantImg from "./assets/infant-care.png";
 import "./ClientTheme.css";
+
+// ── Nationality → ISO 3166-1 alpha-2 country code ──────────────────────────
+const NATIONALITY_FLAGS: Record<string, string> = {
+  // Southeast Asia
+  filipino: "ph", philippines: "ph",
+  indonesian: "id", indonesia: "id",
+  myanmar: "mm", burmese: "mm",
+  cambodian: "kh", cambodia: "kh",
+  vietnamese: "vn", vietnam: "vn",
+  thai: "th", thailand: "th",
+  malaysian: "my", malaysia: "my",
+  singaporean: "sg", singapore: "sg",
+  // South Asia
+  indian: "in", india: "in",
+  "sri lankan": "lk", "sri lanka": "lk",
+  bangladeshi: "bd", bangladesh: "bd",
+  nepali: "np", nepalese: "np", nepal: "np",
+  pakistani: "pk", pakistan: "pk",
+  // East Asia
+  chinese: "cn", china: "cn",
+  hongkong: "hk", "hong kong": "hk",
+  taiwanese: "tw", taiwan: "tw",
+  korean: "kr", "south korea": "kr",
+  japanese: "jp", japan: "jp",
+  // Africa / Others
+  ethiopian: "et", ethiopia: "et",
+  kenyan: "ke", kenya: "ke",
+  ugandan: "ug", uganda: "ug",
+  ghanaian: "gh", ghana: "gh",
+  nigerian: "ng", nigeria: "ng",
+};
+
+const getNationalityCode = (nationality?: string): string => {
+  if (!nationality) return "";
+  const key = nationality.toLowerCase().trim();
+  if (NATIONALITY_FLAGS[key]) return NATIONALITY_FLAGS[key];
+  for (const [k, code] of Object.entries(NATIONALITY_FLAGS)) {
+    if (key.includes(k)) return code;
+  }
+  return "";
+};
+
+/** Circular flag image using flagcdn.com — same as EditMaids */
+const FlagCircle = ({ code }: { code: string }) => {
+  if (!code) return null;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 14,
+        height: 14,
+        borderRadius: "50%",
+        overflow: "hidden",
+        border: "1px solid rgba(0,0,0,0.13)",
+        flexShrink: 0,
+        verticalAlign: "middle",
+        background: "#e5e7eb",
+      }}
+    >
+      <img
+        src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
+        alt={code}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
+    </span>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const services = [
   {
@@ -73,10 +144,18 @@ const features = [
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid", "Willing to work on off-days"] as const;
 const ITEMS_PER_PAGE = 14; // 2 rows × 7 cards
 
-const getPrimaryPhoto = (maid: MaidProfile) =>
-  Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
-    ? maid.photoDataUrls[0]
-    : maid.photoDataUrl || "";
+const getPrimaryPhoto = (maid: MaidProfile): string => {
+  if (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) {
+    return maid.photoDataUrls[0];
+  }
+  return maid.photoDataUrl || "";
+};
+
+/** Returns true only if the maid has a real, non-empty photo. */
+const hasPhoto = (maid: MaidProfile): boolean => {
+  const photo = getPrimaryPhoto(maid);
+  return typeof photo === "string" && photo.trim().length > 0;
+};
 
 interface CompanyProfileApi {
   company_name?: string;
@@ -149,7 +228,11 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         if (!maidsResponse.ok || !maidData.maids) {
           throw new Error(maidData.error || "Failed to load public maids");
         }
-        setAllPublicMaids(maidData.maids.filter((maid) => maid.isPublic));
+
+        // ── CHANGE 1: Only store maids that are public AND have a photo ──
+        setAllPublicMaids(
+          maidData.maids.filter((maid) => maid.isPublic && hasPhoto(maid))
+        );
 
         if (companyResponse.ok) {
           const companyData = (await companyResponse.json().catch(() => ({}))) as CompanyResponse;
@@ -173,7 +256,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           setClientUser(null);
           return;
         }
-
         const client = await syncClientProfileFromSession();
         setClientUser(client ?? null);
       } catch {
@@ -210,7 +292,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       maidTypes,
       language,
     });
-  }, [allPublicMaids, keyword, maidTypes, nationality, language ]);
+  }, [allPublicMaids, keyword, maidTypes, nationality, language]);
 
   useEffect(() => { setCurrentPage(1); }, [keyword, maidTypes, nationality, language]);
 
@@ -398,7 +480,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </h2>
           </div>
 
-          {/* Search panel — styled like the reference screenshot */}
+          {/* Search panel */}
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
 
             {/* Panel header */}
@@ -498,7 +580,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 >
                   Request Maid
                 </button>
-               <button
+                <button
                   type="button"
                   onClick={() => navigate(searchMaidsHref)}
                   className="flex-1 rounded bg-[#4a7c1f] px-5 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-[#3b6411] sm:flex-none sm:min-w-[160px]"
@@ -585,99 +667,106 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 </div>
               )}
 
-              <div className="relative">
-                {!isLoggedIn && (
-                  <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-background/35" />
-                )}
+              {/* 7-column grid → exactly 2 rows per page at xl+ */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
+                {pagedMaids.map((maid) => {
+                  const photo = getPrimaryPhoto(maid);
+                  const age = calculateAge(maid.dateOfBirth);
+                  const typeLower = (maid.type || "").toLowerCase();
+                  const typeColor = typeLower.includes("new")
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : typeLower.includes("transfer")
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-amber-50 text-amber-700 border-amber-200";
 
-                {/* 7-column grid → exactly 2 rows per page at xl+ */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
-                  {pagedMaids.map((maid) => {
-                    const photo = getPrimaryPhoto(maid);
-                    const age = calculateAge(maid.dateOfBirth);
-                    const typeLower = (maid.type || "").toLowerCase();
-                    const typeColor = typeLower.includes("new")
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : typeLower.includes("transfer")
-                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                      : "bg-amber-50 text-amber-700 border-amber-200";
+                  const flagCode = getNationalityCode(maid.nationality);
 
-                    return (
-                      <article
-                        key={maid.referenceCode}
-                        className={`group flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md ${!isLoggedIn ? "pointer-events-none" : ""}`}
-                      >
-                        <div className={`${!isLoggedIn ? "blur-[3px] opacity-80" : ""}`}>
-                          {/* Photo */}
-                          <div className="relative w-full bg-muted">
-                            {photo ? (
-                              <img
-                                src={photo}
-                                alt={maid.fullName}
-                                className="block h-auto w-full"
-                                loading="lazy"
-                                decoding="async"
-                              />
-                            ) : (
-                              <div className="flex h-44 items-center justify-center flex-col gap-1 text-muted-foreground/50">
-                                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                                </svg>
-                                <span className="text-[9px]">No photo</span>
-                              </div>
-                            )}
-                            {maid.type && (
-                              <div className="absolute top-1.5 left-1.5">
-                                <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColor}`}>
-                                  {maid.type}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                  // Whole card is the clickable link when logged in — no radius
+                  const cardBase = "group flex flex-col overflow-hidden border bg-card shadow-sm transition-all";
 
-                          {/* Info */}
-                          <div className="flex flex-col gap-1 p-2.5 flex-1">
-                            <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
-                              {maid.fullName}
-                            </h3>
-                            <p className="text-[10px] text-muted-foreground font-mono leading-tight">
-                              {maid.referenceCode}
-                            </p>
-                            <div className="flex flex-wrap gap-1 mt-0.5">
-                              {maid.nationality && (
-                                <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
-                                  {maid.nationality}
-                                </span>
-                              )}
-                              {age && (
-                                <span className="bg-muted px-1.5 py-px text-[9px] text-muted-foreground border border-border/40">
-                                  {age} yrs
-                                </span>
-                              )}
-                            </div>
-                            <div className="mt-auto pt-2">
-                              <Button size="sm" asChild className="h-7 w-full text-[10px] px-1 font-semibold">
-                                <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>
-                                  View Profile
-                                </Link>
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                        {!isLoggedIn && (
-                          <div className="border-t bg-card px-2.5 py-2">
-                            <h3 className="text-xs font-semibold text-foreground line-clamp-1 leading-tight">
-                              {maid.fullName}
-                            </h3>
-                            <p className="text-[10px] text-muted-foreground font-mono leading-tight">
-                              {maid.referenceCode}
-                            </p>
+                  return isLoggedIn ? (
+                    <Link
+                      key={maid.referenceCode}
+                      to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
+                      className={`${cardBase} hover:shadow-md hover:border-primary/50 cursor-pointer`}
+                    >
+                      {/* Photo */}
+                      <div className="relative w-full bg-muted">
+                        <img
+                          src={photo}
+                          alt={maid.fullName}
+                          className="block h-auto w-full"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        {maid.type && (
+                          <div className="absolute top-1.5 left-1.5">
+                            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColor}`}>
+                              {maid.type}
+                            </span>
                           </div>
                         )}
-                      </article>
-                    );
-                  })}
-                </div>
+                      </div>
+
+                      {/* Info — black readable text */}
+                      <div className="flex flex-col gap-1 p-2.5 flex-1 bg-white">
+                        <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
+                          {maid.fullName}
+                        </h3>
+                        <p className="text-[10px] text-gray-600 font-mono leading-tight">
+                          {maid.referenceCode}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {maid.nationality && (
+                            <span className="inline-flex items-center gap-1 bg-gray-100 px-1.5 py-px text-[9px] text-black border border-gray-300">
+                                <FlagCircle code={flagCode} />
+                                {maid.nationality}
+                              </span>
+                          )}
+                          {age && (
+                            <span className="bg-gray-100 px-1.5 py-px text-[9px] text-black border border-gray-300">
+                              {age} yrs
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ) : (
+                    /* Guest: blurred photo, fully censored info panel */
+                    <div key={maid.referenceCode} className={cardBase}>
+                      {/* Blurred photo */}
+                      <div className="relative w-full bg-muted blur-[4px] opacity-75 select-none pointer-events-none">
+                        <img
+                          src={photo}
+                          alt="Maid profile"
+                          className="block h-auto w-full"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        {maid.type && (
+                          <div className="absolute top-1.5 left-1.5">
+                            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 ${typeColor}`}>
+                              {maid.type}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Censored info */}
+                      <div className="flex flex-col gap-1 p-2.5 flex-1 bg-white">
+                        <div className="h-2.5 w-3/4 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+                        <div className="mt-1 h-2 w-1/2 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+                        <div className="mt-1 flex gap-1">
+                          <div className="h-4 w-12 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+                          <div className="h-4 w-8 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+                        </div>
+                        <p className="mt-2 text-center text-[9px] text-gray-400 leading-tight">
+                          🔒 Login to view
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Pagination */}

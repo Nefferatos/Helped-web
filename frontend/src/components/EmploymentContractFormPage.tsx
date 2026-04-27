@@ -31,6 +31,7 @@ import {
   Home,
   FilePlus2,
   AlertCircle,
+  Wand2,
 } from "lucide-react";
 import { downloadMergedEmployerPdf, printMergedEmployerPdf } from "@/lib/employerPdf";
 import { adminPath } from "@/lib/routes";
@@ -138,14 +139,12 @@ const inp = [
   "text-[15px] text-gray-900 font-medium outline-none transition-all",
   "placeholder:text-gray-400 placeholder:font-normal",
   "focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100",
-  "disabled:bg-white disabled:opacity-100 disabled:border-gray-200",
 ].join(" ");
 
 const selTrigger = [
   "h-11 rounded-xl border-2 border-gray-200 bg-gray-50 px-3.5",
   "text-[15px] text-gray-900 font-medium",
   "focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100",
-  "disabled:bg-white disabled:opacity-100",
 ].join(" ");
 
 function SectionCard({
@@ -161,12 +160,12 @@ function SectionCard({
   children: React.ReactNode;
   action?: React.ReactNode;
 }) {
-  const colors: Record<string, { header: string; border: string; icon: string }> = {
-    emerald: { header: "bg-gradient-to-r from-emerald-600 to-teal-600", border: "border-emerald-100", icon: "bg-emerald-100 text-emerald-700" },
-    sky:     { header: "bg-gradient-to-r from-sky-600 to-blue-600",     border: "border-sky-100",     icon: "bg-sky-100 text-sky-700" },
-    violet:  { header: "bg-gradient-to-r from-violet-600 to-purple-600",border: "border-violet-100",  icon: "bg-violet-100 text-violet-700" },
-    amber:   { header: "bg-gradient-to-r from-amber-500 to-orange-500", border: "border-amber-100",   icon: "bg-amber-100 text-amber-700" },
-    slate:   { header: "bg-gradient-to-r from-slate-600 to-gray-700",   border: "border-slate-100",   icon: "bg-slate-100 text-slate-700" },
+  const colors: Record<string, { header: string; border: string }> = {
+    emerald: { header: "bg-gradient-to-r from-emerald-600 to-teal-600", border: "border-emerald-100" },
+    sky:     { header: "bg-gradient-to-r from-sky-600 to-blue-600",     border: "border-sky-100" },
+    violet:  { header: "bg-gradient-to-r from-violet-600 to-purple-600",border: "border-violet-100" },
+    amber:   { header: "bg-gradient-to-r from-amber-500 to-orange-500", border: "border-amber-100" },
+    slate:   { header: "bg-gradient-to-r from-slate-600 to-gray-700",   border: "border-slate-100" },
   };
   const c = colors[color];
   return (
@@ -204,24 +203,22 @@ function Field({
 }
 
 function RadioGroup({
-  name, options, value, onChange, disabled = false,
+  name, options, value, onChange,
 }: {
-  name: string; options: string[]; value: string; onChange: (v: string) => void; disabled?: boolean;
+  name: string; options: string[]; value: string; onChange: (v: string) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-2 pt-1">
       {options.map((opt) => (
         <label
           key={opt}
-          className={`flex items-center gap-2 rounded-xl border-2 px-4 py-2 text-[14px] font-semibold transition-all ${
-            disabled ? "cursor-default opacity-70" : "cursor-pointer"
-          } ${
+          className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-4 py-2 text-[14px] font-semibold transition-all ${
             value === opt
               ? "border-emerald-400 bg-emerald-50 text-emerald-800"
               : "border-gray-200 text-gray-600 hover:border-gray-300 bg-gray-50"
           }`}
         >
-          <input type="radio" name={name} checked={value === opt} onChange={() => onChange(opt)} disabled={disabled} className="sr-only" />
+          <input type="radio" name={name} checked={value === opt} onChange={() => onChange(opt)} className="sr-only" />
           {value === opt && <Check className="h-3.5 w-3.5 text-emerald-600" />}
           {opt}
         </label>
@@ -230,22 +227,21 @@ function RadioGroup({
   );
 }
 
-function DatePicker({ day, month, year, onDay, onMonth, onYear, disabled = false }: {
+function DatePicker({ day, month, year, onDay, onMonth, onYear }: {
   day: string; month: string; year: string;
   onDay: (v: string) => void; onMonth: (v: string) => void; onYear: (v: string) => void;
-  disabled?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Select value={day || undefined} onValueChange={onDay} disabled={disabled}>
+      <Select value={day || undefined} onValueChange={onDay}>
         <SelectTrigger className={`${selTrigger} w-[80px]`}><SelectValue placeholder="DD" /></SelectTrigger>
         <SelectContent>{Array.from({ length: 31 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
       </Select>
-      <Select value={month || undefined} onValueChange={onMonth} disabled={disabled}>
+      <Select value={month || undefined} onValueChange={onMonth}>
         <SelectTrigger className={`${selTrigger} w-[80px]`}><SelectValue placeholder="MM" /></SelectTrigger>
         <SelectContent>{Array.from({ length: 12 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
       </Select>
-      <Select value={year || undefined} onValueChange={onYear} disabled={disabled}>
+      <Select value={year || undefined} onValueChange={onYear}>
         <SelectTrigger className={`${selTrigger} w-[100px]`}><SelectValue placeholder="YYYY" /></SelectTrigger>
         <SelectContent>{Array.from({ length: 120 }, (_, i) => <SelectItem key={i} value={String(1910 + i)}>{1910 + i}</SelectItem>)}</SelectContent>
       </Select>
@@ -390,7 +386,6 @@ const BulkUploadModal = ({
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
       <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        {/* Modal header */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -409,7 +404,6 @@ const BulkUploadModal = ({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
-          {/* Drop zone */}
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
@@ -465,7 +459,6 @@ const BulkUploadModal = ({
           )}
         </div>
 
-        {/* Modal footer */}
         <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-5 py-4">
           <button type="button" onClick={handleClose} disabled={isUploading}
             className="text-[14px] font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-40">
@@ -504,7 +497,6 @@ export const EmploymentContractPage = ({
   const location = useLocation();
   const navigate = useNavigate();
   const isCreateMode = mode === "create";
-  const isViewMode = mode === "view";
   const requestedStep = Number(new URLSearchParams(location.search).get("step") || "");
   const hasStepQuery = Number.isInteger(requestedStep) && requestedStep >= 1 && requestedStep <= 4;
   const showStepTabs = isCreateMode || hasStepQuery;
@@ -727,10 +719,6 @@ export const EmploymentContractPage = ({
     }));
 
   const submitContract = async () => {
-    if (isViewMode) {
-      toast.error("This page is read-only. Open Edit to make changes.");
-      return;
-    }
     if (isSubmitting) return;
     if (!employer.name.trim()) { toast.error("Employer name is required"); return; }
     try {
@@ -790,7 +778,6 @@ export const EmploymentContractPage = ({
     { id: 4, label: "Upload Forms",   icon: <FilePlus2 className="h-4 w-4" />, color: "amber" },
   ];
 
-  /* ── loading / error ── */
   if (isLoading) return (
     <div className="flex min-h-[40vh] items-center justify-center gap-3">
       <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
@@ -838,7 +825,7 @@ export const EmploymentContractPage = ({
             </div>
             <div>
               <h2 className="text-[22px] font-bold text-gray-900 leading-tight">
-                {isCreateMode ? "Add New Employment Contract" : isViewMode ? "Employment Contract Details" : "Employment Contract Form"}
+                {isCreateMode ? "Add New Employment Contract" : "Employment Contract Form"}
               </h2>
               <p className="text-[14px] text-gray-500 font-medium mt-0.5">
                 Reference:{" "}
@@ -846,19 +833,6 @@ export const EmploymentContractPage = ({
               </p>
             </div>
           </div>
-
-          {/* Save button always visible */}
-          {!isViewMode && (
-            <button
-              type="button"
-              onClick={() => void submitContract()}
-              disabled={isSubmitting}
-              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-[15px] font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all"
-            >
-              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-              {isSubmitting ? "Saving…" : isCreateMode ? "Save Contract" : "Save Changes"}
-            </button>
-          )}
         </div>
 
         {/* ── Step tabs ── */}
@@ -893,131 +867,130 @@ export const EmploymentContractPage = ({
         {showStepOne && (
           <div className="ecp-section space-y-4">
             <SectionCard title="The Maid Employed" icon={<User className="h-4 w-4 text-white" />} color="emerald">
-              <fieldset disabled={isViewMode} className="space-y-4">
-              {/* Maid search */}
-              <div className="mb-5 flex gap-2.5">
-                <div className="relative flex-1">
-                  <input
-                    className={`${inp} pr-4`}
-                    value={maidSearch}
-                    onChange={(e) => { setMaidSearch(e.target.value); setShowMaidResults(true); }}
-                    onFocus={() => setShowMaidResults(true)}
-                    placeholder="Search maid by name or reference code…"
-                  />
-                  {showMaidResults && maidSearch.trim().length > 0 && (
-                    <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl border-2 border-gray-200 bg-white shadow-xl">
-                      {maidSearch.trim().length < 2 ? (
-                        <div className="px-4 py-3 text-[14px] text-gray-400">Type at least 2 characters…</div>
-                      ) : maidSearchLoading ? (
-                        <div className="flex items-center gap-2 px-4 py-3 text-[14px] text-gray-400">
-                          <Loader2 className="h-4 w-4 animate-spin" /> Searching maids…
-                        </div>
-                      ) : maidResults.length === 0 ? (
-                        <div className="px-4 py-3 text-[14px] text-gray-400">No maids found.</div>
-                      ) : (
-                        maidResults.map((result) => (
-                          <button
-                            key={`${result.referenceCode}-${result.id ?? "maid"}`}
-                            type="button"
-                            className="flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left last:border-b-0 hover:bg-emerald-50 transition-colors"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => applyMaidResult(result)}
-                          >
-                            <div className="h-14 w-11 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shrink-0">
-                              {getPrimaryPhoto(result as unknown as Record<string, unknown>) ? (
-                                <img src={getPrimaryPhoto(result as unknown as Record<string, unknown>)} alt={result.fullName} className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-gray-300">
-                                  <User className="h-5 w-5" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[15px] font-bold text-gray-900 truncate">{result.fullName || "Unnamed maid"}</p>
-                              <p className="text-[13px] text-gray-500 mt-0.5">
-                                {result.nationality || "Unknown"} · {getMaidExperienceLabel(result)} exp
-                              </p>
-                              <p className="text-[13px] text-emerald-700 font-semibold">
-                                Ref: {result.referenceCode || "N/A"} · Salary: {toText((result.introduction as Record<string, unknown> | undefined)?.expectedSalary) || "—"}
-                              </p>
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowMaidResults(true)}
-                  disabled={isViewMode}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm"
-                >
-                  <Search className="h-4 w-4" /> Search
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_140px]">
-                <div className="space-y-2">
-                  <Field label="Maid's Full Name">
-                    <input className={inp} value={maid.name} onChange={(e) => setMaid({ ...maid, name: e.target.value })} placeholder="Full name as per passport" />
-                  </Field>
-                  <Field label="Nationality">
-                    <Select value={maid.nationality || undefined} onValueChange={(v) => setMaid({ ...maid, nationality: v })}>
-                      <SelectTrigger className={`${selTrigger} w-52`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
-                      <SelectContent>
-                        {["Filipino maid","Indian maid","Indonesian maid","Myanmar maid","Sri Lankan maid"].map((n) => (
-                          <SelectItem key={n} value={n}>{n}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label="Work Permit No.">
-                    <input className={`${inp} max-w-[220px]`} value={maid.workPermitNo} onChange={(e) => setMaid({ ...maid, workPermitNo: e.target.value })} placeholder="e.g. G1234567P" />
-                  </Field>
-                  <Field label="FIN No.">
-                    <input className={`${inp} max-w-[220px]`} value={maid.finNo} onChange={(e) => setMaid({ ...maid, finNo: e.target.value })} placeholder="e.g. G1234567P" />
-                  </Field>
-                  <Field label="Passport No.">
-                    <input className={`${inp} max-w-[220px]`} value={maid.passportNo} onChange={(e) => setMaid({ ...maid, passportNo: e.target.value })} placeholder="Passport number" />
-                  </Field>
-                  <Field label="Monthly Salary">
-                    <input className={`${inp} max-w-[200px]`} value={maid.salary} onChange={(e) => setMaid({ ...maid, salary: e.target.value })} placeholder="e.g. $800" />
-                  </Field>
-                  <Field label="Number of Off-days">
-                    <input className={`${inp} max-w-[200px]`} value={maid.numberOfOffDays} onChange={(e) => setMaid({ ...maid, numberOfOffDays: e.target.value })} placeholder="e.g. 4" />
-                  </Field>
-                  <Field label="Compensation (No Offday)">
-                    <input className={`${inp} max-w-[200px]`} value={maid.compensationNoOffday} onChange={(e) => setMaid({ ...maid, compensationNoOffday: e.target.value })} placeholder="0" />
-                  </Field>
-                  <Field label="Name of Maid Replaced">
-                    <input className={inp} value={maid.nameOfReplacement} onChange={(e) => setMaid({ ...maid, nameOfReplacement: e.target.value })} placeholder="Previous maid's name (if applicable)" />
-                  </Field>
-                  <Field label="Passport of Maid Replaced">
-                    <input className={inp} value={maid.passportOfMaid} onChange={(e) => setMaid({ ...maid, passportOfMaid: e.target.value })} placeholder="Previous maid's passport no." />
-                  </Field>
-                </div>
-
-                {/* Photo */}
-                <div className="flex flex-col items-center pt-1">
-                  <div className="overflow-hidden rounded-2xl border-2 border-gray-200 bg-gray-50 shadow-sm" style={{ width: 130, height: 160 }}>
-                    {maidPhoto ? (
-                      <img src={maidPhoto} alt={maid.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center text-gray-300">
-                        <User className="h-10 w-10" />
-                        <span className="mt-2 text-[12px] text-gray-400 font-medium">No photo</span>
+              <div className="space-y-4">
+                {/* Maid search */}
+                <div className="mb-5 flex gap-2.5">
+                  <div className="relative flex-1">
+                    <input
+                      className={`${inp} pr-4`}
+                      value={maidSearch}
+                      onChange={(e) => { setMaidSearch(e.target.value); setShowMaidResults(true); }}
+                      onFocus={() => setShowMaidResults(true)}
+                      placeholder="Search maid by name or reference code…"
+                    />
+                    {showMaidResults && maidSearch.trim().length > 0 && (
+                      <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl border-2 border-gray-200 bg-white shadow-xl">
+                        {maidSearch.trim().length < 2 ? (
+                          <div className="px-4 py-3 text-[14px] text-gray-400">Type at least 2 characters…</div>
+                        ) : maidSearchLoading ? (
+                          <div className="flex items-center gap-2 px-4 py-3 text-[14px] text-gray-400">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Searching maids…
+                          </div>
+                        ) : maidResults.length === 0 ? (
+                          <div className="px-4 py-3 text-[14px] text-gray-400">No maids found.</div>
+                        ) : (
+                          maidResults.map((result) => (
+                            <button
+                              key={`${result.referenceCode}-${result.id ?? "maid"}`}
+                              type="button"
+                              className="flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left last:border-b-0 hover:bg-emerald-50 transition-colors"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => applyMaidResult(result)}
+                            >
+                              <div className="h-14 w-11 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shrink-0">
+                                {getPrimaryPhoto(result as unknown as Record<string, unknown>) ? (
+                                  <img src={getPrimaryPhoto(result as unknown as Record<string, unknown>)} alt={result.fullName} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-gray-300">
+                                    <User className="h-5 w-5" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[15px] font-bold text-gray-900 truncate">{result.fullName || "Unnamed maid"}</p>
+                                <p className="text-[13px] text-gray-500 mt-0.5">
+                                  {result.nationality || "Unknown"} · {getMaidExperienceLabel(result)} exp
+                                </p>
+                                <p className="text-[13px] text-emerald-700 font-semibold">
+                                  Ref: {result.referenceCode || "N/A"} · Salary: {toText((result.introduction as Record<string, unknown> | undefined)?.expectedSalary) || "—"}
+                                </p>
+                              </div>
+                            </button>
+                          ))
+                        )}
                       </div>
                     )}
                   </div>
-                  {maid.referenceCode && (
-                    <span className="mt-2 rounded-xl bg-emerald-100 px-3 py-1 text-[12px] font-bold text-emerald-800">
-                      Ref: {maid.referenceCode}
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowMaidResults(true)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm"
+                  >
+                    <Search className="h-4 w-4" /> Search
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_140px]">
+                  <div className="space-y-2">
+                    <Field label="Maid's Full Name">
+                      <input className={inp} value={maid.name} onChange={(e) => setMaid({ ...maid, name: e.target.value })} placeholder="Full name as per passport" />
+                    </Field>
+                    <Field label="Nationality">
+                      <Select value={maid.nationality || undefined} onValueChange={(v) => setMaid({ ...maid, nationality: v })}>
+                        <SelectTrigger className={`${selTrigger} w-52`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
+                        <SelectContent>
+                          {["Filipino maid","Indian maid","Indonesian maid","Myanmar maid","Sri Lankan maid"].map((n) => (
+                            <SelectItem key={n} value={n}>{n}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label="Work Permit No.">
+                      <input className={`${inp} max-w-[220px]`} value={maid.workPermitNo} onChange={(e) => setMaid({ ...maid, workPermitNo: e.target.value })} placeholder="e.g. G1234567P" />
+                    </Field>
+                    <Field label="FIN No.">
+                      <input className={`${inp} max-w-[220px]`} value={maid.finNo} onChange={(e) => setMaid({ ...maid, finNo: e.target.value })} placeholder="e.g. G1234567P" />
+                    </Field>
+                    <Field label="Passport No.">
+                      <input className={`${inp} max-w-[220px]`} value={maid.passportNo} onChange={(e) => setMaid({ ...maid, passportNo: e.target.value })} placeholder="Passport number" />
+                    </Field>
+                    <Field label="Monthly Salary">
+                      <input className={`${inp} max-w-[200px]`} value={maid.salary} onChange={(e) => setMaid({ ...maid, salary: e.target.value })} placeholder="e.g. $800" />
+                    </Field>
+                    <Field label="Number of Off-days">
+                      <input className={`${inp} max-w-[200px]`} value={maid.numberOfOffDays} onChange={(e) => setMaid({ ...maid, numberOfOffDays: e.target.value })} placeholder="e.g. 4" />
+                    </Field>
+                    <Field label="Compensation (No Offday)">
+                      <input className={`${inp} max-w-[200px]`} value={maid.compensationNoOffday} onChange={(e) => setMaid({ ...maid, compensationNoOffday: e.target.value })} placeholder="0" />
+                    </Field>
+                    <Field label="Name of Maid Replaced">
+                      <input className={inp} value={maid.nameOfReplacement} onChange={(e) => setMaid({ ...maid, nameOfReplacement: e.target.value })} placeholder="Previous maid's name (if applicable)" />
+                    </Field>
+                    <Field label="Passport of Maid Replaced">
+                      <input className={inp} value={maid.passportOfMaid} onChange={(e) => setMaid({ ...maid, passportOfMaid: e.target.value })} placeholder="Previous maid's passport no." />
+                    </Field>
+                  </div>
+
+                  {/* Photo */}
+                  <div className="flex flex-col items-center pt-1">
+                    <div className="overflow-hidden rounded-2xl border-2 border-gray-200 bg-gray-50 shadow-sm" style={{ width: 130, height: 160 }}>
+                      {maidPhoto ? (
+                        <img src={maidPhoto} alt={maid.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center text-gray-300">
+                          <User className="h-10 w-10" />
+                          <span className="mt-2 text-[12px] text-gray-400 font-medium">No photo</span>
+                        </div>
+                      )}
+                    </div>
+                    {maid.referenceCode && (
+                      <span className="mt-2 rounded-xl bg-emerald-100 px-3 py-1 text-[12px] font-bold text-emerald-800">
+                        Ref: {maid.referenceCode}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              </fieldset>
             </SectionCard>
 
             {showStepTabs && (
@@ -1034,7 +1007,7 @@ export const EmploymentContractPage = ({
         {showStepTwo && (
           <div className="ecp-section space-y-4">
             <SectionCard title="Agency Information" icon={<Building2 className="h-4 w-4 text-white" />} color="sky">
-              <fieldset disabled={isViewMode} className="space-y-2">
+              <div className="space-y-2">
                 <Field label="Case Reference Number">
                   <input className={`${inp} max-w-[180px]`} value={agency.caseReferenceNumber} onChange={(e) => setAgency({ ...agency, caseReferenceNumber: e.target.value })} placeholder="e.g. 06583" />
                 </Field>
@@ -1047,7 +1020,6 @@ export const EmploymentContractPage = ({
                     onDay={(v) => setAgency({ ...agency, dateOfEmploymentDay: v })}
                     onMonth={(v) => setAgency({ ...agency, dateOfEmploymentMonth: v })}
                     onYear={(v) => setAgency({ ...agency, dateOfEmploymentYear: v })}
-                    disabled={isViewMode}
                   />
                 </Field>
 
@@ -1077,7 +1049,7 @@ export const EmploymentContractPage = ({
                   <input className={`${inp} max-w-[180px]`} value={agency.insuranceFee} onChange={(e) => setAgency({ ...agency, insuranceFee: e.target.value })} placeholder="$0.00" />
                 </Field>
                 <Field label="Agency Witness">
-                  <Select value={agency.agencyWitness || undefined} onValueChange={(v) => setAgency({ ...agency, agencyWitness: v })} disabled={isViewMode}>
+                  <Select value={agency.agencyWitness || undefined} onValueChange={(v) => setAgency({ ...agency, agencyWitness: v })}>
                     <SelectTrigger className={selTrigger}><SelectValue placeholder="Select witness" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Balamurugan S/O Subramaniam (R1218275)">Balamurugan S/O Subramaniam (R1218275)</SelectItem>
@@ -1085,7 +1057,7 @@ export const EmploymentContractPage = ({
                     </SelectContent>
                   </Select>
                 </Field>
-              </fieldset>
+              </div>
             </SectionCard>
 
             {showStepTabs && (
@@ -1105,27 +1077,27 @@ export const EmploymentContractPage = ({
         {showStepThree && (
           <div className="ecp-section space-y-4">
             <SectionCard title="Employer Details" icon={<User className="h-4 w-4 text-white" />} color="violet">
-              <fieldset disabled={isViewMode} className="space-y-2">
+              <div className="space-y-2">
                 <Field label="Full Name" required>
                   <input className={inp} value={employer.name} onChange={(e) => setEmployer({ ...employer, name: e.target.value })} placeholder="Employer's full legal name" />
                 </Field>
                 <Field label="Gender">
-                  <RadioGroup name="emp-gender" options={["Male","Female"]} value={employer.gender} onChange={(v) => setEmployer({ ...employer, gender: v })} disabled={isViewMode} />
+                  <RadioGroup name="emp-gender" options={["Male","Female"]} value={employer.gender} onChange={(v) => setEmployer({ ...employer, gender: v })} />
                 </Field>
                 <Field label="Date of Birth">
                   <DatePicker day={employer.dateOfBirthDay} month={employer.dateOfBirthMonth} year={employer.dateOfBirthYear}
                     onDay={(v) => setEmployer({ ...employer, dateOfBirthDay: v })}
                     onMonth={(v) => setEmployer({ ...employer, dateOfBirthMonth: v })}
-                    onYear={(v) => setEmployer({ ...employer, dateOfBirthYear: v })} disabled={isViewMode} />
+                    onYear={(v) => setEmployer({ ...employer, dateOfBirthYear: v })} />
                 </Field>
                 <Field label="Nationality">
-                  <Select value={employer.nationality || undefined} onValueChange={(v) => setEmployer({ ...employer, nationality: v })} disabled={isViewMode}>
+                  <Select value={employer.nationality || undefined} onValueChange={(v) => setEmployer({ ...employer, nationality: v })}>
                     <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
                     <SelectContent>{NATIONALITY_OPTIONS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Residential Status">
-                  <Select value={employer.residentialStatus || undefined} onValueChange={(v) => setEmployer({ ...employer, residentialStatus: v })} disabled={isViewMode}>
+                  <Select value={employer.residentialStatus || undefined} onValueChange={(v) => setEmployer({ ...employer, residentialStatus: v })}>
                     <SelectTrigger className={`${selTrigger} w-64`}><SelectValue placeholder="Select status" /></SelectTrigger>
                     <SelectContent>
                       {["Singapore Citizen","Singapore Permanent Resident","Employment Pass","S Pass","Work Permit"].map((s) => (
@@ -1175,18 +1147,18 @@ export const EmploymentContractPage = ({
                   <input className={`${inp} max-w-[220px]`} value={employer.mobileNumber} onChange={(e) => setEmployer({ ...employer, mobileNumber: e.target.value })} placeholder="e.g. 91234567" />
                 </Field>
                 <Field label="Monthly Combined Income">
-                  <Select value={employer.monthlyContribution || undefined} onValueChange={(v) => setEmployer({ ...employer, monthlyContribution: v })} disabled={isViewMode}>
+                  <Select value={employer.monthlyContribution || undefined} onValueChange={(v) => setEmployer({ ...employer, monthlyContribution: v })}>
                     <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="-- Select --" /></SelectTrigger>
                     <SelectContent>{INCOME_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Notification of Assessment" hint="Based on Annual Income or Bank Statement">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Select value={notificationDate.year || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, year: v })} disabled={isViewMode}>
+                    <Select value={notificationDate.year || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, year: v })}>
                       <SelectTrigger className={`${selTrigger} w-28`}><SelectValue placeholder="Year" /></SelectTrigger>
                       <SelectContent>{Array.from({ length: 20 }, (_, i) => <SelectItem key={i} value={String(2010 + i)}>{2010 + i}</SelectItem>)}</SelectContent>
                     </Select>
-                    <Select value={notificationDate.month || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, month: v })} disabled={isViewMode}>
+                    <Select value={notificationDate.month || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, month: v })}>
                       <SelectTrigger className={`${selTrigger} w-40`}><SelectValue placeholder="-- Select Month --" /></SelectTrigger>
                       <SelectContent>{MONTHS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                     </Select>
@@ -1198,32 +1170,32 @@ export const EmploymentContractPage = ({
                 <Field label="Existing Employer NRIC">
                   <input className={inp} value={employer.existingEmployerNric} onChange={(e) => setEmployer({ ...employer, existingEmployerNric: e.target.value })} placeholder="e.g. S1234567A" />
                 </Field>
-              </fieldset>
+              </div>
             </SectionCard>
 
             {/* Spouse */}
             <SectionCard title="Spouse Details" icon={<Users className="h-4 w-4 text-white" />} color="violet">
-              <fieldset disabled={isViewMode} className="space-y-2">
+              <div className="space-y-2">
                 <Field label="Spouse's Full Name">
                   <input className={inp} value={spouse.name} onChange={(e) => setSpouse({ ...spouse, name: e.target.value })} placeholder="Full legal name" />
                 </Field>
                 <Field label="Gender">
-                  <RadioGroup name="sp-gender" options={["Male","Female"]} value={spouse.gender} onChange={(v) => setSpouse({ ...spouse, gender: v })} disabled={isViewMode} />
+                  <RadioGroup name="sp-gender" options={["Male","Female"]} value={spouse.gender} onChange={(v) => setSpouse({ ...spouse, gender: v })} />
                 </Field>
                 <Field label="Date of Birth">
                   <DatePicker day={spouse.dateOfBirthDay} month={spouse.dateOfBirthMonth} year={spouse.dateOfBirthYear}
                     onDay={(v) => setSpouse({ ...spouse, dateOfBirthDay: v })}
                     onMonth={(v) => setSpouse({ ...spouse, dateOfBirthMonth: v })}
-                    onYear={(v) => setSpouse({ ...spouse, dateOfBirthYear: v })} disabled={isViewMode} />
+                    onYear={(v) => setSpouse({ ...spouse, dateOfBirthYear: v })} />
                 </Field>
                 <Field label="Nationality">
-                  <Select value={spouse.nationality || undefined} onValueChange={(v) => setSpouse({ ...spouse, nationality: v })} disabled={isViewMode}>
+                  <Select value={spouse.nationality || undefined} onValueChange={(v) => setSpouse({ ...spouse, nationality: v })}>
                     <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
                     <SelectContent>{NATIONALITY_OPTIONS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Residential Status">
-                  <Select value={spouse.residentialStatus || undefined} onValueChange={(v) => setSpouse({ ...spouse, residentialStatus: v })} disabled={isViewMode}>
+                  <Select value={spouse.residentialStatus || undefined} onValueChange={(v) => setSpouse({ ...spouse, residentialStatus: v })}>
                     <SelectTrigger className={`${selTrigger} w-64`}><SelectValue placeholder="Select status" /></SelectTrigger>
                     <SelectContent>
                       {["Singapore Citizen","Singapore Permanent Resident","Employment Pass","S Pass","Work Permit"].map((s) => (
@@ -1241,7 +1213,7 @@ export const EmploymentContractPage = ({
                 <Field label="Company Name">
                   <input className={inp} value={spouse.company} onChange={(e) => setSpouse({ ...spouse, company: e.target.value })} placeholder="Company name (if applicable)" />
                 </Field>
-              </fieldset>
+              </div>
             </SectionCard>
 
             {/* Family members */}
@@ -1252,7 +1224,7 @@ export const EmploymentContractPage = ({
                 icon={<User className="h-4 w-4 text-white" />}
                 color="amber"
                 action={
-                  !isViewMode && familyMembers.length > 1 ? (
+                  familyMembers.length > 1 ? (
                     <button type="button" onClick={() => removeFamilyMember(idx)}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-[13px] font-bold text-white hover:bg-white/30 transition-colors">
                       <X className="h-3.5 w-3.5" /> Remove
@@ -1260,7 +1232,7 @@ export const EmploymentContractPage = ({
                   ) : undefined
                 }
               >
-                <fieldset disabled={isViewMode} className="space-y-2">
+                <div className="space-y-2">
                   <Field label="Full Name">
                     <input className={inp} value={fm.name} onChange={(e) => updateFamilyMember(idx, "name", e.target.value)} placeholder="Full name" />
                   </Field>
@@ -1284,49 +1256,33 @@ export const EmploymentContractPage = ({
                     <DatePicker day={fm.dateOfBirthDay} month={fm.dateOfBirthMonth} year={fm.dateOfBirthYear}
                       onDay={(v) => updateFamilyMember(idx, "dateOfBirthDay", v)}
                       onMonth={(v) => updateFamilyMember(idx, "dateOfBirthMonth", v)}
-                      onYear={(v) => updateFamilyMember(idx, "dateOfBirthYear", v)} disabled={isViewMode} />
+                      onYear={(v) => updateFamilyMember(idx, "dateOfBirthYear", v)} />
                   </Field>
-                </fieldset>
+                </div>
               </SectionCard>
             ))}
 
-            {!isViewMode && (
-              <button type="button" onClick={addFamilyMember}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3.5 text-[14px] font-bold text-amber-700 hover:bg-amber-100 transition-colors">
-                <Plus className="h-4 w-4" /> Add Family Member
-              </button>
-            )}
+            <button type="button" onClick={addFamilyMember}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3.5 text-[14px] font-bold text-amber-700 hover:bg-amber-100 transition-colors">
+              <Plus className="h-4 w-4" /> Add Family Member
+            </button>
 
-            {/* Save button */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
-              <p className="text-[13px] text-gray-400 font-medium">{isViewMode ? "This contract is read-only on the view page." : "All changes are saved when you click Save Contract"}</p>
-              <div className="flex items-center gap-3">
-                {showStepTabs && (
-                  <button onClick={() => setActiveStep(2)} className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-colors">
-                    <ChevronLeft className="h-4 w-4" /> Back
-                  </button>
-                )}
-                {!isViewMode && (
-                  <button type="button" onClick={() => void submitContract()} disabled={isSubmitting}
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-[15px] font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all">
-                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    {isSubmitting ? "Saving…" : "Save Contract"}
-                  </button>
-                )}
-                {showStepTabs && (
-                  <button onClick={() => setActiveStep(4)} className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-amber-600 transition-colors">
-                    Next: Upload Forms <ChevronRight className="h-4 w-4" />
-                  </button>
-                )}
+            {showStepTabs && (
+              <div className="flex justify-between">
+                <button onClick={() => setActiveStep(2)} className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-colors">
+                  <ChevronLeft className="h-4 w-4" /> Back
+                </button>
+                <button onClick={() => setActiveStep(4)} className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-amber-600 transition-colors">
+                  Next: Upload Forms <ChevronRight className="h-4 w-4" />
+                </button>
               </div>
-            </div>
+            )}
           </div>
         )}
 
         {/* ═══ STEP 4: DOCUMENTS ═══ */}
         {showStepFour && (
           <div className="ecp-section space-y-4">
-
             {/* Instructions */}
             <div className="rounded-2xl border-2 border-amber-100 bg-amber-50 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1346,12 +1302,10 @@ export const EmploymentContractPage = ({
                     ))}
                   </div>
                 </div>
-                {!isViewMode && (
-                  <button type="button" onClick={() => setBulkUploadOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-[14px] font-bold text-white hover:bg-amber-700 shadow-sm transition-colors">
-                    <Upload className="h-4 w-4" /> Bulk Upload PDF
-                  </button>
-                )}
+                <button type="button" onClick={() => setBulkUploadOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-[14px] font-bold text-white hover:bg-amber-700 shadow-sm transition-colors">
+                  <Upload className="h-4 w-4" /> Bulk Upload PDF
+                </button>
               </div>
             </div>
 
@@ -1364,7 +1318,7 @@ export const EmploymentContractPage = ({
                 <h3 className="text-[16px] font-bold text-white">Documents &amp; Forms</h3>
               </div>
               <div className="bg-white divide-y divide-gray-100 px-5">
-                {GENERATED_FORMS.map((cat, i) => {
+                {GENERATED_FORMS.map((cat) => {
                   const uploads = categoryUploads[cat.category] ?? [];
                   return (
                     <div key={cat.category} className="py-2.5">
@@ -1374,7 +1328,6 @@ export const EmploymentContractPage = ({
                         refCode={refCode || agency.caseReferenceNumber || "temp"}
                         uploads={uploads}
                         onUpload={(files) => updateCategoryUploads(cat.category, files)}
-                        readOnly={isViewMode}
                       />
                       {uploads.length > 0 && (
                         <div className="mt-1.5 pl-6 space-y-1">
@@ -1399,50 +1352,85 @@ export const EmploymentContractPage = ({
               PDF forms are for demo purposes only. Contact admin for customization.
             </p>
 
-            {/* Download / print actions */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
-              {showStepTabs && (
+            {showStepTabs && (
+              <div className="flex justify-start">
                 <button onClick={() => setActiveStep(3)} className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-colors">
                   <ChevronLeft className="h-4 w-4" /> Back
                 </button>
-              )}
-              <div className="flex flex-wrap gap-2.5 ml-auto">
-                <button type="button" onClick={handleSelectAll}
-                  className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:border-gray-300 transition-colors">
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════ */}
+        {/* ── BOTTOM ACTION BAR — always visible ──────── */}
+        {/* ══════════════════════════════════════════════ */}
+        <div className="sticky bottom-0 z-40 -mx-4 px-4 pb-4">
+          <div className="rounded-2xl border border-gray-200 bg-white/95 shadow-xl backdrop-blur-md px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+
+              {/* Left: document selection controls */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+                >
+                  <Check className="h-4 w-4" />
                   {allSelected ? "Deselect All" : "Select All"}
                 </button>
-                <button type="button" onClick={handleDownloadSelected} disabled={selectedDocs.size === 0}
-                  className="inline-flex items-center gap-2 rounded-xl border-2 border-sky-200 bg-sky-50 px-4 py-2.5 text-[14px] font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-40 disabled:cursor-default transition-colors">
+                <button
+                  type="button"
+                  onClick={handleDownloadSelected}
+                  disabled={selectedDocs.size === 0}
+                  className="inline-flex items-center gap-2 rounded-xl border-2 border-sky-200 bg-sky-50 px-4 py-2.5 text-[14px] font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-40 disabled:cursor-default transition-colors"
+                >
                   <Download className="h-4 w-4" />
-                  Download Selected
+                  Download
                   {selectedDocs.size > 0 && (
-                    <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[12px]">{selectedDocs.size}</span>
+                    <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[12px] font-black">{selectedDocs.size}</span>
                   )}
                 </button>
-                <button type="button" onClick={() => void handlePrintForms()}
-                  className="inline-flex items-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-[14px] font-bold text-violet-700 hover:bg-violet-100 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => void handlePrintForms()}
+                  className="inline-flex items-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-[14px] font-bold text-violet-700 hover:bg-violet-100 transition-colors"
+                >
                   <Printer className="h-4 w-4" /> Print All
                 </button>
               </div>
+
+              {/* Right: Save & Generate */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void submitContract()}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-2.5 text-[15px] font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all"
+                >
+                  {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                  {isSubmitting ? "Saving…" : isCreateMode ? "Save Contract" : "Submit & Save"}
+                </button>
+              </div>
+
             </div>
           </div>
-        )}
+        </div>
+
       </div>
 
-      {!isViewMode && (
-        <BulkUploadModal
-          open={bulkUploadOpen}
-          onClose={() => setBulkUploadOpen(false)}
-          refCode={refCode || agency.caseReferenceNumber || "temp"}
-          onUploadComplete={handleBulkUploadComplete}
-        />
-      )}
+      <BulkUploadModal
+        open={bulkUploadOpen}
+        onClose={() => setBulkUploadOpen(false)}
+        refCode={refCode || agency.caseReferenceNumber || "temp"}
+        onUploadComplete={handleBulkUploadComplete}
+      />
 
       {/* Back to top */}
       {showBackToTop && (
         <button type="button" onClick={scrollToTop}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-[14px] font-bold text-white shadow-xl hover:bg-emerald-700 active:scale-95 transition-all">
-          <ArrowUp className="h-4 w-4" /> Back to Top
+          className="fixed bottom-24 right-6 z-50 flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-[14px] font-bold text-white shadow-xl hover:bg-emerald-700 active:scale-95 transition-all">
+          <ArrowUp className="h-4 w-4" /> Top
         </button>
       )}
     </>

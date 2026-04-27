@@ -20,6 +20,77 @@ import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import "./ClientTheme.css";
 
+// ── Nationality → ISO 3166-1 alpha-2 country code ──────────────────────────
+const NATIONALITY_FLAGS: Record<string, string> = {
+  // Southeast Asia
+  filipino: "ph", philippines: "ph",
+  indonesian: "id", indonesia: "id",
+  myanmar: "mm", burmese: "mm",
+  cambodian: "kh", cambodia: "kh",
+  vietnamese: "vn", vietnam: "vn",
+  thai: "th", thailand: "th",
+  malaysian: "my", malaysia: "my",
+  singaporean: "sg", singapore: "sg",
+  // South Asia
+  indian: "in", india: "in",
+  "sri lankan": "lk", "sri lanka": "lk",
+  bangladeshi: "bd", bangladesh: "bd",
+  nepali: "np", nepalese: "np", nepal: "np",
+  pakistani: "pk", pakistan: "pk",
+  // East Asia
+  chinese: "cn", china: "cn",
+  hongkong: "hk", "hong kong": "hk",
+  taiwanese: "tw", taiwan: "tw",
+  korean: "kr", "south korea": "kr",
+  japanese: "jp", japan: "jp",
+  // Africa / Others
+  ethiopian: "et", ethiopia: "et",
+  kenyan: "ke", kenya: "ke",
+  ugandan: "ug", uganda: "ug",
+  ghanaian: "gh", ghana: "gh",
+  nigerian: "ng", nigeria: "ng",
+};
+
+const getNationalityCode = (nationality?: string): string => {
+  if (!nationality) return "";
+  const key = nationality.toLowerCase().trim();
+  if (NATIONALITY_FLAGS[key]) return NATIONALITY_FLAGS[key];
+  for (const [k, code] of Object.entries(NATIONALITY_FLAGS)) {
+    if (key.includes(k)) return code;
+  }
+  return "";
+};
+
+/** Circular flag using flagcdn.com — matches ClientLandingPage & EditMaids */
+const FlagCircle = ({ code }: { code: string }) => {
+  if (!code) return null;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 14,
+        height: 14,
+        borderRadius: "50%",
+        overflow: "hidden",
+        border: "1px solid rgba(0,0,0,0.13)",
+        flexShrink: 0,
+        verticalAlign: "middle",
+        background: "#e5e7eb",
+      }}
+    >
+      <img
+        src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
+        alt={code}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
+    </span>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface Filters {
   keyword: string;
   agencyPreference: string;
@@ -93,13 +164,9 @@ interface Filters {
 type ClientMaidsPageProps = {
   resultsPath?: string;
   loginPath?: string;
-  /** Same convention as ClientLandingPage: when false (default) the page
-   *  renders its own navbar. Pass embedded={true} when the page is already
-   *  inside a layout that provides a navbar (e.g. ClientPortalLayout). */
   embedded?: boolean;
 };
 
-// ── Maid data shape returned from your search API ────────────────────────────
 export interface MaidProfile {
   id: number | string;
   refCode?: string;
@@ -117,7 +184,6 @@ export interface MaidProfile {
   religion?: string;
   hasVideo?: boolean;
   biodataCreatedAt?: string;
-  // add any extra fields your API returns
 }
 
 type RequirementsState = {
@@ -381,58 +447,45 @@ const FilterSection = ({
   );
 };
 
-// ── Locked maid card (public / not logged in) ─────────────────────────────────
+// ── type badge colour helper ──────────────────────────────────────────────────
+const getMaidTypeBadgeClass = (maidType?: string) => {
+  const t = (maidType || "").toLowerCase();
+  if (t.includes("new")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (t.includes("transfer")) return "bg-blue-50 text-blue-700 border-blue-200";
+  return "bg-amber-50 text-amber-700 border-amber-200";
+};
+
+// ── LOCKED maid card — matches ClientLandingPage guest style ─────────────────
 const LockedMaidCard = ({ onLoginClick }: { onLoginClick: () => void }) => (
-  <div className="group relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
-    {/* Photo area — blurred placeholder */}
-    <div className="relative h-40 overflow-hidden bg-muted">
-      {/* Blurred silhouette shapes */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="h-20 w-20 rounded-full bg-muted-foreground/20 blur-xl" />
-      </div>
-      <div className="absolute bottom-0 left-1/2 h-16 w-32 -translate-x-1/2 rounded-t-full bg-muted-foreground/10 blur-lg" />
-      {/* Frosted overlay */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary shadow-sm">
-          <Lock className="h-4 w-4 text-primary-foreground" />
-        </div>
-        <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-[11px] font-semibold text-primary">
-          Login to view
-        </span>
+  <div
+    onClick={onLoginClick}
+    className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer"
+  >
+    {/* Blurred photo placeholder */}
+    <div className="relative w-full bg-muted blur-[4px] opacity-75 select-none pointer-events-none">
+      <div className="aspect-[3/4] min-h-[130px] flex items-center justify-center bg-gray-100">
+        <svg className="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        </svg>
       </div>
     </div>
 
-    {/* Card body — blurred text */}
-    <div className="p-4">
-      {/* Name row */}
-      <div className="mb-1 flex items-center justify-between">
-        <div className="h-4 w-28 rounded-md bg-muted blur-sm" />
-        <div className="h-4 w-12 rounded-full bg-muted blur-sm" />
+    {/* Censored info panel */}
+    <div className="flex flex-col gap-1 p-2.5 flex-1 bg-white">
+      <div className="h-2.5 w-3/4 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+      <div className="mt-1 h-2 w-1/2 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+      <div className="mt-1 flex gap-1">
+        <div className="h-4 w-12 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
+        <div className="h-4 w-8 bg-gray-200 blur-[3px] select-none" aria-hidden="true" />
       </div>
-      {/* Meta line */}
-      <div className="mb-3 h-3 w-36 rounded-md bg-muted blur-sm" />
-      {/* Tag pills */}
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        <div className="h-5 w-16 rounded-full bg-muted blur-sm" />
-        <div className="h-5 w-20 rounded-full bg-muted blur-sm" />
-        <div className="h-5 w-14 rounded-full bg-muted blur-sm" />
-      </div>
-      {/* CTA button */}
-      <button
-        type="button"
-        onClick={onLoginClick}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 active:bg-primary/15"
-      >
-        <Lock className="h-3.5 w-3.5" />
-        Log in to view profile
-      </button>
+      <p className="mt-2 text-center text-[9px] text-gray-400 leading-tight">
+        🔒 Login to view
+      </p>
     </div>
   </div>
 );
 
-// ── Real maid card (logged in) ────────────────────────────────────────────────
-// Replace the internals with your actual MaidCard component.
-// This is a fully-featured placeholder that matches the locked card's dimensions.
+// ── REAL maid card — matches ClientLandingPage logged-in style ────────────────
 const MaidCard = ({
   maid,
   onViewProfile,
@@ -444,133 +497,113 @@ const MaidCard = ({
   locked?: boolean;
   onLoginClick?: () => void;
 }) => {
-  const initials = maid.name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
+  if (locked) return <LockedMaidCard onLoginClick={onLoginClick ?? (() => {})} />;
 
-  const typeColor =
-    maid.maidType === "New Maid"
-      ? "border-emerald-400/40 bg-emerald-50 text-emerald-700"
-      : maid.maidType === "Transfer Maid"
-        ? "border-blue-400/40 bg-blue-50 text-blue-700"
-        : "border-amber-400/40 bg-amber-50 text-amber-700";
-
-  const handlePrimaryAction = () => {
-    if (locked) {
-      onLoginClick?.();
-      return;
-    }
-    onViewProfile(maid);
-  };
+  const flagCode = getNationalityCode(maid.nationality);
+  const typeColor = getMaidTypeBadgeClass(maid.maidType);
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
-      {/* Photo / avatar area */}
-      <div className="relative h-40 overflow-hidden bg-muted flex items-center justify-center">
-        <div className={`absolute inset-0 ${locked ? "scale-105 blur-[10px]" : ""}`}>
-          {maid.photoUrl ? (
-            <img
-              src={maid.photoUrl}
-              alt={maid.name}
-              className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20 text-xl font-semibold text-primary">
-                {initials}
-              </div>
-            </div>
-          )}
-        </div>
-        {locked && <div className="absolute inset-0 bg-background/25 backdrop-blur-[1px]" />}
-        {maid.maidType && (
-          <span
-            className={`absolute bottom-2 left-2 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${typeColor}`}
+    <div
+      onClick={() => onViewProfile(maid)}
+      className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer"
+    >
+      {/* Photo */}
+      <div className="relative w-full bg-white">
+        {maid.photoUrl ? (
+          <img
+            src={maid.photoUrl}
+            alt={maid.name}
+            className="block w-full h-auto"
+            style={{ aspectRatio: "3/4", objectFit: "contain", objectPosition: "top center", minHeight: 130, background: "#fff" }}
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div
+            className="w-full flex items-center justify-center bg-gray-50"
+            style={{ aspectRatio: "3/4", minHeight: 130 }}
           >
-            {maid.maidType}
-          </span>
+            <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          </div>
         )}
+
+        {/* Maid type badge — top-left overlay */}
+        {maid.maidType && (
+          <div className="absolute top-1.5 left-1.5">
+            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColor}`}>
+              {maid.maidType}
+            </span>
+          </div>
+        )}
+
+        {/* Video badge — top-right */}
         {maid.hasVideo && (
-          <span className="absolute bottom-2 right-2 rounded-full border border-purple-400/40 bg-purple-50 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700">
-            📹 Video
-          </span>
-        )}
-        {locked && (
-          <div className="absolute inset-x-0 top-3 flex justify-center">
-            <span className="rounded-full border border-primary/25 bg-background/85 px-3 py-1 text-[11px] font-semibold text-primary shadow-sm backdrop-blur">
-              Login to unlock
+          <div className="absolute top-1.5 right-1.5">
+            <span className="inline-block px-1.5 py-px text-[9px] font-semibold border border-purple-200 bg-purple-50/90 text-purple-700 backdrop-blur-sm">
+              📹
             </span>
           </div>
         )}
       </div>
 
-      {/* Card body */}
-      <div className="p-4">
-        <div className="mb-0.5 flex items-start justify-between gap-2">
-          <p className="font-semibold text-foreground leading-tight">{maid.name}</p>
-          {maid.refCode && (
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-              {maid.refCode}
+      {/* Info — black readable text, no radius */}
+      <div className="flex flex-col gap-1 p-2.5 flex-1 bg-white">
+        {/* Name */}
+        <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
+          {maid.name}
+        </h3>
+
+        {/* Ref code */}
+        {maid.refCode && (
+          <p className="text-[10px] text-gray-600 font-mono leading-tight">
+            {maid.refCode}
+          </p>
+        )}
+
+        {/* Nationality + age badges */}
+        <div className="flex flex-wrap gap-1 mt-0.5">
+          {maid.nationality && (
+            <span className="inline-flex items-center gap-1 bg-gray-100 px-1.5 py-px text-[9px] text-black border border-gray-300">
+              <FlagCircle code={flagCode} />
+              {maid.nationality}
+            </span>
+          )}
+          {maid.age && (
+            <span className="bg-gray-100 px-1.5 py-px text-[9px] text-black border border-gray-300">
+              {maid.age} yrs
             </span>
           )}
         </div>
-        <p className={`mb-3 text-xs text-muted-foreground ${locked ? "select-none blur-[4px]" : ""}`}>
-          {[maid.nationality, maid.age ? `${maid.age} yrs` : "", maid.experience?.[0]].filter(Boolean).join(" | ")}
-        </p>
 
-        {/* Duty / language tags */}
+        {/* Duties / languages — compact */}
         {(maid.duties?.length || maid.languages?.length) ? (
-          <div className={`mb-4 flex flex-wrap gap-1.5 ${locked ? "select-none blur-[4px]" : ""}`}>
-            {maid.duties?.slice(0, 2).map((d) => (
-              <span key={d} className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-foreground">
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {maid.duties?.slice(0, 1).map((d) => (
+              <span key={d} className="bg-gray-100 px-1.5 py-px text-[9px] text-black border border-gray-300">
                 {d}
               </span>
             ))}
             {maid.languages?.slice(0, 1).map((l) => (
-              <span key={l} className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+              <span key={l} className="bg-primary/10 px-1.5 py-px text-[9px] text-primary border border-primary/20">
                 {l}
               </span>
             ))}
           </div>
-        ) : (
-          <div className="mb-4" />
-        )}
-
-      </div>
-      <div className={`px-4 pb-4 ${locked ? "relative z-10 -mt-[3.2rem]" : ""}`}>
-        <button
-          type="button"
-          onClick={handlePrimaryAction}
-          className={`flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
-            locked
-              ? "border border-primary/40 bg-background/90 text-primary shadow-sm backdrop-blur hover:bg-background"
-              : "border border-primary bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80"
-          }`}
-        >
-          {locked ? (
-            <>
-              <Lock className="h-3.5 w-3.5" />
-              Log in to view profile
-            </>
-          ) : (
-            "View Full Profile"
-          )}
-        </button>
+        ) : null}
       </div>
     </div>
   );
 };
 
-// ── Login gate banner (shown above results when not logged in) ─────────────────
+// ── Login gate banner ─────────────────────────────────────────────────────────
 const LoginGateBanner = ({ onLoginClick }: { onLoginClick: () => void }) => (
   <div className="overflow-hidden rounded-2xl border border-primary/20 bg-primary/5 shadow-sm">
     <div className="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6 sm:p-6">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <Lock className="h-4.5 w-4.5 text-primary" />
+          <Lock className="h-4 w-4 text-primary" />
         </div>
         <div>
           <p className="font-semibold text-foreground">Profiles are hidden until you log in</p>
@@ -702,10 +735,7 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
       };
       const response = await fetch("/api/requests", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getClientAuthHeaders(),
-        },
+        headers: { "Content-Type": "application/json", ...getClientAuthHeaders() },
         body: JSON.stringify(payload),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
@@ -764,57 +794,26 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
           <p className="mb-3 text-sm font-semibold text-foreground">Your Contact Details</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
-              <label className="text-sm font-medium text-foreground">
-                Full Name <span className="text-destructive">*</span>
-              </label>
-              <Input
-                placeholder="e.g. Sarah Tan"
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                required
-              />
+              <label className="text-sm font-medium text-foreground">Full Name <span className="text-destructive">*</span></label>
+              <Input placeholder="e.g. Sarah Tan" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
             </div>
             <div className="grid gap-1.5">
-              <label className="text-sm font-medium text-foreground">
-                Email Address <span className="text-destructive">*</span>
-              </label>
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                required
-              />
+              <label className="text-sm font-medium text-foreground">Email Address <span className="text-destructive">*</span></label>
+              <Input type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} required />
             </div>
           </div>
           <div className="mt-4 grid gap-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Agency <span className="text-destructive">*</span>
-            </label>
-            <select
-              className={selectClass}
-              value={form.agencyId}
-              onChange={(e) => setForm((p) => ({ ...p, agencyId: e.target.value }))}
-              required
-            >
+            <label className="text-sm font-medium text-foreground">Agency <span className="text-destructive">*</span></label>
+            <select className={selectClass} value={form.agencyId} onChange={(e) => setForm((p) => ({ ...p, agencyId: e.target.value }))} required>
               <option value="">Choose an agency</option>
               {agencyOptions.map((agency) => (
-                <option key={agency.id} value={agency.id}>
-                  {agency.name}
-                </option>
+                <option key={agency.id} value={agency.id}>{agency.name}</option>
               ))}
             </select>
           </div>
           <div className="mt-4 grid gap-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Phone Number <span className="text-destructive">*</span>
-            </label>
-            <Input
-              placeholder="e.g. +65 9123 4567"
-              value={form.phone}
-              onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-              required
-            />
+            <label className="text-sm font-medium text-foreground">Phone Number <span className="text-destructive">*</span></label>
+            <Input placeholder="e.g. +65 9123 4567" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} required />
           </div>
         </div>
 
@@ -882,18 +881,14 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
         </div>
 
         <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onBack} className="sm:w-auto">
-            Cancel
-          </Button>
+          <Button type="button" variant="outline" onClick={onBack} className="sm:w-auto">Cancel</Button>
           <Button type="submit" size="lg" className="sm:min-w-[180px]" disabled={isSubmitting}>
             {isSubmitting ? (
               <>
                 <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
                 Submitting…
               </>
-            ) : (
-              "Submit Request"
-            )}
+            ) : "Submit Request"}
           </Button>
         </div>
       </form>
@@ -901,9 +896,7 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
   );
 };
 
-// ── Search Results Section ────────────────────────────────────────────────────
-// This is the component that renders after the user clicks "Search Maids".
-// Pass your actual maid data via props. Here it handles the locked vs. unlocked card logic.
+// ── Search Results ────────────────────────────────────────────────────────────
 interface SearchResultsProps {
   maids: MaidProfile[];
   isLoggedIn: boolean;
@@ -950,7 +943,6 @@ const SearchResults = ({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Login gate banner — only shown when not logged in */}
       {!isLoggedIn && <LoginGateBanner onLoginClick={onLoginClick} />}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -970,8 +962,8 @@ const SearchResults = ({
           )}
         </div>
 
-        {/* Cards grid */}
-        <div className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
+        {/* ── Card grid — matches ClientLandingPage layout ── */}
+        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
           {maids.map((maid) => (
             <MaidCard
               key={maid.id}
@@ -1003,13 +995,10 @@ const ClientMaidsPage = ({
   const [requestOpen, setRequestOpen] = useState(searchParams.get("intent") === "request");
   const [searchedFilters, setSearchedFilters] = useState<Filters>(initialDraft);
 
-  // ── Search results state ──────────────────────────────────────────────────
   const [searchResults, setSearchResults] = useState<MaidProfile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  // The page is PUBLIC — no redirect. We only check login for card visibility.
   const isLoggedIn = !!getClientToken();
 
   useEffect(() => {
@@ -1102,30 +1091,21 @@ const ClientMaidsPage = ({
     setSearchParams(new URLSearchParams([["filters", JSON.stringify(defaultFilters)]]), { replace: true });
   };
 
-  // ── Search handler — calls your real API ───────────────────────────────────
   const handleSearch = async () => {
     setRequestOpen(false);
     setSearchedFilters(draft);
     setHasSearched(true);
     setIsSearching(true);
-
-    // Update URL with search params
     const params = buildSearchParamsFromFilters(draft);
     navigate(`${resultsPath}?${params.toString()}`);
-
     try {
-      // Replace this fetch with however your app loads maid data.
-      // The URL below mirrors the search params you were already building.
       const response = await fetch(`/api/maids?${params.toString()}`, {
         headers: {
-          // Include auth token if logged in so the API can return richer data.
-          // The page still renders even without a token — cards just stay locked.
           ...(getClientToken() ? { Authorization: `Bearer ${getClientToken()}` } : {}),
         },
       });
       if (!response.ok) throw new Error("Search failed");
       const data = (await response.json()) as { maids?: MaidProfile[]; data?: MaidProfile[] };
-      // Support both { maids: [...] } and { data: [...] } response shapes
       setSearchResults(data.maids ?? data.data ?? []);
     } catch {
       toast.error("Failed to load profiles. Please try again.");
@@ -1137,10 +1117,7 @@ const ClientMaidsPage = ({
 
   const handleViewProfile = (maid: MaidProfile) => {
     const profilePath = getPublicProfilePath(maid);
-    if (!profilePath) {
-      toast.error("Profile link is unavailable for this maid.");
-      return;
-    }
+    if (!profilePath) { toast.error("Profile link is unavailable for this maid."); return; }
     navigate(profilePath);
   };
 
@@ -1156,15 +1133,10 @@ const ClientMaidsPage = ({
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleLoginClick = () => {
-    navigate(loginPath);
-  };
+  const handleLoginClick = () => navigate(loginPath);
 
   return (
     <div className="client-page-theme min-h-screen bg-background">
-
-      {/* Navbar — same embedded pattern as ClientLandingPage.
-          When not embedded: PublicSiteNavbar for guests, ClientPortalNavbar for logged-in users. */}
       {!embedded && !isLoggedIn && <PublicSiteNavbar />}
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-7">
@@ -1185,13 +1157,8 @@ const ClientMaidsPage = ({
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {["Set filters", "Search profiles", "Request matching"].map((step, i) => (
-                  <span
-                    key={i}
-                    className="flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-foreground"
-                  >
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
-                      {i + 1}
-                    </span>
+                  <span key={i} className="flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-foreground">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{i + 1}</span>
                     {step}
                   </span>
                 ))}
@@ -1211,10 +1178,7 @@ const ClientMaidsPage = ({
                   {requestHighlights.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {requestHighlights.slice(0, 3).map((item) => (
-                        <span
-                          key={item}
-                          className="rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-foreground"
-                        >
+                        <span key={item} className="rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-foreground">
                           {item}
                         </span>
                       ))}
@@ -1230,7 +1194,6 @@ const ClientMaidsPage = ({
 
         {/* ── Filter Panel ── */}
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          {/* Filter header */}
           <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-4 py-3">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
@@ -1263,7 +1226,6 @@ const ClientMaidsPage = ({
             </div>
           </div>
 
-          {/* Active filter tags */}
           {activeTags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 border-b bg-primary/5 px-4 py-2.5">
               {activeTags.map(({ key, label }) => (
@@ -1275,13 +1237,10 @@ const ClientMaidsPage = ({
           {filtersOpen && (
             <div className="space-y-0 divide-y divide-border/60 px-4 sm:px-5">
 
-              {/* Keyword + quick toggles */}
               <div className="py-4 space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Keyword Search
-                    </label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Keyword Search</label>
                     <div className="relative">
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                       <input
@@ -1292,11 +1251,7 @@ const ClientMaidsPage = ({
                         placeholder="Name, reference code, nationality…"
                       />
                       {draft.keyword && (
-                        <button
-                          type="button"
-                          onClick={() => set("keyword", "")}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
+                        <button type="button" onClick={() => set("keyword", "")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                           <X className="h-3.5 w-3.5" />
                         </button>
                       )}
@@ -1304,55 +1259,33 @@ const ClientMaidsPage = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Profile Created Within
-                    </label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Profile Created Within</label>
                     <select
                       value={draft.biodataCreatedWithin}
                       onChange={(e) => set("biodataCreatedWithin", e.target.value)}
                       className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     >
                       <option>No Preference</option>
-                      <option>1 week</option>
-                      <option>2 weeks</option>
-                      <option>1 month</option>
-                      <option>3 months</option>
-                      <option>6 months</option>
-                      <option>1 year</option>
+                      <option>1 week</option><option>2 weeks</option>
+                      <option>1 month</option><option>3 months</option>
+                      <option>6 months</option><option>1 year</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Maid Type
-                    </label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Maid Type</label>
                     <div className="flex flex-wrap gap-1.5">
                       {(["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const).map((type) => (
-                        <Chip
-                          key={type}
-                          label={type}
-                          checked={draft.maidType === type}
-                          onChange={() => set("maidType", draft.maidType === type ? "" : type)}
-                          color={type === "New Maid" ? "green" : type === "Transfer Maid" ? "blue" : "amber"}
-                        />
+                        <Chip key={type} label={type} checked={draft.maidType === type} onChange={() => set("maidType", draft.maidType === type ? "" : type)} color={type === "New Maid" ? "green" : type === "Transfer Maid" ? "blue" : "amber"} />
                       ))}
                     </div>
                   </div>
-
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Quick Filters
-                    </label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Filters</label>
                     <div className="flex flex-wrap gap-1.5">
-                      {(
-                        [
-                          ["willingOffDays", "Willing Off-days"],
-                          ["hasChildren", "Has Children"],
-                          ["withVideo", "Has Video"],
-                        ] as [keyof Filters, string][]
-                      ).map(([key, label]) => (
+                      {([ ["willingOffDays","Willing Off-days"], ["hasChildren","Has Children"], ["withVideo","Has Video"] ] as [keyof Filters, string][]).map(([key, label]) => (
                         <Chip key={key} label={label} checked={!!draft[key]} onChange={() => toggle(key)} />
                       ))}
                     </div>
@@ -1360,102 +1293,60 @@ const ClientMaidsPage = ({
                 </div>
               </div>
 
-              {/* Detailed filter accordions */}
               <div className="py-4">
-                <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                  Detailed Preferences
-                </p>
+                <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Detailed Preferences</p>
                 <div className="grid grid-cols-1 gap-x-8 gap-y-1 divide-y divide-border/40 sm:grid-cols-2 sm:divide-y-0 [&>*]:border-b [&>*]:border-border/40 sm:[&>*]:border-b-0">
 
-                  <FilterSection
-                    title="Nationality"
-                    count={countGroup(["natFilipino","natIndonesian","natMyanmar","natIndian","natSriLankan","natCambodian","natBangladeshi","natOthers"])}
-                    defaultOpen
-                  >
-                    {[
-                      ["natFilipino","Filipino"],["natIndonesian","Indonesian"],["natMyanmar","Myanmar"],
-                      ["natIndian","Indian"],["natSriLankan","Sri Lankan"],["natCambodian","Cambodian"],
-                      ["natBangladeshi","Bangladeshi"],["natOthers","Others"],
-                    ].map(([key,label]) => (
+                  <FilterSection title="Nationality" count={countGroup(["natFilipino","natIndonesian","natMyanmar","natIndian","natSriLankan","natCambodian","natBangladeshi","natOthers"])} defaultOpen>
+                    {[["natFilipino","Filipino"],["natIndonesian","Indonesian"],["natMyanmar","Myanmar"],["natIndian","Indian"],["natSriLankan","Sri Lankan"],["natCambodian","Cambodian"],["natBangladeshi","Bangladeshi"],["natOthers","Others"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
-                  <FilterSection
-                    title="Work Experience"
-                    count={countGroup(["expHomeCountry","expSingapore","expMalaysia","expHongKong","expTaiwan","expMiddleEast","expOtherCountries"])}
-                    defaultOpen
-                  >
-                    {[
-                      ["expHomeCountry","Home Country"],["expSingapore","Singapore"],["expMalaysia","Malaysia"],
-                      ["expHongKong","Hong Kong"],["expTaiwan","Taiwan"],["expMiddleEast","Middle East"],
-                      ["expOtherCountries","Others"],
-                    ].map(([key,label]) => (
+                  <FilterSection title="Work Experience" count={countGroup(["expHomeCountry","expSingapore","expMalaysia","expHongKong","expTaiwan","expMiddleEast","expOtherCountries"])} defaultOpen>
+                    {[["expHomeCountry","Home Country"],["expSingapore","Singapore"],["expMalaysia","Malaysia"],["expHongKong","Hong Kong"],["expTaiwan","Taiwan"],["expMiddleEast","Middle East"],["expOtherCountries","Others"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
                   <FilterSection title="Duties" count={countGroup(["dutyCareInfant","dutyCareYoungChildren","dutyCareElderlyDisabled","dutyCooking","dutyGeneralHousekeeping"])}>
-                    {[
-                      ["dutyCareInfant","Infant Care"],["dutyCareYoungChildren","Young Children"],
-                      ["dutyCareElderlyDisabled","Elderly / Disabled"],["dutyCooking","Cooking"],
-                      ["dutyGeneralHousekeeping","Housekeeping"],
-                    ].map(([key,label]) => (
+                    {[["dutyCareInfant","Infant Care"],["dutyCareYoungChildren","Young Children"],["dutyCareElderlyDisabled","Elderly / Disabled"],["dutyCooking","Cooking"],["dutyGeneralHousekeeping","Housekeeping"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
                   <FilterSection title="Language" count={countGroup(["langEnglish","langMandarin","langBahasaIndonesia","langHindi","langTamil"])}>
-                    {[
-                      ["langEnglish","English"],["langMandarin","Mandarin"],
-                      ["langBahasaIndonesia","Bahasa / Malay"],["langHindi","Hindi"],["langTamil","Tamil"],
-                    ].map(([key,label]) => (
+                    {[["langEnglish","English"],["langMandarin","Mandarin"],["langBahasaIndonesia","Bahasa / Malay"],["langHindi","Hindi"],["langTamil","Tamil"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
                   <FilterSection title="Age Group" count={countGroup(["age21to25","age26to30","age31to35","age36to40","age41above"])}>
-                    {[
-                      ["age21to25","21–25"],["age26to30","26–30"],["age31to35","31–35"],
-                      ["age36to40","36–40"],["age41above","41+"],
-                    ].map(([key,label]) => (
+                    {[["age21to25","21–25"],["age26to30","26–30"],["age31to35","31–35"],["age36to40","36–40"],["age41above","41+"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
                   <FilterSection title="Marital Status" count={countGroup(["marSingle","marMarried","marWidowed","marDivorced","marSeparated"])}>
-                    {[
-                      ["marSingle","Single"],["marMarried","Married"],["marWidowed","Widowed"],
-                      ["marDivorced","Divorced"],["marSeparated","Separated"],
-                    ].map(([key,label]) => (
+                    {[["marSingle","Single"],["marMarried","Married"],["marWidowed","Widowed"],["marDivorced","Divorced"],["marSeparated","Separated"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
                   <FilterSection title="Education" count={countGroup(["eduCollege","eduHighSchool","eduSecondary","eduPrimary"])}>
-                    {[
-                      ["eduCollege","College / Degree"],["eduHighSchool","High School"],
-                      ["eduSecondary","Secondary"],["eduPrimary","Primary Level"],
-                    ].map(([key,label]) => (
+                    {[["eduCollege","College / Degree"],["eduHighSchool","High School"],["eduSecondary","Secondary"],["eduPrimary","Primary Level"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
                   <FilterSection title="Height (cm)" count={countGroup(["height150below","height151to155","height156to160","height161above"])}>
-                    {[
-                      ["height150below","≤150 cm"],["height151to155","151–155 cm"],
-                      ["height156to160","156–160 cm"],["height161above","161+ cm"],
-                    ].map(([key,label]) => (
+                    {[["height150below","≤150 cm"],["height151to155","151–155 cm"],["height156to160","156–160 cm"],["height161above","161+ cm"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
 
                   <FilterSection title="Religion" count={countGroup(["relFreeThinker","relChristian","relCatholic","relBuddhist","relMuslim","relHindu","relSikh","relOthers"])}>
-                    {[
-                      ["relFreeThinker","Free Thinker"],["relChristian","Christian"],["relCatholic","Catholic"],
-                      ["relBuddhist","Buddhist"],["relMuslim","Muslim"],["relHindu","Hindu"],
-                      ["relSikh","Sikh"],["relOthers","Others"],
-                    ].map(([key,label]) => (
+                    {[["relFreeThinker","Free Thinker"],["relChristian","Christian"],["relCatholic","Catholic"],["relBuddhist","Buddhist"],["relMuslim","Muslim"],["relHindu","Hindu"],["relSikh","Sikh"],["relOthers","Others"]].map(([key,label]) => (
                       <Chip key={key} label={label} checked={!!draft[key as keyof Filters]} onChange={() => toggle(key as keyof Filters)} />
                     ))}
                   </FilterSection>
@@ -1463,37 +1354,19 @@ const ClientMaidsPage = ({
                 </div>
               </div>
 
-              {/* Action buttons */}
               <div className="flex flex-wrap items-center gap-2 py-4">
-                <Button
-                  type="button"
-                  size="lg"
-                  className="flex-1 font-semibold sm:flex-none sm:min-w-[160px]"
-                  onClick={() => void handleSearch()}
-                >
+                <Button type="button" size="lg" className="flex-1 font-semibold sm:flex-none sm:min-w-[160px]" onClick={() => void handleSearch()}>
                   <Search className="mr-2 h-4 w-4" />
                   Search Maids
                   {activeFilterCount > 0 && (
-                    <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary-foreground/20 px-1.5 text-[10px] font-bold">
-                      {activeFilterCount}
-                    </span>
+                    <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary-foreground/20 px-1.5 text-[10px] font-bold">{activeFilterCount}</span>
                   )}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="flex-1 sm:flex-none"
-                  onClick={handleOpenRequest}
-                >
+                <Button type="button" variant="outline" size="lg" className="flex-1 sm:flex-none" onClick={handleOpenRequest}>
                   Request Agency Help
                 </Button>
                 {activeFilterCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearAllFilters}
-                    className="flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                  >
+                  <button type="button" onClick={clearAllFilters} className="flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10">
                     <X className="h-3.5 w-3.5" />
                     Clear Filters
                   </button>
@@ -1514,7 +1387,7 @@ const ClientMaidsPage = ({
           />
         )}
 
-        {/* ── Agency CTA (shown when request form is closed) ── */}
+        {/* ── Agency CTA ── */}
         {!requestOpen && (
           <div className="overflow-hidden rounded-2xl border border-dashed bg-card shadow-sm">
             <div className="grid gap-5 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
@@ -1527,13 +1400,9 @@ const ClientMaidsPage = ({
               </div>
               <div className="shrink-0 rounded-xl border bg-muted/40 p-4 sm:w-52">
                 <p className="text-sm text-muted-foreground">
-                  {requestHighlights.length > 0
-                    ? "Your filters will pre-fill the form."
-                    : "You can send a general request without filters."}
+                  {requestHighlights.length > 0 ? "Your filters will pre-fill the form." : "You can send a general request without filters."}
                 </p>
-                <Button type="button" className="mt-3 w-full" onClick={handleOpenRequest}>
-                  Open Request Form
-                </Button>
+                <Button type="button" className="mt-3 w-full" onClick={handleOpenRequest}>Open Request Form</Button>
               </div>
             </div>
           </div>

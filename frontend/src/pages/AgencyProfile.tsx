@@ -42,7 +42,7 @@ const useWindowWidth = () => {
   return w;
 };
 
-/* ─── Design tokens ──────────────────────────────────────────────────── */
+/* ─── Design tokens — senior-citizen friendly ────────────────────────── */
 const C = {
   primary: "#0D6E56",
   primaryDark: "#085041",
@@ -50,20 +50,33 @@ const C = {
   primaryBorder: "#9FE1CB",
   bg: "#F4F6F9",
   card: "#ffffff",
-  border: "#E8ECF2",
-  borderLight: "#F1F4F8",
-  text: "#1A2332",
-  textMid: "#4A5568",
-  textSoft: "#8A96A8",
+  border: "#D0D7E2",
+  borderLight: "#E8ECF2",
+  // ALL text is near-black for maximum readability
+  text: "#0A0F1A",        // primary text — almost black
+  textMid: "#1A2332",     // secondary text — dark navy
+  textSoft: "#2D3748",    // "soft" text — still dark
   headerFrom: "#0a2540",
   headerTo: "#0D6E56",
+};
+
+/* ─── Typography scale — large for farsighted users ─────────────────── */
+const T = {
+  label: 12,      // uppercase labels
+  caption: 14,    // small supporting text
+  body: 16,       // main body text
+  bodyLg: 18,     // slightly larger body
+  sub: 16,        // card subtitles / descriptions
+  title: 18,      // card titles
+  heading: 22,    // section headings
+  hero: 28,       // hero name
 };
 
 /* ─── Card wrapper ───────────────────────────────────────────────────── */
 const Card = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
   <div style={{
-    background: C.card, borderRadius: 16, border: `1.5px solid ${C.border}`,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden", ...style,
+    background: C.card, borderRadius: 18, border: `2px solid ${C.border}`,
+    boxShadow: "0 3px 16px rgba(0,0,0,0.08)", overflow: "hidden", ...style,
   }}>
     {children}
   </div>
@@ -73,17 +86,17 @@ const Card = ({ children, style }: { children: React.ReactNode; style?: React.CS
 const CardHeader = ({ icon, title, count }: { icon: string; title: string; count?: number }) => (
   <div style={{
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "12px 16px", borderBottom: `1.5px solid ${C.borderLight}`,
-    background: "linear-gradient(135deg, #FAFBFC 0%, #F4F6F9 100%)",
+    padding: "16px 20px", borderBottom: `2px solid ${C.borderLight}`,
+    background: "linear-gradient(135deg, #FAFBFC 0%, #F0F4F8 100%)",
   }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
-      <span style={{ fontSize: 13, fontWeight: 800, color: C.text, letterSpacing: "0.01em" }}>{title}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 22 }}>{icon}</span>
+      <span style={{ fontSize: T.title, fontWeight: 800, color: C.text, letterSpacing: "0.01em" }}>{title}</span>
     </div>
     {count !== undefined && (
       <span style={{
-        fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20,
-        background: C.primaryLight, color: C.primary, border: `1px solid ${C.primaryBorder}`,
+        fontSize: T.caption, fontWeight: 700, padding: "4px 14px", borderRadius: 20,
+        background: C.primaryLight, color: C.primaryDark, border: `2px solid ${C.primaryBorder}`,
       }}>{count}</span>
     )}
   </div>
@@ -96,27 +109,30 @@ const ContactRow = ({ icon: Icon, label, value, href }: {
   if (!value) return null;
   return (
     <div style={{
-      display: "flex", alignItems: "flex-start", gap: 12,
-      padding: "10px 0", borderBottom: `1px solid ${C.borderLight}`,
+      display: "flex", alignItems: "flex-start", gap: 14,
+      padding: "13px 0", borderBottom: `1.5px solid ${C.borderLight}`,
     }}>
       <div style={{
-        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-        background: C.primaryLight, border: `1.5px solid ${C.primaryBorder}`,
+        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+        background: C.primaryLight, border: `2px solid ${C.primaryBorder}`,
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <Icon size={14} color={C.primary} />
+        <Icon size={18} color={C.primary} />
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.textSoft, margin: "0 0 2px" }}>
+        <p style={{
+          fontSize: T.label, fontWeight: 800, letterSpacing: "0.1em",
+          textTransform: "uppercase", color: C.textSoft, margin: "0 0 3px",
+        }}>
           {label}
         </p>
         {href ? (
           <a href={href} target="_blank" rel="noreferrer" style={{
-            fontSize: 13, color: C.primary, textDecoration: "none",
-            fontWeight: 600, wordBreak: "break-all", lineHeight: 1.4,
+            fontSize: T.bodyLg, color: C.primary, textDecoration: "none",
+            fontWeight: 700, wordBreak: "break-all", lineHeight: 1.5,
           }}>{value}</a>
         ) : (
-          <p style={{ fontSize: 13, color: C.text, fontWeight: 500, wordBreak: "break-all", margin: 0, lineHeight: 1.4 }}>
+          <p style={{ fontSize: T.bodyLg, color: C.text, fontWeight: 600, wordBreak: "break-all", margin: 0, lineHeight: 1.5 }}>
             {value}
           </p>
         )}
@@ -127,27 +143,30 @@ const ContactRow = ({ icon: Icon, label, value, href }: {
 
 /* ─── Stat chip ──────────────────────────────────────────────────────── */
 const statPalette = [
-  { bg: "#E8F5E9", text: "#2E7D32", border: "#A5D6A7" },
-  { bg: "#E3F2FD", text: "#1565C0", border: "#90CAF9" },
-  { bg: "#FFF3E0", text: "#E65100", border: "#FFCC80" },
-  { bg: "#F3E5F5", text: "#6A1B9A", border: "#CE93D8" },
-  { bg: "#FCE4EC", text: "#880E4F", border: "#F48FB1" },
-  { bg: "#E0F7FA", text: "#00695C", border: "#80DEEA" },
-  { bg: "#FFF8E1", text: "#F57F17", border: "#FFE082" },
-  { bg: "#F1F8E9", text: "#33691E", border: "#C5E1A5" },
+  { bg: "#E8F5E9", text: "#1B5E20", border: "#81C784" },
+  { bg: "#E3F2FD", text: "#0D47A1", border: "#64B5F6" },
+  { bg: "#FFF3E0", text: "#BF360C", border: "#FFAB40" },
+  { bg: "#F3E5F5", text: "#4A148C", border: "#BA68C8" },
+  { bg: "#FCE4EC", text: "#880E4F", border: "#F06292" },
+  { bg: "#E0F7FA", text: "#004D40", border: "#4DD0E1" },
+  { bg: "#FFF8E1", text: "#E65100", border: "#FFD54F" },
+  { bg: "#F1F8E9", text: "#1B5E20", border: "#AED581" },
 ];
 
 const StatChip = ({ label, value, index }: { label: string; value: number; index: number }) => {
   const p = statPalette[index % statPalette.length];
   return (
     <div style={{
-      background: p.bg, border: `1.5px solid ${p.border}`, borderRadius: 12,
-      padding: "10px 14px", display: "flex", flexDirection: "column", gap: 2,
+      background: p.bg, border: `2px solid ${p.border}`, borderRadius: 14,
+      padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4,
     }}>
-      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: p.text, opacity: 0.8 }}>
+      <span style={{
+        fontSize: T.label, fontWeight: 800, letterSpacing: "0.1em",
+        textTransform: "uppercase", color: p.text,
+      }}>
         {label}
       </span>
-      <span style={{ fontSize: 26, fontWeight: 800, color: p.text, lineHeight: 1 }}>{value}</span>
+      <span style={{ fontSize: 30, fontWeight: 900, color: p.text, lineHeight: 1 }}>{value}</span>
     </div>
   );
 };
@@ -198,8 +217,8 @@ const AgencyProfile = () => {
   if (isLoading) return (
     <div style={{ display: "flex", height: "16rem", alignItems: "center", justifyContent: "center" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-        <div style={{ width: 40, height: 40, borderRadius: "50%", border: `3px solid ${C.primaryLight}`, borderTopColor: C.primary, animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontSize: 13, color: C.textSoft, fontWeight: 600 }}>Loading profile…</span>
+        <div style={{ width: 48, height: 48, borderRadius: "50%", border: `4px solid ${C.primaryLight}`, borderTopColor: C.primary, animation: "spin 0.8s linear infinite" }} />
+        <span style={{ fontSize: T.body, color: C.text, fontWeight: 700 }}>Loading profile…</span>
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
@@ -207,10 +226,10 @@ const AgencyProfile = () => {
 
   if (loadError || !company) return (
     <div style={{ display: "flex", height: "16rem", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-      <p style={{ fontSize: 14, color: "#ef4444", fontWeight: 600 }}>{loadError || "Failed to load"}</p>
+      <p style={{ fontSize: T.bodyLg, color: "#C62828", fontWeight: 700 }}>{loadError || "Failed to load"}</p>
       <button onClick={() => void loadCompanyProfile()} style={{
-        fontSize: 13, padding: "8px 18px", borderRadius: 8, border: `1.5px solid ${C.border}`,
-        background: "#fff", color: C.textMid, cursor: "pointer", fontWeight: 600,
+        fontSize: T.body, padding: "12px 24px", borderRadius: 10, border: `2px solid ${C.border}`,
+        background: "#fff", color: C.text, cursor: "pointer", fontWeight: 700,
       }}>🔄 Retry</button>
     </div>
   );
@@ -232,59 +251,58 @@ const AgencyProfile = () => {
       <style>{`
         @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         .ap-fadein { animation: fadeUp 0.35s ease both; }
-        .gallery-thumb:hover { transform: scale(1.04); box-shadow: 0 6px 20px rgba(13,110,86,0.18) !important; }
-        .action-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+        .gallery-thumb:hover { transform: scale(1.04); box-shadow: 0 8px 24px rgba(13,110,86,0.22) !important; }
+        .action-btn:hover { opacity: 0.88; transform: translateY(-2px); }
       `}</style>
 
       {/* Lightbox */}
       {lightboxImage && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.85)" }}
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.88)" }}
           onClick={() => setLightboxImage(null)}>
           <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
-            <img src={lightboxImage} alt="Gallery preview" style={{ maxHeight: "90vh", maxWidth: "92vw", borderRadius: 14, objectFit: "contain", boxShadow: "0 30px 80px rgba(0,0,0,0.6)" }} />
-            <button onClick={() => setLightboxImage(null)} style={{ position: "absolute", top: -14, right: -14, width: 32, height: 32, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.25)" }}>
-              <X size={15} color="#374151" />
+            <img src={lightboxImage} alt="Gallery preview" style={{ maxHeight: "90vh", maxWidth: "92vw", borderRadius: 16, objectFit: "contain", boxShadow: "0 30px 80px rgba(0,0,0,0.6)" }} />
+            <button onClick={() => setLightboxImage(null)} style={{ position: "absolute", top: -16, right: -16, width: 40, height: 40, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.3)" }}>
+              <X size={18} color="#111" />
             </button>
           </div>
         </div>
       )}
 
-      <div className="ap-fadein" style={{ display: "flex", flexDirection: "column", gap: 16, fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+      <div className="ap-fadein" style={{ display: "flex", flexDirection: "column", gap: 18, fontSize: T.body, color: C.text, lineHeight: 1.7 }}>
 
         {/* ── Hero header ───────────────────────────────────────────── */}
         <div style={{
           background: `linear-gradient(135deg, ${C.headerFrom} 0%, ${C.headerTo} 100%)`,
-          borderRadius: 18, padding: isMobile ? "18px 16px" : "22px 28px",
-          boxShadow: "0 8px 32px rgba(13,110,86,0.25)",
+          borderRadius: 20, padding: isMobile ? "20px 18px" : "26px 32px",
+          boxShadow: "0 10px 36px rgba(13,110,86,0.28)",
           display: "flex", flexWrap: "wrap", alignItems: "center",
-          justifyContent: "space-between", gap: 16, position: "relative", overflow: "hidden",
+          justifyContent: "space-between", gap: 18, position: "relative", overflow: "hidden",
         }}>
-          {/* Decorative circles */}
-          <div style={{ position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.05)", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", bottom: -30, left: "40%", width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", top: -40, right: -40, width: 180, height: 180, borderRadius: "50%", background: "rgba(255,255,255,0.05)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: -30, left: "40%", width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
 
           {/* Logo + name */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16, zIndex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 18, zIndex: 1 }}>
             <div style={{
-              width: isMobile ? 56 : 70, height: isMobile ? 56 : 70, flexShrink: 0,
-              borderRadius: 14, border: "2.5px solid rgba(255,255,255,0.28)",
-              background: "rgba(255,255,255,0.12)", overflow: "hidden",
+              width: isMobile ? 64 : 80, height: isMobile ? 64 : 80, flexShrink: 0,
+              borderRadius: 16, border: "3px solid rgba(255,255,255,0.3)",
+              background: "rgba(255,255,255,0.14)", overflow: "hidden",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               {company.logo_data_url
                 ? <img src={company.logo_data_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                : <Building2 size={isMobile ? 24 : 30} color="rgba(255,255,255,0.5)" />}
+                : <Building2 size={isMobile ? 28 : 36} color="rgba(255,255,255,0.55)" />}
             </div>
             <div>
-              <h1 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: "#fff", margin: 0, lineHeight: 1.2 }}>
+              <h1 style={{ fontSize: isMobile ? T.heading : T.hero, fontWeight: 900, color: "#ffffff", margin: 0, lineHeight: 1.2 }}>
                 {company.company_name || "Agency Profile"}
               </h1>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 6, background: "rgba(255,255,255,0.18)", color: "#a7f3d0", letterSpacing: "0.05em" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                <span style={{ fontSize: T.caption, fontWeight: 800, padding: "4px 12px", borderRadius: 7, background: "rgba(255,255,255,0.2)", color: "#a7f3d0", letterSpacing: "0.05em" }}>
                   Lic. {company.license_no || "N/A"}
                 </span>
                 {company.short_name && (
-                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontWeight: 500, alignSelf: "center" }}>
+                  <span style={{ fontSize: T.body, color: "rgba(255,255,255,0.85)", fontWeight: 600, alignSelf: "center" }}>
                     {company.short_name}
                   </span>
                 )}
@@ -293,19 +311,19 @@ const AgencyProfile = () => {
           </div>
 
           {/* Action buttons */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, zIndex: 1 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, zIndex: 1 }}>
             {[
-              { to: adminPath("/agency-profile/edit"), label: "Edit Profile", icon: <Edit size={14} />, solid: false },
-              { to: adminPath("/employment-contracts"), label: "Contracts", icon: <Shield size={14} />, solid: false },
-              { to: adminPath("/chat-support"), label: "Chat", icon: <MessageCircle size={14} />, solid: true },
+              { to: adminPath("/agency-profile/edit"), label: "Edit Profile", icon: <Edit size={16} />, solid: false },
+              { to: adminPath("/employment-contracts"), label: "Contracts", icon: <Shield size={16} />, solid: false },
+              { to: adminPath("/chat-support"), label: "Chat", icon: <MessageCircle size={16} />, solid: true },
             ].map(btn => (
               <Link key={btn.to} to={btn.to} className="action-btn" style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                fontSize: 12, fontWeight: 700, padding: "8px 14px", borderRadius: 9,
+                display: "inline-flex", alignItems: "center", gap: 8,
+                fontSize: T.body, fontWeight: 800, padding: "10px 18px", borderRadius: 11,
                 textDecoration: "none", transition: "all 0.15s",
                 ...(btn.solid
                   ? { background: "#fff", color: C.primary, border: "none" }
-                  : { background: "rgba(255,255,255,0.14)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.35)" }
+                  : { background: "rgba(255,255,255,0.16)", color: "#fff", border: "2px solid rgba(255,255,255,0.38)" }
                 ),
               }}>
                 {btn.icon} {btn.label}
@@ -316,7 +334,7 @@ const AgencyProfile = () => {
 
         {/* ── Stat chips ─────────────────────────────────────────────── */}
         {summary && (
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : isTablet ? 4 : 8}, 1fr)`, gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : isTablet ? 4 : 8}, 1fr)`, gap: 10 }}>
             {statItems.map(({ label, value }, i) => (
               <StatChip key={label} label={label} value={value} index={i} />
             ))}
@@ -326,32 +344,32 @@ const AgencyProfile = () => {
         {/* ── Main layout ────────────────────────────────────────────── */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : isTablet ? "1fr" : "1fr 300px",
-          gap: 16, alignItems: "start",
+          gridTemplateColumns: isMobile ? "1fr" : isTablet ? "1fr" : "1fr 320px",
+          gap: 18, alignItems: "start",
         }}>
 
           {/* LEFT: main content */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
             {/* Intro Video */}
             <Card>
               <CardHeader icon="🎬" title="Introduction Video" />
-              <div style={{ padding: 16 }}>
+              <div style={{ padding: 18 }}>
                 {company.intro_video_data_url ? (
-                  <div style={{ borderRadius: 12, overflow: "hidden", background: "#0f172a", border: "2px solid #1e293b" }}>
-                    <div style={{ background: "linear-gradient(90deg,#1e3a5f,#0D6E56)", padding: "8px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 12, color: "#fff", fontWeight: 700 }}>🎬 Agency Introduction</span>
-                      <span style={{ fontSize: 10, background: "rgba(255,255,255,0.15)", color: "#a7f3d0", padding: "2px 8px", borderRadius: 20, fontWeight: 700, letterSpacing: "0.06em" }}>PREVIEW</span>
+                  <div style={{ borderRadius: 14, overflow: "hidden", background: "#0f172a", border: "2px solid #1e293b" }}>
+                    <div style={{ background: "linear-gradient(90deg,#1e3a5f,#0D6E56)", padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: T.body, color: "#fff", fontWeight: 700 }}>🎬 Agency Introduction</span>
+                      <span style={{ fontSize: T.caption, background: "rgba(255,255,255,0.18)", color: "#a7f3d0", padding: "3px 10px", borderRadius: 20, fontWeight: 700, letterSpacing: "0.06em" }}>PREVIEW</span>
                     </div>
-                    <video controls style={{ display: "block", width: "100%", maxHeight: 300, background: "#000" }} src={company.intro_video_data_url} />
+                    <video controls style={{ display: "block", width: "100%", maxHeight: 320, background: "#000" }} src={company.intro_video_data_url} />
                   </div>
                 ) : (
-                  <div style={{ borderRadius: 12, background: "#F8FAFC", border: `1.5px dashed ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "28px 20px" }}>
-                    <div style={{ width: 48, height: 48, borderRadius: 12, background: C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Camera size={22} color={C.primary} />
+                  <div style={{ borderRadius: 14, background: "#F8FAFC", border: `2px dashed ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "36px 24px" }}>
+                    <div style={{ width: 56, height: 56, borderRadius: 14, background: C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Camera size={26} color={C.primary} />
                     </div>
-                    <p style={{ margin: 0, fontSize: 13, color: C.textSoft, fontWeight: 500 }}>No introduction video uploaded yet</p>
-                    <Link to={adminPath("/agency-profile/edit")} style={{ fontSize: 12, color: C.primary, fontWeight: 700, textDecoration: "none" }}>
+                    <p style={{ margin: 0, fontSize: T.bodyLg, color: C.textSoft, fontWeight: 600 }}>No introduction video uploaded yet</p>
+                    <Link to={adminPath("/agency-profile/edit")} style={{ fontSize: T.body, color: C.primary, fontWeight: 800, textDecoration: "none" }}>
                       Upload video →
                     </Link>
                   </div>
@@ -362,13 +380,13 @@ const AgencyProfile = () => {
             {/* About Us */}
             <Card>
               <CardHeader icon="📋" title="About Us" />
-              <div style={{ padding: "14px 16px" }}>
+              <div style={{ padding: "16px 20px" }}>
                 {company.about_us ? (
-                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.8, color: C.textMid, whiteSpace: "pre-wrap" }}>
+                  <p style={{ margin: 0, fontSize: T.bodyLg, lineHeight: 1.9, color: C.text, whiteSpace: "pre-wrap", fontWeight: 500 }}>
                     {company.about_us}
                   </p>
                 ) : (
-                  <p style={{ margin: 0, fontSize: 13, color: C.textSoft, fontStyle: "italic" }}>No about us content yet.</p>
+                  <p style={{ margin: 0, fontSize: T.bodyLg, color: C.textSoft, fontStyle: "italic", fontWeight: 500 }}>No about us content yet.</p>
                 )}
               </div>
             </Card>
@@ -377,15 +395,15 @@ const AgencyProfile = () => {
             <Card>
               <CardHeader icon="🖼" title="Gallery" count={gallery.length} />
               {gallery.length === 0 ? (
-                <div style={{ display: "flex", height: "5rem", alignItems: "center", justifyContent: "center", gap: 8, color: C.textSoft, fontSize: 13 }}>
-                  <ImageIcon size={16} /> No gallery images uploaded yet
+                <div style={{ display: "flex", height: "6rem", alignItems: "center", justifyContent: "center", gap: 10, color: C.textSoft, fontSize: T.bodyLg, fontWeight: 600 }}>
+                  <ImageIcon size={20} /> No gallery images uploaded yet
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 80 : 100}px, 1fr))`, gap: 8, padding: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 90 : 110}px, 1fr))`, gap: 10, padding: 16 }}>
                   {gallery.map((img, idx) => (
                     <button key={`${img.slice(-10)}-${idx}`} type="button" className="gallery-thumb"
                       onClick={() => setLightboxImage(img)}
-                      style={{ aspectRatio: "1/1", overflow: "hidden", borderRadius: 10, border: `1.5px solid ${C.border}`, background: C.bg, cursor: "pointer", padding: 0, transition: "transform 0.18s ease, box-shadow 0.18s ease" }}>
+                      style={{ aspectRatio: "1/1", overflow: "hidden", borderRadius: 12, border: `2px solid ${C.border}`, background: C.bg, cursor: "pointer", padding: 0, transition: "transform 0.18s ease, box-shadow 0.18s ease" }}>
                       <img src={img} alt={`Gallery ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     </button>
                   ))}
@@ -394,33 +412,33 @@ const AgencyProfile = () => {
             </Card>
 
             {/* MOM + Testimonials */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18, alignItems: "start" }}>
 
               {/* MOM Personnel */}
               <Card>
                 <CardHeader icon="👤" title="MOM Personnel" count={momPersonnel.length} />
                 {momPersonnel.length === 0 ? (
-                  <div style={{ display: "flex", height: "5rem", alignItems: "center", justifyContent: "center", gap: 8, color: C.textSoft, fontSize: 13 }}>
-                    <Users size={16} /> No MOM personnel added yet
+                  <div style={{ display: "flex", height: "6rem", alignItems: "center", justifyContent: "center", gap: 10, color: C.textSoft, fontSize: T.bodyLg, fontWeight: 600 }}>
+                    <Users size={20} /> No MOM personnel added yet
                   </div>
                 ) : (
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
-                        <tr style={{ background: "#F8FAFC", borderBottom: `1.5px solid ${C.borderLight}` }}>
+                        <tr style={{ background: "#F0F4F8", borderBottom: `2px solid ${C.borderLight}` }}>
                           {["#", "Name", "Reg. No."].map(h => (
-                            <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.textSoft }}>{h}</th>
+                            <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: T.caption, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: C.text }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {momPersonnel.map((p, i) => (
-                          <tr key={p.id} style={{ borderBottom: `1px solid ${C.borderLight}` }}
-                            onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "#F8FAFC"}
+                          <tr key={p.id} style={{ borderBottom: `1.5px solid ${C.borderLight}` }}
+                            onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "#F4F7FA"}
                             onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
-                            <td style={{ padding: "9px 14px", fontSize: 12, color: C.textSoft }}>{i + 1}</td>
-                            <td style={{ padding: "9px 14px", fontSize: 13, fontWeight: 600, color: C.text }}>{p.name}</td>
-                            <td style={{ padding: "9px 14px", fontSize: 12, fontFamily: "monospace", color: C.textMid }}>{p.registration_number}</td>
+                            <td style={{ padding: "12px 16px", fontSize: T.body, color: C.textSoft, fontWeight: 600 }}>{i + 1}</td>
+                            <td style={{ padding: "12px 16px", fontSize: T.bodyLg, fontWeight: 700, color: C.text }}>{p.name}</td>
+                            <td style={{ padding: "12px 16px", fontSize: T.body, fontFamily: "monospace", color: C.text, fontWeight: 600 }}>{p.registration_number}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -433,20 +451,20 @@ const AgencyProfile = () => {
               <Card>
                 <CardHeader icon="💬" title="Testimonials" count={testimonials.length} />
                 {testimonials.length === 0 ? (
-                  <div style={{ display: "flex", height: "5rem", alignItems: "center", justifyContent: "center", gap: 8, color: C.textSoft, fontSize: 13 }}>
-                    <Star size={16} /> No testimonials added yet
+                  <div style={{ display: "flex", height: "6rem", alignItems: "center", justifyContent: "center", gap: 10, color: C.textSoft, fontSize: T.bodyLg, fontWeight: 600 }}>
+                    <Star size={20} /> No testimonials added yet
                   </div>
                 ) : (
-                  <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                  <div style={{ maxHeight: 380, overflowY: "auto" }}>
                     {testimonials.map((t, i) => (
-                      <div key={t.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${C.borderLight}`, background: i % 2 === 0 ? "#fff" : "#FAFBFC" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                          <div style={{ display: "flex", gap: 1 }}>
-                            {[...Array(5)].map((_, j) => <Star key={j} size={11} fill="#F59E0B" color="#F59E0B" />)}
+                      <div key={t.id} style={{ padding: "16px 20px", borderBottom: `1.5px solid ${C.borderLight}`, background: i % 2 === 0 ? "#fff" : "#F8FAFB" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                          <div style={{ display: "flex", gap: 2 }}>
+                            {[...Array(5)].map((_, j) => <Star key={j} size={14} fill="#F59E0B" color="#F59E0B" />)}
                           </div>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{t.author}</span>
+                          <span style={{ fontSize: T.bodyLg, fontWeight: 800, color: C.text }}>{t.author}</span>
                         </div>
-                        <p style={{ margin: 0, fontSize: 12, color: C.textMid, lineHeight: 1.7 }}>{t.message}</p>
+                        <p style={{ margin: 0, fontSize: T.body, color: C.text, lineHeight: 1.8, fontWeight: 500 }}>{t.message}</p>
                       </div>
                     ))}
                   </div>
@@ -474,12 +492,12 @@ const SidebarContent = ({ company }: { company: CompanyProfileApi }) => {
   const isWide = !isMobile && !isTablet;
 
   return (
-    <div style={{ display: "flex", flexDirection: isWide ? "column" : "row", flexWrap: "wrap", gap: 16, alignItems: "start" }}>
+    <div style={{ display: "flex", flexDirection: isWide ? "column" : "row", flexWrap: "wrap", gap: 18, alignItems: "start" }}>
 
       {/* Contact Details */}
-      <Card style={{ flex: isWide ? undefined : "1 1 280px", minWidth: 0 }}>
+      <Card style={{ flex: isWide ? undefined : "1 1 300px", minWidth: 0 }}>
         <CardHeader icon="📞" title="Contact Details" />
-        <div style={{ padding: "4px 14px 8px" }}>
+        <div style={{ padding: "6px 18px 12px" }}>
           <ContactRow icon={Building2} label="Company" value={company.company_name} />
           <ContactRow icon={Users} label="Contact Person" value={company.contact_person} />
           <ContactRow icon={Phone} label="Phone" value={company.contact_phone} href={`tel:${company.contact_phone}`} />
@@ -493,9 +511,9 @@ const SidebarContent = ({ company }: { company: CompanyProfileApi }) => {
       </Card>
 
       {/* Location */}
-      <Card style={{ flex: isWide ? undefined : "1 1 220px", minWidth: 0 }}>
+      <Card style={{ flex: isWide ? undefined : "1 1 240px", minWidth: 0 }}>
         <CardHeader icon="📍" title="Location" />
-        <div style={{ padding: "4px 14px 8px" }}>
+        <div style={{ padding: "6px 18px 12px" }}>
           <ContactRow icon={MapPin} label="Address"
             value={[company.address_line1, company.address_line2, company.postal_code, company.country].filter(Boolean).join(", ") || undefined} />
           <ContactRow icon={Clock} label="Office Hours" value={company.office_hours_regular} />
@@ -504,9 +522,9 @@ const SidebarContent = ({ company }: { company: CompanyProfileApi }) => {
       </Card>
 
       {/* Registration */}
-      <Card style={{ flex: isWide ? undefined : "1 1 200px", minWidth: 0 }}>
+      <Card style={{ flex: isWide ? undefined : "1 1 220px", minWidth: 0 }}>
         <CardHeader icon="🏛" title="Registration" />
-        <div style={{ padding: "4px 14px 8px" }}>
+        <div style={{ padding: "6px 18px 12px" }}>
           <ContactRow icon={Shield} label="License No." value={company.license_no} />
           <ContactRow icon={Building2} label="Short Name" value={company.short_name} />
         </div>
