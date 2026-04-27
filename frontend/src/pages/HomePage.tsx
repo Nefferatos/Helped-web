@@ -337,7 +337,7 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
       {/* Desc */}
       <p style={{
         fontSize: compact ? 11 : 12, fontWeight: 600,
-        color: hovered ? "rgba(255,255,255,0.80)" : "#64748B",
+        color: hovered ? "rgb(255, 255, 255)" : "#000000",
         margin: 0,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         position: "relative",
