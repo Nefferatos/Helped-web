@@ -204,22 +204,24 @@ function Field({
 }
 
 function RadioGroup({
-  name, options, value, onChange,
+  name, options, value, onChange, disabled = false,
 }: {
-  name: string; options: string[]; value: string; onChange: (v: string) => void;
+  name: string; options: string[]; value: string; onChange: (v: string) => void; disabled?: boolean;
 }) {
   return (
     <div className="flex flex-wrap gap-2 pt-1">
       {options.map((opt) => (
         <label
           key={opt}
-          className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-4 py-2 text-[14px] font-semibold transition-all ${
+          className={`flex items-center gap-2 rounded-xl border-2 px-4 py-2 text-[14px] font-semibold transition-all ${
+            disabled ? "cursor-default opacity-70" : "cursor-pointer"
+          } ${
             value === opt
               ? "border-emerald-400 bg-emerald-50 text-emerald-800"
               : "border-gray-200 text-gray-600 hover:border-gray-300 bg-gray-50"
           }`}
         >
-          <input type="radio" name={name} checked={value === opt} onChange={() => onChange(opt)} className="sr-only" />
+          <input type="radio" name={name} checked={value === opt} onChange={() => onChange(opt)} disabled={disabled} className="sr-only" />
           {value === opt && <Check className="h-3.5 w-3.5 text-emerald-600" />}
           {opt}
         </label>
@@ -228,21 +230,22 @@ function RadioGroup({
   );
 }
 
-function DatePicker({ day, month, year, onDay, onMonth, onYear }: {
+function DatePicker({ day, month, year, onDay, onMonth, onYear, disabled = false }: {
   day: string; month: string; year: string;
   onDay: (v: string) => void; onMonth: (v: string) => void; onYear: (v: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Select value={day || undefined} onValueChange={onDay}>
+      <Select value={day || undefined} onValueChange={onDay} disabled={disabled}>
         <SelectTrigger className={`${selTrigger} w-[80px]`}><SelectValue placeholder="DD" /></SelectTrigger>
         <SelectContent>{Array.from({ length: 31 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
       </Select>
-      <Select value={month || undefined} onValueChange={onMonth}>
+      <Select value={month || undefined} onValueChange={onMonth} disabled={disabled}>
         <SelectTrigger className={`${selTrigger} w-[80px]`}><SelectValue placeholder="MM" /></SelectTrigger>
         <SelectContent>{Array.from({ length: 12 }, (_, i) => <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{String(i + 1).padStart(2, "0")}</SelectItem>)}</SelectContent>
       </Select>
-      <Select value={year || undefined} onValueChange={onYear}>
+      <Select value={year || undefined} onValueChange={onYear} disabled={disabled}>
         <SelectTrigger className={`${selTrigger} w-[100px]`}><SelectValue placeholder="YYYY" /></SelectTrigger>
         <SelectContent>{Array.from({ length: 120 }, (_, i) => <SelectItem key={i} value={String(1910 + i)}>{1910 + i}</SelectItem>)}</SelectContent>
       </Select>
@@ -253,9 +256,9 @@ function DatePicker({ day, month, year, onDay, onMonth, onYear }: {
 
 /* ─────────────────── category file upload ─────────────────── */
 const CategoryFileUpload = ({
-  category, hasTemplate, refCode, uploads, onUpload,
+  category, hasTemplate, refCode, uploads, onUpload, readOnly = false,
 }: {
-  category: string; hasTemplate: boolean; refCode: string; uploads: UploadedFile[]; onUpload: (files: UploadedFile[]) => void;
+  category: string; hasTemplate: boolean; refCode: string; uploads: UploadedFile[]; onUpload: (files: UploadedFile[]) => void; readOnly?: boolean;
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -290,15 +293,17 @@ const CategoryFileUpload = ({
           <FileText className="h-4 w-4 shrink-0 text-gray-400" />
           <span className="truncate text-[14px] font-semibold text-gray-700">{category}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={isUploading}
-          className="inline-flex items-center gap-1.5 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
-        >
-          {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-          {hasTemplate ? "Upload Signed File" : "Upload File"}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={isUploading}
+            className="inline-flex items-center gap-1.5 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+          >
+            {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            {hasTemplate ? "Upload Signed File" : "Upload File"}
+          </button>
+        )}
       </div>
       <input ref={inputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handleFileChange} />
       {uploads.length > 0 && (
@@ -313,9 +318,11 @@ const CategoryFileUpload = ({
               <a href={u.url} download={u.name} className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-1 text-gray-500 hover:bg-gray-50 transition-colors">
                 <Download className="h-3.5 w-3.5" />
               </a>
-              <button type="button" onClick={() => removeUpload(i)} className="text-gray-300 hover:text-red-400 transition-colors">
-                <X className="h-4 w-4" />
-              </button>
+              {!readOnly && (
+                <button type="button" onClick={() => removeUpload(i)} className="text-gray-300 hover:text-red-400 transition-colors">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -486,7 +493,7 @@ const BulkUploadModal = ({
 };
 
 /* ═══════════════════════════════════════════════════════ */
-/*              EmploymentContractPage (always editable)  */
+/*              EmploymentContractPage                     */
 /* ═══════════════════════════════════════════════════════ */
 export const EmploymentContractPage = ({
   mode = "view",
@@ -497,6 +504,7 @@ export const EmploymentContractPage = ({
   const location = useLocation();
   const navigate = useNavigate();
   const isCreateMode = mode === "create";
+  const isViewMode = mode === "view";
   const requestedStep = Number(new URLSearchParams(location.search).get("step") || "");
   const hasStepQuery = Number.isInteger(requestedStep) && requestedStep >= 1 && requestedStep <= 4;
   const showStepTabs = isCreateMode || hasStepQuery;
@@ -719,6 +727,10 @@ export const EmploymentContractPage = ({
     }));
 
   const submitContract = async () => {
+    if (isViewMode) {
+      toast.error("This page is read-only. Open Edit to make changes.");
+      return;
+    }
     if (isSubmitting) return;
     if (!employer.name.trim()) { toast.error("Employer name is required"); return; }
     try {
@@ -826,7 +838,7 @@ export const EmploymentContractPage = ({
             </div>
             <div>
               <h2 className="text-[22px] font-bold text-gray-900 leading-tight">
-                {isCreateMode ? "Add New Employment Contract" : "Employment Contract Form"}
+                {isCreateMode ? "Add New Employment Contract" : isViewMode ? "Employment Contract Details" : "Employment Contract Form"}
               </h2>
               <p className="text-[14px] text-gray-500 font-medium mt-0.5">
                 Reference:{" "}
@@ -836,15 +848,17 @@ export const EmploymentContractPage = ({
           </div>
 
           {/* Save button always visible */}
-          <button
-            type="button"
-            onClick={() => void submitContract()}
-            disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-[15px] font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all"
-          >
-            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-            {isSubmitting ? "Saving…" : isCreateMode ? "Save Contract" : "Save Changes"}
-          </button>
+          {!isViewMode && (
+            <button
+              type="button"
+              onClick={() => void submitContract()}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-[15px] font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all"
+            >
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+              {isSubmitting ? "Saving…" : isCreateMode ? "Save Contract" : "Save Changes"}
+            </button>
+          )}
         </div>
 
         {/* ── Step tabs ── */}
@@ -879,7 +893,7 @@ export const EmploymentContractPage = ({
         {showStepOne && (
           <div className="ecp-section space-y-4">
             <SectionCard title="The Maid Employed" icon={<User className="h-4 w-4 text-white" />} color="emerald">
-
+              <fieldset disabled={isViewMode} className="space-y-4">
               {/* Maid search */}
               <div className="mb-5 flex gap-2.5">
                 <div className="relative flex-1">
@@ -936,6 +950,7 @@ export const EmploymentContractPage = ({
                 <button
                   type="button"
                   onClick={() => setShowMaidResults(true)}
+                  disabled={isViewMode}
                   className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm"
                 >
                   <Search className="h-4 w-4" /> Search
@@ -1002,6 +1017,7 @@ export const EmploymentContractPage = ({
                   )}
                 </div>
               </div>
+              </fieldset>
             </SectionCard>
 
             {showStepTabs && (
@@ -1018,7 +1034,7 @@ export const EmploymentContractPage = ({
         {showStepTwo && (
           <div className="ecp-section space-y-4">
             <SectionCard title="Agency Information" icon={<Building2 className="h-4 w-4 text-white" />} color="sky">
-              <div className="space-y-2">
+              <fieldset disabled={isViewMode} className="space-y-2">
                 <Field label="Case Reference Number">
                   <input className={`${inp} max-w-[180px]`} value={agency.caseReferenceNumber} onChange={(e) => setAgency({ ...agency, caseReferenceNumber: e.target.value })} placeholder="e.g. 06583" />
                 </Field>
@@ -1031,6 +1047,7 @@ export const EmploymentContractPage = ({
                     onDay={(v) => setAgency({ ...agency, dateOfEmploymentDay: v })}
                     onMonth={(v) => setAgency({ ...agency, dateOfEmploymentMonth: v })}
                     onYear={(v) => setAgency({ ...agency, dateOfEmploymentYear: v })}
+                    disabled={isViewMode}
                   />
                 </Field>
 
@@ -1060,7 +1077,7 @@ export const EmploymentContractPage = ({
                   <input className={`${inp} max-w-[180px]`} value={agency.insuranceFee} onChange={(e) => setAgency({ ...agency, insuranceFee: e.target.value })} placeholder="$0.00" />
                 </Field>
                 <Field label="Agency Witness">
-                  <Select value={agency.agencyWitness || undefined} onValueChange={(v) => setAgency({ ...agency, agencyWitness: v })}>
+                  <Select value={agency.agencyWitness || undefined} onValueChange={(v) => setAgency({ ...agency, agencyWitness: v })} disabled={isViewMode}>
                     <SelectTrigger className={selTrigger}><SelectValue placeholder="Select witness" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Balamurugan S/O Subramaniam (R1218275)">Balamurugan S/O Subramaniam (R1218275)</SelectItem>
@@ -1068,7 +1085,7 @@ export const EmploymentContractPage = ({
                     </SelectContent>
                   </Select>
                 </Field>
-              </div>
+              </fieldset>
             </SectionCard>
 
             {showStepTabs && (
@@ -1088,27 +1105,27 @@ export const EmploymentContractPage = ({
         {showStepThree && (
           <div className="ecp-section space-y-4">
             <SectionCard title="Employer Details" icon={<User className="h-4 w-4 text-white" />} color="violet">
-              <div className="space-y-2">
+              <fieldset disabled={isViewMode} className="space-y-2">
                 <Field label="Full Name" required>
                   <input className={inp} value={employer.name} onChange={(e) => setEmployer({ ...employer, name: e.target.value })} placeholder="Employer's full legal name" />
                 </Field>
                 <Field label="Gender">
-                  <RadioGroup name="emp-gender" options={["Male","Female"]} value={employer.gender} onChange={(v) => setEmployer({ ...employer, gender: v })} />
+                  <RadioGroup name="emp-gender" options={["Male","Female"]} value={employer.gender} onChange={(v) => setEmployer({ ...employer, gender: v })} disabled={isViewMode} />
                 </Field>
                 <Field label="Date of Birth">
                   <DatePicker day={employer.dateOfBirthDay} month={employer.dateOfBirthMonth} year={employer.dateOfBirthYear}
                     onDay={(v) => setEmployer({ ...employer, dateOfBirthDay: v })}
                     onMonth={(v) => setEmployer({ ...employer, dateOfBirthMonth: v })}
-                    onYear={(v) => setEmployer({ ...employer, dateOfBirthYear: v })} />
+                    onYear={(v) => setEmployer({ ...employer, dateOfBirthYear: v })} disabled={isViewMode} />
                 </Field>
                 <Field label="Nationality">
-                  <Select value={employer.nationality || undefined} onValueChange={(v) => setEmployer({ ...employer, nationality: v })}>
+                  <Select value={employer.nationality || undefined} onValueChange={(v) => setEmployer({ ...employer, nationality: v })} disabled={isViewMode}>
                     <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
                     <SelectContent>{NATIONALITY_OPTIONS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Residential Status">
-                  <Select value={employer.residentialStatus || undefined} onValueChange={(v) => setEmployer({ ...employer, residentialStatus: v })}>
+                  <Select value={employer.residentialStatus || undefined} onValueChange={(v) => setEmployer({ ...employer, residentialStatus: v })} disabled={isViewMode}>
                     <SelectTrigger className={`${selTrigger} w-64`}><SelectValue placeholder="Select status" /></SelectTrigger>
                     <SelectContent>
                       {["Singapore Citizen","Singapore Permanent Resident","Employment Pass","S Pass","Work Permit"].map((s) => (
@@ -1158,18 +1175,18 @@ export const EmploymentContractPage = ({
                   <input className={`${inp} max-w-[220px]`} value={employer.mobileNumber} onChange={(e) => setEmployer({ ...employer, mobileNumber: e.target.value })} placeholder="e.g. 91234567" />
                 </Field>
                 <Field label="Monthly Combined Income">
-                  <Select value={employer.monthlyContribution || undefined} onValueChange={(v) => setEmployer({ ...employer, monthlyContribution: v })}>
+                  <Select value={employer.monthlyContribution || undefined} onValueChange={(v) => setEmployer({ ...employer, monthlyContribution: v })} disabled={isViewMode}>
                     <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="-- Select --" /></SelectTrigger>
                     <SelectContent>{INCOME_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Notification of Assessment" hint="Based on Annual Income or Bank Statement">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Select value={notificationDate.year || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, year: v })}>
+                    <Select value={notificationDate.year || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, year: v })} disabled={isViewMode}>
                       <SelectTrigger className={`${selTrigger} w-28`}><SelectValue placeholder="Year" /></SelectTrigger>
                       <SelectContent>{Array.from({ length: 20 }, (_, i) => <SelectItem key={i} value={String(2010 + i)}>{2010 + i}</SelectItem>)}</SelectContent>
                     </Select>
-                    <Select value={notificationDate.month || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, month: v })}>
+                    <Select value={notificationDate.month || undefined} onValueChange={(v) => setNotificationDate({ ...notificationDate, month: v })} disabled={isViewMode}>
                       <SelectTrigger className={`${selTrigger} w-40`}><SelectValue placeholder="-- Select Month --" /></SelectTrigger>
                       <SelectContent>{MONTHS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                     </Select>
@@ -1181,32 +1198,32 @@ export const EmploymentContractPage = ({
                 <Field label="Existing Employer NRIC">
                   <input className={inp} value={employer.existingEmployerNric} onChange={(e) => setEmployer({ ...employer, existingEmployerNric: e.target.value })} placeholder="e.g. S1234567A" />
                 </Field>
-              </div>
+              </fieldset>
             </SectionCard>
 
             {/* Spouse */}
             <SectionCard title="Spouse Details" icon={<Users className="h-4 w-4 text-white" />} color="violet">
-              <div className="space-y-2">
+              <fieldset disabled={isViewMode} className="space-y-2">
                 <Field label="Spouse's Full Name">
                   <input className={inp} value={spouse.name} onChange={(e) => setSpouse({ ...spouse, name: e.target.value })} placeholder="Full legal name" />
                 </Field>
                 <Field label="Gender">
-                  <RadioGroup name="sp-gender" options={["Male","Female"]} value={spouse.gender} onChange={(v) => setSpouse({ ...spouse, gender: v })} />
+                  <RadioGroup name="sp-gender" options={["Male","Female"]} value={spouse.gender} onChange={(v) => setSpouse({ ...spouse, gender: v })} disabled={isViewMode} />
                 </Field>
                 <Field label="Date of Birth">
                   <DatePicker day={spouse.dateOfBirthDay} month={spouse.dateOfBirthMonth} year={spouse.dateOfBirthYear}
                     onDay={(v) => setSpouse({ ...spouse, dateOfBirthDay: v })}
                     onMonth={(v) => setSpouse({ ...spouse, dateOfBirthMonth: v })}
-                    onYear={(v) => setSpouse({ ...spouse, dateOfBirthYear: v })} />
+                    onYear={(v) => setSpouse({ ...spouse, dateOfBirthYear: v })} disabled={isViewMode} />
                 </Field>
                 <Field label="Nationality">
-                  <Select value={spouse.nationality || undefined} onValueChange={(v) => setSpouse({ ...spouse, nationality: v })}>
+                  <Select value={spouse.nationality || undefined} onValueChange={(v) => setSpouse({ ...spouse, nationality: v })} disabled={isViewMode}>
                     <SelectTrigger className={`${selTrigger} w-56`}><SelectValue placeholder="Select nationality" /></SelectTrigger>
                     <SelectContent>{NATIONALITY_OPTIONS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Residential Status">
-                  <Select value={spouse.residentialStatus || undefined} onValueChange={(v) => setSpouse({ ...spouse, residentialStatus: v })}>
+                  <Select value={spouse.residentialStatus || undefined} onValueChange={(v) => setSpouse({ ...spouse, residentialStatus: v })} disabled={isViewMode}>
                     <SelectTrigger className={`${selTrigger} w-64`}><SelectValue placeholder="Select status" /></SelectTrigger>
                     <SelectContent>
                       {["Singapore Citizen","Singapore Permanent Resident","Employment Pass","S Pass","Work Permit"].map((s) => (
@@ -1224,7 +1241,7 @@ export const EmploymentContractPage = ({
                 <Field label="Company Name">
                   <input className={inp} value={spouse.company} onChange={(e) => setSpouse({ ...spouse, company: e.target.value })} placeholder="Company name (if applicable)" />
                 </Field>
-              </div>
+              </fieldset>
             </SectionCard>
 
             {/* Family members */}
@@ -1235,7 +1252,7 @@ export const EmploymentContractPage = ({
                 icon={<User className="h-4 w-4 text-white" />}
                 color="amber"
                 action={
-                  familyMembers.length > 1 ? (
+                  !isViewMode && familyMembers.length > 1 ? (
                     <button type="button" onClick={() => removeFamilyMember(idx)}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-[13px] font-bold text-white hover:bg-white/30 transition-colors">
                       <X className="h-3.5 w-3.5" /> Remove
@@ -1243,7 +1260,7 @@ export const EmploymentContractPage = ({
                   ) : undefined
                 }
               >
-                <div className="space-y-2">
+                <fieldset disabled={isViewMode} className="space-y-2">
                   <Field label="Full Name">
                     <input className={inp} value={fm.name} onChange={(e) => updateFamilyMember(idx, "name", e.target.value)} placeholder="Full name" />
                   </Field>
@@ -1267,31 +1284,35 @@ export const EmploymentContractPage = ({
                     <DatePicker day={fm.dateOfBirthDay} month={fm.dateOfBirthMonth} year={fm.dateOfBirthYear}
                       onDay={(v) => updateFamilyMember(idx, "dateOfBirthDay", v)}
                       onMonth={(v) => updateFamilyMember(idx, "dateOfBirthMonth", v)}
-                      onYear={(v) => updateFamilyMember(idx, "dateOfBirthYear", v)} />
+                      onYear={(v) => updateFamilyMember(idx, "dateOfBirthYear", v)} disabled={isViewMode} />
                   </Field>
-                </div>
+                </fieldset>
               </SectionCard>
             ))}
 
-            <button type="button" onClick={addFamilyMember}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3.5 text-[14px] font-bold text-amber-700 hover:bg-amber-100 transition-colors">
-              <Plus className="h-4 w-4" /> Add Family Member
-            </button>
+            {!isViewMode && (
+              <button type="button" onClick={addFamilyMember}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3.5 text-[14px] font-bold text-amber-700 hover:bg-amber-100 transition-colors">
+                <Plus className="h-4 w-4" /> Add Family Member
+              </button>
+            )}
 
             {/* Save button */}
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
-              <p className="text-[13px] text-gray-400 font-medium">All changes are saved when you click Save Contract</p>
+              <p className="text-[13px] text-gray-400 font-medium">{isViewMode ? "This contract is read-only on the view page." : "All changes are saved when you click Save Contract"}</p>
               <div className="flex items-center gap-3">
                 {showStepTabs && (
                   <button onClick={() => setActiveStep(2)} className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-colors">
                     <ChevronLeft className="h-4 w-4" /> Back
                   </button>
                 )}
-                <button type="button" onClick={() => void submitContract()} disabled={isSubmitting}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-[15px] font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all">
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {isSubmitting ? "Saving…" : "Save Contract"}
-                </button>
+                {!isViewMode && (
+                  <button type="button" onClick={() => void submitContract()} disabled={isSubmitting}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-[15px] font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all">
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {isSubmitting ? "Saving…" : "Save Contract"}
+                  </button>
+                )}
                 {showStepTabs && (
                   <button onClick={() => setActiveStep(4)} className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-[14px] font-bold text-white hover:bg-amber-600 transition-colors">
                     Next: Upload Forms <ChevronRight className="h-4 w-4" />
@@ -1325,10 +1346,12 @@ export const EmploymentContractPage = ({
                     ))}
                   </div>
                 </div>
-                <button type="button" onClick={() => setBulkUploadOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-[14px] font-bold text-white hover:bg-amber-700 shadow-sm transition-colors">
-                  <Upload className="h-4 w-4" /> Bulk Upload PDF
-                </button>
+                {!isViewMode && (
+                  <button type="button" onClick={() => setBulkUploadOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-[14px] font-bold text-white hover:bg-amber-700 shadow-sm transition-colors">
+                    <Upload className="h-4 w-4" /> Bulk Upload PDF
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1351,6 +1374,7 @@ export const EmploymentContractPage = ({
                         refCode={refCode || agency.caseReferenceNumber || "temp"}
                         uploads={uploads}
                         onUpload={(files) => updateCategoryUploads(cat.category, files)}
+                        readOnly={isViewMode}
                       />
                       {uploads.length > 0 && (
                         <div className="mt-1.5 pl-6 space-y-1">
@@ -1405,12 +1429,14 @@ export const EmploymentContractPage = ({
         )}
       </div>
 
-      <BulkUploadModal
-        open={bulkUploadOpen}
-        onClose={() => setBulkUploadOpen(false)}
-        refCode={refCode || agency.caseReferenceNumber || "temp"}
-        onUploadComplete={handleBulkUploadComplete}
-      />
+      {!isViewMode && (
+        <BulkUploadModal
+          open={bulkUploadOpen}
+          onClose={() => setBulkUploadOpen(false)}
+          refCode={refCode || agency.caseReferenceNumber || "temp"}
+          onUploadComplete={handleBulkUploadComplete}
+        />
+      )}
 
       {/* Back to top */}
       {showBackToTop && (
