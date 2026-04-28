@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,10 +48,24 @@ function getStrength(pw: string): { score: number; label: string; color: string 
   return { score, label: "Strong", color: "#0D6E56" };
 }
 
+/* ─── Responsive hook ───────────────────────────────────────────────────── */
+const useWindowWidth = () => {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+};
+
 const ChangePassword = () => {
   const [form, setForm] = useState<FormState>({ current: "", newPw: "", confirm: "", captcha: "" });
   const [showFields, setShowFields] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
+
+  const width = useWindowWidth();
+  const isSm = width < 640;
 
   const toggleShow = (key: string) =>
     setShowFields((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -79,36 +93,72 @@ const ChangePassword = () => {
     setSubmitted(false);
   };
 
+  /* ── dynamic sizes ── */
+  const cardPadX = isSm ? 14 : 24;
+  const headerPadX = isSm ? 16 : 24;
+
   return (
-    <div className="flex items-start justify-center pt-4 pb-8 px-4">
-      <div className="w-full max-w-lg">
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        paddingTop: isSm ? 12 : 16,
+        paddingBottom: isSm ? 24 : 32,
+        paddingLeft: isSm ? 10 : 16,
+        paddingRight: isSm ? 10 : 16,
+        boxSizing: "border-box",
+        width: "100%",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 520 }}>
 
         {/* ── Page heading ── */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-1">
+        <div style={{ marginBottom: isSm ? 16 : 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <div
-              className="flex items-center justify-center rounded-lg"
-              style={{ width: 34, height: 34, background: "rgba(13,110,86,0.10)" }}
+              style={{
+                width: isSm ? 30 : 34, height: isSm ? 30 : 34,
+                borderRadius: 9, flexShrink: 0,
+                background: "rgba(13,110,86,0.10)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
             >
-              <Lock style={{ width: 17, height: 17, color: "#0D6E56" }} />
+              <Lock style={{ width: isSm ? 15 : 17, height: isSm ? 15 : 17, color: "#0D6E56" }} />
             </div>
             <h2
-              className="font-extrabold tracking-tight"
-              style={{ fontSize: 26, letterSpacing: "-0.4px", color: "#000000" }}
+              style={{
+                fontSize: isSm ? 20 : 26,
+                fontWeight: 900,
+                letterSpacing: "-0.4px",
+                color: "#000000",
+                margin: 0,
+                lineHeight: 1.15,
+              }}
             >
               Password Management
             </h2>
           </div>
-          <p className="ml-11" style={{ fontSize: 15, color: "#1a1a1a", fontWeight: 600 }}>
+          <p
+            style={{
+              fontSize: isSm ? 13 : 15,
+              color: "#1a1a1a",
+              fontWeight: 600,
+              margin: 0,
+              // On mobile, don't indent — just align flush
+              marginLeft: isSm ? 0 : 44,
+            }}
+          >
             Keep your account secure by using a strong, unique password.
           </p>
         </div>
 
         {/* ── Main card ── */}
         <div
-          className="overflow-hidden bg-white"
           style={{
-            borderRadius: 16,
+            overflow: "hidden",
+            background: "#fff",
+            borderRadius: isSm ? 14 : 16,
             border: "1px solid #D1D9E0",
             boxShadow: "0 2px 16px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.05)",
           }}
@@ -118,47 +168,40 @@ const ChangePassword = () => {
           <div
             style={{
               background: "linear-gradient(135deg, #0D6E56 0%, #0f8567 100%)",
-              padding: "20px 24px",
+              padding: isSm ? `16px ${headerPadX}px` : `20px ${headerPadX}px`,
               display: "flex",
               alignItems: "center",
-              gap: 14,
+              gap: isSm ? 10 : 14,
               position: "relative",
               overflow: "hidden",
             }}
           >
-            <div style={{
-              position: "absolute", right: -24, top: -24,
-              width: 100, height: 100, borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.12)",
-            }} />
-            <div style={{
-              position: "absolute", right: 8, top: -48,
-              width: 130, height: 130, borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.07)",
-            }} />
+            <div style={{ position: "absolute", right: -24, top: -24, width: 100, height: 100, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.12)" }} />
+            <div style={{ position: "absolute", right: 8, top: -48, width: 130, height: 130, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.07)" }} />
 
             <div
               style={{
-                width: 48, height: 48, borderRadius: 12,
+                width: isSm ? 40 : 48, height: isSm ? 40 : 48,
+                borderRadius: 12,
                 background: "rgba(255,255,255,0.18)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <Lock style={{ width: 22, height: 22, color: "#fff" }} />
+              <Lock style={{ width: isSm ? 18 : 22, height: isSm ? 18 : 22, color: "#fff" }} />
             </div>
             <div>
-              <p style={{ fontSize: 19, fontWeight: 800, color: "#fff", letterSpacing: "-0.2px" }}>
+              <p style={{ fontSize: isSm ? 16 : 19, fontWeight: 800, color: "#fff", letterSpacing: "-0.2px", margin: 0 }}>
                 Change Password
               </p>
-              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", marginTop: 3, fontWeight: 600 }}>
+              <p style={{ fontSize: isSm ? 12 : 14, color: "rgba(255,255,255,0.85)", marginTop: 2, fontWeight: 600 }}>
                 All fields are required to proceed
               </p>
             </div>
           </div>
 
           {/* Card body */}
-          <div style={{ padding: "24px 24px 0" }}>
+          <div style={{ padding: `${isSm ? 16 : 24}px ${cardPadX}px 0` }}>
 
             {/* Security tip banner */}
             <div
@@ -166,17 +209,19 @@ const ChangePassword = () => {
                 display: "flex", gap: 10, alignItems: "flex-start",
                 background: "#E8F5EF",
                 border: "1px solid rgba(13,110,86,0.25)",
-                borderRadius: 10, padding: "13px 16px", marginBottom: 22,
+                borderRadius: 10,
+                padding: isSm ? "10px 12px" : "13px 16px",
+                marginBottom: isSm ? 16 : 22,
               }}
             >
-              <ShieldCheck style={{ width: 18, height: 18, color: "#0D6E56", flexShrink: 0, marginTop: 1 }} />
-              <p style={{ fontSize: 14, color: "#000000", lineHeight: 1.6, fontWeight: 600 }}>
+              <ShieldCheck style={{ width: 17, height: 17, color: "#0D6E56", flexShrink: 0, marginTop: 1 }} />
+              <p style={{ fontSize: isSm ? 12 : 14, color: "#000000", lineHeight: 1.55, fontWeight: 600, margin: 0 }}>
                 Enter your current password, then choose a new one. Both new password fields must match exactly before saving.
               </p>
             </div>
 
             {/* Password fields */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: isSm ? 14 : 18 }}>
               {fields.map(({ label, key, placeholder }) => {
                 const isConfirm = key === "confirm";
                 const isNew = key === "newPw";
@@ -195,10 +240,10 @@ const ChangePassword = () => {
                   <div key={key}>
                     <Label
                       style={{
-                        fontSize: 15,
+                        fontSize: isSm ? 13 : 15,
                         fontWeight: 800,
                         color: "#000000",
-                        marginBottom: 7,
+                        marginBottom: 6,
                         display: "block",
                         letterSpacing: "-0.1px",
                       }}
@@ -212,11 +257,11 @@ const ChangePassword = () => {
                         placeholder={placeholder}
                         onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
                         style={{
-                          height: 48,
+                          height: isSm ? 44 : 48,
                           borderRadius: 10,
                           border: inputBorder,
                           background: inputBg,
-                          fontSize: 16,
+                          fontSize: isSm ? 15 : 16,
                           fontWeight: 600,
                           color: "#000000",
                           paddingRight: 44,
@@ -258,13 +303,13 @@ const ChangePassword = () => {
 
                     {/* Inline hints */}
                     {isConfirm && passwordsMismatch && (
-                      <p style={{ fontSize: 13, color: "#B91C1C", marginTop: 6, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
-                        <XCircle style={{ width: 14, height: 14 }} /> Passwords do not match
+                      <p style={{ fontSize: 12, color: "#B91C1C", marginTop: 5, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                        <XCircle style={{ width: 13, height: 13 }} /> Passwords do not match
                       </p>
                     )}
                     {isConfirm && passwordsMatch && (
-                      <p style={{ fontSize: 13, color: "#0D6E56", marginTop: 6, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
-                        <CheckCircle2 style={{ width: 14, height: 14 }} /> Passwords match
+                      <p style={{ fontSize: 12, color: "#0D6E56", marginTop: 5, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                        <CheckCircle2 style={{ width: 13, height: 13 }} /> Passwords match
                       </p>
                     )}
 
@@ -283,7 +328,7 @@ const ChangePassword = () => {
                             />
                           ))}
                         </div>
-                        <p style={{ fontSize: 13, color: strength.color, fontWeight: 800 }}>
+                        <p style={{ fontSize: 12, color: strength.color, fontWeight: 800, margin: 0 }}>
                           {strength.label} password
                         </p>
                       </div>
@@ -294,95 +339,162 @@ const ChangePassword = () => {
             </div>
 
             {/* Divider */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "22px 0 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: isSm ? "18px 0 14px" : "22px 0 18px" }}>
               <div style={{ flex: 1, height: 1, background: "#E5EAF0" }} />
               <span style={{
-                fontSize: 11, fontWeight: 800, letterSpacing: "0.09em",
-                color: "#94A3B8", textTransform: "uppercase",
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                color: "#94A3B8", textTransform: "uppercase", whiteSpace: "nowrap",
               }}>Security Verification</span>
               <div style={{ flex: 1, height: 1, background: "#E5EAF0" }} />
             </div>
 
-            {/* CAPTCHA */}
-            <div style={{ marginBottom: 24 }}>
-              <Label style={{ fontSize: 15, fontWeight: 800, color: "#000000", marginBottom: 7, display: "block" }}>
+            {/* CAPTCHA — stacks on mobile */}
+            <div style={{ marginBottom: isSm ? 16 : 24 }}>
+              <Label style={{ fontSize: isSm ? 13 : 15, fontWeight: 800, color: "#000000", marginBottom: 7, display: "block" }}>
                 Security Code
               </Label>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Input
-                  type="text"
-                  value={form.captcha}
-                  placeholder="Enter code"
-                  maxLength={6}
-                  onChange={(e) => setForm((prev) => ({ ...prev, captcha: e.target.value }))}
-                  style={{
-                    height: 48, width: 130, borderRadius: 10,
-                    border: "2px solid #D1D9E0", background: "#FAFBFC",
-                    fontSize: 18, fontWeight: 800, color: "#000000",
-                    letterSpacing: 5,
-                    paddingLeft: 14, outline: "none",
-                  }}
-                  className="focus-visible:ring-0 focus:border-[#0D6E56] focus:shadow-[0_0_0_3px_rgba(13,110,86,0.14)]"
-                />
 
-                {/* CAPTCHA display */}
-                <div
-                  style={{
-                    height: 48, borderRadius: 10, paddingInline: 20,
-                    background: "linear-gradient(135deg, #0D6E56, #0f8567)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    userSelect: "none", position: "relative", overflow: "hidden",
-                    boxShadow: "0 2px 8px rgba(13,110,86,0.3)",
-                  }}
-                >
-                  <div style={{
-                    position: "absolute", inset: 0,
-                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 100 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E\")",
-                    opacity: 0.3,
-                  }} />
-                  <span
+              {isSm ? (
+                /* ── Mobile layout: CAPTCHA display full-width, then input + hint row ── */
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {/* CAPTCHA box — full width on mobile */}
+                  <div
                     style={{
-                      fontFamily: "'Courier New', monospace",
-                      fontSize: 22, fontWeight: 900,
-                      letterSpacing: 9, color: "#fff",
-                      fontStyle: "italic", position: "relative",
-                      textShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                      height: 48, borderRadius: 10,
+                      background: "linear-gradient(135deg, #0D6E56, #0f8567)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      userSelect: "none", position: "relative", overflow: "hidden",
+                      boxShadow: "0 2px 8px rgba(13,110,86,0.3)",
                     }}
                   >
-                    {CAPTCHA_CODE}
-                  </span>
-                </div>
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 100 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E\")",
+                      opacity: 0.3,
+                    }} />
+                    <span
+                      style={{
+                        fontFamily: "'Courier New', monospace",
+                        fontSize: 26, fontWeight: 900,
+                        letterSpacing: 12, color: "#fff",
+                        fontStyle: "italic", position: "relative",
+                        textShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                      }}
+                    >
+                      {CAPTCHA_CODE}
+                    </span>
+                  </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Info style={{ width: 15, height: 15, color: "#64748B" }} />
-                  <span style={{ fontSize: 13, color: "#000000", fontWeight: 700 }}>enter this code</span>
+                  {/* Input + hint on same row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Input
+                      type="text"
+                      value={form.captcha}
+                      placeholder="Enter code"
+                      maxLength={6}
+                      onChange={(e) => setForm((prev) => ({ ...prev, captcha: e.target.value }))}
+                      style={{
+                        height: 44, flex: 1, borderRadius: 10,
+                        border: "2px solid #D1D9E0", background: "#FAFBFC",
+                        fontSize: 18, fontWeight: 800, color: "#000000",
+                        letterSpacing: 5, paddingLeft: 14, outline: "none",
+                      }}
+                      className="focus-visible:ring-0 focus:border-[#0D6E56] focus:shadow-[0_0_0_3px_rgba(13,110,86,0.14)]"
+                    />
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                      <Info style={{ width: 14, height: 14, color: "#64748B" }} />
+                      <span style={{ fontSize: 12, color: "#000000", fontWeight: 700 }}>enter code</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* ── Desktop layout: horizontal row ── */
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <Input
+                    type="text"
+                    value={form.captcha}
+                    placeholder="Enter code"
+                    maxLength={6}
+                    onChange={(e) => setForm((prev) => ({ ...prev, captcha: e.target.value }))}
+                    style={{
+                      height: 48, width: 130, borderRadius: 10,
+                      border: "2px solid #D1D9E0", background: "#FAFBFC",
+                      fontSize: 18, fontWeight: 800, color: "#000000",
+                      letterSpacing: 5, paddingLeft: 14, outline: "none",
+                    }}
+                    className="focus-visible:ring-0 focus:border-[#0D6E56] focus:shadow-[0_0_0_3px_rgba(13,110,86,0.14)]"
+                  />
+                  <div
+                    style={{
+                      height: 48, borderRadius: 10, paddingInline: 20,
+                      background: "linear-gradient(135deg, #0D6E56, #0f8567)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      userSelect: "none", position: "relative", overflow: "hidden",
+                      boxShadow: "0 2px 8px rgba(13,110,86,0.3)",
+                    }}
+                  >
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 100 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E\")",
+                      opacity: 0.3,
+                    }} />
+                    <span
+                      style={{
+                        fontFamily: "'Courier New', monospace",
+                        fontSize: 22, fontWeight: 900,
+                        letterSpacing: 9, color: "#fff",
+                        fontStyle: "italic", position: "relative",
+                        textShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                      }}
+                    >
+                      {CAPTCHA_CODE}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Info style={{ width: 15, height: 15, color: "#64748B" }} />
+                    <span style={{ fontSize: 13, color: "#000000", fontWeight: 700 }}>enter this code</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Card footer */}
           <div
             style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "16px 24px",
+              padding: isSm ? `12px ${cardPadX}px 14px` : `16px ${cardPadX}px`,
               borderTop: "1px solid #E5EAF0",
               background: "#F8FAFB",
+              // On mobile: stack hint above, buttons below full-width
+              display: "flex",
+              flexDirection: isSm ? "column" : "row",
+              alignItems: isSm ? "stretch" : "center",
+              justifyContent: isSm ? "flex-start" : "space-between",
+              gap: isSm ? 10 : 0,
             }}
           >
-            <p style={{ fontSize: 13, color: "#000000", fontWeight: 700 }}>
+            <p style={{ fontSize: isSm ? 12 : 13, color: "#000000", fontWeight: 700, margin: 0 }}>
               Minimum 6 characters required
             </p>
 
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 8, flexDirection: isSm ? "column" : "row" }}>
               <Button
                 onClick={handleReset}
                 variant="outline"
                 style={{
-                  height: 44, paddingInline: 20, borderRadius: 10,
-                  border: "2px solid #D1D9E0", background: "#fff",
-                  fontSize: 14, fontWeight: 800, color: "#000000",
-                  display: "flex", alignItems: "center", gap: 7,
+                  height: isSm ? 42 : 44,
+                  paddingInline: isSm ? 0 : 20,
+                  borderRadius: 10,
+                  border: "2px solid #D1D9E0",
+                  background: "#fff",
+                  fontSize: isSm ? 13 : 14,
+                  fontWeight: 800,
+                  color: "#000000",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 7,
+                  width: isSm ? "100%" : "auto",
                 }}
                 className="hover:bg-gray-50 hover:border-gray-400"
               >
@@ -394,14 +506,22 @@ const ChangePassword = () => {
                 onClick={handleSubmit}
                 disabled={submitted}
                 style={{
-                  height: 44, paddingInline: 22, borderRadius: 10,
+                  height: isSm ? 44 : 44,
+                  paddingInline: isSm ? 0 : 22,
+                  borderRadius: 10,
                   background: submitted ? "#6EE7B7" : "linear-gradient(135deg, #0D6E56, #0f8567)",
-                  fontSize: 14, fontWeight: 800, color: "#fff",
-                  display: "flex", alignItems: "center", gap: 7,
+                  fontSize: isSm ? 13 : 14,
+                  fontWeight: 800,
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 7,
                   border: "none",
                   boxShadow: submitted ? "none" : "0 2px 10px rgba(13,110,86,0.4)",
                   transition: "all .2s",
                   letterSpacing: "0.01em",
+                  width: isSm ? "100%" : "auto",
                 }}
                 className="active:scale-[0.97]"
               >
@@ -415,7 +535,7 @@ const ChangePassword = () => {
         </div>
 
         {/* Bottom note */}
-        <p style={{ marginTop: 16, textAlign: "center", fontSize: 14, color: "#000000", fontWeight: 600 }}>
+        <p style={{ marginTop: isSm ? 14 : 16, textAlign: "center", fontSize: isSm ? 13 : 14, color: "#000000", fontWeight: 600 }}>
           Forgotten your password?{" "}
           <span style={{ color: "#0D6E56", fontWeight: 800, cursor: "pointer" }}>
             Contact your system administrator.

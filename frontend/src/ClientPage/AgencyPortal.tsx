@@ -10,6 +10,9 @@ import {
   Star,
   Sparkles,
   Shield,
+  Building2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import {
@@ -77,6 +80,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
   const [password, setPassword] = useState("");
   const [focused, setFocused] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (getAgencyAdminToken()) {
@@ -109,166 +113,260 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
   };
 
   return (
-    <div className="client-page-theme min-h-screen flex flex-col" style={{ background: "#f4f1eb" }}>
+    <div className="client-page-theme ap-root">
       {!isEmbedded && <PublicSiteNavbar />}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=DM+Sans:wght@400;500;600;700&display=swap');
 
-        /* ── Outer wrapper: full height, centered both axes ── */
+        :root {
+          --forest:    #0e2b1f;
+          --forest-md: #1a3c2e;
+          --forest-lt: #2a5c47;
+          --gold:      #c9a84c;
+          --gold-lt:   #e8c97a;
+          --gold-pale: #f7eecc;
+          --cream:     #f9f6ef;
+          --cream-dk:  #f0ebe0;
+          --ink:       #0d0d0b;
+          --muted:     #2e2820;
+          --border:    #ccc5b8;
+        }
+
+        .ap-root {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          background: var(--cream);
+          font-family: 'DM Sans', sans-serif;
+          /* Subtle grain overlay */
+          background-image:
+            radial-gradient(ellipse 80% 60% at 10% 0%, rgba(201,168,76,0.08) 0%, transparent 60%),
+            radial-gradient(ellipse 60% 50% at 90% 100%, rgba(14,43,31,0.07) 0%, transparent 55%);
+        }
+
+        /* ─── Page outer ─────────────────────────────── */
         .ap-outer {
           flex: 1;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 2.5rem 1.25rem 4rem;
-          min-height: 0;
         }
 
-        /* ── Single unified container ── */
-        .ap-container {
+        /* ─── Card ───────────────────────────────────── */
+        .ap-card {
           width: 100%;
-          max-width: 1020px;
+          max-width: 1060px;
           background: #fff;
-          border: 1px solid #e4dfd5;
-          border-radius: 20px;
-          box-shadow: 0 8px 48px rgba(0,0,0,0.09), 0 2px 8px rgba(0,0,0,0.04);
+          border: 1px solid var(--border);
+          border-radius: 24px;
+          box-shadow:
+            0 0 0 1px rgba(255,255,255,0.8) inset,
+            0 24px 64px rgba(14,43,31,0.10),
+            0 4px 12px rgba(0,0,0,0.04);
           overflow: hidden;
+          animation: cardIn 0.55s cubic-bezier(.22,.68,0,1.2) both;
+        }
+        @keyframes cardIn {
+          from { opacity: 0; transform: translateY(18px) scale(0.985); }
+          to   { opacity: 1; transform: none; }
         }
 
-        /* ── Top bar inside container ── */
-        .ap-topbar {
+        /* ─── Header ─────────────────────────────────── */
+        .ap-header {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          padding: 1rem 1.5rem;
-          background: linear-gradient(135deg, #0d2b1e 0%, #1a3c2e 100%);
-          border-bottom: 1px solid rgba(255,255,255,0.07);
+          gap: 1rem;
+          padding: 1rem 1.75rem;
+          background: linear-gradient(110deg, var(--forest) 0%, #163526 55%, #0d2419 100%);
+          position: relative;
+          overflow: hidden;
         }
-        .ap-topbar-icon {
-          width: 36px; height: 36px;
-          border-radius: 10px;
-          background: rgba(201,168,76,0.18);
-          border: 1px solid rgba(201,168,76,0.35);
+        .ap-header::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(ellipse 35% 120% at 85% 50%, rgba(201,168,76,0.12) 0%, transparent 70%);
+          pointer-events: none;
+        }
+        /* Decorative diagonal lines */
+        .ap-header::after {
+          content: '';
+          position: absolute;
+          top: 0; right: 0; bottom: 0;
+          width: 200px;
+          background: repeating-linear-gradient(
+            -55deg,
+            transparent,
+            transparent 10px,
+            rgba(255,255,255,0.015) 10px,
+            rgba(255,255,255,0.015) 11px
+          );
+          pointer-events: none;
+        }
+
+        .ap-header-badge {
+          width: 40px; height: 40px;
+          border-radius: 12px;
+          background: rgba(201,168,76,0.15);
+          border: 1px solid rgba(201,168,76,0.3);
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .ap-header-text { flex: 1; }
+        .ap-header-title {
+          font-family: 'Playfair Display', serif;
+          font-size: 1.15rem;
+          font-weight: 700;
+          color: #f5f0e8;
+          letter-spacing: 0.01em;
+          line-height: 1.2;
+          margin: 0;
+        }
+        .ap-header-sub {
+          font-size: 0.7rem;
+          font-weight: 400;
+          color: rgba(245,240,232,0.72);
+          margin: 0.15rem 0 0;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+
+        .ap-header-pill {
+          display: flex;
+          align-items: center;
+          gap: 0.35rem;
+          background: rgba(201,168,76,0.14);
+          border: 1px solid rgba(201,168,76,0.28);
+          border-radius: 20px;
+          padding: 0.3rem 0.75rem;
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: var(--gold-lt);
+          letter-spacing: 0.04em;
+          flex-shrink: 0;
+          position: relative; z-index: 1;
+        }
+
+        /* ─── Info Banner ─────────────────────────────── */
+        .ap-banner {
+          display: flex;
+          align-items: center;
+          gap: 0.875rem;
+          padding: 0.875rem 1.75rem;
+          background: linear-gradient(to right, #fffdf0, #fffbea);
+          border-bottom: 1px solid #ede4b8;
+          border-left: 4px solid var(--gold);
+        }
+        .ap-banner-dot {
+          width: 30px; height: 30px;
+          border-radius: 50%;
+          background: rgba(180,83,9,0.09);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
         }
-        .ap-topbar-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 1.15rem;
-          font-weight: 600;
-          color: #f9f6f1;
-          letter-spacing: 0.01em;
-        }
-        .ap-topbar-sub {
-          font-size: 0.72rem;
-          color: rgba(249,246,241,0.45);
-          margin-left: auto;
-          white-space: nowrap;
-        }
-
-        /* ── Info banner row ── */
-        .ap-infobanner {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.85rem 1.5rem;
-          background: linear-gradient(to right, #fffbeb, #fef9e0);
-          border-bottom: 1px solid #f0d878;
-          border-left: 3.5px solid #c9a84c;
-        }
-        .ap-infobanner p {
-          font-size: 0.8125rem;
-          color: #1a1a1a;
+        .ap-banner p {
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: #1e1800;
           line-height: 1.5;
           margin: 0;
         }
+        .ap-banner strong { color: var(--forest-md); }
 
-        /* ── Three-column body ── */
+        /* ─── Body grid ───────────────────────────────── */
         .ap-body {
           display: grid;
-          grid-template-columns: 1fr 1px 1fr 1px 1fr;
-          min-height: 520px;
+          grid-template-columns: 1fr 1px 1.08fr 1px 1fr;
         }
         @media (max-width: 860px) {
-          .ap-body {
-            grid-template-columns: 1fr;
-          }
-          .ap-divider { display: none; }
+          .ap-body { grid-template-columns: 1fr; }
+          .ap-sep  { display: none; }
         }
 
-        .ap-divider {
-          background: #ece8e0;
+        .ap-sep {
+          background: linear-gradient(to bottom, transparent, var(--border) 15%, var(--border) 85%, transparent);
           align-self: stretch;
         }
 
+        /* ─── Columns ─────────────────────────────────── */
         .ap-col {
-          padding: 1.75rem 1.5rem;
+          padding: 1.75rem 1.625rem;
           display: flex;
           flex-direction: column;
           gap: 1rem;
         }
-
-        /* ── Sign-in column: center everything vertically ── */
-        .ap-col-signin {
-          padding: 1.75rem 1.5rem;
+        .ap-col-center {
+          padding: 1.75rem 1.625rem;
           display: flex;
           flex-direction: column;
           gap: 1rem;
           justify-content: center;
+          background: linear-gradient(160deg, #fafaf7 0%, #fff 100%);
         }
 
-        /* ── Column headers ── */
-        .ap-col-label {
-          font-size: 0.65rem;
-          font-weight: 700;
-          letter-spacing: 0.11em;
-          text-transform: uppercase;
-          color: #8a7e6a;
+        /* Section label */
+        .ap-section-label {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          margin-bottom: 0.1rem;
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: #1e1810;
         }
-        .ap-col-label::before {
-          content: '';
-          width: 1.5rem; height: 1.5px;
-          background: currentColor;
-          flex-shrink: 0;
-          opacity: 0.5;
+        .ap-section-label span.line {
+          flex: none;
+          width: 20px; height: 1.5px;
+          background: #1e1810;
+          opacity: 0.25;
         }
 
-        /* ── Sign-in image: full width, natural aspect ratio, no cropping ── */
-        .ap-signin-img-wrap {
+        /* ─── Image strip ─────────────────────────────── */
+        .ap-img-wrap {
           width: 100%;
-          border-radius: 10px;
+          border-radius: 12px;
           overflow: hidden;
-          border: 1px solid #ece8e0;
-          background: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          border: 1px solid var(--border);
+          background: var(--cream);
+          position: relative;
         }
-        .ap-signin-img {
+        .ap-img-wrap::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          box-shadow: inset 0 -24px 32px rgba(255,255,255,0.45);
+          border-radius: 12px;
+          pointer-events: none;
+        }
+        .ap-img-wrap img {
           width: 100%;
           height: auto;
           display: block;
           object-fit: contain;
         }
 
-        .ap-field-label {
+        /* ─── Form fields ─────────────────────────────── */
+        .ap-form { display: flex; flex-direction: column; gap: 0.875rem; }
+
+        .ap-label {
           display: block;
-          font-size: 0.67rem;
+          font-size: 0.75rem;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.09em;
-          color: #1a3c2e;
-          margin-bottom: 0.4rem;
+          letter-spacing: 0.08em;
+          color: #0e2b1f;
+          margin-bottom: 0.45rem;
         }
-        .ap-input-wrap { position: relative; }
-        .ap-input-icon {
+        .ap-field { position: relative; }
+        .ap-field-icon {
           position: absolute;
-          left: 0.65rem;
+          left: 0.7rem;
           top: 50%;
           transform: translateY(-50%);
           pointer-events: none;
@@ -276,246 +374,335 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         }
         .ap-input {
           width: 100%;
-          border: 1.5px solid #e0dcd2;
-          border-radius: 9px;
-          background: #fafaf8;
-          padding: 0.6rem 0.75rem 0.6rem 2.25rem;
-          font-size: 0.875rem;
-          color: #1a1a1a;
+          border: 2px solid #9e958a;
+          border-radius: 10px;
+          background: #fff;
+          padding: 0.7rem 0.875rem 0.7rem 2.3rem;
+          font-size: 0.9375rem;
+          font-weight: 500;
+          font-family: 'DM Sans', sans-serif;
+          color: #0d0d0b;
           outline: none;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.07);
           transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
         }
-        .ap-input::placeholder { color: #c0bdb8; }
+        .ap-input::placeholder { color: #5a5248; font-weight: 400; }
         .ap-input:focus {
-          border-color: #1a3c2e;
-          background: #f4faf7;
-          box-shadow: 0 0 0 3px rgba(26,60,46,0.08);
+          border-color: var(--forest-md);
+          background: #f3faf7;
+          box-shadow: 0 0 0 3.5px rgba(26,60,46,0.12), 0 1px 4px rgba(26,60,46,0.08);
         }
         .ap-input:disabled { opacity: 0.6; }
+        .ap-input-pr { padding-right: 2.5rem; }
 
-        .ap-submit {
-          width: 100%;
-          background: linear-gradient(135deg, #1a3c2e, #0d2b1e);
-          color: #fff;
+        .ap-eye-btn {
+          position: absolute;
+          right: 0.65rem;
+          top: 50%;
+          transform: translateY(-50%);
+          background: none;
           border: none;
-          border-radius: 9px;
-          padding: 0.75rem 1.25rem;
+          padding: 0.2rem;
+          cursor: pointer;
+          color: #c4bfb8;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 4px;
+          transition: color 0.15s;
+        }
+        .ap-eye-btn:hover { color: #1a3c2e; }
+
+        /* ─── Submit button ───────────────────────────── */
+        .ap-btn {
+          width: 100%;
+          border: none;
+          border-radius: 10px;
+          padding: 0.8rem 1.25rem;
           font-size: 0.875rem;
+          font-family: 'DM Sans', sans-serif;
           font-weight: 700;
-          letter-spacing: 0.03em;
+          letter-spacing: 0.02em;
+          cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 0.5rem;
-          cursor: pointer;
-          transition: box-shadow 0.2s, transform 0.15s;
+          position: relative;
+          overflow: hidden;
+          transition: box-shadow 0.22s, transform 0.15s;
+          background: linear-gradient(135deg, var(--forest-md) 0%, var(--forest) 100%);
+          color: #fff;
+          box-shadow: 0 4px 14px rgba(14,43,31,0.28), inset 0 1px 0 rgba(255,255,255,0.08);
         }
-        .ap-submit:hover:not(:disabled) {
-          box-shadow: 0 6px 20px rgba(26,60,46,0.32);
+        .ap-btn::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.07) 50%, transparent 100%);
+          transform: translateX(-100%);
+          transition: transform 0.55s ease;
+        }
+        .ap-btn:hover:not(:disabled)::after { transform: translateX(100%); }
+        .ap-btn:hover:not(:disabled) {
+          box-shadow: 0 8px 28px rgba(14,43,31,0.38), inset 0 1px 0 rgba(255,255,255,0.1);
           transform: translateY(-1px);
         }
-        .ap-submit:active { transform: none; }
-        .ap-submit:disabled { opacity: 0.65; cursor: not-allowed; }
+        .ap-btn:active { transform: none; box-shadow: 0 2px 8px rgba(14,43,31,0.22); }
+        .ap-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .ap-ssl {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 0.4rem;
-          color: #aaa;
-          font-size: 0.69rem;
-          margin-top: 0.1rem;
+          color: #3d3020;
+          font-size: 0.78rem;
+          letter-spacing: 0.02em;
         }
 
-        /* ── Testimonials col ── */
-        .ap-testimonial {
-          background: #faf8f3;
-          border: 1px solid #e8e2d4;
-          border-radius: 12px;
-          padding: 1rem 1rem 1rem 1.25rem;
+        /* ─── Testimonials ────────────────────────────── */
+        .ap-tcard {
+          background: linear-gradient(135deg, #faf8f3, #f5f2eb);
+          border: 1px solid var(--border);
+          border-radius: 14px;
+          padding: 1.125rem 1.125rem 1.125rem 1.375rem;
           position: relative;
           overflow: hidden;
           transition: transform 0.2s, box-shadow 0.2s;
+          animation: fadeUp 0.5s ease both;
         }
-        .ap-testimonial:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.07);
+        .ap-tcard:nth-child(2) { animation-delay: 0.08s; }
+        .ap-tcard:nth-child(3) { animation-delay: 0.16s; }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: none; }
         }
-        .ap-testimonial::before {
+        .ap-tcard:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 12px 32px rgba(0,0,0,0.07);
+        }
+        .ap-tcard::before {
           content: '';
           position: absolute;
-          left: 0; top: 0; bottom: 0;
-          width: 3px;
-          background: linear-gradient(to bottom, #c9a84c, #e8c97a);
-          border-radius: 4px 0 0 4px;
+          left: 0; top: 12px; bottom: 12px;
+          width: 3.5px;
+          background: linear-gradient(to bottom, var(--gold), var(--gold-lt));
+          border-radius: 0 4px 4px 0;
         }
-        .ap-testimonial-quote {
-          font-size: 0.8125rem;
-          line-height: 1.65;
-          color: #2a2a2a;
-          margin-bottom: 0.65rem;
-          font-style: italic;
-        }
-        .ap-testimonial-stars {
+        .ap-tcard-stars {
           display: flex;
           gap: 2px;
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.6rem;
         }
-        .ap-testimonial-author {
-          font-size: 0.73rem;
+        .ap-tcard-quote {
+          font-size: 0.875rem;
+          line-height: 1.7;
+          color: #1a1510;
+          font-style: italic;
+          margin-bottom: 0.7rem;
+        }
+        /* Large decorative quote mark */
+        .ap-tcard-quote::before {
+          content: '\u201C';
+          font-family: 'Playfair Display', serif;
+          font-size: 2rem;
+          line-height: 0;
+          vertical-align: -0.55rem;
+          color: var(--gold);
+          margin-right: 0.15rem;
+          opacity: 0.6;
+        }
+        .ap-tcard-agency {
+          font-size: 0.9rem;
           font-weight: 700;
-          color: #1a3c2e;
+          color: var(--forest-md);
         }
-        .ap-testimonial-sub {
-          font-size: 0.69rem;
-          color: #999;
+        .ap-tcard-by {
+          font-size: 0.8rem;
+          color: #4a4038;
           margin-top: 0.1rem;
         }
 
-        /* ── Benefits col ── */
-        .ap-benefits-header {
-          background: linear-gradient(135deg, #b8922e, #c9a84c, #e8c97a);
-          border-radius: 10px;
-          padding: 0.85rem 1rem;
+        /* ─── Benefits ────────────────────────────────── */
+        .ap-bheader {
+          border-radius: 12px;
+          padding: 0.9rem 1rem;
+          background: linear-gradient(135deg, #a87c28, var(--gold), var(--gold-lt));
           display: flex;
           align-items: center;
-          gap: 0.65rem;
+          gap: 0.7rem;
+          box-shadow: 0 4px 14px rgba(180,130,40,0.25), inset 0 1px 0 rgba(255,255,255,0.3);
         }
-        .ap-benefits-header-ico {
-          width: 32px; height: 32px;
-          border-radius: 8px;
-          background: rgba(255,255,255,0.22);
-          border: 1px solid rgba(255,255,255,0.3);
+        .ap-bheader-ico {
+          width: 34px; height: 34px;
+          border-radius: 9px;
+          background: rgba(255,255,255,0.25);
+          border: 1px solid rgba(255,255,255,0.35);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
         }
-        .ap-benefits-header-title {
-          font-size: 0.875rem;
+        .ap-bheader-title {
+          font-size: 1rem;
           font-weight: 700;
-          color: rgba(60,35,0,0.88);
+          color: rgba(20,10,0,0.97);
           margin: 0;
+          font-family: 'Playfair Display', serif;
         }
-        .ap-benefits-header-sub {
-          font-size: 0.69rem;
-          color: rgba(60,35,0,0.52);
+        .ap-bheader-sub {
+          font-size: 0.8rem;
+          color: rgba(40,20,0,0.8);
           margin: 0.1rem 0 0;
         }
 
-        .ap-benefit-item {
+        .ap-benefit {
           display: flex;
           align-items: center;
-          gap: 0.65rem;
-          padding: 0.55rem 0.75rem;
-          border-radius: 8px;
-          background: #f8f6f1;
-          border: 1px solid #ece8de;
-          font-size: 0.8rem;
-          color: #1a1a1a;
-          transition: background 0.15s, border-color 0.15s, transform 0.12s;
+          gap: 0.7rem;
+          padding: 0.575rem 0.75rem;
+          border-radius: 9px;
+          background: var(--cream);
+          border: 1px solid var(--cream-dk);
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: #0f0f0d;
+          line-height: 1.4;
+          transition: background 0.14s, border-color 0.14s, transform 0.12s, box-shadow 0.14s;
+          cursor: default;
         }
-        .ap-benefit-item:hover {
-          background: #f1ede4;
-          border-color: #d9d3c4;
-          transform: translateX(2px);
+        .ap-benefit:hover {
+          background: #eee9de;
+          border-color: #d7cfc0;
+          transform: translateX(3px);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         }
-        .ap-benefit-icon { font-size: 0.9rem; flex-shrink: 0; width: 1.2rem; text-align: center; }
+        .ap-benefit-icon { font-size: 0.9rem; flex-shrink: 0; width: 1.15rem; text-align: center; }
         .ap-benefit-check {
           width: 18px; height: 18px;
           border-radius: 50%;
-          background: rgba(26,60,46,0.09);
+          background: rgba(26,60,46,0.1);
+          border: 1px solid rgba(26,60,46,0.12);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
           margin-left: auto;
         }
 
-        /* ── Footer row inside container ── */
-        .ap-footer-row {
-          padding: 0.875rem 1.5rem;
-          background: #fafaf8;
-          border-top: 1px solid #ece8e0;
+        /* ─── Footer inside card ──────────────────────── */
+        .ap-foot {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 0.4rem;
-          font-size: 0.8125rem;
-          color: #666;
+          gap: 0.5rem;
+          padding: 0.9rem 1.75rem;
+          background: var(--cream);
+          border-top: 1px solid var(--border);
+          font-size: 0.9rem;
+          color: #2e2820;
           flex-wrap: wrap;
         }
-        .ap-footer-row a {
-          color: #1a3c2e;
+        .ap-foot a {
+          color: var(--forest-md);
           font-weight: 700;
-          text-decoration: underline;
-          text-underline-offset: 2px;
+          text-decoration: none;
+          border-bottom: 1.5px solid var(--gold);
+          padding-bottom: 1px;
+          transition: color 0.15s;
+        }
+        .ap-foot a:hover { color: var(--forest); }
+
+        .ap-divider-text {
+          font-size: 0.75rem;
+          color: #2e2820;
+          text-align: center;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .ap-divider-text::before,
+        .ap-divider-text::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: var(--border);
         }
       `}</style>
 
-      <main className="ap-outer flex-1">
-        <div className="ap-container">
+      <main className="ap-outer">
+        <div className="ap-card">
 
-          {/* ── Top bar ── */}
-          <div className="ap-topbar">
-            <div className="ap-topbar-icon">
-              <KeyRound size={16} color="#e8c97a" strokeWidth={1.75} />
+          {/* ── Header ── */}
+          <div className="ap-header">
+            <div className="ap-header-badge">
+              <KeyRound size={17} color="#e8c97a" strokeWidth={1.75} />
             </div>
-            <span className="ap-topbar-title">Agency Portal</span>
-            <span className="ap-topbar-sub">FindMaid Agency Dashboard</span>
+            <div className="ap-header-text">
+              <p className="ap-header-title">Agency Portal</p>
+              <p className="ap-header-sub">FindMaid Agency Dashboard</p>
+            </div>
+            <div className="ap-header-pill">
+              <Building2 size={10} strokeWidth={2} />
+              500+ Agencies
+            </div>
           </div>
 
           {/* ── Info banner ── */}
-          <div className="ap-infobanner">
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(180,83,9,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div className="ap-banner">
+            <div className="ap-banner-dot">
               <Info size={13} color="#b45309" strokeWidth={2} />
             </div>
             <p>
-              Sign in with your <strong style={{ color: "#1a3c2e" }}>FindMaid agency account</strong> to access your dashboard, listings, and documents.
+              Sign in with your <strong>FindMaid agency account</strong> to access your dashboard, listings, and documents.
             </p>
           </div>
 
           {/* ── Three-column body ── */}
           <div className="ap-body">
 
-            {/* ── Col 1: Testimonials ── */}
+            {/* Col 1 — Testimonials */}
             <div className="ap-col">
-              <div className="ap-col-label">
-                <Star size={11} />
-                What agencies say
+              <div className="ap-section-label">
+                <span className="line" />
+                <Star size={10} strokeWidth={2} />
+                Agency Reviews
               </div>
 
               {testimonials.map((t) => (
-                <div key={t.agency} className="ap-testimonial">
-                  <div className="ap-testimonial-stars">
+                <div key={t.agency} className="ap-tcard">
+                  <div className="ap-tcard-stars">
                     {Array.from({ length: t.rating }).map((_, i) => (
                       <Star key={i} size={10} color="#c9a84c" fill="#c9a84c" />
                     ))}
                   </div>
-                  <p className="ap-testimonial-quote">"{t.quote}"</p>
-                  <div className="ap-testimonial-author">{t.agency}</div>
-                  <div className="ap-testimonial-sub">— {t.author}</div>
+                  <p className="ap-tcard-quote">{t.quote}"</p>
+                  <div className="ap-tcard-agency">{t.agency}</div>
+                  <div className="ap-tcard-by">— {t.author}</div>
                 </div>
               ))}
             </div>
 
-            <div className="ap-divider" />
+            <div className="ap-sep" />
 
-            {/* ── Col 2: Sign In (vertically centered) ── */}
-            <div className="ap-col-signin">
-              <div className="ap-col-label">
-                <KeyRound size={11} />
+            {/* Col 2 — Sign In */}
+            <div className="ap-col-center">
+              <div className="ap-section-label">
+                <span className="line" />
+                <KeyRound size={10} strokeWidth={2} />
                 Sign In
               </div>
 
-              {/* Banner image — full width, no cropping */}
-              <div className="ap-signin-img-wrap">
-                <img src={FindMaidImg} alt="Agency banner" className="ap-signin-img" />
+              <div className="ap-img-wrap">
+                <img src={FindMaidImg} alt="FindMaid agency banner" />
               </div>
 
-              <form onSubmit={(e) => void handleSubmit(e)} style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-                {/* Username */}
+              <form
+                onSubmit={(e) => void handleSubmit(e)}
+                className="ap-form"
+              >
                 <div>
-                  <label htmlFor="username" className="ap-field-label">Username</label>
-                  <div className="ap-input-wrap">
-                    <span className="ap-input-icon">
-                      <User size={13} color={focused === "username" ? "#1a3c2e" : "#c0bdb8"} strokeWidth={1.75} />
+                  <label htmlFor="username" className="ap-label">Username</label>
+                  <div className="ap-field">
+                    <span className="ap-field-icon">
+                      <User size={13} color={focused === "username" ? "#1a3c2e" : "#c4bfb8"} strokeWidth={1.75} />
                     </span>
                     <input
                       id="username"
@@ -532,16 +719,15 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                   </div>
                 </div>
 
-                {/* Password */}
                 <div>
-                  <label htmlFor="password" className="ap-field-label">Password</label>
-                  <div className="ap-input-wrap">
-                    <span className="ap-input-icon">
-                      <Lock size={13} color={focused === "password" ? "#1a3c2e" : "#c0bdb8"} strokeWidth={1.75} />
+                  <label htmlFor="password" className="ap-label">Password</label>
+                  <div className="ap-field">
+                    <span className="ap-field-icon">
+                      <Lock size={13} color={focused === "password" ? "#1a3c2e" : "#c4bfb8"} strokeWidth={1.75} />
                     </span>
                     <input
                       id="password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       onFocus={() => setFocused("password")}
@@ -549,54 +735,66 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                       placeholder="Enter your password"
                       required
                       disabled={isSubmitting}
-                      className="ap-input"
+                      className="ap-input ap-input-pr"
                     />
+                    <button
+                      type="button"
+                      className="ap-eye-btn"
+                      onClick={() => setShowPassword((v) => !v)}
+                      tabIndex={-1}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword
+                        ? <EyeOff size={14} strokeWidth={1.75} />
+                        : <Eye size={14} strokeWidth={1.75} />}
+                    </button>
                   </div>
                 </div>
 
-                <button type="submit" disabled={isSubmitting} className="ap-submit">
+                <button type="submit" disabled={isSubmitting} className="ap-btn">
                   {isSubmitting ? "Signing in…" : "Sign in to Dashboard"}
                   {!isSubmitting && <ArrowRight size={14} strokeWidth={2.5} />}
                 </button>
 
                 <div className="ap-ssl">
-                  <Shield size={11} color="#aaa" strokeWidth={2} />
-                  <span>256-bit SSL encrypted</span>
+                  <Shield size={11} color="#b0a99f" strokeWidth={2} />
+                  <span>256-bit SSL encrypted connection</span>
                 </div>
               </form>
             </div>
 
-            <div className="ap-divider" />
+            <div className="ap-sep" />
 
-            {/* ── Col 3: Benefits ── */}
+            {/* Col 3 — Benefits */}
             <div className="ap-col">
-              <div className="ap-col-label">
-                <Sparkles size={11} />
-                Platform features
+              <div className="ap-section-label">
+                <span className="line" />
+                <Sparkles size={10} strokeWidth={2} />
+                Platform Features
               </div>
 
-              <div className="ap-benefits-header">
-                <div className="ap-benefits-header-ico">
-                  <Sparkles size={15} color="rgba(60,35,0,0.7)" strokeWidth={1.75} />
+              <div className="ap-bheader">
+                <div className="ap-bheader-ico">
+                  <Sparkles size={15} color="rgba(45,25,0,0.7)" strokeWidth={1.75} />
                 </div>
                 <div>
-                  <p className="ap-benefits-header-title">New to FindMaid?</p>
-                  <p className="ap-benefits-header-sub">Join 500+ agencies on the platform</p>
+                  <p className="ap-bheader-title">New to FindMaid?</p>
+                  <p className="ap-bheader-sub">Join 500+ agencies on the platform</p>
                 </div>
               </div>
 
-              <p style={{ fontSize: "0.8125rem", color: "#444", lineHeight: 1.6, margin: 0 }}>
-                <Link to="/login" style={{ color: "#1a3c2e", fontWeight: 700, textDecoration: "underline", textUnderlineOffset: 2 }}>
+              <p style={{ fontSize: "0.8rem", color: "#2e2820", lineHeight: 1.65, margin: 0 }}>
+                <Link to="/login" style={{ color: "var(--forest-md)", fontWeight: 700, textDecoration: "none", borderBottom: "1.5px solid var(--gold)", paddingBottom: 1 }}>
                   Sign up for a FindMaid plan
                 </Link>{" "}
-                and unlock all features:
+                and unlock powerful agency tools:
               </p>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
                 {benefits.map((b) => (
-                  <div key={b.text} className="ap-benefit-item">
+                  <div key={b.text} className="ap-benefit">
                     <span className="ap-benefit-icon">{b.icon}</span>
-                    <span style={{ flex: 1, lineHeight: 1.4 }}>{b.text}</span>
+                    <span style={{ flex: 1 }}>{b.text}</span>
                     <div className="ap-benefit-check">
                       <Check size={10} color="#1a3c2e" strokeWidth={2.5} />
                     </div>
@@ -604,9 +802,9 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                 ))}
               </div>
 
-              <p style={{ fontSize: "0.69rem", color: "#999", lineHeight: 1.6, margin: 0 }}>
+              <p style={{ fontSize: "0.8rem", color: "#5c5248", lineHeight: 1.65, margin: 0 }}>
                 By creating an account you agree to our{" "}
-                <Link to="/faq" style={{ color: "#1a3c2e", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 2 }}>
+                <Link to="/faq" style={{ color: "var(--forest-md)", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(26,60,46,0.3)" }}>
                   Terms of Service
                 </Link>.
               </p>
@@ -614,8 +812,8 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
 
           </div>
 
-          {/* ── Footer row inside container ── */}
-          <div className="ap-footer-row">
+          {/* ── Card footer ── */}
+          <div className="ap-foot">
             <span>Looking for the employer login?</span>
             <Link to="/employer-login">Go to Employer Login →</Link>
           </div>

@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import AiInquiryPanel from "@/components/ai/AiInquiryPanel";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
-import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
+import { getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
+
+import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 
 type EnquiryProps = {
   embedded?: boolean;
@@ -11,11 +13,12 @@ type EnquiryProps = {
 
 const Enquiry = ({ embedded = false }: EnquiryProps) => {
   const [clientUser] = useState<ClientUser | null>(getStoredClient());
+  const isLoggedIn = !!getClientToken();
 
   return (
     <div className="client-page-theme min-h-screen flex flex-col">
 
-      {!embedded && <PublicSiteNavbar />}
+      {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
       <main className="flex-1 py-40 md:py-40">
         <div className="container max-w-5xl">

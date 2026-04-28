@@ -241,9 +241,11 @@ interface MenuCardProps {
   icon: React.ReactNode; label: string; desc: string; path: string;
   accentColor: string; gradientFrom: string; gradientTo: string;
   badge?: string; badgeUrgent?: boolean; delay?: number; compact?: boolean;
+  // FIX: allow text wrapping on mobile instead of truncating
+  allowWrap?: boolean;
 }
 
-const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradientTo, badge, badgeUrgent, delay = 0, compact = false }: MenuCardProps) => {
+const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradientTo, badge, badgeUrgent, delay = 0, compact = false, allowWrap = false }: MenuCardProps) => {
   const [hovered, setHovered] = useState(false);
   const [visible, setVisible] = useState(false);
 
@@ -251,6 +253,11 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
     const t = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(t);
   }, [delay]);
+
+  // FIX: when allowWrap, don't clip text — let it wrap naturally
+  const textOverflowStyle: React.CSSProperties = allowWrap
+    ? { whiteSpace: "normal", overflow: "visible", textOverflow: "unset" }
+    : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 
   return (
     <Link
@@ -260,13 +267,15 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
+        // FIX: on mobile (allowWrap), height is auto so the card grows to fit its content
+        height: allowWrap ? "auto" : "100%",
         background: hovered
           ? `linear-gradient(145deg, ${gradientFrom}, ${gradientTo})`
           : "#fff",
         border: `1.5px solid ${hovered ? "transparent" : "#E2E8F0"}`,
         borderRadius: 12,
-        padding: compact ? "9px 10px 8px" : "11px 11px 9px",
+        // FIX: slightly more vertical padding on mobile for breathing room
+        padding: allowWrap ? "10px 10px 9px" : (compact ? "9px 10px 8px" : "11px 11px 9px"),
         textDecoration: "none", color: "inherit",
         transition: "all 0.25s cubic-bezier(0.34,1.56,0.64,1)",
         transform: visible
@@ -297,9 +306,12 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
         }} />
       </div>
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: compact ? 6 : 8, position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: compact ? 5 : 8, position: "relative" }}>
         <div style={{
-          width: compact ? 32 : 36, height: compact ? 32 : 36, borderRadius: 10,
+          // FIX: slightly smaller icon on mobile to free up space
+          width: allowWrap ? 30 : (compact ? 32 : 36),
+          height: allowWrap ? 30 : (compact ? 32 : 36),
+          borderRadius: 10,
           background: hovered ? "rgba(255,255,255,0.22)" : `${accentColor}18`,
           display: "flex", alignItems: "center", justifyContent: "center",
           color: hovered ? "#fff" : accentColor,
@@ -310,7 +322,7 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
           {icon}
         </div>
         <div style={{
-          width: 22, height: 22, borderRadius: 6,
+          width: 20, height: 20, borderRadius: 6,
           background: hovered ? "rgba(255,255,255,0.2)" : "#EEF2F7",
           display: "flex", alignItems: "center", justifyContent: "center",
           transition: "all 0.25s ease",
@@ -318,26 +330,32 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
           boxShadow: hovered ? "0 2px 8px rgba(0,0,0,0.12)" : "none",
           flexShrink: 0,
         }}>
-          <ArrowUpRight size={12} color={hovered ? "#fff" : "#475569"} />
+          <ArrowUpRight size={11} color={hovered ? "#fff" : "#475569"} />
         </div>
       </div>
 
+      {/* FIX: label uses wrapping styles on mobile */}
       <p style={{
-        fontSize: compact ? 12 : 13, fontWeight: 800,
+        fontSize: allowWrap ? 12 : (compact ? 12 : 13),
+        fontWeight: 800,
         color: hovered ? "#fff" : "#0F172A",
         margin: "0 0 2px",
         transition: "color 0.2s",
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         letterSpacing: "-0.01em",
         position: "relative",
+        lineHeight: 1.25,
+        ...textOverflowStyle,
       }}>{label}</p>
 
+      {/* FIX: description uses wrapping styles on mobile */}
       <p style={{
-        fontSize: compact ? 11 : 12, fontWeight: 600,
+        fontSize: allowWrap ? 11 : (compact ? 11 : 12),
+        fontWeight: 600,
         color: hovered ? "rgb(255,255,255)" : "#000000",
         margin: 0,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         position: "relative",
+        lineHeight: 1.3,
+        ...textOverflowStyle,
       }}>{desc}</p>
 
       <div style={{ marginTop: 5, position: "relative", minHeight: badge ? undefined : 0 }}>
@@ -457,14 +475,13 @@ const HomePage = () => {
     { icon: <MessageSquare size={14} />, label: "Messages",      desc: "Respond to clients",       path: adminPath("/chat-support"),         accentColor: "#6D28D9", gradientFrom: "#4C1D95", gradientTo: "#7C3AED", badge: s?.unreadAgencyChats ? `${s.unreadAgencyChats} unread` : undefined, badgeUrgent: !!(s?.unreadAgencyChats && s.unreadAgencyChats > 0) },
     { icon: <Lock size={14} />,          label: "Security",      desc: "Change password",          path: adminPath("/change-password"),      accentColor: "#334155", gradientFrom: "#0F172A", gradientTo: "#334155", badge: undefined,                                                          badgeUrgent: false },
     { icon: <ScrollText size={14} />,    label: "Contracts",     desc: "Employment contracts",     path: adminPath("/employment-contracts"), accentColor: "#0F766E", gradientFrom: "#134E4A", gradientTo: "#0D9488", badge: undefined,                                                          badgeUrgent: false },
-    { icon: <PhoneIncoming size={14} />, label: "Enquiries",     desc: "See who's reaching out",  path: adminPath("/enquiry"),              accentColor: "#9D174D", gradientFrom: "#831843", gradientTo: "#BE185D", badge: s ? `${s.enquiries} total` : undefined,                            badgeUrgent: false },
+    { icon: <PhoneIncoming size={14} />, label: "Enquiries",     desc: "See who's reaching out",   path: adminPath("/enquiry"),              accentColor: "#9D174D", gradientFrom: "#831843", gradientTo: "#BE185D", badge: s ? `${s.enquiries} total` : undefined,                            badgeUrgent: false },
     { icon: <ClipboardList size={14} />, label: "Requests",      desc: "Track bookings",           path: adminPath("/requests"),             accentColor: "#0E7490", gradientFrom: "#164E63", gradientTo: "#0891B2", badge: s?.pendingRequests ? `${s.pendingRequests} pending` : undefined,   badgeUrgent: !!(s?.pendingRequests && s.pendingRequests > 0) },
   ];
 
   const gap = compact ? 6 : 8;
   const pad = isSm ? "10px 10px 16px" : compact ? "10px 14px" : "12px 16px";
 
-  // On mobile: natural scroll. On desktop: fixed viewport with overflow hidden.
   const outerStyles: React.CSSProperties = isSm
     ? {
         padding: pad,
@@ -542,8 +559,6 @@ const HomePage = () => {
         display: "grid",
         gridTemplateColumns: isSm ? "1fr" : "1fr 1fr",
         gap,
-        // On desktop: flex:1 + minHeight:0 keeps it inside the fixed viewport.
-        // On mobile: auto height, no flex stretching needed.
         ...(isSm ? {} : { flex: 1, minHeight: 0 }),
       }}>
 
@@ -552,7 +567,6 @@ const HomePage = () => {
           background: "#fff", border: "1.5px solid #E2E8F0", borderRadius: 14,
           boxShadow: "0 4px 24px rgba(0,0,0,0.05)", padding: compact ? "10px 12px" : "12px 14px",
           display: "flex", flexDirection: "column",
-          // On mobile, let height be natural (auto). On desktop, fill remaining space.
           ...(isSm ? {} : { minHeight: 0, overflow: "hidden" }),
           boxSizing: "border-box",
         }}>
@@ -594,8 +608,6 @@ const HomePage = () => {
           boxShadow: "0 4px 24px rgba(0,0,0,0.05)",
           padding: compact ? "10px 12px 12px" : "12px 14px 14px",
           display: "flex", flexDirection: "column",
-          // On mobile: let height be auto so all 8 cards are fully visible with no scroll.
-          // On desktop: fill remaining space.
           ...(isSm ? {} : { minHeight: 0, overflow: "hidden" }),
           boxSizing: "border-box",
           minWidth: 0,
@@ -605,29 +617,29 @@ const HomePage = () => {
             label="Quick Actions"
             iconGradient="linear-gradient(135deg, #4C1D95, #7C3AED)"
           />
-          {/*
-            Mobile: fixed row height via auto rows so all 8 cards show without any scroll.
-            The grid intrinsically sizes to its content — no overflow, no flex stretching.
-            Desktop: gridAutoRows:"1fr" keeps equal row heights inside the flex container.
-          */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-            // On mobile, use a fixed compact row height so all 4 rows fit naturally.
-            // On desktop keep 1fr to fill available space evenly.
-            gridAutoRows: isSm ? "80px" : "1fr",
+            // FIX: on mobile use "auto" rows so each card sizes to its own content
+            // instead of a fixed 80px that clips text. On desktop keep 1fr.
+            gridAutoRows: isSm ? "auto" : "1fr",
             gap: compact ? 6 : 7,
-            // Desktop only: flex:1 + minHeight:0 lets the grid stretch to fill the panel.
             ...(isSm ? {} : { flex: 1, minHeight: 0 }),
             minWidth: 0,
             boxSizing: "border-box",
-            // No overflow on either breakpoint — cards must all be visible.
             overflow: "visible",
           }}>
             {loading
               ? Array.from({ length: 8 }).map((_, i) => <SkeletonMenuCard key={i} />)
               : menuCards.map((card, i) => (
-                <MenuCard key={i} {...card} delay={i * 40} compact={compact} />
+                <MenuCard
+                  key={i}
+                  {...card}
+                  delay={i * 40}
+                  compact={compact}
+                  // FIX: pass allowWrap on mobile so text wraps instead of truncating
+                  allowWrap={isSm}
+                />
               ))
             }
           </div>
