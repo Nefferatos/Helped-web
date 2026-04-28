@@ -109,7 +109,7 @@ const EmploymentContracts = () => {
       maidNationality: "",
     })),
   );
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");

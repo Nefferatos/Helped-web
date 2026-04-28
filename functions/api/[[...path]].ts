@@ -182,6 +182,44 @@ interface ChatMessageRecord {
   readByClient: boolean;
 }
 
+interface EmployerContractRecord {
+  id: number;
+  refCode: string;
+  maid: Record<string, unknown>;
+  agency: Record<string, unknown>;
+  employer: Record<string, unknown>;
+  spouse: Record<string, unknown>;
+  familyMembers: Array<Record<string, unknown>>;
+  notificationDate?: Record<string, unknown>;
+  documents: Array<{
+    category: string;
+    fileUrl: string;
+    fileName: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface EmploymentContractRecord {
+  id: number;
+  refCode: string;
+  employerRefCode: string;
+  employerId: number | null;
+  maidId: number | null;
+  maidReferenceCode: string;
+  maidName: string;
+  employerName: string;
+  caseReferenceNumber: string;
+  contractDate: string;
+  serviceFee: string;
+  placementFee: string;
+  agencyWitness: string;
+  employerSnapshot: Record<string, unknown>;
+  maidSnapshot: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface AppData {
   companyProfile: CompanyProfileRecord;
   momPersonnel: MOMPersonnelRecord[];
@@ -194,6 +232,8 @@ interface AppData {
   agencyAdminSessions: AgencyAdminSessionRecord[];
   directSales: DirectSaleRecord[];
   chatMessages: ChatMessageRecord[];
+  employers: EmployerContractRecord[];
+  employmentContracts: EmploymentContractRecord[];
   counters: {
     momPersonnel: number;
     testimonials: number;
@@ -203,6 +243,8 @@ interface AppData {
     agencyAdmins: number;
     directSales: number;
     chatMessages: number;
+    employers: number;
+    employmentContracts: number;
   };
 }
 
@@ -341,6 +383,8 @@ const defaultData = (): AppData => ({
   agencyAdminSessions: [],
   directSales: [],
   chatMessages: [],
+  employers: [],
+  employmentContracts: [],
   counters: {
     momPersonnel: 1,
     testimonials: 1,
@@ -350,6 +394,8 @@ const defaultData = (): AppData => ({
     agencyAdmins: 2,
     directSales: 1,
     chatMessages: 1,
+    employers: 1,
+    employmentContracts: 1,
   },
 });
 
@@ -381,6 +427,80 @@ const normalizeMaid = (maid: MaidRecord): MaidRecord => {
     hasPhoto: photos.length > 0,
   };
 };
+
+const toNullableNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toTrimmedString = (value: unknown) => String(value ?? "").trim();
+
+const formatEmployerRefCode = (value: number) => String(value).padStart(5, "0");
+
+const normalizeEmployerContractRecord = (
+  record: Partial<EmployerContractRecord>,
+): EmployerContractRecord => ({
+  id: Number(record.id ?? 0) || 0,
+  refCode: toTrimmedString(record.refCode),
+  maid: record.maid && typeof record.maid === "object" ? record.maid : {},
+  agency:
+    record.agency && typeof record.agency === "object" ? record.agency : {},
+  employer:
+    record.employer && typeof record.employer === "object"
+      ? record.employer
+      : {},
+  spouse:
+    record.spouse && typeof record.spouse === "object" ? record.spouse : {},
+  familyMembers: Array.isArray(record.familyMembers) ? record.familyMembers : [],
+  notificationDate:
+    record.notificationDate && typeof record.notificationDate === "object"
+      ? record.notificationDate
+      : {},
+  documents: Array.isArray(record.documents)
+    ? record.documents.map((document) => ({
+        category: toTrimmedString(document.category),
+        fileUrl: toTrimmedString(document.fileUrl),
+        fileName: toTrimmedString(document.fileName),
+      }))
+    : [],
+  createdAt: record.createdAt ?? now(),
+  updatedAt: record.updatedAt ?? record.createdAt ?? now(),
+});
+
+const normalizeEmploymentContractRecord = (
+  record: Partial<EmploymentContractRecord>,
+  fallbackRefCode: string,
+): EmploymentContractRecord => ({
+  id: Number(record.id ?? 0) || 0,
+  refCode: toTrimmedString(record.refCode) || fallbackRefCode,
+  employerRefCode:
+    toTrimmedString(record.employerRefCode) ||
+    toTrimmedString(record.refCode) ||
+    fallbackRefCode,
+  employerId: toNullableNumber(record.employerId),
+  maidId: toNullableNumber(record.maidId),
+  maidReferenceCode: toTrimmedString(record.maidReferenceCode),
+  maidName: toTrimmedString(record.maidName),
+  employerName: toTrimmedString(record.employerName),
+  caseReferenceNumber:
+    toTrimmedString(record.caseReferenceNumber) ||
+    toTrimmedString(record.refCode) ||
+    fallbackRefCode,
+  contractDate: toTrimmedString(record.contractDate),
+  serviceFee: toTrimmedString(record.serviceFee),
+  placementFee: toTrimmedString(record.placementFee),
+  agencyWitness: toTrimmedString(record.agencyWitness),
+  employerSnapshot:
+    record.employerSnapshot && typeof record.employerSnapshot === "object"
+      ? record.employerSnapshot
+      : {},
+  maidSnapshot:
+    record.maidSnapshot && typeof record.maidSnapshot === "object"
+      ? record.maidSnapshot
+      : {},
+  createdAt: record.createdAt ?? now(),
+  updatedAt: record.updatedAt ?? record.createdAt ?? now(),
+});
 
 const mergeAppData = (raw: Partial<AppData>): AppData => {
   const defaults = defaultData();
@@ -431,6 +551,60 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
   );
   const directSales = raw.directSales ?? defaults.directSales;
   const chatMessages = raw.chatMessages ?? defaults.chatMessages;
+  const employers = (raw.employers ?? defaults.employers)
+    .map((record) => normalizeEmployerContractRecord(record))
+    .filter((record) => record.refCode);
+  const employmentContracts = (
+    raw.employmentContracts ??
+    employers.map((record) => {
+      const agency = record.agency ?? {};
+      const maid = record.maid ?? {};
+      const employer = record.employer ?? {};
+      return {
+        id: record.id,
+        refCode: record.refCode,
+        employerRefCode: record.refCode,
+        employerId: record.id,
+        maidId:
+          toNullableNumber((maid as { id?: unknown; maidId?: unknown }).id) ??
+          toNullableNumber((maid as { maidId?: unknown }).maidId),
+        maidReferenceCode: toTrimmedString(
+          (maid as { referenceCode?: unknown }).referenceCode,
+        ),
+        maidName:
+          toTrimmedString((maid as { fullName?: unknown }).fullName) ||
+          toTrimmedString((maid as { name?: unknown }).name),
+        employerName: toTrimmedString(
+          (employer as { name?: unknown }).name,
+        ),
+        caseReferenceNumber:
+          toTrimmedString(
+            (agency as { caseReferenceNumber?: unknown }).caseReferenceNumber,
+          ) || record.refCode,
+        contractDate: toTrimmedString(
+          (agency as { contractDate?: unknown }).contractDate,
+        ),
+        serviceFee: toTrimmedString(
+          (agency as { serviceFee?: unknown }).serviceFee,
+        ),
+        placementFee: toTrimmedString(
+          (agency as { placementFee?: unknown }).placementFee,
+        ),
+        agencyWitness: toTrimmedString(
+          (agency as { agencyWitness?: unknown }).agencyWitness,
+        ),
+        employerSnapshot: employer,
+        maidSnapshot: maid,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+      };
+    })
+  ).map((record) =>
+    normalizeEmploymentContractRecord(
+      record,
+      toTrimmedString((record as { refCode?: unknown }).refCode),
+    ),
+  );
 
   return {
     companyProfile: {
@@ -457,6 +631,8 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       conversationType: message.conversationType ?? "support",
       agencyName: message.agencyName ?? "",
     })),
+    employers,
+    employmentContracts,
     counters: {
       momPersonnel: nextCounter(
         raw.counters?.momPersonnel,
@@ -497,6 +673,16 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         raw.counters?.chatMessages,
         chatMessages.map((item) => item.id),
         defaults.counters.chatMessages,
+      ),
+      employers: nextCounter(
+        raw.counters?.employers,
+        employers.map((item) => item.id),
+        defaults.counters.employers,
+      ),
+      employmentContracts: nextCounter(
+        raw.counters?.employmentContracts,
+        employmentContracts.map((item) => item.id),
+        defaults.counters.employmentContracts,
       ),
     },
   };
@@ -2522,6 +2708,239 @@ app.delete(
     );
     await saveData(c.env, data);
     return c.json({ message: "Maid deleted successfully" });
+  }),
+);
+
+app.get(
+  "/api/employers",
+  safeApi(async (c) => {
+    const data = await loadData(c.env);
+    const employers = [...data.employers].sort(
+      (left, right) =>
+        new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+    );
+    return c.json({ employers });
+  }),
+);
+
+app.get(
+  "/api/employers/:refCode",
+  safeApi(async (c) => {
+    const data = await loadData(c.env);
+    const refCode = toTrimmedString(c.req.param("refCode"));
+    const employer =
+      data.employers.find((item) => item.refCode === refCode) ?? null;
+    if (!employer) {
+      return c.json({ error: "Employer not found" }, 404);
+    }
+    return c.json({ employer });
+  }),
+);
+
+app.post(
+  "/api/employers",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      refCode?: string | null;
+      maid?: Record<string, unknown>;
+      agency?: Record<string, unknown>;
+      employer?: Record<string, unknown>;
+      spouse?: Record<string, unknown>;
+      familyMembers?: Array<Record<string, unknown>>;
+      notificationDate?: Record<string, unknown>;
+      documents?: Array<{
+        category?: string;
+        fileUrl?: string;
+        fileName?: string;
+      }>;
+    }>(c.req.raw);
+    if (!body) {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+
+    const employerPayload =
+      body.employer && typeof body.employer === "object" ? body.employer : {};
+    const agencyPayload =
+      body.agency && typeof body.agency === "object" ? body.agency : {};
+    const maidPayload =
+      body.maid && typeof body.maid === "object" ? body.maid : {};
+    const employerName = toTrimmedString(
+      (employerPayload as { name?: unknown }).name,
+    );
+
+    if (!employerName) {
+      return c.json({ error: "employer.name is required" }, 400);
+    }
+
+    const data = await loadData(c.env);
+    const incomingRef =
+      toTrimmedString(body.refCode) ||
+      toTrimmedString(
+        (agencyPayload as { caseReferenceNumber?: unknown }).caseReferenceNumber,
+      );
+    const existingIndex = incomingRef
+      ? data.employers.findIndex((item) => item.refCode === incomingRef)
+      : -1;
+    const id =
+      existingIndex === -1
+        ? data.counters.employers++
+        : data.employers[existingIndex].id;
+    const refCode = incomingRef || formatEmployerRefCode(id);
+    const normalizedAgency = {
+      ...agencyPayload,
+      caseReferenceNumber:
+        toTrimmedString(
+          (agencyPayload as { caseReferenceNumber?: unknown }).caseReferenceNumber,
+        ) || refCode,
+    };
+
+    const employerRecord: EmployerContractRecord = {
+      id,
+      refCode,
+      maid: maidPayload,
+      agency: normalizedAgency,
+      employer: employerPayload,
+      spouse: body.spouse && typeof body.spouse === "object" ? body.spouse : {},
+      familyMembers: Array.isArray(body.familyMembers) ? body.familyMembers : [],
+      notificationDate:
+        body.notificationDate && typeof body.notificationDate === "object"
+          ? body.notificationDate
+          : {},
+      documents: Array.isArray(body.documents)
+        ? body.documents
+            .map((document) => ({
+              category: toTrimmedString(document.category),
+              fileUrl: toTrimmedString(document.fileUrl),
+              fileName: toTrimmedString(document.fileName),
+            }))
+            .filter(
+              (document) =>
+                document.category && document.fileUrl && document.fileName,
+            )
+        : [],
+      createdAt:
+        existingIndex === -1 ? now() : data.employers[existingIndex].createdAt,
+      updatedAt: now(),
+    };
+
+    if (existingIndex === -1) {
+      data.employers.unshift(employerRecord);
+    } else {
+      data.employers[existingIndex] = employerRecord;
+    }
+
+    const existingEmploymentContractIndex = data.employmentContracts.findIndex(
+      (item) => item.refCode === refCode || item.employerRefCode === refCode,
+    );
+    const employmentContractId =
+      existingEmploymentContractIndex === -1
+        ? data.counters.employmentContracts++
+        : data.employmentContracts[existingEmploymentContractIndex].id;
+    const employmentContractRecord = normalizeEmploymentContractRecord(
+      {
+        id: employmentContractId,
+        refCode,
+        employerRefCode: refCode,
+        employerId: id,
+        maidId:
+          toNullableNumber((maidPayload as { id?: unknown; maidId?: unknown }).id) ??
+          toNullableNumber((maidPayload as { maidId?: unknown }).maidId),
+        maidReferenceCode: toTrimmedString(
+          (maidPayload as { referenceCode?: unknown }).referenceCode,
+        ),
+        maidName:
+          toTrimmedString((maidPayload as { fullName?: unknown }).fullName) ||
+          toTrimmedString((maidPayload as { name?: unknown }).name),
+        employerName,
+        caseReferenceNumber: toTrimmedString(
+          (normalizedAgency as { caseReferenceNumber?: unknown }).caseReferenceNumber,
+        ),
+        contractDate: toTrimmedString(
+          (normalizedAgency as { contractDate?: unknown }).contractDate,
+        ),
+        serviceFee: toTrimmedString(
+          (normalizedAgency as { serviceFee?: unknown }).serviceFee,
+        ),
+        placementFee: toTrimmedString(
+          (normalizedAgency as { placementFee?: unknown }).placementFee,
+        ),
+        agencyWitness: toTrimmedString(
+          (normalizedAgency as { agencyWitness?: unknown }).agencyWitness,
+        ),
+        employerSnapshot: employerPayload,
+        maidSnapshot: maidPayload,
+        createdAt:
+          existingEmploymentContractIndex === -1
+            ? now()
+            : data.employmentContracts[existingEmploymentContractIndex].createdAt,
+        updatedAt: now(),
+      },
+      refCode,
+    );
+
+    if (existingEmploymentContractIndex === -1) {
+      data.employmentContracts.unshift(employmentContractRecord);
+    } else {
+      data.employmentContracts[existingEmploymentContractIndex] =
+        employmentContractRecord;
+    }
+
+    await saveData(c.env, data);
+
+    return c.json({
+      employer: employerRecord,
+      employmentContract: {
+        refCode: employerRecord.refCode,
+        caseReferenceNumber: toTrimmedString(
+          (employerRecord.agency as { caseReferenceNumber?: unknown })
+            .caseReferenceNumber,
+        ),
+        contractDate: toTrimmedString(
+          (employerRecord.agency as { contractDate?: unknown }).contractDate,
+        ),
+        serviceFee: toTrimmedString(
+          (employerRecord.agency as { serviceFee?: unknown }).serviceFee,
+        ),
+        placementFee: toTrimmedString(
+          (employerRecord.agency as { placementFee?: unknown }).placementFee,
+        ),
+        agencyWitness: toTrimmedString(
+          (employerRecord.agency as { agencyWitness?: unknown }).agencyWitness,
+        ),
+      },
+    });
+  }),
+);
+
+app.post(
+  "/api/employment-contract",
+  safeApi(async (c) => {
+    const request = new Request(new URL("/api/employers", c.req.url), {
+      method: "POST",
+      headers: c.req.raw.headers,
+      body: await c.req.raw.clone().text(),
+    });
+    return app.fetch(request, c.env);
+  }),
+);
+
+app.delete(
+  "/api/employers/:refCode",
+  safeApi(async (c) => {
+    const data = await loadData(c.env);
+    const refCode = toTrimmedString(c.req.param("refCode"));
+    const existing =
+      data.employers.find((item) => item.refCode === refCode) ?? null;
+    if (!existing) {
+      return c.json({ error: "Employer not found" }, 404);
+    }
+
+    data.employers = data.employers.filter((item) => item.refCode !== refCode);
+    data.employmentContracts = data.employmentContracts.filter(
+      (item) => item.refCode !== refCode && item.employerRefCode !== refCode,
+    );
+    await saveData(c.env, data);
+    return c.json({ message: "Employer deleted successfully" });
   }),
 );
 

@@ -51,7 +51,7 @@ const logOptionalEnv = (key: string) => {
 logOptionalEnv('SUPABASE_URL')
 logOptionalEnv('SUPABASE_SERVICE_ROLE_KEY')
 
-// Middleware
+// ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(
   cors({
     origin: true,
@@ -59,31 +59,47 @@ app.use(
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   })
 )
+
+// ─── Body parsers ─────────────────────────────────────────────────────────────
+//
+// FIX: The file upload controller (employerContractFileController) reads
+// req.body as a raw Buffer to parse multipart/form-data itself.
+// express.json() must NOT run first on those routes — it would consume the
+// stream and leave req.body as {} making every upload fail silently.
+//
+// Solution: apply express.raw() specifically on the two file-upload paths
+// BEFORE the global express.json() middleware, then let everything else use
+// the normal JSON parser.
+//
+app.use(
+  ['/api/employer-files', '/api/employer-contract-files'],
+  express.raw({ type: '*/*', limit: '120mb' })
+)
+
+// Global JSON + urlencoded parsers for every other route
 app.use(express.json({ limit: '120mb' }))
 app.use(express.urlencoded({ extended: true, limit: '120mb' }))
 
-app.get('/api/health', (req: Request, res: Response) => {
+// ─── Health / utility endpoints ───────────────────────────────────────────────
+app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'Server is running' })
 })
 
 app.get('/api/diagnostics', async (_req: Request, res: Response) => {
   try {
     const store = await getStoreDiagnostics()
-    res.json({
-      runtime: 'express',
-      ...store,
-    })
+    res.json({ runtime: 'express', ...store })
   } catch (error) {
     console.error('Error building diagnostics:', error)
     res.status(500).json({ error: 'Failed to load diagnostics' })
   }
 })
 
-app.get('/api', (req: Request, res: Response) => {
+app.get('/api', (_req: Request, res: Response) => {
   res.json({ message: 'Welcome to Maid Agency Backend API' })
 })
 
-app.get('/api/data', (req: Request, res: Response) => {
+app.get('/api/data', (_req: Request, res: Response) => {
   res.json({
     data: [
       { id: 1, name: 'Item 1' },
@@ -92,7 +108,7 @@ app.get('/api/data', (req: Request, res: Response) => {
   })
 })
 
-// Company management routes
+// ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/company', companyRoutes)
 app.use('/api/maids', maidRoutes)
 app.use('/api/enquiries', enquiryRoutes)
@@ -112,7 +128,29 @@ app.use('/api/leads', leadWorkflowRoutes)
 app.use('/api/inquiry', inquiryWorkflowRoutes)
 app.use('/api', matchingWorkflowRoutes)
 app.use('/api', automationRoutes)
+
+// ─── Employer contract routes ─────────────────────────────────────────────────
+// Mounted at /api/employers — the router file must use relative paths:
+//   GET  /        → listEmployerContracts
+//   POST /        → saveEmployerContract
+//   GET  /:refCode → getEmployerContract
+//   DELETE /:refCode → deleteEmployerContract
 app.use('/api/employers', employerRoutes)
+
+// Legacy single-contract endpoint (kept for backwards compat)
+app.post('/api/employment-contract', saveEmployerContract)
+
+// ─── Employer file upload routes ──────────────────────────────────────────────
+// Mounted at both paths — the router file must use relative paths:
+//   GET    /           → listEmployerContractFiles
+//   POST   /           → uploadEmployerContractFiles   (multipart — needs raw body)
+//   GET    /:id/view   → viewEmployerContractFile
+//   GET    /:id/download → downloadEmployerContractFile
+//   DELETE /:id        → deleteEmployerContractFile
+app.use('/api/employer-contract-files', employerContractFileRoutes)
+app.use('/api/employer-files', employerContractFileRoutes)
+
+// ─── Public maids (no auth) ───────────────────────────────────────────────────
 app.get('/api/public-maids', async (_req: Request, res: Response) => {
   try {
     const maids = await getMaidsStore(undefined, 'public')
@@ -122,19 +160,17 @@ app.get('/api/public-maids', async (_req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to fetch public maids' })
   }
 })
-app.post('/api/employment-contract', saveEmployerContract)
-app.use('/api/employer-contract-files', employerContractFileRoutes)
-app.use('/api/employer-files', employerContractFileRoutes)
 
+// ─── Frontend SPA catch-all ───────────────────────────────────────────────────
 if (hasFrontendSite) {
   app.use(express.static(frontendDist))
-  app.get(/^(?!\/api(?:\/|$)).*/, (req: Request, res: Response) => {
+  app.get(/^(?!\/api(?:\/|$)).*/, (_req: Request, res: Response) => {
     res.sendFile(path.join(frontendDist, 'index.html'))
   })
 }
 
-// Error handling middleware
-const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+// ─── Error handler ────────────────────────────────────────────────────────────
+const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (
     err &&
     typeof err === 'object' &&
@@ -154,11 +190,13 @@ const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   ) {
     return res.status(400).json({ error: 'Invalid JSON body' })
   }
+
   console.error(err.stack)
   res.status(500).json({ error: 'Something went wrong!' })
 }
 app.use(errorHandler)
 
+// ─── Start ────────────────────────────────────────────────────────────────────
 const startServer = async () => {
   try {
     await initializeStore()
