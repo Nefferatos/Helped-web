@@ -65,6 +65,23 @@ const getClientMe = async (accessToken: string) => {
   return data.client;
 };
 
+// ── Profile cache ────────────────────────────────────────────────────────────
+// Avoids a /api/client-auth/me round-trip on every route change.
+// TTL is 30 s — short enough to reflect profile updates promptly,
+// long enough to cover rapid navigation.
+let profileCache: { user: ClientUser; expiresAt: number } | null = null;
+
+const clearProfileCache = () => {
+  profileCache = null;
+};
+
+// ── Inflight deduplication ───────────────────────────────────────────────────
+// Prevents parallel /me requests when multiple components call
+// syncClientProfileFromSession at the same time (e.g. navbar + App.tsx).
+let inflightSync: Promise<ClientUser | null> | null = null;
+
+// ── Public helpers ───────────────────────────────────────────────────────────
+
 export const primeClientAuth = async () => {
   const token = await refreshClientToken();
   if (!token) {
@@ -95,22 +112,43 @@ export const finalizeClientLoginFromSupabase = async () => {
 
   const client = await getClientMe(token);
   clearClientLogoutMarker();
+  profileCache = { user: client, expiresAt: Date.now() + 30_000 };
   saveClientAuth(token, client);
   return client;
 };
 
-export const syncClientProfileFromSession = async () => {
+export const syncClientProfileFromSession = async (): Promise<ClientUser | null> => {
+  // Deduplicate: if a sync is already in flight, wait for it instead of
+  // firing a second parallel request.
+  if (inflightSync) return inflightSync;
+
+  inflightSync = _doSync().finally(() => {
+    inflightSync = null;
+  });
+
+  return inflightSync;
+};
+
+const _doSync = async (): Promise<ClientUser | null> => {
   const token = await primeClientAuth();
   if (!token) {
     saveClientAuth(null, null);
     return null;
   }
 
+  // Return cached profile if still fresh.
+  if (profileCache && Date.now() < profileCache.expiresAt) {
+    saveClientAuth(token, profileCache.user);
+    return profileCache.user;
+  }
+
   try {
     const client = await getClientMe(token);
+    profileCache = { user: client, expiresAt: Date.now() + 30_000 };
     saveClientAuth(token, client);
     return client;
   } catch {
+    // Network hiccup — return stored profile rather than logging the user out.
     const fallback = getStoredClient();
     saveClientAuth(token, fallback);
     return fallback;
@@ -119,6 +157,7 @@ export const syncClientProfileFromSession = async () => {
 
 export const handleInvalidClientSession = async (redirectTo = "/employer-login") => {
   setClientLogoutMarker();
+  clearProfileCache();
 
   try {
     if (supabase) {
@@ -154,12 +193,36 @@ export const clientFetch = async (input: RequestInfo | URL, init: RequestInit = 
     headers,
   });
 
-  if (response.status === 401 || response.status === 403) {
+  // FIX: Only log out on explicit session errors, not every 401.
+  // A transient 401 (clock skew, non-auth endpoint) should not nuke the session.
+  if (response.status === 401) {
     const cloned = response.clone();
-    const payload = (await cloned.json().catch(() => ({}))) as { error?: string; message?: string };
+    const payload = (await cloned.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+    };
     const errorText = String(payload.error || payload.message || "").toLowerCase();
 
-    if (errorText.includes("session_not_found") || response.status === 403 || response.status === 401) {
+    if (
+      errorText.includes("session_not_found") ||
+      errorText.includes("invalid_token") ||
+      errorText.includes("jwt expired")
+    ) {
+      await handleInvalidClientSession();
+    }
+    // For all other 401s, let the caller decide what to do.
+    return response;
+  }
+
+  if (response.status === 403) {
+    const cloned = response.clone();
+    const payload = (await cloned.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+    };
+    const errorText = String(payload.error || payload.message || "").toLowerCase();
+
+    if (errorText.includes("session_not_found") || errorText.includes("forbidden")) {
       await handleInvalidClientSession();
     }
   }
@@ -168,33 +231,33 @@ export const clientFetch = async (input: RequestInfo | URL, init: RequestInit = 
 };
 
 export const logoutClientPortal = async (redirectTo = "/") => {
+  // FIX: Clear local state synchronously first, then fire network cleanup
+  // in the background. This ensures the redirect is instant and localStorage
+  // is cleared before navigation (window.location.replace fires immediately
+  // after, so anything after it may never run).
   setClientLogoutMarker();
-
-  try {
-    const token = await primeClientAuth();
-    if (token) {
-      await fetch("/api/client-auth/logout", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-    }
-  } catch {
-    // API logout is best effort.
-  }
-
-  try {
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-  } catch {
-    // Continue with local cleanup.
-  }
-
-  clearSupabaseSessionStorage();
+  clearProfileCache();
   clearClientAuth();
+  clearSupabaseSessionStorage();
+
+  // Get the token before we wipe everything — needed for the API call.
+  // primeClientAuth reads from the Supabase session which we haven't cleared yet.
+  const token = await primeClientAuth().catch(() => null);
+
+  // Fire network cleanup in the background — do NOT await.
+  // If either call fails the logout marker + cleared storage still protects us.
+  void Promise.allSettled([
+    token
+      ? fetch("/api/client-auth/logout", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        })
+      : Promise.resolve(),
+    supabase ? supabase.auth.signOut() : Promise.resolve(),
+  ]);
 
   if (typeof window !== "undefined") {
     window.localStorage.clear();

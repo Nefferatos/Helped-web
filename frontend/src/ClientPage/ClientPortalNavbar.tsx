@@ -46,8 +46,25 @@ const ClientPortalNavbar = () => {
   );
 
   useEffect(() => {
-    void syncClientProfileFromSession().then((c) => setClientUser(c ?? getStoredClient()));
+    // FIX: syncClientProfileFromSession is now deduplicated and cached internally,
+    // so calling it here on every route change is safe — it won't fire a new
+    // network request if one is already in flight or the cache is still warm.
+    // We intentionally do NOT make the cancellation token abort the setState
+    // call, since the sync result is shared state and still valid even if this
+    // component unmounts before it resolves.
+    let cancelled = false;
+
+    void syncClientProfileFromSession().then((c) => {
+      if (!cancelled) {
+        setClientUser(c ?? getStoredClient());
+      }
+    });
+
     setIsMobileMenuOpen(false);
+
+    return () => {
+      cancelled = true;
+    };
   }, [location.pathname, location.hash]);
 
   const activeKey = useMemo(

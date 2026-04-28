@@ -81,6 +81,7 @@ const ClientEmployerLogin = () => {
             ?.email_confirmed_at ??
           (data?.user as unknown as { confirmed_at?: string | null })?.confirmed_at ??
           null;
+
         if (data?.user && !confirmedAt) {
           toast({
             title: "Email not verified",
@@ -88,23 +89,27 @@ const ClientEmployerLogin = () => {
             variant: "destructive",
           });
           await sb.auth.signOut();
+          setIsSubmitting(false); // fix: reset loading state so button un-freezes
           return;
         }
 
-        const accessToken = data.session?.access_token || (await sb.auth.getSession()).data.session?.access_token;
+        // Fix: session is already in `data`, no need for an extra getSession() round trip
+        const accessToken = data.session?.access_token;
         if (!accessToken) {
           throw new Error("No session returned from Supabase");
         }
 
-        await finalizeClientLoginFromSupabase();
+        // Fix: navigate immediately — backend sync runs in background, user doesn't wait
         toast({
           title: "Login Successful",
           description: "You can now view your assigned maids.",
         });
         navigate(redirectTo, { replace: true });
+        void finalizeClientLoginFromSupabase(); // fire and forget
         return;
       }
 
+      // Signup flow
       try {
         const { data, error } = await sb.auth.signUp({
           email: normalizedEmail,
@@ -160,19 +165,6 @@ const ClientEmployerLogin = () => {
     });
     setStep("auth");
     setIsLogin(true);
-    return;
-
-    try {
-      setIsConfirming(true);
-    } catch (error) {
-      toast({
-        title: "Confirmation failed",
-        description: error instanceof Error ? error.message : "Unable to continue",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConfirming(false);
-    }
   };
 
   const handleResend = async () => {

@@ -13,7 +13,7 @@ import { getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAu
 import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
-import { hasActiveClientSession, syncClientProfileFromSession } from "@/lib/supabaseAuth";
+import { syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import culinaryImg from "./assets/culinary.png";
 import elderlyImg from "./assets/elderly-care.png";
 import familyImg from "./assets/family.jpg";
@@ -138,7 +138,6 @@ const GLOBAL_STYLES = `
     border-color: rgba(255,224,0,0.3);
   }
 
-  /* ── MAID CARD: larger base size ── */
   .maid-card {
     background: #fff;
     border: 2px solid #E8F4C8;
@@ -320,19 +319,12 @@ const GLOBAL_STYLES = `
   .pagination-btn.active { background: var(--green-mid); border-color: var(--green-mid); color: #fff; }
   .pagination-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-  /* ═══════════════════════════════
-     RESPONSIVE BREAKPOINTS
-  ═══════════════════════════════ */
-
-  /* Hero grid → stack on mobile */
   @media (max-width: 900px) {
     .hero-grid { grid-template-columns: 1fr !important; }
     .hero-image-col { display: none !important; }
     .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
     .hero-headline-size { font-size: clamp(1.8rem, 7vw, 2.8rem) !important; }
   }
-
-  /* Search card filters → stack on tablet */
   @media (max-width: 768px) {
     .filter-row { flex-direction: column !important; gap: 10px !important; }
     .filter-label { width: auto !important; }
@@ -342,27 +334,19 @@ const GLOBAL_STYLES = `
     .search-actions .btn-yellow,
     .search-actions .btn-search-now { width: 100%; justify-content: center; }
   }
-
-  /* Why section → stack on mobile */
   @media (max-width: 900px) {
     .why-grid { grid-template-columns: 1fr !important; }
     .why-image-col { display: none !important; }
   }
-
-  /* Footer grid → 2 cols on tablet, 1 col on mobile */
   @media (max-width: 900px) {
     .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
   }
   @media (max-width: 520px) {
     .footer-grid { grid-template-columns: 1fr !important; }
   }
-
-  /* Services grid → 2 col on tablet, 1 col on mobile */
   @media (max-width: 600px) {
     .services-grid { grid-template-columns: 1fr !important; }
   }
-
-  /* Maid grid responsive */
   .maid-grid {
     display: grid;
     gap: 16px;
@@ -377,16 +361,10 @@ const GLOBAL_STYLES = `
   @media (max-width: 360px) {
     .maid-grid { grid-template-columns: 1fr; }
   }
-
-  /* Maid card info padding */
-  .maid-card-info {
-    padding: 14px 14px 16px;
-  }
+  .maid-card-info { padding: 14px 14px 16px; }
   @media (max-width: 480px) {
     .maid-card-info { padding: 10px 10px 12px; }
   }
-
-  /* Section padding shrink on mobile */
   @media (max-width: 640px) {
     .section-pad { padding: 48px 0 !important; }
     .section-pad-lg { padding: 56px 0 !important; }
@@ -469,6 +447,10 @@ const TICKER_ITEMS = ["✦ Trusted Agency", "✦ 15+ Years", "✦ MOM Approved",
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid", "Willing to work on off-days"] as const;
 const ITEMS_PER_PAGE = 14;
 
+// Cache key for maid list — avoids re-fetching on every visit within the same session
+const MAIDS_CACHE_KEY = "landing_maids_cache";
+const MAIDS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 const getPrimaryPhoto = (maid: MaidProfile): string => {
   if (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) return maid.photoDataUrls[0];
   return maid.photoDataUrl || "";
@@ -486,6 +468,7 @@ type ClientLandingPageProps = { embedded?: boolean };
 const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const navigate = useNavigate();
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
+  // FIX 1: Initialise from localStorage immediately — no flicker, no waiting
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isLoading, setIsLoading] = useState(true);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
@@ -497,6 +480,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [language, setLanguage] = useState("No Preference");
   const [currentPage, setCurrentPage] = useState(1);
 
+  // FIX 2: Derive login state from token synchronously — no async needed
   const isLoggedIn = !!getClientToken();
   const searchMaidsHref = isLoggedIn ? "/client/maids" : "/search-maids";
 
@@ -508,32 +492,55 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     }
   }, [location]);
 
+  // FIX 3: Load maids with in-memory cache to skip repeat fetches
   useEffect(() => {
     const load = async () => {
       try {
         setIsLoading(true);
-        const [mr] = await Promise.all([fetch("/api/maids?visibility=public"), fetch("/api/company")]);
+
+        // Check memory cache first
+        const cached = sessionStorage.getItem(MAIDS_CACHE_KEY);
+        if (cached) {
+          const { data, ts } = JSON.parse(cached) as { data: MaidProfile[]; ts: number };
+          if (Date.now() - ts < MAIDS_CACHE_TTL) {
+            setAllPublicMaids(data);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        const mr = await fetch("/api/maids?visibility=public");
         const md = (await mr.json().catch(() => ({}))) as { error?: string; maids?: MaidProfile[] };
         if (!mr.ok || !md.maids) throw new Error(md.error || "Failed to load public maids");
-        setAllPublicMaids(md.maids.filter((m) => m.isPublic && hasPhoto(m)));
+        const filtered = md.maids.filter((m) => m.isPublic && hasPhoto(m));
+        setAllPublicMaids(filtered);
+
+        // Save to session cache
+        sessionStorage.setItem(MAIDS_CACHE_KEY, JSON.stringify({ data: filtered, ts: Date.now() }));
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load public maids");
-      } finally { setIsLoading(false); }
+      } finally {
+        setIsLoading(false);
+      }
     };
     void load();
   }, []);
 
+  // FIX 4: Session sync runs in background — doesn't block page render at all.
+  // If getStoredClient() already returned a user above, the page is instantly usable.
+  // This effect quietly refreshes the profile in the background.
   useEffect(() => {
-    const loadClient = async () => {
+    if (!isLoggedIn) return; // skip entirely for guests — saves the network call
+    const syncInBackground = async () => {
       try {
-        const ok = await hasActiveClientSession();
-        if (!ok) { setClientUser(null); return; }
         const c = await syncClientProfileFromSession();
-        setClientUser(c ?? null);
-      } catch { setClientUser(null); }
+        if (c) setClientUser(c);
+      } catch {
+        // Silently fail — stored client is still usable
+      }
     };
-    void loadClient();
-  }, []);
+    void syncInBackground();
+  }, [isLoggedIn]);
 
   const nationalityOptions = useMemo(() => {
     const vals = Array.from(new Set(allPublicMaids.map((m) => m.nationality?.trim()).filter(Boolean) as string[])).sort();
@@ -836,7 +843,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       </section>
 
       {/* ══════════════════════════════════════════════════
-          MAID RESULTS — larger cards
+          MAID RESULTS
       ══════════════════════════════════════════════════ */}
       <section id="maid-results" className="section-pad" style={{ background: "#fff", padding: "64px 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
@@ -853,7 +860,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           </div>
 
           {isLoading ? (
-            /* Skeleton */
             <div className="maid-grid">
               {Array.from({ length: 14 }).map((_, i) => (
                 <div key={i} style={{ borderRadius: 0, overflow: "hidden", border: "2px solid #F0F7E0", background: "#fff" }}>
@@ -874,7 +880,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </div>
           ) : (
             <>
-              {/* Login CTA banner */}
               {!isLoggedIn && (
                 <div style={{ marginBottom: 24, borderRadius: 20, padding: "20px 24px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16, background: "linear-gradient(110deg, #061800 0%, #145200 50%, #2E8B00 100%)", border: "2px solid rgba(255,224,0,0.2)" }}>
                   <div>
@@ -891,7 +896,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 </div>
               )}
 
-              {/* ── MAID GRID: larger cards ── */}
               <div className="maid-grid">
                 {pagedMaids.map((maid) => {
                   const photo = getPrimaryPhoto(maid);
@@ -903,7 +907,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
                   return isLoggedIn ? (
                     <Link key={maid.referenceCode} to={`/maids/${encodeURIComponent(maid.referenceCode)}`} className="maid-card" style={{ textDecoration: "none" }}>
-                      {/* Photo */}
                       <div style={{ position: "relative", width: "100%", background: "#f8f8f8" }}>
                         <img src={photo} alt={maid.fullName} loading="lazy" decoding="async" />
                         {maid.type && (
@@ -912,7 +915,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                           </span>
                         )}
                       </div>
-                      {/* Info */}
                       <div className="maid-card-info" style={{ background: "#fff" }}>
                         <h3 style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 700, color: "#0B2E00", lineHeight: 1.3, fontFamily: "'Unbounded', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{maid.fullName}</h3>
                         <p style={{ margin: "0 0 8px", fontSize: 10, color: "#8AAA65", fontFamily: "monospace" }}>{maid.referenceCode}</p>
@@ -927,7 +929,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                       </div>
                     </Link>
                   ) : (
-                    /* Guest — blurred */
                     <div key={maid.referenceCode} className="maid-card">
                       <div style={{ position: "relative", width: "100%", filter: "blur(5px)", opacity: 0.7, userSelect: "none", pointerEvents: "none" }}>
                         <img src={photo} alt="Maid profile" loading="lazy" decoding="async" />
@@ -945,7 +946,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 })}
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div style={{ marginTop: 40, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
                   <button className="pagination-btn" onClick={() => handlePageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>← Prev</button>
@@ -1026,8 +1026,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           </div>
 
           <div className="why-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, alignItems: "center" }}>
-
-            {/* Image */}
             <div className="why-image-col" style={{ position: "relative" }}>
               <div style={{ position: "absolute", inset: -8, borderRadius: 32, border: "3px solid #FFE000", zIndex: 0, transform: "rotate(-1.5deg)" }} />
               <div style={{ position: "relative", borderRadius: 24, overflow: "hidden", boxShadow: "0 30px 70px rgba(46,139,0,0.2)", zIndex: 1 }}>
@@ -1048,7 +1046,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               </div>
             </div>
 
-            {/* Feature cards + CTA */}
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {features.map(({ Icon, title, description, stat, statLabel }) => (
                 <div key={title} className="feature-card">
@@ -1068,7 +1065,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 </div>
               ))}
 
-              {/* CTA card */}
               <div style={{ borderRadius: 22, padding: 24, background: "linear-gradient(110deg, #061800 0%, #145200 55%, #2E8B00 100%)", border: "2px solid rgba(255,224,0,0.2)", position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,224,0,0.15) 0%, transparent 70%)", pointerEvents: "none" }} />
                 <p style={{ fontFamily: "'Unbounded', sans-serif", fontWeight: 800, fontSize: 14, color: "#fff", margin: "0 0 8px" }}>Ready to find your perfect helper?</p>
@@ -1083,12 +1079,10 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </section>
 
-     
       <footer className="bg-foreground py-12 text-primary-foreground">
         <div className="container">
           <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4">

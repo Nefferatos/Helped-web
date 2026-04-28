@@ -22,6 +22,13 @@ import {
 } from "@/lib/supabaseAuth";
 import { adminPath } from "@/lib/routes";
 import ProtectedClientRoute from "@/components/ProtectedClientRoute";
+
+// FIX: Import ClientPortalLayout eagerly so it doesn't cause a second
+// sequential chunk fetch when the user first hits any /client/* route.
+// The layout is a lightweight shell that's always needed on the portal —
+// making it lazy only adds a waterfall without saving meaningful bytes.
+import ClientPortalLayout from "@/ClientPage/ClientPortalLayout";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -78,7 +85,6 @@ const ClientLandingPage = lazyRoute(() => import("@/ClientPage/ClientLandingPage
 const ClientMaidsPage = lazyRoute(() => import("@/ClientPage/ClientMaidsPage"));
 const MaidSearchPage = lazyRoute(() => import("@/ClientPage/MaidSearchPage"));
 const ClientProfilePage = lazyRoute(() => import("@/ClientPage/ClientProfilePage"));
-const ClientPortalLayout = lazyRoute(() => import("@/ClientPage/ClientPortalLayout"));
 const ClientPortalHome = lazyRoute(() => import("@/ClientPage/ClientPortalHome"));
 const ClientRequestsPage = lazyRoute(() => import("@/ClientPage/ClientRequestsPage"));
 const ClientChangePasswordPage = lazyRoute(() => import("@/ClientPage/ClientChangePasswordPage"));
@@ -235,6 +241,8 @@ const App = () => {
       const { data: { session } = { session: null } } = await supabase.auth.getSession();
       if (session?.access_token) {
         try {
+          // syncClientProfileFromSession is now cached + deduplicated, so this
+          // won't race with the navbar's own call on initial load.
           await syncClientProfileFromSession();
         } catch (error) {
           console.error("Failed to sync Supabase session:", error);
@@ -258,6 +266,8 @@ const App = () => {
         }
 
         if (session.access_token) {
+          // Deduplication in syncClientProfileFromSession means this is safe
+          // to call even if the navbar already triggered a sync.
           void syncClientProfileFromSession().catch((error) => {
             console.error("Failed to sync Supabase session:", error);
           });
@@ -300,6 +310,10 @@ const App = () => {
             <Route path="/agencyadmin/employment-contracts/new" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>)} />
+
+            {/* FIX: ClientPortalLayout is now imported eagerly at the top of this
+                file, so this route renders the layout shell immediately without
+                a second sequential chunk fetch. */}
             <Route path="/client" element={withRouteLoader(<ProtectedClientRoute><ClientPortalLayout /></ProtectedClientRoute>)}>
               <Route index element={<Navigate to="home" replace />} />
               <Route path="home" element={withRouteLoader(<ClientPortalHome />)} />
@@ -318,6 +332,7 @@ const App = () => {
               {/* Keep existing dashboard route working */}
               <Route path="dashboard" element={withRouteLoader(<ClientDashboard />)} />
             </Route>
+
             <Route path="/hire/:refCode" element={withRouteLoader(<HiringProcessPage />)} />
             <Route path="/maids/:refCode" element={withRouteLoader(<PublicMaidProfile />)} />
             <Route path="/agency-portal" element={withRouteLoader(<AgenciesPage />)} />
