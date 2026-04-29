@@ -1,0 +1,26 @@
+[db] Failed to connect using DATABASE_URL: password authentication failed for user "postgres"
+[db] Failed to connect using DB_*: password authentication failed for user "postgres"
+Failed to initialize database: error: password authentication failed for user "postgres"
+    at C:\hh\Helped-web\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async ensurePool (C:\hh\Helped-web\backend\dist\db.js:68:28)
+    at async initializeDatabase (C:\hh\Helped-web\backend\dist\db.js:111:24)
+    at async startServer (C:\hh\Helped-web\backend\dist\server.js:185:9) {
+  length: 104,
+  severity: 'FATAL',
+  code: '28P01',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'auth.c',
+  line: '320',
+  routine: 'auth_failed'
+}

@@ -4440,6 +4440,77 @@ app.get(
   },
 );
 
+// ─── Tell a friend ────────────────────────────────────────────────────────────
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+app.post(
+  "/api/tell-friend",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      toName?: string
+      toEmail?: string
+      fromName?: string
+      fromEmail?: string
+      subject?: string
+      message?: string
+      maidRefCode?: string
+    }>(c.req.raw)
+
+    if (!body || typeof body !== "object") {
+      return c.json({ error: "Request body is missing or not valid JSON." }, 400)
+    }
+
+    const sanitize = (v: unknown, max: number) =>
+      typeof v === "string"
+        ? v.replace(/\r\n/g, "\n").replace(/\0/g, "").trim().slice(0, max)
+        : ""
+
+    const toName      = sanitize(body.toName,     100)
+    const fromName    = sanitize(body.fromName,   100)
+    const toEmail     = sanitize(body.toEmail,    320).toLowerCase()
+    const fromEmail   = sanitize(body.fromEmail,  320).toLowerCase()
+    const subject     = sanitize(body.subject,    200)
+    const message     = sanitize(body.message,    5000)
+    const maidRefCode = sanitize(body.maidRefCode, 50)
+
+    if (!toEmail || !fromEmail || !subject || !message) {
+      return c.json(
+        { error: "toEmail, fromEmail, subject, and message are required" },
+        400,
+      )
+    }
+
+    if (!EMAIL_PATTERN.test(toEmail) || !EMAIL_PATTERN.test(fromEmail)) {
+      return c.json({ error: "Please enter valid email addresses" }, 400)
+    }
+
+    const text = [
+      fromName ? `${fromName} (${fromEmail})` : fromEmail,
+      "wants to share a maid profile with you.",
+      "",
+      `To: ${toName ? `${toName} <${toEmail}>` : toEmail}`,
+      maidRefCode ? `Maid ref: ${maidRefCode}` : "",
+      "",
+      `Subject: ${subject}`,
+      "",
+      message,
+    ]
+      .filter((line) => line !== undefined)
+      .join("\n")
+
+    const result = await sendEmailViaResend(c.env, toEmail, subject, text)
+
+    if (!result.ok) {
+      if (result.error === "RESEND_NOT_CONFIGURED") {
+        return c.json({ error: "Email service is not configured" }, 503)
+      }
+      return c.json({ error: "Email could not be delivered right now" }, 502)
+    }
+
+    return c.json({ message: "Email sent successfully" })
+  }),
+)
+
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
 export default {

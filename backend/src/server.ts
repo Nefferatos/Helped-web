@@ -24,6 +24,7 @@ import leadWorkflowRoutes from './routes/leadWorkflowRoutes'
 import inquiryWorkflowRoutes from './routes/inquiryWorkflowRoutes'
 import matchingWorkflowRoutes from './routes/matchingWorkflowRoutes'
 import automationRoutes from './routes/automationRoutes'
+import shareRoutes from './routes/shareRoutes'
 import { initializeDatabase } from './db'
 import {
   getAgencyAdminsStore,
@@ -40,6 +41,13 @@ const port = process.env.PORT || 3000
 const frontendDist = path.resolve(__dirname, '../../frontend/dist')
 const hasFrontendSite = fs.existsSync(frontendDist)
 
+const resolveCorsOrigin = () => {
+  const configured = process.env.CORS_ORIGIN?.trim()
+  if (!configured) return true
+  if (configured === '*') return true
+  return configured.split(',').map((origin) => origin.trim())
+}
+
 const logOptionalEnv = (key: string) => {
   if (!process.env[key]?.trim()) {
     console.warn(
@@ -54,35 +62,27 @@ logOptionalEnv('SUPABASE_SERVICE_ROLE_KEY')
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(
   cors({
-    origin: true,
+    origin: resolveCorsOrigin(),
     allowedHeaders: ['Content-Type', 'Authorization'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   })
 )
 
 // ─── Body parsers ─────────────────────────────────────────────────────────────
-//
-// FIX: The file upload controller (employerContractFileController) reads
-// req.body as a raw Buffer to parse multipart/form-data itself.
-// express.json() must NOT run first on those routes — it would consume the
-// stream and leave req.body as {} making every upload fail silently.
-//
-// Solution: apply express.raw() specifically on the two file-upload paths
-// BEFORE the global express.json() middleware, then let everything else use
-// the normal JSON parser.
-//
+// Raw body MUST be applied before global json() for file upload routes.
 app.use(
   ['/api/employer-files', '/api/employer-contract-files'],
   express.raw({ type: '*/*', limit: '120mb' })
 )
 
-// Global JSON + urlencoded parsers for every other route
+// Global JSON + urlencoded for all other routes.
 app.use(express.json({ limit: '120mb' }))
 app.use(express.urlencoded({ extended: true, limit: '120mb' }))
 
 // ─── Health / utility endpoints ───────────────────────────────────────────────
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ status: 'Server is running' })
+  const storageType = process.env.SUPABASE_URL ? 'supabase' : 'memory'
+  res.json({ status: 'Server is running', storage: storageType })
 })
 
 app.get('/api/diagnostics', async (_req: Request, res: Response) => {
@@ -108,7 +108,7 @@ app.get('/api/data', (_req: Request, res: Response) => {
   })
 })
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
+// ─── Named/specific routes ────────────────────────────────────────────────────
 app.use('/api/company', companyRoutes)
 app.use('/api/maids', maidRoutes)
 app.use('/api/enquiries', enquiryRoutes)
@@ -123,34 +123,28 @@ app.use('/api/agency', agencyRoutes)
 app.use('/api/agencies', agencyDirectoryRoutes)
 app.use('/api/client', clientRoutes)
 app.use('/api/chats', chatRoutes)
-app.use('/api', dashboardRoutes)
 app.use('/api/leads', leadWorkflowRoutes)
 app.use('/api/inquiry', inquiryWorkflowRoutes)
+
+// ─── Share route ──────────────────────────────────────────────────────────────
+// IMPORTANT: Must be mounted BEFORE the generic /api catch-all routers below.
+// dashboardRoutes, matchingWorkflowRoutes, and automationRoutes all mount at
+// /api with no prefix — if they're registered first, they can shadow
+// /api/tell-friend and return 404 before shareRoutes ever runs.
+app.use('/api', shareRoutes)
+
+// ─── Generic /api routers (after all named routes) ────────────────────────────
+app.use('/api', dashboardRoutes)
 app.use('/api', matchingWorkflowRoutes)
 app.use('/api', automationRoutes)
 
-// ─── Employer contract routes ─────────────────────────────────────────────────
-// Mounted at /api/employers — the router file must use relative paths:
-//   GET  /        → listEmployerContracts
-//   POST /        → saveEmployerContract
-//   GET  /:refCode → getEmployerContract
-//   DELETE /:refCode → deleteEmployerContract
+// ─── Employer routes ──────────────────────────────────────────────────────────
 app.use('/api/employers', employerRoutes)
-
-// Legacy single-contract endpoint (kept for backwards compat)
 app.post('/api/employment-contract', saveEmployerContract)
-
-// ─── Employer file upload routes ──────────────────────────────────────────────
-// Mounted at both paths — the router file must use relative paths:
-//   GET    /           → listEmployerContractFiles
-//   POST   /           → uploadEmployerContractFiles   (multipart — needs raw body)
-//   GET    /:id/view   → viewEmployerContractFile
-//   GET    /:id/download → downloadEmployerContractFile
-//   DELETE /:id        → deleteEmployerContractFile
 app.use('/api/employer-contract-files', employerContractFileRoutes)
 app.use('/api/employer-files', employerContractFileRoutes)
 
-// ─── Public maids (no auth) ───────────────────────────────────────────────────
+// ─── Public maids ─────────────────────────────────────────────────────────────
 app.get('/api/public-maids', async (_req: Request, res: Response) => {
   try {
     const maids = await getMaidsStore(undefined, 'public')
@@ -192,7 +186,7 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   }
 
   console.error(err.stack)
-  res.status(500).json({ error: 'Something went wrong!' })
+  return res.status(500).json({ error: 'Something went wrong!' })
 }
 app.use(errorHandler)
 

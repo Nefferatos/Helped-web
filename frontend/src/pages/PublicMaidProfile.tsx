@@ -86,10 +86,13 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setErrors({});
     setIsSending(true);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
     try {
       const res = await fetch("/api/tell-friend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({ toName, toEmail, fromName, fromEmail, subject, message, maidRefCode: maid.referenceCode }),
       });
       if (!res.ok) {
@@ -99,8 +102,13 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
       setSent(true);
       setTimeout(() => onClose(), 2000);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send message.");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.error("Email request timed out. Please try again later.");
+      } else {
+        toast.error(err instanceof Error ? err.message : "Could not send message.");
+      }
     } finally {
+      window.clearTimeout(timeout);
       setIsSending(false);
     }
   };
