@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight, CheckCircle, HeartHandshake, Users, X, Star,
   Shield, ChevronRight, Search, Home, Heart, Baby, Backpack,
@@ -145,6 +145,8 @@ const GLOBAL_STYLES = `
     overflow: hidden;
     transition: all 0.22s cubic-bezier(0.34,1.56,0.64,1);
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
   }
   .maid-card:hover {
     border-color: var(--yellow-dark);
@@ -361,9 +363,9 @@ const GLOBAL_STYLES = `
   @media (max-width: 360px) {
     .maid-grid { grid-template-columns: 1fr; }
   }
-  .maid-card-info { padding: 14px 14px 16px; }
+  .maid-card-info { padding: 10px 12px 12px; }
   @media (max-width: 480px) {
-    .maid-card-info { padding: 10px 10px 12px; }
+    .maid-card-info { padding: 8px 10px 10px; }
   }
   @media (max-width: 640px) {
     .section-pad { padding: 48px 0 !important; }
@@ -373,7 +375,7 @@ const GLOBAL_STYLES = `
 `;
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   HELPERS
+   SMALL SVG COMPONENTS
 ───────────────────────────────────────────────────────────────────────────── */
 const ClipboardList = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -385,6 +387,131 @@ const ClipboardList = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+const LockIconSvg = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ width: 16, height: 16 }}
+  >
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   BLURRED CANVAS — renders the maid photo onto a canvas with blur applied
+   via the Canvas 2D API. No <img src="..."> ever appears in the DOM, so the
+   original URL cannot be extracted from the Elements panel or right-clicked.
+   The image is fetched as a Blob, turned into a temporary blob: URL that is
+   revoked immediately after drawing, leaving zero traces in DevTools.
+───────────────────────────────────────────────────────────────────────────── */
+const BlurredCanvas = ({ src }: { src: string }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!src || !canvasRef.current) return;
+
+    let revoked = false;
+    let blobUrl = "";
+
+    const draw = (img: HTMLImageElement) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Match the rendered CSS size so the canvas is never blurry itself
+      const w = canvas.offsetWidth || 240;
+      const h = Math.round(w * (4 / 3));
+      canvas.width = w;
+      canvas.height = h;
+
+      // Cover-fit the image
+      const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+      const sw = img.naturalWidth * scale;
+      const sh = img.naturalHeight * scale;
+      const ox = (w - sw) / 2;
+      const oy = (h - sh) / 2;
+
+      // Apply blur and slight dim via Canvas 2D filter
+      ctx.filter = "blur(18px)";
+      ctx.globalAlpha = 0.72;
+      ctx.drawImage(img, ox, oy, sw, sh);
+
+      // Revoke blob URL as soon as we're done with it
+      if (!revoked && blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+        revoked = true;
+      }
+    };
+
+    const img = new Image();
+    // crossOrigin must be set before src
+    img.crossOrigin = "anonymous";
+
+    // Fetch the image as a Blob so the original URL never sits in the DOM
+    fetch(src, { credentials: "same-origin" })
+      .then((r) => {
+        if (!r.ok) throw new Error("fetch failed");
+        return r.blob();
+      })
+      .then((blob) => {
+        blobUrl = URL.createObjectURL(blob);
+        img.onload = () => draw(img);
+        img.onerror = () => {
+          // Blob creation succeeded but drawing failed — draw grey fallback
+          if (!revoked && blobUrl) { URL.revokeObjectURL(blobUrl); revoked = true; }
+          drawFallback();
+        };
+        img.src = blobUrl;
+      })
+      .catch(() => drawFallback());
+
+    const drawFallback = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const w = canvas.offsetWidth || 240;
+      canvas.width = w;
+      canvas.height = Math.round(w * (4 / 3));
+      ctx.fillStyle = "#e8f5d0";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    };
+
+    return () => {
+      // Cleanup: revoke if component unmounts before draw finishes
+      if (!revoked && blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+        revoked = true;
+      }
+    };
+  }, [src]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        width: "100%",
+        aspectRatio: "3/4",
+        display: "block",
+        background: "#f8f8f8",
+        userSelect: "none",
+        pointerEvents: "none",
+        // Slight extra CSS blur as a defence-in-depth layer
+        filter: "blur(2px)",
+      }}
+    />
+  );
+};
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   NATIONALITY FLAGS
+───────────────────────────────────────────────────────────────────────────── */
 const NATIONALITY_FLAGS: Record<string, string> = {
   filipino: "ph", philippines: "ph", indonesian: "id", indonesia: "id",
   myanmar: "mm", burmese: "mm", cambodian: "kh", cambodia: "kh",
@@ -413,43 +540,270 @@ const getNationalityCode = (nationality?: string): string => {
 const FlagCircle = ({ code }: { code: string }) => {
   if (!code) return null;
   return (
-    <span style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",width:16,height:16,borderRadius:"50%",overflow:"hidden",border:"1px solid rgba(0,0,0,0.12)",background:"#e5e7eb",flexShrink:0,verticalAlign:"middle" }}>
+    <span style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",width:14,height:14,borderRadius:"50%",overflow:"hidden",border:"1px solid rgba(0,0,0,0.12)",background:"#e5e7eb",flexShrink:0,verticalAlign:"middle" }}>
       <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={code} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
     </span>
   );
 };
 
+const getTypeLabel = (type: string) => {
+  const lower = type.toLowerCase();
+  if (lower.includes("new")) return "NEW";
+  if (lower.includes("transfer")) return "TRANSFER";
+  if (lower.includes("ex")) return "EX-SG";
+  return type.toUpperCase();
+};
+
+const getTypeBadgeStyle = (type?: string): { bg: string; color: string } => {
+  const t = (type || "").toLowerCase();
+  if (t.includes("new")) return { bg: "#ECFCE0", color: "#1A6E00" };
+  if (t.includes("transfer")) return { bg: "#E0EEFF", color: "#1A4A8E" };
+  return { bg: "#FFF8E0", color: "#8A6000" };
+};
+
 /* ─────────────────────────────────────────────────────────────────────────────
-   DATA
+   MAID CARD COMPONENTS
+───────────────────────────────────────────────────────────────────────────── */
+
+// ── Locked maid card ─────────────────────────────────────────────────────────
+// Uses BlurredCanvas: the real photo URL never appears anywhere in the DOM.
+// Right-clicking the canvas does nothing; DevTools Elements shows no src attr.
+const LockedMaidCard = ({
+  maid,
+  loginPath = "/employer-login",
+}: {
+  maid: MaidProfile;
+  loginPath?: string;
+}) => {
+  const photo = getPrimaryPhoto(maid);
+  const { bg: typeBg, color: typeColor } = getTypeBadgeStyle(maid.type);
+
+  return (
+    <div className="maid-card">
+      {/* Photo area — drawn on canvas with blur, no <img> in DOM */}
+      <div style={{ position: "relative", width: "100%", overflow: "hidden" }}>
+        {photo ? (
+          <BlurredCanvas src={photo} />
+        ) : (
+          <div style={{
+            aspectRatio: "3/4",
+            background: "#f0f0f0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth={1}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+              />
+            </svg>
+          </div>
+        )}
+
+        {/* Type badge — softly blurred so it hints without revealing */}
+        {maid.type && (
+          <div style={{
+            position: "absolute",
+            top: 10,
+            left: 10,
+            filter: "blur(3px)",
+            pointerEvents: "none",
+          }}>
+            <span style={{
+              background: typeBg,
+              color: typeColor,
+              fontSize: 9,
+              fontWeight: 700,
+              padding: "4px 10px",
+              borderRadius: 100,
+              fontFamily: "'Unbounded', sans-serif",
+              letterSpacing: "0.03em",
+            }}>
+              {getTypeLabel(maid.type)}
+            </span>
+          </div>
+        )}
+
+        {/* Lock overlay centred on photo */}
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          pointerEvents: "none",
+        }}>
+          <div style={{
+            borderRadius: "50%",
+            background: "rgba(0,0,0,0.45)",
+            padding: 10,
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}>
+            <LockIconSvg />
+          </div>
+        </div>
+      </div>
+
+      {/* Censored info panel */}
+      <div
+        className="maid-card-info"
+        style={{ background: "#fff", display: "flex", flexDirection: "column", gap: 6, flex: 1 }}
+      >
+        <div style={{ height: 10, width: "75%", background: "#e8f5d0", borderRadius: 4, filter: "blur(2px)" }} />
+        <div style={{ height: 8,  width: "50%", background: "#e8f5d0", borderRadius: 4, filter: "blur(2px)" }} />
+        <div style={{ height: 8,  width: "60%", background: "#e8f5d0", borderRadius: 4, filter: "blur(2px)" }} />
+      </div>
+
+      {/* Login CTA */}
+      <div style={{ padding: "0 10px 10px" }}>
+        <Link
+          to={loginPath}
+          style={{
+            display: "flex",
+            width: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            borderRadius: 100,
+            background: "linear-gradient(105deg, #061800 0%, #145200 60%, #2E8B00 100%)",
+            padding: "8px 10px",
+            fontSize: 9,
+            fontWeight: 800,
+            letterSpacing: "0.05em",
+            textTransform: "uppercase" as const,
+            color: "#FFE000",
+            fontFamily: "'Unbounded', sans-serif",
+            textDecoration: "none",
+            transition: "opacity 0.15s",
+            boxSizing: "border-box" as const,
+          }}
+        >
+          <LockIconSvg />
+          Log in to view
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+// ── Logged-in maid card — full info ──────────────────────────────────────────
+const MaidCardFull = ({
+  maid,
+  searchMaidsHref,
+}: {
+  maid: MaidProfile;
+  searchMaidsHref: string;
+}) => {
+  const photo = getPrimaryPhoto(maid);
+  const age = calculateAge(maid.dateOfBirth);
+  const flagCode = getNationalityCode(maid.nationality);
+  const { bg: typeBg, color: typeColor } = getTypeBadgeStyle(maid.type);
+
+  const langs = Object.entries(maid.languageSkills || {})
+    .filter(([, level]) => {
+      const l = String(level || "").trim().toLowerCase();
+      return l && l !== "zero" && l !== "none";
+    })
+    .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
+    .slice(0, 3);
+
+  return (
+    <Link
+      to={`/maids/${encodeURIComponent(maid.referenceCode)}`}
+      className="maid-card"
+      style={{ textDecoration: "none" }}
+    >
+      <div style={{ position: "relative", width: "100%", background: "#f8f8f8" }}>
+        <img src={photo} alt={maid.fullName} loading="lazy" decoding="async" />
+        {maid.type && (
+          <span style={{
+            position: "absolute", top: 10, left: 10,
+            background: typeBg, color: typeColor,
+            fontSize: 9, fontWeight: 700, padding: "4px 10px",
+            borderRadius: 100, fontFamily: "'Unbounded', sans-serif", letterSpacing: "0.03em",
+          }}>
+            {getTypeLabel(maid.type)}
+          </span>
+        )}
+      </div>
+
+      <div className="maid-card-info" style={{ background: "#fff", display: "flex", flexDirection: "column", gap: 3, flex: 1 }}>
+        <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#0B2E00", lineHeight: 1.3, fontFamily: "'Unbounded', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {maid.fullName}
+        </h3>
+        <p style={{ margin: 0, fontSize: 9, color: "#8AAA65", fontFamily: "monospace", lineHeight: 1.4 }}>
+          {maid.referenceCode}
+        </p>
+        {maid.nationality && (
+          <p style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, color: "#2E6000", fontWeight: 600, lineHeight: 1.4 }}>
+            <FlagCircle code={flagCode} />
+            {maid.nationality}
+          </p>
+        )}
+        <div style={{ borderTop: "1px solid #E8F4C8", margin: "4px 0" }} />
+        {(age || maid.maritalStatus) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#4A7A20", lineHeight: 1.4 }}>
+            {age && <span style={{ fontWeight: 700, color: "#2E6000" }}>{age} yrs</span>}
+            {age && maid.maritalStatus && <span style={{ color: "#C8E880" }}>·</span>}
+            {maid.maritalStatus && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{maid.maritalStatus}</span>}
+          </div>
+        )}
+        {maid.religion && (
+          <p style={{ margin: 0, fontSize: 9, color: "#7A9A55", lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {maid.religion}
+          </p>
+        )}
+        {langs.length > 0 && (
+          <p style={{ margin: 0, fontSize: 9, color: "#9AAA80", lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {langs.join(" · ")}
+          </p>
+        )}
+      </div>
+    </Link>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   STATIC DATA
 ───────────────────────────────────────────────────────────────────────────── */
 const services = [
   { title: "Housekeeping",  slug: "housekeeping", description: "Meticulous cleaning & organization — your home, immaculate.",   image: housekeepingImg, Icon: Home,    badge: "Most Popular" },
-  { title: "Elderly Care",  slug: "elderly-care", description: "Compassionate professional support for your loved ones.",        image: elderlyImg,      Icon: Heart,   badge: "Specialist" },
-  { title: "Infant Care",   slug: "infant-care",  description: "Expert caregivers providing nurturing support for newborns.",   image: infantImg,       Icon: Baby,    badge: "Certified" },
-  { title: "Kid Care",      slug: "kid-care",     description: "Safe, engaging, developmental care for growing children.",      image: culinaryImg,     Icon: Backpack,badge: "Top Rated" },
+  { title: "Elderly Care",  slug: "elderly-care", description: "Compassionate professional support for your loved ones.",        image: elderlyImg,      Icon: Heart,   badge: "Specialist"   },
+  { title: "Infant Care",   slug: "infant-care",  description: "Expert caregivers providing nurturing support for newborns.",   image: infantImg,       Icon: Baby,    badge: "Certified"    },
+  { title: "Kid Care",      slug: "kid-care",     description: "Safe, engaging, developmental care for growing children.",      image: culinaryImg,     Icon: Backpack,badge: "Top Rated"    },
 ];
 
 const features = [
-  { Icon: BadgeCheck,      title: "Vigorously Vetted",   description: "Rigorous multi-stage screening — only the most trustworthy candidates join our network.", stat: "100%",  statLabel: "Background Checked" },
-  { Icon: Sparkles,        title: "Smart Matching",      description: "Advanced compatibility matching finds helpers perfectly tailored to your household.",       stat: "98%",   statLabel: "Match Satisfaction" },
-  { Icon: HeartHandshake,  title: "Ongoing Support",     description: "We provide continued mediation and after-placement care — service beyond placement.",      stat: "24/7",  statLabel: "Support Available" },
+  { Icon: BadgeCheck,     title: "Vigorously Vetted",  description: "Rigorous multi-stage screening — only the most trustworthy candidates join our network.", stat: "100%", statLabel: "Background Checked" },
+  { Icon: Sparkles,       title: "Smart Matching",     description: "Advanced compatibility matching finds helpers perfectly tailored to your household.",       stat: "98%",  statLabel: "Match Satisfaction"  },
+  { Icon: HeartHandshake, title: "Ongoing Support",    description: "We provide continued mediation and after-placement care — service beyond placement.",      stat: "24/7", statLabel: "Support Available"   },
 ];
 
 const stats = [
   { value: "2,500+", label: "Placements Made",     Icon: TrendingUp },
-  { value: "15+",    label: "Years Experience",    Icon: Award },
-  { value: "98%",    label: "Client Satisfaction", Icon: Star },
-  { value: "500+",   label: "Active Helpers",      Icon: Users },
+  { value: "15+",    label: "Years Experience",    Icon: Award      },
+  { value: "98%",    label: "Client Satisfaction", Icon: Star       },
+  { value: "500+",   label: "Active Helpers",      Icon: Users      },
 ];
 
-const TICKER_ITEMS = ["✦ Trusted Agency", "✦ 15+ Years", "✦ MOM Approved", "✦ 2,500+ Placements", "✦ 500+ Helpers", "✦ 98% Satisfaction", "✦ Background Checked", "✦ Smart Matching", "✦ 24/7 Support"];
+const TICKER_ITEMS = [
+  "✦ Trusted Agency", "✦ 15+ Years", "✦ MOM Approved", "✦ 2,500+ Placements",
+  "✦ 500+ Helpers", "✦ 98% Satisfaction", "✦ Background Checked",
+  "✦ Smart Matching", "✦ 24/7 Support",
+];
 
-const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid", "Willing to work on off-days"] as const;
-const ITEMS_PER_PAGE = 14;
+const MAID_TYPES = [
+  "New Maid", "Transfer Maid", "Ex-Singapore Maid", "Willing to work on off-days",
+] as const;
 
-// Cache key for maid list — avoids re-fetching on every visit within the same session
+const ITEMS_PER_PAGE = 15;
 const MAIDS_CACHE_KEY = "landing_maids_cache";
-const MAIDS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAIDS_CACHE_TTL = 5 * 60 * 1000;
 
 const getPrimaryPhoto = (maid: MaidProfile): string => {
   if (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) return maid.photoDataUrls[0];
@@ -463,12 +817,11 @@ const hasPhoto = (maid: MaidProfile): boolean => {
 type ClientLandingPageProps = { embedded?: boolean };
 
 /* ═════════════════════════════════════════════════════════════════════════════
-   COMPONENT
+   MAIN COMPONENT
 ═════════════════════════════════════════════════════════════════════════════*/
 const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const navigate = useNavigate();
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
-  // FIX 1: Initialise from localStorage immediately — no flicker, no waiting
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isLoading, setIsLoading] = useState(true);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
@@ -480,7 +833,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [language, setLanguage] = useState("No Preference");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // FIX 2: Derive login state from token synchronously — no async needed
   const isLoggedIn = !!getClientToken();
   const searchMaidsHref = isLoggedIn ? "/client/maids" : "/search-maids";
 
@@ -492,13 +844,10 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     }
   }, [location]);
 
-  // FIX 3: Load maids with in-memory cache to skip repeat fetches
   useEffect(() => {
     const load = async () => {
       try {
         setIsLoading(true);
-
-        // Check memory cache first
         const cached = sessionStorage.getItem(MAIDS_CACHE_KEY);
         if (cached) {
           const { data, ts } = JSON.parse(cached) as { data: MaidProfile[]; ts: number };
@@ -508,14 +857,11 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             return;
           }
         }
-
         const mr = await fetch("/api/maids?visibility=public");
         const md = (await mr.json().catch(() => ({}))) as { error?: string; maids?: MaidProfile[] };
         if (!mr.ok || !md.maids) throw new Error(md.error || "Failed to load public maids");
         const filtered = md.maids.filter((m) => m.isPublic && hasPhoto(m));
         setAllPublicMaids(filtered);
-
-        // Save to session cache
         sessionStorage.setItem(MAIDS_CACHE_KEY, JSON.stringify({ data: filtered, ts: Date.now() }));
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load public maids");
@@ -526,44 +872,58 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     void load();
   }, []);
 
-  // FIX 4: Session sync runs in background — doesn't block page render at all.
-  // If getStoredClient() already returned a user above, the page is instantly usable.
-  // This effect quietly refreshes the profile in the background.
   useEffect(() => {
-    if (!isLoggedIn) return; // skip entirely for guests — saves the network call
+    if (!isLoggedIn) return;
     const syncInBackground = async () => {
       try {
         const c = await syncClientProfileFromSession();
         if (c) setClientUser(c);
       } catch {
-        // Silently fail — stored client is still usable
+        // Silently fail
       }
     };
     void syncInBackground();
   }, [isLoggedIn]);
 
   const nationalityOptions = useMemo(() => {
-    const vals = Array.from(new Set(allPublicMaids.map((m) => m.nationality?.trim()).filter(Boolean) as string[])).sort();
+    const vals = Array.from(
+      new Set(allPublicMaids.map((m) => m.nationality?.trim()).filter(Boolean) as string[])
+    ).sort();
     return ["No Preference", ...vals];
   }, [allPublicMaids]);
 
-  const languageOptions = ["No Preference", "English", "Mandarin/Chinese-Dialect", "Bahasa Indonesia/Malaysia", "Hindi", "Tamil"];
-  const toggleMaidType = (t: string) => setMaidTypes((p) => p.includes(t) ? p.filter((x) => x !== t) : [...p, t]);
+  const languageOptions = [
+    "No Preference", "English", "Mandarin/Chinese-Dialect",
+    "Bahasa Indonesia/Malaysia", "Hindi", "Tamil",
+  ];
+
+  const toggleMaidType = (t: string) =>
+    setMaidTypes((p) => p.includes(t) ? p.filter((x) => x !== t) : [...p, t]);
 
   const filteredMaids = useMemo(() =>
-    filterMaids(allPublicMaids, { keyword, nationality: nationality === "No Preference" ? [] : [nationality], maidTypes, language }),
-    [allPublicMaids, keyword, maidTypes, nationality, language]);
+    filterMaids(allPublicMaids, {
+      keyword,
+      nationality: nationality === "No Preference" ? [] : [nationality],
+      maidTypes,
+      language,
+    }),
+    [allPublicMaids, keyword, maidTypes, nationality, language],
+  );
 
   useEffect(() => { setCurrentPage(1); }, [keyword, maidTypes, nationality, language]);
 
   const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
-  const pagedMaids = filteredMaids.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const pagedMaids = filteredMaids.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
 
   const pageNumbers = useMemo(() => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: (number | "...")[] = [1];
     if (currentPage > 3) pages.push("...");
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++)
+      pages.push(i);
     if (currentPage < totalPages - 2) pages.push("...");
     pages.push(totalPages);
     return pages;
@@ -576,21 +936,21 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     if (maidTypes.length === 1) { params.set("type", maidTypes[0]); draft.maidType = maidTypes[0]; }
     if (nationality !== "No Preference") {
       params.set("nationality", nationality); draft.natNoPreference = false;
-      if (nationality === "Filipino") draft.natFilipino = true;
-      if (nationality === "Indonesian") draft.natIndonesian = true;
-      if (nationality === "Myanmar") draft.natMyanmar = true;
-      if (nationality === "Indian") draft.natIndian = true;
-      if (nationality === "Sri Lankan") draft.natSriLankan = true;
-      if (nationality === "Cambodian") draft.natCambodian = true;
+      if (nationality === "Filipino")    draft.natFilipino    = true;
+      if (nationality === "Indonesian")  draft.natIndonesian  = true;
+      if (nationality === "Myanmar")     draft.natMyanmar     = true;
+      if (nationality === "Indian")      draft.natIndian      = true;
+      if (nationality === "Sri Lankan")  draft.natSriLankan   = true;
+      if (nationality === "Cambodian")   draft.natCambodian   = true;
       if (nationality === "Bangladeshi") draft.natBangladeshi = true;
     }
     if (language !== "No Preference") {
       params.set("language", language); draft.langNoPreference = false;
-      if (language === "English") draft.langEnglish = true;
-      if (language === "Mandarin/Chinese-Dialect") draft.langMandarin = true;
-      if (language === "Bahasa Indonesia/Malaysia") draft.langBahasaIndonesia = true;
-      if (language === "Hindi") draft.langHindi = true;
-      if (language === "Tamil") draft.langTamil = true;
+      if (language === "English")                   draft.langEnglish          = true;
+      if (language === "Mandarin/Chinese-Dialect")  draft.langMandarin         = true;
+      if (language === "Bahasa Indonesia/Malaysia") draft.langBahasaIndonesia  = true;
+      if (language === "Hindi")                     draft.langHindi            = true;
+      if (language === "Tamil")                     draft.langTamil            = true;
     }
     if (Object.keys(draft).length > 0) params.set("filters", JSON.stringify(draft));
     return params;
@@ -601,15 +961,28 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     const params = buildParams();
     params.set("intent", "request");
     const target = `/client/maids?${params.toString()}`;
-    if (!isLoggedIn) { setPendingLoginPath(buildEmployerLoginPath(target)); setLoginPromptOpen(true); return; }
+    if (!isLoggedIn) {
+      setPendingLoginPath(buildEmployerLoginPath(target));
+      setLoginPromptOpen(true);
+      return;
+    }
     navigate(target);
   };
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    window.setTimeout(() => document.getElementById("maid-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    window.setTimeout(
+      () => document.getElementById("maid-results")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      0,
+    );
   };
-  const clearFilters = () => { setKeyword(""); setMaidTypes([]); setNationality("No Preference"); setLanguage("No Preference"); setCurrentPage(1); };
-  const hasFilters = keyword || maidTypes.length > 0 || nationality !== "No Preference" || language !== "No Preference";
+  const clearFilters = () => {
+    setKeyword(""); setMaidTypes([]); setNationality("No Preference");
+    setLanguage("No Preference"); setCurrentPage(1);
+  };
+  const hasFilters = keyword || maidTypes.length > 0
+    || nationality !== "No Preference"
+    || language !== "No Preference";
+
 
   return (
     <div className="dm" style={{ minHeight: "100vh", background: "#fff", fontFamily: "'DM Sans', sans-serif" }}>
@@ -617,9 +990,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
-      {/* ══════════════════════════════════════════════════
-          HERO
-      ══════════════════════════════════════════════════ */}
       <section style={{ background: "linear-gradient(135deg, #061800 0%, #0B2E00 40%, #145200 100%)", position: "relative", overflow: "hidden" }}>
         <div className="hero-noise" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }} />
         <div style={{ position: "absolute", top: "-80px", right: "-80px", width: 420, height: 420, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,224,0,0.18) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
@@ -633,9 +1003,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             <div style={{ animation: "fadeSlideUp 0.7s ease both" }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 28 }}>
                 {[
-                  { Icon: Shield,     label: "Licensed Agency",  color: "#FFE000" },
-                  { Icon: Award,      label: "15+ Years",         color: "#5DD800" },
-                  { Icon: BadgeCheck, label: "MOM Approved",      color: "#FFE000" },
+                  { Icon: Shield,     label: "Licensed Agency", color: "#FFE000" },
+                  { Icon: Award,      label: "15+ Years",        color: "#5DD800" },
+                  { Icon: BadgeCheck, label: "MOM Approved",     color: "#FFE000" },
                 ].map(({ Icon, label, color }) => (
                   <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 100, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700, fontFamily: "'Unbounded', sans-serif", letterSpacing: "0.03em" }}>
                     <Icon size={11} color={color} /> {label}
@@ -644,16 +1014,16 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               </div>
 
               <h1 className="hero-headline hero-headline-size" style={{ fontSize: "clamp(2rem,4.2vw,3.6rem)", lineHeight: 1.06, fontWeight: 900, color: "#fff", margin: "0 0 10px", letterSpacing: "-0.03em" }}>
-                Find Your<br />
+                Hiring a Helper<br />
                 <span style={{ color: "#FFE000", display: "inline-block", position: "relative" }}>
-                  Perfect Helper
+                  Now More Affordable
                   <span style={{ display: "block", position: "absolute", bottom: -4, left: 0, right: 0, height: 4, background: "linear-gradient(90deg, #FFE000, #5DD800)", borderRadius: 4 }} />
                 </span><br />
-                <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.7em", fontWeight: 700 }}>With Confidence.</span>
+                <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.7em", fontWeight: 700 }}>Than You Think.</span>
               </h1>
 
               <p style={{ color: "rgba(255,255,255,0.58)", fontSize: 15, lineHeight: 1.75, maxWidth: 440, margin: "20px 0 32px" }}>
-                Trusted by thousands of Singapore families. We match you with thoroughly vetted, professional domestic helpers tailored to your household.
+                We keep our fees transparent and straightforward — so more families can access reliable, professional domestic help without the financial stress.
               </p>
 
               {clientUser && (
@@ -730,9 +1100,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
-          SEARCH
-      ══════════════════════════════════════════════════ */}
+
       <section id="search" className="section-pad" style={{ background: "#F4FFDF", padding: "64px 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
@@ -747,7 +1115,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           </div>
 
           <div className="search-card" style={{ maxWidth: 940, margin: "0 auto" }}>
-
             {/* Card header */}
             <div style={{ background: "linear-gradient(105deg, #061800 0%, #145200 60%, #2E8B00 100%)", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
               <span style={{ display: "flex", alignItems: "center", gap: 10, color: "#fff", fontFamily: "'Unbounded', sans-serif", fontSize: 12, fontWeight: 800 }}>
@@ -760,7 +1127,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
             {/* Card body */}
             <div className="search-body" style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 22 }}>
-
               {/* Keywords */}
               <div className="filter-row" style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <label className="filter-label" style={{ flexShrink: 0, fontFamily: "'Unbounded', sans-serif", fontSize: 10, fontWeight: 800, color: "#145200", width: 100, letterSpacing: "0.04em" }}>KEYWORDS</label>
@@ -842,9 +1208,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
-          MAID RESULTS
-      ══════════════════════════════════════════════════ */}
       <section id="maid-results" className="section-pad" style={{ background: "#fff", padding: "64px 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
@@ -856,7 +1219,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               <h2 className="hero-headline" style={{ fontSize: "clamp(1.3rem,2.8vw,2rem)", color: "#061800", margin: "0 0 6px", letterSpacing: "-0.02em" }}>Available Public Maids</h2>
               <p style={{ fontSize: 13, color: "#7A9A55", margin: 0 }}>Browse currently available profiles matching your filters.</p>
             </div>
-            {totalPages > 1 && <p style={{ fontSize: 13, color: "#aaa", flexShrink: 0 }}>Page {currentPage} of {totalPages}</p>}
+            {totalPages > 1 && (
+              <p style={{ fontSize: 13, color: "#aaa", flexShrink: 0 }}>Page {currentPage} of {totalPages}</p>
+            )}
           </div>
 
           {isLoading ? (
@@ -864,10 +1229,10 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               {Array.from({ length: 14 }).map((_, i) => (
                 <div key={i} style={{ borderRadius: 0, overflow: "hidden", border: "2px solid #F0F7E0", background: "#fff" }}>
                   <div style={{ aspectRatio: "3/4", background: "linear-gradient(90deg, #f0f0f0 25%, #e8f5d0 50%, #f0f0f0 75%)", backgroundSize: "400px 100%", animation: "shimmer 1.5s infinite" }} />
-                  <div style={{ padding: "14px 14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ padding: "10px 12px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ height: 10, width: "75%", borderRadius: 4, background: "#f0f0f0" }} />
-                    <div style={{ height: 8, width: "50%", borderRadius: 4, background: "#f0f0f0" }} />
-                    <div style={{ height: 24, width: "100%", borderRadius: 8, background: "#f0f0f0", marginTop: 4 }} />
+                    <div style={{ height: 8,  width: "50%", borderRadius: 4, background: "#f0f0f0" }} />
+                    <div style={{ height: 8,  width: "60%", borderRadius: 4, background: "#f0f0f0" }} />
                   </div>
                 </div>
               ))}
@@ -897,53 +1262,21 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               )}
 
               <div className="maid-grid">
-                {pagedMaids.map((maid) => {
-                  const photo = getPrimaryPhoto(maid);
-                  const age = calculateAge(maid.dateOfBirth);
-                  const typeLower = (maid.type || "").toLowerCase();
-                  const typeBg   = typeLower.includes("new")      ? "#ECFCE0" : typeLower.includes("transfer") ? "#E0EEFF" : "#FFF8E0";
-                  const typeColor= typeLower.includes("new")      ? "#1A6E00" : typeLower.includes("transfer") ? "#1A4A8E" : "#8A6000";
-                  const flagCode = getNationalityCode(maid.nationality);
-
-                  return isLoggedIn ? (
-                    <Link key={maid.referenceCode} to={`/maids/${encodeURIComponent(maid.referenceCode)}`} className="maid-card" style={{ textDecoration: "none" }}>
-                      <div style={{ position: "relative", width: "100%", background: "#f8f8f8" }}>
-                        <img src={photo} alt={maid.fullName} loading="lazy" decoding="async" />
-                        {maid.type && (
-                          <span style={{ position: "absolute", top: 10, left: 10, background: typeBg, color: typeColor, fontSize: 9, fontWeight: 700, padding: "4px 10px", borderRadius: 100, fontFamily: "'Unbounded', sans-serif", letterSpacing: "0.03em" }}>
-                            {maid.type}
-                          </span>
-                        )}
-                      </div>
-                      <div className="maid-card-info" style={{ background: "#fff" }}>
-                        <h3 style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 700, color: "#0B2E00", lineHeight: 1.3, fontFamily: "'Unbounded', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{maid.fullName}</h3>
-                        <p style={{ margin: "0 0 8px", fontSize: 10, color: "#8AAA65", fontFamily: "monospace" }}>{maid.referenceCode}</p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                          {maid.nationality && (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#F0FBD8", padding: "4px 9px", fontSize: 10, color: "#2E6000", borderRadius: 100, border: "1px solid #C8E880", fontWeight: 600 }}>
-                              <FlagCircle code={flagCode} />{maid.nationality}
-                            </span>
-                          )}
-                          {age && <span style={{ background: "#F0FBD8", padding: "4px 9px", fontSize: 10, color: "#2E6000", borderRadius: 100, border: "1px solid #C8E880", fontWeight: 600 }}>{age} yrs</span>}
-                        </div>
-                      </div>
-                    </Link>
+                {pagedMaids.map((maid) =>
+                  isLoggedIn ? (
+                    <MaidCardFull
+                      key={maid.referenceCode}
+                      maid={maid}
+                      searchMaidsHref={searchMaidsHref}
+                    />
                   ) : (
-                    <div key={maid.referenceCode} className="maid-card">
-                      <div style={{ position: "relative", width: "100%", filter: "blur(5px)", opacity: 0.7, userSelect: "none", pointerEvents: "none" }}>
-                        <img src={photo} alt="Maid profile" loading="lazy" decoding="async" />
-                        {maid.type && (
-                          <span style={{ position: "absolute", top: 10, left: 10, background: typeBg, color: typeColor, fontSize: 9, fontWeight: 700, padding: "4px 10px", borderRadius: 100 }}>{maid.type}</span>
-                        )}
-                      </div>
-                      <div className="maid-card-info" style={{ background: "#fff" }}>
-                        <div style={{ height: 10, width: "75%", background: "#e8f5d0", borderRadius: 4, filter: "blur(2px)", marginBottom: 6 }} />
-                        <div style={{ height: 8, width: "50%", background: "#e8f5d0", borderRadius: 4, filter: "blur(2px)", marginBottom: 8 }} />
-                        <p style={{ textAlign: "center", fontSize: 10, color: "#7AAA45", margin: "8px 0 0" }}>🔒 Login to view</p>
-                      </div>
-                    </div>
-                  );
-                })}
+                    <LockedMaidCard
+                      key={maid.referenceCode}
+                      maid={maid}
+                      loginPath="/employer-login"
+                    />
+                  )
+                )}
               </div>
 
               {totalPages > 1 && (
@@ -964,9 +1297,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
-          SERVICES
-      ══════════════════════════════════════════════════ */}
       <section id="services" className="section-pad-lg" style={{ background: "#061800", padding: "80px 0", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(255,224,0,0.08) 1px, transparent 1px)", backgroundSize: "32px 32px", pointerEvents: "none" }} />
         <div style={{ position: "absolute", top: -100, right: -100, width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, rgba(93,216,0,0.12) 0%, transparent 70%)", pointerEvents: "none" }} />
@@ -1007,9 +1337,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
-          WHY CHOOSE US
-      ══════════════════════════════════════════════════ */}
+
       <section id="why" className="section-pad-lg" style={{ background: "#F4FFDF", padding: "80px 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
           <div style={{ textAlign: "center", marginBottom: 56 }}>
@@ -1093,9 +1421,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             <div>
               <h5 className="mb-3 font-body text-sm font-semibold uppercase tracking-wider">Company</h5>
               <ul className="space-y-2 font-body text-sm opacity-70">
-                <li><a href="#why" className="transition-opacity hover:opacity-100">About Us</a></li>
+                <li><a href="#why"      className="transition-opacity hover:opacity-100">About Us</a></li>
                 <li><a href="#services" className="transition-opacity hover:opacity-100">Our Services</a></li>
-                <li><a href="#contact" className="transition-opacity hover:opacity-100">Contact</a></li>
+                <li><a href="#contact"  className="transition-opacity hover:opacity-100">Contact</a></li>
               </ul>
             </div>
             <div>

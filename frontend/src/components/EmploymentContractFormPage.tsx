@@ -1362,60 +1362,78 @@ export const EmploymentContractPage = ({
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════ */}
-        {/* ── BOTTOM ACTION BAR — always visible ──────── */}
-        {/* ══════════════════════════════════════════════ */}
-        <div className="sticky bottom-0 z-40 -mx-4 px-4 pb-4">
-          <div className="rounded-2xl border border-gray-200 bg-white/95 shadow-xl backdrop-blur-md px-5 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* ══════════════════════════════════════════════════════════════ */}
+        {/* ── BOTTOM ACTION BAR                                        */}
+        {/* ── Create mode: inline Save Contract button only (no bar)   */}
+        {/* ── Edit/View mode: full sticky bar with all controls        */}
+        {/* ══════════════════════════════════════════════════════════════ */}
+        {isCreateMode ? (
+          /* Create mode — just a simple inline Save button, no floating bar */
+          <div className="flex justify-end pt-2 pb-6">
+            <button
+              type="button"
+              onClick={() => void submitContract()}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-7 py-3 text-[15px] font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all"
+            >
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+              {isSubmitting ? "Saving…" : "Save Contract"}
+            </button>
+          </div>
+        ) : (
+          /* Edit / View mode — sticky floating bar */
+          <div className="sticky bottom-0 z-40 -mx-4 px-4 pb-4">
+            <div className="rounded-2xl border border-gray-200 bg-white/95 shadow-xl backdrop-blur-md px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
 
-              {/* Left: document selection controls */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAll}
-                  className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-colors"
-                >
-                  <Check className="h-4 w-4" />
-                  {allSelected ? "Deselect All" : "Select All"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadSelected}
-                  disabled={selectedDocs.size === 0}
-                  className="inline-flex items-center gap-2 rounded-xl border-2 border-sky-200 bg-sky-50 px-4 py-2.5 text-[14px] font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-40 disabled:cursor-default transition-colors"
-                >
-                  <Download className="h-4 w-4" />
-                  Download
-                  {selectedDocs.size > 0 && (
-                    <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[12px] font-black">{selectedDocs.size}</span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handlePrintForms()}
-                  className="inline-flex items-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-[14px] font-bold text-violet-700 hover:bg-violet-100 transition-colors"
-                >
-                  <Printer className="h-4 w-4" /> Print All
-                </button>
+                {/* Left: document selection controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+                  >
+                    <Check className="h-4 w-4" />
+                    {allSelected ? "Deselect All" : "Select All"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadSelected}
+                    disabled={selectedDocs.size === 0}
+                    className="inline-flex items-center gap-2 rounded-xl border-2 border-sky-200 bg-sky-50 px-4 py-2.5 text-[14px] font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-40 disabled:cursor-default transition-colors"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                    {selectedDocs.size > 0 && (
+                      <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[12px] font-black">{selectedDocs.size}</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handlePrintForms()}
+                    className="inline-flex items-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-[14px] font-bold text-violet-700 hover:bg-violet-100 transition-colors"
+                  >
+                    <Printer className="h-4 w-4" /> Print All
+                  </button>
+                </div>
+
+                {/* Right: Submit & Save */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void submitContract()}
+                    disabled={isSubmitting}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-2.5 text-[15px] font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all"
+                  >
+                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                    {isSubmitting ? "Saving…" : "Submit & Save"}
+                  </button>
+                </div>
+
               </div>
-
-              {/* Right: Save & Generate */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void submitContract()}
-                  disabled={isSubmitting}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-2.5 text-[15px] font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-default transition-all"
-                >
-                  {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                  {isSubmitting ? "Saving…" : isCreateMode ? "Save Contract" : "Submit & Save"}
-                </button>
-              </div>
-
             </div>
           </div>
-        </div>
+        )}
 
       </div>
 
@@ -1429,7 +1447,7 @@ export const EmploymentContractPage = ({
       {/* Back to top */}
       {showBackToTop && (
         <button type="button" onClick={scrollToTop}
-          className="fixed bottom-24 right-6 z-50 flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-[14px] font-bold text-white shadow-xl hover:bg-emerald-700 active:scale-95 transition-all">
+          className={`fixed right-6 z-50 flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-[14px] font-bold text-white shadow-xl hover:bg-emerald-700 active:scale-95 transition-all ${isCreateMode ? "bottom-6" : "bottom-24"}`}>
           <ArrowUp className="h-4 w-4" /> Top
         </button>
       )}

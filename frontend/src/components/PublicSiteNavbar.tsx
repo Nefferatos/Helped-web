@@ -16,13 +16,30 @@ import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabase
 import { cn } from "@/lib/utils";
 
 const links = [
-  { label: "Home", to: "/" },
+  { label: "Home",         to: "/"          },
   { label: "Search Maids", to: "/search-maids" },
-  { label: "About Us", to: "/about" },
-  { label: "Agency", to: "/agency" },
-  { label: "Enquiry", to: "/enquiry2" },
-  { label: "FAQ", to: "/faq" },
+  { label: "About Us",     to: "/about"     },
+  { label: "Agency",       to: "/agency"    },
+  { label: "Enquiry",      to: "/enquiry2"  },
+  { label: "FAQ",          to: "/faq"       },
 ];
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Arrow icon — matches the → symbol visible in the reference image
+───────────────────────────────────────────────────────────────────────────── */
+const ArrowRightIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="h-3.5 w-3.5"
+  >
+    <path d="M3 8h10M9 4l4 4-4 4" />
+  </svg>
+);
 
 const PublicSiteNavbar = () => {
   const location = useLocation();
@@ -45,51 +62,82 @@ const PublicSiteNavbar = () => {
     `${location.pathname}${location.search}${location.hash}`
   );
 
-  // Reusable login button — desktop header variant
+  /* ── Desktop header variant ───────────────────────────────────────────── */
   const LoginButton = () => (
     <Link
       to={loginPath}
-      className="inline-flex items-center gap-2 rounded-[9px] border-b-[3px] border-green-950 bg-green-800 px-5 py-2 text-[13.5px] font-bold tracking-wide text-white transition-colors hover:bg-green-900"
+      className={cn(
+        // Outer button — matches the dark-green pill in the reference
+        "inline-flex items-center gap-0 overflow-hidden",
+        "rounded-[10px] border-b-[3px] border-green-950",
+        "bg-[#1c5e2a] text-white",
+        "text-[13.5px] font-bold tracking-wide",
+        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
+        "select-none"
+      )}
     >
-      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white/20">
-        <LogIn className="h-3.5 w-3.5" />
+      {/* Icon box — darker green panel on the left */}
+      <span
+        className={cn(
+          "flex h-full items-center justify-center",
+          "bg-[#164d22]",           // noticeably darker than the button body
+          "px-3 py-[9px]",
+          "border-r border-green-950/40"
+        )}
+      >
+        <ArrowRightIcon />
       </span>
-      Employer Login
+
+      {/* Label */}
+      <span className="px-4 py-[9px]">Employer Login</span>
     </Link>
   );
 
-  // Reusable login button — full-width menu variant
+  /* ── Full-width menu variant (mobile drawer) ──────────────────────────── */
   const LoginButtonFull = () => (
     <Link
       to={loginPath}
       onClick={() => setIsMobileMenuOpen(false)}
-      className="flex h-11 w-full items-center justify-center gap-2.5 rounded-[9px] border-b-[3px] border-green-950 bg-green-800 text-[14px] font-bold tracking-wide text-white transition-colors hover:bg-green-900"
+      className={cn(
+        "flex h-11 w-full overflow-hidden",
+        "rounded-[10px] border-b-[3px] border-green-950",
+        "bg-[#1c5e2a] text-white",
+        "text-[14px] font-bold tracking-wide",
+        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
+        "select-none"
+      )}
     >
-      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-md bg-white/20">
-        <LogIn className="h-3.5 w-3.5" />
+      {/* Icon box */}
+      <span
+        className={cn(
+          "flex items-center justify-center",
+          "bg-[#164d22]",
+          "px-4",
+          "border-r border-green-950/40"
+        )}
+      >
+        <ArrowRightIcon />
       </span>
-      Employer Login
-    </Link>
-  );
 
+      {/* Label */}
+      <span className="flex flex-1 items-center justify-center">
+        Employer Login
+      </span>
+    </Link>
+  ); 
+
+  /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <header className="sticky top-0 z-50 border-b-2 border-green-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
-      <div className="mx-auto flex h-14 max-w-screen-xl items-center px-4 sm:px-6 md:h-[58px]">
+      <div className="mx-auto flex h-14 max-w-screen-xl items-center px-4 sm:px-6 md:h-[80px]">
 
         {/* Logo */}
-        <Link to="/" className="flex shrink-0 items-center gap-2">
-          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-green-800">
-            <svg viewBox="0 0 16 16" fill="none" className="h-[15px] w-[15px]">
-              <path
-                d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5 4.5 8.5 4.5 8.5S12.5 9.5 12.5 6C12.5 3.5 10.5 1.5 8 1.5zm0 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"
-                fill="white"
-              />
-            </svg>
-          </div>
-          <span className="text-[20px] font-bold tracking-tight text-green-950">
-            Find Maids{" "}
-            <span className="font-medium text-green-600">At The Agency</span>
-          </span>
+        <Link to="/" className="flex shrink-0 items-center">
+          <img
+            src="/FM_logo.png"
+            alt="Find Maids At The Agency"
+            className="h-20 w-auto object-contain"
+          />
         </Link>
 
         {/* Desktop nav — centered, only lg+ */}
@@ -139,7 +187,10 @@ const PublicSiteNavbar = () => {
                 <DropdownMenuItem asChild><Link to="/client/profile">Profile</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link to="/client/history">History</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600" onClick={() => void logoutClientPortal("/")}>
+                <DropdownMenuItem
+                  className="text-red-600"
+                  onClick={() => void logoutClientPortal("/")}
+                >
                   Logout
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -149,9 +200,9 @@ const PublicSiteNavbar = () => {
           )}
         </div>
 
-        {/* Tablet + Mobile: hamburger only (no login button in header) */}
+        {/* Tablet + Mobile: hamburger */}
         <div className="ml-auto flex items-center lg:hidden">
-          {/* Show avatar pill on tablet if logged in */}
+          {/* Avatar pill on tablet when logged in */}
           {clientUser && (
             <button className="mr-2 hidden items-center gap-2 rounded-full border-2 border-green-200 bg-green-50 py-1 pl-1 pr-2.5 sm:flex">
               <Avatar className="h-7 w-7">
@@ -203,7 +254,7 @@ const PublicSiteNavbar = () => {
                       "flex items-center justify-between border-b border-green-50 px-5 py-3.5 text-[14px] font-medium transition-colors",
                       "border-l-[3px]",
                       isActive
-                        ? "border-l-green-700 bg-green-50 font-bold text-green-800 underline underline-offset-2"
+                        ? "border-l-green-700 bg-green-50 font-bold text-green-800"
                         : "border-l-transparent text-gray-700 hover:bg-green-50 hover:text-green-800"
                     )
                   }
