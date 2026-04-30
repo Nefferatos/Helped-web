@@ -8,7 +8,6 @@ const loadPdfLib = async () => {
 };
 
 // ── html2canvas + jsPDF loaders (lazy, fully typed) ────────────────────────
-// These types match the actual default exports without using `any`.
 type Html2CanvasFn = (element: HTMLElement, options?: Record<string, unknown>) => Promise<HTMLCanvasElement>;
 type JsPDFConstructor = new (options?: { orientation?: string; unit?: string; format?: string }) => {
   addPage: () => void;
@@ -221,10 +220,6 @@ const downloadBytes = (filename: string, bytes: Uint8Array, mimeType: string) =>
   downloadBlob(filename, blob);
 };
 
-// ── Embedded assets ────────────────────────────────────────────────────────
-const AGENCY_LOGO   = "data:image/jpeg;base64,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";
-const FULLBODY_PHOTO = ""
-
 // ── MOM A4 Bio-data HTML builder ───────────────────────────────────────────
 const buildMomBiodataHtml = (maid: MaidProfile): string => {
   const agencyContact = (maid.agencyContact ?? {}) as Record<string, unknown>;
@@ -243,8 +238,7 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
       ? [maid.photoDataUrl]
       : [];
 
-  // Use profile photo if available, otherwise fall back to embedded full-body
-  const photoSrc = photos[1] || photos[0] || FULLBODY_PHOTO;
+  const photoSrc = photos[1] || photos[0] || "";
 
   const age = calcAge(maid.dateOfBirth);
   const importPayloadBase64 = encodeBase64Utf8(JSON.stringify(buildImportPayloadWithPhoto(maid)));
@@ -295,7 +289,7 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
     }
 
     /* ── Agency header ── */
-   
+    .agency-header { margin-bottom: 8px; }
     .agency-logo { height: 64px; width: auto; display: block; }
     .agency-license { font-size: 9pt; text-align: right; color: #444; }
 
@@ -449,10 +443,30 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
     .foot-item { display: flex; gap: 6px; margin: 4px 0; font-size: 9.5pt; }
     .foot-bullet { min-width: 12px; }
 
-    .page-num { text-align: right; font-size: 9pt; margin: 14px 0 4px; }
+    /* ── Page break sections ── */
+    .page-break {
+      display: block;
+      text-align: right;
+      font-size: 9pt;
+      padding-top: 10mm;
+      margin-bottom: 4px;
+    }
+    /* First page-break label needs no top padding */
+    .page-break:first-of-type {
+      padding-top: 0;
+    }
 
     @media print {
       body { padding: 10mm 12mm; }
+      .page-break {
+        page-break-before: always;
+        break-before: page;
+        padding-top: 0;
+      }
+      .page-break:first-of-type {
+        page-break-before: avoid;
+        break-before: avoid;
+      }
     }
   `;
 
@@ -468,10 +482,10 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
 
 <!-- ═══ AGENCY HEADER WITH LOGO ═══ -->
 <div class="agency-header">
-  <img class="agency-logo" src="${AGENCY_LOGO}" alt="At The Agency logo" />
+  <img class="agency-logo" src="/FM_logo.png" alt="At The Agency logo" />
 </div>
 
-<div class="page-num">A-1</div>
+<div class="page-break">A-1</div>
 
 <div class="doc-title">BIO-DATA OF FOREIGN DOMESTIC WORKER (FDW)</div>
 <div class="doc-note">*Please ensure that you run through the information within the biodata as it is an important document to help you select a suitable FDW</div>
@@ -498,7 +512,9 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
     <div class="field-row"><span class="field-num">&nbsp;</span><span class="field-label">– Age(s) of children (if any):</span><span class="field-value">${esc(String(introduction.agesOfChildren ?? ""))}</span></div>
   </div>
   <div class="photo-box">
-    <img src="${photoSrc}" alt="${esc(maid.fullName)}" />
+    ${photoSrc
+      ? `<img src="${photoSrc}" alt="${esc(maid.fullName)}" />`
+      : `<div class="no-photo">No Photo</div>`}
   </div>
 </div>
 
@@ -584,8 +600,8 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
 </div>
 <div class="field-row"><span class="field-num">20.</span><span class="field-label">Any other remarks:</span><span class="field-value">${esc(String(skillsPref.availabilityRemark ?? ""))}</span></div>
 
-<!-- ═══ PAGE BREAK ═══ -->
-<div class="page-num">A-2</div>
+<!-- ═══ PAGE BREAK → A-2 ═══ -->
+<div class="page-break">A-2</div>
 
 <!-- ═══ (B) SKILLS ═══ -->
 <div class="sec-label">(B) SKILLS OF FDW</div>
@@ -613,8 +629,8 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
   <tbody>${workAreaRows}</tbody>
 </table>
 
-<!-- ═══ PAGE BREAK ═══ -->
-<div class="page-num">A-3</div>
+<!-- ═══ PAGE BREAK → A-3 ═══ -->
+<div class="page-break">A-3</div>
 
 <!-- ═══ (C) EMPLOYMENT ═══ -->
 <div class="sec-label">(C) EMPLOYMENT HISTORY OF THE FDW</div>
@@ -662,8 +678,8 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
 <div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;FDW can be interviewed by video-conference</div>
 <div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;FDW can be interviewed in person</div>
 
-<!-- ═══ PAGE BREAK ═══ -->
-<div class="page-num">A-4</div>
+<!-- ═══ PAGE BREAK → A-4 ═══ -->
+<div class="page-break">A-4</div>
 
 <!-- ═══ (E) OTHER REMARKS ═══ -->
 <div class="sec-label">(E) OTHER REMARKS</div>
@@ -729,22 +745,20 @@ const A4_H_MM = 297;
 const A4_W_PX = 794; // ~96 dpi A4 width
 
 // ── Render the MOM HTML biodata into a hidden iframe, capture with html2canvas,
-//    then slice into A4 pages with jsPDF — identical to the print window layout.
+//    then slice into A4 pages using .page-break element positions as boundaries.
 const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> => {
   try {
     const [html2canvas, JsPDF] = await Promise.all([loadHtml2Canvas(), loadJsPdf()]);
 
-    // Build the same HTML that the print window uses
     const html = buildMomBiodataHtml(maid);
 
-    // Render into a hidden, A4-width iframe so layout matches print exactly
     const iframe = document.createElement("iframe");
     iframe.style.cssText = [
       "position:fixed",
       "top:0",
       "left:0",
       `width:${A4_W_PX}px`,
-      "height:1px",           // grows with content
+      "height:1px",
       "border:none",
       "opacity:0",
       "pointer-events:none",
@@ -761,12 +775,48 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
     if (!iframeDoc) { document.body.removeChild(iframe); return false; }
 
     const body = iframeDoc.body;
-    // Let the iframe expand to its natural height
-    iframe.style.height = `${body.scrollHeight}px`;
+    iframe.style.height = `${body.scrollHeight + 200}px`;
 
-    // Wait one frame for layout to settle
+    // Wait for all images (logo + profile photo) to fully load
+    const images = Array.from(iframeDoc.images);
+    await Promise.all(
+      images.map(
+        (img) => new Promise<void>((res) => {
+          if (img.complete) { res(); return; }
+          img.onload = () => res();
+          img.onerror = () => res();
+        })
+      )
+    );
+
+    // Allow fonts + layout to fully settle
+    await new Promise<void>((r) => setTimeout(r, 400));
+
+    // Re-measure height after images load (they may have changed layout)
+    iframe.style.height = `${body.scrollHeight + 200}px`;
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
+    // ── Find .page-break elements to determine per-page slice boundaries ──
+    const pageBreakEls = Array.from(
+      iframeDoc.querySelectorAll<HTMLElement>(".page-break")
+    );
+
+    const totalH = body.scrollHeight;
+    const sections: Array<{ top: number; bottom: number }> = [];
+
+    pageBreakEls.forEach((el, idx) => {
+      const top = el.offsetTop;
+      const nextEl = pageBreakEls[idx + 1];
+      const bottom = nextEl ? nextEl.offsetTop : totalH;
+      sections.push({ top, bottom });
+    });
+
+    // Fallback: treat entire body as one page if no markers found
+    if (sections.length === 0) {
+      sections.push({ top: 0, bottom: totalH });
+    }
+
+    // Capture the full body canvas at 2× scale
     const canvas = await html2canvas(body, {
       scale: 2,
       useCORS: true,
@@ -779,45 +829,41 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
 
     document.body.removeChild(iframe);
 
-    // ── Slice canvas into A4 pages ────────────────────────────────────────
     const pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-    // canvas is 2× scale, so logical px = canvas px / 2
-    const logicalCanvasW = canvas.width / 2;
-    const logicalCanvasH = canvas.height / 2;
+    // Logical px → mm ratio (canvas is 2× so divide canvas.width by 2)
+    const pxPerMm = (canvas.width / 2) / A4_W_MM;
 
-    // How many logical px fit in one A4 page height (preserving aspect ratio of A4)
-    const pxPerMm = logicalCanvasW / A4_W_MM;
-    const pageHeightPx = A4_H_MM * pxPerMm;           // logical px per page
-    const totalPages = Math.ceil(logicalCanvasH / pageHeightPx);
+    sections.forEach((section, idx) => {
+      if (idx > 0) pdf.addPage();
 
-    for (let i = 0; i < totalPages; i++) {
-      if (i > 0) pdf.addPage();
+      const srcY  = section.top;
+      const srcH  = section.bottom - section.top;
+      const clampedSrcH = Math.min(srcH, (canvas.height / 2) - srcY);
+      if (clampedSrcH <= 0) return;
 
-      const srcY = i * pageHeightPx;
-      const srcH = Math.min(pageHeightPx, logicalCanvasH - srcY);
-
-      // Slice out this page's rows from the full canvas (at 2× scale)
+      // Slice this page's rows out of the full 2× canvas
       const sliceCanvas = document.createElement("canvas");
-      sliceCanvas.width = canvas.width;                // full 2× width
-      sliceCanvas.height = Math.round(srcH * 2);      // 2× scale
+      sliceCanvas.width  = canvas.width;
+      sliceCanvas.height = Math.round(clampedSrcH * 2);
 
       const ctx = sliceCanvas.getContext("2d");
       if (ctx) {
         ctx.drawImage(
           canvas,
-          0, Math.round(srcY * 2),           // source x, y (2× coords)
-          canvas.width, Math.round(srcH * 2), // source w, h
-          0, 0,                               // dest x, y
+          0, Math.round(srcY * 2),
+          canvas.width, Math.round(clampedSrcH * 2),
+          0, 0,
           sliceCanvas.width, sliceCanvas.height,
         );
       }
 
       const sliceData = sliceCanvas.toDataURL("image/jpeg", 0.95);
-      // Fill the full A4 page — height proportional to how much content is on this slice
-      const destH = (srcH / pageHeightPx) * A4_H_MM;
+
+      // Scale content to fit A4 width; cap height at A4 page height
+      const destH = Math.min((clampedSrcH / pxPerMm), A4_H_MM);
       pdf.addImage(sliceData, "JPEG", 0, 0, A4_W_MM, destH);
-    }
+    });
 
     pdf.setProperties({
       title: `${maid.fullName || maid.referenceCode} Bio-data`,
@@ -826,7 +872,8 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
     });
     pdf.save(`${maid.referenceCode || maid.fullName}-bio-data.pdf`);
     return true;
-  } catch {
+  } catch (err) {
+    console.error("Canvas PDF export failed:", err);
     return false;
   }
 };
@@ -944,39 +991,45 @@ export const exportMaidProfileToPdf = async (maid: MaidProfile) => {
   const bytes = await pdf.save({ useObjectStreams: false });
   downloadBytes(`${maid.referenceCode || maid.fullName}-bio-data.pdf`, bytes, "application/pdf");
 
-  // Also open the fully-styled HTML layout in a print window so the user
-  // can additionally save a design-accurate PDF via the browser print dialog.
+  // Also open the fully-styled HTML layout in a print window
   const html = buildMomBiodataHtml(maid);
   const printStyle = `
     <style>
       @page { size: A4; margin: 10mm 12mm; }
       @media print {
         body { padding: 0 !important; }
-        .page-num { page-break-before: always; padding-top: 4mm; }
-        .page-num:first-of-type { page-break-before: avoid; }
+        .page-break {
+          page-break-before: always;
+          break-before: page;
+          padding-top: 0;
+        }
+        .page-break:first-of-type {
+          page-break-before: avoid;
+          break-before: avoid;
+        }
       }
     </style>
   `;
   const htmlWithPrint = html.replace("</head>", `${printStyle}</head>`);
 
-  const iframe = document.createElement("iframe");
-  iframe.style.cssText =
+  const printIframe = document.createElement("iframe");
+  printIframe.style.cssText =
     "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:99999;opacity:0;pointer-events:none;";
-  document.body.appendChild(iframe);
+  document.body.appendChild(printIframe);
 
-  const cleanup = () => setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 3000);
+  const cleanup = () => setTimeout(() => { if (printIframe.parentNode) document.body.removeChild(printIframe); }, 3000);
 
-  iframe.onload = () => {
+  printIframe.onload = () => {
     try {
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      const iframeDoc = printIframe.contentDocument || printIframe.contentWindow?.document;
       if (!iframeDoc) { cleanup(); return; }
       iframeDoc.open();
       iframeDoc.write(htmlWithPrint);
       iframeDoc.close();
 
-      const images = Array.from(iframeDoc.images);
+      const iframeImages = Array.from(iframeDoc.images);
       Promise.all(
-        images.map(
+        iframeImages.map(
           (img) => new Promise<void>((res) => {
             if (img.complete) { res(); return; }
             img.onload = () => res();
@@ -984,8 +1037,8 @@ export const exportMaidProfileToPdf = async (maid: MaidProfile) => {
           })
         )
       ).then(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
+        printIframe.contentWindow?.focus();
+        printIframe.contentWindow?.print();
         cleanup();
       });
     } catch {
@@ -993,7 +1046,7 @@ export const exportMaidProfileToPdf = async (maid: MaidProfile) => {
     }
   };
 
-  iframe.src = "about:blank";
+  printIframe.src = "about:blank";
 };
 
 export const exportMaidProfilesToPdf = async (maids: MaidProfile[]) => {

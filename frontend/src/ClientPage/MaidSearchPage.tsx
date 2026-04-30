@@ -568,7 +568,7 @@ const LockedMaidCard = ({ loginPath, photo, type }: { loginPath: string; photo?:
           <img src={photo} alt="Maid profile" loading="lazy" decoding="async"
             className="block w-full h-auto"
             style={{ aspectRatio: "3/4", objectFit: "contain", objectPosition: "top center",
-              minHeight: 130, background: "#fff", filter: "blur(15px)", opacity: 0.7, transform: "scale(1.05)" }}
+              minHeight: 130, background: "#fff", filter: "blur(10px)", opacity: 0.9, transform: "scale(1.05)" }}
           />
         ) : (
           <div className="w-full flex items-center justify-center bg-gray-100"

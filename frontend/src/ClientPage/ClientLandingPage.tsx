@@ -438,8 +438,8 @@ const BlurredCanvas = ({ src }: { src: string }) => {
       const oy = (h - sh) / 2;
 
       // Apply blur and slight dim via Canvas 2D filter
-      ctx.filter = "blur(18px)";
-      ctx.globalAlpha = 0.72;
+      ctx.filter = "blur(10px) brightness(0.85)";
+      ctx.globalAlpha = 0.9;
       ctx.drawImage(img, ox, oy, sw, sh);
 
       // Revoke blob URL as soon as we're done with it

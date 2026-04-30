@@ -94,6 +94,7 @@ const Enquiry2 = lazyRoute(() => import("./ClientPage/Enquiry"));
 const ServiceDetail = lazyRoute(() => import("./ClientPage/ServiceDetails"));
 const FaqPage = lazyRoute(() => import("./ClientPage/FAQPage"));
 const AgencyPortal = lazyRoute(() => import("./ClientPage/AgencyPortal"));
+;
 
 const AdminShell = ({ children }: { children: ReactNode }) => <AppLayout>{children}</AppLayout>;
 const withRouteLoader = (element: ReactNode) => <Suspense fallback={<RouteLoader />}>{element}</Suspense>;

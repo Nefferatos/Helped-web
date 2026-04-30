@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getStoredClient } from "@/lib/clientAuth";
-import { calculateAge, formatDate, getPublicIntro, MaidProfile } from "@/lib/maids";
+import { calculateAge, formatDate, getExperienceBucket, getPublicIntro, MaidProfile } from "@/lib/maids";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import { toast } from "@/components/ui/sonner";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
@@ -34,6 +34,194 @@ interface CompanyProfileApi {
 interface CompanyResponse {
   companyProfile?: CompanyProfileApi;
 }
+
+// ── Nationality → ISO 3166-1 alpha-2 ─────────────────────────────────────────
+const NATIONALITY_FLAGS: Record<string, string> = {
+  filipino: "ph", philippines: "ph",
+  indonesian: "id", indonesia: "id",
+  myanmar: "mm", burmese: "mm",
+  cambodian: "kh", cambodia: "kh",
+  vietnamese: "vn", vietnam: "vn",
+  thai: "th", thailand: "th",
+  malaysian: "my", malaysia: "my",
+  singaporean: "sg", singapore: "sg",
+  indian: "in", india: "in",
+  "sri lankan": "lk", "sri lanka": "lk",
+  bangladeshi: "bd", bangladesh: "bd",
+  nepali: "np", nepalese: "np", nepal: "np",
+  pakistani: "pk", pakistan: "pk",
+  chinese: "cn", china: "cn",
+  hongkong: "hk", "hong kong": "hk",
+  taiwanese: "tw", taiwan: "tw",
+  korean: "kr", "south korea": "kr",
+  japanese: "jp", japan: "jp",
+  ethiopian: "et", ethiopia: "et",
+  kenyan: "ke", kenya: "ke",
+  ugandan: "ug", uganda: "ug",
+  ghanaian: "gh", ghana: "gh",
+  nigerian: "ng", nigeria: "ng",
+};
+
+const getNationalityCode = (nationality?: string): string => {
+  if (!nationality) return "";
+  const key = nationality.toLowerCase().trim();
+  if (NATIONALITY_FLAGS[key]) return NATIONALITY_FLAGS[key];
+  for (const [k, code] of Object.entries(NATIONALITY_FLAGS)) {
+    if (key.includes(k)) return code;
+  }
+  return "";
+};
+
+const FlagCircle = ({ code }: { code: string }) => {
+  if (!code) return null;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: 14, height: 14, borderRadius: "50%", overflow: "hidden",
+      border: "1px solid rgba(0,0,0,0.13)", flexShrink: 0,
+      verticalAlign: "middle", background: "#e5e7eb",
+    }}>
+      <img
+        src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
+        alt={code}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
+    </span>
+  );
+};
+
+// ── Card helpers (from MaidSearchPage) ───────────────────────────────────────
+const getTypeLabel = (type: string) => {
+  const lower = type.toLowerCase();
+  if (lower.includes("new")) return "NEW";
+  if (lower.includes("transfer")) return "TRANSFER";
+  if (lower.includes("ex")) return "EX-SG";
+  return type.toUpperCase();
+};
+
+const getMaidTypeBadgeClass = (type?: string) => {
+  const t = (type || "").toLowerCase();
+  if (t.includes("new")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (t.includes("transfer")) return "bg-blue-50 text-blue-700 border-blue-200";
+  return "bg-amber-50 text-amber-700 border-amber-200";
+};
+
+// ── Shortlist maid card (matches MaidSearchPage MaidCard style) ───────────────
+const ShortlistMaidCard = ({
+  maid,
+  isShortlisted,
+  onToggleShortlist,
+  onNavigate,
+}: {
+  maid: MaidProfile;
+  isShortlisted: boolean;
+  onToggleShortlist: (ref: string) => void;
+  onNavigate?: () => void;
+}) => {
+  const photo =
+    Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
+      ? maid.photoDataUrls[0]
+      : maid.photoDataUrl || "";
+  const age = calculateAge(maid.dateOfBirth);
+  const flagCode = getNationalityCode(maid.nationality);
+  const typeColorClass = getMaidTypeBadgeClass(maid.type);
+  const experienceBucket = getExperienceBucket(maid);
+
+  return (
+    <article className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer">
+      <div className="relative w-full bg-white overflow-hidden">
+        <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
+          {photo ? (
+            <img
+              src={photo}
+              alt={maid.fullName}
+              className="block w-full h-auto"
+              style={{
+                aspectRatio: "3/4",
+                objectFit: "contain",
+                objectPosition: "top center",
+                minHeight: 130,
+                background: "#fff",
+              }}
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <div
+              className="w-full flex items-center justify-center bg-gray-50"
+              style={{ aspectRatio: "3/4", minHeight: 130 }}
+            >
+              <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor" strokeWidth={1}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+            </div>
+          )}
+        </Link>
+
+        {maid.type && (
+          <div className="absolute top-1.5 left-1.5">
+            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>
+              {getTypeLabel(maid.type)}
+            </span>
+          </div>
+        )}
+
+        <button
+          onClick={(e) => { e.preventDefault(); onToggleShortlist(maid.referenceCode); }}
+          className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
+            isShortlisted ? "bg-amber-500" : "bg-black/60 opacity-0 group-hover:opacity-100"
+          }`}
+        >
+          <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
+          {isShortlisted ? "Shortlisted" : "Shortlist"}
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-0.5 p-2.5 flex-1 bg-white">
+        <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
+          {maid.fullName || "Unnamed maid"}
+        </h3>
+        {maid.referenceCode && (
+          <p className="text-[9px] text-gray-400 font-mono leading-tight">{maid.referenceCode}</p>
+        )}
+        {maid.nationality && (
+          <p className="inline-flex items-center gap-1 text-[10px] text-gray-700 leading-tight mt-0.5">
+            <FlagCircle code={flagCode} />
+            {maid.nationality}
+          </p>
+        )}
+        <div className="my-1 border-t border-gray-100" />
+        <div className="flex items-center gap-1.5 text-[9px] text-gray-500 leading-tight">
+          {age !== null && <span className="font-medium text-gray-700">{age} yrs</span>}
+          {age !== null && maid.maritalStatus && <span className="text-gray-300">·</span>}
+          {maid.maritalStatus && <span className="truncate">{maid.maritalStatus}</span>}
+        </div>
+        {maid.religion && (
+          <p className="text-[9px] text-gray-500 leading-tight line-clamp-1">{maid.religion}</p>
+        )}
+        {experienceBucket && (
+          <p className="text-[9px] text-gray-500 leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>
+        )}
+        {maid.languageSkills && (() => {
+          const langs = Object.entries(maid.languageSkills)
+            .filter(([, level]) => {
+              const l = String(level || "").trim().toLowerCase();
+              return l && l !== "zero" && l !== "none";
+            })
+            .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
+            .slice(0, 3);
+          return langs.length > 0 ? (
+            <p className="text-[9px] text-gray-400 leading-tight line-clamp-1 mt-0.5">
+              {langs.join(" · ")}
+            </p>
+          ) : null;
+        })()}
+      </div>
+    </article>
+  );
+};
 
 // ── Tell Friend Modal ──────────────────────────────────────────────────────────
 interface TellFriendModalProps {
@@ -114,17 +302,14 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
   };
 
   return (
-    // Backdrop
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       onClick={onClose}
     >
-      {/* Modal panel */}
       <div
         className="relative w-full max-w-md rounded-xl bg-white shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3.5">
           <h2 className="text-sm font-semibold text-gray-800">
             Tell your friend about this {maid.nationality || ""}.
@@ -138,7 +323,6 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
         </div>
 
         {sent ? (
-          // Success state
           <div className="flex flex-col items-center justify-center gap-3 py-12 px-6 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
               <Check className="h-6 w-6 text-emerald-600" />
@@ -148,20 +332,17 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
           </div>
         ) : (
           <div className="px-5 py-4 space-y-3">
-            {/* To row */}
             <div className="grid grid-cols-[60px_1fr] items-start gap-x-3 gap-y-2">
               <label className="pt-2 text-right text-xs font-medium text-gray-600">To</label>
               <div className="space-y-1.5">
-                <div>
-                  <input
-                    ref={toNameRef}
-                    type="text"
-                    placeholder="Your Friend's name"
-                    value={toName}
-                    onChange={(e) => setToName(e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
-                  />
-                </div>
+                <input
+                  ref={toNameRef}
+                  type="text"
+                  placeholder="Your Friend's name"
+                  value={toName}
+                  onChange={(e) => setToName(e.target.value)}
+                  className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
+                />
                 <div>
                   <input
                     type="email"
@@ -212,12 +393,8 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
               />
             </div>
 
-            {/* Footer */}
             <div className="flex items-center justify-between border-t pt-3">
-              <button
-                onClick={onClose}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              >
+              <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
                 Cancel
               </button>
               <button
@@ -235,8 +412,8 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
     </div>
   );
 };
-// ──────────────────────────────────────────────────────────────────────────────
 
+// ── Profile page helpers ──────────────────────────────────────────────────────
 const availabilityRemarkItems = [
   { label: "Able to handle pork", keys: ["Able to handle pork?"] },
   { label: "Able to eat pork", keys: ["Able to eat pork?"] },
@@ -407,8 +584,11 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
 
   const agencyContact = useMemo(() => (maid ? maid.agencyContact as Record<string, unknown> : null), [maid]);
   const isShortlisted = Boolean(maid?.referenceCode && shortlistRefs.includes(maid.referenceCode));
-  const shortlistedMaidMap = useMemo(() => new Map(shortlistMaids.map((item) => [item.referenceCode, item])), [shortlistMaids]);
-  const missingShortlistRefs = useMemo(() => shortlistRefs.filter((ref) => !shortlistedMaidMap.has(ref)), [shortlistRefs, shortlistedMaidMap]);
+
+  const missingShortlistRefs = useMemo(
+    () => shortlistRefs.filter((ref) => !shortlistMaids.some((m) => m.referenceCode === ref)),
+    [shortlistRefs, shortlistMaids]
+  );
 
   const handleToggleShortlist = (refOverride?: string) => {
     const ref = refOverride ?? maid?.referenceCode;
@@ -591,7 +771,6 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               {isShortlisted ? "Shortlisted" : "Shortlist"}
             </button>
 
-            {/* ── Tell Friend button — now opens modal ── */}
             <button
               onClick={() => setIsTellFriendOpen(true)}
               className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"
@@ -893,7 +1072,7 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
           </div>
         </div>
 
-        {/* ── Shortlist dialog ── */}
+        {/* ── Shortlist dialog — now uses ShortlistMaidCard matching MaidSearchPage ── */}
         <Dialog open={isShortlistOpen} onOpenChange={setIsShortlistOpen}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
@@ -906,7 +1085,9 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                   </span>
                 )}
               </DialogTitle>
-              <DialogDescription>Click any profile to view full details. Tap the star to remove from shortlist.</DialogDescription>
+              <DialogDescription>
+                Click any profile to view full details. Tap the star to remove from shortlist.
+              </DialogDescription>
             </DialogHeader>
 
             {shortlistRefs.length === 0 ? (
@@ -915,61 +1096,81 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                   <Star className="h-7 w-7 text-amber-300" />
                 </div>
                 <p className="text-sm font-semibold text-foreground">No maids shortlisted yet</p>
-                <p className="mt-1 max-w-xs text-xs text-foreground">Tap the star that appears on any profile card to add it to your shortlist.</p>
+                <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                  Tap the star that appears on any profile card to add it to your shortlist.
+                </p>
               </div>
             ) : (
               <div className="max-h-[68vh] overflow-y-auto pr-1">
                 {isShortlistLoading ? (
-                  <p className="py-8 text-center text-sm text-foreground">Loading shortlist…</p>
-                ) : (
-                  <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
-                    {shortlistMaids.map((shortlistedMaid) => (
-                      <article key={`shortlist-${shortlistedMaid.referenceCode}`} className="overflow-hidden rounded-xl border border-border bg-background" style={{ aspectRatio: "3 / 4" }}>
-                        <div className="relative flex h-full flex-col">
-                          <Link to={`/maids/${encodeURIComponent(shortlistedMaid.referenceCode)}`} className="relative flex-1 bg-muted" onClick={() => setIsShortlistOpen(false)}>
-                            {getPrimaryPhoto(shortlistedMaid) ? (
-                              <img src={getPrimaryPhoto(shortlistedMaid)} alt={shortlistedMaid.fullName} className="h-full w-full object-cover" />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <svg className="h-6 w-6 text-foreground/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-                                </svg>
-                              </div>
-                            )}
-                          </Link>
-                          <div className="p-2">
-                            <Link to={`/maids/${encodeURIComponent(shortlistedMaid.referenceCode)}`} className="line-clamp-1 text-[11px] font-semibold text-foreground hover:text-primary" onClick={() => setIsShortlistOpen(false)}>
-                              {shortlistedMaid.fullName || `${shortlistedMaid.nationality || "Maid"} Maid`}
-                            </Link>
-                            <p className="line-clamp-1 text-[10px] text-foreground">
-                              {shortlistedMaid.nationality || "—"}
-                              {calculateAge(shortlistedMaid.dateOfBirth) !== null ? `, ${calculateAge(shortlistedMaid.dateOfBirth)} yrs` : ""}
-                            </p>
-                          </div>
-                          <button type="button" onClick={() => handleToggleShortlist(shortlistedMaid.referenceCode)} className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white/80 shadow backdrop-blur-sm transition hover:bg-white" title="Remove from shortlist">
-                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
-                          </button>
+                  /* Loading skeleton — matches MaidSearchPage */
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <div key={i} className="overflow-hidden rounded-xl border border-border bg-muted animate-pulse">
+                        <div className="aspect-[3/4] bg-muted-foreground/10" />
+                        <div className="space-y-1.5 p-2">
+                          <div className="h-2 w-3/4 rounded-full bg-muted-foreground/15" />
+                          <div className="h-2 w-1/2 rounded-full bg-muted-foreground/10" />
+                          <div className="h-2 w-2/3 rounded-full bg-muted-foreground/10" />
                         </div>
-                      </article>
+                      </div>
                     ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                    {shortlistMaids.map((shortlistedMaid) => (
+                      <ShortlistMaidCard
+                        key={`sl-${shortlistedMaid.referenceCode}`}
+                        maid={shortlistedMaid}
+                        isShortlisted={shortlistRefs.includes(shortlistedMaid.referenceCode)}
+                        onToggleShortlist={handleToggleShortlist}
+                        onNavigate={() => setIsShortlistOpen(false)}
+                      />
+                    ))}
+
+                    {/* Missing refs — profile no longer available */}
                     {missingShortlistRefs.map((ref) => (
-                      <div key={`missing-${ref}`} className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-3 text-center" style={{ aspectRatio: "3 / 4" }}>
-                        <svg className="h-6 w-6 text-foreground/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
+                      <div
+                        key={`missing-${ref}`}
+                        className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-3 text-center"
+                        style={{ aspectRatio: "3/4" }}
+                      >
+                        <svg className="h-6 w-6 text-muted-foreground/25" fill="none"
+                          viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <circle cx="12" cy="12" r="10" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
                         </svg>
-                        <p className="break-all font-mono text-[9px] text-foreground">{ref}</p>
-                        <p className="text-[9px] text-foreground/60">Profile not found</p>
-                        <button type="button" onClick={() => handleToggleShortlist(ref)} className="text-[10px] font-medium text-destructive hover:underline">Remove</button>
+                        <p className="break-all font-mono text-[9px] text-muted-foreground/70">{ref}</p>
+                        <p className="text-[9px] text-muted-foreground/50">Profile not found</p>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleShortlist(ref)}
+                          className="text-[10px] font-medium text-destructive hover:underline"
+                        >
+                          Remove
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
+
                 <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
-                  <p className="text-xs text-foreground">
-                    <span className="font-medium">{shortlistMaids.length}</span> {shortlistMaids.length === 1 ? "profile" : "profiles"} shortlisted
-                    {missingShortlistRefs.length > 0 && <span className="ml-1 text-foreground/60">· {missingShortlistRefs.length} not found</span>}
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{shortlistMaids.length}</span>{" "}
+                    {shortlistMaids.length === 1 ? "profile" : "profiles"} shortlisted
+                    {missingShortlistRefs.length > 0 && (
+                      <span className="ml-1 text-muted-foreground/60">
+                        · {missingShortlistRefs.length} not found
+                      </span>
+                    )}
                   </p>
-                  <button type="button" onClick={() => shortlistRefs.forEach((ref) => handleToggleShortlist(ref))} className="text-xs font-medium text-destructive hover:underline">Clear all</button>
+                  <button
+                    type="button"
+                    onClick={() => shortlistRefs.forEach((ref) => handleToggleShortlist(ref))}
+                    className="text-xs font-medium text-destructive hover:underline"
+                  >
+                    Clear all
+                  </button>
                 </div>
               </div>
             )}
