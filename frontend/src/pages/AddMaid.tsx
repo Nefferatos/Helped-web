@@ -1,3 +1,5 @@
+// ─── AddMaid.tsx (with PDF auto-fill + functional evaluation checkboxes) ──────
+
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Star, ChevronRight, User, Briefcase, Clock, FileText, Globe, Lock, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +9,19 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { defaultMaidProfile, type MaidProfile } from "@/lib/maids";
 import { useNavigate } from "react-router-dom";
+
+import { PdfAutofillBanner } from "./PdfAutofill";
+
+// ─── Evaluation method constants ──────────────────────────────────────────────
+const EVAL_PARENT_DECLARATION =
+  "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA";
+const EVAL_PARENT_INTERVIEWED = "Interviewed by Singapore EA";
+const EVAL_SUB_OPTIONS = [
+  "Interviewed via telephone/teleconference",
+  "Interviewed via videoconference",
+  "Interviewed in person",
+  "Interviewed in person and also made observation of FDW in the areas of work listed in table",
+];
 
 const tabs = [
   { label: "Profile", icon: User },
@@ -205,6 +220,9 @@ const AddMaid = () => {
           <p className="text-slate-500 mt-1">Complete all sections to create a comprehensive maid profile.</p>
         </div>
 
+        {/* PDF Auto-fill Banner */}
+        <PdfAutofillBanner formData={formData} setFormData={setFormData} />
+
         {/* Tab Navigation */}
         <div className="flex flex-wrap gap-1 mb-0 bg-white rounded-t-2xl border border-b-0 border-slate-200 p-2 shadow-sm">
           {tabs.map((tab, i) => {
@@ -363,7 +381,7 @@ const AddMaid = () => {
   );
 };
 
-
+// ─── Shared types ─────────────────────────────────────────────────────────────
 
 type TabSaveProps = {
   onSave?: () => void | Promise<void>;
@@ -378,14 +396,14 @@ type FormTabProps = TabSaveProps & {
   setFormData: React.Dispatch<React.SetStateAction<MaidProfile>>;
 };
 
-/* Card wrapper for each tab */
+// ─── Shared UI primitives ─────────────────────────────────────────────────────
+
 const TabCard = ({ children }: { children: React.ReactNode }) => (
   <div className="bg-white border border-slate-200 rounded-b-2xl rounded-tr-2xl shadow-sm p-6 md:p-8 space-y-8">
     {children}
   </div>
 );
 
-/* Section header */
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
   <div className="flex items-center gap-3 mb-4">
     <div className="h-1 w-6 rounded-full bg-amber-400" />
@@ -394,7 +412,6 @@ const SectionHeader = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-/* Two-column row */
 const FormRow2Col = ({ left, right }: { left: React.ReactNode; right?: React.ReactNode }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
     <div>{left}</div>
@@ -402,7 +419,6 @@ const FormRow2Col = ({ left, right }: { left: React.ReactNode; right?: React.Rea
   </div>
 );
 
-/* Field wrapper */
 const Field = ({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) => (
   <div className="space-y-1.5 w-full">
     <Label className="text-sm font-semibold text-slate-900 uppercase tracking-wide">{label}</Label>
@@ -410,7 +426,6 @@ const Field = ({ label, children, error }: { label: string; children: React.Reac
     {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
   </div>
 );
-
 
 const StyledInput = ({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input
@@ -431,7 +446,6 @@ const StyledInput = ({ className = "", ...props }: React.InputHTMLAttributes<HTM
   />
 );
 
-/* Styled select */
 const StyledSelect = ({
   options,
   className = "",
@@ -467,7 +481,6 @@ const StyledSelect = ({
   </select>
 );
 
-
 const RadioGroup = ({
   name,
   options,
@@ -501,7 +514,6 @@ const RadioGroup = ({
             }
           `}
         >
-          {/* Dot indicator when selected */}
           {isSelected && (
             <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-slate-900/40 inline-block" />
           )}
@@ -556,7 +568,6 @@ const YesNo = ({
   </div>
 );
 
-/* Star Rating */
 const StarRating = ({
   value, onChange, name,
 }: {
@@ -586,7 +597,6 @@ const StarRating = ({
   </div>
 );
 
-/* Save Buttons */
 const SaveButtons = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto, primaryLabel }: TabSaveProps) => (
   <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
     <Button
@@ -610,6 +620,7 @@ const SaveButtons = ({ onSave, isSaving, onUploadPhoto, isUploadingPhoto, primar
   </div>
 );
 
+// ─── Tab: Profile ─────────────────────────────────────────────────────────────
 
 const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const currentYear = new Date().getFullYear();
@@ -629,6 +640,13 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
     month: dobMatch?.[2] ?? "--",
     year: dobMatch?.[1] ?? "--",
   }));
+
+  useEffect(() => {
+    const m = String(formData.dateOfBirth || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      setDobDraft({ day: m[3], month: m[2], year: m[1] });
+    }
+  }, [formData.dateOfBirth]);
 
   const contractMatch = String(introduction.contractEnds || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   const [contractDraft, setContractDraft] = useState(() => ({
@@ -785,7 +803,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
               <Field label="Indian Maid Category">
                 <StyledSelect
                   options={["Select", "Mizoram maid", "Darjeeling maid", "Manipur maid", "Punjabi maid", "Others"]}
-                  value={String(skillsPreferences.indianMaidCategory || "Select")}
+                  value={String((skillsPreferences.indianMaidCategory as string) || "Select")}
                   onChange={(e) => setSkillsPreferencesField("indianMaidCategory", e.target.value === "Select" ? "" : e.target.value)}
                 />
               </Field>
@@ -798,9 +816,9 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
                 <Field label="Date of Birth *" error={errors.dateOfBirth}>
                   <div className="flex gap-2">
                     {[
-                      { opts: days, key: "day", w: "w-20", placeholder: "DD" },
-                      { opts: months, key: "month", w: "w-20", placeholder: "MM" },
-                      { opts: years, key: "year", w: "w-28", placeholder: "YYYY" },
+                      { opts: days, key: "day", w: "w-20" },
+                      { opts: months, key: "month", w: "w-20" },
+                      { opts: years, key: "year", w: "w-28" },
                     ].map(({ opts, key, w }) => (
                       <select
                         key={key}
@@ -1159,7 +1177,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
               <Field label="Dietary Restrictions">
                 <StyledInput value={String(introduction.dietaryRestrictions || "")} onChange={(e) => setIntroductionField("dietaryRestrictions", e.target.value)} placeholder="None" />
               </Field>
-            } 
+            }
           />
 
           <div>
@@ -1180,12 +1198,10 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
                     ["No Beef", hasNoBeef, (v: boolean) => setFoodPrefs(hasNoPork, v, other)]].map(([lbl, checked, fn]) => (
                     <label key={lbl as string} className="flex items-center gap-2 text-sm cursor-pointer select-none">
                       <div
-                          className={`relative h-5 w-5 rounded-md border-2 flex items-center justify-center transition-all duration-150 ${
-                            checked
-                              ? "bg-amber-400 border-amber-400"
-                              : "bg-white border-slate-300 hover:border-amber-300"
-                          }`}
-                        >
+                        className={`relative h-5 w-5 rounded-md border-2 flex items-center justify-center transition-all duration-150 ${
+                          checked ? "bg-amber-400 border-amber-400" : "bg-white border-slate-300 hover:border-amber-300"
+                        }`}
+                      >
                         {checked && (
                           <svg className="h-3 w-3 text-slate-900" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
@@ -1225,6 +1241,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
   );
 });
 
+// ─── Tab: Skills ──────────────────────────────────────────────────────────────
 
 const skillRows = [
   { no: 1, label: "Care of infants/children", sub: "Please specify age range:", subField: true },
@@ -1236,161 +1253,327 @@ const skillRows = [
   { no: 7, label: "Other skills, if any", sub: "Please specify:", subField: true },
 ];
 
-const SkillsTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
-  const workAreas = (formData.workAreas as Record<string, unknown>) || {};
-  const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
-  const workAreaNotes = (skillsPreferences.workAreaNotes as Record<string, string>) || {};
+// ── Evaluation checkbox sub-component ────────────────────────────────────────
+const EvalCheckbox = ({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+  indented = false,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  indented?: boolean;
+}) => (
+  <label
+    className={`
+      flex items-start gap-2.5 text-sm py-2.5 border-b border-slate-100 last:border-0 select-none
+      ${indented ? "pl-7" : ""}
+      ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer group"}
+    `}
+  >
+    {/* Custom checkbox */}
+    <div
+      className={`
+        mt-0.5 h-[18px] w-[18px] shrink-0 rounded-md border-2
+        flex items-center justify-center
+        transition-all duration-150
+        ${checked
+          ? "bg-amber-400 border-amber-400"
+          : "bg-white border-slate-400 group-hover:border-amber-400"
+        }
+        ${disabled ? "pointer-events-none" : ""}
+      `}
+    >
+      {checked && (
+        <svg
+          className="h-2.5 w-2.5 text-slate-900"
+          fill="none"
+          viewBox="0 0 12 12"
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+        </svg>
+      )}
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+    </div>
 
-  const setWorkArea = (area: string, patch: Record<string, unknown>) =>
-    setFormData((prev) => {
-      const prev2 = (prev.workAreas as Record<string, unknown>) || {};
-      const cur = (prev2[area] as Record<string, unknown>) || {};
-      return { ...prev, workAreas: { ...prev2, [area]: { ...cur, ...patch } } };
-    });
+    {/* Label text */}
+    <span
+      className={`leading-snug transition-colors ${
+        checked ? "text-slate-800 font-semibold" : "text-slate-700 font-normal"
+      }`}
+    >
+      {label}
+    </span>
+  </label>
+);
 
-  const setWorkAreaNote = (key: string, value: string) =>
-    setFormData((prev) => {
-      const ps = (prev.skillsPreferences as Record<string, unknown>) || {};
-      const pn = (ps.workAreaNotes as Record<string, string>) || {};
-      return { ...prev, skillsPreferences: { ...ps, workAreaNotes: { ...pn, [key]: value } } };
-    });
+const SkillsTab = memo(
+  ({
+    formData,
+    setFormData,
+    onSave,
+    isSaving,
+    onUploadPhoto,
+    isUploadingPhoto,
+  }: FormTabProps) => {
+    const workAreas = (formData.workAreas as Record<string, unknown>) || {};
+    const skillsPreferences =
+      (formData.skillsPreferences as Record<string, unknown>) || {};
+    const workAreaNotes =
+      (skillsPreferences.workAreaNotes as Record<string, string>) || {};
 
-  const buildEvaluation = (rating: number | null, note: string) => {
-    const t = note.trim();
-    if (rating === null) return t || "N.A.";
-    return t ? `${rating}/5 - ${t}` : `${rating}/5`;
-  };
+    // ── Evaluation method state ───────────────────────────────────────────────
+    const evaluationMethods: string[] = Array.isArray(
+      skillsPreferences.evaluationMethods
+    )
+      ? (skillsPreferences.evaluationMethods as string[])
+      : [];
 
-  return (
-    <TabCard>
-      <h3 className="text-xl font-bold text-slate-800">(B) Maid's Skills</h3>
+    const isDeclarationChecked = evaluationMethods.includes(EVAL_PARENT_DECLARATION);
+    const isInterviewedChecked = evaluationMethods.includes(EVAL_PARENT_INTERVIEWED);
 
-      <section>
-        <SectionHeader>B1. Method of Evaluation</SectionHeader>
-        <div className="space-y-2 bg-slate-50 rounded-xl p-4 border border-slate-100">
-          {[
-            "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA",
-            "Interviewed by Singapore EA",
-          ].map((opt) => (
-            <label key={opt} className="flex items-start gap-2.5 text-sm cursor-pointer group py-1">
-              <div className="relative mt-0.5 h-4.5 w-4.5 shrink-0">
-                <input type="checkbox" className="peer sr-only" />
-                <div className="h-4.5 w-4.5 rounded-md border-2 border-slate-300 bg-white group-hover:border-amber-400 peer-checked:bg-amber-400 peer-checked:border-amber-400 transition-all duration-150" />
+    const setEvalMethods = (next: string[]) =>
+      setFormData((prev) => ({
+        ...prev,
+        skillsPreferences: {
+          ...((prev.skillsPreferences as Record<string, unknown>) || {}),
+          evaluationMethods: next,
+        },
+      }));
+
+    const toggleEvalOption = (option: string, checked: boolean) => {
+      if (checked) {
+        setEvalMethods([...new Set([...evaluationMethods, option])]);
+      } else {
+        // Unchecking the parent "Interviewed by Singapore EA" also clears all sub-options
+        if (option === EVAL_PARENT_INTERVIEWED) {
+          setEvalMethods(
+            evaluationMethods.filter(
+              (m) => m !== EVAL_PARENT_INTERVIEWED && !EVAL_SUB_OPTIONS.includes(m)
+            )
+          );
+        } else {
+          setEvalMethods(evaluationMethods.filter((m) => m !== option));
+        }
+      }
+    };
+
+    // ── Work area helpers ─────────────────────────────────────────────────────
+    const setWorkArea = (area: string, patch: Record<string, unknown>) =>
+      setFormData((prev) => {
+        const prev2 = (prev.workAreas as Record<string, unknown>) || {};
+        const cur = (prev2[area] as Record<string, unknown>) || {};
+        return { ...prev, workAreas: { ...prev2, [area]: { ...cur, ...patch } } };
+      });
+
+    const setWorkAreaNote = (key: string, value: string) =>
+      setFormData((prev) => {
+        const ps = (prev.skillsPreferences as Record<string, unknown>) || {};
+        const pn = (ps.workAreaNotes as Record<string, string>) || {};
+        return {
+          ...prev,
+          skillsPreferences: { ...ps, workAreaNotes: { ...pn, [key]: value } },
+        };
+      });
+
+    const buildEvaluation = (rating: number | null, note: string) => {
+      const t = note.trim();
+      if (rating === null) return t || "N.A.";
+      return t ? `${rating}/5 - ${t}` : `${rating}/5`;
+    };
+
+    return (
+      <TabCard>
+        <h3 className="text-xl font-bold text-slate-800">(B) Maid's Skills</h3>
+
+        {/* ── B1. Method of Evaluation ─────────────────────────────────────── */}
+        <section>
+          <SectionHeader>B1. Method of Evaluation</SectionHeader>
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+
+            {/* Parent option 1 — FDW declaration */}
+            <EvalCheckbox
+              label={EVAL_PARENT_DECLARATION}
+              checked={isDeclarationChecked}
+              onChange={(checked) => toggleEvalOption(EVAL_PARENT_DECLARATION, checked)}
+            />
+
+            {/* Parent option 2 — Interviewed by Singapore EA */}
+            <EvalCheckbox
+              label={EVAL_PARENT_INTERVIEWED}
+              checked={isInterviewedChecked}
+              onChange={(checked) => toggleEvalOption(EVAL_PARENT_INTERVIEWED, checked)}
+            />
+
+            {/* Sub-options — visually locked when parent 2 is unchecked */}
+            <div
+              className={`transition-all duration-200 ${
+                isInterviewedChecked ? "opacity-100" : "opacity-40 pointer-events-none"
+              }`}
+            >
+              {EVAL_SUB_OPTIONS.map((opt) => (
+                <EvalCheckbox
+                  key={opt}
+                  label={opt}
+                  checked={evaluationMethods.includes(opt)}
+                  disabled={!isInterviewedChecked}
+                  indented
+                  onChange={(checked) => toggleEvalOption(opt, checked)}
+                />
+              ))}
+            </div>
+
+            {/* Active selection summary pills */}
+            {evaluationMethods.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-1.5">
+                {evaluationMethods.map((m) => (
+                  <span
+                    key={m}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block shrink-0" />
+                    {m.length > 50 ? m.slice(0, 47) + "…" : m}
+                  </span>
+                ))}
               </div>
-              <span className="text-slate-700 leading-relaxed">{opt}</span>
-            </label>
-          ))}
-          <div className="pl-6 space-y-2 pt-1">
-            {[
-              "Interviewed via telephone/teleconference",
-              "Interviewed via videoconference",
-              "Interviewed in person",
-              "Interviewed in person and also made observation of FDW in the areas of work listed in table",
-            ].map((opt) => (
-              <label key={opt} className="flex items-start gap-2.5 text-sm cursor-pointer group py-0.5">
-                <div className="relative mt-0.5 h-4 w-4 shrink-0">
-                  <input type="checkbox" className="peer sr-only" />
-                  <div className="h-4 w-4 rounded-md border-2 border-slate-300 bg-white group-hover:border-amber-400 peer-checked:bg-amber-400 peer-checked:border-amber-400 transition-all duration-150" />
-                </div>
-                <span className="text-slate-700">{opt}</span>
-              </label>
-            ))}
+            )}
           </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-800 text-white">
-              <th className="px-3 py-3 text-center text-xs font-semibold w-12">#</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold">Area of Work</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold w-28">Willingness</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold w-44">
-                Experience<br />
-                <span className="font-normal opacity-70">(if yes, state years)</span>
-              </th>
-              <th className="px-3 py-3 text-center text-xs font-semibold w-64">Assessment / Observation</th>
-            </tr>
-          </thead>
-          <tbody>
-            {skillRows.map((row, idx) => {
-              const config = (workAreas[row.label] as Record<string, unknown>) || {};
-              const willing = config.willing as boolean | undefined;
-              const experience = config.experience as boolean | undefined;
-              const yearsOfExperience = String(config.yearsOfExperience || "");
-              const rating = typeof config.rating === "number" ? (config.rating as number) : null;
-              const note = String(config.note || "");
-              const subKey = row.label === "Other skills, if any" ? "Other Skill" : row.label;
-              const updateEvaluation = (nr: number | null, nn: string) =>
-                setWorkArea(row.label, { rating: nr, note: nn, evaluation: buildEvaluation(nr, nn) });
+        {/* ── Skills table ─────────────────────────────────────────────────── */}
+        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-800 text-white">
+                <th className="px-3 py-3 text-center text-xs font-semibold w-12">#</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold">Area of Work</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold w-28">Willingness</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold w-44">
+                  Experience<br />
+                  <span className="font-normal opacity-70">(if yes, state years)</span>
+                </th>
+                <th className="px-3 py-3 text-center text-xs font-semibold w-64">Assessment / Observation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {skillRows.map((row, idx) => {
+                const config = (workAreas[row.label] as Record<string, unknown>) || {};
+                const willing = config.willing as boolean | undefined;
+                const experience = config.experience as boolean | undefined;
+                const yearsOfExperience = String(config.yearsOfExperience || "");
+                const rating =
+                  typeof config.rating === "number" ? (config.rating as number) : null;
+                const note = String(config.note || "");
+                const subKey =
+                  row.label === "Other skills, if any" ? "Other Skill" : row.label;
+                const updateEvaluation = (nr: number | null, nn: string) =>
+                  setWorkArea(row.label, {
+                    rating: nr,
+                    note: nn,
+                    evaluation: buildEvaluation(nr, nn),
+                  });
 
-              return (
-                <tr key={row.no} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
-                  <td className="px-3 py-4 text-center text-slate-400 font-medium align-top">{row.no}</td>
-                  <td className="px-4 py-4 align-top">
-                    <p className="font-semibold text-slate-800">{row.label}</p>
-                    {row.sub && (
-                      <div className="mt-2">
-                        <p className="text-sm text-slate-600 mb-1">{row.sub}</p>
-                        {row.subField && (
-                          <StyledInput
-                            className="w-44 h-8 text-xs"
-                            value={String(workAreaNotes[subKey] || "")}
-                            onChange={(e) => setWorkAreaNote(subKey, e.target.value)}
-                          />
-                        )}
+                return (
+                  <tr key={row.no} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
+                    <td className="px-3 py-4 text-center text-slate-400 font-medium align-top">
+                      {row.no}
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <p className="font-semibold text-slate-800">{row.label}</p>
+                      {row.sub && (
+                        <div className="mt-2">
+                          <p className="text-sm text-slate-600 mb-1">{row.sub}</p>
+                          {row.subField && (
+                            <StyledInput
+                              className="w-44 h-8 text-xs"
+                              value={String(workAreaNotes[subKey] || "")}
+                              onChange={(e) => setWorkAreaNote(subKey, e.target.value)}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-4 text-center align-top">
+                      <div className="flex justify-center">
+                        <YesNo
+                          name={`will_${row.no}`}
+                          value={willing}
+                          onValueChange={(next) => setWorkArea(row.label, { willing: next })}
+                        />
                       </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-4 text-center align-top">
-                    <div className="flex justify-center">
-                      <YesNo name={`will_${row.no}`} value={willing} onValueChange={(next) => setWorkArea(row.label, { willing: next })} />
-                    </div>
-                  </td>
-                  <td className="px-3 py-4 text-center align-top">
-                    <div className="mb-2 flex justify-center">
-                      <YesNo
-                        name={`exp_${row.no}`}
-                        value={experience}
-                        onValueChange={(next) =>
-                          setWorkArea(row.label, { experience: next, yearsOfExperience: next ? String(config.yearsOfExperience || "") : "" })
-                        }
+                    </td>
+                    <td className="px-3 py-4 text-center align-top">
+                      <div className="mb-2 flex justify-center">
+                        <YesNo
+                          name={`exp_${row.no}`}
+                          value={experience}
+                          onValueChange={(next) =>
+                            setWorkArea(row.label, {
+                              experience: next,
+                              yearsOfExperience: next
+                                ? String(config.yearsOfExperience || "")
+                                : "",
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-center gap-1">
+                        <StyledInput
+                          className="w-14 h-8 text-xs text-center"
+                          value={yearsOfExperience}
+                          onChange={(e) =>
+                            setWorkArea(row.label, { yearsOfExperience: e.target.value })
+                          }
+                          disabled={experience !== true}
+                        />
+                        <span className="text-xs text-slate-400">yrs</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-4 align-top">
+                      <div className="mb-2">
+                        <StarRating
+                          name={`assess_${row.no}`}
+                          value={rating}
+                          onChange={(nr) => updateEvaluation(nr, note)}
+                        />
+                      </div>
+                      <textarea
+                        className="w-full min-h-[52px] rounded-xl border border-slate-500 bg-white px-2 py-1.5 text-xs text-slate-800 shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] focus:bg-white hover:border-slate-300 resize-none placeholder:text-slate-600"
+                        value={note}
+                        onChange={(e) => updateEvaluation(rating, e.target.value)}
+                        placeholder="Notes (optional)"
                       />
-                    </div>
-                    <div className="flex items-center justify-center gap-1">
-                      <StyledInput
-                        className="w-14 h-8 text-xs text-center"
-                        value={yearsOfExperience}
-                        onChange={(e) => setWorkArea(row.label, { yearsOfExperience: e.target.value })}
-                        disabled={experience !== true}
-                      />
-                      <span className="text-xs text-slate-400">yrs</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-4 align-top">
-                    <div className="mb-2">
-                      <StarRating name={`assess_${row.no}`} value={rating} onChange={(nr) => updateEvaluation(nr, note)} />
-                    </div>
-                    <textarea
-                      className="w-full min-h-[52px] rounded-xl border border-slate-500 bg-white px-2 py-1.5 text-xs text-slate-800 shadow-sm transition-all duration-200 focus:outline-none focus:border-amber-400 focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18)] focus:bg-white hover:border-slate-300 resize-none placeholder:text-slate-600"
-                      value={note}
-                      onChange={(e) => updateEvaluation(rating, e.target.value)}
-                      placeholder="Notes (optional)"
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
-    </TabCard>
-  );
-});
+        <SaveButtons
+          onSave={onSave}
+          isSaving={isSaving}
+          onUploadPhoto={onUploadPhoto}
+          isUploadingPhoto={isUploadingPhoto}
+        />
+      </TabCard>
+    );
+  }
+);
 
+// ─── Tab: Employment History ──────────────────────────────────────────────────
 
 const employmentCountries = [
   { value: "", label: "Select Country", disabled: true },
@@ -1421,20 +1604,29 @@ const employmentCountries = [
 
 const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const years = ["--", ...Array.from({ length: 30 }, (_, i) => String(2000 + i))];
-  const employment = Array.isArray(formData.employmentHistory) && formData.employmentHistory.length > 0
-    ? formData.employmentHistory
-    : [{}];
+  const employment =
+    Array.isArray(formData.employmentHistory) && formData.employmentHistory.length > 0
+      ? formData.employmentHistory
+      : [{}];
   const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
-  const sgExperience = typeof skillsPreferences.sgExperience === "boolean" ? skillsPreferences.sgExperience : undefined;
+  const sgExperience =
+    typeof skillsPreferences.sgExperience === "boolean"
+      ? skillsPreferences.sgExperience
+      : undefined;
 
   const setEmployment = (next: Array<Record<string, unknown>>) =>
     setFormData((prev) => ({ ...prev, employmentHistory: next }));
 
   const updateEmployer = (index: number, key: string, value: unknown) =>
-    setEmployment(employment.map((row, i) => (i === index ? { ...(row as Record<string, unknown>), [key]: value } : row)));
+    setEmployment(
+      employment.map((row, i) =>
+        i === index ? { ...(row as Record<string, unknown>), [key]: value } : row
+      )
+    );
 
   const addEmployer = () => setEmployment([...employment, {}]);
-  const removeEmployer = (index: number) => setEmployment(employment.filter((_, i) => i !== index));
+  const removeEmployer = (index: number) =>
+    setEmployment(employment.filter((_, i) => i !== index));
 
   return (
     <TabCard>
@@ -1449,11 +1641,17 @@ const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, on
               <div key={idx} className="border border-slate-200 rounded-2xl bg-slate-50/50 p-5">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-2">
-                    <div className="h-7 w-7 rounded-full bg-amber-400 flex items-center justify-center text-xs font-bold text-slate-900">{idx + 1}</div>
+                    <div className="h-7 w-7 rounded-full bg-amber-400 flex items-center justify-center text-xs font-bold text-slate-900">
+                      {idx + 1}
+                    </div>
                     <span className="font-semibold text-slate-700">Employer #{idx + 1}</span>
                   </div>
                   {employment.length > 1 && (
-                    <button type="button" onClick={() => removeEmployer(idx)} className="text-xs text-red-400 hover:text-red-600 font-semibold underline underline-offset-2 transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => removeEmployer(idx)}
+                      className="text-xs text-red-400 hover:text-red-600 font-semibold underline underline-offset-2 transition-colors"
+                    >
                       Remove
                     </button>
                   )}
@@ -1465,7 +1663,9 @@ const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, on
                       options={years}
                       className="w-full"
                       value={String(r.from || "--")}
-                      onChange={(e) => updateEmployer(idx, "from", e.target.value === "--" ? "" : e.target.value)}
+                      onChange={(e) =>
+                        updateEmployer(idx, "from", e.target.value === "--" ? "" : e.target.value)
+                      }
                     />
                   </Field>
                   <Field label="To Year">
@@ -1473,7 +1673,9 @@ const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, on
                       options={years}
                       className="w-full"
                       value={String(r.to || "--")}
-                      onChange={(e) => updateEmployer(idx, "to", e.target.value === "--" ? "" : e.target.value)}
+                      onChange={(e) =>
+                        updateEmployer(idx, "to", e.target.value === "--" ? "" : e.target.value)
+                      }
                     />
                   </Field>
                   <Field label="Country">
@@ -1532,20 +1734,27 @@ const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, on
         <SectionHeader>C2. Singapore Experience</SectionHeader>
         <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-700">Previous working experience in Singapore</span>
+            <span className="text-sm font-medium text-slate-700">
+              Previous working experience in Singapore
+            </span>
             <YesNo
               name="sg_experience"
               value={sgExperience}
               onValueChange={(next) =>
                 setFormData((p) => ({
                   ...p,
-                  skillsPreferences: { ...((p.skillsPreferences as Record<string, unknown>) || {}), sgExperience: next },
+                  skillsPreferences: {
+                    ...((p.skillsPreferences as Record<string, unknown>) || {}),
+                    sgExperience: next,
+                  },
                 }))
               }
             />
           </div>
           <p className="text-sm text-slate-700 leading-relaxed">
-            The EA is required to obtain the FDW's employment history from MOM and furnish the employer with the employment history. The employer may also verify via WPOL using SingPass.
+            The EA is required to obtain the FDW's employment history from MOM and furnish the
+            employer with the employment history. The employer may also verify via WPOL using
+            SingPass.
           </p>
         </div>
       </section>
@@ -1562,11 +1771,17 @@ const EmploymentHistoryTab = memo(({ formData, setFormData, onSave, isSaving, on
         </div>
       </section>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
+      <SaveButtons
+        onSave={onSave}
+        isSaving={isSaving}
+        onUploadPhoto={onUploadPhoto}
+        isUploadingPhoto={isUploadingPhoto}
+      />
     </TabCard>
   );
 });
 
+// ─── Tab: Availability / Remark ───────────────────────────────────────────────
 
 const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const skillsPreferences = (formData.skillsPreferences as Record<string, unknown>) || {};
@@ -1577,7 +1792,9 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
     setFormData((prev) => {
       const ps = (prev.skillsPreferences as Record<string, unknown>) || {};
       const cur = (ps.availabilityInterviewOptions as string[]) || [];
-      const next = checked ? Array.from(new Set([...cur, opt])) : cur.filter((v) => v !== opt);
+      const next = checked
+        ? Array.from(new Set([...cur, opt]))
+        : cur.filter((v) => v !== opt);
       return { ...prev, skillsPreferences: { ...ps, availabilityInterviewOptions: next } };
     });
 
@@ -1596,7 +1813,10 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
           ].map((opt) => {
             const checked = interviewOptions.includes(opt);
             return (
-              <label key={opt} className="flex items-center gap-3 text-sm cursor-pointer py-3 border-b border-slate-100 last:border-0 group select-none">
+              <label
+                key={opt}
+                className="flex items-center gap-3 text-sm cursor-pointer py-3 border-b border-slate-100 last:border-0 group select-none"
+              >
                 <div
                   className={`h-5 w-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-all duration-150 ${
                     checked
@@ -1605,7 +1825,13 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
                   }`}
                 >
                   {checked && (
-                    <svg className="h-3 w-3 text-slate-900" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                    <svg
+                      className="h-3 w-3 text-slate-900"
+                      fill="none"
+                      viewBox="0 0 12 12"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
                     </svg>
                   )}
@@ -1616,7 +1842,13 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
                     onChange={(e) => toggleOption(opt, e.target.checked)}
                   />
                 </div>
-                <span className={`transition-colors ${checked ? "text-slate-800 font-medium" : "text-slate-900"}`}>{opt}</span>
+                <span
+                  className={`transition-colors ${
+                    checked ? "text-slate-800 font-medium" : "text-slate-900"
+                  }`}
+                >
+                  {opt}
+                </span>
               </label>
             );
           })}
@@ -1632,7 +1864,10 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
             onChange={(e) =>
               setFormData((p) => ({
                 ...p,
-                skillsPreferences: { ...((p.skillsPreferences as Record<string, unknown>) || {}), availabilityRemark: e.target.value },
+                skillsPreferences: {
+                  ...((p.skillsPreferences as Record<string, unknown>) || {}),
+                  availabilityRemark: e.target.value,
+                },
               }))
             }
             placeholder="Any additional information..."
@@ -1640,11 +1875,17 @@ const AvailabilityRemarkTab = memo(({ formData, setFormData, onSave, isSaving, o
         </Field>
       </section>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
+      <SaveButtons
+        onSave={onSave}
+        isSaving={isSaving}
+        onUploadPhoto={onUploadPhoto}
+        isUploadingPhoto={isUploadingPhoto}
+      />
     </TabCard>
   );
 });
 
+// ─── Tab: Introduction ────────────────────────────────────────────────────────
 
 const IntroductionTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const introduction = (formData.introduction as Record<string, unknown>) || {};
@@ -1652,7 +1893,9 @@ const IntroductionTab = memo(({ formData, setFormData, onSave, isSaving, onUploa
     <TabCard>
       <div className="text-center space-y-1">
         <h3 className="text-xl font-bold text-slate-800">Maid's Introduction</h3>
-        <p className="text-sm text-slate-800">This introduction is hidden from the public. Employers must log in to view it.</p>
+        <p className="text-sm text-slate-800">
+          This introduction is hidden from the public. Employers must log in to view it.
+        </p>
       </div>
 
       <Field label="Maid Introduction">
@@ -1662,18 +1905,27 @@ const IntroductionTab = memo(({ formData, setFormData, onSave, isSaving, onUploa
           onChange={(e) =>
             setFormData((p) => ({
               ...p,
-              introduction: { ...((p.introduction as Record<string, unknown>) || {}), intro: e.target.value },
+              introduction: {
+                ...((p.introduction as Record<string, unknown>) || {}),
+                intro: e.target.value,
+              },
             }))
           }
           placeholder="Write a detailed introduction about the maid's background, personality, and work experience..."
         />
       </Field>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
+      <SaveButtons
+        onSave={onSave}
+        isSaving={isSaving}
+        onUploadPhoto={onUploadPhoto}
+        isUploadingPhoto={isUploadingPhoto}
+      />
     </TabCard>
   );
 });
 
+// ─── Tab: Public Introduction ─────────────────────────────────────────────────
 
 const PublicIntroductionTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const introduction = (formData.introduction as Record<string, unknown>) || {};
@@ -1688,12 +1940,21 @@ const PublicIntroductionTab = memo(({ formData, setFormData, onSave, isSaving, o
         <p className="font-semibold">⚠️ MOM Compliance Notice</p>
         <p>
           EAs must comply with MOM's{" "}
-          <a href="https://www.mom.gov.sg/employment-practices/employment-agencies/ealc" className="underline font-medium" target="_blank" rel="noopener noreferrer">
+          <a
+            href="https://www.mom.gov.sg/employment-practices/employment-agencies/ealc"
+            className="underline font-medium"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             EALC #17
           </a>{" "}
-          and only disclose: FDW name, nationality, skills and experience, food handling preferences, previous employment history, and language abilities.
+          and only disclose: FDW name, nationality, skills and experience, food handling
+          preferences, previous employment history, and language abilities.
         </p>
-        <p>Avoid transactional terms that liken FDWs to commodities (e.g. "condition new", "chat to buy").</p>
+        <p>
+          Avoid transactional terms that liken FDWs to commodities (e.g. "condition new",
+          "chat to buy").
+        </p>
       </div>
 
       <Field label="Public Introduction">
@@ -1703,17 +1964,27 @@ const PublicIntroductionTab = memo(({ formData, setFormData, onSave, isSaving, o
           onChange={(e) =>
             setFormData((p) => ({
               ...p,
-              introduction: { ...((p.introduction as Record<string, unknown>) || {}), publicIntro: e.target.value },
+              introduction: {
+                ...((p.introduction as Record<string, unknown>) || {}),
+                publicIntro: e.target.value,
+              },
             }))
           }
           placeholder="Write a public-facing introduction (compliant with MOM EALC #17)..."
         />
       </Field>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} />
+      <SaveButtons
+        onSave={onSave}
+        isSaving={isSaving}
+        onUploadPhoto={onUploadPhoto}
+        isUploadingPhoto={isUploadingPhoto}
+      />
     </TabCard>
   );
 });
+
+// ─── Tab: Private Info ────────────────────────────────────────────────────────
 
 const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhoto, isUploadingPhoto }: FormTabProps) => {
   const agencyContact = (formData.agencyContact as Record<string, unknown>) || {};
@@ -1723,7 +1994,9 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
     <TabCard>
       <div className="text-center space-y-1">
         <h3 className="text-xl font-bold text-slate-800">Private Information</h3>
-        <p className="text-sm text-slate-800">Internal agency records — not visible to employers or the public.</p>
+        <p className="text-sm text-slate-800">
+          Internal agency records — not visible to employers or the public.
+        </p>
       </div>
 
       <div className="space-y-5">
@@ -1735,7 +2008,10 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
                 onChange={(e) =>
                   setFormData((p) => ({
                     ...p,
-                    skillsPreferences: { ...((p.skillsPreferences as Record<string, unknown>) || {}), interviewedBy: e.target.value },
+                    skillsPreferences: {
+                      ...((p.skillsPreferences as Record<string, unknown>) || {}),
+                      interviewedBy: e.target.value,
+                    },
                   }))
                 }
                 placeholder="Staff name"
@@ -1749,7 +2025,10 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
                 onChange={(e) =>
                   setFormData((p) => ({
                     ...p,
-                    skillsPreferences: { ...((p.skillsPreferences as Record<string, unknown>) || {}), referredBy: e.target.value },
+                    skillsPreferences: {
+                      ...((p.skillsPreferences as Record<string, unknown>) || {}),
+                      referredBy: e.target.value,
+                    },
                   }))
                 }
                 placeholder="Referrer name"
@@ -1765,7 +2044,10 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
             onChange={(e) =>
               setFormData((p) => ({
                 ...p,
-                agencyContact: { ...((p.agencyContact as Record<string, unknown>) || {}), passportNo: e.target.value },
+                agencyContact: {
+                  ...((p.agencyContact as Record<string, unknown>) || {}),
+                  passportNo: e.target.value,
+                },
               }))
             }
           />
@@ -1777,7 +2059,10 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
             onChange={(e) =>
               setFormData((p) => ({
                 ...p,
-                agencyContact: { ...((p.agencyContact as Record<string, unknown>) || {}), phone: e.target.value },
+                agencyContact: {
+                  ...((p.agencyContact as Record<string, unknown>) || {}),
+                  phone: e.target.value,
+                },
               }))
             }
             placeholder="+60 XXX XXXX"
@@ -1791,7 +2076,10 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
             onChange={(e) =>
               setFormData((p) => ({
                 ...p,
-                skillsPreferences: { ...((p.skillsPreferences as Record<string, unknown>) || {}), privateInfo: e.target.value },
+                skillsPreferences: {
+                  ...((p.skillsPreferences as Record<string, unknown>) || {}),
+                  privateInfo: e.target.value,
+                },
               }))
             }
             placeholder="Internal notes, past incidents, special observations..."
@@ -1799,14 +2087,19 @@ const PrivateInfoTab = memo(({ formData, setFormData, onSave, isSaving, onUpload
         </Field>
       </div>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} onUploadPhoto={onUploadPhoto} isUploadingPhoto={isUploadingPhoto} primaryLabel="Save & Finish" />
+      <SaveButtons
+        onSave={onSave}
+        isSaving={isSaving}
+        onUploadPhoto={onUploadPhoto}
+        isUploadingPhoto={isUploadingPhoto}
+        primaryLabel="Save & Finish"
+      />
     </TabCard>
   );
 });
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Tab component map
-───────────────────────────────────────────────────────────────────────────── */
+// ─── Tab registry ─────────────────────────────────────────────────────────────
+
 const TabComponents = [
   ProfileTab,
   SkillsTab,
