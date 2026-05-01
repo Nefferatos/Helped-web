@@ -8,7 +8,7 @@ import { toast } from "@/components/ui/sonner";
 import type { MaidProfile } from "@/lib/maids";
 
 // ─── Gemini config ────────────────────────────────────────────────────────────
-const GEMINI_API_KEY = "AIzaSyCtZjAty_GqHAVOfpSA-kVQZ9uIUYGv9r8";
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 const GEMINI_MODELS = [
