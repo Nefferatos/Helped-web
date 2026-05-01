@@ -3,12 +3,12 @@
 // Usage: import { PdfAutofillBanner } from "./PdfAutofill";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle, AlertCircle, X, FileText } from "lucide-react";
+import { CheckCircle, AlertCircle, X, FileText, RefreshCw } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import type { MaidProfile } from "@/lib/maids";
 
 // ─── Gemini config ────────────────────────────────────────────────────────────
-const GEMINI_API_KEY = "AIzaSyDis5ICIex14iVET2f7jY0vhL77zoUAq_0";
+const GEMINI_API_KEY = "AIzaSyCtZjAty_GqHAVOfpSA-kVQZ9uIUYGv9r8";
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 const GEMINI_MODELS = [
@@ -21,8 +21,9 @@ const geminiUrl = (model: string) =>
   `${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
 const RETRYABLE_CODES = new Set([429, 500, 503]);
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 1500;
+const MAX_RETRIES = 5;           // more attempts per model
+const BASE_DELAY_MS = 2000;      // 2 s → 4 s → 8 s → 16 s → 32 s
+const MAX_DELAY_MS  = 32000;     // cap at 32 s
 
 // ─── Evaluation method constants (must match AddMaid.tsx exactly) ─────────────
 const EVAL_PARENT_DECLARATION =
@@ -42,15 +43,30 @@ function isOverloaded(msg: string) {
     l.includes("overloaded") ||
     l.includes("try again") ||
     l.includes("quota") ||
-    l.includes("rate limit")
+    l.includes("rate limit") ||
+    l.includes("resource_exhausted") ||
+    l.includes("429")
   );
+}
+
+function friendlyRetryMsg(attempt: number, totalAttempts: number, model: string, delayMs: number): string {
+  const modelShort = model.replace("gemini-", "").replace("-flash", " Flash").replace("-pro", " Pro");
+  const secs = Math.round(delayMs / 1000);
+  const phrases = [
+    `AI is busy — retrying in ${secs}s…`,
+    `Still trying (${attempt}/${totalAttempts}) — ${secs}s wait…`,
+    `Switching to ${modelShort}, please wait…`,
+    `Almost there — one more attempt…`,
+    `Trying backup model (${modelShort})…`,
+  ];
+  return phrases[Math.min(attempt - 1, phrases.length - 1)];
 }
 
 async function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-type Status = "idle" | "reading" | "extracting" | "done" | "error";
+type Status = "idle" | "reading" | "extracting" | "retrying" | "done" | "error";
 
 interface ExtractedData {
   fullName?: string | null;
@@ -82,7 +98,7 @@ interface ExtractedData {
     yearsOfExperience?: string | null;
     rating?: number | null;
     note?: string | null;
-    subNote?: string | null; // age range / cuisines / language specify / other skills specify
+    subNote?: string | null;
   }> | null;
   employmentHistory?: Array<{
     from?: string | null;
@@ -112,7 +128,6 @@ interface ExtractedData {
   privateInfo?: string | null;
   interviewedBy?: string | null;
   referredBy?: string | null;
-  // ── NEW: evaluation method fields ─────────────────────────────────────────
   evalByDeclaration?: boolean | null;
   evalInterviewedBySgEA?: boolean | null;
   evalInterviewSubOption?: string | null;
@@ -387,41 +402,64 @@ async function callGemini(base64: string, model: string): Promise<ExtractedData>
   return parseGeminiJson(raw);
 }
 
+// ─── Extract with graceful retry ──────────────────────────────────────────────
+
 async function extractFromPdf(
   file: File,
-  onRetry?: (attempt: number, model: string, delayMs: number) => void,
+  onRetry?: (msg: string, attempt: number, total: number) => void,
 ): Promise<ExtractedData> {
   const base64 = await fileToBase64(file);
 
   for (let modelIdx = 0; modelIdx < GEMINI_MODELS.length; modelIdx++) {
     const model = GEMINI_MODELS[modelIdx];
+
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         return await callGemini(base64, model);
       } catch (err) {
         const e = err as Error & { status?: number };
-        const retryable =
-          (e.status !== undefined && RETRYABLE_CODES.has(e.status)) || isOverloaded(e.message);
+
+        const isRateLimit =
+          (e.status !== undefined && RETRYABLE_CODES.has(e.status)) ||
+          isOverloaded(e.message);
+
         const isLastAttempt = attempt === MAX_RETRIES;
         const isLastModel   = modelIdx === GEMINI_MODELS.length - 1;
 
-        if (!retryable) {
-          if (isLastModel) throw new Error(e.message);
-          console.warn(`[PdfAutofill] Model ${model} non-retryable: ${e.message}. Trying next…`);
-          break;
+        // Non-retryable error → skip to next model (or fail)
+        if (!isRateLimit) {
+          console.warn(`[PdfAutofill] Model ${model} non-retryable: ${e.message}`);
+          if (isLastModel) throw new Error("Extraction failed. Please try again.");
+          break; // try next model
         }
-        if (isLastAttempt && isLastModel) throw new Error(e.message);
+
+        // Rate-limited — if we still have retries or models left, wait and retry
+        if (isLastAttempt && isLastModel) {
+          throw new Error(
+            "AI service is currently at capacity. Please wait a minute and try again."
+          );
+        }
+
         if (isLastAttempt) {
-          console.warn(`[PdfAutofill] Model ${model} exhausted, trying fallback…`);
+          // Move to next model
+          console.warn(`[PdfAutofill] ${model} exhausted, switching to next model…`);
           break;
         }
-        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        onRetry?.(attempt, model, delay);
+
+        // Exponential backoff capped at MAX_DELAY_MS
+        const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt - 1), MAX_DELAY_MS);
+        const totalAttempts = GEMINI_MODELS.length * MAX_RETRIES;
+        const globalAttempt = modelIdx * MAX_RETRIES + attempt;
+        const msg = friendlyRetryMsg(globalAttempt, totalAttempts, model, delay);
+
+        console.warn(`[PdfAutofill] Rate limited on ${model} attempt ${attempt}. Waiting ${delay}ms…`);
+        onRetry?.(msg, globalAttempt, totalAttempts);
         await sleep(delay);
       }
     }
   }
-  throw new Error("All Gemini models unavailable. Please try again later.");
+
+  throw new Error("AI service is currently at capacity. Please wait a minute and try again.");
 }
 
 // ─── Map extracted data → MaidProfile ────────────────────────────────────────
@@ -441,8 +479,6 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
     return raw;
   };
 
-  // ── Skill area normalisation ───────────────────────────────────────────────
-  // Keys must exactly match the row.label values used in SkillsTab
   const areaMap: Record<string, string> = {
     "care of infants": "Care of infants/children",
     "care of infants/children": "Care of infants/children",
@@ -461,13 +497,9 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
   };
   const resolveArea = (raw: string) => areaMap[raw.toLowerCase().trim()] ?? raw;
 
-  // ── Work areas + workAreaNotes ─────────────────────────────────────────────
   const prevWorkAreas = (prev.workAreas as Record<string, unknown>) ?? {};
   const workAreas: Record<string, unknown> = { ...prevWorkAreas };
 
-  // workAreaNotes stores the sub-field text (age range, cuisines, etc.)
-  // Keys match the subKey logic in SkillsTab: "Other Skill" for "Other skills, if any",
-  // otherwise the area label itself.
   const prevSP = (prev.skillsPreferences as Record<string, unknown>) ?? {};
   const prevWorkAreaNotes = (prevSP.workAreaNotes as Record<string, string>) ?? {};
   const workAreaNotes: Record<string, string> = { ...prevWorkAreaNotes };
@@ -477,16 +509,12 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
       if (!s.area) continue;
       const area = resolveArea(s.area);
 
-      // Normalise willing / experience: keep true/false, convert null → undefined
-      // so the YesNo component stays unselected (not forced to false)
       const willing    = s.willing    === true ? true : s.willing    === false ? false : undefined;
       const experience = s.experience === true ? true : s.experience === false ? false : undefined;
 
       const rating = typeof s.rating === "number" ? s.rating : null;
       const note   = typeof s.note === "string" ? s.note : (s.note ?? "");
 
-      // yearsOfExperience: normalise to string, keep value regardless of experience flag
-      // (the UI input is always editable; we just disable it visually when experience=false)
       const rawYears = s.yearsOfExperience;
       const yearsOfExperience =
         rawYears == null ? "" :
@@ -502,8 +530,6 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
         evaluation: rating !== null ? `${rating}/5${note ? ` - ${note}` : ""}` : note || "N.A.",
       };
 
-      // Map subNote → workAreaNotes using the same key logic as SkillsTab
-      // SkillsTab uses: subKey = area === "Other skills, if any" ? "Other Skill" : area
       if (typeof s.subNote === "string" && s.subNote.trim()) {
         const subKey = area === "Other skills, if any" ? "Other Skill" : area;
         workAreaNotes[subKey] = s.subNote.trim();
@@ -511,7 +537,6 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
     }
   }
 
-  // ── Employment history ─────────────────────────────────────────────────────
   const empHistory: Record<string, unknown>[] =
     Array.isArray(e.employmentHistory) && e.employmentHistory.length > 0
       ? e.employmentHistory.map((h) => ({
@@ -520,13 +545,11 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
         }))
       : ((prev.employmentHistory ?? [{}]) as Record<string, unknown>[]);
 
-  // ── Language skills ────────────────────────────────────────────────────────
   const prevLangs = (prev.languageSkills as Record<string, string>) ?? {};
   const langSkills: Record<string, string> = { ...prevLangs };
   if (e.languageSkills && typeof e.languageSkills === "object")
     for (const [k, v] of Object.entries(e.languageSkills)) if (v) langSkills[k] = v;
 
-  // ── Other information (yes/no questions) ───────────────────────────────────
   const prevOI = (prevSP.otherInformation as Record<string, boolean>) ?? {};
   const otherInfo: Record<string, boolean> = { ...prevOI };
   if (e.ableHandlePork    != null) otherInfo["Able to handle pork?"] = e.ableHandlePork;
@@ -542,16 +565,12 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
       ? empHistory.some((h) => String(h["country"] ?? "").toLowerCase().includes("singapore"))
       : undefined;
 
-  // ── Illnesses ──────────────────────────────────────────────────────────────
   const prevIntro    = (prev.introduction as Record<string, unknown>) ?? {};
   const prevIllnesses = (prevIntro.pastIllnesses as Record<string, boolean>) ?? {};
   const mergedIllnesses: Record<string, boolean> = { ...prevIllnesses };
   if (e.illnesses && typeof e.illnesses === "object")
     for (const [k, v] of Object.entries(e.illnesses)) if (v != null) mergedIllnesses[k] = v;
 
-  // ── Evaluation methods ─────────────────────────────────────────────────────
-  // Build the evaluationMethods string array that SkillsTab reads from
-  // skillsPreferences.evaluationMethods
   const prevEvalMethods = Array.isArray(prevSP.evaluationMethods)
     ? (prevSP.evaluationMethods as string[])
     : [];
@@ -565,15 +584,10 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
 
   if (e.evalInterviewedBySgEA === true) {
     evalSet.add(EVAL_PARENT_INTERVIEWED);
-    // Add sub-option if present and valid
-    if (
-      e.evalInterviewSubOption &&
-      EVAL_SUB_OPTIONS.includes(e.evalInterviewSubOption)
-    ) {
+    if (e.evalInterviewSubOption && EVAL_SUB_OPTIONS.includes(e.evalInterviewSubOption)) {
       evalSet.add(e.evalInterviewSubOption);
     }
   } else if (e.evalInterviewedBySgEA === false) {
-    // Remove the parent and all sub-options
     evalSet.delete(EVAL_PARENT_INTERVIEWED);
     for (const sub of EVAL_SUB_OPTIONS) evalSet.delete(sub);
   }
@@ -609,9 +623,7 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
       ...(e.offDaysPerMonth != null ? { offDaysPerMonth: String(e.offDaysPerMonth) } : {}),
       ...(hasSgExp !== undefined ? { sgExperience: hasSgExp } : {}),
       otherInformation: otherInfo,
-      // ── Sub-field notes (age range, cuisines, language specify, etc.) ────────
       workAreaNotes,
-      // ── Evaluation methods ───────────────────────────────────────────────────
       evaluationMethods,
       ...(Array.isArray(e.interviewAvailability) && e.interviewAvailability.length > 0
         ? { availabilityInterviewOptions: e.interviewAvailability } : {}),
@@ -652,17 +664,17 @@ function countFields(e: ExtractedData): number {
   return n;
 }
 
-// ─── Stage config (labels only — progress is now live 1→100) ─────────────────
+// ─── Stage config ─────────────────────────────────────────────────────────────
 
 const STAGE_LABELS: Record<Status, { label: string; sublabel: string }> = {
-  idle:       { label: "AI PDF Upload",   sublabel: "Auto-fill from biodata PDF"  },
-  reading:    { label: "Reading PDF…",    sublabel: "Loading file into memory"    },
-  extracting: { label: "Extracting…",     sublabel: "Gemini AI analysing fields"  },
-  done:       { label: "Done!",           sublabel: "Form auto-filled"            },
-  error:      { label: "Failed",          sublabel: "Click to retry"              },
+  idle:       { label: "AI PDF Upload",    sublabel: "Auto-fill from biodata PDF"   },
+  reading:    { label: "Reading PDF…",     sublabel: "Loading file into memory"     },
+  extracting: { label: "Extracting…",      sublabel: "Gemini AI analysing fields"   },
+  retrying:   { label: "Retrying…",        sublabel: "AI is busy, please wait…"     },
+  done:       { label: "Done!",            sublabel: "Form auto-filled"             },
+  error:      { label: "Failed",           sublabel: "Click to retry"               },
 };
 
-// Keep STAGES for popup step-dot backward-compat (pct only used for arc now)
 const STAGES = STAGE_LABELS;
 
 // ─── AI Brain SVG icon ────────────────────────────────────────────────────────
@@ -725,19 +737,21 @@ type PopupProps = {
   fileName: string | null;
   fieldCount: number;
   errMsg: string;
+  retryMsg: string;
   pct: number;
   onClose: () => void;
   onRetry: () => void;
 };
 
-const STATUS_ORDER: Status[] = ["idle", "reading", "extracting", "done", "error"];
+const STATUS_ORDER: Status[] = ["idle", "reading", "extracting", "retrying", "done", "error"];
 
-const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, onClose, onRetry }: PopupProps) => {
-  const cfg      = STAGES[status];
-  const isActive = status === "reading" || status === "extracting";
-  const isDone   = status === "done";
-  const isError  = status === "error";
-  const curIdx   = STATUS_ORDER.indexOf(status);
+const UploadPopup = ({ status, fileName, fieldCount, errMsg, retryMsg, pct, onClose, onRetry }: PopupProps) => {
+  const cfg       = STAGES[status];
+  const isActive  = status === "reading" || status === "extracting";
+  const isRetrying = status === "retrying";
+  const isDone    = status === "done";
+  const isError   = status === "error";
+  const curIdx    = STATUS_ORDER.indexOf(status);
 
   useEffect(() => {
     if (!isDone) return;
@@ -758,11 +772,13 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, onClose, onRet
         className="fixed bottom-5 right-5 z-50 w-[308px] overflow-hidden rounded-2xl"
         style={{
           background: "linear-gradient(148deg,#1e293b 0%,#0f172a 100%)",
-          border: `1px solid ${isDone ? "#10b981" : isError ? "#f43f5e" : "#334155"}`,
+          border: `1px solid ${isDone ? "#10b981" : isError ? "#f43f5e" : isRetrying ? "#f59e0b" : "#334155"}`,
           boxShadow: isDone
             ? "0 0 0 1px #10b981,0 20px 60px rgba(16,185,129,0.14),0 6px 20px rgba(0,0,0,0.55)"
             : isError
             ? "0 0 0 1px #f43f5e,0 20px 60px rgba(244,63,94,0.14),0 6px 20px rgba(0,0,0,0.55)"
+            : isRetrying
+            ? "0 0 0 1px #f59e0b,0 20px 60px rgba(245,158,11,0.14),0 6px 20px rgba(0,0,0,0.55)"
             : "0 0 0 1px #334155,0 20px 60px rgba(0,0,0,0.55)",
           animation: "fdwPopIn .28s cubic-bezier(.34,1.56,.64,1)",
         }}
@@ -771,9 +787,11 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, onClose, onRet
           @keyframes fdwPopIn{from{opacity:0;transform:translateY(12px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}
           @keyframes fdwShimmer{0%{transform:translateX(-100%)}100%{transform:translateX(220%)}}
           @keyframes fdwPulse{0%,100%{opacity:1}50%{opacity:.5}}
+          @keyframes fdwSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
           .fdw-shimmer{position:relative;overflow:hidden}
           .fdw-shimmer::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent);animation:fdwShimmer 1.5s ease infinite}
           .fdw-pulse{animation:fdwPulse 1.8s ease infinite}
+          .fdw-spin{animation:fdwSpin 1.2s linear infinite}
         `}</style>
 
         {/* Header */}
@@ -784,18 +802,24 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, onClose, onRet
               style={{
                 background: isDone ? "rgba(16,185,129,.18)"
                   : isError ? "rgba(244,63,94,.18)"
+                  : isRetrying ? "rgba(245,158,11,.22)"
                   : "rgba(251,191,36,.15)",
               }}
             >
-              {isDone    ? <CheckCircle className="h-4 w-4 text-emerald-400" />
-               : isError ? <AlertCircle className="h-4 w-4 text-rose-400" />
+              {isDone     ? <CheckCircle className="h-4 w-4 text-emerald-400" />
+               : isError  ? <AlertCircle className="h-4 w-4 text-rose-400" />
+               : isRetrying ? <RefreshCw className="h-4 w-4 text-amber-400 fdw-spin" />
                : <AiBrainIcon className="h-4 w-4 text-amber-400" />}
             </div>
             <span className="text-[13px] font-bold text-white tracking-tight">AI PDF Upload</span>
-            {isActive && (
-              <span className="fdw-pulse inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide bg-amber-400/15 text-amber-300 border border-amber-400/20">
+            {(isActive || isRetrying) && (
+              <span className={`fdw-pulse inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide border ${
+                isRetrying
+                  ? "bg-amber-400/15 text-amber-300 border-amber-400/20"
+                  : "bg-amber-400/15 text-amber-300 border-amber-400/20"
+              }`}>
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />
-                LIVE
+                {isRetrying ? "RETRY" : "LIVE"}
               </span>
             )}
           </div>
@@ -826,6 +850,8 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, onClose, onRet
                   <CheckCircle className="h-6 w-6 text-emerald-400" />
                 ) : isError ? (
                   <AlertCircle className="h-6 w-6 text-rose-400" />
+                ) : isRetrying ? (
+                  <RefreshCw className="h-5 w-5 text-amber-400 fdw-spin" />
                 ) : (
                   <>
                     <span className="text-[15px] font-black text-white tabular-nums">{pct}</span>
@@ -837,10 +863,14 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, onClose, onRet
 
             <div className="min-w-0">
               <p className={`text-sm font-bold leading-tight ${
-                isDone ? "text-emerald-400" : isError ? "text-rose-400" : "text-white"
+                isDone ? "text-emerald-400" : isError ? "text-rose-400" : isRetrying ? "text-amber-400" : "text-white"
               }`}>{cfg.label}</p>
               <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                {isError ? (errMsg || cfg.sublabel) : cfg.sublabel}
+                {isError
+                  ? (errMsg || cfg.sublabel)
+                  : isRetrying
+                  ? retryMsg
+                  : cfg.sublabel}
               </p>
               {isDone && fieldCount > 0 && (
                 <p className="text-[11px] text-emerald-400 font-semibold mt-1.5">
@@ -853,18 +883,20 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, onClose, onRet
           {!isError && (
             <div className="h-[5px] w-full rounded-full bg-white/[0.07] overflow-hidden">
               <div
-                className={`h-full rounded-full ${isDone ? "bg-emerald-500" : "bg-amber-400"} ${isActive ? "fdw-shimmer" : ""}`}
+                className={`h-full rounded-full ${isDone ? "bg-emerald-500" : "bg-amber-400"} ${(isActive || isRetrying) ? "fdw-shimmer" : ""}`}
                 style={{ width: `${pct}%`, transition: "width 0.18s linear" }}
               />
             </div>
           )}
 
+          {/* Step dots — show reading / extracting / done */}
           {!isError && (
             <div className="flex items-start justify-between px-0.5">
               {(["reading", "extracting", "done"] as Status[]).map((s) => {
                 const mine   = STATUS_ORDER.indexOf(s);
-                const isNow  = status === s;
-                const isPast = curIdx > mine && !isError;
+                const curI   = STATUS_ORDER.indexOf(status);
+                const isNow  = status === s || (s === "extracting" && status === "retrying");
+                const isPast = curI > STATUS_ORDER.indexOf(s) && status !== "retrying" && !isError;
                 const labels: Record<string, string> = { reading: "Read", extracting: "Extract", done: "Fill" };
                 return (
                   <div key={s} className="flex flex-col items-center gap-1.5">
@@ -891,9 +923,11 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, onClose, onRet
             </button>
           )}
 
-          {isActive && (
+          {(isActive || isRetrying) && (
             <p className="text-[10px] text-slate-600 text-center leading-none">
-              Please wait — do not close this window
+              {isRetrying
+                ? "AI is busy — automatically retrying, please wait…"
+                : "Please wait — do not close this window"}
             </p>
           )}
         </div>
@@ -915,6 +949,7 @@ export function PdfAutofillBanner({
   const [fileName,     setFileName]    = useState<string | null>(null);
   const [fieldCount,   setFieldCount]  = useState(0);
   const [errMsg,       setErrMsg]      = useState("");
+  const [retryMsg,     setRetryMsg]    = useState("");
   const [showPopup,    setShowPopup]   = useState(false);
   const [liveProgress, setLiveProgress] = useState(0);
   const inputRef       = useRef<HTMLInputElement>(null);
@@ -924,7 +959,7 @@ export function PdfAutofillBanner({
   // ── Progress ticker helpers ──────────────────────────────────────────────
   const startTicker = useCallback((from: number, target: number, durationMs: number) => {
     if (tickerRef.current) clearInterval(tickerRef.current);
-    const steps   = Math.max(1, Math.round(durationMs / 80)); // tick every ~80 ms
+    const steps   = Math.max(1, Math.round(durationMs / 80));
     const delta   = (target - from) / steps;
     let   current = from;
     let   step    = 0;
@@ -949,6 +984,7 @@ export function PdfAutofillBanner({
     setFileName(null);
     setFieldCount(0);
     setErrMsg("");
+    setRetryMsg("");
     setShowPopup(false);
     setLiveProgress(0);
     processingRef.current = false;
@@ -963,6 +999,7 @@ export function PdfAutofillBanner({
 
       setFileName(file.name);
       setErrMsg("");
+      setRetryMsg("");
       setShowPopup(true);
 
       // Phase 1: reading (0 → 15 over 600 ms)
@@ -971,33 +1008,50 @@ export function PdfAutofillBanner({
       startTicker(1, 15, 600);
 
       try {
-        // Phase 2: extracting (15 → 92 over ~18 s — typical Gemini latency)
+        // Phase 2: extracting (15 → 88 over ~18 s)
         setStatus("extracting");
-        startTicker(15, 92, 18000);
+        startTicker(15, 88, 18000);
 
-        const extracted = await extractFromPdf(file);
+        const extracted = await extractFromPdf(file, (msg, attempt, total) => {
+          // Switch to "retrying" state so the UI reflects the wait
+          setStatus("retrying");
+          setRetryMsg(msg);
+          stopTicker();
+          // Hold progress at current value during retry wait
+        });
 
-        // Phase 3: applying (92 → 99 fast)
+        // Phase 3: applying (current → 99 fast)
+        setStatus("extracting"); // snap back to extracting briefly
         stopTicker();
-        startTicker(92, 99, 400);
+        setLiveProgress((prev) => {
+          startTicker(prev, 99, 400);
+          return prev;
+        });
         await sleep(420);
 
         const count = countFields(extracted);
         setFieldCount(count);
         setFormData((prev) => applyToProfile(extracted, prev));
 
-        // Phase 4: done — snap to 100
+        // Phase 4: done
         stopTicker();
         setLiveProgress(100);
         setStatus("done");
         toast.success(`Auto-filled ${count} fields from biodata PDF`);
       } catch (err) {
         stopTicker();
-        const msg = err instanceof Error ? err.message : "Extraction failed";
-        setErrMsg(msg);
+        const raw = err instanceof Error ? err.message : "Extraction failed";
+        // Show a clean user-facing message, not internal error text
+        const friendly =
+          isOverloaded(raw) || raw.includes("capacity")
+            ? "AI is at capacity. Please wait a moment and try again."
+            : raw.length > 80
+            ? "Extraction failed. Please try again."
+            : raw;
+        setErrMsg(friendly);
         setLiveProgress(0);
         setStatus("error");
-        toast.error(msg);
+        toast.error(friendly);
       } finally {
         processingRef.current = false;
       }
@@ -1023,10 +1077,11 @@ export function PdfAutofillBanner({
     setTimeout(() => inputRef.current?.click(), 80);
   }, [reset]);
 
-  const isProcessing = status === "reading" || status === "extracting";
+  const isProcessing = status === "reading" || status === "extracting" || status === "retrying";
   const isDone       = status === "done";
   const isError      = status === "error";
-  const pct          = liveProgress; // live 1→100 driven by ticker
+  const isRetrying   = status === "retrying";
+  const pct          = liveProgress;
 
   const BTN_SIZE = 44;
   const BTN_R    = (BTN_SIZE - 6) / 2;
@@ -1057,6 +1112,8 @@ export function PdfAutofillBanner({
             ? "linear-gradient(135deg,#059669,#10b981)"
             : isError
             ? "linear-gradient(135deg,#e11d48,#f43f5e)"
+            : isRetrying
+            ? "linear-gradient(135deg,#92400e,#d97706)"
             : isProcessing
             ? "linear-gradient(135deg,#d97706,#f59e0b)"
             : "linear-gradient(135deg,#b45309,#f59e0b)",
@@ -1094,7 +1151,10 @@ export function PdfAutofillBanner({
           )}
 
           <span className="relative z-10 flex flex-col items-center leading-none">
-            {isProcessing ? (
+            {isRetrying ? (
+              // Spinning retry icon when waiting between retries
+              <RefreshCw className="h-5 w-5 text-white" style={{ animation: "fdwSpin 1.2s linear infinite" }} />
+            ) : isProcessing ? (
               <>
                 <span className="text-[12px] font-black text-white tabular-nums leading-none">{pct}</span>
                 <span className="text-[8px] font-bold text-white/70 leading-none">%</span>
@@ -1117,7 +1177,9 @@ export function PdfAutofillBanner({
 
         <span className="flex flex-col items-start justify-center px-4 leading-tight">
           <span className="text-[13px] font-bold text-white whitespace-nowrap">
-            {isProcessing
+            {isRetrying
+              ? "AI Busy — Retrying…"
+              : isProcessing
               ? "Analysing PDF…"
               : isDone
               ? `Filled · ${fieldCount} fields`
@@ -1126,7 +1188,9 @@ export function PdfAutofillBanner({
               : "AI PDF Upload"}
           </span>
           <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "rgba(255,255,255,0.72)" }}>
-            {isProcessing
+            {isRetrying
+              ? retryMsg || "Please wait…"
+              : isProcessing
               ? STAGES[status].sublabel
               : isDone
               ? "Click to view details"
@@ -1157,6 +1221,7 @@ export function PdfAutofillBanner({
           fileName={fileName}
           fieldCount={fieldCount}
           errMsg={errMsg}
+          retryMsg={retryMsg}
           pct={pct}
           onClose={reset}
           onRetry={handleRetry}

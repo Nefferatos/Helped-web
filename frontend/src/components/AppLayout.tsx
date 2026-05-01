@@ -855,22 +855,22 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     setAgencyAdmin(getStoredAgencyAdmin());
   }, [location.pathname]);
 
-    const handleLogout = async () => {
-      try {
-        await fetch("/api/agency-auth/logout", {
-          method: "POST",
-          headers: { ...getAgencyAdminAuthHeaders() },
-        });
-      } catch {
-        // ignore error
-      } finally {
-        clearAgencyAdminAuth();
-        toast.success("Agency admin logged out");
-
-        // ✅ go to AgencyPortal
-        navigate("/agency", { replace: true });
-      }
-    };
+  // ✅ FIXED: use window.location.href to ensure a hard redirect to /agency
+  // regardless of any router guards that may intercept navigate()
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/agency-auth/logout", {
+        method: "POST",
+        headers: { ...getAgencyAdminAuthHeaders() },
+      });
+    } catch {
+      // ignore error
+    } finally {
+      clearAgencyAdminAuth();
+      toast.success("Agency admin logged out");
+      window.location.href = "/agency";
+    }
+  };
 
   const initials = (agencyAdmin?.agencyName || "A").slice(0, 2).toUpperCase();
   const agencyDisplayName = getAgencyDisplayName(agencyAdmin);
