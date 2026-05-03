@@ -8,6 +8,7 @@ type AssetsBinding = {
 
 interface MaidRecord {
   id: number;
+  agencyId: number;
   fullName: string;
   referenceCode: string;
   status?: string;
@@ -118,6 +119,7 @@ interface ClientSessionRecord {
 
 interface AgencyAdminRecord {
   id: number;
+  agencyId: number;
   supabaseUserId?: string;
   username: string;
   email?: string;
@@ -137,6 +139,7 @@ interface AgencyAdminSessionRecord {
   adminId: number;
   admin?: {
     id: number;
+    agencyId: number;
     username: string;
     email?: string;
     emailVerified?: boolean;
@@ -374,6 +377,7 @@ const defaultData = (): AppData => ({
   agencyAdmins: [
     {
       id: 1,
+      agencyId: 1,
       username: "attheagency",
       password: "@atagency2026",
       agencyName: "Main Agency",
@@ -420,6 +424,7 @@ const normalizeMaid = (maid: MaidRecord): MaidRecord => {
 
   return {
     ...maid,
+    agencyId: Number.isInteger(Number(maid.agencyId)) ? Number(maid.agencyId) : 1,
     status: maid.status ?? "available",
     photoDataUrls: photos.slice(0, 5),
     photoDataUrl: photos[0] ?? maid.photoDataUrl ?? "",
@@ -522,6 +527,9 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
   let agencyAdmins = (raw.agencyAdmins ?? defaults.agencyAdmins).map(
     (admin) => ({
       ...admin,
+      agencyId: Number.isInteger(Number(admin.agencyId))
+        ? Number(admin.agencyId)
+        : 1,
       supabaseUserId: admin.supabaseUserId || undefined,
       email: admin.email ?? "",
       password: typeof admin.password === "string" ? admin.password : "",
@@ -888,13 +896,25 @@ const saveData = async (env: Bindings, data: AppData) => {
 
 const mergeAgencyAdminSessions = (sessions: AgencyAdminSessionRecord[]) => {
   const seen = new Set<string>();
-  return sessions.filter((session) => {
-    if (!session?.token || seen.has(session.token)) {
-      return false;
-    }
-    seen.add(session.token);
-    return true;
-  });
+  return sessions
+    .filter((session) => {
+      if (!session?.token || seen.has(session.token)) {
+        return false;
+      }
+      seen.add(session.token);
+      return true;
+    })
+    .map((session) => ({
+      ...session,
+      admin: session.admin
+        ? {
+            ...session.admin,
+            agencyId: Number.isInteger(Number(session.admin.agencyId))
+              ? Number(session.admin.agencyId)
+              : 1,
+          }
+        : undefined,
+    }));
 };
 
 const getAgencyAdminSessionStoreRowId = (config: SupabaseAppDataConfig) =>
@@ -950,7 +970,12 @@ const loadAgencyAdminAuthFromSupabase = async (
   const rows = (await response.json()) as Array<{
     data?: AgencyAdminAuthStoreRecord;
   }>;
-  return rows[0]?.data?.agencyAdmins ?? [];
+  return (rows[0]?.data?.agencyAdmins ?? []).map((admin) => ({
+    ...admin,
+    agencyId: Number.isInteger(Number(admin.agencyId))
+      ? Number(admin.agencyId)
+      : 1,
+  }));
 };
 
 const saveAgencyAdminSessionsToSupabase = async (
@@ -1265,6 +1290,7 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
       const admin = session.admin
         ? {
             id: session.admin.id,
+            agencyId: session.admin.agencyId,
             username: session.admin.username,
             email: session.admin.email ?? "",
             password: "",
@@ -1348,6 +1374,7 @@ const toSafeClient = (client: ClientRecord) => ({
 
 const toSafeAgencyAdmin = (admin: AgencyAdminRecord) => ({
   id: admin.id,
+  agencyId: admin.agencyId,
   username: admin.username,
   email: admin.email ?? "",
   emailVerified: Boolean(admin.emailVerified),
@@ -1796,6 +1823,10 @@ const toMaidRecordPayload = (
   const photoDataUrl = photoDataUrls[0] ?? rawPhotoDataUrl;
 
   return {
+    agencyId:
+      Number.isInteger(Number(maid.agencyId)) && Number(maid.agencyId) > 0
+        ? Number(maid.agencyId)
+        : 1,
     fullName: String(maid.fullName).trim(),
     referenceCode: normalizeReferenceCode(maid.referenceCode),
     status: typeof maid.status === "string" ? maid.status : "available",
@@ -3905,6 +3936,7 @@ app.post("/api/agency-auth/register", async (c) => {
   const code = generateSixDigitCode();
   const admin: AgencyAdminRecord = {
     id: data.counters.agencyAdmins++,
+    agencyId: 1,
     username: body.username.trim(),
     email,
     password: body.password.trim(),

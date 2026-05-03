@@ -1,0 +1,110 @@
+[db] Connected using DATABASE_URL
+Server is running at http://localhost:3000
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: 'd87a717d2ef22bb4a9f8679c0e8f61198305589a737b9c30'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: 'ffb394023a2f2ea1795c9744d074992b1c5e5de926eca3c5'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: 'c46167ce9408ebcf242f7f711c1f47b69bb7c60865295e1e'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '4909d58e28f2b2b6f0e1e0e7af3cf877624fa10ef203aeaa'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '858ca5a8b43b0d9f7c48d79a7a3b6745d1fa44f0ccff439d'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: 'b22e2d6fe2e190a6e1646cbbe06702357e1577bc094ffdf3'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '9a0d16887f2310898267fe4b9f801e188adaa71dea0214c9'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '85d4df67158724ee8b3cd2829b27a14752319d4b6d39cfbd'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: 'e7ce2d265b543f95956ae65da9e3e005cfb1b9386cec4a51'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '095d692839b462e4ae44fd32c9fa92d7735faffd2136899e'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: 'bfbeeadad830afe51a29e1c42dce74cac95b49129945893d'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '5deecaeb27ccf547522ac93ce37587263dac6327ddddcae2'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '403eb4d1b6503f0ae60ba116ab67ce3b17c172de304b1de1'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '4757dbbcdcf567c7e28cfd4e44a626192907862e561094b3'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '5b1616821910c5ad3daa8efc56cd7cfda50c0172ca7118eb'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '2cdf532693aef58353208ac3e82f95a6295b375c907480cc'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '0c269214b0de6aa586e50f5a1b2aae77c558f2feac08796f'
+}
+[agency-auth] login identifier: attheagency
+[agency-auth] login success: {
+  adminId: 2,
+  agencyId: 1,
+  token: '02102968fd58be604d0ea373aa58d34526b07accb7f552d3'
+}

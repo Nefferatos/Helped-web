@@ -117,6 +117,8 @@ async function sleep(ms: number) {
 type Status = "idle" | "reading" | "extracting" | "done" | "error" | "limit";
 
 interface ExtractedData {
+  referenceCode?: string | null;
+  type?: string | null;
   fullName?: string | null;
   dateOfBirth?: string | null;
   placeOfBirth?: string | null;
@@ -128,7 +130,10 @@ interface ExtractedData {
   homeCountryContact?: string | null;
   religion?: string | null;
   educationLevel?: string | null;
+  education?: string | null;
   numberOfSiblings?: number | null;
+  numberOfSibling?: number | null;
+  siblingCount?: number | null;
   maritalStatus?: string | null;
   numberOfChildren?: number | null;
   agesOfChildren?: string | null;
@@ -179,6 +184,7 @@ interface ExtractedData {
   evalByDeclaration?: boolean | null;
   evalInterviewedBySgEA?: boolean | null;
   evalInterviewSubOption?: string | null;
+  maidType?: string | null;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -248,7 +254,9 @@ function parseGeminiJson(raw: string): ExtractedData {
     try {
       const repaired = attempt();
       const parsed = JSON.parse(repaired) as ExtractedData;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return normalizeExtractedData(parsed);
+      }
       errors.push("Not a plain object");
     } catch (e) {
       errors.push((e as Error).message);
@@ -256,6 +264,52 @@ function parseGeminiJson(raw: string): ExtractedData {
   }
   console.error("[PdfAutofill] All parse strategies failed:", errors, raw.slice(0, 1000));
   throw new Error(`Could not extract JSON from Gemini response: ${errors.join(" | ")}`);
+}
+
+function normalizeExtractedData(input: ExtractedData): ExtractedData {
+  const raw = input as ExtractedData & Record<string, unknown>;
+  const toNullableString = (...values: unknown[]) => {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return null;
+  };
+  const toNullableNumber = (...values: unknown[]) => {
+    for (const value of values) {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value === "string" && value.trim()) {
+        const parsed = Number(value.trim());
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+    return null;
+  };
+
+  return {
+    ...input,
+    referenceCode: toNullableString(
+      input.referenceCode,
+      raw.refCode,
+      raw.reference_code,
+      raw.reference,
+      raw.code,
+    ),
+    type: toNullableString(input.type, input.maidType, raw.maid_type, raw.typeOfMaid),
+    height: toNullableNumber(input.height, raw.heightCm, raw.height_cm),
+    educationLevel: toNullableString(
+      input.educationLevel,
+      input.education,
+      raw.education_level,
+      raw.educationLevelName,
+    ),
+    numberOfSiblings: toNullableNumber(
+      input.numberOfSiblings,
+      input.numberOfSibling,
+      input.siblingCount,
+      raw.number_of_siblings,
+      raw.siblings,
+    ),
+  };
 }
 
 // ─── Prompt ───────────────────────────────────────────────────────────────────
@@ -277,6 +331,8 @@ MANDATORY OUTPUT RULES:
 Return this exact JSON structure:
 
 {
+  "referenceCode": null,
+  "type": null,
   "fullName": null,
   "dateOfBirth": null,
   "placeOfBirth": null,
@@ -353,7 +409,9 @@ Return this exact JSON structure:
 }
 
 Field rules:
+- referenceCode: the agency / FDW reference code if shown on the biodata form; otherwise null
 - dateOfBirth: YYYY-MM-DD format (convert from any format found)
+- type: MUST be exactly one of: "New maid", "Transfer maid", "APS maid", "Ex-Singapore maid", "Ex-Hong Kong maid", "Ex-Taiwan maid", "Ex-Malaysia maid", "Ex-Middle East maid", "Applying to work in Hong Kong", "Applying to work in Canada", "Applying to work in Taiwan"
 - height: number in cm only (convert from feet/inches if needed)
 - weight: number in kg only (convert from lbs if needed)
 - nationality: append " maid" e.g. "Filipino maid", "Indonesian maid"
@@ -499,6 +557,46 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
     return raw;
   };
 
+  const resolveType = (raw?: string | null): string => {
+    if (!raw) return prev.type ?? "";
+    const normalized = raw.toLowerCase().trim();
+    const typeMap: Array<[string[], string]> = [
+      [["new maid", "new"], "New maid"],
+      [["transfer maid", "transfer"], "Transfer maid"],
+      [["aps maid", "aps"], "APS maid"],
+      [["ex-singapore maid", "ex singapore maid", "ex singapore"], "Ex-Singapore maid"],
+      [["ex-hong kong maid", "ex hong kong maid", "hong kong"], "Ex-Hong Kong maid"],
+      [["ex-taiwan maid", "ex taiwan maid", "taiwan"], "Ex-Taiwan maid"],
+      [["ex-malaysia maid", "ex malaysia maid", "malaysia"], "Ex-Malaysia maid"],
+      [["ex-middle east maid", "ex middle east maid", "middle east"], "Ex-Middle East maid"],
+      [["applying to work in hong kong"], "Applying to work in Hong Kong"],
+      [["applying to work in canada"], "Applying to work in Canada"],
+      [["applying to work in taiwan"], "Applying to work in Taiwan"],
+    ];
+    for (const [needles, value] of typeMap) {
+      if (needles.some((needle) => normalized.includes(needle))) return value;
+    }
+    return raw.trim();
+  };
+
+  const resolveEducationLevel = (raw?: string | null): string => {
+    if (!raw) return prev.educationLevel ?? "";
+    const normalized = raw
+      .toLowerCase()
+      .replace(/[–—]/g, "-")
+      .replace(/≤/g, "<=")
+      .replace(/≥/g, ">=")
+      .trim();
+    if (normalized.includes("primary")) return "Primary Level (≤6 yrs)";
+    if (normalized.includes("secondary")) return "Secondary Level (7–9 yrs)";
+    if (normalized.includes("high school")) return "High School (10–12 yrs)";
+    if (normalized.includes("vocational")) return "Vocational Course";
+    if (normalized.includes("college") || normalized.includes("degree")) {
+      return "College / Degree (≥13 yrs)";
+    }
+    return raw.trim();
+  };
+
   const areaMap: Record<string, string> = {
     "care of infants": "Care of infants/children",
     "care of infants/children": "Care of infants/children",
@@ -609,6 +707,8 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
 
   return {
     ...prev,
+    referenceCode:     e.referenceCode     != null ? e.referenceCode     : prev.referenceCode,
+    type:              resolveType(e.type),
     fullName:          e.fullName          != null ? e.fullName          : prev.fullName,
     dateOfBirth:       e.dateOfBirth       != null ? e.dateOfBirth       : prev.dateOfBirth,
     placeOfBirth:      e.placeOfBirth      != null ? e.placeOfBirth      : prev.placeOfBirth,
@@ -618,7 +718,7 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
     homeAddress:       e.homeAddress       != null ? e.homeAddress       : prev.homeAddress,
     airportRepatriation: e.airportRepatriation != null ? e.airportRepatriation : prev.airportRepatriation,
     religion:          e.religion          != null ? e.religion          : prev.religion,
-    educationLevel:    e.educationLevel    != null ? e.educationLevel    : prev.educationLevel,
+    educationLevel:    resolveEducationLevel(e.educationLevel),
     numberOfSiblings:  e.numberOfSiblings  != null ? e.numberOfSiblings  : prev.numberOfSiblings,
     maritalStatus:     e.maritalStatus     != null ? e.maritalStatus     : prev.maritalStatus,
     numberOfChildren:  e.numberOfChildren  != null ? e.numberOfChildren  : prev.numberOfChildren,

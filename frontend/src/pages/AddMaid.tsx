@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { defaultMaidProfile, type MaidProfile } from "@/lib/maids";
 import { useNavigate } from "react-router-dom";
 
@@ -91,7 +92,7 @@ const AddMaid = () => {
         setFormData(optimistic);
         const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
           body: JSON.stringify(optimistic),
         });
         const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
@@ -158,7 +159,7 @@ const AddMaid = () => {
       const method = shouldCreate ? "POST" : "PUT";
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify(payload),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
