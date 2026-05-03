@@ -84,6 +84,11 @@ interface LeadPayload {
   message: string;
 }
 
+const MAKE_WEBHOOKS = {
+  inquiry_pipeline: import.meta.env.VITE_MAKE_WEBHOOK_URL_INQUIRY_PIPELINE as string | undefined,
+  lead_pipeline: import.meta.env.VITE_MAKE_WEBHOOK_URL_LEAD_PIPELINE as string | undefined,
+} as const;
+
 const parseApiError = async (response: Response, fallbackMessage: string) => {
   const data = (await response.json().catch(() => ({}))) as ApiErrorPayload;
   return data.error || fallbackMessage;
@@ -107,15 +112,37 @@ export const triggerMakeScenario = async (
   scenario: "inquiry_pipeline" | "lead_pipeline",
   payload: Record<string, unknown>,
 ) => {
-  const response = await fetch("/api/send-to-make", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scenario, payload }),
-  });
+  const directWebhookUrl = MAKE_WEBHOOKS[scenario]?.trim();
+  const response = await fetch(
+    directWebhookUrl || "/api/send-to-make",
+    directWebhookUrl
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      : {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scenario, payload }),
+        },
+  );
 
   if (!response.ok) {
     const message = await parseApiError(response, `Failed to trigger ${scenario}`);
     throw new Error(message);
+  }
+
+  if (directWebhookUrl) {
+    return {
+      ok: true,
+      delivery: {
+        id: 0,
+        scenario,
+        success: true,
+        statusCode: response.status,
+      },
+    };
   }
 
   return (await response.json()) as {

@@ -38,52 +38,173 @@ const extractJsonObject = (value: string) => {
   }
 }
 
-const runOpenAiJson = async <T>(
+const firstDefinedEnv = (...keys: string[]) => {
+  for (const key of keys) {
+    const value = process.env[key]?.trim()
+    if (value) return value
+  }
+  return ''
+}
+
+const runClaudeJson = async <T>(
   systemPrompt: string,
   userPrompt: string
 ): Promise<T | null> => {
-  const apiKey = process.env.OPENAI_API_KEY?.trim()
+  const apiKey = firstDefinedEnv(
+    'ANTHROPIC_API_KEY',
+    'CLAUDE_API_KEY',
+    'VITE_CLAUDE_API_KEY'
+  )
   if (!apiKey) {
+    console.warn('[workflowAiService] Claude API key is missing; using fallback rules')
     return null
   }
 
-  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini'
+  const model =
+    firstDefinedEnv(
+      'ANTHROPIC_MODEL',
+      'CLAUDE_MODEL',
+      'VITE_CLAUDE_MODEL'
+    ) || 'claude-3-5-haiku-latest'
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         ...jsonHeaders,
-        Authorization: `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model,
         temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
+        max_tokens: 1024,
+        system: `${systemPrompt} Return only a valid JSON object.`,
+        messages: [{ role: 'user', content: userPrompt }],
       }),
       signal: controller.signal,
     })
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => '')
+      console.warn(
+        `[workflowAiService] Claude request failed with ${response.status}: ${errorText.slice(0, 500)}`
+      )
       return null
     }
 
     const body = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>
+      content?: Array<{ type?: string; text?: string }>
     }
-    const content = body.choices?.[0]?.message?.content ?? ''
+    const content =
+      body.content
+        ?.filter((item) => item.type === 'text' && typeof item.text === 'string')
+        .map((item) => item.text)
+        .join('\n') ?? ''
     return extractJsonObject(content) as T | null
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`[workflowAiService] Claude request threw: ${message}`)
     return null
   } finally {
     clearTimeout(timeout)
   }
+}
+
+const runGeminiJson = async <T>(
+  systemPrompt: string,
+  userPrompt: string
+): Promise<T | null> => {
+  const apiKey = firstDefinedEnv(
+    'GEMINI_API_KEY',
+    'GOOGLE_API_KEY',
+    'VITE_GEMINI_API_KEY'
+  )
+  if (!apiKey) {
+    console.warn('[workflowAiService] Gemini API key is missing; cannot use Gemini fallback')
+    return null
+  }
+
+  const model =
+    firstDefinedEnv(
+      'GEMINI_MODEL',
+      'GOOGLE_MODEL',
+      'VITE_GEMINI_MODEL'
+    ) || 'gemini-2.5-flash'
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          ...jsonHeaders,
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `${systemPrompt}\n\nReturn only a valid JSON object.\n\n${userPrompt}`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 1024,
+            responseMimeType: 'application/json',
+          },
+        }),
+        signal: controller.signal,
+      }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '')
+      console.warn(
+        `[workflowAiService] Gemini request failed with ${response.status}: ${errorText.slice(0, 500)}`
+      )
+      return null
+    }
+
+    const body = (await response.json()) as {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{ text?: string }>
+        }
+      }>
+    }
+    const content =
+      body.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? '')
+        .join('\n') ?? ''
+    return extractJsonObject(content) as T | null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`[workflowAiService] Gemini request threw: ${message}`)
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+const runWorkflowAiJson = async <T>(
+  systemPrompt: string,
+  userPrompt: string
+): Promise<T | null> => {
+  const claudeResult = await runClaudeJson<T>(systemPrompt, userPrompt)
+  if (claudeResult) {
+    return claudeResult
+  }
+
+  return await runGeminiJson<T>(systemPrompt, userPrompt)
 }
 
 const buildLeadSummary = (
@@ -219,7 +340,7 @@ export const enrichLeadWithAi = async (payload: {
   name: string
 }): Promise<AiResult<LeadEnrichment>> => {
   const fallback = heuristicLeadEnrichment(payload)
-  const aiResponse = await runOpenAiJson<LeadEnrichment>(
+  const aiResponse = await runWorkflowAiJson<LeadEnrichment>(
     'Extract lead details as JSON with keys serviceType, budget {min,max,currency,text}, urgency, location, summary.',
     `Lead name: ${payload.name}\nLead message: ${payload.message}`
   )
@@ -247,7 +368,7 @@ export const qualifyLeadWithAi = async (payload: {
   enrichment: LeadEnrichment
 }): Promise<AiResult<LeadQualification>> => {
   const fallback = heuristicLeadQualification(payload)
-  const aiResponse = await runOpenAiJson<LeadQualification>(
+  const aiResponse = await runWorkflowAiJson<LeadQualification>(
     'Score the lead from 0 to 100 and classify as HIGH, MEDIUM, or LOW. Return JSON with score, classification, reasons.',
     JSON.stringify(payload)
   )
@@ -282,7 +403,7 @@ export const classifyInquiryWithAi = async (payload: {
   name: string
 }): Promise<AiResult<InquiryAutomationResult>> => {
   const fallback = heuristicInquiry(payload)
-  const aiResponse = await runOpenAiJson<InquiryAutomationResult>(
+  const aiResponse = await runWorkflowAiJson<InquiryAutomationResult>(
     'Classify the inquiry as hiring, inquiry, or complaint. Return JSON with intent, workflow, and reply.',
     JSON.stringify(payload)
   )
@@ -322,7 +443,7 @@ export const rankMatchesWithAi = async (
     return { data: [], aiUsed: false }
   }
 
-  const aiResponse = await runOpenAiJson<{ matches: MatchCandidate[] }>(
+  const aiResponse = await runWorkflowAiJson<{ matches: MatchCandidate[] }>(
     'Rank the best maid matches. Return JSON with matches array containing maidId, maidReferenceCode, maidName, score, reasons.',
     JSON.stringify({ criteria, candidates })
   )
@@ -381,7 +502,7 @@ export const generateContractDraftWithAi = async (payload: {
 
   const fallbackSummary = `Draft contract prepared for employer ${payload.employerId} and maid ${payload.maidId}.`
 
-  const aiResponse = await runOpenAiJson<{ contractText: string; summary: string }>(
+  const aiResponse = await runWorkflowAiJson<{ contractText: string; summary: string }>(
     'Draft a concise structured employment service contract. Return JSON with contractText and summary.',
     JSON.stringify(payload)
   )

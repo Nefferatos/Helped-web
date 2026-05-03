@@ -3048,6 +3048,475 @@ app.delete("/api/enquiries/:id", async (c) => {
   return c.json({ message: "Enquiry deleted successfully" });
 });
 
+const WORKFLOW_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const isAvailableMaid = (maid: MaidRecord) =>
+  maid.isPublic &&
+  !["inactive", "archived"].includes(
+    String(maid.status ?? "available").toLowerCase(),
+  );
+
+const buildMatchCandidates = (maids: MaidRecord[], message: string) => {
+  const lowerMessage = message.toLowerCase();
+
+  return maids
+    .filter(isAvailableMaid)
+    .slice(0, 3)
+    .map((maid, index) => {
+      const reasons = [
+        `${maid.nationality} helper profile is publicly available`,
+        `Current status: ${maid.status ?? "available"}`,
+      ];
+
+      if (lowerMessage.includes("childcare")) {
+        reasons.push("Message mentions childcare requirements");
+      } else if (lowerMessage.includes("elderly")) {
+        reasons.push("Message mentions elderly care requirements");
+      } else if (lowerMessage.includes("house")) {
+        reasons.push("Message mentions housekeeping support");
+      }
+
+      return {
+        maidId: maid.id,
+        maidReferenceCode: maid.referenceCode,
+        maidName: maid.fullName,
+        score: Math.max(70, 95 - index * 7),
+        reasons,
+      };
+    });
+};
+
+const classifyInquiryIntent = (message: string) => {
+  const lower = message.toLowerCase();
+
+  if (
+    /(complaint|refund|angry|bad service|disappointed|escalate|problem|issue)/.test(
+      lower,
+    )
+  ) {
+    return "complaint" as const;
+  }
+
+  if (
+    /(hire|hiring|recommend|shortlist|maid|helper|transfer maid|childcare|elderly care|housekeeping)/.test(
+      lower,
+    )
+  ) {
+    return "hiring" as const;
+  }
+
+  return "inquiry" as const;
+};
+
+const workflowForIntent = (
+  intent: ReturnType<typeof classifyInquiryIntent>,
+) => {
+  if (intent === "hiring") {
+    return "maid_matching" as const;
+  }
+  if (intent === "complaint") {
+    return "support_escalation" as const;
+  }
+  return "general_inquiry" as const;
+};
+
+const buildInquiryReply = (
+  intent: ReturnType<typeof classifyInquiryIntent>,
+  matchesCount: number,
+) => {
+  if (intent === "hiring" && matchesCount > 0) {
+    return `Thanks for reaching out. We shortlisted ${matchesCount} maid profile${matchesCount === 1 ? "" : "s"} for follow-up.`;
+  }
+  if (intent === "hiring") {
+    return "Thanks for reaching out. We have logged your hiring request and our team will follow up with suitable profiles shortly.";
+  }
+  if (intent === "complaint") {
+    return "Thanks for letting us know. We have logged your concern and a team member will follow up shortly.";
+  }
+  return "Thanks for reaching out. We have logged your inquiry and our team will get back to you shortly.";
+};
+
+const inferLeadEnrichment = (message: string) => {
+  const lower = message.toLowerCase();
+  const budgetMatch =
+    message.match(/(?:sgd|s\\$|\\$)\\s*(\\d{3,5})/i) ??
+    message.match(/budget\\s*(\\d{3,5})/i);
+  const budgetValue = budgetMatch ? Number(budgetMatch[1]) : null;
+  const serviceType = lower.includes("childcare")
+    ? "childcare"
+    : lower.includes("elderly")
+      ? "elderly_care"
+      : lower.includes("house")
+        ? "housekeeping"
+        : "general_housekeeping";
+  const urgency = /(urgent|asap|immediately|today|tomorrow)/.test(lower)
+    ? "high"
+    : "normal";
+  const locationMatch = message.match(
+    /(woodlands|tampines|yishun|jurong|bedok|hougang|toa payoh|singapore)/i,
+  );
+  const location = locationMatch ? locationMatch[1] : "Singapore";
+
+  return {
+    serviceType,
+    budget: {
+      min: budgetValue,
+      max: budgetValue,
+      currency: "SGD",
+      text: budgetMatch?.[0] ?? "",
+    },
+    urgency,
+    location,
+    summary: `${serviceType.replace(/_/g, " ")} request in ${location}${budgetValue ? ` with budget ${budgetValue} SGD` : ""}`.trim(),
+  };
+};
+
+const qualifyLead = (
+  enrichment: ReturnType<typeof inferLeadEnrichment>,
+  message: string,
+) => {
+  let score = 45;
+  const reasons: string[] = [];
+
+  if (enrichment.serviceType !== "general_housekeeping") {
+    score += 15;
+    reasons.push(`Service type detected: ${enrichment.serviceType}`);
+  }
+
+  if (enrichment.budget.min) {
+    score += 15;
+    reasons.push(`Budget captured: ${enrichment.budget.min} SGD`);
+  }
+
+  if (enrichment.urgency === "high") {
+    score += 15;
+    reasons.push("Customer indicated high urgency");
+  }
+
+  if (enrichment.location && enrichment.location !== "Singapore") {
+    score += 10;
+    reasons.push(`Location identified: ${enrichment.location}`);
+  }
+
+  if (message.trim().length > 40) {
+    score += 10;
+    reasons.push("Message includes enough detail for follow-up");
+  }
+
+  return {
+    score,
+    classification: score >= 80 ? "HIGH" : score >= 60 ? "MEDIUM" : "LOW",
+    reasons,
+  };
+};
+
+app.post(
+  "/api/inquiry",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      name?: string;
+      contact?: string;
+      message?: string;
+      employerId?: number | null;
+    }>(c.req.raw);
+
+    const name = toTrimmedString(body?.name) || "Unknown";
+    const contact = toTrimmedString(body?.contact);
+    const message = toTrimmedString(body?.message);
+
+    if (!message) {
+      return c.json({ error: "message is required" }, 400);
+    }
+
+    const data = await loadData(c.env);
+    const intent = classifyInquiryIntent(message);
+    const workflow = workflowForIntent(intent);
+    const matches =
+      intent === "hiring" ? buildMatchCandidates(data.maids, message) : [];
+    const reply = buildInquiryReply(intent, matches.length);
+
+    const enquiry: EnquiryRecord = {
+      id: data.counters.enquiries++,
+      username: name,
+      date: buildFallbackDate(),
+      email: WORKFLOW_EMAIL_PATTERN.test(contact) ? contact : "",
+      phone: WORKFLOW_EMAIL_PATTERN.test(contact) ? "" : contact,
+      message,
+      createdAt: now(),
+    };
+
+    data.enquiries.unshift(enquiry);
+    await saveData(c.env, data);
+
+    return c.json({
+      inquiry: {
+        id: enquiry.id,
+        name,
+        contact,
+        message,
+        intent,
+        workflow,
+        reply,
+        aiUsed: false,
+        createdAt: enquiry.createdAt,
+      },
+      matches: matches.length > 0 ? matches : undefined,
+      reply,
+    });
+  }),
+);
+
+app.post(
+  "/api/leads/raw",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      source?: string;
+      name?: string;
+      contact?: string;
+      message?: string;
+    }>(c.req.raw);
+
+    const source =
+      toTrimmedString(body?.source).toLowerCase() === "facebook"
+        ? "facebook"
+        : toTrimmedString(body?.source).toLowerCase() === "scraped"
+          ? "scraped"
+          : "website";
+    const name = toTrimmedString(body?.name);
+    const contact = toTrimmedString(body?.contact);
+    const message = toTrimmedString(body?.message);
+
+    if (!name || !contact || !message) {
+      return c.json({ error: "name, contact, and message are required" }, 400);
+    }
+
+    const enrichment = inferLeadEnrichment(message);
+    const qualification = qualifyLead(enrichment, message);
+    const data = await loadData(c.env);
+    const leadId = data.counters.directSales++;
+    const createdAt = now();
+
+    data.directSales.unshift({
+      id: leadId,
+      maidReferenceCode: "",
+      maidName: "",
+      clientId: 0,
+      clientName: name,
+      clientEmail: WORKFLOW_EMAIL_PATTERN.test(contact) ? contact : "",
+      clientPhone: WORKFLOW_EMAIL_PATTERN.test(contact) ? "" : contact,
+      status: qualification.classification,
+      requestDetails: {
+        source,
+        message,
+        aiSummary: enrichment.summary,
+      },
+      createdAt,
+    });
+    await saveData(c.env, data);
+
+    return c.json(
+      {
+        lead: {
+          id: leadId,
+          name,
+          source,
+          classification: qualification.classification,
+          aiSummary: enrichment.summary,
+          createdAt,
+        },
+        enrichment,
+        qualification,
+        notification: {
+          id: leadId,
+          recipient: "sales-team",
+          message: `New ${qualification.classification} lead received from ${source}: ${name}`,
+        },
+        aiUsed: false,
+      },
+      201,
+    );
+  }),
+);
+
+app.post(
+  "/api/match",
+  safeApi(async (c) => {
+    const body = await parseBody<{ message?: string }>(c.req.raw);
+    const message = toTrimmedString(body?.message);
+    const data = await loadData(c.env);
+
+    return c.json({
+      matches: buildMatchCandidates(data.maids, message),
+      aiUsed: false,
+    });
+  }),
+);
+
+app.post(
+  "/api/contracts/generate",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      maidId?: number | null;
+      employerId?: number | null;
+      serviceType?: string;
+      location?: string;
+      budgetText?: string;
+      scheduleDate?: string;
+    }>(c.req.raw);
+
+    const maidId = toNullableNumber(body?.maidId);
+    const employerId = toNullableNumber(body?.employerId);
+
+    if (!maidId || !employerId) {
+      return c.json({ error: "maidId and employerId are required" }, 400);
+    }
+
+    const data = await loadData(c.env);
+    const maid = data.maids.find((item) => item.id === maidId) ?? null;
+    if (!maid) {
+      return c.json({ error: "Maid not found" }, 404);
+    }
+
+    const employer =
+      data.employers.find((item) => item.id === employerId) ?? null;
+    const contractId = data.counters.employmentContracts++;
+    const refCode = `WF-${formatEmployerRefCode(contractId)}`;
+    const employerName =
+      toTrimmedString(
+        (
+          employer?.employer as
+            | {
+                name?: unknown;
+              }
+            | undefined
+        )?.name,
+      ) || `Employer ${employerId}`;
+    const contractDate = toTrimmedString(body?.scheduleDate) || now().slice(0, 10);
+
+    const contract = normalizeEmploymentContractRecord(
+      {
+        id: contractId,
+        refCode,
+        employerRefCode: employer?.refCode ?? refCode,
+        employerId,
+        maidId,
+        maidReferenceCode: maid.referenceCode,
+        maidName: maid.fullName,
+        employerName,
+        caseReferenceNumber: refCode,
+        contractDate,
+        serviceFee: toTrimmedString(body?.budgetText),
+        placementFee: toTrimmedString(body?.budgetText),
+        agencyWitness: "Helped Agency",
+        employerSnapshot: employer?.employer ?? { id: employerId, name: employerName },
+        maidSnapshot: maid,
+        createdAt: now(),
+        updatedAt: now(),
+      },
+      refCode,
+    );
+
+    data.employmentContracts.unshift(contract);
+    await saveData(c.env, data);
+
+    const summary = `Contract generated for ${maid.fullName} (${maid.referenceCode}) with ${employerName} in ${toTrimmedString(body?.location) || "Singapore"}.`;
+    const contractText = [
+      `Employment Contract Reference: ${contract.refCode}`,
+      `Employer: ${employerName}`,
+      `Maid: ${maid.fullName} (${maid.referenceCode})`,
+      `Service Type: ${toTrimmedString(body?.serviceType) || "general_housekeeping"}`,
+      `Location: ${toTrimmedString(body?.location) || "Singapore"}`,
+      `Budget / Fee: ${toTrimmedString(body?.budgetText) || "To be confirmed"}`,
+      `Schedule Date: ${contractDate}`,
+    ].join("\\n");
+
+    return c.json({
+      contract: {
+        id: contract.id,
+        refCode: contract.refCode,
+        maidId: contract.maidId,
+        employerId: contract.employerId,
+        contractText,
+        summary,
+        createdAt: contract.createdAt,
+      },
+      aiUsed: false,
+    });
+  }),
+);
+
+app.post(
+  "/api/schedule",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      maidId?: number | null;
+      employerId?: number | null;
+      datetime?: string;
+    }>(c.req.raw);
+
+    const maidId = toNullableNumber(body?.maidId);
+    const employerId = toNullableNumber(body?.employerId);
+    const datetime = toTrimmedString(body?.datetime);
+
+    if (!maidId || !employerId || !datetime) {
+      return c.json(
+        { error: "maidId, employerId, and datetime are required" },
+        400,
+      );
+    }
+
+    const data = await loadData(c.env);
+    const maid = data.maids.find((item) => item.id === maidId) ?? null;
+    if (!maid) {
+      return c.json({ error: "Maid not found" }, 404);
+    }
+
+    return c.json({
+      schedule: {
+        id: Date.now(),
+        maidId,
+        employerId,
+        maidName: maid.fullName,
+        datetime,
+        status: "scheduled",
+        createdAt: now(),
+      },
+    });
+  }),
+);
+
+app.post(
+  "/api/notify",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      channel?: string;
+      recipient?: string;
+      message?: string;
+      referenceType?: string;
+      referenceId?: string;
+    }>(c.req.raw);
+
+    const recipient = toTrimmedString(body?.recipient);
+    const message = toTrimmedString(body?.message);
+
+    if (!recipient || !message) {
+      return c.json({ error: "recipient and message are required" }, 400);
+    }
+
+    return c.json({
+      notification: {
+        id: Date.now(),
+        channel: toTrimmedString(body?.channel) || "internal",
+        recipient,
+        message,
+        referenceType: toTrimmedString(body?.referenceType) || "workflow",
+        referenceId: toTrimmedString(body?.referenceId),
+        createdAt: now(),
+      },
+    });
+  }),
+);
+
 app.post("/api/client-auth/register", async (c) => {
   const body = await parseBody<{
     name?: string;

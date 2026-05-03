@@ -31,6 +31,72 @@
   ],
   "inquiries": [
     {
+      "id": 10,
+      "createdAt": "2026-05-02T03:00:22.376Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "give me top 3 recommended maids",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 9,
+      "createdAt": "2026-05-02T02:58:09.044Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "give me top 3 maids you can recommend",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 8,
+      "createdAt": "2026-05-02T02:55:07.687Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "give me a top 3 maids you can recommend",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 7,
+      "createdAt": "2026-05-01T23:37:20.893Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "i want a maid",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 6,
+      "createdAt": "2026-05-01T23:35:19.042Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "recommend me some maids",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 5,
+      "createdAt": "2026-05-01T19:15:14.657Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "id like inquire what available maids",
+      "intent": "inquiry",
+      "workflow": "general_inquiry",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
       "id": 4,
       "createdAt": "2026-04-23T01:57:32.194Z",
       "name": "test",
@@ -126,7 +192,17 @@
     }
   ],
   "schedules": [],
-  "contracts": [],
+  "contracts": [
+    {
+      "id": 1,
+      "status": "draft",
+      "createdAt": "2026-05-03T02:02:32.633Z",
+      "maidId": 25,
+      "employerId": 9,
+      "contractText": "Employment Service Agreement\n\nEmployer ID: 9\nMaid ID: 25\nService Type: eldercare\nLocation: Yishun\nBudget / Salary Terms: SGD 700\nInterview / Start Date Reference: 2026-05-10\n\nTerms:\n1. The agency will coordinate screening, matching, and interview scheduling.\n2. The employer will confirm final hiring terms before activation.\n3. The maid candidate remains subject to availability and final approval.\n4. Any personal data exchanged is used only for hiring workflow administration.",
+      "summary": "Draft contract prepared for employer 9 and maid 25."
+    }
+  ],
   "notifications": [
     {
       "id": 1,
@@ -140,6 +216,174 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 31,
+      "createdAt": "2026-05-03T02:02:32.641Z",
+      "workflow": "matching_pipeline",
+      "step": "contract_generation",
+      "status": "warning",
+      "message": "Contract 1 generated",
+      "payload": {
+        "contractId": 1,
+        "aiUsed": false
+      }
+    },
+    {
+      "id": 30,
+      "createdAt": "2026-05-02T03:00:22.377Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 29,
+      "createdAt": "2026-05-02T03:00:21.877Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "give me top 3 recommended maids",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
+    {
+      "id": 28,
+      "createdAt": "2026-05-02T02:58:09.047Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 27,
+      "createdAt": "2026-05-02T02:58:08.458Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "give me top 3 maids you can recommend",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
+    {
+      "id": 26,
+      "createdAt": "2026-05-02T02:55:07.690Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 25,
+      "createdAt": "2026-05-02T02:55:07.684Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "give me a top 3 maids you can recommend",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
+    {
+      "id": 24,
+      "createdAt": "2026-05-01T23:37:20.901Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 23,
+      "createdAt": "2026-05-01T23:37:18.866Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "i want a maid",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
+    {
+      "id": 22,
+      "createdAt": "2026-05-01T23:35:19.055Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 21,
+      "createdAt": "2026-05-01T23:35:12.662Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "recommend me some maids",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
+    {
+      "id": 20,
+      "createdAt": "2026-05-01T19:15:14.673Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "general_inquiry",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      }
+    },
+    {
+      "id": 19,
+      "createdAt": "2026-05-01T19:15:12.527Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "id like inquire what available maids",
+        "name": "test",
+        "contact": "test@gmail.com"
+      }
+    },
     {
       "id": 18,
       "createdAt": "2026-04-23T01:57:32.708Z",
@@ -680,12 +924,12 @@
   ],
   "counters": {
     "leads": 2,
-    "inquiries": 5,
+    "inquiries": 11,
     "matches": 4,
     "schedules": 1,
-    "contracts": 1,
+    "contracts": 2,
     "notifications": 2,
-    "automationLogs": 19,
+    "automationLogs": 32,
     "makeDeliveries": 6
   }
 }

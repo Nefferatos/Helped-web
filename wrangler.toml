@@ -14,6 +14,7 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 # Defaults: app_data / default
 SUPABASE_APP_DATA_TABLE = "app_data"
 SUPABASE_APP_DATA_ID = "default"
+MAKE_WEBHOOK_URL = "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig"
 
 # Email confirmations (optional)
 # RESEND_API_KEY should be set as a Wrangler secret, not committed.
