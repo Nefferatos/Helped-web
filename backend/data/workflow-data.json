@@ -31,6 +31,17 @@
   ],
   "inquiries": [
     {
+      "id": 11,
+      "createdAt": "2026-05-03T03:49:42.645Z",
+      "name": "Marcus",
+      "contact": "marcus@example.com",
+      "message": "I want to hire a maid for childcare in Woodlands with budget 800",
+      "intent": "hiring",
+      "workflow": "maid_matching",
+      "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+      "aiUsed": false
+    },
+    {
       "id": 10,
       "createdAt": "2026-05-02T03:00:22.376Z",
       "name": "test",
@@ -143,6 +154,56 @@
   ],
   "matches": [
     {
+      "id": 4,
+      "createdAt": "2026-05-03T03:49:43.123Z",
+      "leadId": null,
+      "inquiryId": 11,
+      "employerId": 12,
+      "maidId": 93,
+      "maidReferenceCode": "45646",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 100,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 5,
+      "createdAt": "2026-05-03T03:49:43.123Z",
+      "leadId": null,
+      "inquiryId": 11,
+      "employerId": 12,
+      "maidId": 92,
+      "maidReferenceCode": "24324",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 100,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 6,
+      "createdAt": "2026-05-03T03:49:43.123Z",
+      "leadId": null,
+      "inquiryId": 11,
+      "employerId": 12,
+      "maidId": 94,
+      "maidReferenceCode": "35",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 90,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Language profile available"
+      ]
+    },
+    {
       "id": 1,
       "createdAt": "2026-04-23T01:43:39.486Z",
       "leadId": null,
@@ -205,6 +266,16 @@
   ],
   "notifications": [
     {
+      "id": 2,
+      "status": "sent",
+      "createdAt": "2026-05-03T03:45:57.469Z",
+      "channel": "internal",
+      "recipient": "test",
+      "message": "make local test",
+      "referenceType": "workflow",
+      "referenceId": ""
+    },
+    {
       "id": 1,
       "status": "sent",
       "createdAt": "2026-04-23T01:46:22.212Z",
@@ -216,6 +287,126 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 37,
+      "createdAt": "2026-05-03T04:02:49.226Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 7,
+        "createdAt": "2026-05-03T04:02:49.205Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "action": "new_inquiry",
+          "actor": {
+            "role": "client",
+            "id": "12"
+          },
+          "customer": {
+            "name": "Marcus",
+            "contact": "marcus@example.com"
+          },
+          "message": "I want to hire a maid for childcare in Woodlands with budget 800",
+          "context": {
+            "employerId": 12,
+            "maidId": "",
+            "scheduleDateTime": "",
+            "serviceType": "childcare",
+            "location": "Woodlands",
+            "budgetText": "SGD 800",
+            "scheduleDate": "",
+            "recipient": "",
+            "notificationMessage": "",
+            "channel": ""
+          }
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 1711,
+        "responseBody": "Accepted",
+        "error": ""
+      }
+    },
+    {
+      "id": 36,
+      "createdAt": "2026-05-03T03:49:43.126Z",
+      "workflow": "inquiry_pipeline",
+      "step": "maid_matching",
+      "status": "success",
+      "message": "Generated 3 match candidates",
+      "payload": {
+        "inquiryId": 11,
+        "aiUsed": false
+      }
+    },
+    {
+      "id": 35,
+      "createdAt": "2026-05-03T03:49:42.652Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as hiring",
+      "payload": {
+        "intent": "hiring",
+        "workflow": "maid_matching",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly."
+      }
+    },
+    {
+      "id": 34,
+      "createdAt": "2026-05-03T03:49:41.331Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "I want to hire a maid for childcare in Woodlands with budget 800",
+        "name": "Marcus",
+        "contact": "marcus@example.com",
+        "employerId": 12
+      }
+    },
+    {
+      "id": 33,
+      "createdAt": "2026-05-03T03:45:58.591Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 6,
+        "createdAt": "2026-05-03T03:45:58.589Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "event": "ping",
+          "source": "codex"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 1091,
+        "responseBody": "Accepted",
+        "error": ""
+      }
+    },
+    {
+      "id": 32,
+      "createdAt": "2026-05-03T03:45:57.524Z",
+      "workflow": "notification_pipeline",
+      "step": "notify",
+      "status": "success",
+      "message": "Notification sent to test",
+      "payload": {
+        "channel": "internal",
+        "recipient": "test",
+        "message": "make local test",
+        "referenceType": "workflow",
+        "referenceId": ""
+      }
+    },
     {
       "id": 31,
       "createdAt": "2026-05-03T02:02:32.641Z",
@@ -764,6 +955,56 @@
   ],
   "makeDeliveries": [
     {
+      "id": 7,
+      "createdAt": "2026-05-03T04:02:49.205Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "action": "new_inquiry",
+        "actor": {
+          "role": "client",
+          "id": "12"
+        },
+        "customer": {
+          "name": "Marcus",
+          "contact": "marcus@example.com"
+        },
+        "message": "I want to hire a maid for childcare in Woodlands with budget 800",
+        "context": {
+          "employerId": 12,
+          "maidId": "",
+          "scheduleDateTime": "",
+          "serviceType": "childcare",
+          "location": "Woodlands",
+          "budgetText": "SGD 800",
+          "scheduleDate": "",
+          "recipient": "",
+          "notificationMessage": "",
+          "channel": ""
+        }
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1711,
+      "responseBody": "Accepted",
+      "error": ""
+    },
+    {
+      "id": 6,
+      "createdAt": "2026-05-03T03:45:58.589Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "event": "ping",
+        "source": "codex"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1091,
+      "responseBody": "Accepted",
+      "error": ""
+    },
+    {
       "id": 5,
       "createdAt": "2026-04-23T01:57:32.696Z",
       "scenario": "inquiry_pipeline",
@@ -924,12 +1165,12 @@
   ],
   "counters": {
     "leads": 2,
-    "inquiries": 11,
-    "matches": 4,
+    "inquiries": 12,
+    "matches": 7,
     "schedules": 1,
     "contracts": 2,
-    "notifications": 2,
-    "automationLogs": 32,
-    "makeDeliveries": 6
+    "notifications": 3,
+    "automationLogs": 38,
+    "makeDeliveries": 8
   }
 }
