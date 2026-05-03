@@ -1,9 +1,9 @@
 // PdfAutofill.tsx  — bold button with AI icon + arc % indicator + popup
-// All Gemini extraction logic unchanged.
+// + daily usage tracking with localStorage + midnight countdown
 // Usage: import { PdfAutofillBanner } from "./PdfAutofill";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle, AlertCircle, X, FileText, RefreshCw } from "lucide-react";
+import { CheckCircle, AlertCircle, X, FileText, Zap } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import type { MaidProfile } from "@/lib/maids";
 
@@ -11,19 +11,82 @@ import type { MaidProfile } from "@/lib/maids";
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
+// gemini-2.0-flash was retired March 2026 — replaced with stable 2.5-flash-lite as fallback
 const GEMINI_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
+  "gemini-2.5-flash-preview-05-20",
+  "gemini-2.5-flash-lite",
 ] as const;
 
 const geminiUrl = (model: string) =>
   `${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
 const RETRYABLE_CODES = new Set([429, 500, 503]);
-const MAX_RETRIES = 5;           // more attempts per model
-const BASE_DELAY_MS = 2000;      // 2 s → 4 s → 8 s → 16 s → 32 s
-const MAX_DELAY_MS  = 32000;     // cap at 32 s
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1500;
+
+// ─── Usage tracking config ────────────────────────────────────────────────────
+// Gemini 2.5 Flash free tier: ~500 RPD (conservative limit set below)
+const DAILY_LIMIT = 20; // conservative daily cap shown to users
+const STORAGE_KEY = "pdfAutofill_usage";
+
+interface UsageRecord {
+  date: string;   // YYYY-MM-DD in Pacific Time
+  count: number;
+}
+
+function getPacificDateString(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+}
+
+function loadUsage(): UsageRecord {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { date: getPacificDateString(), count: 0 };
+    const parsed = JSON.parse(raw) as UsageRecord;
+    // Reset if it's a new day (Pacific Time)
+    if (parsed.date !== getPacificDateString()) {
+      return { date: getPacificDateString(), count: 0 };
+    }
+    return parsed;
+  } catch {
+    return { date: getPacificDateString(), count: 0 };
+  }
+}
+
+function saveUsage(record: UsageRecord): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+  } catch {
+    // localStorage unavailable — fail silently
+  }
+}
+
+function incrementUsage(): UsageRecord {
+  const current = loadUsage();
+  const updated = { date: current.date, count: current.count + 1 };
+  saveUsage(updated);
+  return updated;
+}
+
+/** Milliseconds until midnight Pacific Time */
+function msTillMidnightPacific(): number {
+  const now = new Date();
+  // Get current time in Pacific
+  const pacificNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+  const midnight = new Date(pacificNow);
+  midnight.setHours(24, 0, 0, 0);
+  return midnight.getTime() - pacificNow.getTime();
+}
+
+function formatCountdown(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
 // ─── Evaluation method constants (must match AddMaid.tsx exactly) ─────────────
 const EVAL_PARENT_DECLARATION =
@@ -43,30 +106,15 @@ function isOverloaded(msg: string) {
     l.includes("overloaded") ||
     l.includes("try again") ||
     l.includes("quota") ||
-    l.includes("rate limit") ||
-    l.includes("resource_exhausted") ||
-    l.includes("429")
+    l.includes("rate limit")
   );
-}
-
-function friendlyRetryMsg(attempt: number, totalAttempts: number, model: string, delayMs: number): string {
-  const modelShort = model.replace("gemini-", "").replace("-flash", " Flash").replace("-pro", " Pro");
-  const secs = Math.round(delayMs / 1000);
-  const phrases = [
-    `AI is busy — retrying in ${secs}s…`,
-    `Still trying (${attempt}/${totalAttempts}) — ${secs}s wait…`,
-    `Switching to ${modelShort}, please wait…`,
-    `Almost there — one more attempt…`,
-    `Trying backup model (${modelShort})…`,
-  ];
-  return phrases[Math.min(attempt - 1, phrases.length - 1)];
 }
 
 async function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-type Status = "idle" | "reading" | "extracting" | "retrying" | "done" | "error";
+type Status = "idle" | "reading" | "extracting" | "done" | "error" | "limit";
 
 interface ExtractedData {
   fullName?: string | null;
@@ -311,7 +359,6 @@ Field rules:
 - nationality: append " maid" e.g. "Filipino maid", "Indonesian maid"
 - educationLevel: MUST be exactly one of: "Primary Level (≤6 yrs)", "Secondary Level (7–9 yrs)", "High School (10–12 yrs)", "Vocational Course", "College / Degree (≥13 yrs)"
 - maritalStatus: MUST be exactly one of: "Single", "Single Parent", "Married", "Divorced", "Widowed", "Separated"
-
 - skills[].area: MUST be exactly one of: "Care of infants/children", "Care of elderly", "Care of disabled", "General housework", "Cooking", "Language abilities (spoken)", "Other skills, if any"
 - skills[].willing: true if the form shows Yes/Willing/checked, false if No/Unwilling. Do NOT use null if a value is present.
 - skills[].experience: true if the form shows Yes/has experience, false if No/no experience. Do NOT use null if a value is present.
@@ -325,8 +372,7 @@ Field rules:
     - For "Other skills, if any": the skill description text
     - For all other areas: "" (empty string)
   Use "" if the sub-field is blank. NEVER null.
-- IMPORTANT: Include ALL 7 skill rows in the skills array, even if some have no data. The 7 areas are: "Care of infants/children", "Care of elderly", "Care of disabled", "General housework", "Cooking", "Language abilities (spoken)", "Other skills, if any"
-
+- IMPORTANT: Include ALL 7 skill rows in the skills array, even if some have no data.
 - employmentHistory[]: one object per employer. Include ALL employers found in the PDF.
 - employmentHistory[].from: 4-digit year string (e.g. "2019"), or "" if unknown
 - employmentHistory[].to: 4-digit year string (e.g. "2022"), or "" if unknown
@@ -336,7 +382,6 @@ Field rules:
 - employmentHistory[].remarks: any remarks, feedback, or notes about this employment period. Use "" if none. NEVER null.
 - languageSkills values: MUST be exactly one of: "Zero", "Poor", "Little", "Fair", "Good" or null
 - interviewAvailability: array of applicable strings from: ["FDW is not available for interview", "FDW can be interviewed by phone", "FDW can be interviewed by video-conference", "FDW can be interviewed in person"]
-
 - evalByDeclaration: true if the form indicates "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA" is checked/selected
 - evalInterviewedBySgEA: true if the form indicates "Interviewed by Singapore EA" is checked/selected
 - evalInterviewSubOption: if evalInterviewedBySgEA is true, set this to whichever ONE of the following sub-options is checked — use the exact string:
@@ -345,9 +390,7 @@ Field rules:
     "Interviewed in person"
     "Interviewed in person and also made observation of FDW in the areas of work listed in table"
   Set to null if none applies.
-
 - ableHandlePork / ableEatPork / ableCareForPets / ableSewing / ableGardening / willingWashCar / willingWorkOffDay: true/false based on Yes/No in the form. Do NOT use null if a Yes/No answer is clearly present.
-
 - intro: the maid's personal self-introduction paragraph (first-person narrative about herself)
 - publicIntro: a public-facing summary suitable for employer viewing
 - availabilityRemark: any remarks about availability or interview conditions
@@ -402,64 +445,41 @@ async function callGemini(base64: string, model: string): Promise<ExtractedData>
   return parseGeminiJson(raw);
 }
 
-// ─── Extract with graceful retry ──────────────────────────────────────────────
-
 async function extractFromPdf(
   file: File,
-  onRetry?: (msg: string, attempt: number, total: number) => void,
+  onRetry?: (attempt: number, model: string, delayMs: number) => void,
 ): Promise<ExtractedData> {
   const base64 = await fileToBase64(file);
 
   for (let modelIdx = 0; modelIdx < GEMINI_MODELS.length; modelIdx++) {
     const model = GEMINI_MODELS[modelIdx];
-
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         return await callGemini(base64, model);
       } catch (err) {
         const e = err as Error & { status?: number };
-
-        const isRateLimit =
-          (e.status !== undefined && RETRYABLE_CODES.has(e.status)) ||
-          isOverloaded(e.message);
-
+        const retryable =
+          (e.status !== undefined && RETRYABLE_CODES.has(e.status)) || isOverloaded(e.message);
         const isLastAttempt = attempt === MAX_RETRIES;
         const isLastModel   = modelIdx === GEMINI_MODELS.length - 1;
 
-        // Non-retryable error → skip to next model (or fail)
-        if (!isRateLimit) {
-          console.warn(`[PdfAutofill] Model ${model} non-retryable: ${e.message}`);
-          if (isLastModel) throw new Error("Extraction failed. Please try again.");
-          break; // try next model
-        }
-
-        // Rate-limited — if we still have retries or models left, wait and retry
-        if (isLastAttempt && isLastModel) {
-          throw new Error(
-            "AI service is currently at capacity. Please wait a minute and try again."
-          );
-        }
-
-        if (isLastAttempt) {
-          // Move to next model
-          console.warn(`[PdfAutofill] ${model} exhausted, switching to next model…`);
+        if (!retryable) {
+          if (isLastModel) throw new Error(e.message);
+          console.warn(`[PdfAutofill] Model ${model} non-retryable: ${e.message}. Trying next…`);
           break;
         }
-
-        // Exponential backoff capped at MAX_DELAY_MS
-        const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt - 1), MAX_DELAY_MS);
-        const totalAttempts = GEMINI_MODELS.length * MAX_RETRIES;
-        const globalAttempt = modelIdx * MAX_RETRIES + attempt;
-        const msg = friendlyRetryMsg(globalAttempt, totalAttempts, model, delay);
-
-        console.warn(`[PdfAutofill] Rate limited on ${model} attempt ${attempt}. Waiting ${delay}ms…`);
-        onRetry?.(msg, globalAttempt, totalAttempts);
+        if (isLastAttempt && isLastModel) throw new Error(e.message);
+        if (isLastAttempt) {
+          console.warn(`[PdfAutofill] Model ${model} exhausted, trying fallback…`);
+          break;
+        }
+        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        onRetry?.(attempt, model, delay);
         await sleep(delay);
       }
     }
   }
-
-  throw new Error("AI service is currently at capacity. Please wait a minute and try again.");
+  throw new Error("All Gemini models unavailable. Please try again later.");
 }
 
 // ─── Map extracted data → MaidProfile ────────────────────────────────────────
@@ -508,13 +528,10 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
     for (const s of e.skills) {
       if (!s.area) continue;
       const area = resolveArea(s.area);
-
       const willing    = s.willing    === true ? true : s.willing    === false ? false : undefined;
       const experience = s.experience === true ? true : s.experience === false ? false : undefined;
-
       const rating = typeof s.rating === "number" ? s.rating : null;
       const note   = typeof s.note === "string" ? s.note : (s.note ?? "");
-
       const rawYears = s.yearsOfExperience;
       const yearsOfExperience =
         rawYears == null ? "" :
@@ -522,11 +539,7 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
         String(rawYears);
 
       workAreas[area] = {
-        willing,
-        experience,
-        yearsOfExperience,
-        rating,
-        note,
+        willing, experience, yearsOfExperience, rating, note,
         evaluation: rating !== null ? `${rating}/5${note ? ` - ${note}` : ""}` : note || "N.A.",
       };
 
@@ -667,12 +680,12 @@ function countFields(e: ExtractedData): number {
 // ─── Stage config ─────────────────────────────────────────────────────────────
 
 const STAGE_LABELS: Record<Status, { label: string; sublabel: string }> = {
-  idle:       { label: "AI PDF Upload",    sublabel: "Auto-fill from biodata PDF"   },
-  reading:    { label: "Reading PDF…",     sublabel: "Loading file into memory"     },
-  extracting: { label: "Extracting…",      sublabel: "Gemini AI analysing fields"   },
-  retrying:   { label: "Retrying…",        sublabel: "AI is busy, please wait…"     },
-  done:       { label: "Done!",            sublabel: "Form auto-filled"             },
-  error:      { label: "Failed",           sublabel: "Click to retry"               },
+  idle:       { label: "AI PDF Upload",   sublabel: "Auto-fill from biodata PDF"  },
+  reading:    { label: "Reading PDF…",    sublabel: "Loading file into memory"    },
+  extracting: { label: "Extracting…",     sublabel: "Gemini AI analysing fields"  },
+  done:       { label: "Done!",           sublabel: "Form auto-filled"            },
+  error:      { label: "Failed",          sublabel: "Click to retry"              },
+  limit:      { label: "Limit reached",   sublabel: "Resets at midnight PT"       },
 };
 
 const STAGES = STAGE_LABELS;
@@ -730,6 +743,37 @@ const ArcProgress = ({ pct, size = 44 }: { pct: number; size?: number }) => {
   );
 };
 
+// ─── Usage dots indicator ─────────────────────────────────────────────────────
+
+const UsageDots = ({ used, total }: { used: number; total: number }) => {
+  const dots = Array.from({ length: total }, (_, i) => i < used);
+  // Show max 10 dots visually, scale remaining
+  const maxVisible = 10;
+  const visible = dots.slice(0, maxVisible);
+
+  return (
+    <div className="flex items-center gap-0.5 flex-wrap" style={{ maxWidth: 120 }}>
+      {visible.map((isUsed, i) => (
+        <div
+          key={i}
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: isUsed ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.2)",
+            transition: "background 0.3s ease",
+          }}
+        />
+      ))}
+      {total > maxVisible && (
+        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", marginLeft: 2 }}>
+          +{total - maxVisible}
+        </span>
+      )}
+    </div>
+  );
+};
+
 // ─── Popup ────────────────────────────────────────────────────────────────────
 
 type PopupProps = {
@@ -737,21 +781,25 @@ type PopupProps = {
   fileName: string | null;
   fieldCount: number;
   errMsg: string;
-  retryMsg: string;
   pct: number;
+  usedToday: number;
+  countdown: string;
   onClose: () => void;
   onRetry: () => void;
 };
 
-const STATUS_ORDER: Status[] = ["idle", "reading", "extracting", "retrying", "done", "error"];
+const STATUS_ORDER: Status[] = ["idle", "reading", "extracting", "done", "error", "limit"];
 
-const UploadPopup = ({ status, fileName, fieldCount, errMsg, retryMsg, pct, onClose, onRetry }: PopupProps) => {
-  const cfg       = STAGES[status];
-  const isActive  = status === "reading" || status === "extracting";
-  const isRetrying = status === "retrying";
-  const isDone    = status === "done";
-  const isError   = status === "error";
-  const curIdx    = STATUS_ORDER.indexOf(status);
+const UploadPopup = ({
+  status, fileName, fieldCount, errMsg, pct, usedToday, countdown, onClose, onRetry,
+}: PopupProps) => {
+  const cfg      = STAGES[status];
+  const isActive = status === "reading" || status === "extracting";
+  const isDone   = status === "done";
+  const isError  = status === "error";
+  const isLimit  = status === "limit";
+  const curIdx   = STATUS_ORDER.indexOf(status);
+  const remaining = Math.max(0, DAILY_LIMIT - usedToday);
 
   useEffect(() => {
     if (!isDone) return;
@@ -759,27 +807,28 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, retryMsg, pct, onCl
     return () => clearTimeout(t);
   }, [isDone, onClose]);
 
+  const borderColor = isDone ? "#10b981" : isError || isLimit ? "#f43f5e" : "#334155";
+  const glowColor   = isDone
+    ? "rgba(16,185,129,0.14)"
+    : isError || isLimit
+    ? "rgba(244,63,94,0.14)"
+    : "rgba(0,0,0,0)";
+
   return (
     <>
       <div
         className="fixed inset-0 z-40"
         style={{ background: "rgba(15,23,42,0.28)", backdropFilter: "blur(2px)" }}
-        onClick={isDone || isError ? onClose : undefined}
+        onClick={isDone || isError || isLimit ? onClose : undefined}
       />
       <div
         role="dialog"
         aria-label="PDF upload progress"
-        className="fixed bottom-5 right-5 z-50 w-[308px] overflow-hidden rounded-2xl"
+        className="fixed bottom-5 right-5 z-50 w-[320px] overflow-hidden rounded-2xl"
         style={{
           background: "linear-gradient(148deg,#1e293b 0%,#0f172a 100%)",
-          border: `1px solid ${isDone ? "#10b981" : isError ? "#f43f5e" : isRetrying ? "#f59e0b" : "#334155"}`,
-          boxShadow: isDone
-            ? "0 0 0 1px #10b981,0 20px 60px rgba(16,185,129,0.14),0 6px 20px rgba(0,0,0,0.55)"
-            : isError
-            ? "0 0 0 1px #f43f5e,0 20px 60px rgba(244,63,94,0.14),0 6px 20px rgba(0,0,0,0.55)"
-            : isRetrying
-            ? "0 0 0 1px #f59e0b,0 20px 60px rgba(245,158,11,0.14),0 6px 20px rgba(0,0,0,0.55)"
-            : "0 0 0 1px #334155,0 20px 60px rgba(0,0,0,0.55)",
+          border: `1px solid ${borderColor}`,
+          boxShadow: `0 0 0 1px ${borderColor},0 20px 60px ${glowColor},0 6px 20px rgba(0,0,0,0.55)`,
           animation: "fdwPopIn .28s cubic-bezier(.34,1.56,.64,1)",
         }}
       >
@@ -787,11 +836,9 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, retryMsg, pct, onCl
           @keyframes fdwPopIn{from{opacity:0;transform:translateY(12px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}
           @keyframes fdwShimmer{0%{transform:translateX(-100%)}100%{transform:translateX(220%)}}
           @keyframes fdwPulse{0%,100%{opacity:1}50%{opacity:.5}}
-          @keyframes fdwSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
           .fdw-shimmer{position:relative;overflow:hidden}
           .fdw-shimmer::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent);animation:fdwShimmer 1.5s ease infinite}
           .fdw-pulse{animation:fdwPulse 1.8s ease infinite}
-          .fdw-spin{animation:fdwSpin 1.2s linear infinite}
         `}</style>
 
         {/* Header */}
@@ -800,30 +847,27 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, retryMsg, pct, onCl
             <div
               className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
               style={{
-                background: isDone ? "rgba(16,185,129,.18)"
-                  : isError ? "rgba(244,63,94,.18)"
-                  : isRetrying ? "rgba(245,158,11,.22)"
+                background: isDone
+                  ? "rgba(16,185,129,.18)"
+                  : isError || isLimit
+                  ? "rgba(244,63,94,.18)"
                   : "rgba(251,191,36,.15)",
               }}
             >
-              {isDone     ? <CheckCircle className="h-4 w-4 text-emerald-400" />
-               : isError  ? <AlertCircle className="h-4 w-4 text-rose-400" />
-               : isRetrying ? <RefreshCw className="h-4 w-4 text-amber-400 fdw-spin" />
+              {isDone      ? <CheckCircle className="h-4 w-4 text-emerald-400" />
+               : isError   ? <AlertCircle className="h-4 w-4 text-rose-400" />
+               : isLimit   ? <Zap className="h-4 w-4 text-rose-400" />
                : <AiBrainIcon className="h-4 w-4 text-amber-400" />}
             </div>
             <span className="text-[13px] font-bold text-white tracking-tight">AI PDF Upload</span>
-            {(isActive || isRetrying) && (
-              <span className={`fdw-pulse inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide border ${
-                isRetrying
-                  ? "bg-amber-400/15 text-amber-300 border-amber-400/20"
-                  : "bg-amber-400/15 text-amber-300 border-amber-400/20"
-              }`}>
+            {isActive && (
+              <span className="fdw-pulse inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide bg-amber-400/15 text-amber-300 border border-amber-400/20">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />
-                {isRetrying ? "RETRY" : "LIVE"}
+                LIVE
               </span>
             )}
           </div>
-          {(isDone || isError) && (
+          {(isDone || isError || isLimit) && (
             <button
               type="button" onClick={onClose}
               className="h-6 w-6 rounded-md flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
@@ -835,100 +879,128 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, retryMsg, pct, onCl
 
         {/* Body */}
         <div className="px-4 py-4 space-y-3.5">
-          {fileName && (
+          {fileName && !isLimit && (
             <div className="flex items-center gap-2.5 rounded-xl px-3 py-2 bg-white/[0.05] border border-white/[0.07]">
               <FileText className="h-3.5 w-3.5 text-amber-400/70 shrink-0" />
               <span className="text-[11px] text-slate-300 font-medium truncate">{fileName}</span>
             </div>
           )}
 
-          <div className="flex items-center gap-4">
-            <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
-              <ArcProgress pct={pct} size={64} />
-              <div className="relative z-10 flex flex-col items-center leading-none">
-                {isDone ? (
-                  <CheckCircle className="h-6 w-6 text-emerald-400" />
-                ) : isError ? (
-                  <AlertCircle className="h-6 w-6 text-rose-400" />
-                ) : isRetrying ? (
-                  <RefreshCw className="h-5 w-5 text-amber-400 fdw-spin" />
-                ) : (
-                  <>
-                    <span className="text-[15px] font-black text-white tabular-nums">{pct}</span>
-                    <span className="text-[9px] font-bold text-slate-400 -mt-0.5">%</span>
-                  </>
-                )}
+          {/* Limit reached state */}
+          {isLimit ? (
+            <div className="space-y-3">
+              <div className="rounded-xl px-3 py-3 bg-rose-500/10 border border-rose-500/20">
+                <p className="text-[13px] font-bold text-rose-400 mb-1">Daily limit reached</p>
+                <p className="text-[11px] text-slate-400 leading-snug">
+                  You've used all {DAILY_LIMIT} AI auto-fills for today. Quota resets at midnight Pacific Time.
+                </p>
               </div>
+              <div className="flex items-center justify-between rounded-xl px-3 py-2.5 bg-white/[0.04] border border-white/[0.07]">
+                <span className="text-[11px] text-slate-400">Resets in</span>
+                <span className="text-[13px] font-black text-white tabular-nums">{countdown}</span>
+              </div>
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] text-slate-500">Used today</span>
+                <span className="text-[11px] font-bold text-rose-400">{usedToday} / {DAILY_LIMIT}</span>
+              </div>
+              <UsageDots used={usedToday} total={DAILY_LIMIT} />
             </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-4">
+                <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
+                  <ArcProgress pct={pct} size={64} />
+                  <div className="relative z-10 flex flex-col items-center leading-none">
+                    {isDone ? (
+                      <CheckCircle className="h-6 w-6 text-emerald-400" />
+                    ) : isError ? (
+                      <AlertCircle className="h-6 w-6 text-rose-400" />
+                    ) : (
+                      <>
+                        <span className="text-[15px] font-black text-white tabular-nums">{pct}</span>
+                        <span className="text-[9px] font-bold text-slate-400 -mt-0.5">%</span>
+                      </>
+                    )}
+                  </div>
+                </div>
 
-            <div className="min-w-0">
-              <p className={`text-sm font-bold leading-tight ${
-                isDone ? "text-emerald-400" : isError ? "text-rose-400" : isRetrying ? "text-amber-400" : "text-white"
-              }`}>{cfg.label}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                {isError
-                  ? (errMsg || cfg.sublabel)
-                  : isRetrying
-                  ? retryMsg
-                  : cfg.sublabel}
-              </p>
-              {isDone && fieldCount > 0 && (
-                <p className="text-[11px] text-emerald-400 font-semibold mt-1.5">
-                  ✓ {fieldCount} fields auto-filled
+                <div className="min-w-0">
+                  <p className={`text-sm font-bold leading-tight ${
+                    isDone ? "text-emerald-400" : isError ? "text-rose-400" : "text-white"
+                  }`}>{cfg.label}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                    {isError ? (errMsg || cfg.sublabel) : cfg.sublabel}
+                  </p>
+                  {isDone && fieldCount > 0 && (
+                    <p className="text-[11px] text-emerald-400 font-semibold mt-1.5">
+                      ✓ {fieldCount} fields auto-filled
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {!isError && (
+                <div className="h-[5px] w-full rounded-full bg-white/[0.07] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${isDone ? "bg-emerald-500" : "bg-amber-400"} ${isActive ? "fdw-shimmer" : ""}`}
+                    style={{ width: `${pct}%`, transition: "width 0.18s linear" }}
+                  />
+                </div>
+              )}
+
+              {!isError && (
+                <div className="flex items-start justify-between px-0.5">
+                  {(["reading", "extracting", "done"] as Status[]).map((s) => {
+                    const mine   = STATUS_ORDER.indexOf(s);
+                    const isNow  = status === s;
+                    const isPast = curIdx > mine && !isError;
+                    const labels: Record<string, string> = { reading: "Read", extracting: "Extract", done: "Fill" };
+                    return (
+                      <div key={s} className="flex flex-col items-center gap-1.5">
+                        <div className={`h-2 w-2 rounded-full transition-all duration-300 ${
+                          isPast ? "bg-emerald-500 scale-110"
+                          : isNow ? "bg-amber-400 scale-125 shadow-[0_0_0_3px_rgba(251,191,36,0.22)]"
+                          : "bg-slate-700"
+                        }`} />
+                        <span className={`text-[9px] font-semibold uppercase tracking-wide ${
+                          isPast ? "text-emerald-400" : isNow ? "text-amber-400" : "text-slate-600"
+                        }`}>{labels[s]}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {isError && (
+                <button
+                  type="button" onClick={onRetry}
+                  className="w-full py-2 rounded-xl text-[13px] font-semibold text-rose-400 border border-rose-500/25 hover:bg-rose-500/10 transition-colors"
+                >
+                  Try again
+                </button>
+              )}
+
+              {/* Usage counter at bottom of popup (non-limit states) */}
+              {!isError && (
+                <div className="pt-1 border-t border-white/[0.05]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] text-slate-500">Today's usage</span>
+                    <span className={`text-[10px] font-bold ${
+                      remaining <= 3 ? "text-rose-400" : remaining <= 7 ? "text-amber-400" : "text-slate-400"
+                    }`}>
+                      {remaining} left of {DAILY_LIMIT}
+                    </span>
+                  </div>
+                  <UsageDots used={usedToday} total={DAILY_LIMIT} />
+                </div>
+              )}
+
+              {isActive && (
+                <p className="text-[10px] text-slate-600 text-center leading-none">
+                  Please wait — do not close this window
                 </p>
               )}
-            </div>
-          </div>
-
-          {!isError && (
-            <div className="h-[5px] w-full rounded-full bg-white/[0.07] overflow-hidden">
-              <div
-                className={`h-full rounded-full ${isDone ? "bg-emerald-500" : "bg-amber-400"} ${(isActive || isRetrying) ? "fdw-shimmer" : ""}`}
-                style={{ width: `${pct}%`, transition: "width 0.18s linear" }}
-              />
-            </div>
-          )}
-
-          {/* Step dots — show reading / extracting / done */}
-          {!isError && (
-            <div className="flex items-start justify-between px-0.5">
-              {(["reading", "extracting", "done"] as Status[]).map((s) => {
-                const mine   = STATUS_ORDER.indexOf(s);
-                const curI   = STATUS_ORDER.indexOf(status);
-                const isNow  = status === s || (s === "extracting" && status === "retrying");
-                const isPast = curI > STATUS_ORDER.indexOf(s) && status !== "retrying" && !isError;
-                const labels: Record<string, string> = { reading: "Read", extracting: "Extract", done: "Fill" };
-                return (
-                  <div key={s} className="flex flex-col items-center gap-1.5">
-                    <div className={`h-2 w-2 rounded-full transition-all duration-300 ${
-                      isPast ? "bg-emerald-500 scale-110"
-                      : isNow ? "bg-amber-400 scale-125 shadow-[0_0_0_3px_rgba(251,191,36,0.22)]"
-                      : "bg-slate-700"
-                    }`} />
-                    <span className={`text-[9px] font-semibold uppercase tracking-wide ${
-                      isPast ? "text-emerald-400" : isNow ? "text-amber-400" : "text-slate-600"
-                    }`}>{labels[s]}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {isError && (
-            <button
-              type="button" onClick={onRetry}
-              className="w-full py-2 rounded-xl text-[13px] font-semibold text-rose-400 border border-rose-500/25 hover:bg-rose-500/10 transition-colors"
-            >
-              Try again
-            </button>
-          )}
-
-          {(isActive || isRetrying) && (
-            <p className="text-[10px] text-slate-600 text-center leading-none">
-              {isRetrying
-                ? "AI is busy — automatically retrying, please wait…"
-                : "Please wait — do not close this window"}
-            </p>
+            </>
           )}
         </div>
       </div>
@@ -945,16 +1017,35 @@ export function PdfAutofillBanner({
   formData: MaidProfile;
   setFormData: React.Dispatch<React.SetStateAction<MaidProfile>>;
 }) {
-  const [status,       setStatus]      = useState<Status>("idle");
-  const [fileName,     setFileName]    = useState<string | null>(null);
-  const [fieldCount,   setFieldCount]  = useState(0);
-  const [errMsg,       setErrMsg]      = useState("");
-  const [retryMsg,     setRetryMsg]    = useState("");
-  const [showPopup,    setShowPopup]   = useState(false);
-  const [liveProgress, setLiveProgress] = useState(0);
+  const [status,        setStatus]       = useState<Status>("idle");
+  const [fileName,      setFileName]     = useState<string | null>(null);
+  const [fieldCount,    setFieldCount]   = useState(0);
+  const [errMsg,        setErrMsg]       = useState("");
+  const [showPopup,     setShowPopup]    = useState(false);
+  const [liveProgress,  setLiveProgress] = useState(0);
+  const [usedToday,     setUsedToday]    = useState(() => loadUsage().count);
+  const [countdown,     setCountdown]    = useState(() => formatCountdown(msTillMidnightPacific()));
+
   const inputRef       = useRef<HTMLInputElement>(null);
   const processingRef  = useRef(false);
   const tickerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Countdown clock ──────────────────────────────────────────────────────
+  useEffect(() => {
+    countdownRef.current = setInterval(() => {
+      setCountdown(formatCountdown(msTillMidnightPacific()));
+      // Also refresh usage count (handles day rollover)
+      const fresh = loadUsage();
+      setUsedToday(fresh.count);
+      if (status === "limit" && fresh.count < DAILY_LIMIT) {
+        setStatus("idle");
+      }
+    }, 1000);
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [status]);
 
   // ── Progress ticker helpers ──────────────────────────────────────────────
   const startTicker = useCallback((from: number, target: number, durationMs: number) => {
@@ -984,49 +1075,53 @@ export function PdfAutofillBanner({
     setFileName(null);
     setFieldCount(0);
     setErrMsg("");
-    setRetryMsg("");
     setShowPopup(false);
     setLiveProgress(0);
     processingRef.current = false;
     if (inputRef.current) inputRef.current.value = "";
+    // Refresh usage in case of day rollover
+    setUsedToday(loadUsage().count);
   }, [stopTicker]);
 
   const process = useCallback(
     async (file: File) => {
       if (!file.type.includes("pdf")) { toast.error("Please upload a PDF file"); return; }
       if (processingRef.current) return;
+
+      // Check limit before starting
+      const currentUsage = loadUsage();
+      if (currentUsage.count >= DAILY_LIMIT) {
+        setUsedToday(currentUsage.count);
+        setStatus("limit");
+        setShowPopup(true);
+        return;
+      }
+
       processingRef.current = true;
 
       setFileName(file.name);
       setErrMsg("");
-      setRetryMsg("");
       setShowPopup(true);
 
-      // Phase 1: reading (0 → 15 over 600 ms)
+      // Phase 1: reading
       setStatus("reading");
       setLiveProgress(1);
       startTicker(1, 15, 600);
 
       try {
-        // Phase 2: extracting (15 → 88 over ~18 s)
+        // Phase 2: extracting
         setStatus("extracting");
-        startTicker(15, 88, 18000);
+        startTicker(15, 92, 18000);
 
-        const extracted = await extractFromPdf(file, (msg, attempt, total) => {
-          // Switch to "retrying" state so the UI reflects the wait
-          setStatus("retrying");
-          setRetryMsg(msg);
-          stopTicker();
-          // Hold progress at current value during retry wait
-        });
+        const extracted = await extractFromPdf(file);
 
-        // Phase 3: applying (current → 99 fast)
-        setStatus("extracting"); // snap back to extracting briefly
+        // Increment usage only on success
+        const updated = incrementUsage();
+        setUsedToday(updated.count);
+
+        // Phase 3: applying
         stopTicker();
-        setLiveProgress((prev) => {
-          startTicker(prev, 99, 400);
-          return prev;
-        });
+        startTicker(92, 99, 400);
         await sleep(420);
 
         const count = countFields(extracted);
@@ -1040,18 +1135,11 @@ export function PdfAutofillBanner({
         toast.success(`Auto-filled ${count} fields from biodata PDF`);
       } catch (err) {
         stopTicker();
-        const raw = err instanceof Error ? err.message : "Extraction failed";
-        // Show a clean user-facing message, not internal error text
-        const friendly =
-          isOverloaded(raw) || raw.includes("capacity")
-            ? "AI is at capacity. Please wait a moment and try again."
-            : raw.length > 80
-            ? "Extraction failed. Please try again."
-            : raw;
-        setErrMsg(friendly);
+        const msg = err instanceof Error ? err.message : "Extraction failed";
+        setErrMsg(msg);
         setLiveProgress(0);
         setStatus("error");
-        toast.error(friendly);
+        toast.error(msg);
       } finally {
         processingRef.current = false;
       }
@@ -1068,6 +1156,13 @@ export function PdfAutofillBanner({
   );
 
   const handleButtonClick = useCallback(() => {
+    const currentUsage = loadUsage();
+    if (currentUsage.count >= DAILY_LIMIT) {
+      setUsedToday(currentUsage.count);
+      setStatus("limit");
+      setShowPopup(true);
+      return;
+    }
     if (status === "idle") inputRef.current?.click();
     else setShowPopup(true);
   }, [status]);
@@ -1077,16 +1172,38 @@ export function PdfAutofillBanner({
     setTimeout(() => inputRef.current?.click(), 80);
   }, [reset]);
 
-  const isProcessing = status === "reading" || status === "extracting" || status === "retrying";
+  const isProcessing = status === "reading" || status === "extracting";
   const isDone       = status === "done";
   const isError      = status === "error";
-  const isRetrying   = status === "retrying";
+  const isLimit      = status === "limit";
+  const remaining    = Math.max(0, DAILY_LIMIT - usedToday);
   const pct          = liveProgress;
 
   const BTN_SIZE = 44;
   const BTN_R    = (BTN_SIZE - 6) / 2;
   const BTN_CIRC = 2 * Math.PI * BTN_R;
   const BTN_OFF  = BTN_CIRC - (pct / 100) * BTN_CIRC;
+
+  // Button gradient based on remaining uses
+  const buttonBg = isDone
+    ? "linear-gradient(135deg,#059669,#10b981)"
+    : isError
+    ? "linear-gradient(135deg,#e11d48,#f43f5e)"
+    : isLimit
+    ? "linear-gradient(135deg,#7f1d1d,#991b1b)"
+    : isProcessing
+    ? "linear-gradient(135deg,#d97706,#f59e0b)"
+    : remaining <= 3
+    ? "linear-gradient(135deg,#b91c1c,#dc2626)"   // red when nearly out
+    : remaining <= 7
+    ? "linear-gradient(135deg,#92400e,#d97706)"   // amber-ish when low
+    : "linear-gradient(135deg,#b45309,#f59e0b)";  // normal
+
+  const buttonShadow = isDone
+    ? "0 2px 12px rgba(16,185,129,0.45), 0 1px 3px rgba(0,0,0,0.2)"
+    : isError || isLimit
+    ? "0 2px 12px rgba(244,63,94,0.45), 0 1px 3px rgba(0,0,0,0.2)"
+    : "0 2px 16px rgba(245,158,11,0.55), 0 1px 4px rgba(0,0,0,0.2)";
 
   return (
     <>
@@ -1096,7 +1213,7 @@ export function PdfAutofillBanner({
         accept="application/pdf"
         className="sr-only"
         onChange={handleFileChange}
-        disabled={isProcessing}
+        disabled={isProcessing || isLimit}
       />
 
       <button
@@ -1108,24 +1225,13 @@ export function PdfAutofillBanner({
           borderRadius: 14,
           padding: 0,
           border: "none",
-          background: isDone
-            ? "linear-gradient(135deg,#059669,#10b981)"
-            : isError
-            ? "linear-gradient(135deg,#e11d48,#f43f5e)"
-            : isRetrying
-            ? "linear-gradient(135deg,#92400e,#d97706)"
-            : isProcessing
-            ? "linear-gradient(135deg,#d97706,#f59e0b)"
-            : "linear-gradient(135deg,#b45309,#f59e0b)",
-          boxShadow: isDone
-            ? "0 2px 12px rgba(16,185,129,0.45), 0 1px 3px rgba(0,0,0,0.2)"
-            : isError
-            ? "0 2px 12px rgba(244,63,94,0.45), 0 1px 3px rgba(0,0,0,0.2)"
-            : "0 2px 16px rgba(245,158,11,0.55), 0 1px 4px rgba(0,0,0,0.2)",
+          background: buttonBg,
+          boxShadow: buttonShadow,
           cursor: isProcessing ? "default" : "pointer",
           transition: "all 0.2s ease",
         }}
       >
+        {/* Left icon area */}
         <span
           className="relative flex items-center justify-center shrink-0"
           style={{ width: BTN_SIZE, height: BTN_SIZE }}
@@ -1151,10 +1257,7 @@ export function PdfAutofillBanner({
           )}
 
           <span className="relative z-10 flex flex-col items-center leading-none">
-            {isRetrying ? (
-              // Spinning retry icon when waiting between retries
-              <RefreshCw className="h-5 w-5 text-white" style={{ animation: "fdwSpin 1.2s linear infinite" }} />
-            ) : isProcessing ? (
+            {isProcessing ? (
               <>
                 <span className="text-[12px] font-black text-white tabular-nums leading-none">{pct}</span>
                 <span className="text-[8px] font-bold text-white/70 leading-none">%</span>
@@ -1163,6 +1266,8 @@ export function PdfAutofillBanner({
               <CheckCircle className="h-5 w-5 text-white" />
             ) : isError ? (
               <AlertCircle className="h-5 w-5 text-white" />
+            ) : isLimit ? (
+              <Zap className="h-5 w-5 text-white" />
             ) : (
               <AiBrainIcon className="h-5 w-5 text-white" />
             )}
@@ -1175,36 +1280,53 @@ export function PdfAutofillBanner({
           aria-hidden
         />
 
-        <span className="flex flex-col items-start justify-center px-4 leading-tight">
+        {/* Text area */}
+        <span className="flex flex-col items-start justify-center px-3 leading-tight">
           <span className="text-[13px] font-bold text-white whitespace-nowrap">
-            {isRetrying
-              ? "AI Busy — Retrying…"
-              : isProcessing
+            {isProcessing
               ? "Analysing PDF…"
               : isDone
               ? `Filled · ${fieldCount} fields`
               : isError
               ? "Upload Failed"
+              : isLimit
+              ? "Daily limit reached"
               : "AI PDF Upload"}
           </span>
           <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "rgba(255,255,255,0.72)" }}>
-            {isRetrying
-              ? retryMsg || "Please wait…"
-              : isProcessing
+            {isProcessing
               ? STAGES[status].sublabel
               : isDone
               ? "Click to view details"
               : isError
               ? "Click to retry"
-              : "Auto-fill from biodata PDF"}
+              : isLimit
+              ? `Resets in ${countdown}`
+              : remaining <= 3
+              ? `Only ${remaining} left today`
+              : `${remaining} of ${DAILY_LIMIT} remaining today`}
           </span>
         </span>
 
-        {!isProcessing && !isDone && !isError && (
-          <span className="pr-3 pl-1 self-center" aria-hidden>
-            <svg viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M1 1l6 6-6 6" />
-            </svg>
+        {/* Usage mini-dots on the right (idle/error only) */}
+        {!isProcessing && !isDone && !isLimit && (
+          <span className="pr-3 pl-1 self-center flex flex-col items-end gap-1" aria-hidden>
+            {/* Mini usage dots */}
+            <div className="flex gap-[3px]">
+              {Array.from({ length: Math.min(DAILY_LIMIT, 10) }, (_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: "50%",
+                    background: i < usedToday
+                      ? "rgba(255,255,255,0.75)"
+                      : "rgba(255,255,255,0.2)",
+                  }}
+                />
+              ))}
+            </div>
           </span>
         )}
 
@@ -1221,8 +1343,9 @@ export function PdfAutofillBanner({
           fileName={fileName}
           fieldCount={fieldCount}
           errMsg={errMsg}
-          retryMsg={retryMsg}
           pct={pct}
+          usedToday={usedToday}
+          countdown={countdown}
           onClose={reset}
           onRetry={handleRetry}
         />
