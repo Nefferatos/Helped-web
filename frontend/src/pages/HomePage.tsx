@@ -57,10 +57,10 @@ const useCountUp = (target: number, duration = 900) => {
 interface StatCardProps {
   icon: React.ReactNode; label: string; value: number; loading: boolean;
   gradient: string; glowColor: string; sub?: string; subUrgent?: boolean;
-  delay?: number; compact?: boolean;
+  delay?: number; compact?: boolean; to?: string;
 }
 
-const StatCard = ({ icon, label, value, loading, gradient, glowColor, sub, subUrgent, delay = 0, compact = false }: StatCardProps) => {
+const StatCard = ({ icon, label, value, loading, gradient, glowColor, sub, subUrgent, delay = 0, compact = false, to }: StatCardProps) => {
   const animated = useCountUp(loading ? 0 : value);
   const [visible, setVisible] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -74,26 +74,42 @@ const StatCard = ({ icon, label, value, loading, gradient, glowColor, sub, subUr
   const numSize = compact ? 26 : 30;
   const iconSize = compact ? 26 : 28;
 
-  return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: gradient, borderRadius: 14, padding: pad,
-        position: "relative", overflow: "hidden", cursor: "default",
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0) scale(1)" : "translateY(12px) scale(0.97)",
-        transition: `opacity 0.4s ease ${delay}ms, transform 0.4s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms, box-shadow 0.2s ease`,
-        boxShadow: hovered
-          ? `0 8px 32px ${glowColor}55, 0 2px 8px rgba(0,0,0,0.15)`
-          : `0 4px 16px ${glowColor}30, 0 1px 4px rgba(0,0,0,0.10)`,
-        minWidth: 0,
-        boxSizing: "border-box",
-      }}
-    >
+  const baseStyle: React.CSSProperties = {
+    background: gradient, borderRadius: 14, padding: pad,
+    position: "relative", overflow: "hidden",
+    cursor: to ? "pointer" : "default",
+    opacity: visible ? 1 : 0,
+    transform: visible
+      ? (hovered && to ? "translateY(-2px) scale(1.01)" : "translateY(0) scale(1)")
+      : "translateY(12px) scale(0.97)",
+    transition: `opacity 0.4s ease ${delay}ms, transform 0.4s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms, box-shadow 0.2s ease`,
+    boxShadow: hovered && to
+      ? `0 10px 36px ${glowColor}65, 0 3px 10px rgba(0,0,0,0.18)`
+      : `0 4px 16px ${glowColor}30, 0 1px 4px rgba(0,0,0,0.10)`,
+    minWidth: 0, boxSizing: "border-box",
+    textDecoration: "none", display: "block",
+  };
+
+  const inner = (
+    <>
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 60%)", borderRadius: 14 }} />
-      <div style={{ position: "absolute", bottom: -14, right: -14, width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.1)", transition: "transform 0.3s ease", transform: hovered ? "scale(1.3)" : "scale(1)" }} />
+      <div style={{ position: "absolute", bottom: -14, right: -14, width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.1)", transition: "transform 0.3s ease", transform: hovered && to ? "scale(1.4)" : "scale(1)" }} />
       <div style={{ position: "absolute", top: -8, right: 26, width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.07)" }} />
+
+      {/* Navigate arrow — only shown when card is a link */}
+      {to && (
+        <div style={{
+          position: "absolute", top: 8, right: 8,
+          width: 18, height: 18, borderRadius: 5,
+          background: "rgba(255,255,255,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          opacity: hovered ? 1 : 0,
+          transform: hovered ? "translate(0,0)" : "translate(2px,-2px)",
+          transition: "all 0.2s ease",
+        }}>
+          <ArrowUpRight size={10} color="#fff" />
+        </div>
+      )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: compact ? 4 : 5, position: "relative" }}>
         <div style={{
@@ -101,7 +117,7 @@ const StatCard = ({ icon, label, value, loading, gradient, glowColor, sub, subUr
           backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center",
           color: "#fff", flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
           transition: "transform 0.2s ease",
-          transform: hovered ? "scale(1.1) rotate(-5deg)" : "scale(1) rotate(0deg)",
+          transform: hovered && to ? "scale(1.1) rotate(-5deg)" : "scale(1) rotate(0deg)",
         }}>{icon}</div>
         <p style={{ fontSize: compact ? 10 : 11, fontWeight: 800, letterSpacing: "0.07em", textTransform: "uppercase", color: "rgba(255,255,255,1)", margin: 0, textShadow: "0 1px 3px rgba(0,0,0,0.2)" }}>{label}</p>
       </div>
@@ -116,6 +132,29 @@ const StatCard = ({ icon, label, value, loading, gradient, glowColor, sub, subUr
           {sub}
         </p>
       )}
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={baseStyle}
+      >
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={baseStyle}
+    >
+      {inner}
     </div>
   );
 };
@@ -241,7 +280,6 @@ interface MenuCardProps {
   icon: React.ReactNode; label: string; desc: string; path: string;
   accentColor: string; gradientFrom: string; gradientTo: string;
   badge?: string; badgeUrgent?: boolean; delay?: number; compact?: boolean;
-  // FIX: allow text wrapping on mobile instead of truncating
   allowWrap?: boolean;
 }
 
@@ -254,7 +292,6 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
     return () => clearTimeout(t);
   }, [delay]);
 
-  // FIX: when allowWrap, don't clip text — let it wrap naturally
   const textOverflowStyle: React.CSSProperties = allowWrap
     ? { whiteSpace: "normal", overflow: "visible", textOverflow: "unset" }
     : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
@@ -265,119 +302,51 @@ const MenuCard = ({ icon, label, desc, path, accentColor, gradientFrom, gradient
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: "flex",
-        flexDirection: "column",
-        // FIX: on mobile (allowWrap), height is auto so the card grows to fit its content
+        display: "flex", flexDirection: "column",
         height: allowWrap ? "auto" : "100%",
-        background: hovered
-          ? `linear-gradient(145deg, ${gradientFrom}, ${gradientTo})`
-          : "#fff",
+        background: hovered ? `linear-gradient(145deg, ${gradientFrom}, ${gradientTo})` : "#fff",
         border: `1.5px solid ${hovered ? "transparent" : "#E2E8F0"}`,
         borderRadius: 12,
-        // FIX: slightly more vertical padding on mobile for breathing room
         padding: allowWrap ? "10px 10px 9px" : (compact ? "9px 10px 8px" : "11px 11px 9px"),
         textDecoration: "none", color: "inherit",
         transition: "all 0.25s cubic-bezier(0.34,1.56,0.64,1)",
-        transform: visible
-          ? (hovered ? "translateY(-3px)" : "translateY(0)")
-          : "translateY(10px)",
+        transform: visible ? (hovered ? "translateY(-3px)" : "translateY(0)") : "translateY(10px)",
         opacity: visible ? 1 : 0,
-        boxShadow: hovered
-          ? `0 8px 24px ${accentColor}40, 0 2px 8px rgba(0,0,0,0.08)`
-          : "0 1px 3px rgba(0,0,0,0.06)",
-        position: "relative",
-        minWidth: 0,
-        boxSizing: "border-box",
+        boxShadow: hovered ? `0 8px 24px ${accentColor}40, 0 2px 8px rgba(0,0,0,0.08)` : "0 1px 3px rgba(0,0,0,0.06)",
+        position: "relative", minWidth: 0, boxSizing: "border-box",
       }}
     >
       <div style={{ position: "absolute", inset: 0, borderRadius: 12, overflow: "hidden", pointerEvents: "none" }}>
-        <div style={{
-          position: "absolute", bottom: -16, right: -16, width: 64, height: 64,
-          borderRadius: "50%",
-          background: hovered ? "rgba(255,255,255,0.13)" : `${accentColor}0D`,
-          transition: "all 0.35s ease",
-          transform: hovered ? "scale(1.25)" : "scale(1)",
-        }} />
-        <div style={{
-          position: "absolute", top: -12, left: -12, width: 42, height: 42,
-          borderRadius: "50%",
-          background: hovered ? "rgba(255,255,255,0.07)" : `${accentColor}08`,
-          transition: "all 0.35s ease",
-        }} />
+        <div style={{ position: "absolute", bottom: -16, right: -16, width: 64, height: 64, borderRadius: "50%", background: hovered ? "rgba(255,255,255,0.13)" : `${accentColor}0D`, transition: "all 0.35s ease", transform: hovered ? "scale(1.25)" : "scale(1)" }} />
+        <div style={{ position: "absolute", top: -12, left: -12, width: 42, height: 42, borderRadius: "50%", background: hovered ? "rgba(255,255,255,0.07)" : `${accentColor}08`, transition: "all 0.35s ease" }} />
       </div>
 
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: compact ? 5 : 8, position: "relative" }}>
         <div style={{
-          // FIX: slightly smaller icon on mobile to free up space
-          width: allowWrap ? 30 : (compact ? 32 : 36),
-          height: allowWrap ? 30 : (compact ? 32 : 36),
-          borderRadius: 10,
-          background: hovered ? "rgba(255,255,255,0.22)" : `${accentColor}18`,
+          width: allowWrap ? 30 : (compact ? 32 : 36), height: allowWrap ? 30 : (compact ? 32 : 36),
+          borderRadius: 10, background: hovered ? "rgba(255,255,255,0.22)" : `${accentColor}18`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: hovered ? "#fff" : accentColor,
-          transition: "all 0.25s ease",
-          boxShadow: hovered ? "0 4px 14px rgba(0,0,0,0.18)" : `0 2px 6px ${accentColor}20`,
-          flexShrink: 0,
-        }}>
-          {icon}
-        </div>
-        <div style={{
-          width: 20, height: 20, borderRadius: 6,
-          background: hovered ? "rgba(255,255,255,0.2)" : "#EEF2F7",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "all 0.25s ease",
-          transform: hovered ? "translate(2px, -2px)" : "translate(0,0)",
-          boxShadow: hovered ? "0 2px 8px rgba(0,0,0,0.12)" : "none",
-          flexShrink: 0,
-        }}>
+          color: hovered ? "#fff" : accentColor, transition: "all 0.25s ease",
+          boxShadow: hovered ? "0 4px 14px rgba(0,0,0,0.18)" : `0 2px 6px ${accentColor}20`, flexShrink: 0,
+        }}>{icon}</div>
+        <div style={{ width: 20, height: 20, borderRadius: 6, background: hovered ? "rgba(255,255,255,0.2)" : "#EEF2F7", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.25s ease", transform: hovered ? "translate(2px, -2px)" : "translate(0,0)", flexShrink: 0 }}>
           <ArrowUpRight size={11} color={hovered ? "#fff" : "#475569"} />
         </div>
       </div>
 
-      {/* FIX: label uses wrapping styles on mobile */}
-      <p style={{
-        fontSize: allowWrap ? 12 : (compact ? 12 : 13),
-        fontWeight: 800,
-        color: hovered ? "#fff" : "#0F172A",
-        margin: "0 0 2px",
-        transition: "color 0.2s",
-        letterSpacing: "-0.01em",
-        position: "relative",
-        lineHeight: 1.25,
-        ...textOverflowStyle,
-      }}>{label}</p>
-
-      {/* FIX: description uses wrapping styles on mobile */}
-      <p style={{
-        fontSize: allowWrap ? 11 : (compact ? 11 : 12),
-        fontWeight: 600,
-        color: hovered ? "rgb(255,255,255)" : "#000000",
-        margin: 0,
-        position: "relative",
-        lineHeight: 1.3,
-        ...textOverflowStyle,
-      }}>{desc}</p>
+      <p style={{ fontSize: allowWrap ? 12 : (compact ? 12 : 13), fontWeight: 800, color: hovered ? "#fff" : "#0F172A", margin: "0 0 2px", transition: "color 0.2s", letterSpacing: "-0.01em", position: "relative", lineHeight: 1.25, ...textOverflowStyle }}>{label}</p>
+      <p style={{ fontSize: allowWrap ? 11 : (compact ? 11 : 12), fontWeight: 600, color: hovered ? "rgba(255,255,255,0.85)" : "#64748B", margin: 0, position: "relative", lineHeight: 1.3, ...textOverflowStyle }}>{desc}</p>
 
       <div style={{ marginTop: 5, position: "relative", minHeight: badge ? undefined : 0 }}>
         {badge && (
           <span style={{
-            fontSize: 9, fontWeight: 800,
-            padding: "2px 7px", borderRadius: 20,
-            background: hovered
-              ? (badgeUrgent ? "rgba(220,38,38,0.28)" : "rgba(255,255,255,0.2)")
-              : (badgeUrgent ? "#FEF2F2" : "#F1F5F9"),
-            color: hovered
-              ? (badgeUrgent ? "#FFC9C9" : "rgba(255,255,255,0.95)")
-              : (badgeUrgent ? "#991B1B" : "#1E293B"),
-            border: `1px solid ${hovered
-              ? (badgeUrgent ? "rgba(239,68,68,0.4)" : "rgba(255,255,255,0.28)")
-              : (badgeUrgent ? "#FECACA" : "#CBD5E1")}`,
-            display: "inline-flex", alignItems: "center", gap: 4,
-            transition: "all 0.2s ease",
+            fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 20,
+            background: hovered ? (badgeUrgent ? "rgba(220,38,38,0.28)" : "rgba(255,255,255,0.2)") : (badgeUrgent ? "#FEF2F2" : "#F1F5F9"),
+            color: hovered ? (badgeUrgent ? "#FFC9C9" : "rgba(255,255,255,0.95)") : (badgeUrgent ? "#991B1B" : "#1E293B"),
+            border: `1px solid ${hovered ? (badgeUrgent ? "rgba(239,68,68,0.4)" : "rgba(255,255,255,0.28)") : (badgeUrgent ? "#FECACA" : "#CBD5E1")}`,
+            display: "inline-flex", alignItems: "center", gap: 4, transition: "all 0.2s ease",
           }}>
-            {badgeUrgent && (
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: hovered ? "#FFA0A0" : "#EF4444", display: "inline-block", animation: "livePulse 1.6s ease-in-out infinite" }} />
-            )}
+            {badgeUrgent && <span style={{ width: 5, height: 5, borderRadius: "50%", background: hovered ? "#FFA0A0" : "#EF4444", display: "inline-block", animation: "livePulse 1.6s ease-in-out infinite" }} />}
             {badge}
           </span>
         )}
@@ -429,7 +398,6 @@ const HomePage = () => {
   const height = useWindowHeight();
   const isSm = width < 768;
   const isMd = width < 1024;
-
   const isShort = height < 700;
   const compact = isShort || isMd;
 
@@ -469,42 +437,22 @@ const HomePage = () => {
   ] : [];
 
   const menuCards = [
-    { icon: <Building2 size={14} />,     label: "Our Profile",   desc: "Agency info & branding",  path: adminPath("/agency-profile"),       accentColor: "#1D4ED8", gradientFrom: "#1E40AF", gradientTo: "#3B82F6", badge: s ? `${s.momPersonnel} MOM` : undefined,                          badgeUrgent: false },
-    { icon: <UserPlus size={14} />,      label: "New Maid",      desc: "Add to roster",            path: adminPath("/add-maid"),             accentColor: "#059669", gradientFrom: "#047857", gradientTo: "#10B981", badge: undefined,                                                          badgeUrgent: false },
-    { icon: <Pencil size={14} />,        label: "Manage Maids",  desc: "Edit or remove profiles",  path: adminPath("/edit-maids"),           accentColor: "#B45309", gradientFrom: "#92400E", gradientTo: "#D97706", badge: s ? `${s.publicMaids} live` : undefined,                          badgeUrgent: false },
+    { icon: <Building2 size={14} />,     label: "Our Profile",   desc: "Agency info & branding",  path: adminPath("/agency-profile"),       accentColor: "#1D4ED8", gradientFrom: "#1E40AF", gradientTo: "#3B82F6", badge: s ? `${s.momPersonnel} MOM` : undefined,                           badgeUrgent: false },
+    { icon: <UserPlus size={14} />,      label: "New Maid",      desc: "Add to roster",            path: adminPath("/add-maid"),             accentColor: "#059669", gradientFrom: "#047857", gradientTo: "#10B981", badge: undefined,                                                           badgeUrgent: false },
+    { icon: <Pencil size={14} />,        label: "Manage Maids",  desc: "Edit or remove profiles",  path: adminPath("/edit-maids"),           accentColor: "#B45309", gradientFrom: "#92400E", gradientTo: "#D97706", badge: s ? `${s.publicMaids} live` : undefined,                           badgeUrgent: false },
     { icon: <MessageSquare size={14} />, label: "Messages",      desc: "Respond to clients",       path: adminPath("/chat-support"),         accentColor: "#6D28D9", gradientFrom: "#4C1D95", gradientTo: "#7C3AED", badge: s?.unreadAgencyChats ? `${s.unreadAgencyChats} unread` : undefined, badgeUrgent: !!(s?.unreadAgencyChats && s.unreadAgencyChats > 0) },
-    { icon: <Lock size={14} />,          label: "Security",      desc: "Change password",          path: adminPath("/change-password"),      accentColor: "#334155", gradientFrom: "#0F172A", gradientTo: "#334155", badge: undefined,                                                          badgeUrgent: false },
-    { icon: <ScrollText size={14} />,    label: "Contracts",     desc: "Employment contracts",     path: adminPath("/employment-contracts"), accentColor: "#0F766E", gradientFrom: "#134E4A", gradientTo: "#0D9488", badge: undefined,                                                          badgeUrgent: false },
-    { icon: <PhoneIncoming size={14} />, label: "Enquiries",     desc: "See who's reaching out",   path: adminPath("/enquiry"),              accentColor: "#9D174D", gradientFrom: "#831843", gradientTo: "#BE185D", badge: s ? `${s.enquiries} total` : undefined,                            badgeUrgent: false },
-    { icon: <ClipboardList size={14} />, label: "Requests",      desc: "Track bookings",           path: adminPath("/requests"),             accentColor: "#0E7490", gradientFrom: "#164E63", gradientTo: "#0891B2", badge: s?.pendingRequests ? `${s.pendingRequests} pending` : undefined,   badgeUrgent: !!(s?.pendingRequests && s.pendingRequests > 0) },
+    { icon: <Lock size={14} />,          label: "Security",      desc: "Change password",          path: adminPath("/change-password"),      accentColor: "#334155", gradientFrom: "#0F172A", gradientTo: "#334155", badge: undefined,                                                           badgeUrgent: false },
+    { icon: <ScrollText size={14} />,    label: "Contracts",     desc: "Employment contracts",     path: adminPath("/employment-contracts"), accentColor: "#0F766E", gradientFrom: "#134E4A", gradientTo: "#0D9488", badge: undefined,                                                           badgeUrgent: false },
+    { icon: <PhoneIncoming size={14} />, label: "Enquiries",     desc: "See who's reaching out",   path: adminPath("/enquiry"),              accentColor: "#9D174D", gradientFrom: "#831843", gradientTo: "#BE185D", badge: s ? `${s.enquiries} total` : undefined,                             badgeUrgent: false },
+    { icon: <ClipboardList size={14} />, label: "Requests",      desc: "Track bookings",           path: adminPath("/requests"),             accentColor: "#0E7490", gradientFrom: "#164E63", gradientTo: "#0891B2", badge: s?.pendingRequests ? `${s.pendingRequests} pending` : undefined,    badgeUrgent: !!(s?.pendingRequests && s.pendingRequests > 0) },
   ];
 
   const gap = compact ? 6 : 8;
   const pad = isSm ? "10px 10px 16px" : compact ? "10px 14px" : "12px 16px";
 
   const outerStyles: React.CSSProperties = isSm
-    ? {
-        padding: pad,
-        background: "#F0F4F8",
-        width: "100%",
-        minHeight: "100vh",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        gap,
-      }
-    : {
-        padding: pad,
-        background: "#F0F4F8",
-        width: "100%",
-        height: "100vh",
-        maxHeight: "100vh",
-        overflow: "hidden",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        gap,
-      };
+    ? { padding: pad, background: "#F0F4F8", width: "100%", minHeight: "100vh", boxSizing: "border-box", display: "flex", flexDirection: "column", gap }
+    : { padding: pad, background: "#F0F4F8", width: "100%", height: "100vh", maxHeight: "100vh", overflow: "hidden", boxSizing: "border-box", display: "flex", flexDirection: "column", gap };
 
   return (
     <div style={outerStyles}>
@@ -534,23 +482,23 @@ const HomePage = () => {
       {/* ── Stat Row 1 ── */}
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${statCols}, 1fr)`, gap, flexShrink: 0 }}>
         {loading ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />) : (<>
-          <StatCard icon={<Users size={13} />} label="Total Maids" value={s?.totalMaids ?? 0} loading={loading} gradient="linear-gradient(135deg, #047857, #10B981)" glowColor="#10B981" delay={0} sub={`${s?.maidsWithPhotos ?? 0} with photos`} compact={compact} />
-          <StatCard icon={<Eye size={13} />} label="Public" value={s?.publicMaids ?? 0} loading={loading} gradient="linear-gradient(135deg, #1E40AF, #3B82F6)" glowColor="#3B82F6" delay={60} sub="Visible to clients" compact={compact} />
-          <StatCard icon={<EyeOff size={13} />} label="Hidden" value={s?.hiddenMaids ?? 0} loading={loading} gradient="linear-gradient(135deg, #92400E, #D97706)" glowColor="#F59E0B" delay={120} sub="Not listed" compact={compact} />
+          <StatCard icon={<Users size={13} />}        label="Total Maids"  value={s?.totalMaids ?? 0}        loading={loading} gradient="linear-gradient(135deg, #047857, #10B981)" glowColor="#10B981" delay={0}   sub={`${s?.maidsWithPhotos ?? 0} with photos`} compact={compact} to={adminPath("/edit-maids")} />
+          <StatCard icon={<Eye size={13} />}          label="Public"       value={s?.publicMaids ?? 0}       loading={loading} gradient="linear-gradient(135deg, #1E40AF, #3B82F6)" glowColor="#3B82F6" delay={60}  sub="Visible to clients"                       compact={compact} to={adminPath("/edit-maids")} />
+          <StatCard icon={<EyeOff size={13} />}       label="Hidden"       value={s?.hiddenMaids ?? 0}       loading={loading} gradient="linear-gradient(135deg, #92400E, #D97706)" glowColor="#F59E0B" delay={120} sub="Not listed"                                compact={compact} to={adminPath("/edit-maids")} />
           <StatCard icon={<MessageCircle size={13} />} label="Unread Chats" value={s?.unreadAgencyChats ?? 0} loading={loading}
             gradient={s?.unreadAgencyChats ? "linear-gradient(135deg, #7F1D1D, #EF4444)" : "linear-gradient(135deg, #14532D, #22C55E)"}
             glowColor={s?.unreadAgencyChats ? "#EF4444" : "#22C55E"} delay={180}
-            sub={s?.unreadAgencyChats ? "Needs attention" : "All caught up"} subUrgent={!!s?.unreadAgencyChats} compact={compact} />
+            sub={s?.unreadAgencyChats ? "Needs attention" : "All caught up"} subUrgent={!!s?.unreadAgencyChats} compact={compact} to={adminPath("/chat-support")} />
         </>)}
       </div>
 
       {/* ── Stat Row 2 ── */}
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${statCols}, 1fr)`, gap, flexShrink: 0 }}>
         {loading ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />) : (<>
-          <StatCard icon={<PhoneIncoming size={13} />} label="Enquiries" value={s?.enquiries ?? 0} loading={loading} gradient="linear-gradient(135deg, #4C1D95, #8B5CF6)" glowColor="#8B5CF6" delay={60} compact={compact} />
-          <StatCard icon={<FileText size={13} />} label="Requests" value={s?.requests ?? 0} loading={loading} gradient="linear-gradient(135deg, #164E63, #06B6D4)" glowColor="#06B6D4" delay={120} sub={`${s?.pendingRequests ?? 0} pending`} compact={compact} />
-          <StatCard icon={<Image size={13} />} label="Gallery" value={s?.galleryImages ?? 0} loading={loading} gradient="linear-gradient(135deg, #831843, #EC4899)" glowColor="#EC4899" delay={180} sub="Agency photos" compact={compact} />
-          <StatCard icon={<Users size={13} />} label="MOM Personnel" value={s?.momPersonnel ?? 0} loading={loading} gradient="linear-gradient(135deg, #78350F, #D97706)" glowColor="#D97706" delay={240} compact={compact} />
+          <StatCard icon={<PhoneIncoming size={13} />} label="Enquiries"     value={s?.enquiries ?? 0}     loading={loading} gradient="linear-gradient(135deg, #4C1D95, #8B5CF6)" glowColor="#8B5CF6" delay={60}  compact={compact} to={adminPath("/enquiry")} />
+          <StatCard icon={<FileText size={13} />}      label="Requests"      value={s?.requests ?? 0}      loading={loading} gradient="linear-gradient(135deg, #164E63, #06B6D4)" glowColor="#06B6D4" delay={120} sub={`${s?.pendingRequests ?? 0} pending`}    compact={compact} to={adminPath("/requests")} />
+          <StatCard icon={<Image size={13} />}         label="Gallery"       value={s?.galleryImages ?? 0} loading={loading} gradient="linear-gradient(135deg, #831843, #EC4899)" glowColor="#EC4899" delay={180} sub="Agency photos"                           compact={compact} to={adminPath("/agency-profile")} />
+          <StatCard icon={<Users size={13} />}         label="MOM Personnel" value={s?.momPersonnel ?? 0}  loading={loading} gradient="linear-gradient(135deg, #78350F, #D97706)" glowColor="#D97706" delay={240} compact={compact} to={adminPath("/agency-profile")} />
         </>)}
       </div>
 
@@ -561,7 +509,6 @@ const HomePage = () => {
         gap,
         ...(isSm ? {} : { flex: 1, minHeight: 0 }),
       }}>
-
         {/* LEFT: Chart */}
         <div style={{
           background: "#fff", border: "1.5px solid #E2E8F0", borderRadius: 14,
@@ -609,8 +556,7 @@ const HomePage = () => {
           padding: compact ? "10px 12px 12px" : "12px 14px 14px",
           display: "flex", flexDirection: "column",
           ...(isSm ? {} : { minHeight: 0, overflow: "hidden" }),
-          boxSizing: "border-box",
-          minWidth: 0,
+          boxSizing: "border-box", minWidth: 0,
         }}>
           <SectionHeader
             icon={<Zap size={12} color="#fff" />}
@@ -620,26 +566,15 @@ const HomePage = () => {
           <div style={{
             display: "grid",
             gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-            // FIX: on mobile use "auto" rows so each card sizes to its own content
-            // instead of a fixed 80px that clips text. On desktop keep 1fr.
             gridAutoRows: isSm ? "auto" : "1fr",
             gap: compact ? 6 : 7,
             ...(isSm ? {} : { flex: 1, minHeight: 0 }),
-            minWidth: 0,
-            boxSizing: "border-box",
-            overflow: "visible",
+            minWidth: 0, boxSizing: "border-box", overflow: "visible",
           }}>
             {loading
               ? Array.from({ length: 8 }).map((_, i) => <SkeletonMenuCard key={i} />)
               : menuCards.map((card, i) => (
-                <MenuCard
-                  key={i}
-                  {...card}
-                  delay={i * 40}
-                  compact={compact}
-                  // FIX: pass allowWrap on mobile so text wraps instead of truncating
-                  allowWrap={isSm}
-                />
+                <MenuCard key={i} {...card} delay={i * 40} compact={compact} allowWrap={isSm} />
               ))
             }
           </div>

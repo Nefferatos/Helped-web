@@ -47,7 +47,7 @@ const esc = (v: unknown) =>
     .replace(/'/g, "&#39;");
 
 const fmtDate = (v?: string) => {
-  if (!v) return "N/A";
+  if (!v) return "";
   const d = new Date(v);
   return isNaN(d.getTime()) ? v : d.toLocaleDateString("en-SG");
 };
@@ -83,7 +83,6 @@ const buildImportPayload = (maid: MaidProfile) => {
   return { ...rest, photoDataUrl: "", photoDataUrls: [], videoDataUrl: "" } satisfies MaidProfile;
 };
 
-// Single-profile export includes photos so they survive the import round-trip.
 const buildImportPayloadWithPhoto = (maid: MaidProfile) => {
   const { id, createdAt, updatedAt, videoDataUrl, ...rest } = maid;
   return { ...rest, videoDataUrl: "" } satisfies MaidProfile;
@@ -91,38 +90,17 @@ const buildImportPayloadWithPhoto = (maid: MaidProfile) => {
 
 const buildMaidsCsv = (maids: MaidProfile[]) => {
   const columns = [
-    "referenceCode",
-    "fullName",
-    "type",
-    "nationality",
-    "dateOfBirth",
-    "placeOfBirth",
-    "height",
-    "weight",
-    "religion",
-    "maritalStatus",
-    "numberOfChildren",
-    "numberOfSiblings",
-    "homeAddress",
-    "airportRepatriation",
-    "educationLevel",
-    "isPublic",
-    "hasPhoto",
+    "referenceCode", "fullName", "type", "nationality", "dateOfBirth",
+    "placeOfBirth", "height", "weight", "religion", "maritalStatus",
+    "numberOfChildren", "numberOfSiblings", "homeAddress", "airportRepatriation",
+    "educationLevel", "isPublic", "hasPhoto",
   ] as const;
-
-  const rows = maids.map((maid) =>
-    columns
-      .map((column) => toCsvCell(maid[column]))
-      .join(",")
-  );
-
+  const rows = maids.map((maid) => columns.map((col) => toCsvCell(maid[col])).join(","));
   return [columns.join(","), ...rows].join("\n");
 };
 
 const normalizeText = (value: unknown) =>
-  String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+  String(value ?? "").replace(/\s+/g, " ").trim();
 
 const dataUrlToBytes = (dataUrl: string) => {
   const parts = dataUrl.split(",", 2);
@@ -151,18 +129,12 @@ const getSectionRows = (maid: MaidProfile) => {
     {
       title: "Profile",
       rows: [
-        ["Reference Code", maid.referenceCode],
-        ["Full Name", maid.fullName],
-        ["Status", maid.status || "available"],
-        ["Type", maid.type],
-        ["Nationality", maid.nationality],
-        ["Date of Birth", fmtDate(maid.dateOfBirth)],
-        ["Age", age === null ? "N/A" : `${age}`],
-        ["Place of Birth", maid.placeOfBirth],
-        ["Religion", maid.religion],
-        ["Marital Status", maid.maritalStatus],
-        ["Children", maid.numberOfChildren],
-        ["Siblings", maid.numberOfSiblings],
+        ["Reference Code", maid.referenceCode], ["Full Name", maid.fullName],
+        ["Status", maid.status || "available"], ["Type", maid.type],
+        ["Nationality", maid.nationality], ["Date of Birth", fmtDate(maid.dateOfBirth)],
+        ["Age", age === null ? "N/A" : `${age}`], ["Place of Birth", maid.placeOfBirth],
+        ["Religion", maid.religion], ["Marital Status", maid.maritalStatus],
+        ["Children", maid.numberOfChildren], ["Siblings", maid.numberOfSiblings],
         ["Height / Weight", `${maid.height ?? ""} cm / ${maid.weight ?? ""} kg`],
         ["Education", maid.educationLevel],
       ],
@@ -170,45 +142,29 @@ const getSectionRows = (maid: MaidProfile) => {
     {
       title: "Contact & Availability",
       rows: [
-        ["Home Address", maid.homeAddress],
-        ["Repatriation Airport", maid.airportRepatriation],
-        ["Agency Contact", agencyContact.contactPerson],
-        ["Agency Phone", agencyContact.phone],
-        ["Passport No", agencyContact.passportNo],
-        ["Rest Days / Month", skills.offDaysPerMonth],
-        ["Interview Options", Array.isArray(skills.availabilityInterviewOptions) ? skills.availabilityInterviewOptions.join(", ") : ""],
+        ["Home Address", maid.homeAddress], ["Repatriation Airport", maid.airportRepatriation],
+        ["Agency Contact", agencyContact.contactPerson], ["Agency Phone", agencyContact.phone],
+        ["Passport No", agencyContact.passportNo], ["Rest Days / Month", skills.offDaysPerMonth],
+        ["Interview Options", Array.isArray(skills.availabilityInterviewOptions) ? (skills.availabilityInterviewOptions as string[]).join(", ") : ""],
         ["Availability Remark", skills.availabilityRemark],
       ],
     },
     {
       title: "Skills & Introduction",
       rows: [
-        ["Languages", Object.entries(maid.languageSkills || {}).map(([name, level]) => `${name}: ${level}`).join(", ")],
-        ["Work Areas", Object.entries(workAreas).filter(([, value]) => Boolean(value)).map(([name]) => name).join(", ")],
-        ["Public Intro", intro.publicIntro],
-        ["Private Intro", intro.intro],
-        ["Food Handling", intro.foodHandlingPreferences],
-        ["Dietary Restrictions", intro.dietaryRestrictions],
-        ["Allergies", intro.allergies],
-        ["Physical Disabilities", intro.physicalDisabilities],
+        ["Languages", Object.entries(maid.languageSkills || {}).map(([n, l]) => `${n}: ${l}`).join(", ")],
+        ["Work Areas", Object.entries(workAreas).filter(([, v]) => Boolean(v)).map(([n]) => n).join(", ")],
+        ["Public Intro", intro.publicIntro], ["Private Intro", intro.intro],
+        ["Food Handling", intro.foodHandlingPreferences], ["Dietary Restrictions", intro.dietaryRestrictions],
+        ["Allergies", intro.allergies], ["Physical Disabilities", intro.physicalDisabilities],
       ],
     },
     {
       title: "Employment History",
       rows: employment.length > 0
-        ? employment.map((entry, index) => {
+        ? employment.map((entry, i) => {
             const row = entry as Record<string, unknown>;
-            const years = [row.from, row.to].filter(Boolean).join(" - ");
-            const description = [
-              years,
-              row.country,
-              row.employer,
-              row.duties,
-              row.remarks,
-            ]
-              .filter(Boolean)
-              .join(" | ");
-            return [`Employer ${index + 1}`, description];
+            return [`Employer ${i + 1}`, [row.from, row.to].filter(Boolean).join(" - ") + " | " + [row.country, row.employer, row.duties, row.remarks].filter(Boolean).join(" | ")];
           })
         : [["History", "No employment history recorded"]],
     },
@@ -220,496 +176,462 @@ const downloadBytes = (filename: string, bytes: Uint8Array, mimeType: string) =>
   downloadBlob(filename, blob);
 };
 
-// ── MOM A4 Bio-data HTML builder ───────────────────────────────────────────
+// =============================================================================
+// buildMomBiodataHtml
+// Pages A-1 … A-4 (+ optional A-5 if remarks overflow).
+// .page-separator divs are ZERO-HEIGHT so the canvas slicer produces no gaps.
+// =============================================================================
 const buildMomBiodataHtml = (maid: MaidProfile): string => {
   const agencyContact = (maid.agencyContact ?? {}) as Record<string, unknown>;
   const introduction  = (maid.introduction  ?? {}) as Record<string, unknown>;
   const skillsPref    = (maid.skillsPreferences ?? {}) as Record<string, unknown>;
   const pastIllnesses = ((introduction.pastIllnesses ?? {}) as Record<string, boolean>);
   const workAreas     = Object.entries(maid.workAreas ?? {}) as Array<
-    [string, { willing?: boolean; experience?: boolean; evaluation?: string }]
+    [string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string; assessmentText?: string; notes?: string }]
   >;
-  const employment    = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
+  const employment = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
 
   const photos =
     Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
       ? maid.photoDataUrls
-      : maid.photoDataUrl
-      ? [maid.photoDataUrl]
-      : [];
-
+      : maid.photoDataUrl ? [maid.photoDataUrl] : [];
   const photoSrc = photos[1] || photos[0] || "";
 
   const age = calcAge(maid.dateOfBirth);
   const importPayloadBase64 = encodeBase64Utf8(JSON.stringify(buildImportPayloadWithPhoto(maid)));
 
-  // ── Work-area rows ──────────────────────────────────────────────────────
-  const workAreaRows = (workAreas as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string }]>)
-    .map(([area, cfg], idx) => {
-      const rating = cfg.evaluation ? String(cfg.evaluation) : "N.A";
-      const dots = [1,2,3,4,5].map(n => {
-        const active = String(n) === rating;
-        return `<span class="dot${active ? " active" : ""}">${n}</span>`;
-      }).join("");
-      return `<tr>
-        <td class="sn">${idx + 1}</td>
-        <td class="area-label">${esc(area)}</td>
-        <td class="center">${esc(yesNo(cfg.willing ?? false))}</td>
-        <td class="center">${esc(yesNo(cfg.experience ?? false))}${cfg.experience && cfg.yearsOfExperience ? `<br/><span style="font-size:8.5pt;">${esc(String(cfg.yearsOfExperience))} yr${String(cfg.yearsOfExperience) === "1" ? "" : "s"}</span>` : ""}</td>
-        <td class="assess">${dots} &nbsp;${esc(cfg.evaluation ? "– " + cfg.evaluation : "N.A")}</td>
-      </tr>`;
-    }).join("") || `<tr><td colspan="5" style="text-align:center;color:#888;">No skill records available.</td></tr>`;
+  // ── small helpers ─────────────────────────────────────────────────────────
+  const cb = (checked: boolean) =>
+    `<span class="cb">${checked ? "&#x2611;" : "&#x2610;"}</span>`;
 
-  // ── Employment rows ─────────────────────────────────────────────────────
-  const empRows = (employment as Record<string, string>[]).map(e => `<tr>
-    <td>${esc(e.from ?? "")}</td>
-    <td>${esc(e.to   ?? "")}</td>
-    <td>${esc(e.country  ?? "")}</td>
-    <td>${esc(e.employer ?? "")}</td>
-    <td>${esc(e.duties   ?? "")}</td>
-    <td>${esc(e.remarks  ?? "")}</td>
-  </tr>`).join("") || `<tr><td colspan="6" style="text-align:center;color:#888;">No employment history recorded.</td></tr>`;
+  const ibox = (yes: boolean) =>
+    `<td class="ibox">${yes ? "&#10003;" : ""}</td>`;
 
-  // ── Remarks ─────────────────────────────────────────────────────────────
-  const publicIntro  = String(introduction.publicIntro  ?? "");
-  const privateIntro = String(introduction.intro ?? "");
-  const remarksText  = [publicIntro, privateIntro].filter(Boolean).join("\n\n") ||
-    String(introduction.otherRemarks ?? "");
+  const ill = (key: string) => pastIllnesses[key] === true;
 
-  // ── CSS ─────────────────────────────────────────────────────────────────
+  const interviewOpts: string[] = Array.isArray(skillsPref.availabilityInterviewOptions)
+    ? (skillsPref.availabilityInterviewOptions as string[])
+    : [];
+  const hasOpt = (s: string) => interviewOpts.some(o => o.toLowerCase().includes(s));
+
+  // ── DOB digit boxes ───────────────────────────────────────────────────────
+  const dobParts = maid.dateOfBirth ? new Date(maid.dateOfBirth) : null;
+  const dobDD  = dobParts ? String(dobParts.getDate()).padStart(2, "0") : "  ";
+  const dobMM  = dobParts ? String(dobParts.getMonth() + 1).padStart(2, "0") : "  ";
+  const dobYY  = dobParts ? String(dobParts.getFullYear()).slice(-2) : "  ";
+  const ageStr = age !== null ? String(age).padStart(2, "0") : "  ";
+
+  const dobBoxes = `<div class="digit-row">
+    <div class="dbox">${dobDD[0]}</div><div class="dbox">${dobDD[1]}</div>
+    <div class="dsep"></div>
+    <div class="dbox">${dobMM[0]}</div><div class="dbox">${dobMM[1]}</div>
+    <div class="dsep"></div>
+    <div class="dbox">${dobYY[0]}</div><div class="dbox">${dobYY[1]}</div>
+    <span style="margin:0 6px;">Age:</span>
+    <div class="dbox">${ageStr[0]}</div><div class="dbox">${ageStr[1]}</div>
+  </div>`;
+
+  // ── Height/weight digit boxes ─────────────────────────────────────────────
+  const hRaw = String(maid.height ?? "").padStart(3, " ");
+  const wRaw = String(maid.weight ?? "").padStart(2, " ");
+  const hwBoxes = `<div class="digit-row">
+    <div class="dbox">${hRaw[0].trim() || "&nbsp;"}</div>
+    <div class="dbox">${hRaw[1].trim() || "&nbsp;"}</div>
+    <div class="dbox">${hRaw[2].trim() || "&nbsp;"}</div>
+    <span style="margin:0 4px;">cm</span>
+    <div class="dbox">${wRaw[0].trim() || "&nbsp;"}</div>
+    <div class="dbox">${wRaw[1].trim() || "&nbsp;"}</div>
+    <span style="margin-left:4px;">kg</span>
+  </div>`;
+
+  // ── MOM standard skill areas ──────────────────────────────────────────────
+  const MOM_AREAS = [
+    { label: "Care of infants/children", sub: "Please specify age range:" },
+    { label: "Care of elderly",          sub: null },
+    { label: "Care of disabled",         sub: null },
+    { label: "General housework",        sub: null },
+    { label: "Cooking",                  sub: "Please specify cuisines:" },
+    { label: "Language abilities (spoken)", sub: "Please specify:" },
+    { label: "Other skills, if any",     sub: "Please specify:" },
+  ];
+
+  const areaByIdx = new Map<number, typeof workAreas[0][1]>();
+  workAreas.forEach(([key, cfg]) => {
+    const kl = key.toLowerCase();
+    const idx = MOM_AREAS.findIndex(a => {
+      const al = a.label.toLowerCase();
+      return al.startsWith(kl.split(" ")[0]) || kl.includes(al.split(" ")[0]);
+    });
+    if (idx >= 0) areaByIdx.set(idx, cfg);
+  });
+
+  const skillRows = MOM_AREAS.map(({ label, sub }, idx) => {
+    const cfg = areaByIdx.get(idx);
+    const assess = cfg
+      ? cfg.assessmentText
+        ? esc(String(cfg.assessmentText))
+        : cfg.evaluation ? `Rate: ${esc(cfg.evaluation)}` : "N.A"
+      : "N.A";
+    const notes = cfg ? esc(String(cfg.notes ?? "")) : "";
+    return `<tr>
+      <td class="sn">${idx + 1}.</td>
+      <td class="area-col">${esc(label)}${sub
+        ? `<br/><span class="sub-note">${esc(sub)}</span> <span class="sub-val">${notes}&nbsp;</span>`
+        : ""}</td>
+      <td class="tctr">${cfg ? esc(yesNo(cfg.willing ?? false)) : ""}</td>
+      <td class="tctr">${cfg ? esc(yesNo(cfg.experience ?? false)) : ""}${
+        cfg?.experience && cfg.yearsOfExperience
+          ? `<br/><span style="font-size:7pt;">${esc(cfg.yearsOfExperience)} yr</span>` : ""}</td>
+      <td class="assess-col">${assess}</td>
+    </tr>`;
+  }).join("");
+
+  // ── Employment rows ───────────────────────────────────────────────────────
+  const empRows = (employment as Record<string, string>[]).length > 0
+    ? (employment as Record<string, string>[]).map(e => `<tr>
+        <td class="emp-date">${esc(e.from ?? "")}</td>
+        <td class="emp-date">${esc(e.to   ?? "")}</td>
+        <td>${esc(e.country  ?? "")}</td>
+        <td>${esc(e.employer ?? "")}</td>
+        <td>${esc(e.duties   ?? "")}</td>
+        <td>${esc(e.remarks  ?? "")}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="6" style="height:28px;"></td></tr>
+       <tr><td colspan="6" style="height:28px;"></td></tr>`;
+
+  // ── Remarks (de-duplicated) ───────────────────────────────────────────────
+  const pub   = String(introduction.publicIntro  ?? "").trim();
+  const priv  = String(introduction.intro        ?? "").trim();
+  const other = String(introduction.otherRemarks ?? "").trim();
+  let remarksText = "";
+  if (pub && priv && pub !== priv) remarksText = `${pub}\n\n${priv}`;
+  else if (pub)  remarksText = pub;
+  else if (priv) remarksText = priv;
+  if (other && other !== remarksText) remarksText = remarksText ? `${remarksText}\n\n${other}` : other;
+
+  const remarksOverflows = remarksText.length > 800;
+
+  // ── Agency details ────────────────────────────────────────────────────────
+  const agencyName    = esc(String(agencyContact.agencyName    ?? "At The Agency (formerly Rinzin Agency Pte. Ltd) (MOM Lic No. 25C3114)"));
+  const agencyAddress = esc(String(agencyContact.agencyAddress ?? "3 Jalan Kukoh, #01-115. Singapore 161003"));
+  const agencyTel     = esc(String(agencyContact.agencyPhone   ?? agencyContact.phone ?? ""));
+
+  // Repeated on every page
+  const HDR = `<div class="agency-header">
+    <img class="agency-logo" src="/FM_logo.png" alt="Agency Logo" onerror="this.style.display='none'" />
+    <div class="agency-info">
+      <div class="agency-name">${agencyName}</div>
+      <div>${agencyAddress}</div>
+      <div>Tel: ${agencyTel}</div>
+    </div>
+  </div>`;
+
+
+  const sigBlock = `
+  <div class="sig-grid">
+    <div>
+      <div class="sig-line">${esc(maid.fullName)}<br/>FDW Name and Signature</div>
+      <div style="margin-top:6px;font-size:8pt;">Date:</div>
+    </div>
+    <div>
+      <div class="sig-line">${esc(String(agencyContact.contactPerson ?? ""))}<br/>EA Personnel Name and Registration Number</div>
+      <div style="margin-top:6px;font-size:8pt;">Date:</div>
+    </div>
+  </div>
+  <p style="margin-top:12px;font-size:8.5pt;">I have gone through the biodata of this FDW and confirm that I would like to employ her</p>
+  <div style="margin-top:22px;">
+    <div class="sig-line">&nbsp;<br/>Employer Name and NRIC No.</div>
+    <div style="margin-top:6px;font-size:8pt;">Date:</div>
+  </div>
+  <div style="text-align:center;margin:10px 0;font-size:9pt;">***************</div>
+  <div class="foot-title">IMPORTANT NOTES FOR EMPLOYERS WHEN USING THE SERVICES OF AN EA</div>
+  <div class="foot-item"><span class="foot-bul">&#9632;</span><span>Do consider asking for an FDW who is able to communicate in a language you require, and interview her (in person/phone/videoconference) to ensure that she can communicate adequately.</span></div>
+  <div class="foot-item"><span class="foot-bul">&#9632;</span><span>Do consider requesting for an FDW who has a proven ability to perform the chores you require, for example, performing household chores (especially if she is required to hang laundry from a high-rise unit), cooking and caring for young children or the elderly.</span></div>
+  <div class="foot-item"><span class="foot-bul">&#9632;</span><span>Do work together with the EA to ensure that a suitable FDW is matched to you according to your needs and requirements.</span></div>
+  <div class="foot-item"><span class="foot-bul">&#9632;</span><span>You may wish to pay special attention to your prospective FDW's employment history and feedback from the FDW's previous employer(s) before employing her.</span></div>`;
+
+  // ── CSS ───────────────────────────────────────────────────────────────────
   const css = `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: "Times New Roman", Times, serif;
-      font-size: 11pt;
-      color: #000;
-      background: #fff;
-      padding: 14mm 15mm;
-      line-height: 1.45;
-    }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #000; background: #fff; line-height: 1.38; }
 
-    /* ── Agency header ── */
-    .agency-header { margin-bottom: 8px; }
-    .agency-logo { height: 64px; width: auto; display: block; }
-    .agency-license { font-size: 9pt; text-align: right; color: #444; }
+    /* ZERO-HEIGHT page separator — invisible slice marker for canvas export */
+    .page-separator { display: block; width: 100%; height: 0; overflow: hidden; font-size: 0; line-height: 0; padding: 0; margin: 0; border: none; }
 
-    /* ── Main title ── */
-    .doc-title {
-      text-align: center;
-      font-weight: bold;
-      font-size: 13pt;
-      text-decoration: underline;
-      margin-bottom: 4px;
-    }
-    .doc-note {
-      font-size: 8.5pt;
-      margin-bottom: 14px;
-      font-style: italic;
-    }
+    .page { padding: 6px 13mm 8px; }
+    .page-ref { text-align: center; font-weight: bold; font-size: 9pt; margin: 4px 0; }
 
-    /* ── Section labels ── */
-    .sec-label {
-      font-weight: bold;
-      font-size: 11pt;
-      text-decoration: underline;
-      margin: 12px 0 4px;
-    }
-    .sub-label {
-      font-weight: bold;
-      margin: 6px 0 4px;
-    }
+    .agency-header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #000; padding: 7px 13mm; }
+    .agency-logo { height: 56px; width: auto; flex-shrink: 0; }
+    .agency-info { font-size: 8.5pt; line-height: 1.5; }
+    .agency-name { font-weight: bold; font-size: 10pt; }
 
-    /* ── Profile hero: fields left, photo right ── */
-    .profile-hero {
-      display: grid;
-      grid-template-columns: 1fr 160px;
-      gap: 12px;
-      align-items: start;
-    }
-    .photo-box img {
-      width: 160px;
-      height: auto;
-      border: 1px solid #aaa;
-      display: block;
-      object-fit: cover;
-    }
-    .photo-box .no-photo {
-      width: 160px;
-      height: 220px;
-      border: 1px solid #aaa;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 9pt;
-      color: #999;
-    }
+    .doc-title { text-align: center; font-weight: bold; font-size: 11pt; margin-bottom: 2px; }
+    .doc-note  { font-size: 7.5pt; font-style: italic; margin-bottom: 6px; }
 
-    /* ── Field lines ── */
-    .field-row {
-      display: flex;
-      align-items: baseline;
-      margin-bottom: 5px;
-      font-size: 10.5pt;
-      flex-wrap: wrap;
-    }
-    .field-num { min-width: 22px; }
-    .field-label { min-width: 210px; white-space: nowrap; }
-    .field-value {
-      border-bottom: 1px solid #555;
-      flex: 1;
-      padding-bottom: 1px;
-      min-height: 16px;
-      min-width: 60px;
-    }
+    .sec-label { font-weight: bold; font-size: 9.5pt; text-decoration: underline; margin: 6px 0 3px; }
+    .sub-label { font-weight: bold; font-size: 9pt; margin: 4px 0 3px; }
+    .sub-note  { font-style: italic; font-size: 7.5pt; color: #333; }
+    .sub-val   { font-size: 8pt; border-bottom: 1px solid #555; display: inline-block; min-width: 70px; }
 
-    /* ── Illness grid ── */
-    table.illness {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 10pt;
-      margin: 6px 0;
-    }
-    table.illness td { padding: 2px 5px; vertical-align: middle; }
-    .ill-label { width: 36%; }
-    .ill-box, .ill-box-header {
-      width: 28px;
-      text-align: center;
-      border: 1px solid #555;
-      font-weight: bold;
-    }
-    .ill-spacer { width: 20px; }
+    .profile-hero { display: grid; grid-template-columns: 1fr 190px; gap: 10px; align-items: start; }
 
-    /* ── Skills table ── */
-    table.skills {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 9.5pt;
-      margin: 4px 0;
-    }
-    table.skills th, table.skills td {
-      border: 1px solid #555;
-      padding: 4px 6px;
-      vertical-align: top;
-    }
-    table.skills thead th { background: #f0f0f0; text-align: center; font-size: 9pt; }
+    .photo-block { display: flex; flex-direction: column; }
+    .ref-block { border: 1px solid #888; border-bottom: none; padding: 5px 7px; font-size: 9pt; font-weight: bold; line-height: 1.5; }
+    .ref-code { font-size: 10.5pt; }
+    .photo-img { width: 190px; height: 242px; object-fit: cover; object-position: top center; display: block; border: 1px solid #888; }
+    .photo-placeholder { width: 190px; height: 242px; border: 1px solid #888; display: flex; align-items: center; justify-content: center; font-size: 8pt; color: #888; background: #f8f8f8; text-align: center; line-height: 1.6; }
+
+    .field-row { display: flex; align-items: baseline; margin-bottom: 3px; font-size: 8.5pt; gap: 2px; }
+    .fn { min-width: 20px; flex-shrink: 0; }
+    .fl { white-space: nowrap; flex-shrink: 0; min-width: 202px; }
+    .fl-auto { white-space: nowrap; flex-shrink: 0; }
+    .fv { border-bottom: 1px solid #555; flex: 1; min-width: 40px; min-height: 13px; font-size: 8.5pt; word-break: break-word; padding-bottom: 1px; }
+    .fv-sm { border-bottom: 1px solid #555; display: inline-block; min-width: 55px; min-height: 13px; font-size: 8.5pt; padding-bottom: 1px; }
+
+    .digit-row { display: inline-flex; align-items: center; gap: 1px; font-size: 8.5pt; }
+    .dbox { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 16px; border: 1px solid #666; font-size: 8pt; font-weight: bold; }
+    .dsep { width: 4px; }
+
+    table.illness { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin: 3px 0; }
+    table.illness td { padding: 2px 3px; vertical-align: middle; }
+    .ibox { width: 22px; height: 16px; text-align: center; border: 1px solid #555; font-size: 9pt; font-weight: bold; }
+    .ihdr { width: 22px; text-align: center; font-size: 8pt; font-weight: bold; }
+    .igap { width: 10px; }
+
+    table.skills { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin: 4px 0; table-layout: fixed; }
+    table.skills th, table.skills td { border: 1px solid #666; padding: 4px 5px; vertical-align: top; word-break: break-word; }
+    table.skills thead th { background: #f0f0f0; text-align: center; font-size: 8pt; font-weight: bold; }
     .sn { width: 26px; text-align: center; }
-    .area-label { width: 26%; }
-    .center { text-align: center; width: 60px; }
-    .assess { font-size: 9pt; }
-    .dot { margin: 0 2px; font-size: 9pt; color: #aaa; }
-    .dot.active { color: #000; font-weight: bold; text-decoration: underline; }
+    .area-col { width: 22%; }
+    .tctr { width: 54px; text-align: center; }
+    .assess-col { font-size: 8pt; }
 
-    /* ── Employment table ── */
-    table.emp {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 9pt;
-      margin: 4px 0;
-    }
-    table.emp th, table.emp td {
-      border: 1px solid #555;
-      padding: 4px 6px;
-      vertical-align: top;
-    }
-    table.emp thead th { background: #f0f0f0; text-align: center; }
+    table.emp { width: 100%; border-collapse: collapse; font-size: 8pt; margin: 4px 0; table-layout: fixed; }
+    table.emp th, table.emp td { border: 1px solid #666; padding: 4px 5px; vertical-align: top; word-break: break-word; }
+    table.emp thead th { background: #f0f0f0; text-align: center; font-size: 8pt; }
+    .emp-date { width: 42px; }
 
-    /* ── Checkbox row ── */
-    .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 10pt; }
-    .cb {
-      width: 14px; height: 14px;
-      border: 1px solid #555;
-      display: inline-flex;
-      align-items: center; justify-content: center;
-      font-size: 9pt; font-weight: bold;
-      flex-shrink: 0;
-    }
+    .checkbox-row { display: flex; align-items: flex-start; gap: 5px; margin: 2px 0; font-size: 8.5pt; }
+    .cb { font-size: 12pt; line-height: 1; flex-shrink: 0; margin-top: -2px; }
+    .indent { padding-left: 20px; }
 
-    /* ── Remarks block ── */
-    .remarks-box {
-      border: 1px solid #555;
-      min-height: 90px;
-      padding: 8px;
-      font-size: 10pt;
-      white-space: pre-wrap;
-      margin: 4px 0 12px;
-    }
+    .remarks-box { border: 1px solid #555; padding: 6px 8px; font-size: 8.5pt; white-space: pre-wrap; word-break: break-word; margin: 3px 0 8px; line-height: 1.5; }
+    .remarks-short   { min-height: 110px; }
+    .remarks-overflow { min-height: 50px; }
 
-    /* ── Signature section ── */
-    .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 14px; }
-    .sig-line { border-top: 1px solid #555; margin-top: 28px; font-size: 9pt; padding-top: 2px; }
+    .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 8px; }
+    .sig-line { border-top: 1px solid #555; margin-top: 24px; font-size: 8pt; padding-top: 2px; }
 
-    /* ── Footer notes ── */
-    .foot-title { font-weight: bold; text-decoration: underline; margin: 12px 0 4px; font-size: 10.5pt; }
-    .foot-item { display: flex; gap: 6px; margin: 4px 0; font-size: 9.5pt; }
-    .foot-bullet { min-width: 12px; }
+    .foot-title { font-weight: bold; text-decoration: underline; margin: 8px 0 3px; font-size: 9pt; }
+    .foot-item  { display: flex; gap: 5px; margin: 3px 0; font-size: 8.5pt; line-height: 1.45; }
+    .foot-bul   { min-width: 10px; flex-shrink: 0; }
 
-    /* ── Page break sections ── */
-    .page-break {
-      display: block;
-      text-align: right;
-      font-size: 9pt;
-      padding-top: 10mm;
-      margin-bottom: 4px;
-    }
-    /* First page-break label needs no top padding */
-    .page-break:first-of-type {
-      padding-top: 0;
-    }
+    .page-footer { font-size: 7pt; color: #555; text-align: center; margin-top: 6px; border-top: 1px solid #ddd; padding-top: 3px; }
 
     @media print {
-      body { padding: 10mm 12mm; }
-      .page-break {
-        page-break-before: always;
-        break-before: page;
-        padding-top: 0;
-      }
-      .page-break:first-of-type {
-        page-break-before: avoid;
-        break-before: avoid;
-      }
+      .page-separator { page-break-before: always; break-before: page; }
+      .agency-header { padding: 6px 0; }
+      .page { padding: 4px 0 6px; }
     }
   `;
 
+  // ── A-4 body: remarks + (optional overflow A-5) ───────────────────────────
+  const pageA4body = remarksOverflows
+    ? `<div class="sec-label">(E) OTHER REMARKS</div>
+      <div class="remarks-box remarks-overflow">${esc(remarksText)}</div>
+    </div>
+
+    <!-- ═══ PAGE A-5 ═══ -->
+    <div class="page-separator" data-page="A-5"></div>
+    ${HDR}
+    <div class="page">
+      <div class="page-ref">A-5</div>
+      ${sigBlock}
+      `
+    : `<div class="sec-label">(E) OTHER REMARKS</div>
+      <div class="remarks-box remarks-short">${esc(remarksText)}</div>
+      ${sigBlock}
+      `;
+
+  // ─────────────────────────────────────────────────────────────────────────
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>${esc(maid.fullName)} – MOM Bio-data</title>
+  <title>${esc(maid.fullName)} – Bio-data</title>
   <style>${css}</style>
 </head>
 <body>
 <!--MAID_PROFILE_JSON_BASE64:${importPayloadBase64}-->
 
-<!-- ═══ AGENCY HEADER WITH LOGO ═══ -->
-<div class="agency-header">
-  <img class="agency-logo" src="/FM_logo.png" alt="At The Agency logo" />
-</div>
+<!-- ═══════════════════ PAGE A-1 ═══════════════════ -->
+<div class="page-separator" data-page="A-1"></div>
+${HDR}
+<div class="page">
+  <div class="page-ref">A-1</div>
+  <div class="doc-title">BIO-DATA OF FOREIGN DOMESTIC WORKER (FDW)</div>
+  <p class="doc-note">*Please ensure that you run through the information within the biodata as it is an important document to help you select a suitable FDW</p>
 
-<div class="page-break">A-1</div>
+  <div class="sec-label">(A) PROFILE OF FDW</div>
+  <div class="sub-label">A1 Personal Information</div>
 
-<div class="doc-title">BIO-DATA OF FOREIGN DOMESTIC WORKER (FDW)</div>
-<div class="doc-note">*Please ensure that you run through the information within the biodata as it is an important document to help you select a suitable FDW</div>
+  <div class="profile-hero">
+    <div>
+      <div class="field-row"><span class="fn">1.</span><span class="fl-auto">Name:&nbsp;</span><span class="fv">${esc(maid.fullName)}&nbsp;</span></div>
+      <div class="field-row" style="align-items:center;"><span class="fn">2.</span><span class="fl-auto">Date of birth:&nbsp;</span>${dobBoxes}</div>
+      <div class="field-row"><span class="fn">3.</span><span class="fl-auto">Place of birth:&nbsp;</span><span class="fv">${esc(maid.placeOfBirth ?? "")}&nbsp;</span></div>
+      <div class="field-row" style="align-items:center;"><span class="fn">4.</span><span class="fl-auto">Height &amp; weight:&nbsp;</span>${hwBoxes}</div>
+      <div class="field-row"><span class="fn">5.</span><span class="fl">Nationality:</span><span class="fv">${esc((maid.nationality ?? "").replace(/\s*maid$/i, ""))}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">6.</span><span class="fl">Residential address in home country:</span><span class="fv">${esc(maid.homeAddress ?? "")}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">7.</span><span class="fl">Name of port / airport to be repatriated to:</span><span class="fv">${esc(maid.airportRepatriation ?? "")}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">8.</span><span class="fl">Contact number in home country:</span><span class="fv">${esc(String(agencyContact.phone ?? ""))}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">9.</span><span class="fl">Religion:</span><span class="fv">${esc(maid.religion ?? "")}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">10.</span><span class="fl">Education level:</span><span class="fv">${esc(maid.educationLevel ?? "")}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">11.</span><span class="fl">Number of siblings:</span><span class="fv-sm">${esc(String(maid.numberOfSiblings ?? ""))}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">12.</span><span class="fl">Marital status:</span><span class="fv">${esc(maid.maritalStatus ?? "")}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">13.</span><span class="fl">Number of children:</span><span class="fv-sm">${esc(String(maid.numberOfChildren ?? ""))}&nbsp;</span></div>
+      <div class="field-row"><span class="fn">&nbsp;</span><span class="fl">– Age(s) of children (if any):</span><span class="fv">${esc(String(introduction.agesOfChildren ?? ""))}&nbsp;</span></div>
+    </div>
 
-<!-- ═══ (A) PROFILE ═══ -->
-<div class="sec-label">(A) PROFILE OF FDW</div>
-<div class="sub-label">A1 Personal Information</div>
-
-<div class="profile-hero">
-  <div class="fields">
-    <div class="field-row"><span class="field-num">1.</span><span class="field-label">Name:</span><span class="field-value">${esc(maid.fullName)}</span></div>
-    <div class="field-row"><span class="field-num">2.</span><span class="field-label">Date of birth:</span><span class="field-value" style="max-width:130px;">${esc(fmtDate(maid.dateOfBirth))}</span><span style="margin:0 8px;">Age:</span><span class="field-value" style="max-width:45px;">${age ?? ""}</span></div>
-    <div class="field-row"><span class="field-num">3.</span><span class="field-label">Place of birth:</span><span class="field-value">${esc(maid.placeOfBirth ?? "")}</span></div>
-    <div class="field-row"><span class="field-num">4.</span><span class="field-label">Height &amp; weight:</span><span class="field-value" style="max-width:65px;">${esc(String(maid.height ?? ""))}</span><span style="margin:0 4px;">cm</span><span class="field-value" style="max-width:65px;">${esc(String(maid.weight ?? ""))}</span><span style="margin-left:4px;">kg</span></div>
-    <div class="field-row"><span class="field-num">5.</span><span class="field-label">Nationality:</span><span class="field-value">${esc((maid.nationality ?? "").replace(/\s*maid$/i, ""))}</span></div>
-    <div class="field-row"><span class="field-num">6.</span><span class="field-label">Residential address in home country:</span><span class="field-value">${esc(maid.homeAddress ?? "")}</span></div>
-    <div class="field-row"><span class="field-num">7.</span><span class="field-label">Name of port / airport to be repatriated to:</span><span class="field-value">${esc(maid.airportRepatriation ?? "")}</span></div>
-    <div class="field-row"><span class="field-num">8.</span><span class="field-label">Contact number in home country:</span><span class="field-value">${esc(String(agencyContact.phone ?? ""))}</span></div>
-    <div class="field-row"><span class="field-num">9.</span><span class="field-label">Religion:</span><span class="field-value">${esc(maid.religion ?? "")}</span></div>
-    <div class="field-row"><span class="field-num">10.</span><span class="field-label">Education level:</span><span class="field-value">${esc(maid.educationLevel ?? "")}</span></div>
-    <div class="field-row"><span class="field-num">11.</span><span class="field-label">Number of siblings:</span><span class="field-value">${esc(String(maid.numberOfSiblings ?? ""))}</span></div>
-    <div class="field-row"><span class="field-num">12.</span><span class="field-label">Marital status:</span><span class="field-value">${esc(maid.maritalStatus ?? "")}</span></div>
-    <div class="field-row"><span class="field-num">13.</span><span class="field-label">Number of children:</span><span class="field-value">${esc(String(maid.numberOfChildren ?? ""))}</span></div>
-    <div class="field-row"><span class="field-num">&nbsp;</span><span class="field-label">– Age(s) of children (if any):</span><span class="field-value">${esc(String(introduction.agesOfChildren ?? ""))}</span></div>
+    <div class="photo-block">
+      <div class="ref-block">
+        <div class="ref-code">Ref: ${esc(String(maid.referenceCode ?? ""))}</div>
+        <div>${esc(String(maid.type ?? ""))}</div>
+      </div>
+      ${photoSrc
+        ? `<img class="photo-img" src="${photoSrc}" alt="${esc(maid.fullName)}" />`
+        : `<div class="photo-placeholder">PHOTO<br/>(half/full bodied<br/>and coloured)</div>`}
+    </div>
   </div>
-  <div class="photo-box">
-    ${photoSrc
-      ? `<img src="${photoSrc}" alt="${esc(maid.fullName)}" />`
-      : `<div class="no-photo">No Photo</div>`}
+
+  <div class="sub-label" style="margin-top:7px;">A2 Medical History/Dietary Restrictions</div>
+  <div class="field-row"><span class="fn">14.</span><span class="fl">Allergies (if any):</span><span class="fv">${esc(String(introduction.allergies ?? ""))}&nbsp;</span></div>
+  <div class="field-row" style="flex-wrap:wrap;margin-bottom:2px;"><span class="fn">15.</span><span>Past and existing illnesses (including chronic ailments and illnesses requiring medication):</span></div>
+
+  <table class="illness">
+    <thead><tr>
+      <td style="width:32%;"></td><td class="ihdr">Yes</td><td class="ihdr">No</td>
+      <td class="igap"></td>
+      <td style="width:32%;"></td><td class="ihdr">Yes</td><td class="ihdr">No</td>
+    </tr></thead>
+    <tbody>
+      <tr><td>i.&nbsp;&nbsp;Mental illness</td>${ibox(ill("mentalIllness"))}${ibox(!ill("mentalIllness"))}<td class="igap"></td><td>vi.&nbsp;&nbsp;Tuberculosis</td>${ibox(ill("tuberculosis"))}${ibox(!ill("tuberculosis"))}</tr>
+      <tr><td>ii.&nbsp;&nbsp;Epilepsy</td>${ibox(ill("epilepsy"))}${ibox(!ill("epilepsy"))}<td class="igap"></td><td>vii.&nbsp;&nbsp;Heart disease</td>${ibox(ill("heartDisease"))}${ibox(!ill("heartDisease"))}</tr>
+      <tr><td>iii.&nbsp;&nbsp;Asthma</td>${ibox(ill("asthma"))}${ibox(!ill("asthma"))}<td class="igap"></td><td>viii.&nbsp;&nbsp;Malaria</td>${ibox(ill("malaria"))}${ibox(!ill("malaria"))}</tr>
+      <tr><td>iv.&nbsp;&nbsp;Diabetes</td>${ibox(ill("diabetes"))}${ibox(!ill("diabetes"))}<td class="igap"></td><td>ix.&nbsp;&nbsp;Operations</td>${ibox(ill("operations"))}${ibox(!ill("operations"))}</tr>
+      <tr><td>v.&nbsp;&nbsp;Hypertension</td>${ibox(ill("hypertension"))}${ibox(!ill("hypertension"))}<td class="igap"></td><td colspan="3">x.&nbsp;&nbsp;Others:&nbsp;<span class="fv-sm" style="min-width:90px;">${esc(String(introduction.otherIllnesses ?? ""))}&nbsp;</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="field-row"><span class="fn">16.</span><span class="fl">Physical disabilities:</span><span class="fv">${esc(String(introduction.physicalDisabilities ?? ""))}&nbsp;</span></div>
+  <div class="field-row"><span class="fn">17.</span><span class="fl">Dietary restrictions:</span><span class="fv">${esc(String(introduction.dietaryRestrictions ?? ""))}&nbsp;</span></div>
+  <div class="field-row" style="align-items:center;flex-wrap:wrap;gap:4px;">
+    <span class="fn">18.</span>
+    <span class="fl-auto">Food handling preferences:&nbsp;</span>
+    ${cb(String(introduction.foodHandlingPreferences ?? "").toLowerCase().includes("pork"))}&nbsp;No pork&nbsp;&nbsp;
+    ${cb(String(introduction.foodHandlingPreferences ?? "").toLowerCase().includes("beef"))}&nbsp;No beef&nbsp;&nbsp;
+    Others:&nbsp;<span class="fv-sm" style="min-width:110px;">${esc(String(introduction.foodHandlingPreferences ?? ""))}&nbsp;</span>
   </div>
+
 </div>
 
-<!-- ── A2 Medical ── -->
-<div class="sub-label" style="margin-top:12px;">A2 Medical History/Dietary Restrictions</div>
-<div class="field-row"><span class="field-num">14.</span><span class="field-label">Allergies (if any):</span><span class="field-value">${esc(String(introduction.allergies ?? ""))}</span></div>
-<div class="field-row" style="margin-bottom:4px;"><span class="field-num">15.</span><span>Past and existing illnesses (including chronic ailments and illnesses requiring medication):</span></div>
 
-<table class="illness">
-  <thead>
-    <tr>
-      <td class="ill-label"></td>
-      <td class="ill-box-header">Yes</td>
-      <td class="ill-box-header">No</td>
-      <td class="ill-spacer"></td>
-      <td class="ill-label"></td>
-      <td class="ill-box-header">Yes</td>
-      <td class="ill-box-header">No</td>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td class="ill-label">i.&nbsp; Mental illness</td>
-      <td class="ill-box">${pastIllnesses["mentalIllness"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["mentalIllness"] ? "&#10003;" : ""}</td>
-      <td class="ill-spacer"></td>
-      <td class="ill-label">vi.&nbsp; Tuberculosis</td>
-      <td class="ill-box">${pastIllnesses["tuberculosis"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["tuberculosis"] ? "&#10003;" : ""}</td>
-    </tr>
-    <tr>
-      <td class="ill-label">ii.&nbsp; Epilepsy</td>
-      <td class="ill-box">${pastIllnesses["epilepsy"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["epilepsy"] ? "&#10003;" : ""}</td>
-      <td class="ill-spacer"></td>
-      <td class="ill-label">vii.&nbsp; Heart disease</td>
-      <td class="ill-box">${pastIllnesses["heartDisease"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["heartDisease"] ? "&#10003;" : ""}</td>
-    </tr>
-    <tr>
-      <td class="ill-label">iii.&nbsp; Asthma</td>
-      <td class="ill-box">${pastIllnesses["asthma"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["asthma"] ? "&#10003;" : ""}</td>
-      <td class="ill-spacer"></td>
-      <td class="ill-label">viii.&nbsp; Malaria</td>
-      <td class="ill-box">${pastIllnesses["malaria"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["malaria"] ? "&#10003;" : ""}</td>
-    </tr>
-    <tr>
-      <td class="ill-label">iv.&nbsp; Diabetes</td>
-      <td class="ill-box">${pastIllnesses["diabetes"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["diabetes"] ? "&#10003;" : ""}</td>
-      <td class="ill-spacer"></td>
-      <td class="ill-label">ix.&nbsp; Operations</td>
-      <td class="ill-box">${pastIllnesses["operations"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["operations"] ? "&#10003;" : ""}</td>
-    </tr>
-    <tr>
-      <td class="ill-label">v.&nbsp; Hypertension</td>
-      <td class="ill-box">${pastIllnesses["hypertension"] ? "&#10003;" : ""}</td>
-      <td class="ill-box">${!pastIllnesses["hypertension"] ? "&#10003;" : ""}</td>
-      <td class="ill-spacer"></td>
-      <td class="ill-label" colspan="3">x.&nbsp; Others:&nbsp;<span style="border-bottom:1px solid #555;display:inline-block;width:110px;">${esc(String(introduction.otherIllnesses ?? ""))}</span></td>
-    </tr>
-  </tbody>
-</table>
+<!-- ═══════════════════ PAGE A-2 ═══════════════════ -->
+<div class="page-separator" data-page="A-2"></div>
+${HDR}
+<div class="page">
+  <div class="page-ref">A-2</div>
 
-<div class="field-row"><span class="field-num">16.</span><span class="field-label">Physical disabilities:</span><span class="field-value">${esc(String(introduction.physicalDisabilities ?? ""))}</span></div>
-<div class="field-row"><span class="field-num">17.</span><span class="field-label">Dietary restrictions:</span><span class="field-value">${esc(String(introduction.dietaryRestrictions ?? ""))}</span></div>
-<div class="field-row" style="align-items:center;">
-  <span class="field-num">18.</span>
-  <span class="field-label">Food handling preferences:</span>
-  <span class="cb">${String(introduction.foodHandlingPreferences ?? "").toLowerCase().includes("pork") ? "&#10003;" : ""}</span>&nbsp;No pork&nbsp;&nbsp;
-  <span class="cb">${String(introduction.foodHandlingPreferences ?? "").toLowerCase().includes("beef") ? "&#10003;" : ""}</span>&nbsp;No beef&nbsp;&nbsp;
-  Others:&nbsp;<span class="field-value">${esc(String(introduction.foodHandlingPreferences ?? ""))}</span>
-</div>
+  <div class="sub-label">A3 Others</div>
+  <div class="field-row">
+    <span class="fn">19.</span>
+    <span>Preference for rest day:&nbsp;<span class="fv-sm" style="min-width:36px;text-align:center;">${esc(String(skillsPref.offDaysPerMonth ?? ""))}&nbsp;</span>&nbsp;rest day(s) per month.</span>
+  </div>
+  <div class="field-row"><span class="fn">20.</span><span class="fl">Any other remarks:</span><span class="fv">${esc(String(skillsPref.availabilityRemark ?? ""))}&nbsp;</span></div>
 
-<!-- ── A3 Others ── -->
-<div class="sub-label" style="margin-top:10px;">A3 Others</div>
-<div class="field-row">
-  <span class="field-num">19.</span>
-  <span>Preference for rest day:&nbsp;<span style="border-bottom:1px solid #555;display:inline-block;min-width:40px;text-align:center;">${esc(String(skillsPref.offDaysPerMonth ?? ""))}</span>&nbsp;rest day(s) per month.</span>
-</div>
-<div class="field-row"><span class="field-num">20.</span><span class="field-label">Any other remarks:</span><span class="field-value">${esc(String(skillsPref.availabilityRemark ?? ""))}</span></div>
+  <div class="sec-label" style="margin-top:8px;">(B) SKILLS OF FDW</div>
+  <div class="sub-label">B1 Method of Evaluation of Skills</div>
+  <p style="font-size:8.5pt;margin-bottom:4px;">Please indicate the method(s) used to evaluate the FDW's skills (can tick more than one):</p>
+  <div class="checkbox-row">${cb(false)}&nbsp;Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA</div>
+  <div class="checkbox-row">${cb(true)}&nbsp;<span>Interviewed by <u>Singapore EA</u></span></div>
+  <div class="indent">
+    <div class="checkbox-row">${cb(hasOpt("phone") || hasOpt("telephone"))}&nbsp;Interviewed via telephone/teleconference</div>
+    <div class="checkbox-row">${cb(hasOpt("video"))}&nbsp;Interviewed via videoconference</div>
+    <div class="checkbox-row">${cb(hasOpt("person"))}&nbsp;Interviewed in person</div>
+    <div class="checkbox-row">${cb(false)}&nbsp;Interviewed in person and also made observation of FDW in the areas of work listed in table</div>
+  </div>
 
-<!-- ═══ PAGE BREAK → A-2 ═══ -->
-<div class="page-break">A-2</div>
-
-<!-- ═══ (B) SKILLS ═══ -->
-<div class="sec-label">(B) SKILLS OF FDW</div>
-<div class="sub-label">B1 Method of Evaluation of Skills</div>
-<p style="font-size:10pt;margin-bottom:6px;">Please indicate the method(s) used to evaluate the FDW's skills (can tick more than one):</p>
-<div class="checkbox-row"><span class="cb">&#10003;</span>&nbsp;Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA</div>
-<div class="checkbox-row"><span class="cb">&#10003;</span>&nbsp;Interviewed by Singapore EA</div>
-<div style="padding-left:22px;">
-  <div class="checkbox-row"><span class="cb">&#10003;</span>&nbsp;Interviewed via telephone/teleconference</div>
-  <div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;Interviewed via videoconference</div>
-  <div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;Interviewed in person</div>
-  <div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;Interviewed in person and also made observation of FDW in the areas of work listed in table</div>
-</div>
-
-<table class="skills" style="margin-top:8px;">
-  <thead>
-    <tr>
+  <table class="skills" style="margin-top:5px;">
+    <thead><tr>
       <th class="sn">S/No</th>
-      <th>Areas of Work</th>
-      <th class="center">Willingness<br/>Yes/No</th>
-      <th class="center">Experience<br/>Yes/No<br/><span style="font-weight:normal;font-size:8pt;">If yes, state<br/>the no. of years</span></th>
-      <th>Assessment/Observation<br/><span style="font-weight:normal;font-size:8pt;">Please state qualitative observations of FDW and/or rate the FDW<br/>(indicate N.A. if no evaluation was done) Poor……Excellent…N.A &nbsp;1 2 3 4 5 N.A</span></th>
-    </tr>
-  </thead>
-  <tbody>${workAreaRows}</tbody>
-</table>
+      <th class="area-col">Areas of Work</th>
+      <th class="tctr">Willingness<br/>Yes/No</th>
+      <th class="tctr">Experience<br/>Yes/No<br/><span style="font-weight:normal;font-size:7pt;">If yes, state<br/>the no. of years</span></th>
+      <th class="assess-col">Assessment/Observation<br/><span style="font-weight:normal;font-size:7pt;">Please state qualitative observations of FDW and/or rate the FDW (indicate N.A. if no evaluation was done)&nbsp; Poor…Excellent…N.A &nbsp; 1 2 3 4 5 N.A</span></th>
+    </tr></thead>
+    <tbody>${skillRows}</tbody>
+  </table>
 
-<!-- ═══ PAGE BREAK → A-3 ═══ -->
-<div class="page-break">A-3</div>
-
-<!-- ═══ (C) EMPLOYMENT ═══ -->
-<div class="sec-label">(C) EMPLOYMENT HISTORY OF THE FDW</div>
-<div class="sub-label">C1 Employment History Overseas</div>
-
-<table class="emp">
-  <thead>
-    <tr>
-      <th colspan="2">Date</th>
-      <th>Country<br/>(including FDW's home country)</th>
-      <th>Employer</th>
-      <th>Work Duties</th>
-      <th>Remarks</th>
-    </tr>
-    <tr>
-      <th style="width:50px;">From</th>
-      <th style="width:50px;">To</th>
-      <th></th><th></th><th></th><th></th>
-    </tr>
-  </thead>
-  <tbody>${empRows}</tbody>
-</table>
-
-<div class="sub-label" style="margin-top:10px;">C2 Employment History in Singapore</div>
-<div class="field-row">
-  <span>Previous working experience in Singapore&nbsp;&nbsp;</span>
-  <span class="cb">&#10003;</span>&nbsp;Yes&nbsp;&nbsp;&nbsp;
-  <span class="cb">&nbsp;</span>&nbsp;No
 </div>
-<p style="font-size:8.5pt;margin:4px 0 10px;">(The EA is required to obtain the FDW's employment history from MOM and furnish the employer with the employment history of the FDW. The employer may also verify the FDW's employment history in Singapore through WPOL using SingPass)</p>
 
-<div class="sub-label">C3 Feedback from previous employers in Singapore</div>
-<p style="font-size:10pt;margin-bottom:4px;">Feedback was/was not obtained by the EA from the previous employers. If feedback was obtained (attach testimonial if possible), please indicate the feedback in the table below:</p>
-<table class="emp">
-  <thead><tr><th style="width:90px;">&nbsp;</th><th>Feedback</th></tr></thead>
-  <tbody>
-    <tr><td style="padding:4px 6px;">Employer 1</td><td style="min-height:36px;">&nbsp;</td></tr>
-    <tr><td style="padding:4px 6px;">Employer 2</td><td style="min-height:36px;">&nbsp;</td></tr>
-  </tbody>
-</table>
 
-<div class="sec-label" style="margin-top:10px;">(D) AVAILABILITY OF FDW TO BE INTERVIEWED BY PROSPECTIVE EMPLOYER</div>
-<div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;FDW is not available for interview</div>
-<div class="checkbox-row"><span class="cb">&#10003;</span>&nbsp;FDW can be interviewed by phone</div>
-<div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;FDW can be interviewed by video-conference</div>
-<div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;FDW can be interviewed in person</div>
+<!-- ═══════════════════ PAGE A-3 ═══════════════════ -->
+<div class="page-separator" data-page="A-3"></div>
+${HDR}
+<div class="page">
+  <div class="page-ref">A-3</div>
 
-<!-- ═══ PAGE BREAK → A-4 ═══ -->
-<div class="page-break">A-4</div>
+  <div class="sec-label">(C) EMPLOYMENT HISTORY OF THE FDW</div>
+  <div class="sub-label">C1 Employment History Overseas</div>
 
-<!-- ═══ (E) OTHER REMARKS ═══ -->
-<div class="sec-label">(E) OTHER REMARKS</div>
-<div class="remarks-box">${esc(remarksText)}</div>
+  <table class="emp">
+    <thead>
+      <tr>
+        <th colspan="2">Date</th>
+        <th style="width:15%;">Country<br/>(including FDW's home country)</th>
+        <th style="width:17%;">Employer</th>
+        <th style="width:30%;">Work Duties</th>
+        <th style="width:14%;">Remarks</th>
+      </tr>
+      <tr><th class="emp-date">From</th><th class="emp-date">To</th><th></th><th></th><th></th><th></th></tr>
+    </thead>
+    <tbody>${empRows}</tbody>
+  </table>
 
-<!-- ── Signatures ── -->
-<div class="sig-grid">
-  <div>
-    <div class="sig-line">${esc(maid.fullName)}<br/>FDW Name and Signature</div>
-    <div style="margin-top:8px;font-size:9pt;">Date:</div>
+  <div class="sub-label" style="margin-top:8px;">C2 Employment History in Singapore</div>
+  <div class="field-row" style="gap:8px;">
+    <span>Previous working experience in Singapore&nbsp;</span>
+    ${cb(true)}&nbsp;Yes&nbsp;&nbsp;${cb(false)}&nbsp;No
   </div>
-  <div>
-    <div class="sig-line">${esc(String(agencyContact.contactPerson ?? ""))}<br/>EA Personnel Name and Registration Number</div>
-    <div style="margin-top:8px;font-size:9pt;">Date:</div>
-  </div>
+  <p style="font-size:7.5pt;margin:3px 0 7px;line-height:1.45;">(The EA is required to obtain the FDW's employment history from MOM and furnish the employer with the employment history of the FDW. The employer may also verify the FDW's employment history in Singapore through WPOL using SingPass)</p>
+
+  <div class="sub-label">C3 Feedback from previous employers in Singapore</div>
+  <p style="font-size:8.5pt;margin-bottom:4px;">Feedback was/was not obtained by the EA from the previous employers. If feedback was obtained (attach testimonial if possible), please indicate the feedback in the table below:</p>
+  <table class="emp">
+    <thead><tr><th style="width:88px;"></th><th>Feedback</th></tr></thead>
+    <tbody>
+      <tr><td style="padding:4px 5px;">Employer 1</td><td>&nbsp;</td></tr>
+      <tr><td style="padding:4px 5px;">Employer 2</td><td>&nbsp;</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sec-label" style="margin-top:8px;">(D) AVAILABILITY OF FDW TO BE INTERVIEWED BY PROSPECTIVE EMPLOYER</div>
+  <div class="checkbox-row">${cb(false)}&nbsp;FDW is not available for interview</div>
+  <div class="checkbox-row">${cb(hasOpt("phone") || hasOpt("telephone"))}&nbsp;FDW can be interviewed by phone</div>
+  <div class="checkbox-row">${cb(hasOpt("video"))}&nbsp;FDW can be interviewed by video-conference</div>
+  <div class="checkbox-row">${cb(hasOpt("person"))}&nbsp;FDW can be interviewed in person</div>
+
 </div>
 
-<div style="margin-top:20px;font-size:10pt;">I have gone through the page biodata of this FDW and confirm that I would like to employ her</div>
-<div style="margin-top:32px;">
-  <div class="sig-line">&nbsp;<br/>Employer Name and NRIC No.</div>
-  <div style="margin-top:8px;font-size:9pt;">Date:</div>
+
+<!-- ═══════════════════ PAGE A-4 ═══════════════════ -->
+<div class="page-separator" data-page="A-4"></div>
+${HDR}
+<div class="page">
+  <div class="page-ref">A-4</div>
+  ${pageA4body}
 </div>
-
-<div style="text-align:center;margin:16px 0;font-size:10pt;">***************</div>
-
-<div class="foot-title">IMPORTANT NOTES FOR EMPLOYERS WHEN USING THE SERVICES OF AN EA</div>
-<div class="foot-item"><span class="foot-bullet">&#9632;</span><span>Do consider asking for an FDW who is able to communicate in a language you require, and interview her (in person/phone/videoconference) to ensure that she can communicate adequately.</span></div>
-<div class="foot-item"><span class="foot-bullet">&#9632;</span><span>Do consider requesting for an FDW who has a proven ability to perform the chores you require, for example, performing household chores (especially if she is required to hang laundry from a high-rise unit), cooking and caring for young children or the elderly.</span></div>
-<div class="foot-item"><span class="foot-bullet">&#9632;</span><span>Do work together with the EA to ensure that a suitable FDW is matched to you according to your needs and requirements.</span></div>
-<div class="foot-item"><span class="foot-bullet">&#9632;</span><span>You may wish to pay special attention to your prospective FDW's employment history and feedback from the FDW's previous employer(s) before employing her.</span></div>
 
 </body>
 </html>`;
@@ -739,37 +661,29 @@ export const exportMaidProfileToExcel = (maid: MaidProfile) => {
   downloadBlob(`${maid.referenceCode || maid.fullName}-bio-data.xls`, blob);
 };
 
-// ── A4 dimensions ───────────────────────────────────────────────────────────
+// ── A4 dimensions ─────────────────────────────────────────────────────────
 const A4_W_MM = 210;
 const A4_H_MM = 297;
-const A4_W_PX = 794; // ~96 dpi A4 width
+const A4_W_PX = 794;
 
-// ── Render the MOM HTML biodata into a hidden iframe, capture with html2canvas,
-//    then slice into A4 pages using .page-break element positions as boundaries.
+// ── Canvas → jsPDF  ───────────────────────────────────────────────────────
+// Slices the full rendered body at each .page-separator's offsetTop.
+// Separators are ZERO HEIGHT → no visual white gaps between page content.
+// Slice logic: content BEFORE first separator = page 1, BETWEEN separators = subsequent pages.
 const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> => {
   try {
     const [html2canvas, JsPDF] = await Promise.all([loadHtml2Canvas(), loadJsPdf()]);
-
     const html = buildMomBiodataHtml(maid);
 
     const iframe = document.createElement("iframe");
     iframe.style.cssText = [
-      "position:fixed",
-      "top:0",
-      "left:0",
-      `width:${A4_W_PX}px`,
-      "height:1px",
-      "border:none",
-      "opacity:0",
-      "pointer-events:none",
-      "z-index:-1",
+      "position:fixed", "top:0", "left:0",
+      `width:${A4_W_PX}px`, "height:1px",
+      "border:none", "opacity:0", "pointer-events:none", "z-index:-1",
     ].join(";");
     document.body.appendChild(iframe);
 
-    await new Promise<void>((resolve) => {
-      iframe.onload = () => resolve();
-      iframe.srcdoc = html;
-    });
+    await new Promise<void>((resolve) => { iframe.onload = () => resolve(); iframe.srcdoc = html; });
 
     const iframeDoc = iframe.contentDocument;
     if (!iframeDoc) { document.body.removeChild(iframe); return false; }
@@ -777,61 +691,38 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
     const body = iframeDoc.body;
     iframe.style.height = `${body.scrollHeight + 200}px`;
 
-    // Wait for all images (logo + profile photo) to fully load
-    const images = Array.from(iframeDoc.images);
-    await Promise.all(
-      images.map(
-        (img) => new Promise<void>((res) => {
-          if (img.complete) { res(); return; }
-          img.onload = () => res();
-          img.onerror = () => res();
-        })
-      )
-    );
+    await Promise.all(Array.from(iframeDoc.images).map(img =>
+      new Promise<void>(res => { if (img.complete) { res(); return; } img.onload = () => res(); img.onerror = () => res(); })
+    ));
 
-    // Allow fonts + layout to fully settle
-    await new Promise<void>((r) => setTimeout(r, 400));
-
-    // Re-measure height after images load (they may have changed layout)
+    await new Promise<void>(r => setTimeout(r, 400));
     iframe.style.height = `${body.scrollHeight + 200}px`;
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    await new Promise<void>(r => requestAnimationFrame(() => r()));
 
-    // ── Find .page-break elements to determine per-page slice boundaries ──
-    const pageBreakEls = Array.from(
-      iframeDoc.querySelectorAll<HTMLElement>(".page-break")
-    );
-
+    // Collect zero-height separator positions to define page boundaries
+    const separators = Array.from(iframeDoc.querySelectorAll<HTMLElement>(".page-separator"));
     const totalH = body.scrollHeight;
+
+    // Build boundaries array: [0, sep0.top, sep1.top, …, totalH]
+    // Each page = [boundaries[i] … boundaries[i+1]]
+    const bounds: number[] = [0, ...separators.map(el => el.offsetTop), totalH];
     const sections: Array<{ top: number; bottom: number }> = [];
-
-    pageBreakEls.forEach((el, idx) => {
-      const top = el.offsetTop;
-      const nextEl = pageBreakEls[idx + 1];
-      const bottom = nextEl ? nextEl.offsetTop : totalH;
-      sections.push({ top, bottom });
-    });
-
-    // Fallback: treat entire body as one page if no markers found
-    if (sections.length === 0) {
-      sections.push({ top: 0, bottom: totalH });
+    for (let i = 0; i < bounds.length - 1; i++) {
+      const top = bounds[i];
+      const bottom = bounds[i + 1];
+      if (bottom > top) sections.push({ top, bottom });
     }
+    if (sections.length === 0) sections.push({ top: 0, bottom: totalH });
 
-    // Capture the full body canvas at 2× scale
     const canvas = await html2canvas(body, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: "#ffffff",
-      logging: false,
-      width: A4_W_PX,
-      windowWidth: A4_W_PX,
+      scale: 2, useCORS: true, allowTaint: false,
+      backgroundColor: "#ffffff", logging: false,
+      width: A4_W_PX, windowWidth: A4_W_PX,
     });
 
     document.body.removeChild(iframe);
 
     const pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-    // Logical px → mm ratio (canvas is 2× so divide canvas.width by 2)
     const pxPerMm = (canvas.width / 2) / A4_W_MM;
 
     sections.forEach((section, idx) => {
@@ -839,30 +730,22 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
 
       const srcY  = section.top;
       const srcH  = section.bottom - section.top;
-      const clampedSrcH = Math.min(srcH, (canvas.height / 2) - srcY);
-      if (clampedSrcH <= 0) return;
+      const clampH = Math.min(srcH, (canvas.height / 2) - srcY);
+      if (clampH <= 0) return;
 
-      // Slice this page's rows out of the full 2× canvas
-      const sliceCanvas = document.createElement("canvas");
-      sliceCanvas.width  = canvas.width;
-      sliceCanvas.height = Math.round(clampedSrcH * 2);
-
-      const ctx = sliceCanvas.getContext("2d");
+      const sc = document.createElement("canvas");
+      sc.width  = canvas.width;
+      sc.height = Math.round(clampH * 2);
+      const ctx = sc.getContext("2d");
       if (ctx) {
         ctx.drawImage(
           canvas,
-          0, Math.round(srcY * 2),
-          canvas.width, Math.round(clampedSrcH * 2),
-          0, 0,
-          sliceCanvas.width, sliceCanvas.height,
+          0, Math.round(srcY * 2), canvas.width, Math.round(clampH * 2),
+          0, 0, sc.width, sc.height,
         );
       }
 
-      const sliceData = sliceCanvas.toDataURL("image/jpeg", 0.95);
-
-      // Scale content to fit A4 width; cap height at A4 page height
-      const destH = Math.min((clampedSrcH / pxPerMm), A4_H_MM);
-      pdf.addImage(sliceData, "JPEG", 0, 0, A4_W_MM, destH);
+      pdf.addImage(sc.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, A4_W_MM, Math.min(clampH / pxPerMm, A4_H_MM));
     });
 
     pdf.setProperties({
@@ -879,11 +762,10 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
 };
 
 export const exportMaidProfileToPdf = async (maid: MaidProfile) => {
-  // Primary: render the MOM HTML biodata via canvas → jsPDF (same layout as print)
   const canvasOk = await exportMaidProfileViaCanvas(maid);
   if (canvasOk) return;
 
-  // Fallback: pdf-lib text export + HTML print window (original behaviour)
+  // Fallback: pdf-lib text + print window
   const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${maid.fullName || maid.referenceCode} Bio-data`);
@@ -891,161 +773,69 @@ export const exportMaidProfileToPdf = async (maid: MaidProfile) => {
   pdf.setCreator("Helped Maid Portal");
   pdf.setProducer("Helped Maid Portal");
 
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const font     = await pdf.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
   const pageSize: [number, number] = [595.28, 841.89];
-  const margin = 42;
-  const lineHeight = 15;
-  const maxWidth = pageSize[0] - margin * 2;
+  const margin = 42, lineHeight = 15, maxWidth = pageSize[0] - margin * 2;
   let page = pdf.addPage(pageSize);
   let y = pageSize[1] - margin;
-
-  const newPage = () => {
-    page = pdf.addPage(pageSize);
-    y = pageSize[1] - margin;
-  };
+  const newPage = () => { page = pdf.addPage(pageSize); y = pageSize[1] - margin; };
 
   const drawWrapped = (text: string, size = 10, bold = false, color = rgb(0.12, 0.14, 0.18)) => {
-    const activeFont = bold ? boldFont : font;
+    const af = bold ? boldFont : font;
     const words = normalizeText(text).split(" ").filter(Boolean);
     let line = "";
-
-    const commit = (value: string) => {
-      if (y < margin + lineHeight) newPage();
-      page.drawText(value, { x: margin, y, size, font: activeFont, color });
-      y -= lineHeight;
-    };
-
-    if (words.length === 0) {
-      commit("-");
-      return;
-    }
-
-    words.forEach((word) => {
-      const next = line ? `${line} ${word}` : word;
-      if (activeFont.widthOfTextAtSize(next, size) <= maxWidth) {
-        line = next;
-        return;
-      }
-      if (line) commit(line);
-      line = word;
-    });
-
+    const commit = (v: string) => { if (y < margin + lineHeight) newPage(); page.drawText(v, { x: margin, y, size, font: af, color }); y -= lineHeight; };
+    if (!words.length) { commit("-"); return; }
+    words.forEach(w => { const next = line ? `${line} ${w}` : w; if (af.widthOfTextAtSize(next, size) <= maxWidth) { line = next; return; } if (line) commit(line); line = w; });
     if (line) commit(line);
   };
 
-  page.drawText("Maid Bio-data", {
-    x: margin,
-    y,
-    size: 20,
-    font: boldFont,
-    color: rgb(0.07, 0.38, 0.3),
-  });
+  page.drawText("Maid Bio-data", { x: margin, y, size: 20, font: boldFont, color: rgb(0.07, 0.38, 0.3) });
   y -= 28;
-  page.drawText(`Generated ${new Date().toLocaleDateString("en-SG")}`, {
-    x: margin,
-    y,
-    size: 9,
-    font,
-    color: rgb(0.4, 0.44, 0.5),
-  });
+  page.drawText(`Generated ${new Date().toLocaleDateString("en-SG")}`, { x: margin, y, size: 9, font, color: rgb(0.4, 0.44, 0.5) });
   y -= 22;
 
   const primaryPhoto = getPrimaryPhoto(maid);
   if (primaryPhoto) {
     try {
       const { bytes, mimeType } = dataUrlToBytes(primaryPhoto);
-      const image = mimeType.includes("png")
-        ? await pdf.embedPng(bytes)
-        : await pdf.embedJpg(bytes);
+      const image = mimeType.includes("png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
       const scaled = image.scale(0.28);
-      page.drawImage(image, {
-        x: pageSize[0] - margin - scaled.width,
-        y: pageSize[1] - margin - scaled.height,
-        width: scaled.width,
-        height: scaled.height,
-      });
-    } catch {
-      // Ignore photo embedding failures and continue with text export.
-    }
+      page.drawImage(image, { x: pageSize[0] - margin - scaled.width, y: pageSize[1] - margin - scaled.height, width: scaled.width, height: scaled.height });
+    } catch { /* ignore */ }
   }
 
-  getSectionRows(maid).forEach((section) => {
+  getSectionRows(maid).forEach(section => {
     if (y < margin + 80) newPage();
-    page.drawText(section.title, {
-      x: margin,
-      y,
-      size: 13,
-      font: boldFont,
-      color: rgb(0.07, 0.38, 0.3),
-    });
+    page.drawText(section.title, { x: margin, y, size: 13, font: boldFont, color: rgb(0.07, 0.38, 0.3) });
     y -= 18;
-
-    section.rows.forEach(([label, value]) => {
-      drawWrapped(`${label}: ${normalizeText(value) || "N/A"}`, 10, false);
-    });
-
+    section.rows.forEach(([label, value]) => drawWrapped(`${label}: ${normalizeText(value) || "N/A"}`, 10));
     y -= 8;
   });
 
   const bytes = await pdf.save({ useObjectStreams: false });
   downloadBytes(`${maid.referenceCode || maid.fullName}-bio-data.pdf`, bytes, "application/pdf");
 
-  // Also open the fully-styled HTML layout in a print window
-  const html = buildMomBiodataHtml(maid);
-  const printStyle = `
-    <style>
-      @page { size: A4; margin: 10mm 12mm; }
-      @media print {
-        body { padding: 0 !important; }
-        .page-break {
-          page-break-before: always;
-          break-before: page;
-          padding-top: 0;
-        }
-        .page-break:first-of-type {
-          page-break-before: avoid;
-          break-before: avoid;
-        }
-      }
-    </style>
-  `;
-  const htmlWithPrint = html.replace("</head>", `${printStyle}</head>`);
+  const htmlForPrint = buildMomBiodataHtml(maid);
+  const printStyle = `<style>@page{size:A4;margin:0}@media print{.page-separator{page-break-before:always;break-before:page}}</style>`;
+  const htmlWithPrint = htmlForPrint.replace("</head>", `${printStyle}</head>`);
 
   const printIframe = document.createElement("iframe");
-  printIframe.style.cssText =
-    "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:99999;opacity:0;pointer-events:none;";
+  printIframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:99999;opacity:0;pointer-events:none;";
   document.body.appendChild(printIframe);
-
   const cleanup = () => setTimeout(() => { if (printIframe.parentNode) document.body.removeChild(printIframe); }, 3000);
 
   printIframe.onload = () => {
     try {
-      const iframeDoc = printIframe.contentDocument || printIframe.contentWindow?.document;
-      if (!iframeDoc) { cleanup(); return; }
-      iframeDoc.open();
-      iframeDoc.write(htmlWithPrint);
-      iframeDoc.close();
-
-      const iframeImages = Array.from(iframeDoc.images);
-      Promise.all(
-        iframeImages.map(
-          (img) => new Promise<void>((res) => {
-            if (img.complete) { res(); return; }
-            img.onload = () => res();
-            img.onerror = () => res();
-          })
-        )
-      ).then(() => {
-        printIframe.contentWindow?.focus();
-        printIframe.contentWindow?.print();
-        cleanup();
-      });
-    } catch {
-      cleanup();
-    }
+      const d = printIframe.contentDocument || printIframe.contentWindow?.document;
+      if (!d) { cleanup(); return; }
+      d.open(); d.write(htmlWithPrint); d.close();
+      Promise.all(Array.from(d.images).map(img =>
+        new Promise<void>(res => { if (img.complete) { res(); return; } img.onload = () => res(); img.onerror = () => res(); })
+      )).then(() => { printIframe.contentWindow?.focus(); printIframe.contentWindow?.print(); cleanup(); });
+    } catch { cleanup(); }
   };
-
   printIframe.src = "about:blank";
 };
 
@@ -1057,93 +847,43 @@ export const exportMaidProfilesToPdf = async (maids: MaidProfile[]) => {
   pdf.setCreator("Helped Maid Portal");
   pdf.setProducer("Helped Maid Portal");
 
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const font     = await pdf.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
   const pageSize: [number, number] = [595.28, 841.89];
-  const margin = 42;
-  const rowHeight = 18;
+  const margin = 42, rowHeight = 18;
   const columns = [
-    { label: "Reference", width: 90 },
-    { label: "Name", width: 160 },
-    { label: "Nationality", width: 100 },
-    { label: "Type", width: 88 },
-    { label: "Status", width: 65 },
-    { label: "Public", width: 50 },
+    { label: "Reference",   width: 90 }, { label: "Name",       width: 160 },
+    { label: "Nationality", width: 100 }, { label: "Type",       width: 88 },
+    { label: "Status",      width: 65 },  { label: "Public",     width: 50 },
   ];
 
   let page = pdf.addPage(pageSize);
   let y = pageSize[1] - margin;
 
   const drawHeader = () => {
-    page.drawText("Maids PDF Export", {
-      x: margin,
-      y,
-      size: 18,
-      font: boldFont,
-      color: rgb(0.07, 0.38, 0.3),
-    });
-    y -= 22;
-    page.drawText(`Total records: ${maids.length}`, {
-      x: margin,
-      y,
-      size: 9,
-      font,
-      color: rgb(0.4, 0.44, 0.5),
-    });
-    y -= 18;
-
+    page.drawText("Maids PDF Export", { x: margin, y, size: 18, font: boldFont, color: rgb(0.07, 0.38, 0.3) }); y -= 22;
+    page.drawText(`Total records: ${maids.length}`, { x: margin, y, size: 9, font, color: rgb(0.4, 0.44, 0.5) }); y -= 18;
     let x = margin;
-    columns.forEach((column) => {
-      page.drawText(column.label, {
-        x,
-        y,
-        size: 9,
-        font: boldFont,
-        color: rgb(0.12, 0.14, 0.18),
-      });
-      x += column.width;
-    });
+    columns.forEach(col => { page.drawText(col.label, { x, y, size: 9, font: boldFont, color: rgb(0.12, 0.14, 0.18) }); x += col.width; });
     y -= 12;
   };
-
-  const newPage = () => {
-    page = pdf.addPage(pageSize);
-    y = pageSize[1] - margin;
-    drawHeader();
-  };
+  const newPage2 = () => { page = pdf.addPage(pageSize); y = pageSize[1] - margin; drawHeader(); };
 
   const fit = (value: string, width: number) => {
     const text = normalizeText(value);
     if (font.widthOfTextAtSize(text, 8) <= width) return text;
-    let trimmed = text;
-    while (trimmed.length > 1 && font.widthOfTextAtSize(`${trimmed}...`, 8) > width) {
-      trimmed = trimmed.slice(0, -1);
-    }
-    return `${trimmed}...`;
+    let t = text;
+    while (t.length > 1 && font.widthOfTextAtSize(`${t}...`, 8) > width) t = t.slice(0, -1);
+    return `${t}...`;
   };
 
   drawHeader();
-
-  maids.forEach((maid) => {
-    if (y < margin + rowHeight) newPage();
+  maids.forEach(maid => {
+    if (y < margin + rowHeight) newPage2();
     let x = margin;
-    const values = [
-      maid.referenceCode,
-      maid.fullName,
-      maid.nationality,
-      maid.type,
-      maid.status || "available",
-      maid.isPublic ? "Yes" : "No",
-    ];
-    values.forEach((value, index) => {
-      page.drawText(fit(String(value ?? ""), columns[index].width - 6), {
-        x,
-        y,
-        size: 8,
-        font,
-        color: rgb(0.12, 0.14, 0.18),
-      });
-      x += columns[index].width;
+    [maid.referenceCode, maid.fullName, maid.nationality, maid.type, maid.status || "available", maid.isPublic ? "Yes" : "No"].forEach((val, i) => {
+      page.drawText(fit(String(val ?? ""), columns[i].width - 6), { x, y, size: 8, font, color: rgb(0.12, 0.14, 0.18) });
+      x += columns[i].width;
     });
     y -= rowHeight;
   });
