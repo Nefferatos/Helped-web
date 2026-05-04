@@ -131,9 +131,10 @@ interface ExtractedData {
   religion?: string | null;
   educationLevel?: string | null;
   education?: string | null;
-  numberOfSiblings?: number | null;
-  numberOfSibling?: number | null;
-  siblingCount?: number | null;
+  // FIX A: numberOfSiblings now also accepts string (e.g. "6/7") in addition to number
+  numberOfSiblings?: number | string | null;
+  numberOfSibling?: number | string | null;
+  siblingCount?: number | string | null;
   maritalStatus?: string | null;
   numberOfChildren?: number | null;
   agesOfChildren?: string | null;
@@ -266,6 +267,42 @@ function parseGeminiJson(raw: string): ExtractedData {
   throw new Error(`Could not extract JSON from Gemini response: ${errors.join(" | ")}`);
 }
 
+// ─── FIX A: Parse siblings — supports integer, float, or "X/Y" fraction strings ──
+
+/**
+ * Resolves a siblings value to a plain integer.
+ * Handles:
+ *   - number  → returned as-is if finite integer, or Math.floor
+ *   - "6"     → 6
+ *   - "6/7"   → 6   (numerator = the FDW's own sibling rank or count among N total)
+ *   - "6 of 7"→ 6
+ *   - "3.0"   → 3
+ */
+function parseSiblingValue(value: unknown): number | null {
+  if (value == null) return null;
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Math.floor(value) : null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    // Handle "X/Y" or "X of Y" fraction formats — take the numerator (X)
+    const fractionMatch = trimmed.match(/^(\d+)\s*(?:\/|of)\s*\d+$/i);
+    if (fractionMatch) {
+      return parseInt(fractionMatch[1], 10);
+    }
+
+    // Plain number string
+    const parsed = parseFloat(trimmed);
+    if (Number.isFinite(parsed)) return Math.floor(parsed);
+  }
+
+  return null;
+}
+
 function normalizeExtractedData(input: ExtractedData): ExtractedData {
   const raw = input as ExtractedData & Record<string, unknown>;
   const toNullableString = (...values: unknown[]) => {
@@ -285,6 +322,14 @@ function normalizeExtractedData(input: ExtractedData): ExtractedData {
     return null;
   };
 
+  // FIX A: Use dedicated sibling parser that handles fraction strings
+  const resolvedSiblings = parseSiblingValue(input.numberOfSiblings)
+    ?? parseSiblingValue(input.numberOfSibling)
+    ?? parseSiblingValue(input.siblingCount)
+    ?? parseSiblingValue(raw.number_of_siblings)
+    ?? parseSiblingValue(raw.siblings)
+    ?? null;
+
   return {
     ...input,
     referenceCode: toNullableString(
@@ -302,13 +347,8 @@ function normalizeExtractedData(input: ExtractedData): ExtractedData {
       raw.education_level,
       raw.educationLevelName,
     ),
-    numberOfSiblings: toNullableNumber(
-      input.numberOfSiblings,
-      input.numberOfSibling,
-      input.siblingCount,
-      raw.number_of_siblings,
-      raw.siblings,
-    ),
+    // FIX A: always a plain integer or null
+    numberOfSiblings: resolvedSiblings,
   };
 }
 
@@ -417,6 +457,36 @@ Field rules:
 - nationality: append " maid" e.g. "Filipino maid", "Indonesian maid"
 - educationLevel: MUST be exactly one of: "Primary Level (≤6 yrs)", "Secondary Level (7–9 yrs)", "High School (10–12 yrs)", "Vocational Course", "College / Degree (≥13 yrs)"
 - maritalStatus: MUST be exactly one of: "Single", "Single Parent", "Married", "Divorced", "Widowed", "Separated"
+
+- numberOfSiblings: Extract the raw value exactly as written in the form — this may be a plain integer (e.g. 3), a decimal (e.g. 3.0), or a fraction string like "6/7" meaning the FDW is 1 of 7 siblings (return the string "6/7" exactly). Do NOT convert fractions to decimals. Return null only if the field is completely absent.
+
+- illnesses: This is a checklist of medical conditions. For EACH condition below, set true ONLY if the form explicitly marks it as checked, ticked, circled, underlined, or written "Yes" next to it. Set false if it is clearly unchecked, crossed out, or marked "No" / "None". If the entire medical history section is absent from the form, set ALL to false.
+  The nine conditions to extract are EXACTLY:
+    "(I) Mental illness"        — any psychiatric condition, depression, anxiety disorder
+    "(II) Epilepsy"             — seizure disorder, fits
+    "(III) Asthma"              — respiratory/breathing condition
+    "(IV) Diabetes"             — blood sugar condition, diabetic
+    "(V) Hypertension"          — high blood pressure
+    "(VI) Tuberculosis"         — TB, lung disease
+    "(VII) Heart disease"       — cardiac condition, heart problem
+    "(VIII) Malaria"            — mosquito-borne fever
+    "(IX) Operations"           — any past surgery, surgical procedure, operation
+  IMPORTANT: Do NOT infer or assume any illness is present unless it is explicitly stated in the form. If the form lists "Nil", "None", "No known illness", or leaves all boxes blank, set ALL nine values to false.
+
+- physicalDisabilities: Any stated physical disability, impairment, or limitation (e.g. "None", "Colour blind", "Hearing impairment"). Use null only if the field is entirely absent from the form.
+
+- allergies: Any stated allergies (e.g. "None", "Seafood allergy", "Dust allergy"). Use null only if the field is entirely absent.
+
+- dietaryRestrictions: Specific foods or ingredients the FDW does NOT eat due to religious, cultural, personal, or health reasons. Examples: "No pork", "Halal only", "Vegetarian", "No beef". Use null only if the field is entirely absent.
+
+- foodHandlingPreferences: The FDW's stated preferences or restrictions regarding PREPARING and HANDLING food for the employer's household — distinct from what she personally eats. This covers:
+    • Whether she can cook or handle pork/lard even if she does not eat it herself
+    • Whether she can cook or handle beef/non-halal meat
+    • Whether she can cook seafood she is allergic to
+    • Any other stated preference about the foods she is willing or unwilling to cook or touch
+  Examples of values: "Can handle pork but cannot eat", "Cannot handle or cook pork and lard", "Can cook all cuisines including pork", "Halal cooking only", "Can prepare non-halal food for employer".
+  Use null only if the field is entirely absent. Do NOT duplicate values already captured in dietaryRestrictions.
+
 - skills[].area: MUST be exactly one of: "Care of infants/children", "Care of elderly", "Care of disabled", "General housework", "Cooking", "Language abilities (spoken)", "Other skills, if any"
 - skills[].willing: true if the form shows Yes/Willing/checked, false if No/Unwilling. Do NOT use null if a value is present.
 - skills[].experience: true if the form shows Yes/has experience, false if No/no experience. Do NOT use null if a value is present.
@@ -705,6 +775,11 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
 
   const evaluationMethods = Array.from(evalSet);
 
+  // FIX A: numberOfSiblings is already a plain integer from normalizeExtractedData
+  const resolvedSiblings = typeof e.numberOfSiblings === "number"
+    ? e.numberOfSiblings
+    : null;
+
   return {
     ...prev,
     referenceCode:     e.referenceCode     != null ? e.referenceCode     : prev.referenceCode,
@@ -719,7 +794,8 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
     airportRepatriation: e.airportRepatriation != null ? e.airportRepatriation : prev.airportRepatriation,
     religion:          e.religion          != null ? e.religion          : prev.religion,
     educationLevel:    resolveEducationLevel(e.educationLevel),
-    numberOfSiblings:  e.numberOfSiblings  != null ? e.numberOfSiblings  : prev.numberOfSiblings,
+    // FIX A: use resolved integer (parseSiblingValue already ran in normalizeExtractedData)
+    numberOfSiblings:  resolvedSiblings    != null ? resolvedSiblings    : prev.numberOfSiblings,
     maritalStatus:     e.maritalStatus     != null ? e.maritalStatus     : prev.maritalStatus,
     numberOfChildren:  e.numberOfChildren  != null ? e.numberOfChildren  : prev.numberOfChildren,
     languageSkills: langSkills,
@@ -750,6 +826,7 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
       ...(e.allergies               != null ? { allergies: e.allergies }                             : {}),
       ...(e.physicalDisabilities    != null ? { physicalDisabilities: e.physicalDisabilities }       : {}),
       ...(e.dietaryRestrictions     != null ? { dietaryRestrictions: e.dietaryRestrictions }         : {}),
+      // FIX B: foodHandlingPreferences is now accurately extracted by the improved prompt
       ...(e.foodHandlingPreferences != null ? { foodHandlingPreferences: e.foodHandlingPreferences } : {}),
       pastIllnesses: mergedIllnesses,
       ...(e.agesOfChildren  != null ? { agesOfChildren: e.agesOfChildren }       : {}),

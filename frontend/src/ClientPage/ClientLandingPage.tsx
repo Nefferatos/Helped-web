@@ -402,13 +402,6 @@ const LockIconSvg = () => (
   </svg>
 );
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   BLURRED CANVAS — renders the maid photo onto a canvas with blur applied
-   via the Canvas 2D API. No <img src="..."> ever appears in the DOM, so the
-   original URL cannot be extracted from the Elements panel or right-clicked.
-   The image is fetched as a Blob, turned into a temporary blob: URL that is
-   revoked immediately after drawing, leaving zero traces in DevTools.
-───────────────────────────────────────────────────────────────────────────── */
 const BlurredCanvas = ({ src }: { src: string }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -801,7 +794,7 @@ const MAID_TYPES = [
   "New Maid", "Transfer Maid", "Ex-Singapore Maid", "Willing to work on off-days",
 ] as const;
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 20;
 const MAIDS_CACHE_KEY = "landing_maids_cache";
 const MAIDS_CACHE_TTL = 5 * 60 * 1000;
 
