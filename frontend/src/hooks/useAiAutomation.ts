@@ -14,7 +14,15 @@ export interface AiInquiryRecord {
   contact: string;
   message: string;
   intent: "hiring" | "inquiry" | "complaint";
-  workflow: "maid_matching" | "support_escalation" | "general_inquiry" | "lead_nurture";
+  workflow:
+    | "inquiry_match"
+    | "inquiry_only"
+    | "lead_scoring"
+    | "contract_creation"
+    | "schedule_creation"
+    | "notification_only"
+    | "validation_error"
+    | "human_review";
   reply: string;
   aiUsed: boolean;
   createdAt: string;

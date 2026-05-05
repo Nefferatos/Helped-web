@@ -1,4 +1,7 @@
-import { createWorkflowAutomationLogStore } from '../store/workflowStore'
+import {
+  createWorkflowAutomationLogStore,
+  createWorkflowDecisionLogStore,
+} from '../store/workflowStore'
 import { AutomationStatus } from '../types/workflow'
 
 const truncate = (value: unknown) => {
@@ -40,4 +43,24 @@ export const logWorkflowStep = async (payload: {
   )
 
   await createWorkflowAutomationLogStore(entry)
+}
+
+export const logWorkflowDecision = async (payload: {
+  requestId: string
+  workflow: string
+  classifierOutput: unknown
+  endpointCalled: string
+  status: AutomationStatus
+  latency: number
+  fallbackUsed: boolean
+}) => {
+  await createWorkflowDecisionLogStore({
+    requestId: payload.requestId,
+    workflow: payload.workflow,
+    classifierOutput: truncate(payload.classifierOutput),
+    endpointCalled: payload.endpointCalled,
+    status: payload.status,
+    latency: payload.latency,
+    fallbackUsed: payload.fallbackUsed,
+  })
 }

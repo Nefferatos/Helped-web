@@ -15,10 +15,12 @@ import {
   normalizeUrgency,
   normalizeWhitespace,
 } from './workflowNormalizationService'
+import { classifyFallback } from './fallbackClassifier'
 
 type AiResult<T> = {
   data: T
   aiUsed: boolean
+  fallbackProvider?: 'deterministic'
 }
 
 const jsonHeaders = {
@@ -296,21 +298,48 @@ const heuristicInquiry = (payload: {
   message: string
   name: string
 }): InquiryAutomationResult => {
-  const text = payload.message.toLowerCase()
+  const fallback = classifyFallback(payload.message)
 
-  if (/(complaint|refund|angry|issue|problem|bad service|disappointed)/.test(text)) {
+  if (fallback.workflow === 'human_review') {
     return {
       intent: 'complaint',
-      workflow: 'support_escalation',
+      workflow: 'human_review',
       reply:
-        'We are sorry to hear about the issue. Our support team has logged your complaint and will follow up shortly to resolve it.',
+        'Thanks for letting us know. We have logged your concern and a team member will follow up shortly.',
     }
   }
 
-  if (/(hire|hiring|need a maid|need helper|looking for helper|looking for maid)/.test(text)) {
+  if (fallback.workflow === 'contract_creation') {
+    return {
+      intent: 'inquiry',
+      workflow: 'contract_creation',
+      reply:
+        'Thanks for reaching out. We have logged your contract request and our team will prepare the next steps shortly.',
+    }
+  }
+
+  if (fallback.workflow === 'schedule_creation') {
+    return {
+      intent: 'inquiry',
+      workflow: 'schedule_creation',
+      reply:
+        'Thanks for reaching out. We have logged your scheduling request and our team will coordinate the appointment shortly.',
+    }
+  }
+
+  if (fallback.workflow === 'notification_only') {
+    return {
+      intent: 'inquiry',
+      workflow: 'notification_only',
+      reply:
+        'Thanks for reaching out. We have logged your notification request and our team will process it shortly.',
+    }
+  }
+
+  if (fallback.workflow === 'inquiry_match') {
     return {
       intent: 'hiring',
-      workflow: 'maid_matching',
+      workflow: 'inquiry_match',
       reply:
         'Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.',
     }
@@ -318,7 +347,7 @@ const heuristicInquiry = (payload: {
 
   return {
     intent: 'inquiry',
-    workflow: 'general_inquiry',
+    workflow: 'inquiry_only',
     reply:
       'Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.',
   }
@@ -404,12 +433,19 @@ export const classifyInquiryWithAi = async (payload: {
 }): Promise<AiResult<InquiryAutomationResult>> => {
   const fallback = heuristicInquiry(payload)
   const aiResponse = await runWorkflowAiJson<InquiryAutomationResult>(
-    'Classify the inquiry as hiring, inquiry, or complaint. Return JSON with intent, workflow, and reply.',
+    'Classify the inquiry as hiring, inquiry, or complaint. Return JSON with intent, workflow, and reply. Workflow must be one of inquiry_match, inquiry_only, contract_creation, schedule_creation, notification_only, validation_error, or human_review.',
     JSON.stringify(payload)
   )
 
   if (!aiResponse) {
-    return { data: fallback, aiUsed: false }
+    console.warn(
+      `[workflowAiService] fallbackProvider: "deterministic" workflow: "${classifyFallback(payload.message).workflow}"`
+    )
+    return {
+      data: fallback,
+      aiUsed: false,
+      fallbackProvider: 'deterministic',
+    }
   }
 
   return {
@@ -422,10 +458,13 @@ export const classifyInquiryWithAi = async (payload: {
           ? aiResponse.intent
           : fallback.intent,
       workflow:
-        aiResponse.workflow === 'maid_matching' ||
-        aiResponse.workflow === 'support_escalation' ||
-        aiResponse.workflow === 'general_inquiry' ||
-        aiResponse.workflow === 'lead_nurture'
+        aiResponse.workflow === 'inquiry_match' ||
+        aiResponse.workflow === 'inquiry_only' ||
+        aiResponse.workflow === 'contract_creation' ||
+        aiResponse.workflow === 'schedule_creation' ||
+        aiResponse.workflow === 'notification_only' ||
+        aiResponse.workflow === 'validation_error' ||
+        aiResponse.workflow === 'human_review'
           ? aiResponse.workflow
           : fallback.workflow,
       reply: normalizeWhitespace(String(aiResponse.reply ?? fallback.reply)),

@@ -2,10 +2,14 @@ export type LeadSource = 'facebook' | 'website' | 'scraped'
 export type LeadClassification = 'HIGH' | 'MEDIUM' | 'LOW'
 export type InquiryIntent = 'hiring' | 'inquiry' | 'complaint'
 export type WorkflowAssignment =
-  | 'lead_nurture'
-  | 'maid_matching'
-  | 'support_escalation'
-  | 'general_inquiry'
+  | 'inquiry_match'
+  | 'inquiry_only'
+  | 'lead_scoring'
+  | 'contract_creation'
+  | 'schedule_creation'
+  | 'notification_only'
+  | 'validation_error'
+  | 'human_review'
 export type NotificationChannel = 'email' | 'sms' | 'whatsapp' | 'internal'
 export type AutomationStatus = 'success' | 'warning' | 'failed'
 
@@ -114,6 +118,18 @@ export interface WorkflowAutomationLogRecord {
   status: AutomationStatus
   message: string
   payload?: Record<string, unknown>
+  createdAt: string
+}
+
+export interface WorkflowDecisionLogRecord {
+  id: number
+  requestId: string
+  workflow: string
+  classifierOutput?: Record<string, unknown>
+  endpointCalled: string
+  status: AutomationStatus
+  latency: number
+  fallbackUsed: boolean
   createdAt: string
 }
 

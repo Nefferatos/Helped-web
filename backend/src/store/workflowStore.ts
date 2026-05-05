@@ -3,6 +3,7 @@ import path from 'path'
 import {
   WorkflowAutomationLogRecord,
   WorkflowContractRecord,
+  WorkflowDecisionLogRecord,
   WorkflowInquiryRecord,
   WorkflowLeadRecord,
   WorkflowMakeDeliveryRecord,
@@ -19,6 +20,7 @@ interface WorkflowData {
   contracts: WorkflowContractRecord[]
   notifications: WorkflowNotificationRecord[]
   automationLogs: WorkflowAutomationLogRecord[]
+  decisionLogs: WorkflowDecisionLogRecord[]
   makeDeliveries: WorkflowMakeDeliveryRecord[]
   counters: {
     leads: number
@@ -28,6 +30,7 @@ interface WorkflowData {
     contracts: number
     notifications: number
     automationLogs: number
+    decisionLogs: number
     makeDeliveries: number
   }
 }
@@ -44,6 +47,7 @@ const defaultData = (): WorkflowData => ({
   contracts: [],
   notifications: [],
   automationLogs: [],
+  decisionLogs: [],
   makeDeliveries: [],
   counters: {
     leads: 1,
@@ -53,6 +57,7 @@ const defaultData = (): WorkflowData => ({
     contracts: 1,
     notifications: 1,
     automationLogs: 1,
+    decisionLogs: 1,
     makeDeliveries: 1,
   },
 })
@@ -87,6 +92,7 @@ const loadData = async (): Promise<WorkflowData> => {
     contracts: parsed.contracts ?? [],
     notifications: parsed.notifications ?? [],
     automationLogs: parsed.automationLogs ?? [],
+    decisionLogs: parsed.decisionLogs ?? [],
     makeDeliveries: parsed.makeDeliveries ?? [],
     counters: {
       ...defaultData().counters,
@@ -221,6 +227,21 @@ export const createWorkflowAutomationLogStore = async (
   }
 
   data.automationLogs.unshift(record)
+  await saveData(data)
+  return record
+}
+
+export const createWorkflowDecisionLogStore = async (
+  payload: Omit<WorkflowDecisionLogRecord, 'id' | 'createdAt'>
+) => {
+  const data = await loadData()
+  const record: WorkflowDecisionLogRecord = {
+    id: data.counters.decisionLogs++,
+    createdAt: now(),
+    ...payload,
+  }
+
+  data.decisionLogs.unshift(record)
   await saveData(data)
   return record
 }

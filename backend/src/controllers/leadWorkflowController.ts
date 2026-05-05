@@ -7,6 +7,7 @@ import {
   requiredString,
 } from '../services/workflowValidationService'
 import { normalizeBudget, normalizeLocation, normalizeServiceType, normalizeUrgency } from '../services/workflowNormalizationService'
+import { buildWorkflowResponse } from '../services/workflowResponseService'
 
 export const ingestRawLead = async (req: Request, res: Response) => {
   try {
@@ -22,11 +23,25 @@ export const ingestRawLead = async (req: Request, res: Response) => {
       contact,
     })
 
-    res.status(201).json(result)
+    res.status(201).json(
+      buildWorkflowResponse({
+        workflow: 'lead_scoring',
+        intent: 'lead',
+        fallbackUsed: !result.aiUsed,
+        data: result,
+      })
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to ingest lead'
     const status = /required|source must/i.test(message) ? 400 : 500
-    res.status(status).json({ error: message })
+    res.status(status).json(
+      buildWorkflowResponse({
+        workflow: 'validation_error',
+        intent: 'validation_error',
+        fallbackUsed: true,
+        data: { error: message },
+      })
+    )
   }
 }
 
@@ -49,11 +64,25 @@ export const createLead = async (req: Request, res: Response) => {
         : [],
     })
 
-    res.status(201).json({ lead })
+    res.status(201).json(
+      buildWorkflowResponse({
+        workflow: 'lead_scoring',
+        intent: 'lead',
+        fallbackUsed: false,
+        data: { lead },
+      })
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create lead'
     const status = /required|must/i.test(message) ? 400 : 500
-    res.status(status).json({ error: message })
+    res.status(status).json(
+      buildWorkflowResponse({
+        workflow: 'validation_error',
+        intent: 'validation_error',
+        fallbackUsed: true,
+        data: { error: message },
+      })
+    )
   }
 }
 

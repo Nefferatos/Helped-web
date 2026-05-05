@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { ExecutionContext, KVNamespace } from "@cloudflare/workers-types";
+import { classifyFallback } from "./fallbackClassifier";
 
 type AssetsBinding = {
   fetch: (request: Request) => Promise<Response>;
@@ -440,6 +441,145 @@ const toNullableNumber = (value: unknown) => {
 
 const toTrimmedString = (value: unknown) => String(value ?? "").trim();
 
+const CANONICAL_WORKFLOWS = [
+  "inquiry_match",
+  "inquiry_only",
+  "lead_scoring",
+  "contract_creation",
+  "schedule_creation",
+  "notification_only",
+  "validation_error",
+  "human_review",
+] as const;
+
+type CanonicalWorkflow = (typeof CANONICAL_WORKFLOWS)[number];
+
+const LEGACY_WORKFLOW_MAP: Record<string, CanonicalWorkflow> = {
+  maid_matching: "inquiry_match",
+  general_inquiry: "inquiry_only",
+  inquiry: "inquiry_only",
+};
+
+const isCanonicalWorkflow = (workflow: string): workflow is CanonicalWorkflow =>
+  (CANONICAL_WORKFLOWS as readonly string[]).includes(workflow);
+
+const normalizeWorkflow = (workflow: string): CanonicalWorkflow => {
+  if (workflow === "human_review") {
+    return "human_review";
+  }
+
+  const normalized = LEGACY_WORKFLOW_MAP[workflow] ?? workflow;
+  if (isCanonicalWorkflow(normalized)) {
+    return normalized;
+  }
+
+  throw new Error(`INVALID_WORKFLOW:${workflow}`);
+};
+
+const containsLegacyWorkflow = (value: unknown): boolean => {
+  if (Array.isArray(value)) {
+    return value.some((item) => containsLegacyWorkflow(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value).some(([key, item]) => {
+      if (key === "workflow" && typeof item === "string") {
+        return (
+          item === "general_inquiry" ||
+          item === "maid_matching" ||
+          item === "inquiry"
+        );
+      }
+      return containsLegacyWorkflow(item);
+    });
+  }
+
+  return false;
+};
+
+const isProductionRuntime = (request: Request) => {
+  const explicit =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } })
+      .process?.env?.NODE_ENV?.trim()
+      ?.toLowerCase() ?? "";
+  if (explicit) {
+    return explicit === "production";
+  }
+
+  const host = new URL(request.url).hostname.toLowerCase();
+  return host !== "localhost" && host !== "127.0.0.1";
+};
+
+const assertNoLegacyWorkflowResponse = (request: Request, payload: unknown) => {
+  if (!isProductionRuntime(request)) return;
+  if (containsLegacyWorkflow(payload)) {
+    throw new Error("LEGACY_WORKFLOW_LEAK_DETECTED");
+  }
+};
+
+const defaultIntentForWorkflow = (workflow: CanonicalWorkflow) => {
+  switch (workflow) {
+    case "inquiry_match":
+      return "hiring";
+    case "inquiry_only":
+      return "inquiry";
+    case "lead_scoring":
+      return "lead";
+    case "contract_creation":
+      return "contract";
+    case "schedule_creation":
+      return "schedule";
+    case "notification_only":
+      return "notification";
+    case "validation_error":
+      return "validation_error";
+    case "human_review":
+      return "complaint";
+    default:
+      return "system";
+  }
+};
+
+const buildWorkflowResponse = <T>(
+  request: Request,
+  payload: {
+    workflow?: string | null;
+    intent?: string | null;
+    fallbackUsed?: boolean | null;
+    fallbackProvider?: string | null;
+    data: T;
+  },
+) => {
+  try {
+    const workflow = normalizeWorkflow(payload.workflow ?? "");
+    const responseBody = {
+      workflow,
+      intent:
+        typeof payload.intent === "string" && payload.intent.trim()
+          ? payload.intent
+          : defaultIntentForWorkflow(workflow),
+      fallbackUsed: typeof payload.fallbackUsed === "boolean" ? payload.fallbackUsed : false,
+      fallbackProvider: payload.fallbackProvider ?? null,
+      data: payload.data,
+    };
+
+    assertNoLegacyWorkflowResponse(request, responseBody);
+    return responseBody;
+  } catch (error) {
+    if (!isProductionRuntime(request)) {
+      throw error;
+    }
+
+    return {
+      workflow: "validation_error" as const,
+      intent: "validation_error",
+      fallbackUsed: true,
+      fallbackProvider: payload.fallbackProvider ?? "worker_guard",
+      data: payload.data,
+    };
+  }
+};
+
 const formatEmployerRefCode = (value: number) => String(value).padStart(5, "0");
 
 const normalizeEmployerContractRecord = (
@@ -847,19 +987,34 @@ const saveDataToSupabase = async (
       updated_at: now(),
     },
   ];
+  const retryDelaysMs = [200, 800, 1600];
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: supabaseHeaders(config, {
-      "content-type": "application/json",
-      prefer: "resolution=merge-duplicates,return=minimal",
-    }),
-    body: JSON.stringify(payload),
-  });
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: supabaseHeaders(config, {
+        "content-type": "application/json",
+        prefer: "resolution=merge-duplicates,return=minimal",
+      }),
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
+    if (response.ok) {
+      return;
+    }
+
     const details = await readSupabaseError(response);
-    throw new Error(`Supabase write failed (${response.status}): ${details}`);
+    const isRetryableTimeout =
+      response.status >= 500 &&
+      (details.includes('"code":"57014"') ||
+        details.toLowerCase().includes("statement timeout") ||
+        details.toLowerCase().includes("canceling statement"));
+
+    if (!isRetryableTimeout || attempt === retryDelaysMs.length) {
+      throw new Error(`Supabase write failed (${response.status}): ${details}`);
+    }
+
+    await sleep(retryDelaysMs[attempt]);
   }
 };
 
@@ -3118,24 +3273,13 @@ const buildMatchCandidates = (maids: MaidRecord[], message: string) => {
 };
 
 const classifyInquiryIntent = (message: string) => {
-  const lower = message.toLowerCase();
-
-  if (
-    /(complaint|refund|angry|bad service|disappointed|escalate|problem|issue)/.test(
-      lower,
-    )
-  ) {
-    return "complaint" as const;
-  }
-
-  if (
-    /(hire|hiring|recommend|shortlist|maid|helper|transfer maid|childcare|elderly care|housekeeping)/.test(
-      lower,
-    )
-  ) {
+  const workflow = classifyFallback(message).workflow;
+  if (workflow === "inquiry_match") {
     return "hiring" as const;
   }
-
+  if (workflow === "human_review") {
+    return "complaint" as const;
+  }
   return "inquiry" as const;
 };
 
@@ -3143,12 +3287,12 @@ const workflowForIntent = (
   intent: ReturnType<typeof classifyInquiryIntent>,
 ) => {
   if (intent === "hiring") {
-    return "maid_matching" as const;
+    return "inquiry_match" as const;
   }
   if (intent === "complaint") {
-    return "support_escalation" as const;
+    return "human_review" as const;
   }
-  return "general_inquiry" as const;
+  return "inquiry_only" as const;
 };
 
 const buildInquiryReply = (
@@ -3256,12 +3400,27 @@ app.post(
     const message = toTrimmedString(body?.message);
 
     if (!message) {
-      return c.json({ error: "message is required" }, 400);
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "message is required" },
+        }),
+        400,
+      );
     }
 
     const data = await loadData(c.env);
+    const fallback = classifyFallback(message);
     const intent = classifyInquiryIntent(message);
-    const workflow = workflowForIntent(intent);
+    const workflow = normalizeWorkflow(
+      fallback.workflow === "inquiry_match"
+        ? workflowForIntent(intent)
+        : fallback.workflow === "inquiry_only"
+          ? ("inquiry_only" as const)
+          : fallback.workflow,
+    );
     const matches =
       intent === "hiring" ? buildMatchCandidates(data.maids, message) : [];
     const reply = buildInquiryReply(intent, matches.length);
@@ -3279,10 +3438,158 @@ app.post(
     data.enquiries.unshift(enquiry);
     await saveData(c.env, data);
 
-    return c.json({
-      inquiry: {
-        id: enquiry.id,
-        name,
+    const responseBody = buildWorkflowResponse(c.req.raw, {
+      workflow,
+      intent,
+      fallbackUsed: true,
+      fallbackProvider: "deterministic",
+      data: {
+        inquiry: {
+          id: enquiry.id,
+          name,
+          contact,
+          message,
+          intent,
+          workflow,
+          reply,
+          aiUsed: false,
+          createdAt: enquiry.createdAt,
+        },
+        matches: matches.length > 0 ? matches : undefined,
+        reply,
+      },
+    });
+
+    return c.json(responseBody);
+  }),
+);
+
+app.post(
+  "/api/inquiry/make",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      name?: string;
+      contact?: string;
+      message?: string;
+      employerId?: number | null;
+      makeScenario?: string;
+      makeUrl?: string;
+      source?: string;
+      channel?: string;
+      conversationId?: string;
+      messageId?: string;
+      receivedAt?: string;
+      metadata?: Record<string, unknown>;
+    }>(c.req.raw);
+
+    const name = toTrimmedString(body?.name) || "Unknown";
+    const contact = toTrimmedString(body?.contact);
+    const message = toTrimmedString(body?.message);
+
+    if (!message) {
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "message is required" },
+        }),
+        400,
+      );
+    }
+
+    const data = await loadData(c.env);
+    const fallback = classifyFallback(message);
+    const intent = classifyInquiryIntent(message);
+    const workflow = normalizeWorkflow(
+      fallback.workflow === "inquiry_match"
+        ? workflowForIntent(intent)
+        : fallback.workflow === "inquiry_only"
+          ? ("inquiry_only" as const)
+          : fallback.workflow,
+    );
+    const matches =
+      intent === "hiring" ? buildMatchCandidates(data.maids, message) : [];
+    const reply = buildInquiryReply(intent, matches.length);
+
+    const enquiry: EnquiryRecord = {
+      id: data.counters.enquiries++,
+      username: name,
+      date: buildFallbackDate(),
+      email: WORKFLOW_EMAIL_PATTERN.test(contact) ? contact : "",
+      phone: WORKFLOW_EMAIL_PATTERN.test(contact) ? "" : contact,
+      message,
+      createdAt: now(),
+    };
+
+    data.enquiries.unshift(enquiry);
+    await saveData(c.env, data);
+
+    const webhookUrl = toTrimmedString(body?.makeUrl) || toTrimmedString(c.env.MAKE_WEBHOOK_URL);
+    let makeTriggered = false;
+    let makeDelivery: Record<string, unknown> | null = null;
+
+    if (webhookUrl) {
+      const startedAt = Date.now();
+      try {
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "inquiry.processed",
+            inquiryId: enquiry.id,
+            intent,
+            workflow,
+            fallbackUsed: true,
+            fallbackProvider: "deterministic",
+            matches,
+            reply,
+            name,
+            contact,
+            message,
+            employerId: body?.employerId ?? null,
+            source: toTrimmedString(body?.source) || "make_ai_agent",
+            channel: toTrimmedString(body?.channel) || "webhook",
+            conversationId: toTrimmedString(body?.conversationId),
+            messageId: toTrimmedString(body?.messageId),
+            receivedAt: toTrimmedString(body?.receivedAt),
+            metadata:
+              body?.metadata && typeof body.metadata === "object" ? body.metadata : {},
+          }),
+        });
+
+        makeTriggered = response.ok;
+        makeDelivery = {
+          success: response.ok,
+          statusCode: response.status,
+          durationMs: Date.now() - startedAt,
+          responseBody: await response.text().catch(() => ""),
+        };
+      } catch (error) {
+        makeDelivery = {
+          success: false,
+          statusCode: null,
+          durationMs: Date.now() - startedAt,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    } else {
+      makeDelivery = {
+        success: false,
+        statusCode: null,
+        error: "MAKE_WEBHOOK_URL is not configured",
+      };
+    }
+
+    const responseBody = buildWorkflowResponse(c.req.raw, {
+      workflow,
+      intent,
+      fallbackUsed: true,
+      fallbackProvider: "deterministic",
+      data: {
+        inquiry: {
+          id: enquiry.id,
+          name,
         contact,
         message,
         intent,
@@ -3290,10 +3597,102 @@ app.post(
         reply,
         aiUsed: false,
         createdAt: enquiry.createdAt,
+        },
+        matches: matches.length > 0 ? matches : undefined,
+        reply,
+        makeTriggered,
+        makeDelivery,
       },
-      matches: matches.length > 0 ? matches : undefined,
-      reply,
     });
+
+    return c.json(responseBody);
+  }),
+);
+
+app.post(
+  "/api/ai/processInquiry",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      requestId?: string;
+      name?: string;
+      contact?: string;
+      message?: string;
+      employerId?: number | null;
+    }>(c.req.raw);
+
+    const name = toTrimmedString(body?.name) || "Unknown";
+    const contact = toTrimmedString(body?.contact);
+    const message = toTrimmedString(body?.message);
+    const requestId = toTrimmedString(body?.requestId) || crypto.randomUUID();
+
+    if (!message) {
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "message is required" },
+        }),
+        400,
+      );
+    }
+
+    const data = await loadData(c.env);
+    const fallback = classifyFallback(message);
+    const intent = classifyInquiryIntent(message);
+    const workflow = normalizeWorkflow(
+      fallback.workflow === "inquiry_match"
+        ? workflowForIntent(intent)
+        : fallback.workflow === "inquiry_only"
+          ? ("inquiry_only" as const)
+          : fallback.workflow,
+    );
+    const matches =
+      intent === "hiring" ? buildMatchCandidates(data.maids, message) : [];
+    const reply = buildInquiryReply(intent, matches.length);
+
+    const enquiry: EnquiryRecord = {
+      id: data.counters.enquiries++,
+      username: name,
+      date: buildFallbackDate(),
+      email: WORKFLOW_EMAIL_PATTERN.test(contact) ? contact : "",
+      phone: WORKFLOW_EMAIL_PATTERN.test(contact) ? "" : contact,
+      message,
+      createdAt: now(),
+    };
+
+    data.enquiries.unshift(enquiry);
+    await saveData(c.env, data);
+
+    const responseBody = buildWorkflowResponse(c.req.raw, {
+      workflow,
+      intent,
+      fallbackUsed: true,
+      fallbackProvider: "deterministic",
+      data: {
+        requestId,
+        inquiry: {
+          id: enquiry.id,
+          name,
+          contact,
+          message,
+          intent,
+          workflow,
+          reply,
+          aiUsed: false,
+          createdAt: enquiry.createdAt,
+        },
+        matches: matches.length > 0 ? matches : undefined,
+        reply,
+        classifier: {
+          intent,
+          workflow,
+          reply,
+        },
+      },
+    });
+
+    return c.json(responseBody);
   }),
 );
 
@@ -3318,7 +3717,15 @@ app.post(
     const message = toTrimmedString(body?.message);
 
     if (!name || !contact || !message) {
-      return c.json({ error: "name, contact, and message are required" }, 400);
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "name, contact, and message are required" },
+        }),
+        400,
+      );
     }
 
     const enrichment = inferLeadEnrichment(message);
@@ -3346,10 +3753,14 @@ app.post(
     await saveData(c.env, data);
 
     return c.json(
-      {
-        lead: {
-          id: leadId,
-          name,
+      buildWorkflowResponse(c.req.raw, {
+        workflow: "lead_scoring",
+        intent: "lead",
+        fallbackUsed: true,
+        data: {
+          lead: {
+            id: leadId,
+            name,
           source,
           classification: qualification.classification,
           aiSummary: enrichment.summary,
@@ -3357,13 +3768,14 @@ app.post(
         },
         enrichment,
         qualification,
-        notification: {
-          id: leadId,
-          recipient: "sales-team",
-          message: `New ${qualification.classification} lead received from ${source}: ${name}`,
+          notification: {
+            id: leadId,
+            recipient: "sales-team",
+            message: `New ${qualification.classification} lead received from ${source}: ${name}`,
+          },
+          aiUsed: false,
         },
-        aiUsed: false,
-      },
+      }),
       201,
     );
   }),
@@ -3372,14 +3784,47 @@ app.post(
 app.post(
   "/api/match",
   safeApi(async (c) => {
-    const body = await parseBody<{ message?: string }>(c.req.raw);
+    const body = await parseBody<{
+      message?: string;
+      serviceType?: string;
+      location?: string;
+      budget?: string;
+      salary?: string;
+      availability?: string;
+    }>(c.req.raw);
     const message = toTrimmedString(body?.message);
     const data = await loadData(c.env);
+    const matches = buildMatchCandidates(data.maids, message);
 
-    return c.json({
-      matches: buildMatchCandidates(data.maids, message),
-      aiUsed: false,
-    });
+    return c.json(
+      buildWorkflowResponse(c.req.raw, {
+        workflow: "inquiry_match",
+        intent: "hiring",
+        fallbackUsed: true,
+        data: {
+          requestId: crypto.randomUUID(),
+          screening: {
+            valid: Boolean(message),
+            missingFields: message ? [] : ["message"],
+            normalized: {
+              message,
+              serviceType: toTrimmedString(body?.serviceType),
+              location: toTrimmedString(body?.location),
+              budget: toTrimmedString(body?.budget),
+              salary: toTrimmedString(body?.salary),
+              availability: toTrimmedString(body?.availability),
+            },
+          },
+          vectorSearch: {
+            used: Boolean(message),
+            candidateCount: data.maids.filter(isAvailableMaid).length,
+          },
+          aiUsed: false,
+          fallbackUsed: true,
+          matches,
+        },
+      }),
+    );
   }),
 );
 
@@ -3399,13 +3844,29 @@ app.post(
     const employerId = toNullableNumber(body?.employerId);
 
     if (!maidId || !employerId) {
-      return c.json({ error: "maidId and employerId are required" }, 400);
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "maidId and employerId are required" },
+        }),
+        400,
+      );
     }
 
     const data = await loadData(c.env);
     const maid = data.maids.find((item) => item.id === maidId) ?? null;
     if (!maid) {
-      return c.json({ error: "Maid not found" }, 404);
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "Maid not found" },
+        }),
+        404,
+      );
     }
 
     const employer =
@@ -3440,7 +3901,7 @@ app.post(
         placementFee: toTrimmedString(body?.budgetText),
         agencyWitness: "Helped Agency",
         employerSnapshot: employer?.employer ?? { id: employerId, name: employerName },
-        maidSnapshot: maid,
+        maidSnapshot: JSON.parse(JSON.stringify(maid)),
         createdAt: now(),
         updatedAt: now(),
       },
@@ -3461,18 +3922,25 @@ app.post(
       `Schedule Date: ${contractDate}`,
     ].join("\\n");
 
-    return c.json({
-      contract: {
-        id: contract.id,
-        refCode: contract.refCode,
-        maidId: contract.maidId,
-        employerId: contract.employerId,
-        contractText,
-        summary,
-        createdAt: contract.createdAt,
-      },
-      aiUsed: false,
-    });
+    return c.json(
+      buildWorkflowResponse(c.req.raw, {
+        workflow: "contract_creation",
+        intent: "contract",
+        fallbackUsed: true,
+        data: {
+          contract: {
+            id: contract.id,
+            refCode: contract.refCode,
+            maidId: contract.maidId,
+            employerId: contract.employerId,
+            contractText,
+            summary,
+            createdAt: contract.createdAt,
+          },
+          aiUsed: false,
+        },
+      }),
+    );
   }),
 );
 
@@ -3491,7 +3959,12 @@ app.post(
 
     if (!maidId || !employerId || !datetime) {
       return c.json(
-        { error: "maidId, employerId, and datetime are required" },
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "maidId, employerId, and datetime are required" },
+        }),
         400,
       );
     }
@@ -3499,20 +3972,35 @@ app.post(
     const data = await loadData(c.env);
     const maid = data.maids.find((item) => item.id === maidId) ?? null;
     if (!maid) {
-      return c.json({ error: "Maid not found" }, 404);
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "Maid not found" },
+        }),
+        404,
+      );
     }
 
-    return c.json({
-      schedule: {
-        id: Date.now(),
-        maidId,
-        employerId,
-        maidName: maid.fullName,
-        datetime,
-        status: "scheduled",
-        createdAt: now(),
-      },
-    });
+    return c.json(
+      buildWorkflowResponse(c.req.raw, {
+        workflow: "schedule_creation",
+        intent: "schedule",
+        fallbackUsed: false,
+        data: {
+          schedule: {
+            id: Date.now(),
+            maidId,
+            employerId,
+            maidName: maid.fullName,
+            datetime,
+            status: "scheduled",
+            createdAt: now(),
+          },
+        },
+      }),
+    );
   }),
 );
 
@@ -3531,20 +4019,35 @@ app.post(
     const message = toTrimmedString(body?.message);
 
     if (!recipient || !message) {
-      return c.json({ error: "recipient and message are required" }, 400);
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "recipient and message are required" },
+        }),
+        400,
+      );
     }
 
-    return c.json({
-      notification: {
-        id: Date.now(),
-        channel: toTrimmedString(body?.channel) || "internal",
-        recipient,
-        message,
-        referenceType: toTrimmedString(body?.referenceType) || "workflow",
-        referenceId: toTrimmedString(body?.referenceId),
-        createdAt: now(),
-      },
-    });
+    return c.json(
+      buildWorkflowResponse(c.req.raw, {
+        workflow: "notification_only",
+        intent: "notification",
+        fallbackUsed: false,
+        data: {
+          notification: {
+            id: Date.now(),
+            channel: toTrimmedString(body?.channel) || "internal",
+            recipient,
+            message,
+            referenceType: toTrimmedString(body?.referenceType) || "workflow",
+            referenceId: toTrimmedString(body?.referenceId),
+            createdAt: now(),
+          },
+        },
+      }),
+    );
   }),
 );
 

@@ -956,7 +956,7 @@ const EditMaids = () => {
     await importCsvText(`referenceCode,fullName,nationality\n${escapeCsv(ref)},${escapeCsv(name.trim())},${escapeCsv(nationality.trim())}`);
   };
 
-  const SharedDialogs = () => (
+  const sharedDialogs = (
     <>
       {/* Export */}
       <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
@@ -1346,7 +1346,7 @@ const EditMaids = () => {
           </p>
         </div>
 
-        <SharedDialogs />
+        {sharedDialogs}
       </div>
     );
   }
@@ -1618,7 +1618,7 @@ const EditMaids = () => {
         )}
       </div>
 
-      <SharedDialogs />
+      {sharedDialogs}
 
       <SendMaidToClientDialog
         maid={maidToSendThroughAgency}

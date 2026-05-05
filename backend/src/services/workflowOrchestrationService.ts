@@ -1,7 +1,6 @@
 import { getDirectSalesStore, getEmployerContractsStore, getMaidsStore } from '../store'
 import {
   createWorkflowContractStore,
-  createWorkflowInquiryStore,
   createWorkflowLeadStore,
   createWorkflowScheduleStore,
   getWorkflowSnapshotStore,
@@ -9,11 +8,11 @@ import {
 } from '../store/workflowStore'
 import { MatchCriteria, StructuredLeadInput } from '../types/workflow'
 import {
-  classifyInquiryWithAi,
   enrichLeadWithAi,
   generateContractDraftWithAi,
   qualifyLeadWithAi,
 } from './workflowAiService'
+import { processInquiryWithAiOrchestrator } from './aiOrchestratorService'
 import { logWorkflowStep } from './workflowLoggerService'
 import { runMatchingWorkflow } from './workflowMatchingService'
 import { sendToMakeWebhook } from './workflowMakeService'
@@ -107,63 +106,7 @@ export const processInquiryWorkflow = async (payload: {
   contact: string
   employerId?: number
 }) => {
-  await logWorkflowStep({
-    workflow: 'inquiry_pipeline',
-    step: 'ingest',
-    status: 'success',
-    message: 'Inquiry received',
-    payload,
-  })
-
-  const classified = await classifyInquiryWithAi({
-    message: payload.message,
-    name: payload.name,
-  })
-
-  const inquiry = await createWorkflowInquiryStore({
-    name: payload.name,
-    contact: payload.contact,
-    message: payload.message,
-    intent: classified.data.intent,
-    workflow: classified.data.workflow,
-    reply: classified.data.reply,
-    aiUsed: classified.aiUsed,
-  })
-
-  await logWorkflowStep({
-    workflow: 'inquiry_pipeline',
-    step: 'classification',
-    status: classified.aiUsed ? 'success' : 'warning',
-    message: `Inquiry classified as ${classified.data.intent}`,
-    payload: classified.data,
-  })
-
-  let matches:
-    | Awaited<ReturnType<typeof runMatchingWorkflow>>['matches']
-    | undefined
-
-  if (classified.data.intent === 'hiring') {
-    const result = await runMatchingWorkflow({
-      inquiryId: inquiry.id,
-      employerId: payload.employerId,
-      message: payload.message,
-    })
-    matches = result.matches
-
-    await logWorkflowStep({
-      workflow: 'inquiry_pipeline',
-      step: 'maid_matching',
-      status: result.matches.length > 0 ? 'success' : 'warning',
-      message: `Generated ${result.matches.length} match candidates`,
-      payload: { inquiryId: inquiry.id, aiUsed: result.aiUsed },
-    })
-  }
-
-  return {
-    inquiry,
-    matches,
-    reply: classified.data.reply,
-  }
+  return await processInquiryWithAiOrchestrator(payload)
 }
 
 export const runDirectMatchingWorkflow = async (criteria: MatchCriteria) => {

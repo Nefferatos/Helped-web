@@ -9,6 +9,11 @@ import {
   requiredString,
   sanitizePayload,
 } from '../services/workflowValidationService'
+import {
+  assertNoLegacyWorkflowResponse,
+  normalizeWorkflow,
+} from '../services/workflowNameService'
+import { buildWorkflowResponse } from '../services/workflowResponseService'
 
 const parseInquiryRequest = (req: Request) => {
   const message = requiredString(req.body.message, 'message')
@@ -27,22 +32,71 @@ const parseInquiryRequest = (req: Request) => {
   }
 }
 
+const normalizeInquiryResult = <T extends {
+  inquiry: { workflow: string }
+  workflow?: string
+  classifier?: { workflow?: string }
+}>(result: T) => {
+  const normalizedWorkflow = normalizeWorkflow(result.inquiry.workflow)
+
+  const normalized = {
+    ...result,
+    inquiry: {
+      ...result.inquiry,
+      workflow: normalizedWorkflow,
+    },
+    workflow: normalizedWorkflow,
+    classifier: result.classifier
+      ? {
+          ...result.classifier,
+          workflow: result.classifier.workflow
+            ? normalizeWorkflow(result.classifier.workflow)
+            : normalizedWorkflow,
+        }
+      : result.classifier,
+  }
+
+  assertNoLegacyWorkflowResponse(
+    normalized,
+    process.env.NODE_ENV === 'production' ? 'production' : 'development'
+  )
+
+  return normalized
+}
+
 export const handleInquiry = async (req: Request, res: Response) => {
   try {
-    const result = await processInquiryWorkflow(parseInquiryRequest(req))
+    const result = normalizeInquiryResult(
+      await processInquiryWorkflow(parseInquiryRequest(req))
+    )
 
-    res.status(200).json(result)
+    const envelope = buildWorkflowResponse({
+      workflow: result.workflow,
+      intent: result.inquiry.intent,
+      fallbackUsed: result.fallbackUsed,
+      fallbackProvider: result.fallbackProvider,
+      data: result,
+    })
+
+    res.status(200).json(envelope)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to process inquiry'
     const status = /required|positive integer/i.test(message) ? 400 : 500
-    res.status(status).json({ error: message })
+    res.status(status).json(
+      buildWorkflowResponse({
+        workflow: 'validation_error',
+        intent: 'validation_error',
+        fallbackUsed: true,
+        data: { error: message },
+      })
+    )
   }
 }
 
 export const handleInquiryForMake = async (req: Request, res: Response) => {
   try {
     const input = parseInquiryRequest(req)
-    const result = await processInquiryWorkflow(input)
+    const result = normalizeInquiryResult(await processInquiryWorkflow(input))
 
     const makeResult = await sendWorkflowToMake({
       scenario: optionalString(req.body.makeScenario, 100) || 'inquiry_pipeline',
@@ -68,17 +122,42 @@ export const handleInquiryForMake = async (req: Request, res: Response) => {
       },
     })
 
-    res.status(200).json({
+    const responseBody = {
       inquiry: result.inquiry,
       matches: result.matches,
       reply: result.reply,
+      workflow: normalizeWorkflow(result.workflow),
+      fallbackUsed: result.fallbackUsed,
+      fallbackProvider: result.fallbackProvider,
       makeTriggered: makeResult.ok,
       makeDelivery: makeResult.delivery,
-    })
+    }
+
+    assertNoLegacyWorkflowResponse(
+      responseBody,
+      process.env.NODE_ENV === 'production' ? 'production' : 'development'
+    )
+
+    res.status(200).json(
+      buildWorkflowResponse({
+        workflow: responseBody.workflow,
+        intent: result.inquiry.intent,
+        fallbackUsed: result.fallbackUsed,
+        fallbackProvider: result.fallbackProvider,
+        data: responseBody,
+      })
+    )
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to process inquiry for Make'
     const status = /required|positive integer/i.test(message) ? 400 : 500
-    res.status(status).json({ error: message })
+    res.status(status).json(
+      buildWorkflowResponse({
+        workflow: 'validation_error',
+        intent: 'validation_error',
+        fallbackUsed: true,
+        data: { error: message },
+      })
+    )
   }
 }

@@ -27,7 +27,7 @@
       "mapper": {
         "defaultModel": "gpt-5.4",
         "reasoningEffort": "low",
-        "systemPrompt": "You are a workflow orchestrator for a maid agency platform.\r\n\r\nChoose exactly one workflow:\r\n- lead_scoring\r\n- inquiry_only\r\n- inquiry_match\r\n- contract_creation\r\n- schedule_creation\r\n- notification_only\r\n- validation_error\r\n- human_review\r\n\r\nYour job:\r\n- Read the input carefully.\r\n- Decide the single best workflow.\r\n- Copy the relevant input values into the payload.\r\n- Never invent IDs, names, dates, contact details, or records.\r\n- Return only valid JSON.\r\n- Do not use markdown.\r\n- Do not use code fences.\r\n- Do not explain anything outside the JSON.\r\n\r\nCritical decision rules:\r\n- If the message is about hiring a maid, recommending maids, shortlisting maids, or matching maids, choose inquiry_match.\r\n- If maidId is missing, empty, invalid, or null, never choose contract_creation.\r\n- If maidId is missing, empty, invalid, or null, never choose schedule_creation.\r\n- If employerId is missing, empty, invalid, or null, never choose contract_creation.\r\n- If employerId is missing, empty, invalid, or null, never choose schedule_creation.\r\n- If user role is guest, never choose contract_creation.\r\n- If user role is guest, never choose schedule_creation.\r\n\r\nUse contract_creation only when all are true:\r\n1. The user explicitly asks to create, generate, prepare, or draft a contract.\r\n2. employerId is present as a positive integer.\r\n3. maidId is present as a positive integer.\r\n4. User role is not guest.\r\n\r\nUse schedule_creation only when all are true:\r\n1. The user explicitly asks to schedule, book, arrange, or confirm an interview or appointment.\r\n2. employerId is present as a positive integer.\r\n3. maidId is present as a positive integer.\r\n4. scheduleDateTime is present and contains a full date-time value.\r\n5. User role is not guest.\r\n\r\nWorkflow rules:\r\n- Use lead_scoring for new leads, raw leads, or lead qualification requests.\r\n- Use inquiry_only for general inquiries that should be stored but do not require maid matching.\r\n- Use inquiry_match for hiring, recommendation, shortlist, or maid-matching requests.\r\n- Use notification_only only for delivery-only actions such as sending a message, email, SMS, WhatsApp, or internal notification.\r\n- Use validation_error if required fields are missing for the requested action.\r\n- Use human_review if the request is ambiguous, risky, policy-sensitive, or cannot be safely classified.\r\n\r\nValidation rules:\r\n- If the user wants contract generation but maidId or employerId is missing, choose validation_error.\r\n- If the user wants scheduling but maidId or employerId or scheduleDateTime is missing, choose validation_error.\r\n- Never use scheduleDate as a substitute for datetime.\r\n- payload.datetime must contain a real date-time string for schedule_creation, otherwise use validation_error.\r\n- If a field is unavailable, return null for nullable fields and empty string for string fields.\r\n\r\nIntent hints:\r\n- \"I want to hire a maid\" -> inquiry_match\r\n- \"recommend top 3 maids\" -> inquiry_match\r\n- \"shortlist maids\" -> inquiry_match\r\n- \"match me with a maid\" -> inquiry_match\r\n- \"generate contract for maid 25 and employer 9\" -> contract_creation if IDs are valid\r\n- \"book interview for maid 25 and employer 9 on 2026-05-10 10:00 AM\" -> schedule_creation if datetime is present\r\n- \"send this reminder to the employer\" -> notification_only\r\n\r\nField copy rules:\r\n- Copy customer name into payload.name\r\n- Copy customer contact into payload.contact\r\n- Copy message into payload.message exactly\r\n- Copy employerId into payload.employerId when it is a valid positive integer, otherwise null\r\n- Copy maidId into payload.maidId when it is a valid positive integer, otherwise null\r\n- Copy scheduleDateTime into payload.datetime when present as a full date-time value, otherwise null\r\n- Copy serviceType into payload.serviceType when present, otherwise \"\"\r\n- Copy location into payload.location when present, otherwise \"\"\r\n- Copy budgetText into payload.budgetText when present, otherwise \"\"\r\n- Copy scheduleDate into payload.scheduleDate when present, otherwise \"\"\r\n- Copy recipient into payload.recipient when present, otherwise \"\"\r\n- Copy notificationMessage into payload.notificationMessage when present, otherwise \"\"\r\n- Copy channel into payload.channel when present, otherwise \"\"\r\n\r\nOutput rules:\r\n- Return exactly one workflow.\r\n- Return valid JSON only.\r\n- Do not add extra keys.\r\n- Do not wrap JSON in markdown.\r\n- Do not include comments.\r\n\r\nReturn this exact structure:\r\n{\r\n  \"workflow\": \"\",\r\n  \"intent\": \"\",\r\n  \"requiresHuman\": false,\r\n  \"reason\": \"\",\r\n  \"payload\": {\r\n    \"source\": \"website\",\r\n    \"name\": \"\",\r\n    \"contact\": \"\",\r\n    \"message\": \"\",\r\n    \"employerId\": null,\r\n    \"maidId\": null,\r\n    \"datetime\": null,\r\n    \"serviceType\": \"\",\r\n    \"location\": \"\",\r\n    \"budgetText\": \"\",\r\n    \"scheduleDate\": \"\",\r\n    \"recipient\": \"\",\r\n    \"notificationMessage\": \"\",\r\n    \"channel\": \"\"\r\n  }\r\n}\r\n",
+        "systemPrompt": "You are a workflow classifier for a maid agency platform.\n\nChoose exactly one workflow based on the user request:\n- lead_scoring\n- inquiry_only\n- inquiry_match\n- contract_creation\n- schedule_creation\n- notification_only\n- human_review\n\nRules:\n- Classify intent only.\n- Do not perform business validation.\n- Do not enforce ID requirements.\n- Do not decide ranking, compliance, or recommendation quality.\n- Never invent IDs, names, dates, contact details, or records.\n- Copy available fields into payload.\n- Return valid JSON only.\n- Do not use markdown.\n- Do not explain anything.\n\nWorkflow hints:\n- lead_scoring: new lead or lead qualification request\n- inquiry_only: general inquiry with no maid recommendation needed\n- inquiry_match: hiring, recommendation, shortlist, or maid matching request\n- contract_creation: contract or draft contract request\n- schedule_creation: interview or appointment scheduling request\n- notification_only: delivery-only message or notification request\n- human_review: ambiguous, risky, policy-sensitive, or invalid AI output fallback\n\nReturn this exact structure:\n{\n  \"workflow\": \"\",\n  \"payload\": {\n    \"source\": \"website\",\n    \"name\": \"\",\n    \"contact\": \"\",\n    \"message\": \"\",\n    \"employerId\": null,\n    \"maidId\": null,\n    \"datetime\": null,\n    \"serviceType\": \"\",\n    \"location\": \"\",\n    \"budgetText\": \"\",\n    \"scheduleDate\": \"\",\n    \"recipient\": \"\",\n    \"notificationMessage\": \"\",\n    \"channel\": \"\"\n  }\n}\n",
         "message": "Action: {{1.action}}\r\nUser role: {{ifempty(1.actor.role; \"guest\")}}\r\nUser id: {{ifempty(1.actor.id; \"\")}}\r\nCustomer name: {{ifempty(1.customer.name; \"\")}}\r\nCustomer contact: {{ifempty(1.customer.contact; \"\")}}\r\nMessage: {{ifempty(1.message; \"\")}}\r\nEmployer ID: {{ifempty(1.context.employerId; \"\")}}\r\nMaid ID: {{ifempty(1.context.maidId; \"\")}}\r\nSchedule datetime: {{ifempty(1.context.scheduleDateTime; \"\")}}\r\nService type: {{ifempty(1.context.serviceType; \"\")}}\r\nLocation: {{ifempty(1.context.location; \"\")}}\r\nBudget text: {{ifempty(1.context.budgetText; \"\")}}\r\nSchedule date: {{ifempty(1.context.scheduleDate; \"\")}}\r\nRecipient: {{ifempty(1.context.recipient; \"\")}}\r\nNotification message: {{ifempty(1.context.notificationMessage; \"\")}}\r\nChannel: {{ifempty(1.context.channel; \"\")}}\r\n",
         "files": [],
         "threadId": "{{1.customer.contact}}-{{ifempty(1.context.employerId; \"guest\")}}",
@@ -64,21 +64,6 @@
         "interface": [
           {
             "name": "workflow",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "intent",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "requiresHuman",
-            "type": "boolean",
-            "required": true
-          },
-          {
-            "name": "reason",
             "type": "text",
             "required": true
           },
@@ -228,7 +213,7 @@
               "version": 1,
               "parameters": {},
               "mapper": {
-                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"reason\": \"{{12.reason}}\",\r\n  \"statusCode\": {{15.statusCode}}\r\n}",
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{15.statusCode}}\r\n}",
                 "status": "200",
                 "headers": []
               },
@@ -295,7 +280,7 @@
               "version": 1,
               "parameters": {},
               "mapper": {
-                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"reason\": \"{{12.reason}}\",\r\n  \"statusCode\": {{16.statusCode}}\r\n}",
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{16.statusCode}}\r\n}",
                 "status": "200",
                 "headers": []
               },
@@ -362,7 +347,7 @@
               "version": 1,
               "parameters": {},
               "mapper": {
-                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"reason\": \"{{12.reason}}\",\r\n  \"statusCode\": {{20.statusCode}}\r\n}",
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{20.statusCode}}\r\n}",
                 "status": "200",
                 "headers": []
               },
@@ -429,7 +414,7 @@
               "version": 1,
               "parameters": {},
               "mapper": {
-                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"reason\": \"{{12.reason}}\",\r\n  \"statusCode\": {{21.statusCode}}\r\n}",
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{21.statusCode}}\r\n}",
                 "status": "200",
                 "headers": []
               },
@@ -496,7 +481,7 @@
               "version": 1,
               "parameters": {},
               "mapper": {
-                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"reason\": \"{{12.reason}}\",\r\n  \"statusCode\": {{22.statusCode}}\r\n}",
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{22.statusCode}}\r\n}",
                 "status": "200",
                 "headers": []
               },
@@ -563,7 +548,7 @@
               "version": 1,
               "parameters": {},
               "mapper": {
-                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"reason\": \"{{12.reason}}\",\r\n  \"statusCode\": {{23.statusCode}}\r\n}",
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{23.statusCode}}\r\n}",
                 "status": "200",
                 "headers": []
               },
@@ -622,7 +607,7 @@
                 "shareCookies": false,
                 "requestCompressedContent": true,
                 "contentTypeValue": "application/json",
-                "rawBodyContent": "{\r\n  \"channel\": \"internal\",\r\n  \"recipient\": \"sales-team\",\r\n  \"message\": \"Human review required: {{12.reason}}\",\r\n  \"referenceType\": \"workflow\",\r\n  \"referenceId\": \"\"\r\n}"
+                "rawBodyContent": "{\r\n  \"channel\": \"internal\",\r\n  \"recipient\": \"sales-team\",\r\n  \"message\": \"Human review required: classifier output invalid or manual review requested\",\r\n  \"referenceType\": \"workflow\",\r\n  \"referenceId\": \"\"\r\n}"
               },
               "metadata": {
                 "designer": {
@@ -637,7 +622,7 @@
               "version": 1,
               "parameters": {},
               "mapper": {
-                "body": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"reason\": \"{{12.reason}}\",\r\n  \"statusCode\": {{27.statusCode}}\r\n}",
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{27.statusCode}}\r\n}",
                 "status": "200",
                 "headers": []
               },

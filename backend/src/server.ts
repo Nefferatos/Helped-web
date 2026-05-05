@@ -24,6 +24,7 @@ import leadWorkflowRoutes from './routes/leadWorkflowRoutes'
 import inquiryWorkflowRoutes from './routes/inquiryWorkflowRoutes'
 import matchingWorkflowRoutes from './routes/matchingWorkflowRoutes'
 import automationRoutes from './routes/automationRoutes'
+import aiRoutes from './routes/aiRoutes'
 import shareRoutes from './routes/shareRoutes'
 import { initializeDatabase } from './db'
 import {
@@ -125,6 +126,7 @@ app.use('/api/client', clientRoutes)
 app.use('/api/chats', chatRoutes)
 app.use('/api/leads', leadWorkflowRoutes)
 app.use('/api/inquiry', inquiryWorkflowRoutes)
+app.use('/api/ai', aiRoutes)
 
 // ─── Share route ──────────────────────────────────────────────────────────────
 // IMPORTANT: Must be mounted BEFORE the generic /api catch-all routers below.

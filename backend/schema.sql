@@ -176,6 +176,22 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
 CREATE INDEX IF NOT EXISTS idx_conversations_request ON conversations(request_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_client ON conversations(client_id);
 
+CREATE TABLE IF NOT EXISTS workflow_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id TEXT NOT NULL,
+  workflow TEXT NOT NULL,
+  classifier_output JSONB,
+  endpoint_called TEXT NOT NULL,
+  status TEXT NOT NULL,
+  latency INTEGER NOT NULL DEFAULT 0,
+  fallback_used BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_logs_request_id ON workflow_logs(request_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_logs_workflow_created_at
+  ON workflow_logs(workflow, created_at DESC);
+
 -- Apply the same ownership pattern to other agency-owned tables in production:
 -- enquiries.agency_id
 -- direct_sales.agency_id

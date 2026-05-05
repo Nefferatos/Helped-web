@@ -9,6 +9,7 @@ import {
   positiveInteger,
 } from '../services/workflowValidationService'
 import { normalizeBudget } from '../services/workflowNormalizationService'
+import { buildWorkflowResponse } from '../services/workflowResponseService'
 
 export const matchMaids = async (req: Request, res: Response) => {
   try {
@@ -31,11 +32,25 @@ export const matchMaids = async (req: Request, res: Response) => {
       availability: optionalString(req.body.availability),
     })
 
-    res.status(200).json(result)
+    res.status(200).json(
+      buildWorkflowResponse({
+        workflow: 'inquiry_match',
+        intent: 'hiring',
+        fallbackUsed: result.fallbackUsed,
+        data: result,
+      })
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to match maids'
     const status = /positive integer/i.test(message) ? 400 : 500
-    res.status(status).json({ error: message })
+    res.status(status).json(
+      buildWorkflowResponse({
+        workflow: 'validation_error',
+        intent: 'validation_error',
+        fallbackUsed: true,
+        data: { error: message },
+      })
+    )
   }
 }
 
@@ -47,14 +62,35 @@ export const scheduleInterview = async (req: Request, res: Response) => {
       datetime: optionalString(req.body.datetime) || new Date().toISOString(),
     })
 
-    res.status(201).json({ schedule: result })
+    res.status(201).json(
+      buildWorkflowResponse({
+        workflow: 'schedule_creation',
+        intent: 'schedule',
+        fallbackUsed: false,
+        data: { schedule: result },
+      })
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to schedule interview'
     if (message === 'MAID_NOT_FOUND') {
-      return res.status(404).json({ error: 'Maid not found' })
+      return res.status(404).json(
+        buildWorkflowResponse({
+          workflow: 'validation_error',
+          intent: 'validation_error',
+          fallbackUsed: true,
+          data: { error: 'Maid not found' },
+        })
+      )
     }
     const status = /positive integer/i.test(message) ? 400 : 500
-    res.status(status).json({ error: message })
+    res.status(status).json(
+      buildWorkflowResponse({
+        workflow: 'validation_error',
+        intent: 'validation_error',
+        fallbackUsed: true,
+        data: { error: message },
+      })
+    )
   }
 }
 
@@ -69,10 +105,24 @@ export const generateContract = async (req: Request, res: Response) => {
       scheduleDate: optionalString(req.body.scheduleDate),
     })
 
-    res.status(201).json(result)
+    res.status(201).json(
+      buildWorkflowResponse({
+        workflow: 'contract_creation',
+        intent: 'contract',
+        fallbackUsed: !result.aiUsed,
+        data: result,
+      })
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to generate contract'
     const status = /positive integer/i.test(message) ? 400 : 500
-    res.status(status).json({ error: message })
+    res.status(status).json(
+      buildWorkflowResponse({
+        workflow: 'validation_error',
+        intent: 'validation_error',
+        fallbackUsed: true,
+        data: { error: message },
+      })
+    )
   }
 }

@@ -1,7 +1,7 @@
 import express, { Router } from 'express'
+import { matchMaids } from '../controllers/matchController'
 import {
   generateContract,
-  matchMaids,
   scheduleInterview,
 } from '../controllers/matchingWorkflowController'
 
