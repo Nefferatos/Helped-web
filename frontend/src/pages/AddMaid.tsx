@@ -941,13 +941,13 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
           <FormRow2Col
             left={
               <Field label="Number of Siblings">
-              <StyledInput
-                type="text"
-                value={String(formData.numberOfSiblings ?? "")}
-                onChange={(e) => setFormData((p) => ({ ...p, numberOfSiblings: e.target.value as any }))}
-                placeholder=""
-              />
-            </Field>
+                <StyledInput
+                  type="text"
+                  value={String(formData.numberOfSiblings ?? "")}
+                  onChange={(e) => setFormData((p) => ({ ...p, numberOfSiblings: e.target.value as unknown as number }))}
+                  placeholder="e.g. 3 or 6/7"
+                />
+              </Field>
             }
             right={
               <Field label="Marital Status">

@@ -77,8 +77,8 @@ const FlagCircle = ({ code }: { code: string }) => {
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", justifyContent: "center",
-      width: 14, height: 14, borderRadius: "50%", overflow: "hidden",
-      border: "1px solid rgba(0,0,0,0.13)", flexShrink: 0,
+      width: 15, height: 15, borderRadius: "50%", overflow: "hidden",
+      border: "1px solid rgba(0,0,0,0.15)", flexShrink: 0,
       verticalAlign: "middle", background: "#e5e7eb",
     }}>
       <img
@@ -90,7 +90,7 @@ const FlagCircle = ({ code }: { code: string }) => {
   );
 };
 
-// ── Card helpers (from MaidSearchPage) ───────────────────────────────────────
+// ── Card helpers ──────────────────────────────────────────────────────────────
 const getTypeLabel = (type: string) => {
   const lower = type.toLowerCase();
   if (lower.includes("new")) return "NEW";
@@ -106,7 +106,7 @@ const getMaidTypeBadgeClass = (type?: string) => {
   return "bg-amber-50 text-amber-700 border-amber-200";
 };
 
-// ── Shortlist maid card (matches MaidSearchPage MaidCard style) ───────────────
+// ── Shortlist maid card ───────────────────────────────────────────────────────
 const ShortlistMaidCard = ({
   maid,
   isShortlisted,
@@ -162,7 +162,7 @@ const ShortlistMaidCard = ({
 
         {maid.type && (
           <div className="absolute top-1.5 left-1.5">
-            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>
+            <span className={`inline-block px-1.5 py-px text-[11px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>
               {getTypeLabel(maid.type)}
             </span>
           </div>
@@ -170,39 +170,40 @@ const ShortlistMaidCard = ({
 
         <button
           onClick={(e) => { e.preventDefault(); onToggleShortlist(maid.referenceCode); }}
-          className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
+          className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white transition-all ${
             isShortlisted ? "bg-amber-500" : "bg-black/60 opacity-0 group-hover:opacity-100"
           }`}
         >
-          <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
+          <Star className={`h-3 w-3 ${isShortlisted ? "fill-white" : ""}`} />
           {isShortlisted ? "Shortlisted" : "Shortlist"}
         </button>
       </div>
 
+      {/* Card body — all text black */}
       <div className="flex flex-col gap-0.5 p-2.5 flex-1 bg-white">
         <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
           {maid.fullName || "Unnamed maid"}
         </h3>
         {maid.referenceCode && (
-          <p className="text-[9px] text-gray-400 font-mono leading-tight">{maid.referenceCode}</p>
+          <p className="text-[11px] text-black font-mono leading-tight">{maid.referenceCode}</p>
         )}
         {maid.nationality && (
-          <p className="inline-flex items-center gap-1 text-[10px] text-gray-700 leading-tight mt-0.5">
+          <p className="inline-flex items-center gap-1 text-[11px] text-black leading-tight mt-0.5">
             <FlagCircle code={flagCode} />
             {maid.nationality}
           </p>
         )}
         <div className="my-1 border-t border-gray-100" />
-        <div className="flex items-center gap-1.5 text-[9px] text-gray-500 leading-tight">
-          {age !== null && <span className="font-medium text-gray-700">{age} yrs</span>}
+        <div className="flex items-center gap-1.5 text-[11px] text-black leading-tight">
+          {age !== null && <span className="font-semibold">{age} yrs</span>}
           {age !== null && maid.maritalStatus && <span className="text-gray-300">·</span>}
           {maid.maritalStatus && <span className="truncate">{maid.maritalStatus}</span>}
         </div>
         {maid.religion && (
-          <p className="text-[9px] text-gray-500 leading-tight line-clamp-1">{maid.religion}</p>
+          <p className="text-[11px] text-black leading-tight line-clamp-1">{maid.religion}</p>
         )}
         {experienceBucket && (
-          <p className="text-[9px] text-gray-500 leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>
+          <p className="text-[11px] text-black leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>
         )}
         {maid.languageSkills && (() => {
           const langs = Object.entries(maid.languageSkills)
@@ -213,7 +214,7 @@ const ShortlistMaidCard = ({
             .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
             .slice(0, 3);
           return langs.length > 0 ? (
-            <p className="text-[9px] text-gray-400 leading-tight line-clamp-1 mt-0.5">
+            <p className="text-[11px] text-black leading-tight line-clamp-1 mt-0.5">
               {langs.join(" · ")}
             </p>
           ) : null;
@@ -223,7 +224,7 @@ const ShortlistMaidCard = ({
   );
 };
 
-// ── Tell Friend Modal ──────────────────────────────────────────────────────────
+// ── Tell Friend Modal ─────────────────────────────────────────────────────────
 interface TellFriendModalProps {
   maid: MaidProfile;
   agencyName: string;
@@ -310,13 +311,14 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
         className="relative w-full max-w-md rounded-xl bg-white shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-gray-800">
+          <h2 className="text-sm font-semibold text-black">
             Tell your friend about this {maid.nationality || ""}.
           </h2>
           <button
             onClick={onClose}
-            className="flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-black hover:bg-gray-200 transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -327,13 +329,14 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
               <Check className="h-6 w-6 text-emerald-600" />
             </div>
-            <p className="text-sm font-semibold text-gray-800">Message sent!</p>
-            <p className="text-xs text-gray-500">Your friend will receive the maid info shortly.</p>
+            <p className="text-sm font-semibold text-black">Message sent!</p>
+            <p className="text-xs text-black">Your friend will receive the maid info shortly.</p>
           </div>
         ) : (
           <div className="px-5 py-4 space-y-3">
             <div className="grid grid-cols-[60px_1fr] items-start gap-x-3 gap-y-2">
-              <label className="pt-2 text-right text-xs font-medium text-gray-600">To</label>
+              {/* Labels */}
+              <label className="pt-2 text-right text-xs font-semibold text-black">To</label>
               <div className="space-y-1.5">
                 <input
                   ref={toNameRef}
@@ -341,7 +344,7 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
                   placeholder="Your Friend's name"
                   value={toName}
                   onChange={(e) => setToName(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
+                  className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-black placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
                 />
                 <div>
                   <input
@@ -349,20 +352,20 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
                     placeholder="Your Friend's email *"
                     value={toEmail}
                     onChange={(e) => { setToEmail(e.target.value); setErrors((p) => ({ ...p, toEmail: "" })); }}
-                    className={`w-full rounded border px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1 transition ${errors.toEmail ? "border-red-400 focus:border-red-400 focus:ring-red-400" : "border-gray-300 focus:border-blue-400 focus:ring-blue-400"}`}
+                    className={`w-full rounded border px-3 py-1.5 text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-1 transition ${errors.toEmail ? "border-red-400 focus:border-red-400 focus:ring-red-400" : "border-gray-300 focus:border-blue-400 focus:ring-blue-400"}`}
                   />
                   {errors.toEmail && <p className="mt-0.5 text-[11px] text-red-500">{errors.toEmail}</p>}
                 </div>
               </div>
 
-              <label className="pt-2 text-right text-xs font-medium text-gray-600">From</label>
+              <label className="pt-2 text-right text-xs font-semibold text-black">From</label>
               <div className="space-y-1.5">
                 <input
                   type="text"
                   placeholder="Your name"
                   value={fromName}
                   onChange={(e) => setFromName(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
+                  className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-black placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
                 />
                 <div>
                   <input
@@ -370,31 +373,31 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
                     placeholder="Your email *"
                     value={fromEmail}
                     onChange={(e) => { setFromEmail(e.target.value); setErrors((p) => ({ ...p, fromEmail: "" })); }}
-                    className={`w-full rounded border px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1 transition ${errors.fromEmail ? "border-red-400 focus:border-red-400 focus:ring-red-400" : "border-gray-300 focus:border-blue-400 focus:ring-blue-400"}`}
+                    className={`w-full rounded border px-3 py-1.5 text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-1 transition ${errors.fromEmail ? "border-red-400 focus:border-red-400 focus:ring-red-400" : "border-gray-300 focus:border-blue-400 focus:ring-blue-400"}`}
                   />
                   {errors.fromEmail && <p className="mt-0.5 text-[11px] text-red-500">{errors.fromEmail}</p>}
                 </div>
               </div>
 
-              <label className="pt-2 text-right text-xs font-medium text-gray-600">Subject</label>
+              <label className="pt-2 text-right text-xs font-semibold text-black">Subject</label>
               <input
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-800 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
+                className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-black focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
               />
 
-              <label className="pt-2 text-right text-xs font-medium text-gray-600">Message</label>
+              <label className="pt-2 text-right text-xs font-semibold text-black">Message</label>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={6}
-                className="w-full resize-none rounded border border-gray-300 px-3 py-2 text-sm text-gray-800 leading-relaxed focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
+                className="w-full resize-none rounded border border-gray-300 px-3 py-2 text-sm text-black leading-relaxed focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition"
               />
             </div>
 
             <div className="flex items-center justify-between border-t pt-3">
-              <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+              <button onClick={onClose} className="text-xs text-black hover:underline transition-colors">
                 Cancel
               </button>
               <button
@@ -413,14 +416,14 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
   );
 };
 
-// ── Profile page helpers ──────────────────────────────────────────────────────
+// ── Profile helpers ───────────────────────────────────────────────────────────
 const availabilityRemarkItems = [
-  { label: "Able to handle pork", keys: ["Able to handle pork?"] },
-  { label: "Able to eat pork", keys: ["Able to eat pork?"] },
+  { label: "Able to handle pork",   keys: ["Able to handle pork?"] },
+  { label: "Able to eat pork",      keys: ["Able to eat pork?"] },
   { label: "Able to care for pets", keys: ["Able to care for dog/cat?"] },
-  { label: "Able to do sewing", keys: ["Able to do simple sewing?"] },
-  { label: "Able to do gardening", keys: ["Able to do gardening work?"] },
-  { label: "Willing to wash car", keys: ["Willing to wash car?"] },
+  { label: "Able to do sewing",     keys: ["Able to do simple sewing?"] },
+  { label: "Able to do gardening",  keys: ["Able to do gardening work?"] },
+  { label: "Willing to wash car",   keys: ["Willing to wash car?"] },
   {
     label: "Can work on off-days",
     keys: [
@@ -432,10 +435,10 @@ const availabilityRemarkItems = [
 ] as const;
 
 const fixedLanguageKeyMap = [
-  { label: "ENGLISH", keys: ["English"] },
-  { label: "MANDARIN/CHINESE dialect", keys: ["Mandarin/Chinese-Dialect", "Mandarin / Chinese Dialect", "Mandarin/Chinese Dialect", "Mandarin"] },
-  { label: "Hindi", keys: ["Hindi"] },
-  { label: "Tamil", keys: ["Tamil"] },
+  { label: "ENGLISH",                   keys: ["English"] },
+  { label: "MANDARIN/CHINESE dialect",  keys: ["Mandarin/Chinese-Dialect", "Mandarin / Chinese Dialect", "Mandarin/Chinese Dialect", "Mandarin"] },
+  { label: "Hindi",                     keys: ["Hindi"] },
+  { label: "Tamil",                     keys: ["Tamil"] },
   { label: "Bahasa Indonesia/Malaysia", keys: ["Bahasa Indonesia/Malaysia", "Bahasa Indonesia / Malaysia", "Bahasa"] },
 ] as const;
 
@@ -450,74 +453,80 @@ const getYouTubeEmbedUrl = (value?: string) => {
       return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
     }
     if (host.endsWith("youtube.com")) {
-      if (url.pathname.startsWith("/watch")) { const id = url.searchParams.get("v"); return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null; }
-      if (url.pathname.startsWith("/embed/")) { const id = url.pathname.split("/embed/")[1]?.split("/")[0]; return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null; }
-      if (url.pathname.startsWith("/shorts/")) { const id = url.pathname.split("/shorts/")[1]?.split("/")[0]; return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null; }
+      if (url.pathname.startsWith("/watch"))   { const id = url.searchParams.get("v");                           return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null; }
+      if (url.pathname.startsWith("/embed/"))  { const id = url.pathname.split("/embed/")[1]?.split("/")[0];     return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null; }
+      if (url.pathname.startsWith("/shorts/")) { const id = url.pathname.split("/shorts/")[1]?.split("/")[0];    return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null; }
     }
   } catch { /* ignore */ }
   return null;
 };
 
+// ── Shared small components ───────────────────────────────────────────────────
+
+/** Section card header — uppercase label strip */
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
-  <div className="border-b bg-muted/30 px-4 py-2">
-    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{children}</p>
+  <div className="border-b bg-gray-50 px-4 py-2">
+    <p className="text-[11px] font-bold uppercase tracking-widest text-black">{children}</p>
   </div>
 );
 
+/** Yes / No pill badge */
 const YesNoBadge = ({ yes }: { yes: boolean }) => (
-  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${yes ? "bg-emerald-50 text-emerald-700" : "bg-muted text-foreground"}`}>
+  <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+    yes ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-black"
+  }`}>
     {yes ? "Yes" : "No"}
   </span>
 );
 
+/** Star rating display */
 const StarDisplay = ({ evaluation }: { evaluation?: string }) => {
   const raw = String(evaluation || "").trim();
   if (!raw || raw === "—" || raw === "N.A." || raw === "-") {
-    return <span className="text-foreground text-xs">N.A.</span>;
+    return <span className="text-xs text-black">N.A.</span>;
   }
   const match = raw.match(/^(\d+)\/5/);
   const rating = match ? parseInt(match[1], 10) : null;
   const note = raw.replace(/^\d+\/5\s*[-–]?\s*/, "").trim();
   if (rating === null) {
-    return <span className="text-[11px] text-foreground">{raw}</span>;
+    return <span className="text-xs text-black">{raw}</span>;
   }
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex items-center gap-0.5">
         {Array.from({ length: 5 }, (_, i) => (
-          <Star key={i} className={`h-4 w-4 ${i < rating ? "fill-primary text-primary" : "text-foreground/30"}`} />
+          <Star key={i} className={`h-4 w-4 ${i < rating ? "fill-primary text-primary" : "text-gray-200"}`} />
         ))}
       </div>
-      {note && <span className="text-[10px] text-foreground leading-tight text-center">{note}</span>}
+      {note && <span className="text-[11px] text-black leading-tight text-center">{note}</span>}
     </div>
   );
 };
 
+/** Key-value row in a two-column grid */
 const KVRow = ({ label, value }: { label: string; value: string }) => (
   <div className="contents">
-    <p className="py-1 pr-3 text-[11px] font-medium text-foreground border-b border-dashed border-muted/60 leading-snug">{label}</p>
-    <p className="py-1 text-[12px] text-foreground border-b border-dashed border-muted/60 leading-snug">{value || "—"}</p>
+    <p className="py-1 pr-3 text-[12px] font-semibold text-black border-b border-dashed border-gray-200 leading-snug">{label}</p>
+    <p className="py-1 text-[13px] text-black border-b border-dashed border-gray-200 leading-snug">{value || "—"}</p>
   </div>
 );
 
-const getPrimaryPhoto = (maid: MaidProfile) =>
-  Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl || "";
-
 type PublicMaidProfileProps = { embedded?: boolean };
 
+// ── Main component ────────────────────────────────────────────────────────────
 const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
   const { refCode } = useParams();
-  const [maid, setMaid] = useState<MaidProfile | null>(null);
-  const [company, setCompany] = useState<CompanyProfileApi | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [maid, setMaid]                   = useState<MaidProfile | null>(null);
+  const [company, setCompany]             = useState<CompanyProfileApi | null>(null);
+  const [isLoading, setIsLoading]         = useState(true);
   const [shortlistRefs, setShortlistRefs] = useState<string[]>([]);
   const [shortlistMaids, setShortlistMaids] = useState<MaidProfile[]>([]);
   const [isShortlistLoading, setIsShortlistLoading] = useState(false);
-  const [isShortlistOpen, setIsShortlistOpen] = useState(false);
-  const [isTellFriendOpen, setIsTellFriendOpen] = useState(false);
+  const [isShortlistOpen, setIsShortlistOpen]       = useState(false);
+  const [isTellFriendOpen, setIsTellFriendOpen]     = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const [showOtherLanguages, setShowOtherLanguages] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn]       = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -582,12 +591,11 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
       .catch(() => setIsLoggedIn(false));
   }, []);
 
-  const agencyContact = useMemo(() => (maid ? maid.agencyContact as Record<string, unknown> : null), [maid]);
-  const isShortlisted = Boolean(maid?.referenceCode && shortlistRefs.includes(maid.referenceCode));
-
+  const agencyContact    = useMemo(() => (maid ? maid.agencyContact as Record<string, unknown> : null), [maid]);
+  const isShortlisted    = Boolean(maid?.referenceCode && shortlistRefs.includes(maid.referenceCode));
   const missingShortlistRefs = useMemo(
     () => shortlistRefs.filter((ref) => !shortlistMaids.some((m) => m.referenceCode === ref)),
-    [shortlistRefs, shortlistMaids]
+    [shortlistRefs, shortlistMaids],
   );
 
   const handleToggleShortlist = (refOverride?: string) => {
@@ -614,17 +622,19 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
       .filter(([language, level]) => !allowedKeys.has(language) && level.trim());
   }, [maid?.languageSkills]);
 
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="client-page-theme min-h-screen bg-card">
         <PublicSiteNavbar />
         <div className="page-container">
-          <div className="content-card py-10 text-center text-foreground text-sm">Loading maid profile…</div>
+          <div className="content-card py-10 text-center text-black text-sm">Loading maid profile…</div>
         </div>
       </div>
     );
   }
 
+  // ── Profile not found ────────────────────────────────────────────────────
   if (!maid) {
     return (
       <div className="client-page-theme min-h-screen bg-card">
@@ -636,22 +646,23 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
             </Link>
           </div>
           <div className="content-card p-10 text-center">
-            <p className="text-sm font-semibold text-foreground">Profile Not Available</p>
-            <p className="mt-1 text-xs text-foreground">This maid profile is not currently available for public viewing.</p>
+            <p className="text-sm font-semibold text-black">Profile Not Available</p>
+            <p className="mt-1 text-xs text-black">This maid profile is not currently available for public viewing.</p>
           </div>
         </div>
       </div>
     );
   }
 
-  const introduction = maid.introduction as Record<string, unknown>;
+  // ── Data prep ────────────────────────────────────────────────────────────
+  const introduction      = maid.introduction as Record<string, unknown>;
   const skillsPreferences = maid.skillsPreferences as Record<string, unknown>;
-  const otherInformation = (skillsPreferences?.otherInformation as Record<string, boolean>) || {};
-  const workAreaNotes = (skillsPreferences?.workAreaNotes as Record<string, string>) || {};
-  const pastIllnesses = (introduction?.pastIllnesses as Record<string, boolean>) || {};
+  const otherInformation  = (skillsPreferences?.otherInformation as Record<string, boolean>) || {};
+  const workAreaNotes     = (skillsPreferences?.workAreaNotes as Record<string, string>) || {};
+  const pastIllnesses     = (introduction?.pastIllnesses as Record<string, boolean>) || {};
 
   const workAreasOrder = ["Care of infants/children", "Care of elderly", "Care of disabled", "General housework", "Cooking", "Language abilities (spoken)", "Other skills, if any"] as const;
-  const rawWorkAreas = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string }]>;
+  const rawWorkAreas   = Object.entries(maid.workAreas || {}) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string }]>;
   const orderedWorkAreas = workAreasOrder
     .map((area) => rawWorkAreas.find(([key]) => key === area) ?? null)
     .filter(Boolean) as Array<[string, { willing?: boolean; experience?: boolean; evaluation?: string; yearsOfExperience?: string }]>;
@@ -664,68 +675,69 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
     .filter(Boolean) as Array<[string, string]>;
 
   const passportOrTwoByTwoPhoto = photos[0] ?? "";
-  const fullBodyPhoto = photos[1] ?? "";
-  const extraPhotos = photos.slice(2);
-  const youtubeEmbedUrl = getYouTubeEmbedUrl(maid.videoDataUrl);
+  const fullBodyPhoto           = photos[1] ?? "";
+  const extraPhotos             = photos.slice(2);
+  const youtubeEmbedUrl         = getYouTubeEmbedUrl(maid.videoDataUrl);
 
-  const storedClient = getStoredClient() as (ReturnType<typeof getStoredClient> & { emailVerified?: boolean }) | null;
+  const storedClient       = getStoredClient() as (ReturnType<typeof getStoredClient> & { emailVerified?: boolean }) | null;
   const canViewPrivateIntro = Boolean(isLoggedIn && storedClient?.emailVerified === true);
 
-  const agencyName = company?.company_name || company?.short_name || String(agencyContact?.companyName || "Agency");
-  const agencyPhone = company?.contact_phone || String(agencyContact?.phone || "");
+  const agencyName          = company?.company_name || company?.short_name || String(agencyContact?.companyName || "Agency");
+  const agencyPhone         = company?.contact_phone || String(agencyContact?.phone || "");
   const agencyContactPerson = company?.contact_person || String(agencyContact?.contactPerson || "");
-  const publicIntro = getPublicIntro(maid);
+  const publicIntro         = getPublicIntro(maid);
 
   const detailRows: Array<[string, string]> = [
-    ["Name", maid.fullName],
-    ["Ref. Code", maid.referenceCode],
-    ["Type", maid.type],
-    ["Nationality", maid.nationality],
-    ["Category", String((agencyContact["indianMaidCategory"] ?? introduction["indianMaidCategory"] ?? skillsPreferences["indianMaidCategory"] ?? "N/A") as string | number | boolean)],
-    ["Date of Birth", formatDate(maid.dateOfBirth)],
-    ["Place of Birth", maid.placeOfBirth],
-    ["Height / Weight", `${maid.height}cm / ${maid.weight}kg`],
-    ["Religion", maid.religion],
-    ["Marital Status", maid.maritalStatus],
-    ["Children", String(maid.numberOfChildren)],
-    ["Siblings", String(maid.numberOfSiblings)],
-    ["Home Address", maid.homeAddress],
-    ["Repatriation Airport", maid.airportRepatriation],
-    ["Education", maid.educationLevel],
-    ["Home Contact No.", String(agencyContact?.homeCountryContactNumber || "N/A")],
+    ["Name",                maid.fullName],
+    ["Ref. Code",           maid.referenceCode],
+    ["Type",                maid.type],
+    ["Nationality",         maid.nationality],
+    ["Category",            String((agencyContact?.["indianMaidCategory"] ?? introduction["indianMaidCategory"] ?? skillsPreferences["indianMaidCategory"] ?? "N/A") as string | number | boolean)],
+    ["Date of Birth",       formatDate(maid.dateOfBirth)],
+    ["Place of Birth",      maid.placeOfBirth],
+    ["Height / Weight",     `${maid.height}cm / ${maid.weight}kg`],
+    ["Religion",            maid.religion],
+    ["Marital Status",      maid.maritalStatus],
+    ["Children",            String(maid.numberOfChildren)],
+    ["Siblings",            String(maid.numberOfSiblings)],
+    ["Home Address",        maid.homeAddress],
+    ["Repatriation Airport",maid.airportRepatriation],
+    ["Education",           maid.educationLevel],
+    ["Home Contact No.",    String(agencyContact?.homeCountryContactNumber || "N/A")],
   ];
 
   const medicalRows: Array<[string, string]> = [
-    ["Allergies", String(introduction?.allergies || "N/A")],
-    ["Disabilities", String(introduction?.physicalDisabilities || "N/A")],
-    ["Dietary", String(introduction?.dietaryRestrictions || "N/A")],
-    ["Food Handling", String(introduction?.foodHandlingPreferences || "N/A")],
+    ["Allergies",       String(introduction?.allergies || "N/A")],
+    ["Disabilities",    String(introduction?.physicalDisabilities || "N/A")],
+    ["Dietary",         String(introduction?.dietaryRestrictions || "N/A")],
+    ["Food Handling",   String(introduction?.foodHandlingPreferences || "N/A")],
     ["Other Illnesses", String(introduction?.otherIllnesses || "N/A")],
-    ["Remarks", String(introduction?.otherRemarks || "N/A")],
+    ["Remarks",         String(introduction?.otherRemarks || "N/A")],
   ];
 
   const availabilityRows: Array<[string, string]> = [
-    ["Available From", String(introduction?.availability || "N/A")],
-    ["Contract Ends", String(introduction?.contractEnds || "N/A")],
-    ["Present Salary", String(introduction?.presentSalary || "N/A")],
-    ["Expected Salary", String(introduction?.expectedSalary || "N/A")],
-    ["Offday Comp.", String(introduction?.offdayCompensation || "N/A")],
-    ["Off-days/Month", String(skillsPreferences?.offDaysPerMonth || "N/A")],
-    ["Avail. Remark", String(skillsPreferences?.availabilityRemark || "N/A")],
+    ["Available From",   String(introduction?.availability || "N/A")],
+    ["Contract Ends",    String(introduction?.contractEnds || "N/A")],
+    ["Present Salary",   String(introduction?.presentSalary || "N/A")],
+    ["Expected Salary",  String(introduction?.expectedSalary || "N/A")],
+    ["Offday Comp.",     String(introduction?.offdayCompensation || "N/A")],
+    ["Off-days/Month",   String(skillsPreferences?.offDaysPerMonth || "N/A")],
+    ["Avail. Remark",    String(skillsPreferences?.availabilityRemark || "N/A")],
   ];
 
   const privateRows: Array<[string, string]> = [
-    ["Passport No.", String(agencyContact?.passportNo || "N/A")],
+    ["Passport No.",     String(agencyContact?.passportNo || "N/A")],
     ["Ages of Children", String(introduction?.agesOfChildren || "N/A")],
-    ["Maid Loan", String(introduction?.maidLoan || "N/A")],
-    ["Private Info", String(skillsPreferences?.privateInfo || "N/A")],
+    ["Maid Loan",        String(introduction?.maidLoan || "N/A")],
+    ["Private Info",     String(skillsPreferences?.privateInfo || "N/A")],
   ];
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="client-page-theme min-h-screen bg-card">
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
-      {/* ── Lightbox ── */}
+      {/* Lightbox */}
       {lightboxPhoto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm" onClick={() => setLightboxPhoto(null)}>
           <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -735,7 +747,7 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
         </div>
       )}
 
-      {/* ── Tell Friend Modal ── */}
+      {/* Tell Friend Modal */}
       {isTellFriendOpen && (
         <TellFriendModal
           maid={maid}
@@ -747,10 +759,11 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
       )}
 
       <div className="page-container">
+        {/* Back link */}
         <div className="mb-5">
           <Link
             to="/client/maids/search"
-            className="group inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200"
+            className="group inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm font-semibold text-black shadow-sm transition-all duration-200"
           >
             <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-1" />
             <span>Back to all maids</span>
@@ -760,55 +773,61 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
         <div className="content-card animate-fade-in-up space-y-4">
 
           {/* ── Action toolbar ── */}
-          <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 rounded-lg border bg-muted/20 px-2 py-1.5">
-            <Link to="/client/maids/search" className="rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors">All Maids</Link>
-            <span className="mx-1 text-foreground/20 select-none">|</span>
+          <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 rounded-lg border bg-gray-50 px-2 py-1.5">
+            <Link to="/client/maids/search" className="rounded px-2.5 py-1 text-xs font-semibold text-black hover:bg-gray-100 transition-colors">All Maids</Link>
+            <span className="mx-1 text-gray-300 select-none">|</span>
+
             <button
               onClick={() => handleToggleShortlist()}
-              className={`flex items-center gap-1 rounded px-2.5 py-1 text-[11px] transition-colors hover:bg-muted ${isShortlisted ? "text-rose-500" : "text-primary"}`}
+              className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-gray-100 ${isShortlisted ? "text-rose-500" : "text-black"}`}
             >
-              <Heart className={`h-3 w-3 ${isShortlisted ? "fill-rose-500" : ""}`} />
+              <Heart className={`h-3.5 w-3.5 ${isShortlisted ? "fill-rose-500" : ""}`} />
               {isShortlisted ? "Shortlisted" : "Shortlist"}
             </button>
 
             <button
               onClick={() => setIsTellFriendOpen(true)}
-              className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"
+              className="flex items-center gap-1 rounded px-2.5 py-1 text-xs font-semibold text-black hover:bg-gray-100 transition-colors"
             >
-              <Share2 className="h-3 w-3" />Tell Friend
+              <Share2 className="h-3.5 w-3.5" /> Tell Friend
             </button>
 
             <button
               onClick={() => setIsShortlistOpen(true)}
-              className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"
+              className="flex items-center gap-1 rounded px-2.5 py-1 text-xs font-semibold text-black hover:bg-gray-100 transition-colors"
             >
-              <Eye className="h-3 w-3" />My Shortlist ({shortlistRefs.length})
+              <Eye className="h-3.5 w-3.5" /> My Shortlist ({shortlistRefs.length})
             </button>
-            <span className="mx-1 text-foreground/20 select-none">|</span>
+
+            <span className="mx-1 text-gray-300 select-none">|</span>
+
             <Link
               to={
                 isLoggedIn
                   ? `/client/support-chat?type=agency&agencyId=${encodeURIComponent(String(maid.agencyId ?? 1))}&agencyName=${encodeURIComponent(maid.agencyName || agencyName)}`
                   : "/employer-login"
               }
-              className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-primary hover:bg-muted transition-colors"
+              className="flex items-center gap-1 rounded px-2.5 py-1 text-xs font-semibold text-black hover:bg-gray-100 transition-colors"
             >
-              <MessageCircle className="h-3 w-3" />Contact Agency
+              <MessageCircle className="h-3.5 w-3.5" /> Contact Agency
             </Link>
           </div>
 
+          {/* Login prompt */}
           {!isLoggedIn && (
-            <div className="rounded-lg border bg-muted/20 p-4 text-center">
-              <p className="text-sm text-foreground">Photos and detailed biodata are blurred until employer login.</p>
+            <div className="rounded-lg border bg-gray-50 p-4 text-center">
+              <p className="text-sm text-black font-medium">Photos and detailed biodata are blurred until employer login.</p>
               <div className="mt-3">
                 <Button asChild><Link to="/employer-login">Employer Login</Link></Button>
               </div>
             </div>
           )}
 
-          {/* ── Top grid: video / agency card / photos ── */}
+          {/* ── Top grid: video / agency / photos ── */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_200px_auto]">
-            <div className={`relative min-h-[180px] overflow-hidden rounded-lg border bg-muted/20 ${!isLoggedIn ? "blur-md" : ""}`}>
+
+            {/* Video */}
+            <div className={`relative min-h-[180px] overflow-hidden rounded-lg border bg-gray-50 ${!isLoggedIn ? "blur-md" : ""}`}>
               {youtubeEmbedUrl ? (
                 <iframe className="absolute inset-0 h-full w-full" src={youtubeEmbedUrl} title="YouTube video"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -817,53 +836,67 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                 <video controls className="absolute inset-0 h-full w-full object-cover" src={maid.videoDataUrl} />
               ) : (
                 <div className="flex min-h-[180px] items-center justify-center p-4 text-center">
-                  <p className="text-xs text-foreground">No video introduction available.</p>
+                  <p className="text-xs text-black">No video introduction available.</p>
                 </div>
               )}
             </div>
 
-            <div className="rounded-lg border bg-muted/10 p-3 space-y-1 text-xs">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Agency</p>
-              <p className="font-semibold text-foreground leading-snug">{agencyName}</p>
-              <p className="text-foreground">Lic. No.: {company?.license_no || String(agencyContact?.licenseNo || "N/A")}</p>
-              <p className="text-foreground">Contact: <span className="font-semibold">{agencyContactPerson || "N/A"}</span></p>
-              <p className="text-foreground">Phone: <span className="font-semibold text-primary">{agencyPhone || "N/A"}</span></p>
+            {/* Agency card */}
+            <div className="rounded-lg border bg-gray-50 p-3 space-y-1 text-xs">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-black mb-2">Agency</p>
+              <p className="font-bold text-black text-sm leading-snug">{agencyName}</p>
+              <p className="text-black">Lic. No.: {company?.license_no || String(agencyContact?.licenseNo || "N/A")}</p>
+              <p className="text-black">Contact: <span className="font-semibold">{agencyContactPerson || "N/A"}</span></p>
+              <p className="text-black">Phone: <span className="font-semibold text-primary">{agencyPhone || "N/A"}</span></p>
               <div className="pt-2 mt-1 border-t">
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${(maid.status || "available") === "available" ? "bg-emerald-50 text-emerald-700" : "bg-muted text-foreground"}`}>
-                  <span className="h-1.5 w-1.5 rounded-full bg-current" />{maid.status || "available"}
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${(maid.status || "available") === "available" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-black"}`}>
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {maid.status || "available"}
                 </span>
               </div>
             </div>
 
+            {/* Photos */}
             <div className={`flex flex-col gap-2 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{photos.length}/5 photos</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-black">{photos.length}/5 photos</p>
               <div className="flex gap-2">
                 <div className="flex flex-col items-center gap-1">
-                  <span className="text-[9px] text-foreground uppercase tracking-wide">Passport</span>
-                  <button type="button" disabled={!passportOrTwoByTwoPhoto || !isLoggedIn} onClick={() => passportOrTwoByTwoPhoto && setLightboxPhoto(passportOrTwoByTwoPhoto)}
-                    className="group relative flex h-32 w-24 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-muted bg-muted/20 transition hover:border-primary/40 disabled:cursor-default">
+                  <span className="text-[11px] font-semibold text-black uppercase tracking-wide">Passport</span>
+                  <button type="button" disabled={!passportOrTwoByTwoPhoto || !isLoggedIn}
+                    onClick={() => passportOrTwoByTwoPhoto && setLightboxPhoto(passportOrTwoByTwoPhoto)}
+                    className="group relative flex h-32 w-24 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 transition hover:border-primary/40 disabled:cursor-default">
                     {passportOrTwoByTwoPhoto ? (
-                      <><img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-contain" />
-                      <span className="absolute inset-0 flex items-end justify-center bg-black/20 pb-1 opacity-0 transition-opacity group-hover:opacity-100"><span className="rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-white">View</span></span></>
-                    ) : <span className="text-[10px] text-foreground">No photo</span>}
+                      <>
+                        <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-contain" />
+                        <span className="absolute inset-0 flex items-end justify-center bg-black/20 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <span className="rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">View</span>
+                        </span>
+                      </>
+                    ) : <span className="text-xs text-black">No photo</span>}
                   </button>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <span className="text-[9px] text-foreground uppercase tracking-wide">Full body</span>
-                  <button type="button" disabled={!fullBodyPhoto || !isLoggedIn} onClick={() => fullBodyPhoto && setLightboxPhoto(fullBodyPhoto)}
-                    className="group relative flex h-48 w-24 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-muted bg-muted/20 transition hover:border-primary/40 disabled:cursor-default">
+                  <span className="text-[11px] font-semibold text-black uppercase tracking-wide">Full body</span>
+                  <button type="button" disabled={!fullBodyPhoto || !isLoggedIn}
+                    onClick={() => fullBodyPhoto && setLightboxPhoto(fullBodyPhoto)}
+                    className="group relative flex h-48 w-24 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 transition hover:border-primary/40 disabled:cursor-default">
                     {fullBodyPhoto ? (
-                      <><img src={fullBodyPhoto} alt="full body" className="h-full w-full object-contain" />
-                      <span className="absolute inset-0 flex items-end justify-center bg-black/20 pb-1 opacity-0 transition-opacity group-hover:opacity-100"><span className="rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-white">View</span></span></>
-                    ) : <span className="text-[10px] text-foreground">No photo</span>}
+                      <>
+                        <img src={fullBodyPhoto} alt="full body" className="h-full w-full object-contain" />
+                        <span className="absolute inset-0 flex items-end justify-center bg-black/20 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <span className="rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">View</span>
+                        </span>
+                      </>
+                    ) : <span className="text-xs text-black">No photo</span>}
                   </button>
                 </div>
               </div>
               {extraPhotos.length > 0 && (
                 <div className="flex gap-1.5">
                   {extraPhotos.map((photo, index) => (
-                    <button key={`${photo}-${index}`} type="button" disabled={!isLoggedIn} onClick={() => setLightboxPhoto(photo)}
-                      className="group relative h-14 w-14 overflow-hidden rounded-md border border-muted bg-muted/20 transition hover:border-primary/40 disabled:cursor-default">
+                    <button key={`${photo}-${index}`} type="button" disabled={!isLoggedIn}
+                      onClick={() => setLightboxPhoto(photo)}
+                      className="group relative h-14 w-14 overflow-hidden rounded-md border border-gray-200 bg-gray-50 transition hover:border-primary/40 disabled:cursor-default">
                       <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-contain" />
                       <span className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
                     </button>
@@ -875,27 +908,30 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
 
           {/* ── Personal details + Other info / Availability ── */}
           <div className={`grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px] ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
+
+            {/* Personal details */}
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Personal Details</SectionHeader>
               <div className="grid grid-cols-[140px_1fr] p-4 text-sm">
                 {detailRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
-                <p className="py-1 pr-3 text-[11px] font-medium text-foreground border-b border-dashed border-muted/60">Languages</p>
-                <div className="py-1 text-[12px] border-b border-dashed border-muted/60 space-y-0.5">
+                <p className="py-1 pr-3 text-[12px] font-semibold text-black border-b border-dashed border-gray-200">Languages</p>
+                <div className="py-1 text-[13px] border-b border-dashed border-gray-200 space-y-0.5">
                   {fixedLanguages.map(([lang, level]) => (
-                    <p key={lang} className="text-foreground">{lang} <span className="text-foreground/70 text-[11px]">({level})</span></p>
+                    <p key={lang} className="text-black">{lang} <span className="text-black text-[11px]">({level})</span></p>
                   ))}
                   {otherLanguages.length > 0 && (
-                    <button type="button" className="text-primary text-[11px] hover:underline" onClick={() => setShowOtherLanguages((p) => !p)}>
+                    <button type="button" className="text-primary text-[12px] hover:underline" onClick={() => setShowOtherLanguages((p) => !p)}>
                       {showOtherLanguages ? "Hide others" : `+${otherLanguages.length} more`}
                     </button>
                   )}
                   {showOtherLanguages && otherLanguages.map(([lang, level]) => (
-                    <p key={lang} className="text-foreground">{lang} <span className="text-foreground/70 text-[11px]">({level})</span></p>
+                    <p key={lang} className="text-black">{lang} <span className="text-black text-[11px]">({level})</span></p>
                   ))}
                 </div>
               </div>
             </div>
 
+            {/* Other info + Availability */}
             <div className="flex flex-col gap-4">
               <div className="rounded-lg border overflow-hidden">
                 <SectionHeader>Other Information</SectionHeader>
@@ -904,13 +940,14 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                     const yes = item.keys.some((key) => Boolean(otherInformation[key]));
                     return (
                       <div key={item.label} className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-foreground">{item.label}</span>
+                        <span className="text-[12px] text-black font-medium">{item.label}</span>
                         <YesNoBadge yes={yes} />
                       </div>
                     );
                   })}
                 </div>
               </div>
+
               <div className="rounded-lg border overflow-hidden">
                 <SectionHeader>Availability</SectionHeader>
                 <div className="grid grid-cols-[auto_1fr] p-3">
@@ -920,17 +957,20 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
             </div>
           </div>
 
-          {/* ── Maid Skills table ── */}
+          {/* ── Maid Skills ── */}
           <div className={`rounded-lg border overflow-hidden ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
             <SectionHeader>Maid Skills</SectionHeader>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b bg-muted/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="px-4 py-2 text-left">Area of Work</th>
-                    <th className="px-4 py-2 text-center w-20">Willing</th>
-                    <th className="px-4 py-2 text-center w-32">Experience</th>
-                    <th className="px-4 py-2 text-center w-36">Evaluation<br /><span className="font-normal normal-case">Stars out of 5</span></th>
+                  <tr className="border-b bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-black">
+                    <th className="px-4 py-2.5 text-left">Area of Work</th>
+                    <th className="px-4 py-2.5 text-center w-20">Willing</th>
+                    <th className="px-4 py-2.5 text-center w-32">Experience</th>
+                    <th className="px-4 py-2.5 text-center w-36">
+                      Evaluation<br />
+                      <span className="font-normal normal-case text-[11px]">Stars out of 5</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y text-xs">
@@ -940,21 +980,23 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                       return Boolean(config.willing || config.experience || (ev && ev !== "-" && ev !== "N.A."));
                     })
                     .map(([area, config]) => {
-                      const rawAge = String(workAreaNotes["Care of infants/children"] || "").trim();
+                      const rawAge      = String(workAreaNotes["Care of infants/children"] || "").trim();
                       const formattedAge = rawAge ? rawAge.replace(/\s*-\s*/g, "–") : "";
-                      const needsYears = formattedAge && !/year/i.test(formattedAge);
-                      const areaLabel = area === "Care of infants/children" && formattedAge
+                      const needsYears   = formattedAge && !/year/i.test(formattedAge);
+                      const areaLabel    = area === "Care of infants/children" && formattedAge
                         ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})`
                         : area;
                       const yrs = String(config.yearsOfExperience || "").trim();
                       return (
-                        <tr key={area} className="hover:bg-muted/20">
-                          <td className="px-4 py-2 text-foreground">{areaLabel}</td>
+                        <tr key={area} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-[13px] text-black">{areaLabel}</td>
                           <td className="px-4 py-2 text-center"><YesNoBadge yes={Boolean(config.willing)} /></td>
                           <td className="px-4 py-2 text-center">
                             <div className="flex flex-col items-center gap-1">
                               <YesNoBadge yes={Boolean(config.experience)} />
-                              {config.experience && yrs && <span className="text-[11px] text-foreground">{yrs} {Number(yrs) === 1 ? "year" : "years"}</span>}
+                              {config.experience && yrs && (
+                                <span className="text-[11px] text-black">{yrs} {Number(yrs) === 1 ? "year" : "years"}</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-2 text-center"><StarDisplay evaluation={config.evaluation} /></td>
@@ -972,13 +1014,13 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               {workAreaNotes["Cooking"] && (
                 <div className="rounded-lg border overflow-hidden">
                   <SectionHeader>Cooking Notes</SectionHeader>
-                  <p className="p-3 text-xs whitespace-pre-wrap text-foreground">{workAreaNotes["Cooking"]}</p>
+                  <p className="p-3 text-[13px] whitespace-pre-wrap text-black">{workAreaNotes["Cooking"]}</p>
                 </div>
               )}
               {workAreaNotes["Other Skill"] && (
                 <div className="rounded-lg border overflow-hidden">
                   <SectionHeader>Other Skill Notes</SectionHeader>
-                  <p className="p-3 text-xs whitespace-pre-wrap text-foreground">{workAreaNotes["Other Skill"]}</p>
+                  <p className="p-3 text-[13px] whitespace-pre-wrap text-black">{workAreaNotes["Other Skill"]}</p>
                 </div>
               )}
             </div>
@@ -991,21 +1033,23 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b bg-muted/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {["From", "To", "Country", "Employer", "Duties", "Remarks"].map((h) => <th key={h} className="px-4 py-2 text-left">{h}</th>)}
+                    <tr className="border-b bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-black">
+                      {["From", "To", "Country", "Employer", "Duties", "Remarks"].map((h) => (
+                        <th key={h} className="px-4 py-2.5 text-left">{h}</th>
+                      ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y text-xs">
+                  <tbody className="divide-y">
                     {employment.map((item, index) => {
                       const row = item as Record<string, string>;
                       return (
-                        <tr key={`${maid.referenceCode}-${index}`} className="hover:bg-muted/20">
-                          <td className="px-4 py-1.5 whitespace-nowrap text-foreground">{formatDate(row.from) === "N/A" ? "—" : formatDate(row.from)}</td>
-                          <td className="px-4 py-1.5 whitespace-nowrap text-foreground">{formatDate(row.to) === "N/A" ? "—" : formatDate(row.to)}</td>
-                          <td className="px-4 py-1.5 text-foreground">{row.country || "—"}</td>
-                          <td className="px-4 py-1.5 text-foreground">{row.employer || "—"}</td>
-                          <td className="px-4 py-1.5 text-foreground">{row.duties || "—"}</td>
-                          <td className="px-4 py-1.5 text-foreground">{row.remarks || "—"}</td>
+                        <tr key={`${maid.referenceCode}-${index}`} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-[13px] text-black whitespace-nowrap">{formatDate(row.from) === "N/A" ? "—" : formatDate(row.from)}</td>
+                          <td className="px-4 py-2 text-[13px] text-black whitespace-nowrap">{formatDate(row.to)   === "N/A" ? "—" : formatDate(row.to)}</td>
+                          <td className="px-4 py-2 text-[13px] text-black">{row.country  || "—"}</td>
+                          <td className="px-4 py-2 text-[13px] text-black">{row.employer || "—"}</td>
+                          <td className="px-4 py-2 text-[13px] text-black">{row.duties   || "—"}</td>
+                          <td className="px-4 py-2 text-[13px] text-black">{row.remarks  || "—"}</td>
                         </tr>
                       );
                     })}
@@ -1017,6 +1061,8 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
 
           {/* ── Medical / Private info ── */}
           <div className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
+
+            {/* Medical */}
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Medical / Dietary</SectionHeader>
               <div className="grid grid-cols-[130px_1fr] p-4 text-sm">
@@ -1024,18 +1070,23 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               </div>
               {Object.keys(pastIllnesses).length > 0 && (
                 <div className="border-t p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Past Illnesses</p>
-                  <div className="space-y-1">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-black mb-2">Past Illnesses</p>
+                  <div className="space-y-1.5">
                     {Object.entries(pastIllnesses).map(([illness, value]) => (
-                      <div key={illness} className="flex items-center justify-between text-xs">
-                        <span className="text-foreground">{illness}</span>
-                        {value ? <Check className="h-3.5 w-3.5 text-primary" /> : <span className="text-foreground">—</span>}
+                      <div key={illness} className="flex items-center justify-between">
+                        <span className="text-[13px] text-black">{illness}</span>
+                        {value
+                          ? <Check className="h-3.5 w-3.5 text-primary" />
+                          : <YesNoBadge yes={false} />
+                        }
                       </div>
                     ))}
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Private */}
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Private Information</SectionHeader>
               {canViewPrivateIntro ? (
@@ -1043,7 +1094,7 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                   {privateRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
                 </div>
               ) : (
-                <div className="p-4 text-sm text-foreground">
+                <div className="p-4 text-sm text-black">
                   Private fields are hidden until employer login and email verification.
                 </div>
               )}
@@ -1054,29 +1105,32 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Public Introduction</SectionHeader>
-              <p className="p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">
+              <p className="p-4 text-[13px] whitespace-pre-wrap text-black leading-relaxed">
                 {publicIntro || "No public introduction added yet."}
               </p>
             </div>
             {canViewPrivateIntro && (
               <div className="rounded-lg border border-amber-200 bg-amber-50/30 overflow-hidden">
                 <SectionHeader>Private Introduction</SectionHeader>
-                <p className="p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">{String(introduction?.intro || "—")}</p>
+                <p className="p-4 text-[13px] whitespace-pre-wrap text-black leading-relaxed">
+                  {String(introduction?.intro || "—")}
+                </p>
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t pt-3 text-[11px] text-foreground">
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t pt-3 text-[12px] font-medium text-black">
             <span>Last updated: {formatDate(maid.updatedAt)}</span>
             <span className={!isLoggedIn ? "blur-sm select-none" : ""}>Ref: {maid.referenceCode}</span>
           </div>
         </div>
 
-        {/* ── Shortlist dialog — now uses ShortlistMaidCard matching MaidSearchPage ── */}
+        {/* ── Shortlist dialog ── */}
         <Dialog open={isShortlistOpen} onOpenChange={setIsShortlistOpen}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+              <DialogTitle className="flex items-center gap-2 text-black">
                 <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
                 My Shortlist
                 {shortlistRefs.length > 0 && (
@@ -1085,7 +1139,7 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                   </span>
                 )}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-[13px] text-black">
                 Click any profile to view full details. Tap the star to remove from shortlist.
               </DialogDescription>
             </DialogHeader>
@@ -1095,15 +1149,14 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
                   <Star className="h-7 w-7 text-amber-300" />
                 </div>
-                <p className="text-sm font-semibold text-foreground">No maids shortlisted yet</p>
-                <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                <p className="text-sm font-semibold text-black">No maids shortlisted yet</p>
+                <p className="mt-1 max-w-xs text-xs text-black">
                   Tap the star that appears on any profile card to add it to your shortlist.
                 </p>
               </div>
             ) : (
               <div className="max-h-[68vh] overflow-y-auto pr-1">
                 {isShortlistLoading ? (
-                  /* Loading skeleton — matches MaidSearchPage */
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
                     {Array.from({ length: 10 }).map((_, i) => (
                       <div key={i} className="overflow-hidden rounded-xl border border-border bg-muted animate-pulse">
@@ -1127,25 +1180,22 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                         onNavigate={() => setIsShortlistOpen(false)}
                       />
                     ))}
-
-                    {/* Missing refs — profile no longer available */}
                     {missingShortlistRefs.map((ref) => (
                       <div
                         key={`missing-${ref}`}
                         className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-3 text-center"
                         style={{ aspectRatio: "3/4" }}
                       >
-                        <svg className="h-6 w-6 text-muted-foreground/25" fill="none"
-                          viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg className="h-6 w-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <circle cx="12" cy="12" r="10" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
                         </svg>
-                        <p className="break-all font-mono text-[9px] text-muted-foreground/70">{ref}</p>
-                        <p className="text-[9px] text-muted-foreground/50">Profile not found</p>
+                        <p className="break-all font-mono text-[11px] text-black">{ref}</p>
+                        <p className="text-[11px] text-black">Profile not found</p>
                         <button
                           type="button"
                           onClick={() => handleToggleShortlist(ref)}
-                          className="text-[10px] font-medium text-destructive hover:underline"
+                          className="text-[11px] font-semibold text-destructive hover:underline"
                         >
                           Remove
                         </button>
@@ -1155,19 +1205,17 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                 )}
 
                 <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">{shortlistMaids.length}</span>{" "}
+                  <p className="text-xs text-black">
+                    <span className="font-semibold">{shortlistMaids.length}</span>{" "}
                     {shortlistMaids.length === 1 ? "profile" : "profiles"} shortlisted
                     {missingShortlistRefs.length > 0 && (
-                      <span className="ml-1 text-muted-foreground/60">
-                        · {missingShortlistRefs.length} not found
-                      </span>
+                      <span className="ml-1 text-black"> · {missingShortlistRefs.length} not found</span>
                     )}
                   </p>
                   <button
                     type="button"
                     onClick={() => shortlistRefs.forEach((ref) => handleToggleShortlist(ref))}
-                    className="text-xs font-medium text-destructive hover:underline"
+                    className="text-xs font-semibold text-destructive hover:underline"
                   >
                     Clear all
                   </button>

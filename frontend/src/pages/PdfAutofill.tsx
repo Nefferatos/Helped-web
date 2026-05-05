@@ -278,7 +278,7 @@ function parseGeminiJson(raw: string): ExtractedData {
  *   - "6 of 7"→ 6
  *   - "3.0"   → 3
  */
-function parseSiblingValue(value: unknown): number | null {
+function parseSiblingValue(value: unknown): number | string | null {
   if (value == null) return null;
 
   if (typeof value === "number") {
@@ -290,9 +290,9 @@ function parseSiblingValue(value: unknown): number | null {
     if (!trimmed) return null;
 
     // Handle "X/Y" or "X of Y" fraction formats — take the numerator (X)
-    const fractionMatch = trimmed.match(/^(\d+)\s*(?:\/|of)\s*\d+$/i);
+    const fractionMatch = trimmed.match(/^(\d+)\s*\/\s*\d+$/);
     if (fractionMatch) {
-      return parseInt(fractionMatch[1], 10);
+      return trimmed; // preserve "6/7" as-is
     }
 
     // Plain number string
@@ -348,7 +348,7 @@ function normalizeExtractedData(input: ExtractedData): ExtractedData {
       raw.educationLevelName,
     ),
     // FIX A: always a plain integer or null
-    numberOfSiblings: resolvedSiblings,
+    numberOfSiblings: resolvedSiblings, // already number | string | null
   };
 }
 
@@ -776,9 +776,8 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
   const evaluationMethods = Array.from(evalSet);
 
   // FIX A: numberOfSiblings is already a plain integer from normalizeExtractedData
-  const resolvedSiblings = typeof e.numberOfSiblings === "number"
-    ? e.numberOfSiblings
-    : null;
+    const resolvedSiblings = e.numberOfSiblings != null ? e.numberOfSiblings : null;
+
 
   return {
     ...prev,
@@ -795,7 +794,7 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
     religion:          e.religion          != null ? e.religion          : prev.religion,
     educationLevel:    resolveEducationLevel(e.educationLevel),
     // FIX A: use resolved integer (parseSiblingValue already ran in normalizeExtractedData)
-    numberOfSiblings:  resolvedSiblings    != null ? resolvedSiblings    : prev.numberOfSiblings,
+    numberOfSiblings:  resolvedSiblings != null ? (resolvedSiblings as unknown as number) : prev.numberOfSiblings,
     maritalStatus:     e.maritalStatus     != null ? e.maritalStatus     : prev.maritalStatus,
     numberOfChildren:  e.numberOfChildren  != null ? e.numberOfChildren  : prev.numberOfChildren,
     languageSkills: langSkills,
