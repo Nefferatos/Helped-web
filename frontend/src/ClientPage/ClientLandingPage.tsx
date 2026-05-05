@@ -349,20 +349,23 @@ const GLOBAL_STYLES = `
   @media (max-width: 600px) {
     .services-grid { grid-template-columns: 1fr !important; }
   }
+
+  /* ── Maid grid: 6 columns × 2 rows ── */
   .maid-grid {
     display: grid;
     gap: 16px;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(6, 1fr);
   }
-  @media (max-width: 900px) {
-    .maid-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  @media (max-width: 1100px) {
+    .maid-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; }
   }
-  @media (max-width: 600px) {
-    .maid-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  @media (max-width: 700px) {
+    .maid-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
   }
-  @media (max-width: 360px) {
-    .maid-grid { grid-template-columns: 1fr; }
+  @media (max-width: 480px) {
+    .maid-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   }
+
   .maid-card-info { padding: 10px 12px 12px; }
   @media (max-width: 480px) {
     .maid-card-info { padding: 8px 10px 10px; }
@@ -417,25 +420,21 @@ const BlurredCanvas = ({ src }: { src: string }) => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Match the rendered CSS size so the canvas is never blurry itself
       const w = canvas.offsetWidth || 240;
       const h = Math.round(w * (4 / 3));
       canvas.width = w;
       canvas.height = h;
 
-      // Cover-fit the image
       const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
       const sw = img.naturalWidth * scale;
       const sh = img.naturalHeight * scale;
       const ox = (w - sw) / 2;
       const oy = (h - sh) / 2;
 
-      // Apply blur and slight dim via Canvas 2D filter
       ctx.filter = "blur(10px) brightness(0.85)";
       ctx.globalAlpha = 0.9;
       ctx.drawImage(img, ox, oy, sw, sh);
 
-      // Revoke blob URL as soon as we're done with it
       if (!revoked && blobUrl) {
         URL.revokeObjectURL(blobUrl);
         revoked = true;
@@ -443,10 +442,8 @@ const BlurredCanvas = ({ src }: { src: string }) => {
     };
 
     const img = new Image();
-    // crossOrigin must be set before src
     img.crossOrigin = "anonymous";
 
-    // Fetch the image as a Blob so the original URL never sits in the DOM
     fetch(src, { credentials: "same-origin" })
       .then((r) => {
         if (!r.ok) throw new Error("fetch failed");
@@ -456,7 +453,6 @@ const BlurredCanvas = ({ src }: { src: string }) => {
         blobUrl = URL.createObjectURL(blob);
         img.onload = () => draw(img);
         img.onerror = () => {
-          // Blob creation succeeded but drawing failed — draw grey fallback
           if (!revoked && blobUrl) { URL.revokeObjectURL(blobUrl); revoked = true; }
           drawFallback();
         };
@@ -477,7 +473,6 @@ const BlurredCanvas = ({ src }: { src: string }) => {
     };
 
     return () => {
-      // Cleanup: revoke if component unmounts before draw finishes
       if (!revoked && blobUrl) {
         URL.revokeObjectURL(blobUrl);
         revoked = true;
@@ -495,7 +490,6 @@ const BlurredCanvas = ({ src }: { src: string }) => {
         background: "#f8f8f8",
         userSelect: "none",
         pointerEvents: "none",
-        // Slight extra CSS blur as a defence-in-depth layer
         filter: "blur(2px)",
       }}
     />
@@ -558,9 +552,6 @@ const getTypeBadgeStyle = (type?: string): { bg: string; color: string } => {
    MAID CARD COMPONENTS
 ───────────────────────────────────────────────────────────────────────────── */
 
-// ── Locked maid card ─────────────────────────────────────────────────────────
-// Uses BlurredCanvas: the real photo URL never appears anywhere in the DOM.
-// Right-clicking the canvas does nothing; DevTools Elements shows no src attr.
 const LockedMaidCard = ({
   maid,
   loginPath = "/employer-login",
@@ -573,7 +564,6 @@ const LockedMaidCard = ({
 
   return (
     <div className="maid-card">
-      {/* Photo area — drawn on canvas with blur, no <img> in DOM */}
       <div style={{ position: "relative", width: "100%", overflow: "hidden" }}>
         {photo ? (
           <BlurredCanvas src={photo} />
@@ -593,7 +583,6 @@ const LockedMaidCard = ({
           </div>
         )}
 
-        {/* Type badge — softly blurred so it hints without revealing */}
         {maid.type && (
           <div style={{
             position: "absolute",
@@ -617,7 +606,6 @@ const LockedMaidCard = ({
           </div>
         )}
 
-        {/* Lock overlay centred on photo */}
         <div style={{
           position: "absolute",
           inset: 0,
@@ -642,7 +630,6 @@ const LockedMaidCard = ({
         </div>
       </div>
 
-      {/* Censored info panel */}
       <div
         className="maid-card-info"
         style={{ background: "#fff", display: "flex", flexDirection: "column", gap: 6, flex: 1 }}
@@ -652,7 +639,6 @@ const LockedMaidCard = ({
         <div style={{ height: 8,  width: "60%", background: "#e8f5d0", borderRadius: 4, filter: "blur(2px)" }} />
       </div>
 
-      {/* Login CTA */}
       <div style={{ padding: "0 10px 10px" }}>
         <Link
           to={loginPath}
@@ -684,7 +670,6 @@ const LockedMaidCard = ({
   );
 };
 
-// ── Logged-in maid card — full info ──────────────────────────────────────────
 const MaidCardFull = ({
   maid,
   searchMaidsHref,
@@ -794,7 +779,9 @@ const MAID_TYPES = [
   "New Maid", "Transfer Maid", "Ex-Singapore Maid", "Willing to work on off-days",
 ] as const;
 
-const ITEMS_PER_PAGE = 20;
+// 6 columns × 2 rows = 12 cards per page
+const ITEMS_PER_PAGE = 12;
+
 const MAIDS_CACHE_KEY = "landing_maids_cache";
 const MAIDS_CACHE_TTL = 5 * 60 * 1000;
 
@@ -976,13 +963,13 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     || nationality !== "No Preference"
     || language !== "No Preference";
 
-
   return (
     <div className="dm" style={{ minHeight: "100vh", background: "#fff", fontFamily: "'DM Sans', sans-serif" }}>
       <style>{GLOBAL_STYLES}</style>
 
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
+      {/* ── HERO ── */}
       <section style={{ background: "linear-gradient(135deg, #061800 0%, #0B2E00 40%, #145200 100%)", position: "relative", overflow: "hidden" }}>
         <div className="hero-noise" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }} />
         <div style={{ position: "absolute", top: "-80px", right: "-80px", width: 420, height: 420, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,224,0,0.18) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
@@ -1093,7 +1080,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-
+      {/* ── SEARCH ── */}
       <section id="search" className="section-pad" style={{ background: "#F4FFDF", padding: "64px 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
@@ -1201,6 +1188,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
+      {/* ── MAID RESULTS: 6 columns × 2 rows ── */}
       <section id="maid-results" className="section-pad" style={{ background: "#fff", padding: "64px 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
@@ -1218,8 +1206,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           </div>
 
           {isLoading ? (
+            /* Skeleton: 6 columns × 2 rows = 12 placeholders */
             <div className="maid-grid">
-              {Array.from({ length: 14 }).map((_, i) => (
+              {Array.from({ length: 12 }).map((_, i) => (
                 <div key={i} style={{ borderRadius: 0, overflow: "hidden", border: "2px solid #F0F7E0", background: "#fff" }}>
                   <div style={{ aspectRatio: "3/4", background: "linear-gradient(90deg, #f0f0f0 25%, #e8f5d0 50%, #f0f0f0 75%)", backgroundSize: "400px 100%", animation: "shimmer 1.5s infinite" }} />
                   <div style={{ padding: "10px 12px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1254,6 +1243,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 </div>
               )}
 
+              {/* 6 × 2 grid */}
               <div className="maid-grid">
                 {pagedMaids.map((maid) =>
                   isLoggedIn ? (
@@ -1290,6 +1280,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
+      {/* ── SERVICES ── */}
       <section id="services" className="section-pad-lg" style={{ background: "#061800", padding: "80px 0", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(255,224,0,0.08) 1px, transparent 1px)", backgroundSize: "32px 32px", pointerEvents: "none" }} />
         <div style={{ position: "absolute", top: -100, right: -100, width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, rgba(93,216,0,0.12) 0%, transparent 70%)", pointerEvents: "none" }} />
@@ -1330,7 +1321,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-
+      {/* ── WHY US ── */}
       <section id="why" className="section-pad-lg" style={{ background: "#F4FFDF", padding: "80px 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
           <div style={{ textAlign: "center", marginBottom: 56 }}>
@@ -1404,6 +1395,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
+      {/* ── FOOTER ── */}
       <footer className="bg-foreground py-12 text-primary-foreground">
         <div className="container">
           <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4">

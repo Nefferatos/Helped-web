@@ -191,6 +191,17 @@
   ],
   "inquiries": [
     {
+      "id": 45,
+      "createdAt": "2026-05-05T01:53:00.015Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "I want to hire a maid can cook indonesian food",
+      "intent": "hiring",
+      "workflow": "inquiry_match",
+      "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+      "aiUsed": false
+    },
+    {
       "id": 44,
       "createdAt": "2026-05-05T01:28:08.860Z",
       "name": "[AI TEST] E2E Make",
@@ -676,6 +687,52 @@
     }
   ],
   "matches": [
+    {
+      "id": 118,
+      "createdAt": "2026-05-05T01:53:00.060Z",
+      "leadId": null,
+      "inquiryId": 45,
+      "employerId": null,
+      "maidId": 79,
+      "maidReferenceCode": "234324",
+      "maidName": "asdadsa",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 119,
+      "createdAt": "2026-05-05T01:53:00.060Z",
+      "leadId": null,
+      "inquiryId": 45,
+      "employerId": null,
+      "maidId": 59,
+      "maidReferenceCode": "INA-PAT-9693",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 120,
+      "createdAt": "2026-05-05T01:53:00.060Z",
+      "leadId": null,
+      "inquiryId": 45,
+      "employerId": null,
+      "maidId": 90,
+      "maidReferenceCode": "3432",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
     {
       "id": 115,
       "createdAt": "2026-05-05T01:28:09.437Z",
@@ -2836,6 +2893,50 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 159,
+      "createdAt": "2026-05-05T01:53:00.065Z",
+      "workflow": "inquiry_pipeline",
+      "step": "inquiry_match",
+      "status": "success",
+      "message": "Generated 3 match candidates",
+      "payload": {
+        "inquiryId": 45,
+        "aiUsed": false,
+        "vectorSearch": {
+          "used": true,
+          "candidateCount": 14
+        }
+      }
+    },
+    {
+      "id": 158,
+      "createdAt": "2026-05-05T01:53:00.027Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as hiring",
+      "payload": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 157,
+      "createdAt": "2026-05-05T01:52:59.997Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "I want to hire a maid can cook indonesian food",
+        "name": "test",
+        "contact": "test@gmail.com",
+        "requestId": "28915b63-8ecb-4202-8707-7fda9cf2583a"
+      }
+    },
     {
       "id": 156,
       "createdAt": "2026-05-05T01:28:10.420Z",
@@ -5625,6 +5726,21 @@
   ],
   "decisionLogs": [
     {
+      "id": 54,
+      "createdAt": "2026-05-05T01:53:00.068Z",
+      "requestId": "28915b63-8ecb-4202-8707-7fda9cf2583a",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly."
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 72,
+      "fallbackUsed": true
+    },
+    {
       "id": 53,
       "createdAt": "2026-05-05T01:28:09.457Z",
       "requestId": "8fba2df9-1546-4f4c-8a38-98ba0d6c3c0b",
@@ -7007,13 +7123,13 @@
   ],
   "counters": {
     "leads": 7,
-    "inquiries": 45,
-    "matches": 118,
+    "inquiries": 46,
+    "matches": 121,
     "schedules": 5,
     "contracts": 6,
     "notifications": 20,
-    "automationLogs": 157,
-    "decisionLogs": 54,
+    "automationLogs": 160,
+    "decisionLogs": 55,
     "makeDeliveries": 13
   }
 }
