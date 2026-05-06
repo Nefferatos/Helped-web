@@ -191,6 +191,17 @@
   ],
   "inquiries": [
     {
+      "id": 46,
+      "createdAt": "2026-05-06T05:21:47.798Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "I'm looking for elderly care support for my [family member]. They need [companionship / personal care / medical assistance]. Preferred hours: [full-time / part-time / live-in]. Start date: [date].",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
       "id": 45,
       "createdAt": "2026-05-05T01:53:00.015Z",
       "name": "test",
@@ -2893,6 +2904,34 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 161,
+      "createdAt": "2026-05-06T05:21:47.801Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 160,
+      "createdAt": "2026-05-06T05:21:47.788Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "I'm looking for elderly care support for my [family member]. They need [companionship / personal care / medical assistance]. Preferred hours: [full-time / part-time / live-in]. Start date: [date].",
+        "name": "test",
+        "contact": "test@gmail.com",
+        "requestId": "e0a704df-0945-481a-8b0e-fbe67e71bb45"
+      }
+    },
     {
       "id": 159,
       "createdAt": "2026-05-05T01:53:00.065Z",
@@ -5726,6 +5765,21 @@
   ],
   "decisionLogs": [
     {
+      "id": 55,
+      "createdAt": "2026-05-06T05:21:47.805Z",
+      "requestId": "e0a704df-0945-481a-8b0e-fbe67e71bb45",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 19,
+      "fallbackUsed": true
+    },
+    {
       "id": 54,
       "createdAt": "2026-05-05T01:53:00.068Z",
       "requestId": "28915b63-8ecb-4202-8707-7fda9cf2583a",
@@ -7123,13 +7177,13 @@
   ],
   "counters": {
     "leads": 7,
-    "inquiries": 46,
+    "inquiries": 47,
     "matches": 121,
     "schedules": 5,
     "contracts": 6,
     "notifications": 20,
-    "automationLogs": 160,
-    "decisionLogs": 55,
+    "automationLogs": 162,
+    "decisionLogs": 56,
     "makeDeliveries": 13
   }
 }

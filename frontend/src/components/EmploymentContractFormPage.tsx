@@ -1408,13 +1408,7 @@ export const EmploymentContractPage = ({
                       <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[12px] font-black">{selectedDocs.size}</span>
                     )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void handlePrintForms()}
-                    className="inline-flex items-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-[14px] font-bold text-violet-700 hover:bg-violet-100 transition-colors"
-                  >
-                    <Printer className="h-4 w-4" /> Print All
-                  </button>
+                  
                 </div>
 
                 {/* Right: Submit & Save */}
