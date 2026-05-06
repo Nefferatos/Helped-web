@@ -3142,6 +3142,7 @@ app.get("/api/enquiries", async (c) => {
         .includes(search),
     );
   }
+  enquiries = enquiries.map((item) => enrichEnquiryWithClient(item, data.clients));
   enquiries.sort((left, right) => right.id - left.id);
   return c.json({ enquiries });
 });
@@ -3175,7 +3176,7 @@ app.get("/api/enquiries/stream", async (c) => {
         .sort((left, right) => left.id - right.id);
 
       for (const enquiry of nextEnquiries) {
-        writeSseEvent(controller, "enquiry", { enquiry });
+        writeSseEvent(controller, "enquiry", { enquiry: enrichEnquiryWithClient(enquiry, data.clients) });
         lastId = Math.max(lastId, enquiry.id);
       }
 
@@ -3220,6 +3221,33 @@ app.post("/api/enquiries", async (c) => {
   await saveData(c.env, data);
   return c.json({ enquiry }, 201);
 });
+
+function normalizePhone(phone: string | undefined) {
+  return String(phone || "").replace(/\D+/g, "").replace(/^0+/, "").trim();
+}
+
+function enrichEnquiryWithClient(enquiry: EnquiryRecord, clients: Array<{ id: number; email?: string; phone?: string; name?: string }>) {
+  const normalizedPhone = normalizePhone(enquiry.phone);
+  const client = clients.find((item) => {
+    if (item.email && enquiry.email && item.email.trim().toLowerCase() === enquiry.email.trim().toLowerCase()) {
+      return true;
+    }
+    if (normalizedPhone && item.phone && normalizePhone(item.phone) === normalizedPhone) {
+      return true;
+    }
+    return false;
+  });
+
+  if (!client) {
+    return enquiry;
+  }
+
+  return {
+    ...enquiry,
+    clientId: client.id,
+    clientName: client.name ?? enquiry.username,
+  };
+}
 
 app.delete("/api/enquiries/:id", async (c) => {
   const id = Number(c.req.param("id"));

@@ -352,6 +352,7 @@ const ClientRequestsPage = () => {
                       onChange={(event) => setForm((current) => ({ ...current, agencyId: event.target.value }))}
                     >
                       <option value="">Choose an agency</option>
+                      <option value="admin">Admin Agency</option>
                       {(agenciesQuery.data ?? []).map((agency) => (
                         <option key={agency.id} value={agency.id}>
                           {agency.name}

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Bot, Loader2, Send, Sparkles, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,10 @@ interface AiInquiryPanelProps {
   description?: string;
   initialName?: string;
   initialContact?: string;
+  initialMessage?: string;
   employerId?: number;
   compact?: boolean;
+  onSuccess?: () => void;
 }
 
 const statusTone: Record<AiInquiryRecord["intent"], "default" | "secondary" | "destructive"> = {
@@ -57,13 +59,21 @@ const AiInquiryPanel = ({
   description = "Send an inquiry through the AI workflow, review the classification, and confirm the Make automation trigger.",
   initialName = "",
   initialContact = "",
+  initialMessage = "",
   employerId,
   compact = false,
+  onSuccess,
 }: AiInquiryPanelProps) => {
   const { history, error, isSubmitting, submitInquiry, clearConversation } = useAiInquiry();
   const [name, setName] = useState(initialName);
   const [contact, setContact] = useState(initialContact);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(initialMessage);
+
+  useEffect(() => {
+    if (initialMessage && !message) {
+      setMessage(initialMessage);
+    }
+  }, [initialMessage, message]);
 
   const latestAssistantMessage = [...history].reverse().find((item) => item.role === "assistant");
 
@@ -82,6 +92,7 @@ const AiInquiryPanel = ({
         employerId,
       });
       setMessage("");
+      onSuccess?.();
     } catch {
       // Error state is surfaced by the hook and rendered below.
     }

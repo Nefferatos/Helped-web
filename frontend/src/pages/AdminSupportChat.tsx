@@ -7,9 +7,20 @@ import {
   Users,
   ArrowLeft,
   Inbox,
+  SlidersHorizontal,
+  ChevronDown,
+  Bot,
+  Zap,
+  Clock,
+  Star,
+  Filter,
+  RefreshCw,
+  Copy,
+  Tag,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { adminPath } from "@/lib/routes";
 import {
   clearAgencyAdminAuth,
@@ -17,10 +28,26 @@ import {
   getAgencyAdminToken,
   getStoredAgencyAdmin,
 } from "@/lib/agencyAdminAuth";
-import type { AdminConversation, ChatMessage } from "@/lib/chat";
+import type { AdminConversation, ChatMessage, ConversationType } from "@/lib/chat";
 import { streamSse } from "@/lib/sse";
 
-/* ─── Helpers ──────────────────────────────────────────────────────────── */
+/* ─── Types ─────────────────────────────────────────────────────────────── */
+
+type SortOption = "newest" | "oldest" | "unread" | "name";
+type FilterOption = "all" | "unread" | "support" | "agency";
+type AiStatus = "online" | "offline" | "checking";
+
+/* ─── Quick reply templates ─────────────────────────────────────────────── */
+
+const QUICK_REPLIES = [
+  { label: "Acknowledged", text: "Thank you for reaching out. We have received your message and will get back to you shortly." },
+  { label: "Processing", text: "We are currently processing your request. We will update you within 1–2 business days." },
+  { label: "Need info", text: "To assist you better, could you please provide more details about your request?" },
+  { label: "Resolved", text: "We are glad we could help! Your request has been resolved. Please don't hesitate to reach out if you need anything else." },
+  { label: "Follow-up", text: "Following up on our previous conversation — has your concern been fully addressed?" },
+];
+
+/* ─── Helpers ───────────────────────────────────────────────────────────── */
 
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -74,35 +101,41 @@ function buildQueryString(
   return params.toString();
 }
 
-/* ─── Sub-components ───────────────────────────────────────────────────── */
+function sortConversations(conversations: AdminConversation[], sort: SortOption): AdminConversation[] {
+  const sorted = [...conversations];
+  switch (sort) {
+    case "newest":
+      return sorted.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    case "oldest":
+      return sorted.sort((a, b) => new Date(a.lastMessageAt).getTime() - new Date(b.lastMessageAt).getTime());
+    case "unread":
+      return sorted.sort((a, b) => b.unreadCount - a.unreadCount || new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    case "name":
+      return sorted.sort((a, b) => a.clientName.localeCompare(b.clientName));
+    default:
+      return sorted;
+  }
+}
+
+/* ─── Sub-components ────────────────────────────────────────────────────── */
 
 type AvatarTone = "client" | "agency" | "support";
 
 const TONE_CLASSES: Record<AvatarTone, string> = {
-  client:  "bg-violet-100 text-violet-800",
-  agency:  "bg-emerald-100 text-emerald-900",
+  client: "bg-violet-100 text-violet-800",
+  agency: "bg-emerald-100 text-emerald-900",
   support: "bg-sky-100 text-sky-800",
 };
 
 const SIZE_CLASSES: Record<"sm" | "md" | "lg", string> = {
-  sm: "h-10 w-10 text-[15px]",   // was h-9 w-9 text-[13px]
-  md: "h-12 w-12 text-[17px]",   // was h-11 w-11 text-[15px]
-  lg: "h-16 w-16 text-[20px]",   // was h-14 w-14 text-[18px]
+  sm: "h-10 w-10 text-[15px]",
+  md: "h-12 w-12 text-[17px]",
+  lg: "h-16 w-16 text-[20px]",
 };
 
-function AvatarBubble({
-  name,
-  tone = "client",
-  size = "md",
-}: {
-  name: string;
-  tone?: AvatarTone;
-  size?: "sm" | "md" | "lg";
-}) {
+function AvatarBubble({ name, tone = "client", size = "md" }: { name: string; tone?: AvatarTone; size?: "sm" | "md" | "lg" }) {
   return (
-    <div
-      className={`flex flex-shrink-0 items-center justify-center rounded-full font-bold tracking-wide ${TONE_CLASSES[tone]} ${SIZE_CLASSES[size]}`}
-    >
+    <div className={`flex flex-shrink-0 items-center justify-center rounded-full font-bold tracking-wide ${TONE_CLASSES[tone]} ${SIZE_CLASSES[size]}`}>
       {initials(name)}
     </div>
   );
@@ -121,11 +154,7 @@ function LoadingDots() {
   return (
     <div className="flex items-center justify-center gap-2 px-4 py-10">
       {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="h-3.5 w-3.5 rounded-full bg-emerald-300"
-          style={{ animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
-        />
+        <div key={i} className="h-3.5 w-3.5 rounded-full bg-emerald-300" style={{ animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
       ))}
     </div>
   );
@@ -135,11 +164,7 @@ function EmptyState({ label, icon }: { label: string; icon?: "message" | "user" 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 p-12">
       <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-50 shadow-sm">
-        {icon === "user" ? (
-          <Users className="h-9 w-9 text-emerald-600" />
-        ) : (
-          <Inbox className="h-9 w-9 text-emerald-600" />
-        )}
+        {icon === "user" ? <Users className="h-9 w-9 text-emerald-600" /> : <Inbox className="h-9 w-9 text-emerald-600" />}
       </div>
       <p className="max-w-[260px] text-center text-[17px] leading-relaxed text-gray-600 font-semibold">{label}</p>
     </div>
@@ -150,15 +175,138 @@ function DateDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 my-3">
       <div className="h-px flex-1 bg-gray-200" />
-      <span className="whitespace-nowrap rounded-full bg-gray-100 px-4 py-1.5 text-[14px] font-700 text-gray-600 font-bold">
-        {label}
-      </span>
+      <span className="whitespace-nowrap rounded-full bg-gray-100 px-4 py-1.5 text-[14px] font-bold text-gray-600">{label}</span>
       <div className="h-px flex-1 bg-gray-200" />
     </div>
   );
 }
 
-/* ─── Conversation list item ───────────────────────────────────────────── */
+/* ─── AI Status Banner ───────────────────────────────────────────────────── */
+
+function AiStatusBanner({ status, onRetry }: { status: AiStatus; onRetry: () => void }) {
+  if (status === "online") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-semibold text-emerald-700">
+        <div className="h-2 w-2 rounded-full bg-emerald-500" />
+        AI reply suggestions active
+      </div>
+    );
+  }
+  if (status === "offline") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px]">
+        <AlertCircle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+        <span className="flex-1 font-semibold text-amber-800">AI assistant offline — using quick reply templates</span>
+        <button onClick={onRetry} className="flex items-center gap-1 text-amber-700 hover:text-amber-900 transition-colors">
+          <RefreshCw className="h-3 w-3" />
+          Retry
+        </button>
+      </div>
+    );
+  }
+  return null;
+}
+
+/* ─── Quick Reply Panel ─────────────────────────────────────────────────── */
+
+function QuickReplyPanel({ onSelect }: { onSelect: (text: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen((v) => !v)}
+        className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+      >
+        <Zap className="h-3.5 w-3.5 text-amber-500" />
+        Quick replies
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+      {isOpen && (
+        <div className="absolute bottom-full left-0 mb-2 z-10 w-80 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <p className="text-[13px] font-bold text-gray-700">Quick reply templates</p>
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {QUICK_REPLIES.map((r) => (
+              <button
+                key={r.label}
+                onClick={() => { onSelect(r.text); setIsOpen(false); }}
+                className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors"
+              >
+                <p className="text-[13px] font-bold text-gray-800 mb-1">{r.label}</p>
+                <p className="text-[12px] text-gray-500 line-clamp-2 leading-relaxed">{r.text}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Filter & Sort Bar ─────────────────────────────────────────────────── */
+
+function FilterSortBar({
+  filter,
+  sort,
+  onFilterChange,
+  onSortChange,
+}: {
+  filter: FilterOption;
+  sort: SortOption;
+  onFilterChange: (f: FilterOption) => void;
+  onSortChange: (s: SortOption) => void;
+}) {
+  const filters: { value: FilterOption; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "unread", label: "Unread" },
+    { value: "support", label: "Support" },
+    { value: "agency", label: "Agency" },
+  ];
+  const sorts: { value: SortOption; label: string; icon: typeof Clock }[] = [
+    { value: "newest", label: "Newest", icon: Clock },
+    { value: "unread", label: "Unread first", icon: Star },
+    { value: "name", label: "Name A–Z", icon: Filter },
+    { value: "oldest", label: "Oldest", icon: RefreshCw },
+  ];
+
+  return (
+    <div className="space-y-2.5">
+      {/* Filter pills */}
+      <div className="flex gap-1.5 flex-wrap">
+        {filters.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => onFilterChange(f.value)}
+            className={`rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
+              filter === f.value
+                ? "bg-emerald-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      {/* Sort select */}
+      <div className="relative">
+        <SlidersHorizontal className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <select
+          value={sort}
+          onChange={(e) => onSortChange(e.target.value as SortOption)}
+          className="h-9 w-full rounded-xl border border-gray-200 bg-white pl-9 pr-4 text-[13px] font-semibold text-gray-700 outline-none focus:border-emerald-400 transition-colors appearance-none cursor-pointer"
+        >
+          {sorts.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 pointer-events-none" />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Conversation list item ─────────────────────────────────────────────── */
 
 function ConversationItem({
   conversation,
@@ -190,9 +338,7 @@ function ConversationItem({
         </div>
         <p className="truncate text-[14px] font-medium text-gray-600 mb-1">{conversation.clientEmail}</p>
         {conversation.lastMessage && (
-          <p className="truncate text-[14px] text-gray-500 leading-snug font-medium">
-            {conversation.lastMessage}
-          </p>
+          <p className="truncate text-[14px] text-gray-500 leading-snug font-medium">{conversation.lastMessage}</p>
         )}
       </div>
       <div className="flex flex-shrink-0 flex-col items-end gap-2 pt-0.5">
@@ -207,37 +353,29 @@ function ConversationItem({
   );
 }
 
-/* ─── Message bubble ───────────────────────────────────────────────────── */
+/* ─── Message bubble ─────────────────────────────────────────────────────── */
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (text: string) => void }) {
   const isOwn = message.senderRole === "agency";
-  const tone: AvatarTone =
-    isOwn ? "agency" : message.senderRole === "client" ? "client" : "support";
+  const tone: AvatarTone = isOwn ? "agency" : message.senderRole === "client" ? "client" : "support";
 
   return (
-    <div
-      className={`asc-msg-row flex items-end gap-3 ${isOwn ? "ml-auto flex-row-reverse" : ""}`}
-      style={{ maxWidth: "72%" }}
-    >
+    <div className={`asc-msg-row group flex items-end gap-3 ${isOwn ? "ml-auto flex-row-reverse" : ""}`} style={{ maxWidth: "72%" }}>
       <AvatarBubble name={message.senderName} tone={tone} size="sm" />
       <div className="min-w-0">
-        {!isOwn && (
-          <p className="mb-2 pl-1 text-[14px] font-bold text-gray-700">{message.senderName}</p>
-        )}
-        <div
-          className={`rounded-2xl px-5 py-3.5 text-[17px] leading-relaxed shadow-sm ${
-            isOwn
-              ? "rounded-br-md bg-emerald-700 text-white"
-              : "rounded-bl-md bg-white text-gray-900 border border-gray-200"
-          }`}
-        >
+        {!isOwn && <p className="mb-2 pl-1 text-[14px] font-bold text-gray-700">{message.senderName}</p>}
+        <div className={`relative rounded-2xl px-5 py-3.5 text-[17px] leading-relaxed shadow-sm ${
+          isOwn ? "rounded-br-md bg-emerald-700 text-white" : "rounded-bl-md bg-white text-gray-900 border border-gray-200"
+        }`}>
           {message.message}
+          <button
+            onClick={() => onCopy(message.message)}
+            className={`absolute -top-2 ${isOwn ? "-left-2" : "-right-2"} hidden group-hover:flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm text-gray-500 hover:text-gray-800 transition-colors`}
+          >
+            <Copy className="h-3 w-3" />
+          </button>
         </div>
-        <div
-          className={`mt-2 flex items-center gap-1.5 text-[13px] text-gray-500 font-semibold ${
-            isOwn ? "justify-end pr-1" : "pl-1"
-          }`}
-        >
+        <div className={`mt-2 flex items-center gap-1.5 text-[13px] text-gray-500 font-semibold ${isOwn ? "justify-end pr-1" : "pl-1"}`}>
           {formatTime(message.createdAt)}
           {isOwn && <CheckCheck className="h-4 w-4 text-emerald-400" />}
         </div>
@@ -246,21 +384,62 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-/* ─── Main component ───────────────────────────────────────────────────── */
+/* ─── AI Suggestion Strip ────────────────────────────────────────────────── */
+
+function AiSuggestionStrip({
+  conversation,
+  onSelect,
+}: {
+  conversation: AdminConversation | null;
+  onSelect: (text: string) => void;
+}) {
+  if (!conversation) return null;
+  const suggestions = [
+    `Hi ${conversation.clientName.split(" ")[0]}, thank you for your message.`,
+    "Could you provide more details so we can assist you better?",
+    "We are looking into this and will update you shortly.",
+  ];
+  return (
+    <div className="flex gap-2 flex-wrap px-5 py-2 border-b border-gray-100 bg-emerald-50/50">
+      <span className="flex items-center gap-1 text-[12px] font-bold text-emerald-700 mr-1">
+        <Bot className="h-3.5 w-3.5" /> AI suggests:
+      </span>
+      {suggestions.map((s) => (
+        <button
+          key={s}
+          onClick={() => onSelect(s)}
+          className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[12px] font-semibold text-emerald-800 hover:bg-emerald-50 transition-colors"
+        >
+          {s.length > 40 ? s.slice(0, 40) + "…" : s}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Main component ─────────────────────────────────────────────────────── */
 
 const AdminSupportChat = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryClientId = Number(searchParams.get("clientId") ?? "0");
+  const queryConversationType: ConversationType = searchParams.get("type") === "agency" ? "agency" : "support";
+  const queryAgencyId = queryConversationType === "agency" ? Number(searchParams.get("agencyId") ?? "0") : undefined;
+  const queryClientName = searchParams.get("clientName") ?? "";
+  const [pendingConversation, setPendingConversation] = useState<AdminConversation | null>(null);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
-
   const [conversations, setConversations] = useState<AdminConversation[]>([]);
   const [activeConversationKey, setActiveConversationKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterOption>("all");
+  const [sort, setSort] = useState<SortOption>("newest");
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [aiStatus, setAiStatus] = useState<AiStatus>("checking");
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -269,128 +448,146 @@ const AdminSupportChat = () => {
   const admin = getStoredAgencyAdmin();
 
   const activeConversation = useMemo(
-    () => conversations.find((item) => item.key === activeConversationKey) ?? null,
-    [activeConversationKey, conversations],
+    () => conversations.find((item) => item.key === activeConversationKey) ?? pendingConversation,
+    [activeConversationKey, conversations, pendingConversation],
   );
 
-  useEffect(() => {
-    activeConversationRef.current = activeConversation;
-  }, [activeConversation]);
+  useEffect(() => { activeConversationRef.current = activeConversation; }, [activeConversation]);
 
+  // Check AI status
+  const checkAiStatus = useCallback(async () => {
+    setAiStatus("checking");
+    try {
+      const response = await fetch("/api/ai/status", { headers: { ...getAgencyAdminAuthHeaders() } }).catch(() => null);
+      setAiStatus(response?.ok ? "online" : "offline");
+    } catch {
+      setAiStatus("offline");
+    }
+  }, []);
+
+  useEffect(() => { void checkAiStatus(); }, [checkAiStatus]);
+
+  const effectiveConversations = useMemo(() => (
+    pendingConversation ? [pendingConversation, ...conversations.filter((c) => c.key !== pendingConversation.key)] : conversations
+  ), [conversations, pendingConversation]);
+
+  // Filter and sort conversations
   const filteredConversations = useMemo(() => {
+    let result = [...effectiveConversations];
+
+    // Text search
     const term = search.trim().toLowerCase();
-    if (!term) return conversations;
-    return conversations.filter((c) =>
-      [c.clientName, c.clientEmail, c.clientCompany, c.agencyName, c.lastMessage]
-        .join(" ").toLowerCase().includes(term),
-    );
-  }, [conversations, search]);
+    if (term) {
+      result = result.filter((c) =>
+        [c.clientName, c.clientEmail, c.clientCompany, c.agencyName, c.lastMessage]
+          .join(" ").toLowerCase().includes(term),
+      );
+    }
 
-  const loadConversations = useCallback(
-    async (silent = false) => {
-      const token = getAgencyAdminToken();
-      if (!token) {
-        clearAgencyAdminAuth();
-        navigate(adminPath("/login"), { replace: true });
-        return;
-      }
-      try {
-        setErrorMessage("");
-        const response = await fetch("/api/chats/admin", {
-          headers: { ...getAgencyAdminAuthHeaders() },
-        });
-        const data = (await response.json().catch(() => ({}))) as {
-          conversations?: AdminConversation[];
-          error?: string;
-        };
-        if (!response.ok || !data.conversations) {
-          if (response.status === 401) {
-            clearAgencyAdminAuth();
-            navigate(adminPath("/login"), { replace: true });
-            return;
-          }
-          throw new Error(data.error || "Failed to load conversations");
-        }
-        setConversations(data.conversations);
-        setActiveConversationKey((prev) => {
-          if (prev && data.conversations!.some((c) => c.key === prev)) return prev;
-          return data.conversations![0]?.key ?? null;
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load conversations";
-        setErrorMessage(message);
-        if (!silent) toast.error(message);
-      } finally {
-        if (!silent) setIsLoadingConversations(false);
-      }
-    },
-    [navigate],
-  );
+    // Filter
+    switch (filter) {
+      case "unread": result = result.filter((c) => c.unreadCount > 0); break;
+      case "support": result = result.filter((c) => c.conversationType === "support"); break;
+      case "agency": result = result.filter((c) => c.conversationType === "agency"); break;
+    }
 
-  const loadMessages = useCallback(
-    async (conversation: AdminConversation, silent = false) => {
-      try {
-        if (!silent) setIsLoadingMessages(true);
-        setErrorMessage("");
-        const response = await fetch(
-          `/api/chats/admin/${conversation.clientId}?${buildQueryString(conversation)}`,
-          { headers: { ...getAgencyAdminAuthHeaders() } },
-        );
-        const data = (await response.json().catch(() => ({}))) as {
-          messages?: ChatMessage[];
-          error?: string;
-        };
-        if (!response.ok || !data.messages) {
-          if (response.status === 401) {
-            clearAgencyAdminAuth();
-            navigate(adminPath("/login"), { replace: true });
-            return;
-          }
-          throw new Error(data.error || "Failed to load messages");
-        }
-        const nextMessages = [...data.messages].sort(
-          (l, r) => new Date(l.createdAt).getTime() - new Date(r.createdAt).getTime(),
-        );
-        const nextSig = JSON.stringify(
-          nextMessages.map((m) => [m.id, m.message, m.createdAt, m.senderRole]),
-        );
-        if (nextSig !== lastMessageSignatureRef.current) {
-          lastMessageSignatureRef.current = nextSig;
-          setMessages(nextMessages);
-        }
-        setConversations((prev) =>
-          prev.map((item) =>
-            item.key === conversation.key && item.unreadCount > 0
-              ? { ...item, unreadCount: 0 }
-              : item,
-          ),
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load messages";
-        setErrorMessage(message);
-        if (!silent) toast.error(message);
-      } finally {
-        if (!silent) setIsLoadingMessages(false);
+    return sortConversations(result, sort);
+  }, [effectiveConversations, search, filter, sort]);
+
+  const loadConversations = useCallback(async (silent = false) => {
+    const token = getAgencyAdminToken();
+    if (!token) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
+    try {
+      setErrorMessage("");
+      const response = await fetch("/api/chats/admin", { headers: { ...getAgencyAdminAuthHeaders() } });
+      const data = (await response.json().catch(() => ({}))) as { conversations?: AdminConversation[]; error?: string };
+      if (!response.ok || !data.conversations) {
+        if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
+        throw new Error(data.error || "Failed to load conversations");
       }
-    },
-    [navigate],
-  );
+
+      setConversations(data.conversations);
+      setActiveConversationKey((prev) => {
+        const queryKey = queryClientId
+          ? `${queryClientId}:${queryConversationType}:${queryAgencyId ?? 0}`
+          : null;
+
+        if (queryKey) {
+          const existing = data.conversations.some((c) => c.key === queryKey);
+          if (existing) {
+            setPendingConversation(null);
+            return queryKey;
+          }
+
+          if (queryConversationType === "support") {
+            setPendingConversation({
+              key: queryKey,
+              clientId: queryClientId,
+              conversationType: "support",
+              agencyId: undefined,
+              agencyName: "",
+              clientName: queryClientName || `Client ${queryClientId}`,
+              clientEmail: "",
+              clientCompany: "",
+              lastMessage: "No support conversation exists yet. Start typing to begin the chat.",
+              lastMessageAt: new Date().toISOString(),
+              unreadCount: 0,
+            });
+            return queryKey;
+          }
+        }
+
+        if (prev && data.conversations.some((c) => c.key === prev)) return prev;
+        return data.conversations[0]?.key ?? null;
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load conversations";
+      setErrorMessage(message);
+      if (!silent) toast.error(message);
+    } finally {
+      if (!silent) setIsLoadingConversations(false);
+    }
+  }, [navigate, queryAgencyId, queryClientId, queryClientName, queryConversationType]);
+
+  const loadMessages = useCallback(async (conversation: AdminConversation, silent = false) => {
+    try {
+      if (!silent) setIsLoadingMessages(true);
+      setErrorMessage("");
+      const response = await fetch(
+        `/api/chats/admin/${conversation.clientId}?${buildQueryString(conversation)}`,
+        { headers: { ...getAgencyAdminAuthHeaders() } },
+      );
+      const data = (await response.json().catch(() => ({}))) as { messages?: ChatMessage[]; error?: string };
+      if (!response.ok || !data.messages) {
+        if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
+        throw new Error(data.error || "Failed to load messages");
+      }
+      const nextMessages = [...data.messages].sort((l, r) => new Date(l.createdAt).getTime() - new Date(r.createdAt).getTime());
+      const nextSig = JSON.stringify(nextMessages.map((m) => [m.id, m.message, m.createdAt, m.senderRole]));
+      if (nextSig !== lastMessageSignatureRef.current) {
+        lastMessageSignatureRef.current = nextSig;
+        setMessages(nextMessages);
+      }
+      setConversations((prev) =>
+        prev.map((item) => item.key === conversation.key && item.unreadCount > 0 ? { ...item, unreadCount: 0 } : item),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load messages";
+      setErrorMessage(message);
+      if (!silent) toast.error(message);
+    } finally {
+      if (!silent) setIsLoadingMessages(false);
+    }
+  }, [navigate]);
 
   useEffect(() => {
     const token = getAgencyAdminToken();
-    if (!token) {
-      clearAgencyAdminAuth();
-      navigate(adminPath("/login"), { replace: true });
-      return;
-    }
+    if (!token) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
     const controller = new AbortController();
     let lastId = 0;
     const run = async () => {
       try {
-        const response = await fetch("/api/chats/admin/last-id", {
-          headers: { ...getAgencyAdminAuthHeaders() },
-          signal: controller.signal,
-        });
+        const response = await fetch("/api/chats/admin/last-id", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
         const data = (await response.json().catch(() => ({}))) as { lastId?: number };
         if (response.ok && typeof data.lastId === "number") lastId = data.lastId;
       } catch { /* no-op */ }
@@ -412,9 +609,7 @@ const AdminSupportChat = () => {
                 current.conversationType === next.conversationType &&
                 (current.conversationType === "support" || current.agencyId === next.agencyId);
               if (isActive) {
-                setMessages((prev) =>
-                  prev.some((item) => item.id === next.id) ? prev : [...prev, next],
-                );
+                setMessages((prev) => prev.some((item) => item.id === next.id) ? prev : [...prev, next]);
                 if (next.senderRole === "client") void loadMessages(current, true);
               }
               void loadConversations(true);
@@ -443,9 +638,22 @@ const AdminSupportChat = () => {
   }, [activeConversation, loadMessages]);
 
   useEffect(() => {
+    if (!pendingConversation) return;
+    const actual = conversations.find((item) => item.key === pendingConversation.key);
+    if (actual) {
+      setPendingConversation(null);
+      setActiveConversationKey(actual.key);
+    }
+  }, [conversations, pendingConversation]);
+
+  useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
+
+  const copyMessage = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard")).catch(() => toast.error("Copy failed"));
+  };
 
   const sendMessage = async () => {
     if (!activeConversation || !draft.trim()) return;
@@ -460,34 +668,20 @@ const AdminSupportChat = () => {
           body: JSON.stringify({ message: draft.trim() }),
         },
       );
-      const data = (await response.json().catch(() => ({}))) as {
-        message?: ChatMessage;
-        error?: string;
-      };
+      const data = (await response.json().catch(() => ({}))) as { message?: ChatMessage; error?: string };
       if (!response.ok || !data.message) {
-        if (response.status === 401) {
-          clearAgencyAdminAuth();
-          navigate(adminPath("/login"), { replace: true });
-          return;
-        }
+        if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
         throw new Error(data.error || "Failed to send message");
       }
       setMessages((prev) => {
         const next = [...prev, data.message!];
-        lastMessageSignatureRef.current = JSON.stringify(
-          next.map((m) => [m.id, m.message, m.createdAt, m.senderRole]),
-        );
+        lastMessageSignatureRef.current = JSON.stringify(next.map((m) => [m.id, m.message, m.createdAt, m.senderRole]));
         return next;
       });
       setConversations((prev) =>
         prev.map((item) =>
           item.key === activeConversation.key
-            ? {
-                ...item,
-                lastMessage: data.message!.message,
-                lastMessageAt: data.message!.createdAt,
-                unreadCount: 0,
-              }
+            ? { ...item, lastMessage: data.message!.message, lastMessageAt: data.message!.createdAt, unreadCount: 0 }
             : item,
         ),
       );
@@ -504,10 +698,7 @@ const AdminSupportChat = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void sendMessage();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); }
   };
 
   const handleSelectConversation = (key: string) => {
@@ -528,7 +719,6 @@ const AdminSupportChat = () => {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-
         .asc-root * { font-family: 'DM Sans', sans-serif; }
 
         @keyframes dotPulse {
@@ -552,8 +742,6 @@ const AdminSupportChat = () => {
         .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 8px; }
         .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 
-        .asc-textarea { field-sizing: content; }
-
         .asc-send-btn:not(:disabled):hover { transform: scale(1.05); }
         .asc-send-btn:not(:disabled):active { transform: scale(0.95); }
         .asc-send-btn { transition: transform 0.12s ease, background-color 0.15s ease, opacity 0.15s ease; }
@@ -574,56 +762,51 @@ const AdminSupportChat = () => {
             <MessageCircle className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h2 className="text-[26px] font-bold leading-tight tracking-tight text-gray-900">
-              Chat Support
-            </h2>
-            <p className="text-[15px] text-gray-600 font-semibold leading-none mt-1">
-              Manage client conversations
-            </p>
+            <h2 className="text-[26px] font-bold leading-tight tracking-tight text-gray-900">Chat Support</h2>
+            <p className="text-[15px] text-gray-600 font-semibold leading-none mt-1">Manage client conversations</p>
           </div>
           {totalUnread > 0 && (
             <span className="ml-1 rounded-full bg-emerald-600 px-4 py-1.5 text-[16px] font-bold text-white shadow-sm">
               {totalUnread} unread
             </span>
           )}
+
+          {/* AI status */}
+          <div className="ml-auto">
+            <AiStatusBanner status={aiStatus} onRetry={checkAiStatus} />
+          </div>
         </div>
 
         {/* ── Chat shell ── */}
         <div className="flex flex-1 overflow-hidden rounded-2xl border-2 border-gray-200 bg-white shadow-md">
 
           {/* ── Sidebar ── */}
-          <div
-            className={`flex flex-col border-r-2 border-gray-100 bg-gray-50/70 ${
-              mobileView === "chat"
-                ? "hidden md:flex md:w-80 md:min-w-[300px]"
-                : "flex w-full md:w-80 md:min-w-[300px]"
-            }`}
-          >
+          <div className={`flex flex-col border-r-2 border-gray-100 bg-gray-50/70 ${
+            mobileView === "chat" ? "hidden md:flex md:w-80 md:min-w-[300px]" : "flex w-full md:w-80 md:min-w-[300px]"
+          }`}>
+
             {/* Sidebar header */}
-            <div className="flex-shrink-0 border-b-2 border-gray-100 px-5 py-5">
+            <div className="flex-shrink-0 border-b-2 border-gray-100 px-5 py-4">
               <p className="text-[20px] font-bold text-gray-900">Conversations</p>
-              <p className="text-[15px] text-gray-600 font-semibold mt-1">
-                {conversations.length} thread{conversations.length !== 1 ? "s" : ""}
-                {totalUnread > 0 && (
-                  <span className="ml-2 text-emerald-800 font-bold">
-                    · {totalUnread} unread
-                  </span>
-                )}
+              <p className="text-[15px] text-gray-600 font-semibold mt-0.5">
+                {filteredConversations.length}/{effectiveConversations.length} shown
+                {totalUnread > 0 && <span className="ml-2 text-emerald-800 font-bold">· {totalUnread} unread</span>}
               </p>
             </div>
 
             {/* Search */}
-            <div className="flex-shrink-0 border-b-2 border-gray-100 px-4 py-3">
-              <div className="relative">
+            <div className="flex-shrink-0 border-b border-gray-100 px-4 pt-3 pb-2">
+              <div className="relative mb-3">
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
                 <input
                   type="text"
-                  placeholder="Search conversations…"
+                  placeholder="Search by name, email, message…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-4 text-[16px] font-medium text-gray-900 outline-none placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                  className="h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-4 text-[15px] font-medium text-gray-900 outline-none placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
                 />
               </div>
+              <FilterSortBar filter={filter} sort={sort} onFilterChange={setFilter} onSortChange={setSort} />
             </div>
 
             {/* Conversation list */}
@@ -631,19 +814,11 @@ const AdminSupportChat = () => {
               {isLoadingConversations ? (
                 <LoadingDots />
               ) : filteredConversations.length === 0 ? (
-                <EmptyState label="No conversations found." icon="user" />
+                <EmptyState label={search || filter !== "all" ? "No conversations match your filters." : "No conversations found."} icon="user" />
               ) : (
                 filteredConversations.map((conv, i) => (
-                  <div
-                    key={conv.key}
-                    className="asc-conv-item"
-                    style={{ animationDelay: `${i * 0.04}s` }}
-                  >
-                    <ConversationItem
-                      conversation={conv}
-                      isActive={conv.key === activeConversationKey}
-                      onClick={() => handleSelectConversation(conv.key)}
-                    />
+                  <div key={conv.key} className="asc-conv-item" style={{ animationDelay: `${i * 0.04}s` }}>
+                    <ConversationItem conversation={conv} isActive={conv.key === activeConversationKey} onClick={() => handleSelectConversation(conv.key)} />
                   </div>
                 ))
               )}
@@ -652,7 +827,7 @@ const AdminSupportChat = () => {
             {/* Sidebar stats footer */}
             <div className="flex-shrink-0 grid grid-cols-2 gap-3 border-t-2 border-gray-100 bg-white/80 p-4">
               <div className="rounded-xl bg-gray-50 px-4 py-4 text-center border-2 border-gray-100">
-                <p className="text-[28px] font-bold text-gray-900 leading-none">{conversations.length}</p>
+                <p className="text-[28px] font-bold text-gray-900 leading-none">{effectiveConversations.length}</p>
                 <p className="text-[14px] text-gray-600 mt-1.5 font-bold">Total Threads</p>
               </div>
               <div className="rounded-xl bg-emerald-50 px-4 py-4 text-center border-2 border-emerald-100">
@@ -663,36 +838,25 @@ const AdminSupportChat = () => {
           </div>
 
           {/* ── Message panel ── */}
-          <div
-            className={`flex min-w-0 flex-1 flex-col ${
-              mobileView === "list" ? "hidden md:flex" : "flex"
-            }`}
-          >
+          <div className={`flex min-w-0 flex-1 flex-col ${mobileView === "list" ? "hidden md:flex" : "flex"}`}>
+
             {/* Chat header */}
             <div className="flex flex-shrink-0 items-center gap-4 border-b-2 border-gray-100 bg-white px-5 py-4 shadow-sm">
-              {/* Back button — mobile only */}
               <button
                 onClick={() => setMobileView("list")}
                 className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-100 active:scale-95 transition-all md:hidden"
               >
                 <ArrowLeft className="h-6 w-6" />
               </button>
-
               {activeConversation ? (
                 <>
                   <AvatarBubble name={activeConversation.clientName} tone="client" size="lg" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[20px] font-bold text-gray-900 leading-tight">
-                      {activeConversation.clientName}
-                    </p>
-                    <p className="truncate text-[15px] text-gray-600 mt-0.5 font-semibold">
-                      {headerSubtitle}
-                    </p>
+                    <p className="truncate text-[20px] font-bold text-gray-900 leading-tight">{activeConversation.clientName}</p>
+                    <p className="truncate text-[15px] text-gray-600 mt-0.5 font-semibold">{headerSubtitle}</p>
                   </div>
                   <div className="flex-shrink-0 text-right hidden sm:block">
-                    <p className="text-[17px] font-bold text-gray-900">
-                      {admin?.agencyName ?? "Agency"}
-                    </p>
+                    <p className="text-[17px] font-bold text-gray-900">{admin?.agencyName ?? "Agency"}</p>
                     <p className="text-[14px] text-gray-500 font-semibold mt-0.5">{activeConversation.clientEmail}</p>
                   </div>
                 </>
@@ -701,11 +865,13 @@ const AdminSupportChat = () => {
               )}
             </div>
 
+            {/* AI suggestions strip (when AI is online and a convo is active) */}
+            {aiStatus === "online" && activeConversation && (
+              <AiSuggestionStrip conversation={activeConversation} onSelect={(text) => setDraft(text)} />
+            )}
+
             {/* Messages area */}
-            <div
-              ref={scrollRef}
-              className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-5 overflow-y-auto p-6"
-            >
+            <div ref={scrollRef} className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-5 overflow-y-auto p-6">
               {isLoadingMessages ? (
                 <LoadingDots />
               ) : errorMessage ? (
@@ -721,7 +887,7 @@ const AdminSupportChat = () => {
                   <div key={label} className="flex flex-col gap-4">
                     <DateDivider label={label} />
                     {groupMsgs.map((msg) => (
-                      <MessageBubble key={msg.id} message={msg} />
+                      <MessageBubble key={msg.id} message={msg} onCopy={copyMessage} />
                     ))}
                   </div>
                 ))
@@ -729,36 +895,39 @@ const AdminSupportChat = () => {
             </div>
 
             {/* Compose bar */}
-            <div className="flex flex-shrink-0 items-end gap-3 border-t-2 border-gray-100 bg-white px-5 py-4">
-              <textarea
-                ref={textareaRef}
-                placeholder={
-                  activeConversation
-                    ? `Reply to ${activeConversation.clientName}…`
-                    : "Select a conversation to reply…"
-                }
-                value={draft}
-                rows={1}
-                disabled={!activeConversation || isSending}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  e.target.style.height = "auto";
-                  e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px";
-                }}
-                onKeyDown={handleKeyDown}
-                className="asc-textarea asc-scrollbar flex-1 resize-none rounded-2xl border-2 border-gray-200 bg-gray-50 px-5 py-3.5 text-[17px] leading-relaxed text-gray-900 font-medium outline-none transition-all placeholder:text-gray-400 placeholder:font-normal focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ lineHeight: 1.7, maxHeight: 140, minHeight: 54 }}
-              />
-              <button
-                onClick={() => void sendMessage()}
-                disabled={isSending || !draft.trim() || !activeConversation}
-                className="asc-send-btn flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm disabled:cursor-default disabled:opacity-30"
-              >
-                <Send className="h-6 w-6" />
-              </button>
+            <div className="flex-shrink-0 border-t-2 border-gray-100 bg-white">
+              {/* Quick reply row */}
+              <div className="flex items-center gap-2 px-5 pt-3 pb-2">
+                <QuickReplyPanel onSelect={(text) => setDraft(text)} />
+              </div>
+              {/* Textarea + send */}
+              <div className="flex items-end gap-3 px-5 pb-4">
+                <textarea
+                  ref={textareaRef}
+                  placeholder={activeConversation ? `Reply to ${activeConversation.clientName}…` : "Select a conversation to reply…"}
+                  value={draft}
+                  rows={1}
+                  disabled={!activeConversation || isSending}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px";
+                  }}
+                  onKeyDown={handleKeyDown}
+                  className="asc-scrollbar flex-1 resize-none rounded-2xl border-2 border-gray-200 bg-gray-50 px-5 py-3.5 text-[17px] leading-relaxed text-gray-900 font-medium outline-none transition-all placeholder:text-gray-400 placeholder:font-normal focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ lineHeight: 1.7, maxHeight: 140, minHeight: 54 }}
+                />
+                <button
+                  onClick={() => void sendMessage()}
+                  disabled={isSending || !draft.trim() || !activeConversation}
+                  className="asc-send-btn flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm disabled:cursor-default disabled:opacity-30"
+                >
+                  <Send className="h-6 w-6" />
+                </button>
+              </div>
             </div>
-          </div>
 
+          </div>
         </div>
       </div>
     </>

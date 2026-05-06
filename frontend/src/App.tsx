@@ -65,7 +65,7 @@ const MaidProfileFullView = lazyRoute(() => import("@/pages/MaidProfileFullView"
 const EditMaid = lazyRoute(() => import("@/pages/EditMaidProfile"));
 const PublicMaidProfile = lazyRoute(() => import("@/pages/PublicMaidProfile"));
 const ChangePassword = lazyRoute(() => import("@/pages/ChangePassword"));
-const Enquiry = lazyRoute(() => import("@/pages/Enquiry"));
+const AdminEnquiry = lazyRoute(() => import("@/pages/AdminEnquiry"));
 const EmploymentContracts = lazyRoute(() => import("@/pages/EmploymentContracts"));
 const AddEmployment = lazyRoute(() => import("@/pages/AddEmployment"));
 const EmploymentContractView = lazyRoute(() => import("@/pages/EmploymentContractView"));
@@ -304,7 +304,7 @@ const App = () => {
             <Route path="/agencyadmin/maid/:refCode/full" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><MaidProfileFullView /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/maid/:refCode/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditMaid /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/change-password" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>)} />
-            <Route path="/agencyadmin/enquiry" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><Enquiry /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/enquiry" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminEnquiry /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/requests" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/chat-support" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>)} />
