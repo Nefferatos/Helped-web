@@ -74,6 +74,21 @@ const LockIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// ── Category helper ───────────────────────────────────────────────────────────
+const getMaidCategory = (maid: MaidProfile): string => {
+  const agencyContact    = (maid.agencyContact    as Record<string, unknown>) || {};
+  const introduction     = (maid.introduction     as Record<string, unknown>) || {};
+  const skillsPreferences = (maid.skillsPreferences as Record<string, unknown>) || {};
+
+  const raw =
+    agencyContact["indianMaidCategory"] ??
+    introduction["indianMaidCategory"] ??
+    skillsPreferences["indianMaidCategory"];
+
+  const value = String(raw ?? "").trim();
+  return value && value !== "N/A" && value !== "N.A." && value !== "-" ? value : "";
+};
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ClientDraft = {
   keyword: string;
@@ -122,6 +137,9 @@ type MaidSearchPageProps = {
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
 const PAGE_SIZE = 18;
+
+// ── Indian subcategory quick link keys ───────────────────────────────────────
+const INDIAN_SUBCATEGORY_KEYS = new Set(["mizoram", "darjeeling", "manipur", "punjabi"]);
 
 const NATIONALITY_LINKS = [
   "Most Recent Maid in 3 days",
@@ -371,35 +389,31 @@ const matchesBiodataAge = (maid: MaidProfile, draft: ClientDraft): boolean => {
 
 /** Returns true if the maid has at least one valid photo */
 const hasPhoto = (maid: MaidProfile): boolean => {
-  // Check photoDataUrls array first
   if (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) {
     const hasValidUrl = maid.photoDataUrls.some(
       (url) => typeof url === "string" && url.trim().length > 0
     );
     if (hasValidUrl) return true;
   }
-  // Fall back to single photoDataUrl
   return typeof maid.photoDataUrl === "string" && maid.photoDataUrl.trim().length > 0;
 };
 
 /** Main filter function — applies the full ClientDraft */
 const filterMaidsByDraft = (maids: MaidProfile[], draft: ClientDraft): MaidProfile[] => {
   return maids.filter((maid) => {
-    // ── Photo required: skip maids with no image ──────────────────────────
     if (!hasPhoto(maid)) return false;
 
-    // Keyword
     if (draft.keyword.trim()) {
       const kw = draft.keyword.trim().toLowerCase();
       const searchable = [
         maid.fullName, maid.referenceCode, maid.nationality,
         maid.type, maid.religion, maid.maritalStatus,
+        getMaidCategory(maid),
         ...Object.keys(maid.workAreas || {}),
       ].map(normalizeStr).join(" ");
       if (!searchable.includes(kw)) return false;
     }
 
-    // Maid type
     if (draft.maidType) {
       const t = normalizeStr(maid.type);
       const wantNew = draft.maidType === "New Maid";
@@ -410,7 +424,6 @@ const filterMaidsByDraft = (maids: MaidProfile[], draft: ClientDraft): MaidProfi
       if (wantExSg && !(t.includes("ex-singapore") || t.includes("ex singapore") || t.includes("exsg"))) return false;
     }
 
-    // Off-days
     if (draft.willingOffDays) {
       const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
       const otherInfo = (sp.otherInformation as Record<string, boolean>) || {};
@@ -423,25 +436,13 @@ const filterMaidsByDraft = (maids: MaidProfile[], draft: ClientDraft): MaidProfi
       if (!isWilling) return false;
     }
 
-    // Has video
     if (draft.withVideo && !maid.videoDataUrl) return false;
-
-    // Biodata age
     if (!matchesBiodataAge(maid, draft)) return false;
-
-    // Nationality
     if (!matchesNationality(maid, draft)) return false;
-
-    // Experience
     if (!matchesExperience(maid, draft)) return false;
-
-    // Duties
     if (!matchesDuties(maid, draft)) return false;
-
-    // Education
     if (!matchesEducation(maid, draft)) return false;
 
-    // Language
     if (!draft.langNoPreference) {
       const langPassed =
         (draft.langEnglish && matchesLanguageSkill(maid, "english")) ||
@@ -452,16 +453,9 @@ const filterMaidsByDraft = (maids: MaidProfile[], draft: ClientDraft): MaidProfi
       if (!langPassed) return false;
     }
 
-    // Age
     if (!matchesAge(maid, draft)) return false;
-
-    // Marital status
     if (!matchesMarital(maid, draft)) return false;
-
-    // Height
     if (!matchesHeight(maid, draft)) return false;
-
-    // Religion
     if (!matchesReligion(maid, draft)) return false;
 
     return true;
@@ -481,6 +475,23 @@ const normalizeNationality = (value: string) => {
   return "Others";
 };
 
+const matchesIndianSubcategory = (maid: MaidProfile, term: string): boolean => {
+  const nat = normalizeStr(maid.nationality);
+  const category = normalizeStr(getMaidCategory(maid));
+  const agencyContact = (maid.agencyContact as Record<string, unknown>) || {};
+  const introduction = (maid.introduction as Record<string, unknown>) || {};
+  const skillsPreferences = (maid.skillsPreferences as Record<string, unknown>) || {};
+
+  const allCategoryText = [
+    category,
+    normalizeStr(agencyContact["indianMaidCategory"]),
+    normalizeStr(introduction["indianMaidCategory"]),
+    normalizeStr(skillsPreferences["indianMaidCategory"]),
+  ].join(" ");
+
+  return nat.includes(term) || allCategoryText.includes(term);
+};
+
 const matchesQuickLink = (maid: MaidProfile, quickLink: QuickLinkKey) => {
   switch (quickLink) {
     case "mostRecent3Days": {
@@ -498,18 +509,19 @@ const matchesQuickLink = (maid: MaidProfile, quickLink: QuickLinkKey) => {
       return matchesLanguageSkill(maid, "hokkien") || matchesLanguageSkill(maid, "cantonese");
     case "newMaid": return normalizeStr(maid.type).includes("new");
     case "transferMaid": return normalizeStr(maid.type).includes("transfer");
-    case "exSingapore": return normalizeStr(maid.type).includes("ex-singapore") || normalizeStr(maid.type).includes("ex singapore");
+    case "exSingapore":
+      return normalizeStr(maid.type).includes("ex-singapore") || normalizeStr(maid.type).includes("ex singapore");
     case "filipino": return normalizeNationality(String(maid.nationality || "")) === "Filipino";
     case "indonesian": return normalizeNationality(String(maid.nationality || "")) === "Indonesian";
     case "myanmar": return normalizeNationality(String(maid.nationality || "")) === "Myanmar";
     case "indian": return normalizeNationality(String(maid.nationality || "")) === "Indian";
-    case "mizoram": return normalizeStr(maid.nationality).includes("mizoram");
-    case "darjeeling": return normalizeStr(maid.nationality).includes("darjeeling");
-    case "manipur": return normalizeStr(maid.nationality).includes("manipur");
-    case "punjabi": return normalizeStr(maid.nationality).includes("punjabi");
-    case "sriLankan": return normalizeNationality(String(maid.nationality || "")) === "Sri Lankan";
-    case "cambodian": return normalizeNationality(String(maid.nationality || "")) === "Cambodian";
-    case "bangladeshi": return normalizeNationality(String(maid.nationality || "")) === "Bangladeshi";
+    case "mizoram":    return matchesIndianSubcategory(maid, "mizoram");
+    case "darjeeling": return matchesIndianSubcategory(maid, "darjeeling");
+    case "manipur":    return matchesIndianSubcategory(maid, "manipur");
+    case "punjabi":    return matchesIndianSubcategory(maid, "punjabi");
+    case "sriLankan":  return normalizeNationality(String(maid.nationality || "")) === "Sri Lankan";
+    case "cambodian":  return normalizeNationality(String(maid.nationality || "")) === "Cambodian";
+    case "bangladeshi":return normalizeNationality(String(maid.nationality || "")) === "Bangladeshi";
     default: return true;
   }
 };
@@ -614,10 +626,12 @@ const LockedMaidCard = ({ loginPath, photo, type }: { loginPath: string; photo?:
 
 // ── Real maid card ────────────────────────────────────────────────────────────
 const MaidCard = ({
-  maid, isShortlisted, onToggleShortlist, onNavigate, isLoggedIn, loginPath,
+  maid, isShortlisted, onToggleShortlist, onNavigate, isLoggedIn, loginPath, showCategory,
 }: {
   maid: MaidProfile; isShortlisted: boolean; onToggleShortlist: (ref: string) => void;
   onNavigate?: () => void; isLoggedIn: boolean; loginPath: string;
+  /** When true (Indian subcategory filter active), show the indianMaidCategory instead of nationality */
+  showCategory?: boolean;
 }) => {
   if (!isLoggedIn)
     return <LockedMaidCard loginPath={loginPath} photo={getPrimaryPhoto(maid)} type={maid.type} />;
@@ -627,6 +641,15 @@ const MaidCard = ({
   const flagCode = getNationalityCode(maid.nationality);
   const typeColorClass = getMaidTypeBadgeClass(maid.type);
   const experienceBucket = getExperienceBucket(maid);
+  const category = getMaidCategory(maid);
+
+  /**
+   * Nationality display logic:
+   * - Default / all view: always show nationality (e.g. "Indian", "Filipino")
+   * - Indian subcategory filter active AND category exists: show category (e.g. "Mizoram")
+   * Flag always reflects the actual nationality regardless.
+   */
+  const displayLabel = showCategory && category ? category : (maid.nationality || "");
 
   return (
     <article className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer">
@@ -667,30 +690,35 @@ const MaidCard = ({
           {isShortlisted ? "Shortlisted" : "Shortlist"}
         </button>
       </div>
+
+      {/* ── Card body ── */}
       <div className="flex flex-col gap-0.5 p-2.5 flex-1 bg-white">
         <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
           {maid.fullName || "Unnamed maid"}
         </h3>
         {maid.referenceCode && (
-          <p className="text-[9px] text-gray-400 font-mono leading-tight">{maid.referenceCode}</p>
+          <p className="text-[9px] text-gray-600 font-mono leading-tight">{maid.referenceCode}</p>
         )}
-        {maid.nationality && (
-          <p className="inline-flex items-center gap-1 text-[10px] text-gray-700 leading-tight mt-0.5">
+
+       
+        {displayLabel && (
+          <p className="inline-flex items-center gap-1 text-[10px] leading-tight mt-0.5">
             <FlagCircle code={flagCode} />
-            {maid.nationality}
+            <span className="font-semibold text-black">{displayLabel}</span>
           </p>
         )}
+
         <div className="my-1 border-t border-gray-100" />
-        <div className="flex items-center gap-1.5 text-[9px] text-gray-500 leading-tight">
-          {age !== null && <span className="font-medium text-gray-700">{age} yrs</span>}
+        <div className="flex items-center gap-1.5 text-[10px] text-gray-500 leading-tight">
+          {age !== null && <span className="font-medium text-black">({age}) yrs</span>}
           {age !== null && maid.maritalStatus && <span className="text-gray-300">·</span>}
-          {maid.maritalStatus && <span className="truncate">{maid.maritalStatus}</span>}
+          {maid.maritalStatus && <span className="truncate text-black">{maid.maritalStatus}</span>}
         </div>
         {maid.religion && (
-          <p className="text-[9px] text-gray-500 leading-tight line-clamp-1">{maid.religion}</p>
+          <p className="text-[9px] text-black leading-tight line-clamp-1">{maid.religion}</p>
         )}
         {experienceBucket && (
-          <p className="text-[9px] text-gray-500 leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>
+          <p className="text-[9px] text-black leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>
         )}
         {maid.languageSkills && (() => {
           const langs = Object.entries(maid.languageSkills)
@@ -701,7 +729,7 @@ const MaidCard = ({
             .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
             .slice(0, 3);
           return langs.length > 0 ? (
-            <p className="text-[9px] text-gray-400 leading-tight line-clamp-1 mt-0.5">
+            <p className="text-[9px] text-black leading-tight line-clamp-1 mt-0.5">
               {langs.join(" · ")}
             </p>
           ) : null;
@@ -722,6 +750,9 @@ const MaidSearchPage = ({
 
   const advancedFilters = useMemo(() => parseAdvancedFilters(searchParams), [searchParams]);
   const quickLink = (searchParams.get("quick") || "") as QuickLinkKey | "";
+
+  // True when user is viewing an Indian subcategory — cards should show category instead of nationality
+  const isIndianSubcategoryActive = !!quickLink && INDIAN_SUBCATEGORY_KEYS.has(quickLink);
 
   const [filters, setFilters] = useState<SidebarFilters>(() =>
     deriveSidebarFilters(searchParams, advancedFilters)
@@ -744,7 +775,6 @@ const MaidSearchPage = ({
     setShortlistRefs(toggleShortlistRef(ref));
   };
 
-  // Load all maids once
   useEffect(() => {
     const controller = new AbortController();
     const load = async () => {
@@ -753,7 +783,6 @@ const MaidSearchPage = ({
         const res = await fetch("/api/maids?visibility=public", { signal: controller.signal });
         const data = (await res.json()) as { maids?: MaidProfile[]; error?: string };
         if (!res.ok || !data.maids) throw new Error(data.error || "Failed to load");
-        // Only keep public maids that have at least one photo
         setAllMaids(data.maids.filter((m) => m.isPublic && hasPhoto(m)));
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError"))
@@ -766,7 +795,6 @@ const MaidSearchPage = ({
     return () => controller.abort();
   }, []);
 
-  // Re-derive sidebar when URL changes
   useEffect(() => {
     const adv = parseAdvancedFilters(searchParams);
     setFilters(deriveSidebarFilters(searchParams, adv));
@@ -813,8 +841,6 @@ const MaidSearchPage = ({
       relMuslim: false, relHindu: false, relSikh: false, relOthers: false, relNoPreference: true,
     };
 
-    // filterMaidsByDraft already enforces hasPhoto() inside, but allMaids
-    // is also pre-filtered at load time — double safety.
     let result = filterMaidsByDraft(allMaids, draft);
     if (quickLink) result = result.filter((m) => matchesQuickLink(m, quickLink));
     return result;
@@ -1217,10 +1243,14 @@ const MaidSearchPage = ({
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {pagedMaids.map((maid) => (
-                <MaidCard key={maid.referenceCode} maid={maid}
+                <MaidCard
+                  key={maid.referenceCode}
+                  maid={maid}
                   isShortlisted={shortlist.has(maid.referenceCode)}
                   onToggleShortlist={handleToggleShortlist}
-                  isLoggedIn={isLoggedIn} loginPath={loginPath}
+                  isLoggedIn={isLoggedIn}
+                  loginPath={loginPath}
+                  showCategory={isIndianSubcategoryActive}
                 />
               ))}
             </div>
@@ -1268,10 +1298,15 @@ const MaidSearchPage = ({
                 <div className="max-h-[68vh] overflow-y-auto pr-1">
                   <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
                     {shortlistedMaids.map((maid) => (
-                      <MaidCard key={`sl-${maid.referenceCode}`} maid={maid}
-                        isShortlisted={true} onToggleShortlist={handleToggleShortlist}
+                      <MaidCard
+                        key={`sl-${maid.referenceCode}`}
+                        maid={maid}
+                        isShortlisted={true}
+                        onToggleShortlist={handleToggleShortlist}
                         onNavigate={() => setIsShortlistOpen(false)}
-                        isLoggedIn={isLoggedIn} loginPath={loginPath}
+                        isLoggedIn={isLoggedIn}
+                        loginPath={loginPath}
+                        showCategory={isIndianSubcategoryActive}
                       />
                     ))}
                     {missingShortlistRefs.map((ref) => (
