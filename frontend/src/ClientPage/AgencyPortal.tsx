@@ -23,7 +23,7 @@ import {
 } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
-import FindMaidImg from "./assets/findmaids_logo.png";
+import FindMaidImg from "./assets/maid_agency_logo_81.jpg";
 
 interface AgencyAuthResponse {
   error?: string;

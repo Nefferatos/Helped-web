@@ -630,7 +630,6 @@ const MaidCard = ({
 }: {
   maid: MaidProfile; isShortlisted: boolean; onToggleShortlist: (ref: string) => void;
   onNavigate?: () => void; isLoggedIn: boolean; loginPath: string;
-  /** When true (Indian subcategory filter active), show the indianMaidCategory instead of nationality */
   showCategory?: boolean;
 }) => {
   if (!isLoggedIn)
@@ -642,13 +641,6 @@ const MaidCard = ({
   const typeColorClass = getMaidTypeBadgeClass(maid.type);
   const experienceBucket = getExperienceBucket(maid);
   const category = getMaidCategory(maid);
-
-  /**
-   * Nationality display logic:
-   * - Default / all view: always show nationality (e.g. "Indian", "Filipino")
-   * - Indian subcategory filter active AND category exists: show category (e.g. "Mizoram")
-   * Flag always reflects the actual nationality regardless.
-   */
   const displayLabel = showCategory && category ? category : (maid.nationality || "");
 
   return (
@@ -699,15 +691,12 @@ const MaidCard = ({
         {maid.referenceCode && (
           <p className="text-[9px] text-gray-600 font-mono leading-tight">{maid.referenceCode}</p>
         )}
-
-       
         {displayLabel && (
           <p className="inline-flex items-center gap-1 text-[10px] leading-tight mt-0.5">
             <FlagCircle code={flagCode} />
             <span className="font-semibold text-black">{displayLabel}</span>
           </p>
         )}
-
         <div className="my-1 border-t border-gray-100" />
         <div className="flex items-center gap-1.5 text-[10px] text-gray-500 leading-tight">
           {age !== null && <span className="font-medium text-black">({age}) yrs</span>}
@@ -751,7 +740,6 @@ const MaidSearchPage = ({
   const advancedFilters = useMemo(() => parseAdvancedFilters(searchParams), [searchParams]);
   const quickLink = (searchParams.get("quick") || "") as QuickLinkKey | "";
 
-  // True when user is viewing an Indian subcategory — cards should show category instead of nationality
   const isIndianSubcategoryActive = !!quickLink && INDIAN_SUBCATEGORY_KEYS.has(quickLink);
 
   const [filters, setFilters] = useState<SidebarFilters>(() =>
@@ -1212,9 +1200,10 @@ const MaidSearchPage = ({
             <PaginationBar />
           </div>
 
-          {/* Grid */}
+          {/* ── Grid ── */}
           {isLoading ? (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            // CHANGED: grid-cols-2 on mobile (was grid-cols-3)
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
                 <div key={i} className="overflow-hidden rounded-xl border border-border bg-muted animate-pulse">
                   <div className="aspect-[3/4] bg-muted-foreground/10" />
@@ -1241,7 +1230,8 @@ const MaidSearchPage = ({
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            // CHANGED: grid-cols-2 on mobile (was grid-cols-3)
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {pagedMaids.map((maid) => (
                 <MaidCard
                   key={maid.referenceCode}
@@ -1296,7 +1286,8 @@ const MaidSearchPage = ({
                 </div>
               ) : (
                 <div className="max-h-[68vh] overflow-y-auto pr-1">
-                  <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
+                  {/* CHANGED: grid-cols-2 on mobile (was grid-cols-3) */}
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
                     {shortlistedMaids.map((maid) => (
                       <MaidCard
                         key={`sl-${maid.referenceCode}`}

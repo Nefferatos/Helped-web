@@ -183,13 +183,6 @@ const ServiceDetail = () => {
                 >
                   Submit an Enquiry
                 </Link>
-                <Link
-                  to="/contact"
-                  className="block w-full text-center border border-primary text-primary font-body font-medium py-3 rounded-lg hover:bg-primary/5 transition-colors"
-                >
-                  <Phone className="w-4 h-4 inline mr-2" />
-                  Contact Us
-                </Link>
               </div>
 
               <div className="rounded-2xl border border-border bg-card p-6">

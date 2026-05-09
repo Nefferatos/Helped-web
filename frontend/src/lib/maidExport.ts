@@ -46,6 +46,13 @@ const esc = (v: unknown) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+// Used inside the DOM injection step — plain text lines need HTML escaping
+const escHtml = (line: string) =>
+  line
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
 const fmtDate = (v?: string) => {
   if (!v) return "N/A";
   const d = new Date(v);
@@ -220,6 +227,14 @@ const downloadBytes = (filename: string, bytes: Uint8Array, mimeType: string) =>
   downloadBlob(filename, blob);
 };
 
+/** Renders a checkbox cell with the tick centred inside the border box.
+ *  The inner <span> forces text-align:center so Times New Roman's natural
+ *  left bearing on the checkmark does not push the glyph left in html2canvas. */
+const cbTick = (checked: boolean) =>
+  checked
+    ? `<span class="cb"><span>&#10003;</span></span>`
+    : `<span class="cb"><span>&nbsp;</span></span>`;
+
 // ── MOM A4 Bio-data HTML builder ───────────────────────────────────────────
 const buildMomBiodataHtml = (maid: MaidProfile): string => {
   const agencyContact = (maid.agencyContact ?? {}) as Record<string, unknown>;
@@ -270,11 +285,14 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
     <td>${esc(e.remarks  ?? "")}</td>
   </tr>`).join("") || `<tr><td colspan="6" style="text-align:center;color:#888;">No employment history recorded.</td></tr>`;
 
-  // ── Remarks ─────────────────────────────────────────────────────────────
-  const publicIntro  = String(introduction.publicIntro  ?? "");
-  const privateIntro = String(introduction.intro ?? "");
-  const remarksText  = [publicIntro, privateIntro].filter(Boolean).join("\n\n") ||
-    String(introduction.otherRemarks ?? "");
+  // ── Remarks — deduplicate publicIntro vs intro ───────────────────────────
+  const publicIntro  = String(introduction.publicIntro  ?? "").trim();
+  const privateIntro = String(introduction.intro ?? "").trim();
+  // Deduplicate: only include privateIntro if it differs from publicIntro
+  const remarksText  = publicIntro === privateIntro
+    ? publicIntro
+    : [publicIntro, privateIntro].filter(Boolean).join("\n\n") ||
+      String(introduction.otherRemarks ?? "");
 
   // ── CSS ─────────────────────────────────────────────────────────────────
   const css = `
@@ -422,16 +440,39 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
       align-items: center; justify-content: center;
       font-size: 9pt; font-weight: bold;
       flex-shrink: 0;
+      text-align: center;
+      line-height: 14px;
+      overflow: hidden;
+    }
+    /* Inner centering span — overrides Times New Roman left bearing on ✓ */
+    .cb > span {
+      display: block;
+      width: 100%;
+      text-align: center;
+      line-height: 1;
     }
 
     /* ── Remarks block ── */
     .remarks-box {
       border: 1px solid #555;
-      min-height: 90px;
       padding: 8px;
       font-size: 10pt;
       white-space: pre-wrap;
       margin: 4px 0 12px;
+      /* No min-height — let content dictate height so overflow becomes extra pages */
+      page-break-inside: auto;
+      break-inside: auto;
+    }
+
+    /* Continuation block on overflow pages — no top border (looks like same box) */
+    .remarks-continued {
+      border-left: 1px solid #555;
+      border-right: 1px solid #555;
+      border-bottom: 1px solid #555;
+      padding: 8px;
+      font-size: 10pt;
+      white-space: pre-wrap;
+      margin: 0 0 12px;
     }
 
     /* ── Signature section ── */
@@ -587,8 +628,8 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
 <div class="field-row" style="align-items:center;">
   <span class="field-num">18.</span>
   <span class="field-label">Food handling preferences:</span>
-  <span class="cb">${String(introduction.foodHandlingPreferences ?? "").toLowerCase().includes("pork") ? "&#10003;" : ""}</span>&nbsp;No pork&nbsp;&nbsp;
-  <span class="cb">${String(introduction.foodHandlingPreferences ?? "").toLowerCase().includes("beef") ? "&#10003;" : ""}</span>&nbsp;No beef&nbsp;&nbsp;
+  ${cbTick(String(introduction.foodHandlingPreferences ?? "").toLowerCase().includes("pork"))}&nbsp;No pork&nbsp;&nbsp;
+  ${cbTick(String(introduction.foodHandlingPreferences ?? "").toLowerCase().includes("beef"))}&nbsp;No beef&nbsp;&nbsp;
   Others:&nbsp;<span class="field-value">${esc(String(introduction.foodHandlingPreferences ?? ""))}</span>
 </div>
 
@@ -607,13 +648,13 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
 <div class="sec-label">(B) SKILLS OF FDW</div>
 <div class="sub-label">B1 Method of Evaluation of Skills</div>
 <p style="font-size:10pt;margin-bottom:6px;">Please indicate the method(s) used to evaluate the FDW's skills (can tick more than one):</p>
-<div class="checkbox-row"><span class="cb">&#10003;</span>&nbsp;Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA</div>
-<div class="checkbox-row"><span class="cb">&#10003;</span>&nbsp;Interviewed by Singapore EA</div>
+<div class="checkbox-row">${cbTick(true)}&nbsp;Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA</div>
+<div class="checkbox-row">${cbTick(true)}&nbsp;Interviewed by Singapore EA</div>
 <div style="padding-left:22px;">
-  <div class="checkbox-row"><span class="cb">&#10003;</span>&nbsp;Interviewed via telephone/teleconference</div>
-  <div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;Interviewed via videoconference</div>
-  <div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;Interviewed in person</div>
-  <div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;Interviewed in person and also made observation of FDW in the areas of work listed in table</div>
+  <div class="checkbox-row">${cbTick(true)}&nbsp;Interviewed via telephone/teleconference</div>
+  <div class="checkbox-row">${cbTick(false)}&nbsp;Interviewed via videoconference</div>
+  <div class="checkbox-row">${cbTick(false)}&nbsp;Interviewed in person</div>
+  <div class="checkbox-row">${cbTick(false)}&nbsp;Interviewed in person and also made observation of FDW in the areas of work listed in table</div>
 </div>
 
 <table class="skills" style="margin-top:8px;">
@@ -657,8 +698,8 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
 <div class="sub-label" style="margin-top:10px;">C2 Employment History in Singapore</div>
 <div class="field-row">
   <span>Previous working experience in Singapore&nbsp;&nbsp;</span>
-  <span class="cb">&#10003;</span>&nbsp;Yes&nbsp;&nbsp;&nbsp;
-  <span class="cb">&nbsp;</span>&nbsp;No
+  ${cbTick(true)}&nbsp;Yes&nbsp;&nbsp;&nbsp;
+  ${cbTick(false)}&nbsp;No
 </div>
 <p style="font-size:8.5pt;margin:4px 0 10px;">(The EA is required to obtain the FDW's employment history from MOM and furnish the employer with the employment history of the FDW. The employer may also verify the FDW's employment history in Singapore through WPOL using SingPass)</p>
 
@@ -673,17 +714,17 @@ const buildMomBiodataHtml = (maid: MaidProfile): string => {
 </table>
 
 <div class="sec-label" style="margin-top:10px;">(D) AVAILABILITY OF FDW TO BE INTERVIEWED BY PROSPECTIVE EMPLOYER</div>
-<div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;FDW is not available for interview</div>
-<div class="checkbox-row"><span class="cb">&#10003;</span>&nbsp;FDW can be interviewed by phone</div>
-<div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;FDW can be interviewed by video-conference</div>
-<div class="checkbox-row"><span class="cb">&nbsp;</span>&nbsp;FDW can be interviewed in person</div>
+<div class="checkbox-row">${cbTick(false)}&nbsp;FDW is not available for interview</div>
+<div class="checkbox-row">${cbTick(true)}&nbsp;FDW can be interviewed by phone</div>
+<div class="checkbox-row">${cbTick(false)}&nbsp;FDW can be interviewed by video-conference</div>
+<div class="checkbox-row">${cbTick(false)}&nbsp;FDW can be interviewed in person</div>
 
 <!-- ═══ PAGE BREAK → A-4 ═══ -->
 <div class="page-break">A-4</div>
 
 <!-- ═══ (E) OTHER REMARKS ═══ -->
 <div class="sec-label">(E) OTHER REMARKS</div>
-<div class="remarks-box">${esc(remarksText)}</div>
+<div class="remarks-box" id="remarks-box">${esc(remarksText)}</div>
 
 <!-- ── Signatures ── -->
 <div class="sig-grid">
@@ -744,6 +785,103 @@ const A4_W_MM = 210;
 const A4_H_MM = 297;
 const A4_W_PX = 794; // ~96 dpi A4 width
 
+// ~297mm at 96 dpi — used to determine when to inject extra page breaks
+// We use 90% of that to be conservative and avoid cutting mid-line
+const A4_H_PX = Math.round(1122 * 0.90);
+
+// ── Inject extra .page-break markers into the remarks section if it's too tall
+// This runs INSIDE the rendered iframe after layout is complete, so offsetTop
+// values are accurate. It splits the remarks text into chunks that each fit
+// within one A4 page, inserting a .page-break div between them.
+const injectRemarksPageBreaks = (
+  iframeDoc: Document,
+  iframe: HTMLIFrameElement,
+  lastStaticBreakOffsetTop: number,
+  extraPageIndexStart: number,
+) => {
+  const remarksBox = iframeDoc.getElementById("remarks-box");
+  if (!remarksBox) return;
+
+  const remarksTop    = remarksBox.offsetTop;
+  const remarksHeight = remarksBox.offsetHeight;
+
+  // Height of content between the last static page-break label and the remarks box
+  // (section heading "(E) OTHER REMARKS" lives here)
+  const headerHeight = remarksTop - lastStaticBreakOffsetTop;
+
+  // Usable pixel height on the FIRST remarks page (rest of A4 after the header)
+  const firstPageUsable = A4_H_PX - headerHeight;
+
+  // Nothing to do if remarks fit on the first page
+  if (remarksHeight <= firstPageUsable) return;
+
+  // ── Approximate line height: font-size 11pt at 96dpi ≈ 18.5px
+  const lineHeightPx = 18.5;
+
+  // Split the raw text on newlines, preserving blank lines
+  const rawText = remarksBox.innerText || remarksBox.textContent || "";
+  const lines   = rawText.split("\n");
+
+  // How many lines fit per page
+  const linesPerFirstPage      = Math.max(1, Math.floor(firstPageUsable / lineHeightPx));
+  const linesPerContinuedPage  = Math.max(1, Math.floor(A4_H_PX / lineHeightPx));
+
+  // Walk through lines, flushing a new page-break whenever we'd overflow
+  const segments: string[][] = [[]]; // segments[0] = first page lines
+  let accumulated = 0;
+  let capacity    = linesPerFirstPage;
+
+  for (const line of lines) {
+    // Blank lines cost 0.6 of a line; non-blank cost 1.0
+    const cost = line.trim() ? 1.0 : 0.6;
+
+    if (accumulated + cost > capacity) {
+      // Start a new segment/page
+      segments.push([]);
+      accumulated = 0;
+      capacity    = linesPerContinuedPage;
+    }
+
+    segments[segments.length - 1].push(line);
+    accumulated += cost;
+  }
+
+  // Only bother restructuring if we actually need more than one segment
+  if (segments.length <= 1) return;
+
+  // Rebuild the remarks area in the live DOM
+  // First segment stays inside .remarks-box (keeps the top border)
+  remarksBox.innerHTML = segments[0].map(escHtml).join("<br/>") + "<br/>";
+
+  // Inject subsequent segments as continuation blocks, each preceded by a
+  // .page-break div (which the canvas slicer uses as a cut point)
+  let pageLabel = extraPageIndexStart;
+  const container = remarksBox.parentNode!;
+  let insertAfter: Element = remarksBox;
+
+  for (let i = 1; i < segments.length; i++) {
+    // Page-break marker (the canvas slicer keyed to querySelectorAll('.page-break'))
+    const breakEl = iframeDoc.createElement("div");
+    breakEl.className = "page-break";
+    breakEl.style.cssText = "display:block;text-align:right;font-size:9pt;padding-top:0;";
+    breakEl.textContent = `A-${pageLabel}`;
+    pageLabel++;
+
+    // Continuation block — top border omitted so it reads as same box continued
+    const contEl = iframeDoc.createElement("div");
+    contEl.className = "remarks-continued";
+    contEl.innerHTML = segments[i].map(escHtml).join("<br/>") + "<br/>";
+
+    // Insert both after the previous block
+    insertAfter.after(breakEl);
+    breakEl.after(contEl);
+    insertAfter = contEl;
+  }
+
+  // Re-measure iframe height after DOM change
+  iframe.style.height = `${iframeDoc.body.scrollHeight + 200}px`;
+};
+
 // ── Render the MOM HTML biodata into a hidden iframe, capture with html2canvas,
 //    then slice into A4 pages using .page-break element positions as boundaries.
 const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> => {
@@ -789,14 +927,34 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
       )
     );
 
-    // Allow fonts + layout to fully settle
+    // Allow fonts + layout to fully settle before measuring
     await new Promise<void>((r) => setTimeout(r, 400));
 
     // Re-measure height after images load (they may have changed layout)
     iframe.style.height = `${body.scrollHeight + 200}px`;
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-    // ── Find .page-break elements to determine per-page slice boundaries ──
+    // ── Find the static .page-break elements to learn the last break's position ──
+    const staticBreakEls = Array.from(
+      iframeDoc.querySelectorAll<HTMLElement>(".page-break")
+    );
+
+    // The A-4 break is the last static one; we need its offsetTop so
+    // injectRemarksPageBreaks knows how much header space is consumed on page A-4.
+    const lastStaticBreak = staticBreakEls[staticBreakEls.length - 1];
+    const lastStaticBreakTop = lastStaticBreak ? lastStaticBreak.offsetTop : 0;
+
+    // Static pages so far: A-1 through A-4 → next overflow page is A-5
+    const extraPageIndexStart = staticBreakEls.length + 1;
+
+    // ── Inject extra page-break markers if the remarks section is too long ──
+    injectRemarksPageBreaks(iframeDoc, iframe, lastStaticBreakTop, extraPageIndexStart);
+
+    // Allow layout to re-settle after any DOM injection
+    await new Promise<void>((r) => setTimeout(r, 200));
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    // ── Re-query ALL .page-break elements (now includes injected overflow breaks) ──
     const pageBreakEls = Array.from(
       iframeDoc.querySelectorAll<HTMLElement>(".page-break")
     );
@@ -805,7 +963,7 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
     const sections: Array<{ top: number; bottom: number }> = [];
 
     pageBreakEls.forEach((el, idx) => {
-      const top = el.offsetTop;
+      const top    = el.offsetTop;
       const nextEl = pageBreakEls[idx + 1];
       const bottom = nextEl ? nextEl.offsetTop : totalH;
       sections.push({ top, bottom });
@@ -837,15 +995,15 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
     sections.forEach((section, idx) => {
       if (idx > 0) pdf.addPage();
 
-      const srcY  = section.top;
-      const srcH  = section.bottom - section.top;
-      const clampedSrcH = Math.min(srcH, (canvas.height / 2) - srcY);
+      const srcY          = section.top;
+      const srcH          = section.bottom - section.top;
+      const clampedSrcH   = Math.min(srcH, (canvas.height / 2) - srcY);
       if (clampedSrcH <= 0) return;
 
       // Slice this page's rows out of the full 2× canvas
-      const sliceCanvas = document.createElement("canvas");
-      sliceCanvas.width  = canvas.width;
-      sliceCanvas.height = Math.round(clampedSrcH * 2);
+      const sliceCanvas    = document.createElement("canvas");
+      sliceCanvas.width    = canvas.width;
+      sliceCanvas.height   = Math.round(clampedSrcH * 2);
 
       const ctx = sliceCanvas.getContext("2d");
       if (ctx) {
@@ -866,7 +1024,7 @@ const exportMaidProfileViaCanvas = async (maid: MaidProfile): Promise<boolean> =
     });
 
     pdf.setProperties({
-      title: `${maid.fullName || maid.referenceCode} Bio-data`,
+      title:   `${maid.fullName || maid.referenceCode} Bio-data`,
       subject: `MAID_PROFILE_JSON_BASE64:${encodeBase64Utf8(JSON.stringify(buildImportPayloadWithPhoto(maid)))}`,
       creator: "Helped Maid Portal",
     });
