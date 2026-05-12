@@ -255,6 +255,7 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
   const [sent, setSent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const toNameRef = useRef<HTMLInputElement>(null);
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   useEffect(() => {
     toNameRef.current?.focus();
@@ -267,7 +268,20 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
     const errs: Record<string, string> = {};
     if (!toEmail.trim()) errs.toEmail = "Required";
     if (!fromEmail.trim()) errs.fromEmail = "Required";
+    if (toEmail.trim() && !emailPattern.test(toEmail.trim())) errs.toEmail = "Invalid email";
+    if (fromEmail.trim() && !emailPattern.test(fromEmail.trim())) errs.fromEmail = "Invalid email";
     return errs;
+  };
+
+  const openMailClientFallback = () => {
+    const lines = [
+      message.trim(),
+      "",
+      fromName.trim() ? `From: ${fromName.trim()} <${fromEmail.trim()}>` : `From: ${fromEmail.trim()}`,
+    ].filter(Boolean);
+
+    const mailto = `mailto:${encodeURIComponent(toEmail.trim())}?subject=${encodeURIComponent(subject.trim())}&body=${encodeURIComponent(lines.join("\n"))}`;
+    window.location.href = mailto;
   };
 
   const handleSubmit = async () => {
@@ -286,6 +300,12 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (res.status === 503) {
+          openMailClientFallback();
+          toast.success("Email service is not configured here, so your mail app has been opened instead.");
+          onClose();
+          return;
+        }
         throw new Error(data.error || "Failed to send.");
       }
       setSent(true);

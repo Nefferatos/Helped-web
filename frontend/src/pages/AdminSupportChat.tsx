@@ -74,6 +74,109 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
+function firstName(name: string) {
+  return name.trim().split(/\s+/)[0] || "there";
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getLatestClientMessage(messages: ChatMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].senderRole === "client") return messages[index];
+  }
+  return null;
+}
+
+function buildAutoGreeting(conversation: AdminConversation) {
+  const greetingName = firstName(conversation.clientName);
+  if (conversation.conversationType === "agency" && conversation.agencyName) {
+    return `Hi ${greetingName}, thank you for messaging ${conversation.agencyName}. How can we help you today?`;
+  }
+  return `Hi ${greetingName}, thank you for reaching out to our support team. How can we help you today?`;
+}
+
+function buildOfflineAutoReplies(
+  conversation: AdminConversation,
+  messages: ChatMessage[],
+) {
+  const greeting = buildAutoGreeting(conversation);
+  const latestClientMessage = getLatestClientMessage(messages);
+  if (!latestClientMessage) {
+    return [
+      greeting,
+      "Thank you for your message. Please share the details of what you need help with, and we will assist you as soon as possible.",
+      "Could you let us know your preferred maid profile, timeline, and any key requirements so we can guide you better?",
+    ];
+  }
+
+  const text = normalizeText(latestClientMessage.message);
+  const greetingName = firstName(conversation.clientName);
+
+  if (/(price|pricing|cost|budget|fee|fees|salary|how much)/.test(text)) {
+    return [
+      `Hi ${greetingName}, thank you for your question. We can help with the pricing details for this request.`,
+      "Please let us know your budget range and the type of helper you need, and we will recommend the most suitable option.",
+      "We can also break down the agency fees, salary expectations, and any applicable processing costs for you.",
+    ];
+  }
+
+  if (/(interview|schedule|appointment|meet|viewing|visit|available time|when can)/.test(text)) {
+    return [
+      `Hi ${greetingName}, we can help arrange the next step for you.`,
+      "Please share your preferred date and time, and we will check availability and get back to you shortly.",
+      "If you already have a shortlist or reference code, send it over and we will coordinate the interview or viewing faster.",
+    ];
+  }
+
+  if (/(available|availability|still available|can i hire|open)/.test(text)) {
+    return [
+      `Hi ${greetingName}, thank you for checking with us.`,
+      "We will confirm the current availability for you and update you as soon as possible.",
+      "If you have a specific reference code or profile in mind, please send it so we can verify the status accurately.",
+    ];
+  }
+
+  if (/(document|documents|paperwork|permit|application|process|requirement|required)/.test(text)) {
+    return [
+      `Hi ${greetingName}, we can guide you through the requirements.`,
+      "Please let us know whether this is for a new hire, transfer, or replacement so we can advise on the correct documents and process.",
+      "Once we have that, we will share the required paperwork and next steps with you.",
+    ];
+  }
+
+  if (/(recommend|suggest|match|suitable|shortlist|looking for|need a maid|helper)/.test(text)) {
+    return [
+      `Hi ${greetingName}, thank you for sharing what you are looking for.`,
+      "Please tell us the main requirements such as childcare, elderly care, cooking, language preference, and budget, and we will suggest suitable profiles.",
+      "If you already saw a profile you like, send the reference code and we can help compare it with other matching options.",
+    ];
+  }
+
+  if (/(status|update|follow up|follow-up|progress|any news)/.test(text)) {
+    return [
+      `Hi ${greetingName}, thank you for following up.`,
+      "We are checking the latest status for you and will update you shortly.",
+      "If there is a specific application, interview, or profile you are referring to, please mention it so we can respond more precisely.",
+    ];
+  }
+
+  if (/(thank you|thanks)/.test(text)) {
+    return [
+      `You're welcome, ${greetingName}.`,
+      "We're happy to help. If you need anything else, just let us know.",
+      "If you want, we can also help with the next step such as recommendations, scheduling, or paperwork guidance.",
+    ];
+  }
+
+  return [
+    greeting,
+    "Thank you for the details. We are reviewing your request and will get back to you shortly.",
+    "If you can share a little more about what you need, such as the profile, timeline, or concern, we can assist you more accurately.",
+  ];
+}
+
 function groupMessagesByDate(messages: ChatMessage[]) {
   const groups: { label: string; messages: ChatMessage[] }[] = [];
   let currentLabel = "";
@@ -196,7 +299,7 @@ function AiStatusBanner({ status, onRetry }: { status: AiStatus; onRetry: () => 
     return (
       <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px]">
         <AlertCircle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
-        <span className="flex-1 font-semibold text-amber-800">AI assistant offline — using quick reply templates</span>
+        <span className="flex-1 font-semibold text-amber-800">AI assistant offline - fallback reply suggestions</span>
         <button onClick={onRetry} className="flex items-center gap-1 text-amber-700 hover:text-amber-900 transition-colors">
           <RefreshCw className="h-3 w-3" />
           Retry
@@ -388,27 +491,38 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
 
 function AiSuggestionStrip({
   conversation,
+  messages,
+  status,
   onSelect,
 }: {
   conversation: AdminConversation | null;
+  messages: ChatMessage[];
+  status: AiStatus;
   onSelect: (text: string) => void;
 }) {
   if (!conversation) return null;
-  const suggestions = [
-    `Hi ${conversation.clientName.split(" ")[0]}, thank you for your message.`,
-    "Could you provide more details so we can assist you better?",
-    "We are looking into this and will update you shortly.",
-  ];
+  const suggestions =
+    status === "offline"
+      ? buildOfflineAutoReplies(conversation, messages)
+      : [
+          `Hi ${firstName(conversation.clientName)}, thank you for your message.`,
+          "Could you provide more details so we can assist you better?",
+          "We are looking into this and will update you shortly.",
+        ];
   return (
-    <div className="flex gap-2 flex-wrap px-5 py-2 border-b border-gray-100 bg-emerald-50/50">
-      <span className="flex items-center gap-1 text-[12px] font-bold text-emerald-700 mr-1">
-        <Bot className="h-3.5 w-3.5" /> AI suggests:
+    <div className={`flex gap-2 flex-wrap px-5 py-2 border-b border-gray-100 ${status === "offline" ? "bg-amber-50/70" : "bg-emerald-50/50"}`}>
+      <span className={`flex items-center gap-1 text-[12px] font-bold mr-1 ${status === "offline" ? "text-amber-700" : "text-emerald-700"}`}>
+        <Bot className="h-3.5 w-3.5" /> {status === "offline" ? "Fallback suggests:" : "AI suggests:"}
       </span>
       {suggestions.map((s) => (
         <button
           key={s}
           onClick={() => onSelect(s)}
-          className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[12px] font-semibold text-emerald-800 hover:bg-emerald-50 transition-colors"
+          className={`rounded-full border bg-white px-3 py-1 text-[12px] font-semibold transition-colors ${
+            status === "offline"
+              ? "border-amber-200 text-amber-900 hover:bg-amber-50"
+              : "border-emerald-200 text-emerald-800 hover:bg-emerald-50"
+          }`}
         >
           {s.length > 40 ? s.slice(0, 40) + "…" : s}
         </button>
@@ -651,6 +765,12 @@ const AdminSupportChat = () => {
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
+  useEffect(() => {
+    if (aiStatus !== "offline" || !activeConversation || draft.trim()) return;
+    const suggestions = buildOfflineAutoReplies(activeConversation, messages);
+    if (suggestions[0]) setDraft(suggestions[0]);
+  }, [activeConversation, aiStatus, draft, messages]);
+
   const copyMessage = (text: string) => {
     navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard")).catch(() => toast.error("Copy failed"));
   };
@@ -865,9 +985,14 @@ const AdminSupportChat = () => {
               )}
             </div>
 
-            {/* AI suggestions strip (when AI is online and a convo is active) */}
-            {aiStatus === "online" && activeConversation && (
-              <AiSuggestionStrip conversation={activeConversation} onSelect={(text) => setDraft(text)} />
+            {/* AI / fallback suggestions strip */}
+            {(aiStatus === "online" || aiStatus === "offline") && activeConversation && (
+              <AiSuggestionStrip
+                conversation={activeConversation}
+                messages={messages}
+                status={aiStatus}
+                onSelect={(text) => setDraft(text)}
+              />
             )}
 
             {/* Messages area */}
