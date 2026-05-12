@@ -38,6 +38,85 @@ const SUPPORT_TOPICS: TopicOption[] = [
   { id: "other", label: "Other", icon: "💬", description: "Something else — just type your message", suggestedMessage: "" },
 ];
 
+function clientFirstName(name?: string | null) {
+  return (name ?? "").trim().split(/\s+/)[0] || "there";
+}
+
+function normalizeClientText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getLatestAgencyMessage(messages: ChatMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].senderRole === "agency") return messages[index];
+  }
+  return null;
+}
+
+function buildReceptionistGreeting(clientName?: string | null) {
+  return `Hello ${clientFirstName(clientName)}, welcome to Helped support. How may I assist you today?`;
+}
+
+function buildReceptionistSuggestions(clientName: string | undefined, messages: ChatMessage[]) {
+  const greeting = buildReceptionistGreeting(clientName);
+  const latestAgencyMessage = getLatestAgencyMessage(messages);
+  if (!latestAgencyMessage) {
+    return [
+      greeting,
+      "Please let me know if you need help with placement status, billing, scheduling, renewal, or a general concern.",
+      "If you prefer, you can select a topic below and I will help you prepare your message for the team.",
+    ];
+  }
+
+  const text = normalizeClientText(latestAgencyMessage.message);
+
+  if (/(placement|application|status|progress|update)/.test(text)) {
+    return [
+      greeting,
+      "I can help you check your placement or application update. Please share the request or reference details if you have them.",
+      "If you are following up on a previous request, let me know what update you are waiting for and I will route it clearly.",
+    ];
+  }
+
+  if (/(bill|billing|invoice|payment|fee|fees)/.test(text)) {
+    return [
+      greeting,
+      "I can help with billing matters. Please tell me which invoice, payment, or fee you would like the team to review.",
+      "If you have a payment date, invoice number, or the amount in question, include it in your message for a faster reply.",
+    ];
+  }
+
+  if (/(schedule|reschedule|appointment|interview|time|date)/.test(text)) {
+    return [
+      greeting,
+      "I can help you with scheduling. Please share the date or timing you need to change, and I will help you phrase the request.",
+      "If there is a preferred new date or time slot, add that as well so the team can respond more quickly.",
+    ];
+  }
+
+  if (/(renew|renewal|extend|extension|contract)/.test(text)) {
+    return [
+      greeting,
+      "I can help with renewal requests. Please let me know which contract or arrangement you would like to renew or extend.",
+      "If you know the preferred renewal period or deadline, include it and I will help prepare the message clearly.",
+    ];
+  }
+
+  if (/(complaint|concern|issue|problem|not happy)/.test(text)) {
+    return [
+      greeting,
+      "I'm sorry to hear there is a concern. Please share what happened and when it happened, and I will help you send it clearly to the team.",
+      "If the matter is urgent, mention that in your message so the support team can prioritize it appropriately.",
+    ];
+  }
+
+  return [
+    greeting,
+    "Please tell me a little about what you need help with, and I will help you prepare a clear message for the support team.",
+    "You can also choose a topic below if that is easier.",
+  ];
+}
+
 const CSS = `
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
