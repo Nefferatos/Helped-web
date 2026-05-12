@@ -3,7 +3,7 @@ import {
   ArrowRight, CheckCircle, HeartHandshake, Users, X, Star,
   Shield, ChevronRight, Search, Home, Heart, Baby, Backpack,
   BadgeCheck, Sparkles, PhoneCall, Lock, UserCheck, TrendingUp,
-  Award, SlidersHorizontal, LayoutGrid,
+  Award, SlidersHorizontal, LayoutGrid, ArrowUp,
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
@@ -68,6 +68,14 @@ const GLOBAL_STYLES = `
   @keyframes rotateSlow {
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
+  }
+  @keyframes backToTopIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.85); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes backToTopOut {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(16px) scale(0.85); }
   }
 
   .hero-headline { font-family: 'Unbounded', sans-serif; }
@@ -321,6 +329,45 @@ const GLOBAL_STYLES = `
   .pagination-btn.active { background: var(--green-mid); border-color: var(--green-mid); color: #fff; }
   .pagination-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
+  /* ── Back to Top Button ── */
+  .back-to-top-btn {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    z-index: 9999;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #FFE000 0%, #F5C800 100%);
+    box-shadow: 0 4px 0 #C8A800, 0 8px 28px rgba(255,224,0,0.45);
+    transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+    outline: none;
+  }
+  .back-to-top-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 7px 0 #C8A800, 0 14px 38px rgba(255,224,0,0.55);
+    background: linear-gradient(135deg, #FFF176 0%, #FFE000 100%);
+  }
+  .back-to-top-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 0 #C8A800;
+  }
+  .back-to-top-btn.visible {
+    animation: backToTopIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both;
+    pointer-events: auto;
+    opacity: 1;
+  }
+  .back-to-top-btn.hidden {
+    animation: backToTopOut 0.22s ease both;
+    pointer-events: none;
+    opacity: 0;
+  }
+
   @media (max-width: 900px) {
     .hero-grid { grid-template-columns: 1fr !important; }
     .hero-image-col { display: none !important; }
@@ -348,6 +395,9 @@ const GLOBAL_STYLES = `
   }
   @media (max-width: 600px) {
     .services-grid { grid-template-columns: 1fr !important; }
+  }
+  @media (max-width: 480px) {
+    .back-to-top-btn { bottom: 20px; right: 20px; width: 42px; height: 42px; }
   }
 
   /* ── Maid grid: 6 columns × 2 rows ── */
@@ -747,6 +797,32 @@ const MaidCardFull = ({
 };
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   BACK TO TOP BUTTON
+───────────────────────────────────────────────────────────────────────────── */
+const BackToTopButton = () => {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 400);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const handleClick = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  return (
+    <button
+      className={`back-to-top-btn ${visible ? "visible" : "hidden"}`}
+      onClick={handleClick}
+      aria-label="Back to top"
+      title="Back to top"
+    >
+      <ArrowUp size={20} color="#061800" strokeWidth={2.5} />
+    </button>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────────────────────────
    STATIC DATA
 ───────────────────────────────────────────────────────────────────────────── */
 const services = [
@@ -966,6 +1042,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   return (
     <div className="dm" style={{ minHeight: "100vh", background: "#fff", fontFamily: "'DM Sans', sans-serif" }}>
       <style>{GLOBAL_STYLES}</style>
+
+      {/* ── BACK TO TOP FLOATING BUTTON ── */}
+      <BackToTopButton />
 
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
@@ -1385,9 +1464,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                   <button className="btn-yellow" onClick={() => navigate(searchMaidsHref)} style={{ padding: "11px 20px", fontSize: 11 }}>
                     <Users size={13} /> Browse Helpers
                   </button>
-                  <a href="#contact" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 100, background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.2)", fontSize: 11, fontWeight: 700, fontFamily: "'Unbounded', sans-serif", textDecoration: "none", letterSpacing: "0.03em", transition: "all 0.18s" }}>
-                    <PhoneCall size={13} /> Contact Us
-                  </a>
                 </div>
               </div>
             </div>
