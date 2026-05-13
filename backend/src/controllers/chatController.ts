@@ -6,13 +6,19 @@ import {
 } from '../auth'
 import {
   createChatMessageStore,
+  getAgencyChatbotConfigStore,
+  getChatMessagesAfterIdForAgencyStore,
+  getChatMessagesAfterIdForClientStore,
   getChatConversationsForClientStore,
   getChatConversationsStore,
+  getLatestChatMessageIdForAgencyStore,
+  getLatestChatMessageIdForClientStore,
   getUnreadChatCountForAdminStore,
   getUnreadChatCountForClientStore,
   getChatMessagesForClientStore,
   markChatMessagesReadForAgencyStore,
   markChatMessagesReadForClientStore,
+  upsertAgencyChatbotConfigStore,
 } from '../store'
 
 type ConversationContext = {
@@ -36,6 +42,24 @@ const getConversationContext = (req: Request): ConversationContext => {
     agencyId: Number.isInteger(agencyId) ? agencyId : undefined,
     agencyName,
   }
+}
+
+const sendSseHeaders = (res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  ;(res as Response & { flushHeaders?: () => void }).flushHeaders?.()
+  res.write('retry: 1200\n\n')
+}
+
+const writeSseEvent = (res: Response, event: string, data: unknown) => {
+  res.write(`event: ${event}\n`)
+  res.write(`data: ${JSON.stringify(data)}\n\n`)
+}
+
+const toPositiveAfterId = (value: unknown) => {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0
 }
 
 export const getMyChatMessages = async (req: Request, res: Response) => {
@@ -123,6 +147,121 @@ export const sendMyChatMessage = async (req: Request, res: Response) => {
     console.error('Error sending client chat message:', error)
     res.status(500).json({ error: 'Failed to send chat message' })
   }
+}
+
+export const getMyChatbotConfig = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const context = getConversationContext(req)
+    const agencyId = await getRequestAgencyId(req, context.agencyId ?? 1)
+    const config = await getAgencyChatbotConfigStore(
+      agencyId,
+      context.agencyName
+    )
+
+    res.status(200).json({ config })
+  } catch (error) {
+    console.error('Error fetching client chatbot config:', error)
+    res.status(500).json({ error: 'Failed to fetch chatbot config' })
+  }
+}
+
+export const postMyChatBotReply = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { message, senderName } = req.body as {
+      message?: string
+      senderName?: string
+    }
+    if (!message?.trim()) {
+      return res.status(400).json({ error: 'message is required' })
+    }
+
+    const context = getConversationContext(req)
+    const agencyId = await getRequestAgencyId(req, context.agencyId ?? 1)
+    const config = await getAgencyChatbotConfigStore(
+      agencyId,
+      context.agencyName
+    )
+    const created = await createChatMessageStore({
+      clientId: client.id,
+      conversationType: context.conversationType,
+      agencyId,
+      agencyName: context.agencyName,
+      senderRole: 'agency',
+      senderName: senderName?.trim() || config.botName,
+      message: message.trim(),
+    })
+
+    res.status(201).json({ message: created })
+  } catch (error) {
+    console.error('Error sending client chatbot reply:', error)
+    res.status(500).json({ error: 'Failed to send chatbot reply' })
+  }
+}
+
+export const getMyChatLastId = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const lastId = await getLatestChatMessageIdForClientStore(client.id)
+    res.status(200).json({ lastId })
+  } catch (error) {
+    console.error('Error fetching client chat last id:', error)
+    res.status(500).json({ error: 'Failed to fetch chat cursor' })
+  }
+}
+
+export const streamMyChatMessages = async (req: Request, res: Response) => {
+  const client = await getAuthenticatedClient(req)
+  if (!client) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  const context = getConversationContext(req)
+  const agencyId = await getRequestAgencyId(req, context.agencyId ?? 1)
+  let lastId = toPositiveAfterId(req.query.afterId)
+  const includeAll = req.query.all === '1'
+
+  sendSseHeaders(res)
+
+  const poll = async () => {
+    try {
+      const messages = await getChatMessagesAfterIdForClientStore(client.id, lastId, {
+        includeAll,
+        conversationType: context.conversationType,
+        agencyId,
+      })
+      for (const message of messages) {
+        lastId = Math.max(lastId, message.id)
+        writeSseEvent(res, 'message', { message })
+      }
+    } catch (error) {
+      console.error('Error streaming client chat messages:', error)
+    }
+  }
+
+  const timer = setInterval(() => {
+    void poll()
+  }, 1200)
+
+  void poll()
+
+  req.on('close', () => {
+    clearInterval(timer)
+    res.end()
+  })
 }
 
 export const getAdminChatConversations = async (req: Request, res: Response) => {
@@ -233,4 +372,94 @@ export const sendAdminChatMessage = async (req: Request, res: Response) => {
     console.error('Error sending admin chat message:', error)
     res.status(500).json({ error: 'Failed to send chat message' })
   }
+}
+
+export const getAdminChatbotConfig = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const config = await getAgencyChatbotConfigStore(
+      admin.agencyId,
+      admin.agencyName
+    )
+    res.status(200).json({ config })
+  } catch (error) {
+    console.error('Error fetching admin chatbot config:', error)
+    res.status(500).json({ error: 'Failed to fetch chatbot config' })
+  }
+}
+
+export const updateAdminChatbotConfig = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const config = await upsertAgencyChatbotConfigStore(
+      admin.agencyId,
+      body,
+      admin.agencyName
+    )
+
+    res.status(200).json({ config })
+  } catch (error) {
+    console.error('Error saving admin chatbot config:', error)
+    res.status(500).json({ error: 'Failed to save chatbot config' })
+  }
+}
+
+export const getAdminChatLastId = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const lastId = await getLatestChatMessageIdForAgencyStore(admin.agencyId)
+    res.status(200).json({ lastId })
+  } catch (error) {
+    console.error('Error fetching admin chat last id:', error)
+    res.status(500).json({ error: 'Failed to fetch chat cursor' })
+  }
+}
+
+export const streamAdminChatMessages = async (req: Request, res: Response) => {
+  const admin = await getAuthenticatedAgencyAdmin(req)
+  if (!admin) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  let lastId = toPositiveAfterId(req.query.afterId)
+  sendSseHeaders(res)
+
+  const poll = async () => {
+    try {
+      const messages = await getChatMessagesAfterIdForAgencyStore(
+        admin.agencyId,
+        lastId
+      )
+      for (const message of messages) {
+        lastId = Math.max(lastId, message.id)
+        writeSseEvent(res, 'message', { message })
+      }
+    } catch (error) {
+      console.error('Error streaming admin chat messages:', error)
+    }
+  }
+
+  const timer = setInterval(() => {
+    void poll()
+  }, 1200)
+
+  void poll()
+
+  req.on('close', () => {
+    clearInterval(timer)
+    res.end()
+  })
 }

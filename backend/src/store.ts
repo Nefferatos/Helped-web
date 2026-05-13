@@ -168,6 +168,41 @@ export interface ChatMessageRecord {
   readByClient: boolean
 }
 
+type ChatAvatarFields = {
+  clientProfileImageUrl?: string
+  agencyProfileImageUrl?: string
+}
+
+export interface AgencyChatbotTopicRecord {
+  id: string
+  label: string
+  icon: string
+  description: string
+  suggestedMessage: string
+  enabled: boolean
+}
+
+export interface AgencyChatbotRuleRecord {
+  id: string
+  label: string
+  keywords: string[]
+  response: string
+  enabled: boolean
+}
+
+export interface AgencyChatbotConfigRecord {
+  agencyId: number
+  enabled: boolean
+  botName: string
+  welcomeMessage: string
+  fallbackShortResponse: string
+  fallbackLongResponse: string
+  suggestionChips: string[]
+  topicOptions: AgencyChatbotTopicRecord[]
+  responseRules: AgencyChatbotRuleRecord[]
+  updatedAt: string
+}
+
 export interface RequestConversationRecord {
   id: string
   requestId: string
@@ -250,6 +285,7 @@ interface AppData {
   agencyAdminSessions: AgencyAdminSessionRecord[]
   directSales: DirectSaleRecord[]
   chatMessages: ChatMessageRecord[]
+  agencyChatbotConfigs: AgencyChatbotConfigRecord[]
   requestConversations: RequestConversationRecord[]
   requestMessages: RequestMessageRecord[]
   employers: EmployerContractRecord[]
@@ -379,6 +415,7 @@ const defaultData = (): AppData => ({
   agencyAdminSessions: [],
   directSales: [],
   chatMessages: [],
+  agencyChatbotConfigs: [],
   requestConversations: [],
   requestMessages: [],
   employers: [],
@@ -414,6 +451,228 @@ const generateEmailConfirmationCode = () =>
 const normalizeAgencyId = (value: unknown) => {
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_AGENCY_ID
+}
+const normalizeTextList = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+        .map((item) => String(item ?? '').trim())
+        .filter((item) => item.length > 0)
+    : []
+const defaultAgencyChatbotTopics = (): AgencyChatbotTopicRecord[] => [
+  {
+    id: 'placement',
+    label: 'Placement Status',
+    icon: '📋',
+    description: 'Ask about your current placement or application progress',
+    suggestedMessage:
+      "Hi, I'd like to get an update on the status of my current placement request.",
+    enabled: true,
+  },
+  {
+    id: 'schedule',
+    label: 'Schedule Change',
+    icon: '📅',
+    description: "Request a change to a helper's schedule or hours",
+    suggestedMessage:
+      "Hi, I need to request a change to my helper's schedule.",
+    enabled: true,
+  },
+  {
+    id: 'complaint',
+    label: 'Raise a Concern',
+    icon: '🚨',
+    description: 'Report an issue or concern with a helper or agency',
+    suggestedMessage:
+      "Hi, I'd like to raise a concern regarding my current arrangement.",
+    enabled: true,
+  },
+  {
+    id: 'billing',
+    label: 'Billing / Fees',
+    icon: '💳',
+    description: 'Inquire about invoices, fees, or payment',
+    suggestedMessage: 'Hi, I have a question regarding my billing or invoice.',
+    enabled: true,
+  },
+  {
+    id: 'renewal',
+    label: 'Contract Renewal',
+    icon: '🔄',
+    description: 'Discuss renewal or extension of a contract',
+    suggestedMessage:
+      "Hi, I'd like to discuss renewing my current contract.",
+    enabled: true,
+  },
+  {
+    id: 'other',
+    label: 'Other',
+    icon: '💬',
+    description: 'Something else — just type your message',
+    suggestedMessage: '',
+    enabled: true,
+  },
+]
+const defaultAgencyChatbotRules = (): AgencyChatbotRuleRecord[] => [
+  {
+    id: 'placement',
+    label: 'Placement / Status',
+    keywords: ['placement', 'application', 'status', 'progress', 'update'],
+    response:
+      "Hi {{name}}, I've noted your inquiry about your placement or application status. Please share any reference number or helper name and our team will review it shortly.",
+    enabled: true,
+  },
+  {
+    id: 'pricing',
+    label: 'Pricing / Fees',
+    keywords: ['price', 'pricing', 'cost', 'budget', 'fee', 'fees', 'salary'],
+    response:
+      'Thanks for asking, {{name}}. Our team can help with pricing, salary expectations, and agency fees. If you already know the helper type or budget range, send it here and we will guide you faster.',
+    enabled: true,
+  },
+  {
+    id: 'schedule',
+    label: 'Interview / Scheduling',
+    keywords: ['interview', 'schedule', 'appointment', 'reschedule', 'date', 'time'],
+    response:
+      'Got it, {{name}}. Please share your preferred date and time, and we will help coordinate the next step for you.',
+    enabled: true,
+  },
+  {
+    id: 'availability',
+    label: 'Availability',
+    keywords: ['available', 'availability', 'still available', 'can i hire'],
+    response:
+      'Hi {{name}}, we can help check availability. If you have a specific profile or reference code in mind, send it here and our team will confirm the current status.',
+    enabled: true,
+  },
+  {
+    id: 'documents',
+    label: 'Documents / Process',
+    keywords: ['document', 'paperwork', 'permit', 'requirement', 'checklist'],
+    response:
+      'Hello {{name}}. To guide you correctly, please let us know whether this is for a new hire, transfer, or renewal, and we will share the required documents and next steps.',
+    enabled: true,
+  },
+  {
+    id: 'complaint',
+    label: 'Complaint / Concern',
+    keywords: ['complaint', 'concern', 'issue', 'problem', 'unhappy'],
+    response:
+      "I'm sorry to hear that, {{name}}. Please share what happened and when it happened, and our team will review it as a priority.",
+    enabled: true,
+  },
+  {
+    id: 'greeting',
+    label: 'Greeting',
+    keywords: ['hi', 'hello', 'hey', 'good morning', 'good afternoon'],
+    response:
+      'Hello {{name}}, welcome to {{agencyName}} support. How may I assist you today?',
+    enabled: true,
+  },
+]
+const buildDefaultAgencyChatbotConfig = (
+  agencyId: number,
+  agencyName?: string
+): AgencyChatbotConfigRecord => ({
+  agencyId,
+  enabled: true,
+  botName: agencyName?.trim() ? `${agencyName.trim()} Support Bot` : 'Support Bot',
+  welcomeMessage:
+    'Hi {{name}}, welcome to {{agencyName}}. How can I help you today?',
+  fallbackShortResponse:
+    'Hi {{name}}, thanks for your message. Could you share a little more detail so I can help you with the next step?',
+  fallbackLongResponse:
+    "Hi {{name}}, thanks for reaching out. I've noted your message. If you can share the main details here, I'll help make sure it is clear for the team to follow up. If it is urgent, please mention that as well.",
+  suggestionChips: [
+    "What's my placement status?",
+    'I need to reschedule',
+    'Billing question',
+    'Raise a concern',
+  ],
+  topicOptions: defaultAgencyChatbotTopics(),
+  responseRules: defaultAgencyChatbotRules(),
+  updatedAt: now(),
+})
+const normalizeAgencyChatbotTopic = (
+  topic: Partial<AgencyChatbotTopicRecord>,
+  fallback: AgencyChatbotTopicRecord,
+  index: number
+): AgencyChatbotTopicRecord => ({
+  id: String(topic.id ?? fallback.id ?? `topic-${index + 1}`).trim() || `topic-${index + 1}`,
+  label: String(topic.label ?? fallback.label ?? `Topic ${index + 1}`).trim() || `Topic ${index + 1}`,
+  icon: String(topic.icon ?? fallback.icon ?? '💬').trim() || '💬',
+  description: String(topic.description ?? fallback.description ?? '').trim(),
+  suggestedMessage: String(topic.suggestedMessage ?? fallback.suggestedMessage ?? '').trim(),
+  enabled: topic.enabled ?? fallback.enabled ?? true,
+})
+const normalizeAgencyChatbotRule = (
+  rule: Partial<AgencyChatbotRuleRecord>,
+  fallback: AgencyChatbotRuleRecord,
+  index: number
+): AgencyChatbotRuleRecord => ({
+  id: String(rule.id ?? fallback.id ?? `rule-${index + 1}`).trim() || `rule-${index + 1}`,
+  label: String(rule.label ?? fallback.label ?? `Rule ${index + 1}`).trim() || `Rule ${index + 1}`,
+  keywords: normalizeTextList(rule.keywords ?? fallback.keywords),
+  response: String(rule.response ?? fallback.response ?? '').trim(),
+  enabled: rule.enabled ?? fallback.enabled ?? true,
+})
+const normalizeAgencyChatbotConfig = (
+  input: Partial<AgencyChatbotConfigRecord> | undefined,
+  agencyId: number,
+  agencyName?: string
+): AgencyChatbotConfigRecord => {
+  const defaults = buildDefaultAgencyChatbotConfig(agencyId, agencyName)
+  const rawTopics = Array.isArray(input?.topicOptions)
+    ? input?.topicOptions
+    : defaults.topicOptions
+  const rawRules = Array.isArray(input?.responseRules)
+    ? input?.responseRules
+    : defaults.responseRules
+
+  return {
+    agencyId,
+    enabled: input?.enabled ?? defaults.enabled,
+    botName: String(input?.botName ?? defaults.botName).trim() || defaults.botName,
+    welcomeMessage:
+      String(input?.welcomeMessage ?? defaults.welcomeMessage).trim() ||
+      defaults.welcomeMessage,
+    fallbackShortResponse:
+      String(input?.fallbackShortResponse ?? defaults.fallbackShortResponse).trim() ||
+      defaults.fallbackShortResponse,
+    fallbackLongResponse:
+      String(input?.fallbackLongResponse ?? defaults.fallbackLongResponse).trim() ||
+      defaults.fallbackLongResponse,
+    suggestionChips: normalizeTextList(input?.suggestionChips ?? defaults.suggestionChips).slice(
+      0,
+      8
+    ),
+    topicOptions: rawTopics
+      .map((topic, index) =>
+        normalizeAgencyChatbotTopic(
+          topic,
+          defaults.topicOptions[index] ??
+            normalizeAgencyChatbotTopic({}, defaults.topicOptions[0], index),
+          index
+        )
+      )
+      .filter((topic) => topic.label.length > 0)
+      .slice(0, 12),
+    responseRules: rawRules
+      .map((rule, index) =>
+        normalizeAgencyChatbotRule(
+          rule,
+          defaults.responseRules[index] ??
+            normalizeAgencyChatbotRule({}, defaults.responseRules[0], index),
+          index
+        )
+      )
+      .filter((rule) => rule.label.length > 0 && rule.response.length > 0)
+      .slice(0, 20),
+    updatedAt:
+      typeof input?.updatedAt === 'string' && input.updatedAt.trim()
+        ? input.updatedAt
+        : now(),
+  }
 }
 const hashPassword = (password: string) =>
   scryptSync(password, 'agency-admin-auth', 64).toString('hex')
@@ -603,6 +862,14 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         agencyId: normalizeAgencyId(message.agencyId),
         agencyName: message.agencyName ?? '',
       })) ?? defaults.chatMessages,
+    agencyChatbotConfigs: (
+      raw.agencyChatbotConfigs ?? defaults.agencyChatbotConfigs
+    ).map((config) =>
+      normalizeAgencyChatbotConfig(
+        config,
+        normalizeAgencyId((config as { agencyId?: unknown }).agencyId)
+      )
+    ),
     requestConversations: (raw.requestConversations ?? defaults.requestConversations)
       .map((conversation) => ({
         id:
@@ -1611,21 +1878,168 @@ export const getChatMessagesForClientStore = async (
   if (!client) {
     throw new Error('CLIENT_NOT_FOUND')
   }
+  const resolvedAgencyId = normalizeAgencyId(agencyId)
+  const agencyProfileImageUrl =
+    data.agencyAdmins.find(
+      (item) =>
+        normalizeAgencyId(item.agencyId) === resolvedAgencyId &&
+        item.profileImageUrl?.trim()
+    )?.profileImageUrl ??
+    data.companyProfile.logo_data_url ??
+    ''
 
   return data.chatMessages
     .filter(
       (message) =>
         message.clientId === clientId &&
         message.conversationType === conversationType &&
-        message.agencyId === agencyId
+        message.agencyId === resolvedAgencyId
     )
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .map((message) => ({
+      ...message,
+      clientProfileImageUrl: client.profileImageUrl ?? '',
+      agencyProfileImageUrl,
+    }))
+}
+
+export const getLatestChatMessageIdForClientStore = async (clientId: number) => {
+  const data = await loadData()
+  return data.chatMessages
+    .filter((message) => message.clientId === clientId)
+    .reduce((maxId, message) => Math.max(maxId, message.id), 0)
+}
+
+export const getLatestChatMessageIdForAgencyStore = async (
+  agencyId: number = DEFAULT_AGENCY_ID
+) => {
+  const data = await loadData()
+  return data.chatMessages
+    .filter((message) => message.agencyId === agencyId)
+    .reduce((maxId, message) => Math.max(maxId, message.id), 0)
+}
+
+export const getChatMessagesAfterIdForClientStore = async (
+  clientId: number,
+  afterId: number,
+  options?: {
+    includeAll?: boolean
+    conversationType?: 'support' | 'agency'
+    agencyId?: number
+  }
+) => {
+  const data = await loadData()
+  const conversationType = options?.conversationType ?? 'support'
+  const agencyId = normalizeAgencyId(options?.agencyId)
+  const client = data.clients.find((item) => item.id === clientId)
+  const agencyProfileImageUrl =
+    data.agencyAdmins.find(
+      (item) =>
+        normalizeAgencyId(item.agencyId) === agencyId &&
+        item.profileImageUrl?.trim()
+    )?.profileImageUrl ??
+    data.companyProfile.logo_data_url ??
+    ''
+
+  return data.chatMessages
+    .filter((message) => {
+      if (message.clientId !== clientId || message.id <= afterId) return false
+      if (options?.includeAll) return true
+      return (
+        message.conversationType === conversationType && message.agencyId === agencyId
+      )
+    })
+    .sort((a, b) => a.id - b.id)
+    .map((message) => ({
+      ...message,
+      clientProfileImageUrl: client?.profileImageUrl ?? '',
+      agencyProfileImageUrl,
+    }))
+}
+
+export const getChatMessagesAfterIdForAgencyStore = async (
+  agencyId: number,
+  afterId: number
+) => {
+  const data = await loadData()
+  const resolvedAgencyId = normalizeAgencyId(agencyId)
+  const agencyProfileImageUrl =
+    data.agencyAdmins.find(
+      (item) =>
+        normalizeAgencyId(item.agencyId) === resolvedAgencyId &&
+        item.profileImageUrl?.trim()
+    )?.profileImageUrl ??
+    data.companyProfile.logo_data_url ??
+    ''
+  return data.chatMessages
+    .filter((message) => message.agencyId === resolvedAgencyId && message.id > afterId)
+    .sort((a, b) => a.id - b.id)
+    .map((message) => {
+      const client = data.clients.find((item) => item.id === message.clientId)
+      return {
+        ...message,
+        clientProfileImageUrl: client?.profileImageUrl ?? '',
+        agencyProfileImageUrl,
+      }
+    })
+}
+
+export const getAgencyChatbotConfigStore = async (
+  agencyId: number = DEFAULT_AGENCY_ID,
+  agencyName?: string
+) => {
+  const data = await loadData()
+  const normalizedAgencyId = normalizeAgencyId(agencyId)
+  const existing = data.agencyChatbotConfigs.find(
+    (config) => config.agencyId === normalizedAgencyId
+  )
+  return normalizeAgencyChatbotConfig(existing, normalizedAgencyId, agencyName)
+}
+
+export const upsertAgencyChatbotConfigStore = async (
+  agencyId: number,
+  payload: Partial<AgencyChatbotConfigRecord>,
+  agencyName?: string
+) => {
+  const data = await loadData()
+  const normalizedAgencyId = normalizeAgencyId(agencyId)
+  const existing = data.agencyChatbotConfigs.find(
+    (config) => config.agencyId === normalizedAgencyId
+  )
+  const next = normalizeAgencyChatbotConfig(
+    {
+      ...(existing ?? buildDefaultAgencyChatbotConfig(normalizedAgencyId, agencyName)),
+      ...payload,
+      agencyId: normalizedAgencyId,
+      updatedAt: now(),
+    },
+    normalizedAgencyId,
+    agencyName
+  )
+
+  data.agencyChatbotConfigs = existing
+    ? data.agencyChatbotConfigs.map((config) =>
+        config.agencyId === normalizedAgencyId ? next : config
+      )
+    : [...data.agencyChatbotConfigs, next]
+
+  await saveData(data)
+  return next
 }
 
 export const getChatConversationsStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
+  const resolvedAgencyId = normalizeAgencyId(agencyId)
+  const agencyProfileImageUrl =
+    data.agencyAdmins.find(
+      (item) =>
+        normalizeAgencyId(item.agencyId) === resolvedAgencyId &&
+        item.profileImageUrl?.trim()
+    )?.profileImageUrl ??
+    data.companyProfile.logo_data_url ??
+    ''
   const conversations = new Map<
     string,
     {
@@ -1637,6 +2051,8 @@ export const getChatConversationsStore = async (
       clientName: string
       clientEmail: string
       clientCompany: string
+      clientProfileImageUrl?: string
+      agencyProfileImageUrl?: string
       lastMessage: string
       lastMessageAt: string
       unreadCount: number
@@ -1644,7 +2060,7 @@ export const getChatConversationsStore = async (
   >()
 
   data.chatMessages
-    .filter((message) => message.agencyId === agencyId)
+    .filter((message) => message.agencyId === resolvedAgencyId)
     .forEach((message) => {
     const client = data.clients.find((item) => item.id === message.clientId)
     if (!client) return
@@ -1664,6 +2080,8 @@ export const getChatConversationsStore = async (
         clientName: client.name,
         clientEmail: client.email,
         clientCompany: client.company || '',
+        clientProfileImageUrl: client.profileImageUrl ?? '',
+        agencyProfileImageUrl,
         lastMessage: message.message,
         lastMessageAt: message.createdAt,
         unreadCount: unreadIncrement,
@@ -2050,6 +2468,8 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
       conversationType: 'support' | 'agency'
       agencyId?: number
       agencyName?: string
+      clientProfileImageUrl?: string
+      agencyProfileImageUrl?: string
       title: string
       description: string
       lastMessage: string
@@ -2061,6 +2481,15 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
   data.chatMessages
     .filter((message) => message.clientId === clientId)
     .forEach((message) => {
+      const resolvedAgencyId = normalizeAgencyId(message.agencyId)
+      const agencyProfileImageUrl =
+        data.agencyAdmins.find(
+          (item) =>
+            normalizeAgencyId(item.agencyId) === resolvedAgencyId &&
+            item.profileImageUrl?.trim()
+        )?.profileImageUrl ??
+        data.companyProfile.logo_data_url ??
+        ''
       const key = `${message.conversationType}:${message.agencyId ?? 0}`
       const existing = conversations.get(key)
       const unreadIncrement =
@@ -2081,6 +2510,8 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
           conversationType: message.conversationType,
           agencyId: message.agencyId,
           agencyName: message.agencyName || '',
+          clientProfileImageUrl: client.profileImageUrl ?? '',
+          agencyProfileImageUrl,
           title,
           description,
           lastMessage: message.message,
@@ -2105,6 +2536,11 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
       key: 'support:0',
       clientId,
       conversationType: 'support',
+      clientProfileImageUrl: client.profileImageUrl ?? '',
+      agencyProfileImageUrl:
+        data.companyProfile.logo_data_url ??
+        data.agencyAdmins.find((item) => item.profileImageUrl?.trim())?.profileImageUrl ??
+        '',
       title: 'Agency Support',
       description: 'General help, follow-up, and request support',
       lastMessage: '',

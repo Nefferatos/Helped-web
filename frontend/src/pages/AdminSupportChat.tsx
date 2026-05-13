@@ -82,6 +82,32 @@ function normalizeText(value: string) {
   return value.trim().toLowerCase();
 }
 
+function compactWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function sanitizeConversationPreview(message: string, senderRole?: ChatMessage["senderRole"]) {
+  const normalized = compactWhitespace(message);
+  if (!normalized) return "No messages yet";
+
+  if (
+    senderRole === "agency" &&
+    /(thank you for reaching out|thank you for your message|we are reviewing your request|we will get back to you shortly|how can we help you today)/i.test(normalized)
+  ) {
+    return "Professional follow-up sent";
+  }
+
+  if (senderRole === "agency" && /(tracked case|support team|logged with our support team)/i.test(normalized)) {
+    return "Support acknowledgement sent";
+  }
+
+  return normalized.length > 96 ? `${normalized.slice(0, 95)}...` : normalized;
+}
+
+function getConversationTypeLabel(conversationType: ConversationType) {
+  return conversationType === "agency" ? "Agency" : "Support";
+}
+
 function getLatestClientMessage(messages: ChatMessage[]) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index].senderRole === "client") return messages[index];
@@ -226,7 +252,7 @@ type AvatarTone = "client" | "agency" | "support";
 
 const TONE_CLASSES: Record<AvatarTone, string> = {
   client: "bg-violet-100 text-violet-800",
-  agency: "bg-emerald-100 text-emerald-900",
+  agency: "bg-blue-100 text-blue-800",
   support: "bg-sky-100 text-sky-800",
 };
 
@@ -236,10 +262,24 @@ const SIZE_CLASSES: Record<"sm" | "md" | "lg", string> = {
   lg: "h-16 w-16 text-[20px]",
 };
 
-function AvatarBubble({ name, tone = "client", size = "md" }: { name: string; tone?: AvatarTone; size?: "sm" | "md" | "lg" }) {
+function AvatarBubble({
+  name,
+  imageUrl,
+  tone = "client",
+  size = "md",
+}: {
+  name: string;
+  imageUrl?: string;
+  tone?: AvatarTone;
+  size?: "sm" | "md" | "lg";
+}) {
   return (
     <div className={`flex flex-shrink-0 items-center justify-center rounded-full font-bold tracking-wide ${TONE_CLASSES[tone]} ${SIZE_CLASSES[size]}`}>
-      {initials(name)}
+      {imageUrl ? (
+        <img src={imageUrl} alt={name} className="h-full w-full rounded-full object-cover" />
+      ) : (
+        initials(name)
+      )}
     </div>
   );
 }
@@ -247,7 +287,7 @@ function AvatarBubble({ name, tone = "client", size = "md" }: { name: string; to
 function UnreadBadge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span className="inline-flex min-w-[26px] items-center justify-center rounded-full bg-emerald-600 px-2.5 py-1 text-[14px] font-bold leading-none text-white shadow-sm">
+    <span className="inline-flex min-w-[22px] items-center justify-center rounded-full px-2 py-0.5 text-[12px] font-bold leading-none text-white shadow-sm" style={{ background: "var(--msn-unread)" }}>
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -255,9 +295,9 @@ function UnreadBadge({ count }: { count: number }) {
 
 function LoadingDots() {
   return (
-    <div className="flex items-center justify-center gap-2 px-4 py-10">
+    <div className="flex items-center justify-center gap-1.5 px-4 py-10">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="h-3.5 w-3.5 rounded-full bg-emerald-300" style={{ animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+        <div key={i} className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--msn-blue)", animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
       ))}
     </div>
   );
@@ -265,21 +305,21 @@ function LoadingDots() {
 
 function EmptyState({ label, icon }: { label: string; icon?: "message" | "user" }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 p-12">
-      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-50 shadow-sm">
-        {icon === "user" ? <Users className="h-9 w-9 text-emerald-600" /> : <Inbox className="h-9 w-9 text-emerald-600" />}
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-10">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "var(--msn-blue-light)" }}>
+        {icon === "user" ? <Users className="h-8 w-8" style={{ color: "var(--msn-blue)" }} /> : <Inbox className="h-8 w-8" style={{ color: "var(--msn-blue)" }} />}
       </div>
-      <p className="max-w-[260px] text-center text-[17px] leading-relaxed text-gray-600 font-semibold">{label}</p>
+      <p className="max-w-[240px] text-center text-[14px] leading-relaxed font-medium" style={{ color: "var(--msn-text-secondary)" }}>{label}</p>
     </div>
   );
 }
 
 function DateDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 my-3">
-      <div className="h-px flex-1 bg-gray-200" />
-      <span className="whitespace-nowrap rounded-full bg-gray-100 px-4 py-1.5 text-[14px] font-bold text-gray-600">{label}</span>
-      <div className="h-px flex-1 bg-gray-200" />
+    <div className="flex items-center gap-3 my-2">
+      <div className="h-px flex-1" style={{ background: "var(--msn-divider)" }} />
+      <span className="whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-semibold" style={{ background: "#e4e6eb", color: "var(--msn-text-secondary)" }}>{label}</span>
+      <div className="h-px flex-1" style={{ background: "var(--msn-divider)" }} />
     </div>
   );
 }
@@ -289,20 +329,19 @@ function DateDivider({ label }: { label: string }) {
 function AiStatusBanner({ status, onRetry }: { status: AiStatus; onRetry: () => void }) {
   if (status === "online") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-semibold text-emerald-700">
-        <div className="h-2 w-2 rounded-full bg-emerald-500" />
-        AI reply suggestions active
+      <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold" style={{ background: "#e7f8ee", color: "#1a7a3c", border: "1px solid #b8f0cc" }}>
+        <div className="h-2 w-2 rounded-full" style={{ background: "var(--msn-online)" }} />
+        AI suggestions active
       </div>
     );
   }
   if (status === "offline") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px]">
-        <AlertCircle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
-        <span className="flex-1 font-semibold text-amber-800">AI assistant offline - fallback reply suggestions</span>
-        <button onClick={onRetry} className="flex items-center gap-1 text-amber-700 hover:text-amber-900 transition-colors">
-          <RefreshCw className="h-3 w-3" />
-          Retry
+      <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px]" style={{ background: "#fff8e1", border: "1px solid #ffe082" }}>
+        <AlertCircle className="h-3 w-3 flex-shrink-0" style={{ color: "#f59e0b" }} />
+        <span className="font-semibold" style={{ color: "#92400e" }}>AI offline – fallback mode</span>
+        <button type="button" onClick={onRetry} className="ml-1 flex items-center gap-0.5 font-semibold transition-opacity hover:opacity-70" style={{ color: "#b45309" }}>
+          <RefreshCw className="h-2.5 w-2.5" /> Retry
         </button>
       </div>
     );
@@ -318,26 +357,30 @@ function QuickReplyPanel({ onSelect }: { onSelect: (text: string) => void }) {
     <div className="relative">
       <button
         onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors hover:opacity-80"
+        style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)", border: "1px solid #c2deff" }}
       >
-        <Zap className="h-3.5 w-3.5 text-amber-500" />
+        <Zap className="h-3 w-3" style={{ color: "var(--msn-blue)" }} />
         Quick replies
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {isOpen && (
-        <div className="absolute bottom-full left-0 mb-2 z-10 w-80 rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <p className="text-[13px] font-bold text-gray-700">Quick reply templates</p>
+        <div className="absolute bottom-full left-0 mb-2 z-10 w-80 rounded-2xl overflow-hidden shadow-2xl" style={{ border: "1px solid var(--msn-divider)", background: "#fff" }}>
+          <div className="px-4 py-2.5" style={{ borderBottom: "1px solid var(--msn-divider)" }}>
+            <p className="text-[12px] font-bold" style={{ color: "var(--msn-text-secondary)" }}>Quick reply templates</p>
           </div>
-          <div className="max-h-64 overflow-y-auto">
+          <div className="max-h-60 overflow-y-auto">
             {QUICK_REPLIES.map((r) => (
               <button
                 key={r.label}
                 onClick={() => { onSelect(r.text); setIsOpen(false); }}
-                className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors"
+                className="w-full px-4 py-3 text-left transition-colors"
+                style={{ borderBottom: "1px solid #f0f2f5" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#f0f2f5")}
+                onMouseLeave={e => (e.currentTarget.style.background = "")}
               >
-                <p className="text-[13px] font-bold text-gray-800 mb-1">{r.label}</p>
-                <p className="text-[12px] text-gray-500 line-clamp-2 leading-relaxed">{r.text}</p>
+                <p className="text-[13px] font-bold mb-0.5" style={{ color: "var(--msn-text-primary)" }}>{r.label}</p>
+                <p className="text-[12px] leading-relaxed line-clamp-2" style={{ color: "var(--msn-text-secondary)" }}>{r.text}</p>
               </button>
             ))}
           </div>
@@ -374,18 +417,19 @@ function FilterSortBar({
   ];
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-2">
       {/* Filter pills */}
       <div className="flex gap-1.5 flex-wrap">
         {filters.map((f) => (
           <button
             key={f.value}
             onClick={() => onFilterChange(f.value)}
-            className={`rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
+            className="rounded-full px-3 py-1 text-[12px] font-semibold transition-all"
+            style={
               filter === f.value
-                ? "bg-emerald-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+                ? { background: "var(--msn-blue)", color: "#fff" }
+                : { background: "#f0f2f5", color: "var(--msn-text-secondary)" }
+            }
           >
             {f.label}
           </button>
@@ -393,17 +437,18 @@ function FilterSortBar({
       </div>
       {/* Sort select */}
       <div className="relative">
-        <SlidersHorizontal className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <SlidersHorizontal className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2" style={{ color: "var(--msn-text-muted)" }} />
         <select
           value={sort}
           onChange={(e) => onSortChange(e.target.value as SortOption)}
-          className="h-9 w-full rounded-xl border border-gray-200 bg-white pl-9 pr-4 text-[13px] font-semibold text-gray-700 outline-none focus:border-emerald-400 transition-colors appearance-none cursor-pointer"
+          className="h-8 w-full rounded-full pl-8 pr-4 text-[12px] font-semibold outline-none transition-colors appearance-none cursor-pointer"
+          style={{ border: "1px solid var(--msn-divider)", background: "#f0f2f5", color: "var(--msn-text-primary)" }}
         >
           {sorts.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
-        <ChevronDown className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <ChevronDown className="absolute right-3 top-1/2 h-3 w-3 -translate-y-1/2 pointer-events-none" style={{ color: "var(--msn-text-muted)" }} />
       </div>
     </div>
   );
@@ -423,31 +468,58 @@ function ConversationItem({
   return (
     <button
       onClick={onClick}
-      className={`group relative flex w-full items-start gap-4 border-b border-gray-100 px-4 py-5 text-left transition-all last:border-0 ${
-        isActive
-          ? "bg-emerald-50 before:absolute before:left-0 before:top-3 before:bottom-3 before:w-1.5 before:rounded-r-full before:bg-emerald-600"
-          : "hover:bg-gray-50/80"
-      }`}
+      className="group relative flex w-full items-center gap-3 px-3 py-2.5 text-left transition-all rounded-xl mx-1 my-0.5"
+      style={{
+        width: "calc(100% - 8px)",
+        background: isActive ? "var(--msn-sidebar-active)" : "transparent",
+      }}
+      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--msn-sidebar-hover)"; }}
+      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
     >
-      <AvatarBubble name={conversation.clientName} tone="client" size="md" />
+      <div className="relative flex-shrink-0">
+        <AvatarBubble
+          name={conversation.clientName}
+          imageUrl={conversation.clientProfileImageUrl}
+          tone="client"
+          size="md"
+        />
+        {conversation.unreadCount > 0 && (
+          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white" style={{ background: "var(--msn-online)" }} />
+        )}
+      </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <p className={`truncate text-[17px] leading-snug ${isActive ? "font-bold text-emerald-900" : "font-bold text-gray-900"}`}>
+        <div className="flex items-center justify-between gap-1 mb-0.5">
+          <p className="truncate text-[15px] font-semibold leading-snug" style={{ color: isActive ? "var(--msn-text-primary)" : "var(--msn-text-primary)", fontWeight: conversation.unreadCount > 0 ? 700 : 600 }}>
             {conversation.clientName}
           </p>
-          <span className={`flex-shrink-0 text-[14px] font-semibold ${isActive ? "text-emerald-700" : "text-gray-500"}`}>
+          <span className="flex-shrink-0 text-[12px] font-medium" style={{ color: "var(--msn-text-muted)" }}>
             {formatTime(conversation.lastMessageAt)}
           </span>
         </div>
-        <p className="truncate text-[14px] font-medium text-gray-600 mb-1">{conversation.clientEmail}</p>
-        {conversation.lastMessage && (
-          <p className="truncate text-[14px] text-gray-500 leading-snug font-medium">{conversation.lastMessage}</p>
-        )}
+        <div className="mt-1 flex items-center gap-2">
+          <span
+            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+            style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)" }}
+          >
+            {getConversationTypeLabel(conversation.conversationType)}
+          </span>
+          {!!conversation.clientCompany && (
+            <span className="truncate text-[11px] font-medium" style={{ color: "var(--msn-text-muted)" }}>
+              {conversation.clientCompany}
+            </span>
+          )}
+        </div>
+        <p
+          className="mt-1 line-clamp-2 text-[13px] leading-5"
+          style={{ color: conversation.unreadCount > 0 ? "var(--msn-text-primary)" : "var(--msn-text-muted)", fontWeight: conversation.unreadCount > 0 ? 600 : 400 }}
+        >
+          {sanitizeConversationPreview(conversation.lastMessage)}
+        </p>
       </div>
-      <div className="flex flex-shrink-0 flex-col items-end gap-2 pt-0.5">
+      <div className="flex flex-shrink-0 flex-col items-end gap-1 ml-1">
         <UnreadBadge count={conversation.unreadCount} />
         {conversation.conversationType === "agency" && conversation.agencyName && (
-          <span className="max-w-[80px] truncate rounded-md bg-emerald-100 px-2.5 py-1 text-[12px] font-bold text-emerald-900">
+          <span className="max-w-[70px] truncate rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)" }}>
             {conversation.agencyName}
           </span>
         )}
@@ -461,26 +533,33 @@ function ConversationItem({
 function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (text: string) => void }) {
   const isOwn = message.senderRole === "agency";
   const tone: AvatarTone = isOwn ? "agency" : message.senderRole === "client" ? "client" : "support";
+  const avatarName = isOwn ? message.agencyName || message.senderName : message.senderName;
+  const avatarUrl = isOwn ? message.agencyProfileImageUrl : message.clientProfileImageUrl;
 
   return (
-    <div className={`asc-msg-row group flex items-end gap-3 ${isOwn ? "ml-auto flex-row-reverse" : ""}`} style={{ maxWidth: "72%" }}>
-      <AvatarBubble name={message.senderName} tone={tone} size="sm" />
+    <div className={`asc-msg-row group flex items-end gap-2 ${isOwn ? "ml-auto flex-row-reverse" : ""}`} style={{ maxWidth: "75%" }}>
+      <AvatarBubble name={avatarName} imageUrl={avatarUrl} tone={tone} size="sm" />
       <div className="min-w-0">
-        {!isOwn && <p className="mb-2 pl-1 text-[14px] font-bold text-gray-700">{message.senderName}</p>}
-        <div className={`relative rounded-2xl px-5 py-3.5 text-[17px] leading-relaxed shadow-sm ${
-          isOwn ? "rounded-br-md bg-emerald-700 text-white" : "rounded-bl-md bg-white text-gray-900 border border-gray-200"
-        }`}>
+        {!isOwn && <p className="mb-1 pl-1 text-[12px] font-semibold" style={{ color: "var(--msn-text-secondary)" }}>{message.senderName}</p>}
+        <div
+          className="asc-bubble-pop relative rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed"
+          style={isOwn
+            ? { background: "var(--msn-bubble-out)", color: "var(--msn-bubble-out-text)", borderBottomRightRadius: 4 }
+            : { background: "var(--msn-bubble-in)", color: "var(--msn-bubble-in-text)", borderBottomLeftRadius: 4 }
+          }
+        >
           {message.message}
           <button
             onClick={() => onCopy(message.message)}
-            className={`absolute -top-2 ${isOwn ? "-left-2" : "-right-2"} hidden group-hover:flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm text-gray-500 hover:text-gray-800 transition-colors`}
+            className={`absolute -top-2 ${isOwn ? "-left-2" : "-right-2"} hidden group-hover:flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50`}
+            style={{ color: "var(--msn-text-secondary)" }}
           >
             <Copy className="h-3 w-3" />
           </button>
         </div>
-        <div className={`mt-2 flex items-center gap-1.5 text-[13px] text-gray-500 font-semibold ${isOwn ? "justify-end pr-1" : "pl-1"}`}>
+        <div className={`mt-1 flex items-center gap-1 text-[11px] font-medium ${isOwn ? "justify-end pr-1" : "pl-1"}`} style={{ color: "var(--msn-text-muted)" }}>
           {formatTime(message.createdAt)}
-          {isOwn && <CheckCheck className="h-4 w-4 text-emerald-400" />}
+          {isOwn && <CheckCheck className="h-3.5 w-3.5" style={{ color: "var(--msn-blue)" }} />}
         </div>
       </div>
     </div>
@@ -498,7 +577,7 @@ function AiSuggestionStrip({
   conversation: AdminConversation | null;
   messages: ChatMessage[];
   status: AiStatus;
-  onSelect: (text: string) => void;
+  onSelect: (text: string) => void | Promise<void>;
 }) {
   if (!conversation) return null;
   const suggestions =
@@ -510,21 +589,23 @@ function AiSuggestionStrip({
           "We are looking into this and will update you shortly.",
         ];
   return (
-    <div className={`flex gap-2 flex-wrap px-5 py-2 border-b border-gray-100 ${status === "offline" ? "bg-amber-50/70" : "bg-emerald-50/50"}`}>
-      <span className={`flex items-center gap-1 text-[12px] font-bold mr-1 ${status === "offline" ? "text-amber-700" : "text-emerald-700"}`}>
-        <Bot className="h-3.5 w-3.5" /> {status === "offline" ? "Fallback suggests:" : "AI suggests:"}
+    <div className="flex flex-wrap items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid var(--msn-divider)", background: status === "offline" ? "#fffbf0" : "#f0f7ff" }}>
+      <span className="mr-1 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ color: status === "offline" ? "#b45309" : "var(--msn-blue)", background: "#fff" }}>
+        <Bot className="h-3 w-3" /> {status === "offline" ? "Fallback replies" : "Suggested replies"}
       </span>
       {suggestions.map((s) => (
         <button
           key={s}
+          type="button"
           onClick={() => onSelect(s)}
-          className={`rounded-full border bg-white px-3 py-1 text-[12px] font-semibold transition-colors ${
+          className="rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors"
+          style={
             status === "offline"
-              ? "border-amber-200 text-amber-900 hover:bg-amber-50"
-              : "border-emerald-200 text-emerald-800 hover:bg-emerald-50"
-          }`}
+              ? { borderColor: "#fcd34d", color: "#92400e", background: "#fff" }
+              : { borderColor: "#bfdbfe", color: "var(--msn-blue)", background: "#fff" }
+          }
         >
-          {s.length > 40 ? s.slice(0, 40) + "…" : s}
+          {s.length > 44 ? s.slice(0, 44) + "…" : s}
         </button>
       ))}
     </div>
@@ -643,7 +724,7 @@ const AdminSupportChat = () => {
               clientName: queryClientName || `Client ${queryClientId}`,
               clientEmail: "",
               clientCompany: "",
-              lastMessage: "No support conversation exists yet. Start typing to begin the chat.",
+              lastMessage: "Ready to start a support conversation.",
               lastMessageAt: new Date().toISOString(),
               unreadCount: 0,
             });
@@ -775,8 +856,10 @@ const AdminSupportChat = () => {
     navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard")).catch(() => toast.error("Copy failed"));
   };
 
-  const sendMessage = async () => {
-    if (!activeConversation || !draft.trim()) return;
+  const sendText = useCallback(async (rawText: string) => {
+    if (!activeConversation) return;
+    const messageText = rawText.trim();
+    if (!messageText) return;
     try {
       setIsSending(true);
       setErrorMessage("");
@@ -785,7 +868,7 @@ const AdminSupportChat = () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-          body: JSON.stringify({ message: draft.trim() }),
+          body: JSON.stringify({ message: messageText }),
         },
       );
       const data = (await response.json().catch(() => ({}))) as { message?: ChatMessage; error?: string };
@@ -805,7 +888,7 @@ const AdminSupportChat = () => {
             : item,
         ),
       );
-      setDraft("");
+      setDraft((prev) => (prev.trim() === messageText ? "" : prev));
       if (textareaRef.current) textareaRef.current.style.height = "auto";
       await loadConversations(true);
     } catch (error) {
@@ -815,7 +898,11 @@ const AdminSupportChat = () => {
     } finally {
       setIsSending(false);
     }
-  };
+  }, [activeConversation, loadConversations, navigate]);
+
+  const sendMessage = useCallback(async () => {
+    await sendText(draft);
+  }, [draft, sendText]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); }
@@ -838,92 +925,141 @@ const AdminSupportChat = () => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        .asc-root * { font-family: 'DM Sans', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .asc-root * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+        /* ── Messenger colour tokens ── */
+        :root {
+          --msn-blue: #0084ff;
+          --msn-blue-dark: #006fd6;
+          --msn-blue-light: #e7f3ff;
+          --msn-sidebar-bg: #ffffff;
+          --msn-sidebar-hover: #f2f2f2;
+          --msn-sidebar-active: #e4e6eb;
+          --msn-header-bg: #ffffff;
+          --msn-chat-bg: #f0f2f5;
+          --msn-bubble-in: #e4e6eb;
+          --msn-bubble-in-text: #050505;
+          --msn-bubble-out: #0084ff;
+          --msn-bubble-out-text: #ffffff;
+          --msn-divider: #e4e6eb;
+          --msn-text-primary: #050505;
+          --msn-text-secondary: #65676b;
+          --msn-text-muted: #8a8d91;
+          --msn-online: #31a24c;
+          --msn-unread: #0084ff;
+        }
 
         @keyframes dotPulse {
-          0%, 80%, 100% { opacity: 0.25; transform: scale(0.75); }
+          0%, 80%, 100% { opacity: 0.3; transform: scale(0.7); }
           40% { opacity: 1; transform: scale(1); }
         }
         @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(6px); }
+          from { opacity: 0; transform: translateY(5px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes slideIn {
-          from { opacity: 0; transform: translateX(-8px); }
+          from { opacity: 0; transform: translateX(-6px); }
           to   { opacity: 1; transform: translateX(0); }
         }
-
-        .asc-msg-row { animation: fadeSlideUp 0.2s ease both; }
-        .asc-conv-item { animation: slideIn 0.18s ease both; }
-
-        .asc-scrollbar::-webkit-scrollbar { width: 6px; }
-        .asc-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 8px; }
-        .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
-
-        .asc-send-btn:not(:disabled):hover { transform: scale(1.05); }
-        .asc-send-btn:not(:disabled):active { transform: scale(0.95); }
-        .asc-send-btn { transition: transform 0.12s ease, background-color 0.15s ease, opacity 0.15s ease; }
-
-        .asc-chat-bg {
-          background-color: #f7f9f8;
-          background-image:
-            radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.04) 0%, transparent 50%),
-            radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
+        @keyframes popIn {
+          from { opacity: 0; transform: scale(0.92); }
+          to   { opacity: 1; transform: scale(1); }
         }
+
+        .asc-msg-row  { animation: fadeSlideUp 0.18s ease both; }
+        .asc-conv-item { animation: slideIn 0.16s ease both; }
+        .asc-bubble-pop { animation: popIn 0.15s ease both; }
+
+        /* Thin Messenger-style scrollbar */
+        .asc-scrollbar::-webkit-scrollbar { width: 4px; }
+        .asc-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 8px; }
+        .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+
+        /* Send button */
+        .asc-send-btn { transition: transform 0.1s ease, opacity 0.15s ease; }
+        .asc-send-btn:not(:disabled):hover { transform: scale(1.08); }
+        .asc-send-btn:not(:disabled):active { transform: scale(0.94); }
+
+        /* Chat background – subtle FB Messenger grey */
+        .asc-chat-bg {
+          background-color: var(--msn-chat-bg);
+        }
+
+        /* Sidebar search focus ring */
+        .asc-search:focus { border-color: var(--msn-blue) !important; box-shadow: 0 0 0 2px rgba(0,132,255,0.18) !important; }
+
+        /* Compose textarea */
+        .asc-textarea:focus { border-color: var(--msn-blue) !important; box-shadow: 0 0 0 2px rgba(0,132,255,0.15) !important; }
+
+        /* Conversation item active indicator */
+        .asc-conv-active { background: var(--msn-sidebar-active) !important; }
+
+        /* Online pulse dot */
+        @keyframes onlinePulse {
+          0%,100% { box-shadow: 0 0 0 0 rgba(49,162,76,0.4); }
+          50% { box-shadow: 0 0 0 4px rgba(49,162,76,0); }
+        }
+        .asc-online-dot { animation: onlinePulse 2s ease infinite; }
       `}</style>
 
       <div className="asc-root flex flex-col" style={{ height: "calc(100vh - 130px)", minHeight: 440 }}>
 
         {/* ── Page title bar ── */}
-        <div className="mb-4 flex flex-shrink-0 items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600 shadow-sm">
-            <MessageCircle className="h-6 w-6 text-white" />
+        <div className="mb-3 flex flex-shrink-0 items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full shadow-sm" style={{ background: "linear-gradient(135deg, #0084ff 0%, #44bef1 100%)" }}>
+            <MessageCircle className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h2 className="text-[26px] font-bold leading-tight tracking-tight text-gray-900">Chat Support</h2>
-            <p className="text-[15px] text-gray-600 font-semibold leading-none mt-1">Manage client conversations</p>
+            <h2 className="text-[22px] font-bold leading-tight tracking-tight" style={{ color: "var(--msn-text-primary)" }}>Messages</h2>
+            <p className="text-[13px] font-medium leading-none mt-0.5" style={{ color: "var(--msn-text-secondary)" }}>Client support inbox</p>
           </div>
           {totalUnread > 0 && (
-            <span className="ml-1 rounded-full bg-emerald-600 px-4 py-1.5 text-[16px] font-bold text-white shadow-sm">
-              {totalUnread} unread
+            <span className="ml-1 rounded-full px-3 py-1 text-[13px] font-bold text-white shadow-sm" style={{ background: "var(--msn-blue)" }}>
+              {totalUnread} new
             </span>
           )}
-
-          {/* AI status */}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => navigate(adminPath("/chatbot-config"))}
+              className="rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors hover:opacity-80"
+              style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)", border: "1px solid #c2deff" }}
+            >
+              Configure bot
+            </button>
             <AiStatusBanner status={aiStatus} onRetry={checkAiStatus} />
           </div>
         </div>
 
         {/* ── Chat shell ── */}
-        <div className="flex flex-1 overflow-hidden rounded-2xl border-2 border-gray-200 bg-white shadow-md">
+        <div className="flex flex-1 overflow-hidden rounded-2xl shadow-lg" style={{ border: "1px solid var(--msn-divider)", background: "#fff" }}>
 
           {/* ── Sidebar ── */}
-          <div className={`flex flex-col border-r-2 border-gray-100 bg-gray-50/70 ${
-            mobileView === "chat" ? "hidden md:flex md:w-80 md:min-w-[300px]" : "flex w-full md:w-80 md:min-w-[300px]"
-          }`}>
+          <div className={`flex flex-col ${
+            mobileView === "chat" ? "hidden md:flex md:w-[340px] md:min-w-[300px]" : "flex w-full md:w-[340px] md:min-w-[300px]"
+          }`} style={{ borderRight: "1px solid var(--msn-divider)", background: "var(--msn-sidebar-bg)" }}>
 
             {/* Sidebar header */}
-            <div className="flex-shrink-0 border-b-2 border-gray-100 px-5 py-4">
-              <p className="text-[20px] font-bold text-gray-900">Conversations</p>
-              <p className="text-[15px] text-gray-600 font-semibold mt-0.5">
-                {filteredConversations.length}/{effectiveConversations.length} shown
-                {totalUnread > 0 && <span className="ml-2 text-emerald-800 font-bold">· {totalUnread} unread</span>}
+            <div className="flex-shrink-0 px-5 pt-5 pb-3" style={{ borderBottom: "1px solid var(--msn-divider)" }}>
+              <p className="text-[20px] font-bold" style={{ color: "var(--msn-text-primary)" }}>Chats</p>
+              <p className="text-[13px] font-medium mt-0.5" style={{ color: "var(--msn-text-secondary)" }}>
+                {filteredConversations.length}/{effectiveConversations.length} conversations
+                {totalUnread > 0 && <span className="ml-2 font-bold" style={{ color: "var(--msn-blue)" }}>· {totalUnread} unread</span>}
               </p>
             </div>
 
             {/* Search */}
-            <div className="flex-shrink-0 border-b border-gray-100 px-4 pt-3 pb-2">
+            <div className="flex-shrink-0 px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--msn-divider)" }}>
               <div className="relative mb-3">
-                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--msn-text-muted)" }} />
                 <input
                   type="text"
-                  placeholder="Search by name, email, message…"
+                  placeholder="Search Messenger"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-4 text-[15px] font-medium text-gray-900 outline-none placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                  className="asc-search h-10 w-full rounded-full border pl-10 pr-4 text-[14px] font-medium outline-none transition-all"
+                  style={{ borderColor: "var(--msn-divider)", background: "#f0f2f5", color: "var(--msn-text-primary)" }}
                 />
               </div>
               <FilterSortBar filter={filter} sort={sort} onFilterChange={setFilter} onSortChange={setSort} />
@@ -945,14 +1081,14 @@ const AdminSupportChat = () => {
             </div>
 
             {/* Sidebar stats footer */}
-            <div className="flex-shrink-0 grid grid-cols-2 gap-3 border-t-2 border-gray-100 bg-white/80 p-4">
-              <div className="rounded-xl bg-gray-50 px-4 py-4 text-center border-2 border-gray-100">
-                <p className="text-[28px] font-bold text-gray-900 leading-none">{effectiveConversations.length}</p>
-                <p className="text-[14px] text-gray-600 mt-1.5 font-bold">Total Threads</p>
+            <div className="flex-shrink-0 grid grid-cols-2 gap-2 p-3" style={{ borderTop: "1px solid var(--msn-divider)", background: "#fafafa" }}>
+              <div className="rounded-xl px-4 py-3 text-center" style={{ background: "#f0f2f5" }}>
+                <p className="text-[24px] font-bold leading-none" style={{ color: "var(--msn-text-primary)" }}>{effectiveConversations.length}</p>
+                <p className="text-[12px] font-semibold mt-1" style={{ color: "var(--msn-text-secondary)" }}>Total</p>
               </div>
-              <div className="rounded-xl bg-emerald-50 px-4 py-4 text-center border-2 border-emerald-100">
-                <p className="text-[28px] font-bold text-emerald-800 leading-none">{totalUnread}</p>
-                <p className="text-[14px] text-emerald-700 mt-1.5 font-bold">Unread</p>
+              <div className="rounded-xl px-4 py-3 text-center" style={{ background: "var(--msn-blue-light)" }}>
+                <p className="text-[24px] font-bold leading-none" style={{ color: "var(--msn-blue)" }}>{totalUnread}</p>
+                <p className="text-[12px] font-semibold mt-1" style={{ color: "var(--msn-blue)" }}>Unread</p>
               </div>
             </div>
           </div>
@@ -961,27 +1097,36 @@ const AdminSupportChat = () => {
           <div className={`flex min-w-0 flex-1 flex-col ${mobileView === "list" ? "hidden md:flex" : "flex"}`}>
 
             {/* Chat header */}
-            <div className="flex flex-shrink-0 items-center gap-4 border-b-2 border-gray-100 bg-white px-5 py-4 shadow-sm">
+            <div className="flex flex-shrink-0 items-center gap-3 px-4 py-3 shadow-sm" style={{ borderBottom: "1px solid var(--msn-divider)", background: "var(--msn-header-bg)" }}>
               <button
                 onClick={() => setMobileView("list")}
-                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-100 active:scale-95 transition-all md:hidden"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-colors md:hidden"
+                style={{ color: "var(--msn-blue)" }}
               >
-                <ArrowLeft className="h-6 w-6" />
+                <ArrowLeft className="h-5 w-5" />
               </button>
               {activeConversation ? (
                 <>
-                  <AvatarBubble name={activeConversation.clientName} tone="client" size="lg" />
+                  <div className="relative flex-shrink-0">
+                    <AvatarBubble
+                      name={activeConversation.clientName}
+                      imageUrl={activeConversation.clientProfileImageUrl}
+                      tone="client"
+                      size="lg"
+                    />
+                    <span className="asc-online-dot absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white" style={{ background: "var(--msn-online)" }} />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[20px] font-bold text-gray-900 leading-tight">{activeConversation.clientName}</p>
-                    <p className="truncate text-[15px] text-gray-600 mt-0.5 font-semibold">{headerSubtitle}</p>
+                    <p className="truncate text-[16px] font-bold leading-tight" style={{ color: "var(--msn-text-primary)" }}>{activeConversation.clientName}</p>
+                    <p className="text-[12px] font-medium" style={{ color: "var(--msn-online)" }}>Active now</p>
                   </div>
                   <div className="flex-shrink-0 text-right hidden sm:block">
-                    <p className="text-[17px] font-bold text-gray-900">{admin?.agencyName ?? "Agency"}</p>
-                    <p className="text-[14px] text-gray-500 font-semibold mt-0.5">{activeConversation.clientEmail}</p>
+                    <p className="text-[14px] font-semibold" style={{ color: "var(--msn-text-primary)" }}>{admin?.agencyName ?? "Agency"}</p>
+                    <p className="text-[12px] mt-0.5" style={{ color: "var(--msn-text-secondary)" }}>{activeConversation.clientEmail}</p>
                   </div>
                 </>
               ) : (
-                <p className="text-[17px] text-gray-600 font-semibold">{headerSubtitle}</p>
+                <p className="text-[15px] font-semibold" style={{ color: "var(--msn-text-secondary)" }}>{headerSubtitle}</p>
               )}
             </div>
 
@@ -991,25 +1136,25 @@ const AdminSupportChat = () => {
                 conversation={activeConversation}
                 messages={messages}
                 status={aiStatus}
-                onSelect={(text) => setDraft(text)}
+                onSelect={(text) => void sendText(text)}
               />
             )}
 
             {/* Messages area */}
-            <div ref={scrollRef} className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-5 overflow-y-auto p-6">
+            <div ref={scrollRef} className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-4 overflow-y-auto p-5">
               {isLoadingMessages ? (
                 <LoadingDots />
               ) : errorMessage ? (
-                <div className="mx-auto max-w-sm rounded-xl bg-red-50 border-2 border-red-100 px-5 py-4 text-center text-[17px] text-red-700 font-semibold">
+                <div className="mx-auto max-w-sm rounded-2xl px-5 py-4 text-center text-[14px] font-semibold" style={{ background: "#fff0f0", color: "#c0392b", border: "1px solid #ffd0d0" }}>
                   {errorMessage}
                 </div>
               ) : !activeConversation ? (
-                <EmptyState label="Select a conversation from the list to get started." />
+                <EmptyState label="Select a conversation to get started." />
               ) : messages.length === 0 ? (
-                <EmptyState label="No messages in this thread yet." />
+                <EmptyState label="No messages yet. Say hello!" />
               ) : (
                 messageGroups.map(({ label, messages: groupMsgs }) => (
-                  <div key={label} className="flex flex-col gap-4">
+                  <div key={label} className="flex flex-col gap-2">
                     <DateDivider label={label} />
                     {groupMsgs.map((msg) => (
                       <MessageBubble key={msg.id} message={msg} onCopy={copyMessage} />
@@ -1020,34 +1165,42 @@ const AdminSupportChat = () => {
             </div>
 
             {/* Compose bar */}
-            <div className="flex-shrink-0 border-t-2 border-gray-100 bg-white">
+            <div className="flex-shrink-0" style={{ borderTop: "1px solid var(--msn-divider)", background: "#fff" }}>
               {/* Quick reply row */}
-              <div className="flex items-center gap-2 px-5 pt-3 pb-2">
+              <div className="flex items-center gap-2 px-4 pt-2.5 pb-1">
                 <QuickReplyPanel onSelect={(text) => setDraft(text)} />
               </div>
               {/* Textarea + send */}
-              <div className="flex items-end gap-3 px-5 pb-4">
+              <div className="flex items-end gap-2 px-4 pb-4">
                 <textarea
                   ref={textareaRef}
-                  placeholder={activeConversation ? `Reply to ${activeConversation.clientName}…` : "Select a conversation to reply…"}
+                  placeholder={activeConversation ? `Message ${activeConversation.clientName}…` : "Select a conversation…"}
                   value={draft}
                   rows={1}
                   disabled={!activeConversation || isSending}
                   onChange={(e) => {
                     setDraft(e.target.value);
                     e.target.style.height = "auto";
-                    e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
                   }}
                   onKeyDown={handleKeyDown}
-                  className="asc-scrollbar flex-1 resize-none rounded-2xl border-2 border-gray-200 bg-gray-50 px-5 py-3.5 text-[17px] leading-relaxed text-gray-900 font-medium outline-none transition-all placeholder:text-gray-400 placeholder:font-normal focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ lineHeight: 1.7, maxHeight: 140, minHeight: 54 }}
+                  className="asc-scrollbar asc-textarea flex-1 resize-none rounded-2xl border px-4 py-2.5 text-[15px] leading-relaxed outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    lineHeight: 1.6,
+                    maxHeight: 120,
+                    minHeight: 42,
+                    borderColor: "var(--msn-divider)",
+                    background: "#f0f2f5",
+                    color: "var(--msn-text-primary)",
+                  }}
                 />
                 <button
                   onClick={() => void sendMessage()}
                   disabled={isSending || !draft.trim() || !activeConversation}
-                  className="asc-send-btn flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm disabled:cursor-default disabled:opacity-30"
+                  className="asc-send-btn flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-white disabled:cursor-default disabled:opacity-30"
+                  style={{ background: "var(--msn-blue)" }}
                 >
-                  <Send className="h-6 w-6" />
+                  <Send className="h-5 w-5" />
                 </button>
               </div>
             </div>

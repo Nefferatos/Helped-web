@@ -9,6 +9,8 @@ export interface ChatMessage {
   conversationType: ConversationType;
   agencyId?: number;
   agencyName?: string;
+  clientProfileImageUrl?: string;
+  agencyProfileImageUrl?: string;
   senderRole: "client" | "agency";
   senderName: string;
   message: string;
@@ -23,6 +25,8 @@ export interface ClientConversation {
   description: string;
   agencyId?: number;
   agencyName?: string;
+  clientProfileImageUrl?: string;
+  agencyProfileImageUrl?: string;
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
@@ -37,9 +41,41 @@ export interface AdminConversation {
   clientName: string;
   clientEmail: string;
   clientCompany: string;
+  clientProfileImageUrl?: string;
+  agencyProfileImageUrl?: string;
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
+}
+
+export interface AgencyChatbotTopicOption {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+  suggestedMessage: string;
+  enabled: boolean;
+}
+
+export interface AgencyChatbotResponseRule {
+  id: string;
+  label: string;
+  keywords: string[];
+  response: string;
+  enabled: boolean;
+}
+
+export interface AgencyChatbotConfig {
+  agencyId: number;
+  enabled: boolean;
+  botName: string;
+  welcomeMessage: string;
+  fallbackShortResponse: string;
+  fallbackLongResponse: string;
+  suggestionChips: string[];
+  topicOptions: AgencyChatbotTopicOption[];
+  responseRules: AgencyChatbotResponseRule[];
+  updatedAt: string;
 }
 
 const readUnreadCount = async (response: Response) => {

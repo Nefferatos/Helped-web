@@ -57,6 +57,7 @@ const HiringProcessPage = lazyRoute(() => import("@/pages/HiringProcessPage"));
 const HomePage = lazyRoute(() => import("@/pages/HomePage"));
 const AgencyProfile = lazyRoute(() => import("@/pages/AgencyProfile"));
 const AgencyProfileEdit = lazyRoute(() => import("@/pages/AgencyProfileEdit"));
+const AgencyChatbotConfig = lazyRoute(() => import("@/pages/AgencyChatbotConfig"));
 const AgencyAdminLogin = lazyRoute(() => import("@/pages/AgencyAdminLogin"));
 const AddMaid = lazyRoute(() => import("@/pages/AddMaid"));
 const EditMaids = lazyRoute(() => import("@/pages/EditMaids"));
@@ -298,6 +299,7 @@ const App = () => {
             <Route path="/agencyadmin/dashboard" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/chatbot-config" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyChatbotConfig /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/add-maid" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/edit-maids" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/maid/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>)} />

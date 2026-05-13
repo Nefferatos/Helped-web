@@ -936,7 +936,7 @@ const AdminEnquiry = () => {
                     ? "Try a different search term."
                     : activeFilter !== "all"
                       ? `No "${STATUS_CONFIG[activeFilter as Status].label}" enquiries yet.`
-                      : "Employer enquiries will appear here once submitted."}
+                        : "Employer enquiries will appear here once submitted."}
                 </p>
                 {(search || activeFilter !== "all") && (
                   <button
