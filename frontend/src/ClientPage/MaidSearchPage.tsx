@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Search, Star, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,262 @@ const getMaidCategory = (maid: MaidProfile): string => {
   const value = String(raw ?? "").trim();
   return value && value !== "N/A" && value !== "N.A." && value !== "-" ? value : "";
 };
+
+// ── Hover popup helper ────────────────────────────────────────────────────────
+const getMaidPopupDetails = (maid: MaidProfile) => {
+  const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
+  const intro = (maid.introduction as Record<string, unknown>) || {};
+  const agencyContact = (maid.agencyContact as Record<string, unknown>) || {};
+
+  // English level from languageSkills
+  const englishLevel = maid.languageSkills
+    ? String(
+        (maid.languageSkills as Record<string, unknown>)["english"] ||
+        (maid.languageSkills as Record<string, unknown>)["English"] ||
+        ""
+      ).trim()
+    : "";
+
+  // Height & weight
+  const height = String(maid.height || sp["height"] || intro["height"] || "").trim();
+  const weight = String(maid.weight || sp["weight"] || intro["weight"] || "").trim();
+
+  // Bio / remarks snippet
+  const bioRaw =
+    String(sp["remarks"] || intro["remarks"] || sp["biodata"] || intro["biodata"] ||
+      sp["summary"] || intro["summary"] || agencyContact["remarks"] || "").trim();
+
+  // Work areas / duties
+  const workAreas = Object.keys(maid.workAreas || {}).filter(Boolean);
+
+  // Off days
+  const otherInfo = (sp.otherInformation as Record<string, boolean>) || {};
+  const willingKeys = [
+    "Can work on off-days with compensation?",
+    "Willing to work on off-days with compensation?",
+    "Willing to work on off-days with  compensation?",
+  ];
+  const willingOffDays = willingKeys.some((k) => Boolean(otherInfo[k]));
+
+  // All languages
+  const langs = maid.languageSkills
+    ? Object.entries(maid.languageSkills as Record<string, unknown>)
+        .filter(([, lvl]) => {
+          const l = String(lvl || "").trim().toLowerCase();
+          return l && l !== "zero" && l !== "none";
+        })
+        .map(([key, lvl]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${String(lvl).trim()}`)
+    : [];
+
+  // Experience countries
+  const expCountries: string[] = [];
+  if (Array.isArray(maid.employmentHistory)) {
+    for (const e of maid.employmentHistory) {
+      const text = Object.values(e as Record<string, unknown>).map(String).join(" ").toLowerCase();
+      if (text.includes("singapore")) expCountries.push("Singapore");
+      else if (text.includes("hong kong") || text.includes("hongkong")) expCountries.push("Hong Kong");
+      else if (text.includes("malaysia")) expCountries.push("Malaysia");
+      else if (text.includes("taiwan")) expCountries.push("Taiwan");
+      else if (text.includes("dubai") || text.includes("uae") || text.includes("saudi") || text.includes("middle east")) expCountries.push("Middle East");
+    }
+  }
+  const uniqueExp = [...new Set(expCountries)];
+
+  return {
+    englishLevel,
+    height,
+    weight,
+    bioRaw,
+    workAreas,
+    willingOffDays,
+    langs,
+    uniqueExp,
+  };
+};
+
+// ── Maid Hover Popup ──────────────────────────────────────────────────────────
+const MaidHoverPopup = ({
+  maid,
+  anchorRef,
+}: {
+  maid: MaidProfile;
+  anchorRef: React.RefObject<HTMLElement>;
+}) => {
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({ visibility: "hidden" });
+
+  const details = useMemo(() => getMaidPopupDetails(maid), [maid]);
+  const age = calculateAge(maid.dateOfBirth);
+  const flagCode = getNationalityCode(maid.nationality);
+
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    const popup = popupRef.current;
+    if (!anchor || !popup) return;
+
+    const rect = anchor.getBoundingClientRect();
+    const popupWidth = 260;
+    const popupHeight = popup.offsetHeight || 360;
+    const gap = 8;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+
+    // Try right first, then left
+    let left = rect.right + scrollX + gap;
+    if (left + popupWidth > scrollX + viewportW - 8) {
+      left = rect.left + scrollX - popupWidth - gap;
+    }
+    // Clamp left
+    left = Math.max(scrollX + 8, left);
+
+    // Vertically align to anchor top, but clamp
+    let top = rect.top + scrollY;
+    if (top + popupHeight > scrollY + viewportH - 8) {
+      top = scrollY + viewportH - popupHeight - 8;
+    }
+    top = Math.max(scrollY + 8, top);
+
+    setStyle({
+      position: "absolute",
+      top,
+      left,
+      width: popupWidth,
+      zIndex: 9999,
+      visibility: "visible",
+    });
+  }, [anchorRef]);
+
+  return (
+    <div
+      ref={popupRef}
+      style={style}
+      className="pointer-events-none rounded-xl border border-border bg-white shadow-2xl overflow-hidden"
+    >
+      {/* Header */}
+      <div className="bg-primary px-3 py-2">
+        <p className="text-xs font-bold text-primary-foreground leading-tight line-clamp-1">
+          {maid.nationality ? `${maid.nationality} maid` : "Maid"}{maid.fullName ? `: ${maid.fullName}` : ""}
+        </p>
+        {maid.referenceCode && (
+          <p className="text-[10px] text-primary-foreground/70 font-mono mt-0.5">{maid.referenceCode}</p>
+        )}
+      </div>
+
+      <div className="p-3 space-y-2">
+        {/* Type badge row */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {maid.type && (
+            <span className={`inline-block px-1.5 py-px text-[9px] font-bold border rounded ${getMaidTypeBadgeClass(maid.type)}`}>
+              {getTypeLabel(maid.type)}
+            </span>
+          )}
+          {maid.nationality && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-foreground">
+              <FlagCircle code={flagCode} />
+              {maid.nationality}
+            </span>
+          )}
+        </div>
+
+        <div className="border-t border-border/60" />
+
+        {/* Key details grid */}
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+          {details.englishLevel && (
+            <PopupRow label="English" value={details.englishLevel} />
+          )}
+          {details.height && (
+            <PopupRow label="Height" value={`${details.height} cm`} />
+          )}
+          {details.weight && (
+            <PopupRow label="Weight" value={`${details.weight} kg`} />
+          )}
+          {age !== null && (
+            <PopupRow label="Age" value={`${age} yrs`} />
+          )}
+          {maid.maritalStatus && (
+            <PopupRow label="Status" value={maid.maritalStatus} />
+          )}
+          {maid.religion && (
+            <PopupRow label="Religion" value={maid.religion} />
+          )}
+          {maid.educationLevel && (
+            <PopupRow label="Education" value={maid.educationLevel} />
+          )}
+          {details.willingOffDays && (
+            <PopupRow label="Off-days" value="Willing ✓" valueClass="text-emerald-600 font-semibold" />
+          )}
+        </div>
+
+        {/* Languages */}
+        {details.langs.length > 0 && (
+          <>
+            <div className="border-t border-border/60" />
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Languages</p>
+              <div className="space-y-0.5">
+                {details.langs.slice(0, 4).map((l) => (
+                  <p key={l} className="text-[10px] text-foreground leading-tight">{l}</p>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Experience */}
+        {details.uniqueExp.length > 0 && (
+          <>
+            <div className="border-t border-border/60" />
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Experience</p>
+              <p className="text-[10px] text-foreground">{details.uniqueExp.join(", ")}</p>
+            </div>
+          </>
+        )}
+
+        {/* Work areas */}
+        {details.workAreas.length > 0 && (
+          <>
+            <div className="border-t border-border/60" />
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Can handle</p>
+              <p className="text-[10px] text-foreground leading-snug line-clamp-2">
+                {details.workAreas.slice(0, 5).join(" · ")}
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* Bio snippet */}
+        {details.bioRaw && (
+          <>
+            <div className="border-t border-border/60" />
+            <p className="text-[10px] text-muted-foreground leading-snug line-clamp-3 italic">
+              {details.bioRaw.slice(0, 160)}{details.bioRaw.length > 160 ? "…" : ""}
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PopupRow = ({
+  label,
+  value,
+  valueClass = "",
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) => (
+  <div className="flex flex-col">
+    <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+    <span className={`text-[10px] text-foreground leading-tight line-clamp-1 ${valueClass}`}>{value}</span>
+  </div>
+);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ClientDraft = {
@@ -643,88 +899,114 @@ const MaidCard = ({
   const category = getMaidCategory(maid);
   const displayLabel = showCategory && category ? category : (maid.nationality || "");
 
+  // ── Hover popup state ──
+  const [hovered, setHovered] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+
+  const handleMouseEnter = () => {
+    hoverTimerRef.current = setTimeout(() => setHovered(true), 300);
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setHovered(false);
+  };
+
   return (
-    <article className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer">
-      <div className="relative w-full bg-white overflow-hidden">
-        <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
-          {photo ? (
-            <img src={photo} alt={maid.fullName}
-              className="block w-full h-auto"
-              style={{ aspectRatio: "3/4", objectFit: "contain", objectPosition: "top center",
-                minHeight: 130, background: "#fff" }}
-              loading="lazy" decoding="async"
-            />
-          ) : (
-            <div className="w-full flex items-center justify-center bg-gray-50"
-              style={{ aspectRatio: "3/4", minHeight: 130 }}>
-              <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor" strokeWidth={1}>
-                <path strokeLinecap="round" strokeLinejoin="round"
-                  d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
+    <>
+      <article
+        ref={cardRef}
+        className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div className="relative w-full bg-white overflow-hidden">
+          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
+            {photo ? (
+              <img src={photo} alt={maid.fullName}
+                className="block w-full h-auto"
+                style={{ aspectRatio: "3/4", objectFit: "contain", objectPosition: "top center",
+                  minHeight: 130, background: "#fff" }}
+                loading="lazy" decoding="async"
+              />
+            ) : (
+              <div className="w-full flex items-center justify-center bg-gray-50"
+                style={{ aspectRatio: "3/4", minHeight: 130 }}>
+                <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" strokeWidth={1}>
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              </div>
+            )}
+          </Link>
+          {maid.type && (
+            <div className="absolute top-1.5 left-1.5">
+              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>
+                {getTypeLabel(maid.type)}
+              </span>
             </div>
           )}
-        </Link>
-        {maid.type && (
-          <div className="absolute top-1.5 left-1.5">
-            <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>
-              {getTypeLabel(maid.type)}
-            </span>
-          </div>
-        )}
-        <button
-          onClick={(e) => { e.preventDefault(); onToggleShortlist(maid.referenceCode); }}
-          className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
-            isShortlisted ? "bg-amber-500" : "bg-black/60 opacity-0 group-hover:opacity-100"
-          }`}
-        >
-          <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
-          {isShortlisted ? "Shortlisted" : "Shortlist"}
-        </button>
-      </div>
-
-      {/* ── Card body ── */}
-      <div className="flex flex-col gap-0.5 p-2.5 flex-1 bg-white">
-        <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
-          {maid.fullName || "Unnamed maid"}
-        </h3>
-        {maid.referenceCode && (
-          <p className="text-[9px] text-gray-600 font-mono leading-tight">{maid.referenceCode}</p>
-        )}
-        {displayLabel && (
-          <p className="inline-flex items-center gap-1 text-[10px] leading-tight mt-0.5">
-            <FlagCircle code={flagCode} />
-            <span className="font-semibold text-black">{displayLabel}</span>
-          </p>
-        )}
-        <div className="my-1 border-t border-gray-100" />
-        <div className="flex items-center gap-1.5 text-[10px] text-gray-500 leading-tight">
-          {age !== null && <span className="font-medium text-black">({age}) yrs</span>}
-          {age !== null && maid.maritalStatus && <span className="text-gray-300">·</span>}
-          {maid.maritalStatus && <span className="truncate text-black">{maid.maritalStatus}</span>}
+          <button
+            onClick={(e) => { e.preventDefault(); onToggleShortlist(maid.referenceCode); }}
+            className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
+              isShortlisted ? "bg-amber-500" : "bg-black/60 opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
+            {isShortlisted ? "Shortlisted" : "Shortlist"}
+          </button>
         </div>
-        {maid.religion && (
-          <p className="text-[9px] text-black leading-tight line-clamp-1">{maid.religion}</p>
-        )}
-        {experienceBucket && (
-          <p className="text-[9px] text-black leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>
-        )}
-        {maid.languageSkills && (() => {
-          const langs = Object.entries(maid.languageSkills)
-            .filter(([, level]) => {
-              const l = String(level || "").trim().toLowerCase();
-              return l && l !== "zero" && l !== "none";
-            })
-            .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
-            .slice(0, 3);
-          return langs.length > 0 ? (
-            <p className="text-[9px] text-black leading-tight line-clamp-1 mt-0.5">
-              {langs.join(" · ")}
+
+        {/* ── Card body ── */}
+        <div className="flex flex-col gap-0.5 p-2.5 flex-1 bg-white">
+          <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
+            {maid.fullName || "Unnamed maid"}
+          </h3>
+          {maid.referenceCode && (
+            <p className="text-[9px] text-gray-600 font-mono leading-tight">{maid.referenceCode}</p>
+          )}
+          {displayLabel && (
+            <p className="inline-flex items-center gap-1 text-[10px] leading-tight mt-0.5">
+              <FlagCircle code={flagCode} />
+              <span className="font-semibold text-black">{displayLabel}</span>
             </p>
-          ) : null;
-        })()}
-      </div>
-    </article>
+          )}
+          <div className="my-1 border-t border-gray-100" />
+          <div className="flex items-center gap-1.5 text-[10px] text-gray-500 leading-tight">
+            {age !== null && <span className="font-medium text-black">({age}) yrs</span>}
+            {age !== null && maid.maritalStatus && <span className="text-gray-300">·</span>}
+            {maid.maritalStatus && <span className="truncate text-black">{maid.maritalStatus}</span>}
+          </div>
+          {maid.religion && (
+            <p className="text-[9px] text-black leading-tight line-clamp-1">{maid.religion}</p>
+          )}
+          {experienceBucket && (
+            <p className="text-[9px] text-black leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>
+          )}
+          {maid.languageSkills && (() => {
+            const langs = Object.entries(maid.languageSkills)
+              .filter(([, level]) => {
+                const l = String(level || "").trim().toLowerCase();
+                return l && l !== "zero" && l !== "none";
+              })
+              .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
+              .slice(0, 3);
+            return langs.length > 0 ? (
+              <p className="text-[9px] text-black leading-tight line-clamp-1 mt-0.5">
+                {langs.join(" · ")}
+              </p>
+            ) : null;
+          })()}
+        </div>
+      </article>
+
+      {/* ── Hover popup rendered via portal into document.body ── */}
+      {hovered && cardRef.current && (
+        <MaidHoverPopup maid={maid} anchorRef={cardRef as React.RefObject<HTMLElement>} />
+      )}
+    </>
   );
 };
 
@@ -1202,7 +1484,6 @@ const MaidSearchPage = ({
 
           {/* ── Grid ── */}
           {isLoading ? (
-            // CHANGED: grid-cols-2 on mobile (was grid-cols-3)
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
                 <div key={i} className="overflow-hidden rounded-xl border border-border bg-muted animate-pulse">
@@ -1230,7 +1511,6 @@ const MaidSearchPage = ({
               )}
             </div>
           ) : (
-            // CHANGED: grid-cols-2 on mobile (was grid-cols-3)
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {pagedMaids.map((maid) => (
                 <MaidCard
@@ -1286,7 +1566,6 @@ const MaidSearchPage = ({
                 </div>
               ) : (
                 <div className="max-h-[68vh] overflow-y-auto pr-1">
-                  {/* CHANGED: grid-cols-2 on mobile (was grid-cols-3) */}
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
                     {shortlistedMaids.map((maid) => (
                       <MaidCard
