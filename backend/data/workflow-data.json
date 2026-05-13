@@ -191,6 +191,17 @@
   ],
   "inquiries": [
     {
+      "id": 47,
+      "createdAt": "2026-05-13T00:08:33.460Z",
+      "name": "test",
+      "contact": "test@gmail.com",
+      "message": "I want a maid can cook",
+      "intent": "hiring",
+      "workflow": "inquiry_match",
+      "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+      "aiUsed": false
+    },
+    {
       "id": 46,
       "createdAt": "2026-05-06T05:21:47.798Z",
       "name": "test",
@@ -698,6 +709,52 @@
     }
   ],
   "matches": [
+    {
+      "id": 121,
+      "createdAt": "2026-05-13T00:08:33.608Z",
+      "leadId": null,
+      "inquiryId": 47,
+      "employerId": null,
+      "maidId": 73,
+      "maidReferenceCode": "IND-DAR-SAB-00001",
+      "maidName": "Suninta Biwaskarms",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 122,
+      "createdAt": "2026-05-13T00:08:33.608Z",
+      "leadId": null,
+      "inquiryId": 47,
+      "employerId": null,
+      "maidId": 104,
+      "maidReferenceCode": "IND-DAR-PRI-9698",
+      "maidName": "Priyanka Dewan",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 123,
+      "createdAt": "2026-05-13T00:08:33.608Z",
+      "leadId": null,
+      "inquiryId": 47,
+      "employerId": null,
+      "maidId": 59,
+      "maidReferenceCode": "INA-PAT-9693",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
     {
       "id": 118,
       "createdAt": "2026-05-05T01:53:00.060Z",
@@ -2904,6 +2961,50 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 164,
+      "createdAt": "2026-05-13T00:08:33.652Z",
+      "workflow": "inquiry_pipeline",
+      "step": "inquiry_match",
+      "status": "success",
+      "message": "Generated 3 match candidates",
+      "payload": {
+        "inquiryId": 47,
+        "aiUsed": false,
+        "vectorSearch": {
+          "used": true,
+          "candidateCount": 14
+        }
+      }
+    },
+    {
+      "id": 163,
+      "createdAt": "2026-05-13T00:08:33.470Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as hiring",
+      "payload": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 162,
+      "createdAt": "2026-05-13T00:08:33.450Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "I want a maid can cook",
+        "name": "test",
+        "contact": "test@gmail.com",
+        "requestId": "0ad7a44f-b423-4790-b4a0-c2d5f94f420f"
+      }
+    },
     {
       "id": 161,
       "createdAt": "2026-05-06T05:21:47.801Z",
@@ -5765,6 +5866,21 @@
   ],
   "decisionLogs": [
     {
+      "id": 56,
+      "createdAt": "2026-05-13T00:08:33.672Z",
+      "requestId": "0ad7a44f-b423-4790-b4a0-c2d5f94f420f",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly."
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 222,
+      "fallbackUsed": true
+    },
+    {
       "id": 55,
       "createdAt": "2026-05-06T05:21:47.805Z",
       "requestId": "e0a704df-0945-481a-8b0e-fbe67e71bb45",
@@ -7177,13 +7293,13 @@
   ],
   "counters": {
     "leads": 7,
-    "inquiries": 47,
-    "matches": 121,
+    "inquiries": 48,
+    "matches": 124,
     "schedules": 5,
     "contracts": 6,
     "notifications": 20,
-    "automationLogs": 162,
-    "decisionLogs": 56,
+    "automationLogs": 165,
+    "decisionLogs": 57,
     "makeDeliveries": 13
   }
 }

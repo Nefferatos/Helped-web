@@ -65,6 +65,7 @@ const navItems = [
     iconShadow: "0 4px 0 #047857, 0 6px 12px rgba(5,150,105,0.45)",
     iconShadowActive: "0 2px 0 #047857, 0 3px 8px rgba(5,150,105,0.4)",
     iconColor: "#fff",
+    badgeKey: null,
   },
   {
     label: "Our Profile",
@@ -74,6 +75,7 @@ const navItems = [
     iconShadow: "0 4px 0 #1D4ED8, 0 6px 12px rgba(37,99,235,0.45)",
     iconShadowActive: "0 2px 0 #1D4ED8, 0 3px 8px rgba(37,99,235,0.4)",
     iconColor: "#fff",
+    badgeKey: null,
   },
   {
     label: "New Maid",
@@ -83,6 +85,7 @@ const navItems = [
     iconShadow: "0 4px 0 #B91C1C, 0 6px 12px rgba(220,38,38,0.45)",
     iconShadowActive: "0 2px 0 #B91C1C, 0 3px 8px rgba(220,38,38,0.4)",
     iconColor: "#fff",
+    badgeKey: null,
   },
   {
     label: "Manage Maids",
@@ -92,6 +95,7 @@ const navItems = [
     iconShadow: "0 4px 0 #B45309, 0 6px 12px rgba(217,119,6,0.45)",
     iconShadowActive: "0 2px 0 #B45309, 0 3px 8px rgba(217,119,6,0.4)",
     iconColor: "#fff",
+    badgeKey: null,
   },
   {
     label: "Messages",
@@ -101,6 +105,7 @@ const navItems = [
     iconShadow: "0 4px 0 #6D28D9, 0 6px 12px rgba(124,58,237,0.45)",
     iconShadowActive: "0 2px 0 #6D28D9, 0 3px 8px rgba(124,58,237,0.4)",
     iconColor: "#fff",
+    badgeKey: "unreadChats" as const,
   },
   {
     label: "Security",
@@ -110,6 +115,7 @@ const navItems = [
     iconShadow: "0 4px 0 #C2410C, 0 6px 12px rgba(234,88,12,0.45)",
     iconShadowActive: "0 2px 0 #C2410C, 0 3px 8px rgba(234,88,12,0.4)",
     iconColor: "#fff",
+    badgeKey: null,
   },
   {
     label: "Contracts",
@@ -119,6 +125,7 @@ const navItems = [
     iconShadow: "0 4px 0 #0E7490, 0 6px 12px rgba(8,145,178,0.45)",
     iconShadowActive: "0 2px 0 #0E7490, 0 3px 8px rgba(8,145,178,0.4)",
     iconColor: "#fff",
+    badgeKey: null,
   },
   {
     label: "Enquiries",
@@ -128,6 +135,7 @@ const navItems = [
     iconShadow: "0 4px 0 #15803D, 0 6px 12px rgba(22,163,74,0.45)",
     iconShadowActive: "0 2px 0 #15803D, 0 3px 8px rgba(22,163,74,0.4)",
     iconColor: "#fff",
+    badgeKey: "unreadEnquiries" as const,
   },
   {
     label: "Requests",
@@ -137,8 +145,17 @@ const navItems = [
     iconShadow: "0 4px 0 #1D4ED8, 0 6px 12px rgba(37,99,235,0.45)",
     iconShadowActive: "0 2px 0 #1D4ED8, 0 3px 8px rgba(37,99,235,0.4)",
     iconColor: "#fff",
+    badgeKey: "unreadRequests" as const,
   },
 ];
+
+/* ─── Badge counts type ───────────────────────────────────────────────────── */
+
+type BadgeCounts = {
+  unreadChats: number;
+  unreadEnquiries: number;
+  unreadRequests: number;
+};
 
 /* ─── 3D Icon ────────────────────────────────────────────────────────────── */
 
@@ -221,6 +238,56 @@ const Tooltip = ({ label }: { label: string }) => (
   </div>
 );
 
+/* ─── Badge component ─────────────────────────────────────────────────────── */
+
+const NavBadge = ({
+  count,
+  collapsed,
+}: {
+  count: number;
+  collapsed: boolean;
+}) => {
+  if (count <= 0) return null;
+
+  if (collapsed) {
+    return (
+      <span
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 6,
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: "#EF4444",
+          border: "2px solid #fff",
+        }}
+      />
+    );
+  }
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        height: 18,
+        minWidth: 18,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 9999,
+        background: "#EF4444",
+        padding: "0 5px",
+        fontSize: 10,
+        fontWeight: 700,
+        color: "#fff",
+        flexShrink: 0,
+      }}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+};
+
 /* ─── Display name helpers ───────────────────────────────────────────────── */
 
 const getAgencyDisplayName = (agencyAdmin: AgencyAdminUser | null) => {
@@ -301,7 +368,7 @@ const WelcomeModal = ({
             "transform 0.26s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease",
         }}
       >
-        {/* Green header band — avatar lives inside */}
+        {/* Green header band */}
         <div
           style={{
             background: "linear-gradient(135deg, #0D6E56 0%, #1aa37e 100%)",
@@ -373,7 +440,6 @@ const WelcomeModal = ({
             />
           </p>
 
-          {/* Avatar — fully inside the band */}
           <div style={{ display: "flex", justifyContent: "center" }}>
             <div
               style={{
@@ -496,14 +562,14 @@ const WelcomeModal = ({
 
 const SidebarContent = ({
   location,
-  unreadAgencyChats,
+  badgeCounts,
   agencyLogoUrl,
   agencyAdmin,
   collapsed,
   onNavClick,
 }: {
   location: ReturnType<typeof useLocation>;
-  unreadAgencyChats: number;
+  badgeCounts: BadgeCounts;
   agencyLogoUrl: string;
   agencyAdmin: AgencyAdminUser | null;
   collapsed: boolean;
@@ -656,9 +722,10 @@ const SidebarContent = ({
           const isActive =
             location.pathname === item.path ||
             location.pathname.startsWith(`${item.path}/`);
-          const hasUnread =
-            item.path === adminPath("/chat-support") && unreadAgencyChats > 0;
           const isHovered = hoveredPath === item.path;
+
+          // Resolve badge count from badgeKey
+          const badgeCount = item.badgeKey ? badgeCounts[item.badgeKey] : 0;
 
           return (
             <div
@@ -715,40 +782,8 @@ const SidebarContent = ({
                   {item.label}
                 </span>
 
-                {hasUnread && !collapsed && (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      height: 18,
-                      minWidth: 18,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: 9999,
-                      background: "#EF4444",
-                      padding: "0 5px",
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: "#fff",
-                    }}
-                  >
-                    {unreadAgencyChats}
-                  </span>
-                )}
-
-                {hasUnread && collapsed && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: 6,
-                      right: 6,
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      background: "#EF4444",
-                      border: "2px solid #fff",
-                    }}
-                  />
-                )}
+                {/* Badge — expanded or collapsed dot */}
+                <NavBadge count={badgeCount} collapsed={collapsed} />
               </Link>
 
               {collapsed && isHovered && <Tooltip label={item.label} />}
@@ -771,7 +806,14 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [unreadAgencyChats, setUnreadAgencyChats] = useState(0);
+
+  // ── All badge counts in one state object ──────────────────────────────────
+  const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({
+    unreadChats: 0,
+    unreadEnquiries: 0,
+    unreadRequests: 0,
+  });
+
   const [agencyAdmin, setAgencyAdmin] = useState<AgencyAdminUser | null>(
     getStoredAgencyAdmin()
   );
@@ -789,28 +831,79 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  // Polling: notifications + logo
+  // ── Polling: notifications + logo ────────────────────────────────────────
   useEffect(() => {
     let active = true;
 
-    const loadSummary = async (silent = false) => {
+    const loadAll = async (silent = false) => {
       try {
-        const [res, compRes] = await Promise.all([
+        const [summaryRes, compRes, enquiryRes, requestRes] = await Promise.all([
           fetch("/api/company/summary", {
             headers: { ...getAgencyAdminAuthHeaders() },
           }),
           fetch("/api/company", {
             headers: { ...getAgencyAdminAuthHeaders() },
           }),
+          // Fetch unread enquiry count
+          fetch("/api/enquiry/unread-count", {
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }),
+          // Fetch unread request count
+          fetch("/api/requests/unread-count", {
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }),
         ]);
-        const data = (await res.json().catch(() => ({}))) as {
+
+        const summaryData = (await summaryRes.json().catch(() => ({}))) as {
           unreadAgencyChats?: number;
           error?: string;
         };
-        if (!res.ok)
-          throw new Error(data.error || "Failed to load notifications");
+
+        if (!summaryRes.ok)
+          throw new Error(summaryData.error || "Failed to load notifications");
+
         if (!active) return;
-        setUnreadAgencyChats(data.unreadAgencyChats ?? 0);
+
+        // Chat count from summary
+        const unreadChats = summaryData.unreadAgencyChats ?? 0;
+
+        // Also get chat count from dedicated endpoint (whichever is higher wins)
+        let dedicatedChatCount = 0;
+        try {
+          dedicatedChatCount = await fetchAdminUnreadChatCount();
+        } catch {
+          /* ignore */
+        }
+
+        // Enquiry unread count
+        let unreadEnquiries = 0;
+        if (enquiryRes.ok) {
+          const enquiryData = (await enquiryRes.json().catch(() => ({}))) as {
+            unreadCount?: number;
+            count?: number;
+          };
+          unreadEnquiries = enquiryData.unreadCount ?? enquiryData.count ?? 0;
+        }
+
+        // Request unread count
+        let unreadRequests = 0;
+        if (requestRes.ok) {
+          const requestData = (await requestRes.json().catch(() => ({}))) as {
+            unreadCount?: number;
+            count?: number;
+          };
+          unreadRequests = requestData.unreadCount ?? requestData.count ?? 0;
+        }
+
+        if (!active) return;
+
+        setBadgeCounts({
+          unreadChats: Math.max(unreadChats, dedicatedChatCount),
+          unreadEnquiries,
+          unreadRequests,
+        });
+
+        // Company logo
         if (compRes.ok) {
           const compData = (await compRes.json().catch(() => ({}))) as {
             companyProfile?: { logo_data_url?: string };
@@ -826,24 +919,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    const loadUnread = async (silent = false) => {
-      try {
-        const count = await fetchAdminUnreadChatCount();
-        if (active) setUnreadAgencyChats(count);
-      } catch (err) {
-        if (!silent)
-          toast.error(
-            err instanceof Error ? err.message : "Failed to load unread chats"
-          );
-      }
-    };
-
-    void loadSummary(false);
-    void loadUnread(false);
-    const iv = window.setInterval(() => {
-      void loadSummary(true);
-      void loadUnread(true);
-    }, 5000);
+    void loadAll(false);
+    const iv = window.setInterval(() => void loadAll(true), 5000);
 
     return () => {
       active = false;
@@ -855,8 +932,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     setAgencyAdmin(getStoredAgencyAdmin());
   }, [location.pathname]);
 
-  // ✅ FIXED: use window.location.href to ensure a hard redirect to /agency
-  // regardless of any router guards that may intercept navigate()
   const handleLogout = async () => {
     try {
       await fetch("/api/agency-auth/logout", {
@@ -877,9 +952,15 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const agencyWelcomeName = getAgencyDisplayWelcomeName(agencyAdmin);
   const desktopWidth = collapsed ? 64 : 230;
 
+  // Total unread count for the header bell icon
+  const totalUnread =
+    badgeCounts.unreadChats +
+    badgeCounts.unreadEnquiries +
+    badgeCounts.unreadRequests;
+
   const sharedSidebarProps = {
     location,
-    unreadAgencyChats,
+    badgeCounts,
     agencyLogoUrl,
     agencyAdmin,
   };
@@ -1071,9 +1152,25 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                   background: "transparent",
                   cursor: "pointer",
                   color: "#6B7280",
+                  position: "relative",
                 }}
               >
                 <Menu style={{ width: 18, height: 18 }} />
+                {/* Dot on hamburger when drawer is closed and there are unreads */}
+                {totalUnread > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 4,
+                      right: 4,
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#EF4444",
+                      border: "2px solid #fff",
+                    }}
+                  />
+                )}
               </button>
             )}
 
@@ -1102,9 +1199,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               gap: 6,
             }}
           >
-            {/* Notification bell */}
+            {/* Notification bell with total unread badge */}
             <button
-              aria-label="Notifications"
+              aria-label={`Notifications${totalUnread > 0 ? ` (${totalUnread} unread)` : ""}`}
               style={{
                 width: 38,
                 height: 38,
@@ -1118,6 +1215,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 color: "#6B7280",
                 transition: "background 0.15s, border-color 0.15s",
                 flexShrink: 0,
+                position: "relative",
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.background =
@@ -1133,6 +1231,30 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               }}
             >
               <Bell style={{ width: 17, height: 17 }} />
+              {totalUnread > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 4,
+                    right: 4,
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 9999,
+                    background: "#EF4444",
+                    border: "2px solid #fff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: "#fff",
+                    padding: "0 3px",
+                    lineHeight: 1,
+                  }}
+                >
+                  {totalUnread > 99 ? "99+" : totalUnread}
+                </span>
+              )}
             </button>
 
             {/* Help */}
