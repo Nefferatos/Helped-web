@@ -95,7 +95,6 @@ const getMaidPopupDetails = (maid: MaidProfile) => {
   const intro = (maid.introduction as Record<string, unknown>) || {};
   const agencyContact = (maid.agencyContact as Record<string, unknown>) || {};
 
-  // English level from languageSkills
   const englishLevel = maid.languageSkills
     ? String(
         (maid.languageSkills as Record<string, unknown>)["english"] ||
@@ -104,19 +103,15 @@ const getMaidPopupDetails = (maid: MaidProfile) => {
       ).trim()
     : "";
 
-  // Height & weight
   const height = String(maid.height || sp["height"] || intro["height"] || "").trim();
   const weight = String(maid.weight || sp["weight"] || intro["weight"] || "").trim();
 
-  // Bio / remarks snippet
   const bioRaw =
     String(sp["remarks"] || intro["remarks"] || sp["biodata"] || intro["biodata"] ||
       sp["summary"] || intro["summary"] || agencyContact["remarks"] || "").trim();
 
-  // Work areas / duties
   const workAreas = Object.keys(maid.workAreas || {}).filter(Boolean);
 
-  // Off days
   const otherInfo = (sp.otherInformation as Record<string, boolean>) || {};
   const willingKeys = [
     "Can work on off-days with compensation?",
@@ -125,7 +120,6 @@ const getMaidPopupDetails = (maid: MaidProfile) => {
   ];
   const willingOffDays = willingKeys.some((k) => Boolean(otherInfo[k]));
 
-  // All languages
   const langs = maid.languageSkills
     ? Object.entries(maid.languageSkills as Record<string, unknown>)
         .filter(([, lvl]) => {
@@ -135,7 +129,6 @@ const getMaidPopupDetails = (maid: MaidProfile) => {
         .map(([key, lvl]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${String(lvl).trim()}`)
     : [];
 
-  // Experience countries
   const expCountries: string[] = [];
   if (Array.isArray(maid.employmentHistory)) {
     for (const e of maid.employmentHistory) {
@@ -149,16 +142,275 @@ const getMaidPopupDetails = (maid: MaidProfile) => {
   }
   const uniqueExp = [...new Set(expCountries)];
 
-  return {
-    englishLevel,
-    height,
-    weight,
-    bioRaw,
-    workAreas,
-    willingOffDays,
-    langs,
-    uniqueExp,
-  };
+  return { englishLevel, height, weight, bioRaw, workAreas, willingOffDays, langs, uniqueExp };
+};
+
+// ── Skills table helper ───────────────────────────────────────────────────────
+type SkillRow = {
+  name: string;
+  willing: boolean;
+  evaluation: number; // 0-5
+};
+
+const getSkillsRows = (maid: MaidProfile): SkillRow[] => {
+  const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
+  const skills = (sp["skills"] || sp["Skills"]) as Record<string, unknown> | undefined;
+  if (!skills || typeof skills !== "object") {
+    const workAreas = Object.keys(maid.workAreas || {});
+    return workAreas.map((name) => ({ name, willing: true, evaluation: 0 }));
+  }
+  return Object.entries(skills).map(([name, val]) => {
+    const v = val as Record<string, unknown> || {};
+    const willing = Boolean(v["willing"] ?? v["Willing"] ?? v["willingness"] ?? true);
+    const evalRaw = Number(v["evaluation"] ?? v["Evaluation"] ?? v["rating"] ?? 0);
+    return { name, willing, evaluation: Math.min(5, Math.max(0, evalRaw)) };
+  });
+};
+
+const StarRating = ({ count }: { count: number }) => (
+  <span className="inline-flex items-center gap-px">
+    {Array.from({ length: 5 }).map((_, i) => (
+      <svg key={i} viewBox="0 0 16 16" className={`h-3 w-3 ${i < count ? "text-amber-400" : "text-gray-200"}`} fill="currentColor">
+        <path d="M8 1l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 10.8l-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
+      </svg>
+    ))}
+  </span>
+);
+
+// ── Locked maid modal ─────────────────────────────────────────────────────────
+const LockedMaidModal = ({
+  maid,
+  loginPath,
+  onClose,
+}: {
+  maid: MaidProfile;
+  loginPath: string;
+  onClose: () => void;
+}) => {
+  const photo = getPrimaryPhoto(maid);
+  const age = calculateAge(maid.dateOfBirth);
+  const flagCode = getNationalityCode(maid.nationality);
+  const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
+  const agencyContact = (maid.agencyContact as Record<string, unknown>) || {};
+  const intro = (maid.introduction as Record<string, unknown>) || {};
+
+  // ── hover state: when true the photo is hidden ───────────────────────────
+  const [imageHovered, setImageHovered] = useState(false);
+
+  const agencyName = String(agencyContact["agencyName"] || agencyContact["name"] || "");
+  const englishLevel = maid.languageSkills
+    ? String(
+        (maid.languageSkills as Record<string, unknown>)["english"] ||
+        (maid.languageSkills as Record<string, unknown>)["English"] || ""
+      ).trim()
+    : "";
+
+  const bioRaw = String(
+    sp["remarks"] || intro["remarks"] || sp["biodata"] || intro["biodata"] ||
+    sp["summary"] || intro["summary"] || agencyContact["remarks"] || ""
+  ).trim();
+
+  const skillRows = getSkillsRows(maid);
+  const empHistory = Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [];
+  const typeLabel = getTypeLabel(maid.type || "");
+  const typeColorClass = getMaidTypeBadgeClass(maid.type);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-lg border border-border bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded bg-black/50 text-white hover:bg-black/70"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+
+        {/* Login banner */}
+        <div className="sticky top-0 z-10 bg-primary px-4 py-3 text-center">
+          <div className="flex items-center justify-center gap-1.5 mb-2">
+            <LockIcon className="h-3.5 w-3.5 text-primary-foreground/80" />
+            <p className="text-xs font-bold text-primary-foreground">
+              Login / Register to see full bio-data and photos
+            </p>
+          </div>
+          <Link
+            to={loginPath}
+            className="inline-flex w-full items-center justify-center gap-2 rounded bg-amber-400 px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-amber-300"
+          >
+            Login / Register
+          </Link>
+        </div>
+
+        {/* Maid info header */}
+        <div className="border-b border-border/60 bg-gray-50 px-4 py-3 text-xs text-gray-700 space-y-0.5">
+          <p>
+            <span className="font-semibold">{maid.nationality ? `${maid.nationality} maid` : "Maid"}:</span>{" "}
+            <span className="blur-[4px] select-none">{maid.fullName || "Name hidden"}</span>
+          </p>
+          {agencyName && (
+            <p><span className="font-semibold">Maid Agency:</span> {agencyName}</p>
+          )}
+          {maid.type && (
+            <p>
+              <span className={`inline-block px-1.5 py-px text-[9px] font-bold border rounded ${typeColorClass}`}>
+                {typeLabel}
+              </span>
+            </p>
+          )}
+          {englishLevel && (
+            <p><span className="font-semibold">English:</span> {englishLevel}</p>
+          )}
+        </div>
+
+        
+
+        {/* Basic details */}
+        <div className="px-4 py-3 text-xs space-y-1 border-b border-border/60">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            {maid.referenceCode && (
+              <div><span className="text-gray-500">Ref:</span> <span className="font-mono font-semibold blur-[3px] select-none">{maid.referenceCode}</span></div>
+            )}
+            {age !== null && (
+              <div><span className="text-gray-500">Age:</span> <span className="font-semibold">{age} yrs</span></div>
+            )}
+            {maid.maritalStatus && (
+              <div><span className="text-gray-500">Status:</span> <span className="font-semibold">{maid.maritalStatus}</span></div>
+            )}
+            {maid.religion && (
+              <div><span className="text-gray-500">Religion:</span> <span className="font-semibold">{maid.religion}</span></div>
+            )}
+            {maid.educationLevel && (
+              <div className="col-span-2"><span className="text-gray-500">Education:</span> <span className="font-semibold">{maid.educationLevel}</span></div>
+            )}
+            {maid.nationality && (
+              <div className="col-span-2 flex items-center gap-1">
+                <span className="text-gray-500">Nationality:</span>
+                <FlagCircle code={flagCode} />
+                <span className="font-semibold">{maid.nationality}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bio / remarks (blurred) */}
+        {bioRaw && (
+          <div className="px-4 py-3 border-b border-border/60">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">About</p>
+            <p className="text-xs text-gray-700 leading-relaxed line-clamp-4 blur-[3px] select-none">
+              {bioRaw}
+            </p>
+          </div>
+        )}
+
+        {/* Employment History */}
+        {empHistory.length > 0 && (
+          <div className="px-4 py-3 border-b border-border/60">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Employment History</p>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-200 px-2 py-1 text-left font-semibold text-gray-600">From</th>
+                  <th className="border border-gray-200 px-2 py-1 text-left font-semibold text-gray-600">To</th>
+                  <th className="border border-gray-200 px-2 py-1 text-left font-semibold text-gray-600">Country / Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {empHistory.slice(0, 4).map((emp, idx) => {
+                  const e = emp as Record<string, unknown>;
+                  const from = String(e["from"] || e["From"] || e["startYear"] || e["startDate"] || "");
+                  const to = String(e["to"] || e["To"] || e["endYear"] || e["endDate"] || "");
+                  const country = String(e["country"] || e["Country"] || e["employer"] || e["location"] || "");
+                  return (
+                    <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="border border-gray-200 px-2 py-1 text-gray-700">{from}</td>
+                      <td className="border border-gray-200 px-2 py-1 text-gray-700">{to}</td>
+                      <td className="border border-gray-200 px-2 py-1 text-gray-700 blur-[3px] select-none">{country || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Skills Table */}
+        {skillRows.length > 0 && (
+          <div className="px-4 py-3 border-b border-border/60">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Skills</p>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                {skillRows.map((skill, idx) => (
+                  <>
+                    <tr key={`name-${idx}`} className="bg-gray-100">
+                      <td colSpan={2} className="border border-gray-200 px-2 py-1 font-semibold text-gray-700 text-center">
+                        {skill.name}
+                      </td>
+                    </tr>
+                    <tr key={`willing-${idx}`} className="bg-white">
+                      <td className="border border-gray-200 px-2 py-1 text-gray-500 w-24">Willingness</td>
+                      <td className="border border-gray-200 px-2 py-1">
+                        {skill.willing ? (
+                          <span className="text-emerald-600 font-bold text-sm">✓</span>
+                        ) : (
+                          <span className="text-red-400 font-bold text-sm">✗</span>
+                        )}
+                      </td>
+                    </tr>
+                    {skill.evaluation > 0 && (
+                      <tr key={`eval-${idx}`} className="bg-white">
+                        <td className="border border-gray-200 px-2 py-1 text-gray-500">Evaluation</td>
+                        <td className="border border-gray-200 px-2 py-1">
+                          <StarRating count={skill.evaluation} />
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Fallback work areas as skills if no structured skills */}
+        {skillRows.length === 0 && Object.keys(maid.workAreas || {}).length > 0 && (
+          <div className="px-4 py-3 border-b border-border/60">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Skills</p>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                {Object.keys(maid.workAreas || {}).map((area, idx) => (
+                  <>
+                    <tr key={`wa-name-${idx}`} className="bg-gray-100">
+                      <td colSpan={2} className="border border-gray-200 px-2 py-1 font-semibold text-gray-700 text-center">
+                        {area}
+                      </td>
+                    </tr>
+                    <tr key={`wa-willing-${idx}`} className="bg-white">
+                      <td className="border border-gray-200 px-2 py-1 text-gray-500 w-24">Willingness</td>
+                      <td className="border border-gray-200 px-2 py-1">
+                        <span className="text-emerald-600 font-bold text-sm">✓</span>
+                      </td>
+                    </tr>
+                  </>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Bottom CTA */}
+        <div className="px-4 py-4 text-center">
+          <p className="text-[11px] text-gray-500 mb-3">
+            Login to view full bio-data, contact details, and more photos.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ── Maid Hover Popup ──────────────────────────────────────────────────────────
@@ -190,15 +442,12 @@ const MaidHoverPopup = ({
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
 
-    // Try right first, then left
     let left = rect.right + scrollX + gap;
     if (left + popupWidth > scrollX + viewportW - 8) {
       left = rect.left + scrollX - popupWidth - gap;
     }
-    // Clamp left
     left = Math.max(scrollX + 8, left);
 
-    // Vertically align to anchor top, but clamp
     let top = rect.top + scrollY;
     if (top + popupHeight > scrollY + viewportH - 8) {
       top = scrollY + viewportH - popupHeight - 8;
@@ -221,7 +470,6 @@ const MaidHoverPopup = ({
       style={style}
       className="pointer-events-none rounded-xl border border-border bg-white shadow-2xl overflow-hidden"
     >
-      {/* Header */}
       <div className="bg-primary px-3 py-2">
         <p className="text-xs font-bold text-primary-foreground leading-tight line-clamp-1">
           {maid.nationality ? `${maid.nationality} maid` : "Maid"}{maid.fullName ? `: ${maid.fullName}` : ""}
@@ -232,7 +480,6 @@ const MaidHoverPopup = ({
       </div>
 
       <div className="p-3 space-y-2">
-        {/* Type badge row */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {maid.type && (
             <span className={`inline-block px-1.5 py-px text-[9px] font-bold border rounded ${getMaidTypeBadgeClass(maid.type)}`}>
@@ -249,35 +496,17 @@ const MaidHoverPopup = ({
 
         <div className="border-t border-border/60" />
 
-        {/* Key details grid */}
         <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-          {details.englishLevel && (
-            <PopupRow label="English" value={details.englishLevel} />
-          )}
-          {details.height && (
-            <PopupRow label="Height" value={`${details.height} cm`} />
-          )}
-          {details.weight && (
-            <PopupRow label="Weight" value={`${details.weight} kg`} />
-          )}
-          {age !== null && (
-            <PopupRow label="Age" value={`${age} yrs`} />
-          )}
-          {maid.maritalStatus && (
-            <PopupRow label="Status" value={maid.maritalStatus} />
-          )}
-          {maid.religion && (
-            <PopupRow label="Religion" value={maid.religion} />
-          )}
-          {maid.educationLevel && (
-            <PopupRow label="Education" value={maid.educationLevel} />
-          )}
-          {details.willingOffDays && (
-            <PopupRow label="Off-days" value="Willing ✓" valueClass="text-emerald-600 font-semibold" />
-          )}
+          {details.englishLevel && <PopupRow label="English" value={details.englishLevel} />}
+          {details.height && <PopupRow label="Height" value={`${details.height} cm`} />}
+          {details.weight && <PopupRow label="Weight" value={`${details.weight} kg`} />}
+          {age !== null && <PopupRow label="Age" value={`${age} yrs`} />}
+          {maid.maritalStatus && <PopupRow label="Status" value={maid.maritalStatus} />}
+          {maid.religion && <PopupRow label="Religion" value={maid.religion} />}
+          {maid.educationLevel && <PopupRow label="Education" value={maid.educationLevel} />}
+          {details.willingOffDays && <PopupRow label="Off-days" value="Willing ✓" valueClass="text-emerald-600 font-semibold" />}
         </div>
 
-        {/* Languages */}
         {details.langs.length > 0 && (
           <>
             <div className="border-t border-border/60" />
@@ -292,7 +521,6 @@ const MaidHoverPopup = ({
           </>
         )}
 
-        {/* Experience */}
         {details.uniqueExp.length > 0 && (
           <>
             <div className="border-t border-border/60" />
@@ -303,7 +531,6 @@ const MaidHoverPopup = ({
           </>
         )}
 
-        {/* Work areas */}
         {details.workAreas.length > 0 && (
           <>
             <div className="border-t border-border/60" />
@@ -316,7 +543,6 @@ const MaidHoverPopup = ({
           </>
         )}
 
-        {/* Bio snippet */}
         {details.bioRaw && (
           <>
             <div className="border-t border-border/60" />
@@ -394,7 +620,6 @@ type MaidSearchPageProps = {
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
 const PAGE_SIZE = 18;
 
-// ── Indian subcategory quick link keys ───────────────────────────────────────
 const INDIAN_SUBCATEGORY_KEYS = new Set(["mizoram", "darjeeling", "manipur", "punjabi"]);
 
 const NATIONALITY_LINKS = [
@@ -454,7 +679,6 @@ const defaultSidebarFilters: SidebarFilters = {
 };
 
 // ── Filter helpers ────────────────────────────────────────────────────────────
-
 const parseAdvancedFilters = (searchParams: URLSearchParams): ClientDraft | null => {
   const raw = searchParams.get("filters");
   if (!raw) return null;
@@ -493,7 +717,6 @@ const deriveSidebarFilters = (
 });
 
 // ── Core filter engine ────────────────────────────────────────────────────────
-
 const normalizeStr = (s: unknown) => String(s || "").toLowerCase().trim();
 
 const matchesLanguageSkill = (maid: MaidProfile, lang: string) => {
@@ -643,7 +866,6 @@ const matchesBiodataAge = (maid: MaidProfile, draft: ClientDraft): boolean => {
   return date >= cutoff;
 };
 
-/** Returns true if the maid has at least one valid photo */
 const hasPhoto = (maid: MaidProfile): boolean => {
   if (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) {
     const hasValidUrl = maid.photoDataUrls.some(
@@ -654,7 +876,6 @@ const hasPhoto = (maid: MaidProfile): boolean => {
   return typeof maid.photoDataUrl === "string" && maid.photoDataUrl.trim().length > 0;
 };
 
-/** Main filter function — applies the full ClientDraft */
 const filterMaidsByDraft = (maids: MaidProfile[], draft: ClientDraft): MaidProfile[] => {
   return maids.filter((maid) => {
     if (!hasPhoto(maid)) return false;
@@ -827,10 +1048,22 @@ const ActiveFilterPill = ({ label, onRemove }: { label: string; onRemove?: () =>
 );
 
 // ── Locked maid card ──────────────────────────────────────────────────────────
-const LockedMaidCard = ({ loginPath, photo, type }: { loginPath: string; photo?: string; type?: string }) => {
-  const typeColorClass = getMaidTypeBadgeClass(type);
+const LockedMaidCard = ({
+  maid,
+  loginPath,
+  onOpenModal,
+}: {
+  maid: MaidProfile;
+  loginPath: string;
+  onOpenModal: () => void;
+}) => {
+  const photo = getPrimaryPhoto(maid);
+  const typeColorClass = getMaidTypeBadgeClass(maid.type);
   return (
-    <article className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50">
+    <article
+      className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer"
+      onClick={onOpenModal}
+    >
       <div className="relative w-full select-none pointer-events-none overflow-hidden">
         {photo ? (
           <img src={photo} alt="Maid profile" loading="lazy" decoding="async"
@@ -848,10 +1081,10 @@ const LockedMaidCard = ({ loginPath, photo, type }: { loginPath: string; photo?:
             </svg>
           </div>
         )}
-        {type && (
+        {maid.type && (
           <div className="absolute top-1.5 left-1.5" style={{ filter: "blur(3px)" }}>
             <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 ${typeColorClass}`}>
-              {getTypeLabel(type)}
+              {getTypeLabel(maid.type)}
             </span>
           </div>
         )}
@@ -870,11 +1103,14 @@ const LockedMaidCard = ({ loginPath, photo, type }: { loginPath: string; photo?:
         </div>
       </div>
       <div className="px-2 pb-2 pt-0">
-        <Link to={loginPath}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90 active:bg-primary/80">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenModal(); }}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90 active:bg-primary/80 pointer-events-auto"
+        >
           <LockIcon className="h-3 w-3" />
           Log in to view
-        </Link>
+        </button>
       </div>
     </article>
   );
@@ -888,8 +1124,26 @@ const MaidCard = ({
   onNavigate?: () => void; isLoggedIn: boolean; loginPath: string;
   showCategory?: boolean;
 }) => {
-  if (!isLoggedIn)
-    return <LockedMaidCard loginPath={loginPath} photo={getPrimaryPhoto(maid)} type={maid.type} />;
+  const [lockedModalOpen, setLockedModalOpen] = useState(false);
+
+  if (!isLoggedIn) {
+    return (
+      <>
+        <LockedMaidCard
+          maid={maid}
+          loginPath={loginPath}
+          onOpenModal={() => setLockedModalOpen(true)}
+        />
+        {lockedModalOpen && (
+          <LockedMaidModal
+            maid={maid}
+            loginPath={loginPath}
+            onClose={() => setLockedModalOpen(false)}
+          />
+        )}
+      </>
+    );
+  }
 
   const photo = getPrimaryPhoto(maid);
   const age = calculateAge(maid.dateOfBirth);
@@ -899,7 +1153,6 @@ const MaidCard = ({
   const category = getMaidCategory(maid);
   const displayLabel = showCategory && category ? category : (maid.nationality || "");
 
-  // ── Hover popup state ──
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRef = useRef<HTMLElement>(null);
@@ -959,7 +1212,6 @@ const MaidCard = ({
           </button>
         </div>
 
-        {/* ── Card body ── */}
         <div className="flex flex-col gap-0.5 p-2.5 flex-1 bg-white">
           <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
             {maid.fullName || "Unnamed maid"}
@@ -985,24 +1237,9 @@ const MaidCard = ({
           {experienceBucket && (
             <p className="text-[9px] text-black leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>
           )}
-          {maid.languageSkills && (() => {
-            const langs = Object.entries(maid.languageSkills)
-              .filter(([, level]) => {
-                const l = String(level || "").trim().toLowerCase();
-                return l && l !== "zero" && l !== "none";
-              })
-              .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
-              .slice(0, 3);
-            return langs.length > 0 ? (
-              <p className="text-[9px] text-black leading-tight line-clamp-1 mt-0.5">
-                {langs.join(" · ")}
-              </p>
-            ) : null;
-          })()}
         </div>
       </article>
 
-      {/* ── Hover popup rendered via portal into document.body ── */}
       {hovered && cardRef.current && (
         <MaidHoverPopup maid={maid} anchorRef={cardRef as React.RefObject<HTMLElement>} />
       )}
@@ -1071,7 +1308,6 @@ const MaidSearchPage = ({
     setPage(1);
   }, [searchParams]);
 
-  // ── Filtering ──────────────────────────────────────────────────────────────
   const filteredMaids = useMemo(() => {
     const draft: ClientDraft = advancedFilters ?? {
       keyword: filters.keyword,
@@ -1203,7 +1439,6 @@ const MaidSearchPage = ({
     return items;
   }, [advancedFilters]);
 
-  // ── Sidebar search ────────────────────────────────────────────────────────
   const handleSearch = () => {
     setPage(1);
     const next = new URLSearchParams();
@@ -1238,7 +1473,6 @@ const MaidSearchPage = ({
               : "border-border bg-background text-foreground"
     }`;
 
-  // ── Sidebar ───────────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <div className="space-y-0">
       <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -1418,7 +1652,7 @@ const MaidSearchPage = ({
         </aside>
 
         <main className="min-w-0 flex-1">
-          {/* ── Advanced filters banner ── */}
+          {/* Advanced filters banner */}
           {advancedFilters && advancedFilterSummary.length > 0 && (
             <div className="mb-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1482,7 +1716,7 @@ const MaidSearchPage = ({
             <PaginationBar />
           </div>
 
-          {/* ── Grid ── */}
+          {/* Grid */}
           {isLoading ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
