@@ -4,8 +4,8 @@ import type {
   ChatMessage,
 } from "@/lib/chat";
 
-export const BOT_TYPING_DELAY_MIN = 900;
-export const BOT_TYPING_DELAY_MAX = 1800;
+export const BOT_TYPING_DELAY_MIN = 600;
+export const BOT_TYPING_DELAY_MAX = 1200;
 
 const firstName = (name?: string | null) => (name ?? "").trim().split(/\s+/)[0] || "there";
 
@@ -14,13 +14,14 @@ const fillTemplate = (
   context: { name: string; agencyName: string; message: string },
 ) =>
   template
-    .replaceAll("{{name}}", context.name)
-    .replaceAll("{{agencyName}}", context.agencyName)
-    .replaceAll("{{message}}", context.message);
+    .split("{{name}}").join(context.name)
+    .split("{{agencyName}}").join(context.agencyName)
+    .split("{{message}}").join(context.message);
 
+// Shorter delay — Facebook replies feel near-instant
 const typingDelay = (text: string): number => {
   const base = BOT_TYPING_DELAY_MIN;
-  const extra = Math.min(text.length * 8, BOT_TYPING_DELAY_MAX - base);
+  const extra = Math.min(text.length * 5, BOT_TYPING_DELAY_MAX - base);
   return base + extra;
 };
 
@@ -42,56 +43,157 @@ const GREETING_WORDS = [
   "hiya",
 ];
 
-const containsAny = (text: string, patterns: RegExp[]) => patterns.some((pattern) => pattern.test(text));
+const containsAny = (text: string, patterns: RegExp[]) =>
+  patterns.some((pattern) => pattern.test(text));
 
-const buildReceptionistResponse = (
-  text: string,
-  context: { name: string; agencyName: string; message: string },
-) => {
-  const lower = normalize(text);
-  const shortName = context.name;
+const pickVariant = (options: string[], seedText: string) =>
+  options[Math.abs(seedText.length + seedText.split(/\s+/).length) % options.length] ||
+  options[0];
 
-  if (isGreetingOnlyMessage(text)) {
-    return `Hi ${shortName}, welcome to ${context.agencyName}. How can I help you today?`;
+const getRecentMessages = (history?: ChatMessage[], count = 6) =>
+  (history ?? []).slice(-count);
+
+const getLastAgencyMessage = (history?: ChatMessage[]) => {
+  const recent = getRecentMessages(history, 10);
+  for (let index = recent.length - 1; index >= 0; index -= 1) {
+    if (recent[index].senderRole === "agency") return recent[index];
   }
-
-  if (containsAny(lower, [/(thank you|thanks|appreciate it)/])) {
-    return `You're most welcome, ${shortName}. If you'd like, you can send me the next detail here and I'll help you from there.`;
-  }
-
-  if (containsAny(lower, [/(price|pricing|cost|budget|fee|fees|salary|invoice|payment)/])) {
-    return `Of course, ${shortName}. I can help with that. Please send the profile, invoice, or fee item you're referring to, and I'll help narrow down what the team needs to check.`;
-  }
-
-  if (containsAny(lower, [/(schedule|reschedule|appointment|interview|date|time|slot|availability)/])) {
-    return `Sure, ${shortName}. Please let me know the date or timing you have in mind, and if there is a specific helper or interview this is about, include that too so I can guide the next step clearly.`;
-  }
-
-  if (containsAny(lower, [/(status|progress|update|follow up|follow-up|application|placement)/])) {
-    return `Certainly, ${shortName}. I can help you follow that up. Please send the helper name, reference number, or request details, and I'll help prepare it properly for the team.`;
-  }
-
-  if (containsAny(lower, [/(document|documents|paperwork|permit|requirement|checklist)/])) {
-    return `No problem, ${shortName}. Please tell me whether this is for a new hire, transfer, or renewal, and I can point you to the right documents or next step.`;
-  }
-
-  if (containsAny(lower, [/(issue|problem|concern|complaint|urgent|not happy)/])) {
-    return `I'm sorry to hear that, ${shortName}. Please tell me briefly what happened and when it happened, and I'll help make sure your message is clear and properly routed.`;
-  }
-
-  return `Hi ${shortName}, thanks for your message. Please share a little more detail about what you need help with, and I'll guide you on the next step.`;
+  return null;
 };
+
+const mentionsReferenceInfo = (text: string) =>
+  /(reference|ref no|request id|application id|helper name|maid name|invoice number|invoice no)/i.test(
+    text,
+  );
+
+// ─── Facebook-style: short, warm, acknowledge first, one ask at the end ───────
 
 const isGreetingOnlyMessage = (text: string) => {
   const cleaned = normalize(text).replace(/[!,.?]+/g, "").trim();
   return GREETING_WORDS.some((word) => cleaned === word);
 };
 
+/**
+ * Core response builder.
+ *
+ * Facebook Business Page feel:
+ *  1. Acknowledge immediately ("Got it!", "Thanks for reaching out!")
+ *  2. Signal a human handoff ("I've flagged this with our team.")
+ *  3. Ask ONE follow-up question at most — never interrogate.
+ *  4. Keep it short: 1–2 sentences max.
+ *  5. One emoji max per message, placed naturally.
+ */
+const buildReceptionistResponse = (
+  text: string,
+  context: { name: string; agencyName: string; message: string },
+  history?: ChatMessage[],
+): string => {
+  const lower = normalize(text);
+  const shortName = context.name;
+  const lastAgencyMessage = getLastAgencyMessage(history);
+  const hasWelcomedRecently =
+    !!lastAgencyMessage &&
+    /(welcome to|how can i help you today|how may i assist you today)/i.test(
+      lastAgencyMessage.message,
+    );
+  const hasReference = mentionsReferenceInfo(text);
+
+  // ── Greeting ────────────────────────────────────────────────────────────────
+  if (isGreetingOnlyMessage(text)) {
+    return hasWelcomedRecently
+      ? pickVariant(
+          [
+            `Hey ${shortName}! 😊 What can I help you with?`,
+            `Hi ${shortName}! Go ahead, I'm listening.`,
+            `Hello ${shortName}! What would you like to check today?`,
+          ],
+          text,
+        )
+      : `Hi ${shortName}! Thanks for reaching out to ${context.agencyName}. How can I help you today? 😊`;
+  }
+
+  // ── Thank you ────────────────────────────────────────────────────────────────
+  if (containsAny(lower, [/(thank you|thanks|appreciate it)/])) {
+    return pickVariant(
+      [
+        `You're welcome, ${shortName}! Feel free to message us anytime. 😊`,
+        `Happy to help, ${shortName}! Don't hesitate to reach out if you need anything else.`,
+        `Of course, ${shortName}! We're always here if you need us.`,
+      ],
+      text,
+    );
+  }
+
+  // ── Billing / Invoice / Fees ─────────────────────────────────────────────────
+  if (
+    containsAny(lower, [/(price|pricing|cost|budget|fee|fees|salary|invoice|payment)/])
+  ) {
+    return hasReference
+      ? pickVariant(
+          [
+            `Got it, ${shortName}! I've flagged your billing query with our team. They'll get back to you shortly.`,
+            `Thanks, ${shortName}! I've passed that on to our team and they'll follow up with you soon.`,
+          ],
+          text,
+        )
+      : `Got it, ${shortName}! I've noted your billing question. Could you share the invoice number or helper name so our team can check it faster? 🙏`;
+  }
+
+  // ── Scheduling / Appointments ────────────────────────────────────────────────
+  if (
+    containsAny(lower, [
+      /(schedule|reschedule|appointment|interview|date|time|slot|availability)/,
+    ])
+  ) {
+    return hasReference
+      ? `Sure, ${shortName}! I've noted your scheduling request and flagged it with the team. They'll confirm with you soon.`
+      : `Sure, ${shortName}! Could you share your preferred date or timing? I'll pass it to the team right away. 📅`;
+  }
+
+  // ── Status / Follow-up / Placement ──────────────────────────────────────────
+  if (
+    containsAny(lower, [
+      /(status|progress|update|follow up|follow-up|application|placement)/,
+    ])
+  ) {
+    return hasReference
+      ? `Thanks, ${shortName}! I've flagged your follow-up with the team. They'll update you as soon as possible. 🙏`
+      : `Hi ${shortName}! I've noted your follow-up request. Could you share the helper name or reference number so the team can locate it faster?`;
+  }
+
+  // ── Documents / Permits ──────────────────────────────────────────────────────
+  if (
+    containsAny(lower, [/(document|documents|paperwork|permit|requirement|checklist)/])
+  ) {
+    return hasReference
+      ? `Got it, ${shortName}! I've flagged your document query with the team. They'll get back to you shortly.`
+      : `Hi ${shortName}! Is this for a new hire, transfer, or renewal? That'll help us point you to the right requirements quickly.`;
+  }
+
+  // ── Concern / Complaint / Urgent ─────────────────────────────────────────────
+  if (
+    containsAny(lower, [/(issue|problem|concern|complaint|urgent|not happy)/])
+  ) {
+    return hasReference
+      ? `I'm sorry to hear that, ${shortName}. I've flagged this with our team right away. Someone will follow up with you shortly. 🙏`
+      : `Hi ${shortName}, I'm sorry about that. Could you briefly share what happened? I'll flag it to our team immediately.`;
+  }
+
+  // ── Generic fallback ─────────────────────────────────────────────────────────
+  return pickVariant(
+    [
+      `Thanks for your message, ${shortName}! I've passed this to our team and they'll get back to you soon.`,
+      `Got it, ${shortName}! Our team has been notified and will follow up with you shortly. 🙏`,
+      `Hi ${shortName}! I've noted your message. Could you share a bit more detail so we can help you faster?`,
+    ],
+    text,
+  );
+};
+
 const detectTopicIntent = (topic?: AgencyChatbotTopicOption | null) => {
   const haystack = normalize(
     `${topic?.id ?? ""} ${topic?.label ?? ""} ${topic?.description ?? ""} ${topic?.suggestedMessage ?? ""}`,
   );
-
   if (/(placement|status|application|progress|update)/.test(haystack)) return "placement";
   if (/(schedule|reschedule|appointment|timing|date|interview)/.test(haystack)) return "schedule";
   if (/(billing|invoice|payment|fee|fees|price|cost)/.test(haystack)) return "billing";
@@ -101,27 +203,49 @@ const detectTopicIntent = (topic?: AgencyChatbotTopicOption | null) => {
   return "general";
 };
 
+/**
+ * Topic-aware fallback — same Facebook Business feel.
+ * Acknowledge → handoff signal → one optional ask.
+ */
 const buildTopicAwareFallback = (
   topic: AgencyChatbotTopicOption,
   context: { name: string; agencyName: string; message: string },
-) => {
+  history?: ChatMessage[],
+): string => {
   const intent = detectTopicIntent(topic);
+  const lastAgencyMessage = getLastAgencyMessage(history);
+  const alreadyHelping =
+    lastAgencyMessage &&
+    /noted|flagged|passed|happy to help|of course|certainly/i.test(
+      lastAgencyMessage.message,
+    );
+
+  // Lead-in: vary so it doesn't feel scripted
+  const lead = alreadyHelping
+    ? pickVariant(["Sure!", "Of course!", "Got it!"], context.message)
+    : `Hi ${context.name}!`;
 
   switch (intent) {
     case "placement":
-      return `Hi ${context.name}, certainly. If you send me the request details, helper name, or reference number, I'll help you follow up on the ${topic.label.toLowerCase()} update.`;
+      return `${lead} I've flagged your ${topic.label.toLowerCase()} enquiry with our team. Could you share the helper name or reference number so they can locate it faster?`;
+
     case "schedule":
-      return `Hi ${context.name}, no problem. Please share the date or timing you'd like to change, and if this is tied to a specific interview or arrangement, include that too.`;
+      return `${lead} I've noted your scheduling request. Could you share your preferred date or timing? Our team will confirm availability shortly. 📅`;
+
     case "billing":
-      return `Hi ${context.name}, of course. Please send the invoice, payment, or fee detail you'd like checked, and I'll guide what to include for the team.`;
+      return `${lead} I've passed your billing query to our team. Got an invoice number or fee detail to share? That'll help them respond faster.`;
+
     case "concern":
-      return `Hi ${context.name}, I'm sorry to hear that. Please tell me what happened, and if possible when it happened, and I'll help you put it across clearly for follow-up.`;
+      return `${lead} I'm sorry you're experiencing this. I've flagged it with our team right away. Could you briefly describe what happened? 🙏`;
+
     case "renewal":
-      return `Hi ${context.name}, certainly. Please send the contract or renewal details you'd like to check, and I'll help with the next step from there.`;
+      return `${lead} I've noted your renewal enquiry and flagged it with the team. They'll guide you through the next steps shortly.`;
+
     case "documents":
-      return `Hi ${context.name}, happy to help. Please let me know which document or requirement you're checking on, and whether this is for a new hire, transfer, or renewal.`;
+      return `${lead} I've passed your document query to the team. Is this for a new hire, transfer, or renewal? That'll help narrow it down quickly.`;
+
     default:
-      return `Hi ${context.name}, I can help with ${topic.label.toLowerCase()}. Send me a little more detail and I'll guide you on what to say next.`;
+      return `${lead} I've noted your message about ${topic.label.toLowerCase()} and flagged it with the team. They'll get back to you soon. 🙏`;
   }
 };
 
@@ -148,10 +272,12 @@ export function getBotReply(
       )
     : [];
 
+  // ── Custom rules from config (agency-defined) ────────────────────────────────
   let bestMatch: { text: string; score: number } | null = null;
 
   for (const rule of config.responseRules) {
     if (!rule.enabled) continue;
+
     const isGreetingRule =
       normalize(rule.id) === "greeting" ||
       rule.keywords.some((keyword) => GREETING_WORDS.includes(normalize(keyword)));
@@ -165,7 +291,11 @@ export function getBotReply(
       if (!cleaned || !normalizedText.includes(cleaned)) continue;
 
       let score = isGreetingRule ? 1 : cleaned.length;
-      if (topicKeywords.some((part) => cleaned.includes(part) || part.includes(cleaned))) {
+      if (
+        topicKeywords.some(
+          (part) => cleaned.includes(part) || part.includes(cleaned),
+        )
+      ) {
         score += 12;
       }
       const text = fillTemplate(rule.response, context);
@@ -179,18 +309,31 @@ export function getBotReply(
     return { text: bestMatch.text, delay: typingDelay(bestMatch.text) };
   }
 
+  // ── Topic-aware fallback ─────────────────────────────────────────────────────
   if (options?.selectedTopic) {
-    const topicText = buildTopicAwareFallback(options.selectedTopic, context);
+    const topicText = buildTopicAwareFallback(
+      options.selectedTopic,
+      context,
+      options.history,
+    );
     return { text: topicText, delay: typingDelay(topicText) };
   }
 
-  const receptionistReply = buildReceptionistResponse(trimmed, context);
+  // ── Receptionist fallback ────────────────────────────────────────────────────
+  const receptionistReply = buildReceptionistResponse(
+    trimmed,
+    context,
+    options?.history,
+  );
   if (receptionistReply) {
     return { text: receptionistReply, delay: typingDelay(receptionistReply) };
   }
 
+  // ── Config fallback (last resort) ────────────────────────────────────────────
   const fallbackTemplate =
-    trimmed.length < 20 ? config.fallbackShortResponse : config.fallbackLongResponse;
+    trimmed.length < 20
+      ? config.fallbackShortResponse
+      : config.fallbackLongResponse;
   const fallbackText = fillTemplate(fallbackTemplate, context);
   return { text: fallbackText, delay: typingDelay(fallbackText) };
 }

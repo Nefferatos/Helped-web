@@ -4,6 +4,8 @@ import {
   Bot,
   ChevronDown,
   ChevronLeft,
+  CheckCircle,
+  HelpCircle,
   MessageCircle,
   Search,
   Send,
@@ -33,6 +35,7 @@ import "./ClientTheme.css";
 
 type TopicOption = AgencyChatbotTopicOption;
 const MAIN_MENU_TOPIC_ID = "__main_menu__";
+const GUIDE_STORAGE_KEY = "sc_guide_dismissed";
 
 const defaultConversation: ClientConversation = {
   key: "support:0",
@@ -181,28 +184,61 @@ const getTopicFollowUps = (topic: TopicOption): TopicOption[] => {
   }
 };
 
-
 const compactWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
 
 const sanitizeConversationPreview = (message: string) => {
   const normalized = compactWhitespace(message);
   if (!normalized) return "No messages yet";
-
   if (
     /(thank you for your message|thank you for reaching out|our team will review it shortly|could you share a little more detail|how may i assist you today)/i.test(normalized)
   ) {
     return "Automated support reply";
   }
-
   if (/(tracked case|support team|logged with our support team)/i.test(normalized)) {
     return "Tracked support item created";
   }
-
   return normalized.length > 90 ? `${normalized.slice(0, 89)}...` : normalized;
 };
 
 const getConversationBadgeLabel = (conversation: ClientConversation) =>
   conversation.conversationType === "agency" ? "Agency chat" : "Support";
+
+// ─── Guide steps ──────────────────────────────────────────────────────────────
+
+const GUIDE_STEPS = [
+  {
+    emoji: "👋",
+    title: "Welcome to Support Chat!",
+    body: "This is where you can send messages to the agency team. They'll reply here — just like chatting on Facebook Messenger.",
+  },
+  {
+    emoji: "📋",
+    title: "Pick a topic first",
+    body: 'Tap "What can we help you with?" at the top, then choose the topic that matches your question — like Billing, Schedule, or Placement Status. This helps the team respond faster.',
+  },
+  {
+    emoji: "⚡",
+    title: "Quick buttons save time",
+    body: "After choosing a topic, you'll see shortcut buttons appear. Just tap one to send a message instantly — no typing needed!",
+  },
+  {
+    emoji: "💬",
+    title: "Or just type your message",
+    body: "Prefer to type? Go ahead! Type in the box at the bottom and press the green Send button (or press Enter on your keyboard).",
+  },
+  {
+    emoji: "🤖",
+    title: "The bot replies right away",
+    body: "You'll get an instant reply from our Support Bot. It will note your message and let the team know. A real person will follow up with you shortly.",
+  },
+  {
+    emoji: "✅",
+    title: "You're all set!",
+    body: "That's all there is to it. If you ever get stuck, just type your question and the bot will guide you. You can reopen this guide anytime using the ? button.",
+  },
+];
+
+// ─── CSS ──────────────────────────────────────────────────────────────────────
 
 const CSS = `
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -212,12 +248,15 @@ const CSS = `
 .sc-nav-icon { width:36px; height:36px; border-radius:10px; background:#1D9E75; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .sc-nav-title { font-size:16px; font-weight:700; color:#111; }
 .sc-nav-unread { font-size:12px; color:#1D9E75; font-weight:600; margin-top:1px; }
+.sc-nav-right { display:flex; align-items:center; gap:10px; }
 .sc-status-pill { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:6px 13px; font-size:12px; font-weight:600; border:1px solid; min-height:34px; }
 .sc-status-pill.online { background:#edfaf4; color:#0c6e4f; border-color:#a3e4c8; }
 .sc-status-pill.offline { background:#fff0f0; color:#c0392b; border-color:#f5b4b4; }
 .sc-status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .sc-status-dot.online { background:#1D9E75; }
 .sc-status-dot.offline { background:#e74c3c; }
+.sc-help-btn { width:34px; height:34px; border-radius:50%; border:1.5px solid #a3e4c8; background:#edfaf4; color:#0c6e4f; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:background .15s; }
+.sc-help-btn:hover { background:#d7f5e8; }
 .sc-banner { display:flex; align-items:center; gap:10px; padding:11px 20px; font-size:13px; font-weight:500; border-bottom:1px solid #f5b4b4; background:#fff0f0; color:#c0392b; }
 .sc-body { display:flex; flex:1; overflow:hidden; min-height:0; position:relative; }
 .sc-overlay { display:none; position:absolute; inset:0; background:rgba(0,0,0,.45); z-index:24; }
@@ -314,6 +353,32 @@ const CSS = `
 .sc-send-btn { width:38px; height:38px; border-radius:11px; background:#1D9E75; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; color:#fff; }
 .sc-send-btn:disabled { background:#d1d5db; cursor:not-allowed; }
 .sc-compose-hint { font-size:11px; color:#c9cdd6; margin-top:5px; padding-left:2px; }
+
+/* ── Guide modal ─────────────────────────────────────────────── */
+.sc-guide-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:200; display:flex; align-items:flex-end; justify-content:center; padding:0; animation:sc-guide-fade .22s ease; }
+@media (min-width:520px) { .sc-guide-backdrop { align-items:center; padding:20px; } }
+@keyframes sc-guide-fade { from{opacity:0} to{opacity:1} }
+.sc-guide-sheet { background:#fff; border-radius:24px 24px 0 0; width:100%; max-width:460px; padding:28px 24px 32px; display:flex; flex-direction:column; gap:0; box-shadow:0 -4px 40px rgba(0,0,0,.18); animation:sc-guide-up .28s cubic-bezier(.34,1.46,.64,1); }
+@media (min-width:520px) { .sc-guide-sheet { border-radius:24px; animation:sc-guide-pop .28s cubic-bezier(.34,1.46,.64,1); } }
+@keyframes sc-guide-up { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
+@keyframes sc-guide-pop { from{transform:scale(.92);opacity:0} to{transform:scale(1);opacity:1} }
+.sc-guide-close { position:absolute; top:16px; right:16px; width:32px; height:32px; border-radius:50%; border:none; background:#f3f4f6; color:#6b7280; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.sc-guide-close:hover { background:#e5e7eb; }
+.sc-guide-emoji { font-size:44px; line-height:1; margin-bottom:14px; display:block; text-align:center; }
+.sc-guide-title { font-size:20px; font-weight:800; color:#111; text-align:center; margin-bottom:8px; }
+.sc-guide-body { font-size:15px; color:#4b5563; line-height:1.65; text-align:center; margin-bottom:24px; min-height:72px; }
+.sc-guide-dots { display:flex; justify-content:center; gap:7px; margin-bottom:22px; }
+.sc-guide-dot { width:8px; height:8px; border-radius:50%; background:#e5e7eb; transition:background .2s,transform .2s; }
+.sc-guide-dot.active { background:#1D9E75; transform:scale(1.25); }
+.sc-guide-actions { display:flex; gap:10px; }
+.sc-guide-btn-skip { flex:1; padding:13px; border-radius:12px; border:1.5px solid #e5e7eb; background:#fff; font-size:14px; font-weight:600; color:#6b7280; cursor:pointer; }
+.sc-guide-btn-skip:hover { background:#f9fafb; }
+.sc-guide-btn-next { flex:2; padding:13px; border-radius:12px; border:none; background:#1D9E75; color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
+.sc-guide-btn-next:hover { background:#178a64; }
+.sc-guide-btn-done { flex:1; padding:13px; border-radius:12px; border:none; background:#1D9E75; color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
+.sc-guide-btn-done:hover { background:#178a64; }
+.sc-guide-progress { font-size:12px; color:#b0b7c3; text-align:center; margin-top:14px; }
+
 @media (max-width:768px) {
   .sc-sidebar { position:absolute; top:0; left:0; bottom:0; width:82%; max-width:300px; transform:translateX(-100%); z-index:25; }
   .sc-sidebar.open { transform:translateX(0); box-shadow:8px 0 40px rgba(0,0,0,.18); }
@@ -328,6 +393,57 @@ const CSS = `
   .sc-compose-hint { display:none; }
 }
 `;
+
+// ─── Guide modal component ────────────────────────────────────────────────────
+
+function GuideModal({ onDismiss }: { onDismiss: () => void }) {
+  const [step, setStep] = useState(0);
+  const current = GUIDE_STEPS[step];
+  const isLast = step === GUIDE_STEPS.length - 1;
+
+  return (
+    <div className="sc-guide-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}>
+      <div className="sc-guide-sheet" style={{ position: "relative" }}>
+        <button className="sc-guide-close" onClick={onDismiss} aria-label="Close guide">
+          <X size={15} />
+        </button>
+
+        <span className="sc-guide-emoji">{current.emoji}</span>
+        <div className="sc-guide-title">{current.title}</div>
+        <div className="sc-guide-body">{current.body}</div>
+
+        <div className="sc-guide-dots">
+          {GUIDE_STEPS.map((_, i) => (
+            <div key={i} className={`sc-guide-dot${i === step ? " active" : ""}`} />
+          ))}
+        </div>
+
+        <div className="sc-guide-actions">
+          {!isLast ? (
+            <>
+              <button className="sc-guide-btn-skip" onClick={onDismiss}>
+                Skip
+              </button>
+              <button className="sc-guide-btn-next" onClick={() => setStep((s) => s + 1)}>
+                Next →
+              </button>
+            </>
+          ) : (
+            <button className="sc-guide-btn-done" onClick={onDismiss} style={{ flex: 1 }}>
+              <CheckCircle size={17} /> Got it, let's start!
+            </button>
+          )}
+        </div>
+
+        <div className="sc-guide-progress">
+          Step {step + 1} of {GUIDE_STEPS.length}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function TopicPicker({
   topics,
@@ -476,6 +592,8 @@ function TopicChoices({
   );
 }
 
+// ─── Main component ───────────────────────────────────────────────────────────
+
 const ClientSupportChat = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -490,6 +608,20 @@ const ClientSupportChat = () => {
   const [selectedTopic, setSelectedTopic] = useState<TopicOption | null>(null);
   const [isBotTyping, setIsBotTyping] = useState(false);
   const [chatbotConfig, setChatbotConfig] = useState<AgencyChatbotConfig>(DEFAULT_CONFIG);
+
+  // Guide: show on first visit, hide after dismiss, re-openable via ? button
+  const [showGuide, setShowGuide] = useState(() => {
+    try {
+      return !localStorage.getItem(GUIDE_STORAGE_KEY);
+    } catch {
+      return true;
+    }
+  });
+
+  const dismissGuide = () => {
+    try { localStorage.setItem(GUIDE_STORAGE_KEY, "1"); } catch { /* ignore */ }
+    setShowGuide(false);
+  };
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -852,6 +984,9 @@ const ClientSupportChat = () => {
     <div className="sc">
       <style>{CSS}</style>
 
+      {/* Guide modal — shown on first visit, re-openable via ? button */}
+      {showGuide && <GuideModal onDismiss={dismissGuide} />}
+
       <nav className="sc-nav">
         <div className="sc-nav-brand">
           <div className="sc-nav-icon"><MessageCircle size={17} color="#fff" /></div>
@@ -864,10 +999,21 @@ const ClientSupportChat = () => {
             )}
           </div>
         </div>
-        <div className={`sc-status-pill ${chatbotEnabled ? "online" : "offline"}`}>
-          <Bot size={13} />
-          <div className={`sc-status-dot ${chatbotEnabled ? "online" : "offline"}`} />
-          {chatbotEnabled ? "Chatbot On" : "Chatbot Off"}
+        <div className="sc-nav-right">
+          {/* ? button — always visible so users can reopen the guide anytime */}
+          <button
+            className="sc-help-btn"
+            onClick={() => setShowGuide(true)}
+            aria-label="Open help guide"
+            title="How to use this chat"
+          >
+            <HelpCircle size={16} />
+          </button>
+          <div className={`sc-status-pill ${chatbotEnabled ? "online" : "offline"}`}>
+            <Bot size={13} />
+            <div className={`sc-status-dot ${chatbotEnabled ? "online" : "offline"}`} />
+            {chatbotEnabled ? "Chatbot On" : "Chatbot Off"}
+          </div>
         </div>
       </nav>
 
@@ -1114,4 +1260,3 @@ const ClientSupportChat = () => {
 };
 
 export default ClientSupportChat;
-

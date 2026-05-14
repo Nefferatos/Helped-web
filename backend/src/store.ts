@@ -168,11 +168,6 @@ export interface ChatMessageRecord {
   readByClient: boolean
 }
 
-type ChatAvatarFields = {
-  clientProfileImageUrl?: string
-  agencyProfileImageUrl?: string
-}
-
 export interface AgencyChatbotTopicRecord {
   id: string
   label: string
