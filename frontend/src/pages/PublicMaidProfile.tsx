@@ -523,6 +523,32 @@ const StarDisplay = ({ evaluation }: { evaluation?: string }) => {
   );
 };
 
+const getLanguageStarRating = (level?: string) => {
+  const normalized = String(level || "").trim().toLowerCase();
+  switch (normalized) {
+    case "good": return 4;
+    case "fair": return 3;
+    case "little": return 2;
+    case "poor": return 1;
+    case "zero": return 0;
+    default: return null;
+  }
+};
+
+const LanguageRating = ({ level }: { level?: string }) => {
+  const rating = getLanguageStarRating(level);
+  if (rating === null) {
+    return <span className="text-[11px] text-black">{String(level || "N.A.")}</span>;
+  }
+  return (
+    <div className="flex items-center gap-0.5" title={String(level)}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <Star key={i} className={`h-3.5 w-3.5 ${i < rating ? "fill-amber-500 text-amber-500" : "text-gray-200"}`} />
+      ))}
+    </div>
+  );
+};
+
 /** Key-value row in a two-column grid */
 const KVRow = ({ label, value }: { label: string; value: string }) => (
   <div className="contents">
@@ -866,7 +892,9 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               <p className="text-[11px] font-bold uppercase tracking-widest text-black mb-2">Agency</p>
               <p className="font-bold text-black text-sm leading-snug">{agencyName}</p>
               <p className="text-black">Lic. No.: {company?.license_no || String(agencyContact?.licenseNo || "N/A")}</p>
-              <p className="text-black">Contact: <span className="font-semibold">{agencyContactPerson || "N/A"}</span></p>
+              <p className="text-sm text-black">
+              Please call: <span className="font-bold">{String(agencyContact.contactPerson || "Bala/Ricky")}</span>
+            </p>
               <p className="text-black">Phone: <span className="font-semibold text-primary">{agencyPhone || "N/A"}</span></p>
               <div className="pt-2 mt-1 border-t">
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${(maid.status || "available") === "available" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-black"}`}>
@@ -935,9 +963,12 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               <div className="grid grid-cols-[140px_1fr] p-4 text-sm">
                 {detailRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
                 <p className="py-1 pr-3 text-[12px] font-semibold text-black border-b border-dashed border-gray-200">Languages</p>
-                <div className="py-1 text-[13px] border-b border-dashed border-gray-200 space-y-0.5">
+                <div className="py-1 text-[13px] border-b border-dashed border-gray-200 space-y-1">
                   {fixedLanguages.map(([lang, level]) => (
-                    <p key={lang} className="text-black">{lang} <span className="text-black text-[11px]">({level})</span></p>
+                    <div key={lang} className="flex items-center justify-between gap-3 text-black">
+                      <span className="font-medium">{lang}</span>
+                      <LanguageRating level={level} />
+                    </div>
                   ))}
                   {otherLanguages.length > 0 && (
                     <button type="button" className="text-primary text-[12px] hover:underline" onClick={() => setShowOtherLanguages((p) => !p)}>
@@ -945,7 +976,10 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                     </button>
                   )}
                   {showOtherLanguages && otherLanguages.map(([lang, level]) => (
-                    <p key={lang} className="text-black">{lang} <span className="text-black text-[11px]">({level})</span></p>
+                    <div key={lang} className="flex items-center justify-between gap-3 text-black">
+                      <span>{lang}</span>
+                      <LanguageRating level={level} />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1091,9 +1125,9 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               {Object.keys(pastIllnesses).length > 0 && (
                 <div className="border-t p-3">
                   <p className="text-[11px] font-bold uppercase tracking-widest text-black mb-2">Past Illnesses</p>
-                  <div className="space-y-1.5">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {Object.entries(pastIllnesses).map(([illness, value]) => (
-                      <div key={illness} className="flex items-center justify-between">
+                      <div key={illness} className="flex items-center justify-between gap-3">
                         <span className="text-[13px] text-black">{illness}</span>
                         {value
                           ? <Check className="h-3.5 w-3.5 text-primary" />

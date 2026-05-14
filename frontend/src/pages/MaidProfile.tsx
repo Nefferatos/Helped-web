@@ -114,6 +114,32 @@ const StarDisplay = ({ evaluation }: { evaluation?: string }) => {
   );
 };
 
+const getLanguageStarRating = (level?: string) => {
+  const normalized = String(level || "").trim().toLowerCase();
+  switch (normalized) {
+    case "good": return 4;
+    case "fair": return 3;
+    case "little": return 2;
+    case "poor": return 1;
+    case "zero": return 0;
+    default: return null;
+  }
+};
+
+const LanguageRating = ({ level }: { level?: string }) => {
+  const rating = getLanguageStarRating(level);
+  if (rating === null) {
+    return <span className="text-sm text-black">{String(level || "N.A.")}</span>;
+  }
+  return (
+    <div className="flex items-center gap-0.5" title={String(level)}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <Star key={i} className={`h-4 w-4 ${i < rating ? "fill-primary text-primary" : "text-muted-foreground/30"}`} />
+      ))}
+    </div>
+  );
+};
+
 const MaidProfilePage = () => {
   const location = useLocation();
   const fromView = (location.state as LocationState | null)?.fromView;
@@ -581,7 +607,7 @@ const MaidProfilePage = () => {
             </p>
             <p className="text-sm text-black">(License No.: {String(agencyContact.licenseNo || "25C3114")}),</p>
             <p className="text-sm text-black">
-              Please call <span className="font-bold">{String(agencyContact.contactPerson || "Bala")}</span>
+              Please call <span className="font-bold">{String(agencyContact.contactPerson || "Bala/Ricky")}</span>
             </p>
             <p className="text-sm text-black">
               at <span className="font-bold text-blue-700 text-base">{String(agencyContact.phone || "80730757")}</span>
@@ -674,9 +700,12 @@ const MaidProfilePage = () => {
             <div className="grid grid-cols-[165px_1fr] p-4">
               {detailRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
               <p className="py-1.5 pr-3 text-sm font-bold text-black border-b border-dashed border-muted/60">Languages</p>
-              <div className="py-1.5 text-sm text-black border-b border-dashed border-muted/60 space-y-0.5">
+              <div className="py-1.5 text-sm text-black border-b border-dashed border-muted/60 space-y-1">
                 {fixedLanguages.map(([lang, level]) => (
-                  <p key={lang}>{lang} <span className="text-black">({level})</span></p>
+                  <div key={lang} className="flex items-center justify-between gap-3">
+                    <span className="font-medium">{lang}</span>
+                    <LanguageRating level={level} />
+                  </div>
                 ))}
                 {otherLanguages.length > 0 && (
                   <button type="button" className="text-blue-700 underline text-sm hover:text-blue-900" onClick={() => setShowOtherLanguages((p) => !p)}>
@@ -684,7 +713,10 @@ const MaidProfilePage = () => {
                   </button>
                 )}
                 {showOtherLanguages && otherLanguages.map(([lang, level]) => (
-                  <p key={lang}>{lang} <span className="text-black">({level})</span></p>
+                  <div key={lang} className="flex items-center justify-between gap-3">
+                    <span>{lang}</span>
+                    <LanguageRating level={level} />
+                  </div>
                 ))}
               </div>
             </div>
@@ -831,9 +863,9 @@ const MaidProfilePage = () => {
             {Object.keys(pastIllnesses).length > 0 && (
               <div className="border-t p-3">
                 <p className="text-sm font-bold uppercase tracking-widest text-black mb-2">Past Illnesses</p>
-                <div className="space-y-1.5">
+                <div className="grid gap-2 sm:grid-cols-2">
                   {Object.entries(pastIllnesses).map(([illness, value]) => (
-                    <div key={illness} className="flex items-center justify-between text-sm">
+                    <div key={illness} className="flex items-center justify-between gap-3 text-sm">
                       <span className="text-black">{illness}</span>
                       <YesNoBadge yes={Boolean(value)} />
                     </div>
