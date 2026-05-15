@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Search, Star, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Star, X, Sparkles, Filter, Trash2, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { calculateAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { getClientToken } from "@/lib/clientAuth";
@@ -11,31 +11,41 @@ import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
+// ── Theme tokens ──────────────────────────────────────────────────────────────
+const C = {
+  green:       "#16653A",
+  greenMid:    "#1E8A4C",
+  greenLight:  "#25B060",
+  greenPale:   "#EAF7EF",
+  greenBorder: "rgba(30,138,76,0.25)",
+  yellow:      "#F5C400",
+  yellowWarm:  "#FFD53E",
+  yellowPale:  "#FFFBE6",
+  yellowBorder:"rgba(245,196,0,0.35)",
+  dark:        "#0C1E12",
+  darkMid:     "#163322",
+  text:        "#0C1E12",
+  textMuted:   "#3C6652",
+  border:      "#C8E2D4",
+  surface:     "#F3FAF6",
+  white:       "#FFFFFF",
+  slate:       "#F1F5F2",
+};
+
 // ── Nationality → ISO 3166-1 alpha-2 ─────────────────────────────────────────
 const NATIONALITY_FLAGS: Record<string, string> = {
-  filipino: "ph", philippines: "ph",
-  indonesian: "id", indonesia: "id",
-  myanmar: "mm", burmese: "mm",
-  cambodian: "kh", cambodia: "kh",
-  vietnamese: "vn", vietnam: "vn",
-  thai: "th", thailand: "th",
-  malaysian: "my", malaysia: "my",
-  singaporean: "sg", singapore: "sg",
-  indian: "in", india: "in",
-  "sri lankan": "lk", "sri lanka": "lk",
-  bangladeshi: "bd", bangladesh: "bd",
-  nepali: "np", nepalese: "np", nepal: "np",
-  pakistani: "pk", pakistan: "pk",
-  chinese: "cn", china: "cn",
-  hongkong: "hk", "hong kong": "hk",
-  taiwanese: "tw", taiwan: "tw",
-  korean: "kr", "south korea": "kr",
-  japanese: "jp", japan: "jp",
-  ethiopian: "et", ethiopia: "et",
-  kenyan: "ke", kenya: "ke",
-  ugandan: "ug", uganda: "ug",
-  ghanaian: "gh", ghana: "gh",
-  nigerian: "ng", nigeria: "ng",
+  filipino:"ph", philippines:"ph", indonesian:"id", indonesia:"id",
+  myanmar:"mm", burmese:"mm", cambodian:"kh", cambodia:"kh",
+  vietnamese:"vn", vietnam:"vn", thai:"th", thailand:"th",
+  malaysian:"my", malaysia:"my", singaporean:"sg", singapore:"sg",
+  indian:"in", india:"in", "sri lankan":"lk", "sri lanka":"lk",
+  bangladeshi:"bd", bangladesh:"bd", nepali:"np", nepalese:"np", nepal:"np",
+  pakistani:"pk", pakistan:"pk", chinese:"cn", china:"cn",
+  hongkong:"hk", "hong kong":"hk", taiwanese:"tw", taiwan:"tw",
+  korean:"kr", "south korea":"kr", japanese:"jp", japan:"jp",
+  ethiopian:"et", ethiopia:"et", kenyan:"ke", kenya:"ke",
+  ugandan:"ug", uganda:"ug", ghanaian:"gh", ghana:"gh",
+  nigerian:"ng", nigeria:"ng",
 };
 
 const getNationalityCode = (nationality?: string): string => {
@@ -52,16 +62,13 @@ const FlagCircle = ({ code }: { code: string }) => {
   if (!code) return null;
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      width: 14, height: 14, borderRadius: "50%", overflow: "hidden",
-      border: "1px solid rgba(0,0,0,0.13)", flexShrink: 0,
-      verticalAlign: "middle", background: "#e5e7eb",
+      display:"inline-flex", alignItems:"center", justifyContent:"center",
+      width:14, height:14, borderRadius:"50%", overflow:"hidden",
+      border:"1px solid rgba(0,0,0,0.13)", flexShrink:0,
+      verticalAlign:"middle", background:C.greenPale,
     }}>
-      <img
-        src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
-        alt={code}
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-      />
+      <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={code}
+        style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
     </span>
   );
 };
@@ -88,11 +95,7 @@ const getMaidCategory = (maid: MaidProfile): string => {
 };
 
 // ── Skills table helpers ──────────────────────────────────────────────────────
-type SkillRow = {
-  name: string;
-  willing: boolean;
-  evaluation: number; // 0–5
-};
+type SkillRow = { name: string; willing: boolean; evaluation: number };
 
 const getSkillsRows = (maid: MaidProfile): SkillRow[] => {
   const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
@@ -109,20 +112,13 @@ const getSkillsRows = (maid: MaidProfile): SkillRow[] => {
   });
 };
 
-// ── Work-area rows with full data (willing + experience + stars) ──────────────
 const parseStarEval = (raw?: string): number => {
   if (!raw) return 0;
   const m = String(raw).match(/^(\d+)\//);
   return m ? Math.min(5, Math.max(0, parseInt(m[1], 10))) : 0;
 };
 
-type WorkAreaRow = {
-  name: string;
-  willing: boolean;
-  experience: boolean;
-  evaluation: number;
-  years: string;
-};
+type WorkAreaRow = { name: string; willing: boolean; experience: boolean; evaluation: number; years: string };
 
 const getWorkAreaRows = (maid: MaidProfile): WorkAreaRow[] => {
   const raw = Object.entries(maid.workAreas || {}) as Array<
@@ -140,42 +136,31 @@ const getWorkAreaRows = (maid: MaidProfile): WorkAreaRow[] => {
 const StarRating = ({ count }: { count: number }) => (
   <span className="inline-flex items-center gap-px">
     {Array.from({ length: 5 }).map((_, i) => (
-      <svg key={i} viewBox="0 0 16 16" className={`h-3 w-3 ${i < count ? "text-amber-400" : "text-gray-200"}`} fill="currentColor">
+      <svg key={i} viewBox="0 0 16 16" style={{ height:12, width:12, color: i < count ? C.yellow : "#D1E8DA" }} fill="currentColor">
         <path d="M8 1l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 10.8l-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
       </svg>
     ))}
   </span>
 );
 
-// ── Hover popup helper (for logged-in users) ──────────────────────────────────
+// ── Hover popup helpers ───────────────────────────────────────────────────────
 const getMaidPopupDetails = (maid: MaidProfile) => {
   const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
   const intro = (maid.introduction as Record<string, unknown>) || {};
   const agencyContact = (maid.agencyContact as Record<string, unknown>) || {};
-
   const englishLevel = maid.languageSkills
-    ? String(
-        (maid.languageSkills as Record<string, unknown>)["english"] ||
-        (maid.languageSkills as Record<string, unknown>)["English"] || ""
-      ).trim()
-    : "";
+    ? String((maid.languageSkills as Record<string, unknown>)["english"] || (maid.languageSkills as Record<string, unknown>)["English"] || "").trim() : "";
   const height = String(maid.height || sp["height"] || intro["height"] || "").trim();
   const weight = String(maid.weight || sp["weight"] || intro["weight"] || "").trim();
-  const bioRaw = String(sp["remarks"] || intro["remarks"] || sp["biodata"] || intro["biodata"] ||
-    sp["summary"] || intro["summary"] || agencyContact["remarks"] || "").trim();
+  const bioRaw = String(sp["remarks"] || intro["remarks"] || sp["biodata"] || intro["biodata"] || sp["summary"] || intro["summary"] || agencyContact["remarks"] || "").trim();
   const workAreas = Object.keys(maid.workAreas || {}).filter(Boolean);
   const otherInfo = (sp.otherInformation as Record<string, boolean>) || {};
-  const willingKeys = [
-    "Can work on off-days with compensation?",
-    "Willing to work on off-days with compensation?",
-    "Willing to work on off-days with  compensation?",
-  ];
+  const willingKeys = ["Can work on off-days with compensation?", "Willing to work on off-days with compensation?", "Willing to work on off-days with  compensation?"];
   const willingOffDays = willingKeys.some((k) => Boolean(otherInfo[k]));
   const langs = maid.languageSkills
     ? Object.entries(maid.languageSkills as Record<string, unknown>)
         .filter(([, lvl]) => { const l = String(lvl || "").trim().toLowerCase(); return l && l !== "zero" && l !== "none"; })
-        .map(([key, lvl]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${String(lvl).trim()}`)
-    : [];
+        .map(([key, lvl]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${String(lvl).trim()}`) : [];
   const expCountries: string[] = [];
   if (Array.isArray(maid.employmentHistory)) {
     for (const e of maid.employmentHistory) {
@@ -187,15 +172,14 @@ const getMaidPopupDetails = (maid: MaidProfile) => {
       else if (text.includes("dubai") || text.includes("uae") || text.includes("saudi") || text.includes("middle east")) expCountries.push("Middle East");
     }
   }
-  const uniqueExp = [...new Set(expCountries)];
-  return { englishLevel, height, weight, bioRaw, workAreas, willingOffDays, langs, uniqueExp };
+  return { englishLevel, height, weight, bioRaw, workAreas, willingOffDays, langs, uniqueExp: [...new Set(expCountries)] };
 };
 
 // ── Maid Hover Popup (logged-in) ──────────────────────────────────────────────
 const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: React.RefObject<HTMLElement> }) => {
   const popupRef = useRef<HTMLDivElement>(null);
-  const [style, setStyle] = useState<React.CSSProperties>({ visibility: "hidden" });
-  const [pointerSide, setPointerSide] = useState<"left" | "right">("right");
+  const [style, setStyle] = useState<React.CSSProperties>({ visibility:"hidden" });
+  const [pointerSide, setPointerSide] = useState<"left"|"right">("right");
   const details = useMemo(() => getMaidPopupDetails(maid), [maid]);
   const age = calculateAge(maid.dateOfBirth);
   const flagCode = getNationalityCode(maid.nationality);
@@ -205,7 +189,7 @@ const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: Rea
     const popup = popupRef.current;
     if (!anchor || !popup) return;
     const rect = anchor.getBoundingClientRect();
-    const popupWidth = 350;
+    const popupWidth = 340;
     const popupHeight = popup.offsetHeight || 360;
     const gap = 8;
     const viewportW = window.innerWidth;
@@ -213,313 +197,232 @@ const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: Rea
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
     let left = rect.right + scrollX + gap;
-    let side: "left" | "right" = "right";
-    if (left + popupWidth > scrollX + viewportW - 8) {
-      left = rect.left + scrollX - popupWidth - gap;
-      side = "left";
-    }
+    let side: "left"|"right" = "right";
+    if (left + popupWidth > scrollX + viewportW - 8) { left = rect.left + scrollX - popupWidth - gap; side = "left"; }
     left = Math.max(scrollX + 8, left);
     let top = rect.top + scrollY;
     if (top + popupHeight > scrollY + viewportH - 8) top = scrollY + viewportH - popupHeight - 8;
     top = Math.max(scrollY + 8, top);
     setPointerSide(side);
-    setStyle({ position: "absolute", top, left, width: popupWidth, zIndex: 9999, visibility: "visible" });
+    setStyle({ position:"absolute", top, left, width:popupWidth, zIndex:9999, visibility:"visible" });
   }, [anchorRef]);
 
   return (
-    <div ref={popupRef} style={style}
-      className="pointer-events-none relative">
-      {/* Arrow pointer */}
-      <div
-        className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${
-          pointerSide === "right"
-            ? "-left-4"
-            : "-right-4"
-        }`}
-        style={{
-          borderWidth: "8px",
-          borderStyle: "solid",
-          borderColor: pointerSide === "right" ? "transparent white transparent transparent" : "transparent transparent transparent white",
-        }}
-      />
-      <div className="rounded-xl border border-border bg-white shadow-2xl overflow-hidden flex flex-col max-h-[500px]">
-        <div className="bg-primary px-3 py-2">
-          <p className="text-xs font-bold text-primary-foreground leading-tight line-clamp-1">
-            {maid.nationality ? `${maid.nationality} maid` : "Maid"}{maid.fullName ? `: ${maid.fullName}` : ""}
-          </p>
-          {maid.referenceCode && (
-            <p className="text-[10px] text-primary-foreground/70 font-mono mt-0.5">{maid.referenceCode}</p>
-          )}
-        </div>
-      <div className="p-3 space-y-2 overflow-y-auto flex-1">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {maid.type && (
-            <span className={`inline-block px-1.5 py-px text-[9px] font-bold border rounded ${getMaidTypeBadgeClass(maid.type)}`}>
-              {getTypeLabel(maid.type)}
-            </span>
-          )}
-          {maid.nationality && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-foreground">
-              <FlagCircle code={flagCode} />
-              {maid.nationality}
-            </span>
-          )}
-        </div>
-        <div className="border-t border-border/60" />
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-          {details.englishLevel && <PopupRow label="English" value={details.englishLevel} />}
-          {details.height && <PopupRow label="Height" value={`${details.height} cm`} />}
-          {details.weight && <PopupRow label="Weight" value={`${details.weight} kg`} />}
-          {age !== null && <PopupRow label="Age" value={`${age} yrs`} />}
-          {maid.maritalStatus && <PopupRow label="Status" value={maid.maritalStatus} />}
-          {maid.religion && <PopupRow label="Religion" value={maid.religion} />}
-          {maid.educationLevel && <PopupRow label="Education" value={maid.educationLevel} />}
-          {details.willingOffDays && <PopupRow label="Off-days" value="Willing ✓" valueClass="text-emerald-600 font-semibold" />}
-        </div>
-        {details.langs.length > 0 && (
-          <>
-            <div className="border-t border-border/60" />
+    <div ref={popupRef} style={style} className="pointer-events-none relative">
+      <div className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${pointerSide === "right" ? "-left-4" : "-right-4"}`}
+        style={{ borderWidth:"8px", borderStyle:"solid",
+          borderColor: pointerSide === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
+      <div className="bg-white overflow-hidden flex flex-col max-h-[500px]"
+        style={{ border:`1.5px solid ${C.border}`, boxShadow:"0 20px 60px rgba(12,30,18,0.18)" }}>
+        <div className="px-3 py-2.5" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ width:3, height:32, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})`, borderRadius:2, flexShrink:0 }} />
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Languages</p>
-              <div className="space-y-0.5">
-                {details.langs.slice(0, 4).map((l) => (
-                  <p key={l} className="text-[10px] text-foreground leading-tight">{l}</p>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-        {details.uniqueExp.length > 0 && (
-          <>
-            <div className="border-t border-border/60" />
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Experience</p>
-              <p className="text-[10px] text-foreground">{details.uniqueExp.join(", ")}</p>
-            </div>
-          </>
-        )}
-        {details.workAreas.length > 0 && (
-          <>
-            <div className="border-t border-border/60" />
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Can handle</p>
-              <p className="text-[10px] text-foreground leading-snug line-clamp-2">
-                {details.workAreas.slice(0, 5).join(" · ")}
+              <p className="text-xs font-bold text-white leading-tight line-clamp-1">
+                {maid.nationality ? `${maid.nationality} maid` : "Maid"}{maid.fullName ? `: ${maid.fullName}` : ""}
               </p>
+              {maid.referenceCode && <p style={{ fontSize:10, color:C.yellowWarm, fontFamily:"monospace", marginTop:2 }}>{maid.referenceCode}</p>}
             </div>
-          </>
-        )}
-        {details.bioRaw && (
-          <>
-            <div className="border-t border-border/60" />
-            <p className="text-[10px] text-muted-foreground leading-snug line-clamp-3 italic">
+          </div>
+        </div>
+        <div className="p-3 space-y-2 overflow-y-auto flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {maid.type && <span className={`inline-block px-1.5 py-px text-[9px] font-bold border ${getMaidTypeBadgeClass(maid.type)}`}>{getTypeLabel(maid.type)}</span>}
+            {maid.nationality && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color:C.text }}>
+                <FlagCircle code={flagCode} />{maid.nationality}
+              </span>
+            )}
+          </div>
+          <div style={{ borderTop:`1px solid ${C.border}` }} />
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+            {details.englishLevel && <PopupRow label="English" value={details.englishLevel} />}
+            {details.height && <PopupRow label="Height" value={`${details.height} cm`} />}
+            {details.weight && <PopupRow label="Weight" value={`${details.weight} kg`} />}
+            {age !== null && <PopupRow label="Age" value={`${age} yrs`} />}
+            {maid.maritalStatus && <PopupRow label="Status" value={maid.maritalStatus} />}
+            {maid.religion && <PopupRow label="Religion" value={maid.religion} />}
+            {maid.educationLevel && <PopupRow label="Education" value={maid.educationLevel} />}
+            {details.willingOffDays && <PopupRow label="Off-days" value="Willing ✓" valueClass="font-semibold" valueStyle={{ color:C.greenMid }} />}
+          </div>
+          {details.langs.length > 0 && (
+            <><div style={{ borderTop:`1px solid ${C.border}` }} />
+            <div>
+              <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:4 }}>Languages</p>
+              <div className="space-y-0.5">
+                {details.langs.slice(0, 4).map((l) => <p key={l} style={{ fontSize:10, color:C.text, lineHeight:1.4 }}>{l}</p>)}
+              </div>
+            </div></>
+          )}
+          {details.uniqueExp.length > 0 && (
+            <><div style={{ borderTop:`1px solid ${C.border}` }} />
+            <div>
+              <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:4 }}>Experience</p>
+              <p style={{ fontSize:10, color:C.text }}>{details.uniqueExp.join(", ")}</p>
+            </div></>
+          )}
+          {details.workAreas.length > 0 && (
+            <><div style={{ borderTop:`1px solid ${C.border}` }} />
+            <div>
+              <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:4 }}>Can handle</p>
+              <p style={{ fontSize:10, color:C.text, lineHeight:1.4 }}>{details.workAreas.slice(0, 5).join(" · ")}</p>
+            </div></>
+          )}
+          {details.bioRaw && (
+            <><div style={{ borderTop:`1px solid ${C.border}` }} />
+            <p style={{ fontSize:10, color:C.textMuted, lineHeight:1.5, fontStyle:"italic" }}>
               {details.bioRaw.slice(0, 160)}{details.bioRaw.length > 160 ? "…" : ""}
-            </p>
-          </>
-        )}
-      </div>
+            </p></>
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
-const PopupRow = ({ label, value, valueClass = "" }: { label: string; value: string; valueClass?: string }) => (
+const PopupRow = ({ label, value, valueClass = "", valueStyle }: { label: string; value: string; valueClass?: string; valueStyle?: React.CSSProperties }) => (
   <div className="flex flex-col">
-    <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-    <span className={`text-[10px] text-foreground leading-tight line-clamp-1 ${valueClass}`}>{value}</span>
+    <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted }}>{label}</span>
+    <span className={`text-[10px] leading-tight line-clamp-1 ${valueClass}`} style={{ color:C.text, ...valueStyle }}>{value}</span>
   </div>
 );
 
 // ════════════════════════════════════════════════════════════════════════════
-//  LockedMaidHoverModal — fixed: stays open when moving mouse card → modal
-//  + Employment History table + Skills with star ratings + indicator arrow
+//  LockedMaidHoverModal
 // ════════════════════════════════════════════════════════════════════════════
-const LOCKED_MODAL_WIDTH = 350;
+const LOCKED_MODAL_WIDTH = 340;
 const LOCKED_MODAL_GAP = 10;
 
 const LockedMaidHoverModal = ({
-  maid,
-  loginPath,
-  anchorRect,
-  onClose,
-  onMouseEnter,
-  onMouseLeave,
+  maid, loginPath, anchorRect, onClose, onMouseEnter, onMouseLeave,
 }: {
-  maid: MaidProfile;
-  loginPath: string;
-  anchorRect: DOMRect | null;
-  onClose: () => void;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
+  maid: MaidProfile; loginPath: string; anchorRect: DOMRect | null;
+  onClose: () => void; onMouseEnter: () => void; onMouseLeave: () => void;
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<React.CSSProperties>({ position: "fixed", visibility: "hidden", top: 0, left: 0, width: LOCKED_MODAL_WIDTH, zIndex: 9999 });
-  const [side, setSide] = useState<"right" | "left">("right");
+  const [pos, setPos] = useState<React.CSSProperties>({ position:"fixed", visibility:"hidden", top:0, left:0, width:LOCKED_MODAL_WIDTH, zIndex:9999 });
+  const [side, setSide] = useState<"right"|"left">("right");
 
   useLayoutEffect(() => {
     if (!anchorRect) return;
     const viewportH = window.innerHeight;
     const viewportW = window.innerWidth;
-    const fixedHeight = 500; // Fixed height
-
+    const fixedHeight = 480;
     let left = anchorRect.right + LOCKED_MODAL_GAP;
-    let chosenSide: "right" | "left" = "right";
-    if (left + LOCKED_MODAL_WIDTH > viewportW - 8) {
-      left = anchorRect.left - LOCKED_MODAL_WIDTH - LOCKED_MODAL_GAP;
-      chosenSide = "left";
-    }
+    let chosenSide: "right"|"left" = "right";
+    if (left + LOCKED_MODAL_WIDTH > viewportW - 8) { left = anchorRect.left - LOCKED_MODAL_WIDTH - LOCKED_MODAL_GAP; chosenSide = "left"; }
     left = Math.max(8, left);
-
     let top = anchorRect.top + anchorRect.height / 2 - fixedHeight / 2;
     if (top + fixedHeight > viewportH - 8) top = viewportH - fixedHeight - 8;
     top = Math.max(8, top);
-
     setSide(chosenSide);
-    setPos({ position: "fixed", top, left, width: LOCKED_MODAL_WIDTH, height: fixedHeight, zIndex: 9999, visibility: "visible" });
+    setPos({ position:"fixed", top, left, width:LOCKED_MODAL_WIDTH, height:fixedHeight, zIndex:9999, visibility:"visible" });
   }, [anchorRect]);
 
   const age = calculateAge(maid.dateOfBirth);
   const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
   const agencyContact = (maid.agencyContact as Record<string, unknown>) || {};
   const intro = (maid.introduction as Record<string, unknown>) || {};
-
   const englishLevel = maid.languageSkills
-    ? String(
-        (maid.languageSkills as Record<string, unknown>)["english"] ||
-        (maid.languageSkills as Record<string, unknown>)["English"] || ""
-      ).trim()
-    : "";
+    ? String((maid.languageSkills as Record<string, unknown>)["english"] || (maid.languageSkills as Record<string, unknown>)["English"] || "").trim() : "";
   const agencyName = String(agencyContact["agencyName"] || agencyContact["name"] || "");
   const publicIntro = String(intro["publicIntro"] || intro["publicIntroduction"] || "").trim();
-  const bioRaw = String(
-    sp["remarks"] || intro["remarks"] || sp["biodata"] || intro["biodata"] ||
-    sp["summary"] || intro["summary"] || agencyContact["remarks"] || ""
-  ).trim();
-
-  const empHistory = Array.isArray(maid.employmentHistory)
-    ? (maid.employmentHistory as Record<string, unknown>[])
-    : [];
-
-  // Prefer workAreaRows (have star ratings), fallback to skillRows
+  const bioRaw = String(sp["remarks"] || intro["remarks"] || sp["biodata"] || intro["biodata"] || sp["summary"] || intro["summary"] || agencyContact["remarks"] || "").trim();
+  const empHistory = Array.isArray(maid.employmentHistory) ? (maid.employmentHistory as Record<string, unknown>[]) : [];
   const workAreaRows = getWorkAreaRows(maid);
   const skillRows = getSkillsRows(maid);
   const hasWorkAreaData = workAreaRows.some((r) => r.willing || r.experience || r.evaluation > 0);
   const displayRows: Array<{ name: string; willing: boolean; experience?: boolean; evaluation: number; years?: string }> =
-    hasWorkAreaData ? workAreaRows : skillRows.map((s) => ({ name: s.name, willing: s.willing, evaluation: s.evaluation }));
+    hasWorkAreaData ? workAreaRows : skillRows.map((s) => ({ name:s.name, willing:s.willing, evaluation:s.evaluation }));
 
   return (
-    <div
-      ref={modalRef}
-      style={{ ...pos, overflowY: "auto" }}
-      className="rounded-xl border border-gray-200 bg-white shadow-2xl relative"
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+    <div ref={modalRef} style={{ ...pos, overflowY:"auto", border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 20px 60px rgba(12,30,18,0.20)" }}
+      className="relative"
+      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
     >
-      {/* ── Indicator arrow on the modal edge facing the card ── */}
-      <div
-        className="pointer-events-none absolute top-1/2 -translate-y-1/2"
-        style={{
-          [side === "right" ? "left" : "right"]: -8,
-          width: 0,
-          height: 0,
-          borderWidth: "8px",
-          borderStyle: "solid",
-          borderColor: side === "right" ? "transparent white transparent transparent" : "transparent transparent transparent white",
-        }}
-      />
+      <div className="pointer-events-none absolute top-1/2 -translate-y-1/2"
+        style={{ [side === "right" ? "left" : "right"]:-8, width:0, height:0, borderWidth:"8px", borderStyle:"solid",
+          borderColor: side === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
 
-      {/* ── Header ── */}
-      <div className="sticky top-0 z-10 flex items-start justify-between gap-3 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3 rounded-t-xl">
-        <div className="flex items-start gap-2 flex-1 min-w-0">
-          <div className="mt-0.5 flex-shrink-0 rounded bg-amber-400 p-1.5">
-            <LockIcon className="h-4 w-4 text-blue-700" />
+      {/* Header */}
+      <div className="sticky top-0 z-10 flex items-start justify-between gap-3 px-4 py-3"
+        style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)` }}>
+        <div style={{ position:"absolute", left:0, top:0, bottom:0, width:4, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})` }} />
+        <div className="flex items-start gap-2 flex-1 min-w-0 pl-2">
+          <div className="mt-0.5 flex-shrink-0 p-1.5" style={{ background:C.yellow }}>
+            <span style={{ color:C.dark, display:"flex" }}>
+            <LockIcon className="h-4 w-4" />
+          </span>
           </div>
           <p className="text-sm font-semibold text-white leading-snug">
             Login / Register to see full bio-data and photos
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex-shrink-0 rounded-lg p-1.5 bg-white/20 text-white hover:bg-white/30 transition-colors"
-        >
-          <X className="h-5 w-5" />
+        <button type="button" onClick={onClose} className="flex-shrink-0 p-1.5 text-white/60 hover:text-white transition-colors">
+          <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* ── Login button ── */}
-      <div className="px-4 py-3 bg-white border-b border-gray-100">
-        <Link
-          to={loginPath}
-          className="flex w-full items-center justify-center rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-bold text-black transition-colors hover:bg-amber-500 active:bg-amber-600"
-        >
+      {/* Login button */}
+      <div className="px-4 py-3 border-b" style={{ background:C.white, borderColor:C.border }}>
+        <Link to={loginPath}
+          className="flex w-full items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors"
+          style={{ background:`linear-gradient(135deg, ${C.yellow}, ${C.yellowWarm})`, color:C.dark }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = "0.92")}
+          onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
+          <LockIcon className="h-3.5 w-3.5" />
           Login / Register
         </Link>
       </div>
 
-      {/* ── Identity ── */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-white text-xs space-y-1.5 text-gray-800">
+      {/* Identity */}
+      <div className="px-4 py-3 border-b text-xs space-y-1.5" style={{ background:C.white, borderColor:C.border, color:C.text }}>
         <p>
-          <span className="font-bold text-gray-900">{maid.nationality ? `${maid.nationality}` : "Maid"}:</span>{" "}
-          <span className="font-semibold text-gray-700">{maid.fullName || "—"}</span>
+          <span style={{ fontWeight:800, color:C.text }}>{maid.nationality ? `${maid.nationality}:` : "Maid:"}</span>{" "}
+          <span style={{ fontWeight:600, color:C.textMuted }}>{maid.fullName || "—"}</span>
         </p>
-        {agencyName && (
-          <p><span className="font-bold text-gray-900">Maid Agency:</span> <span className="text-gray-700">{agencyName}</span></p>
-        )}
-        {maid.type && (
-          <p>
-            <span className={`inline-block px-1.5 py-px text-[9px] font-bold border rounded ${getMaidTypeBadgeClass(maid.type)}`}>
-              {getTypeLabel(maid.type)}
-            </span>
-          </p>
-        )}
-        {englishLevel && <p><span className="font-bold text-gray-900">English:</span> <span className="font-semibold text-gray-700">{englishLevel}</span></p>}
-        {age !== null && <p><span className="font-bold text-gray-900">Age:</span> <span className="text-gray-700">{age} yrs</span></p>}
-        {maid.maritalStatus && <p><span className="font-bold text-gray-900">Status:</span> <span className="text-gray-700">{maid.maritalStatus}</span></p>}
-        {maid.religion && <p><span className="font-bold text-gray-900">Religion:</span> <span className="text-gray-700">{maid.religion}</span></p>}
+        {agencyName && <p><span style={{ fontWeight:800 }}>Agency:</span> <span style={{ color:C.textMuted }}>{agencyName}</span></p>}
+        {maid.type && <p><span className={`inline-block px-1.5 py-px text-[9px] font-bold border ${getMaidTypeBadgeClass(maid.type)}`}>{getTypeLabel(maid.type)}</span></p>}
+        {englishLevel && <p><span style={{ fontWeight:800 }}>English:</span> <span style={{ color:C.textMuted }}>{englishLevel}</span></p>}
+        {age !== null && <p><span style={{ fontWeight:800 }}>Age:</span> <span style={{ color:C.textMuted }}>{age} yrs</span></p>}
+        {maid.maritalStatus && <p><span style={{ fontWeight:800 }}>Status:</span> <span style={{ color:C.textMuted }}>{maid.maritalStatus}</span></p>}
+        {maid.religion && <p><span style={{ fontWeight:800 }}>Religion:</span> <span style={{ color:C.textMuted }}>{maid.religion}</span></p>}
         {publicIntro && (
-          <div className="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-900 leading-relaxed">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Public Introduction</p>
-            <p className="whitespace-pre-line">{publicIntro}</p>
+          <div className="mt-2 p-3" style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale }}>
+            <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:"#92680A", marginBottom:4 }}>Public Introduction</p>
+            <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color:"#78560A" }}>{publicIntro}</p>
           </div>
         )}
       </div>
 
-      {/* ── Bio (blurred) ── */}
       {bioRaw && (
-        <div className="px-4 py-3 border-b border-gray-100 bg-white">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-2">About</p>
-          <p className="text-xs text-gray-700 leading-relaxed line-clamp-3 blur-[3px] select-none">{bioRaw}</p>
+        <div className="px-4 py-3 border-b" style={{ background:C.white, borderColor:C.border }}>
+          <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:6 }}>About</p>
+          <p className="text-xs leading-relaxed line-clamp-3 blur-[3px] select-none" style={{ color:C.text }}>{bioRaw}</p>
         </div>
       )}
 
-      {/* ── Employment History ── */}
       {empHistory.length > 0 && (
-        <div className="px-4 py-3 border-b border-gray-100 bg-white">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-2">Employment History</p>
+        <div className="px-4 py-3 border-b" style={{ background:C.white, borderColor:C.border }}>
+          <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:6 }}>Employment History</p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-gray-200 px-2 py-2 text-left font-semibold text-gray-700">From</th>
-                  <th className="border border-gray-200 px-2 py-2 text-left font-semibold text-gray-700">To</th>
-                  <th className="border border-gray-200 px-2 py-2 text-left font-semibold text-gray-700">Country</th>
-                  <th className="border border-gray-200 px-2 py-2 text-left font-semibold text-gray-700">Duties</th>
+                <tr style={{ background:C.surface }}>
+                  {["From","To","Country","Duties"].map(h => (
+                    <th key={h} className="px-2 py-1.5 text-left font-semibold" style={{ border:`1px solid ${C.border}`, color:C.text }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {empHistory.slice(0, 5).map((emp, idx) => {
                   const e = emp as Record<string, unknown>;
-                  const from = String(e["from"] || e["From"] || e["startYear"] || e["startDate"] || "—");
-                  const to = String(e["to"] || e["To"] || e["endYear"] || e["endDate"] || "—");
-                  const country = String(e["country"] || e["Country"] || e["location"] || "—");
-                  const duties = String(e["duties"] || e["Duties"] || e["employer"] || "—");
                   return (
-                    <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                      <td className="border border-gray-200 px-2 py-1.5 text-gray-700 whitespace-nowrap">{from}</td>
-                      <td className="border border-gray-200 px-2 py-1.5 text-gray-700 whitespace-nowrap">{to}</td>
-                      <td className="border border-gray-200 px-2 py-1.5 text-gray-700 blur-[3px] select-none">{country}</td>
-                      <td className="border border-gray-200 px-2 py-1.5 text-gray-600 blur-[3px] select-none max-w-[70px] truncate">{duties}</td>
+                    <tr key={idx} style={{ background: idx % 2 === 0 ? C.white : C.surface }}>
+                      <td className="px-2 py-1.5 whitespace-nowrap" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["from"]||e["From"]||e["startYear"]||e["startDate"]||"—")}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["to"]||e["To"]||e["endYear"]||e["endDate"]||"—")}</td>
+                      <td className="px-2 py-1.5 blur-[3px] select-none" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["country"]||e["Country"]||e["location"]||"—")}</td>
+                      <td className="px-2 py-1.5 blur-[3px] select-none max-w-[70px] truncate" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["duties"]||e["Duties"]||e["employer"]||"—")}</td>
                     </tr>
                   );
                 })}
@@ -529,40 +432,33 @@ const LockedMaidHoverModal = ({
         </div>
       )}
 
-      {/* ── Skills Table with stars ── */}
       {displayRows.length > 0 && (
-        <div className="px-4 py-3 border-b border-gray-100 bg-white">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-2">Skills</p>
+        <div className="px-4 py-3" style={{ background:C.white }}>
+          <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:6 }}>Skills</p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-gray-200 px-2 py-2 text-left font-semibold text-gray-700">Area</th>
-                  <th className="border border-gray-200 px-2 py-2 text-center font-semibold text-gray-700">Willing</th>
-                  <th className="border border-gray-200 px-2 py-2 text-center font-semibold text-gray-700">Exp.</th>
-                  <th className="border border-gray-200 px-2 py-2 text-center font-semibold text-gray-700">Rating</th>
+                <tr style={{ background:C.surface }}>
+                  {["Area","Willing","Exp.","Rating"].map((h, i) => (
+                    <th key={h} className={`px-2 py-1.5 font-semibold ${i === 0 ? "text-left" : "text-center"}`}
+                      style={{ border:`1px solid ${C.border}`, color:C.text }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {displayRows.map((row, idx) => (
-                  <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="border border-gray-200 px-2 py-1.5 text-gray-700 leading-tight">{row.name}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-center">
-                      {row.willing
-                        ? <span className="text-emerald-600 font-bold text-sm">✓</span>
-                        : <span className="text-red-400 font-bold text-sm">✗</span>}
+                  <tr key={idx} style={{ background: idx % 2 === 0 ? C.white : C.surface }}>
+                    <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.text }}>{row.name}</td>
+                    <td className="px-2 py-1.5 text-center" style={{ border:`1px solid ${C.border}` }}>
+                      {row.willing ? <span style={{ color:C.greenMid, fontWeight:800 }}>✓</span> : <span style={{ color:"#EF4444", fontWeight:800 }}>✗</span>}
                     </td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-center">
+                    <td className="px-2 py-1.5 text-center" style={{ border:`1px solid ${C.border}` }}>
                       {"experience" in row
-                        ? (row.experience
-                            ? <span className="text-emerald-600 font-bold text-sm">✓</span>
-                            : <span className="text-gray-300">—</span>)
-                        : <span className="text-gray-300">—</span>}
+                        ? (row.experience ? <span style={{ color:C.greenMid, fontWeight:800 }}>✓</span> : <span style={{ color:C.border }}>—</span>)
+                        : <span style={{ color:C.border }}>—</span>}
                     </td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-center">
-                      {row.evaluation > 0
-                        ? <StarRating count={row.evaluation} />
-                        : <span className="text-gray-300 text-[10px]">N/A</span>}
+                    <td className="px-2 py-1.5 text-center" style={{ border:`1px solid ${C.border}` }}>
+                      {row.evaluation > 0 ? <StarRating count={row.evaluation} /> : <span style={{ color:C.border, fontSize:10 }}>N/A</span>}
                     </td>
                   </tr>
                 ))}
@@ -576,8 +472,7 @@ const LockedMaidHoverModal = ({
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-//  LockedMaidCard — fixed hover: card + modal share hover state via refs +
-//  debounce timer, pulsing indicator dot points toward modal
+//  LockedMaidCard
 // ════════════════════════════════════════════════════════════════════════════
 const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: MaidProfile; loginPath: string; disableHoverModal?: boolean }) => {
   const photo = getPrimaryPhoto(maid);
@@ -586,7 +481,6 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
   const [isOpen, setIsOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const cardRef = useRef<HTMLElement>(null);
-
   const cardHovered = useRef(false);
   const modalHovered = useRef(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -605,7 +499,6 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
     }, 120);
   }, [disableHoverModal]);
 
-  // Keep anchorRect in sync on scroll/resize
   useEffect(() => {
     if (!isOpen) return;
     const update = () => { if (cardRef.current) setAnchorRect(cardRef.current.getBoundingClientRect()); };
@@ -614,83 +507,70 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
     return () => { window.removeEventListener("scroll", update, true); window.removeEventListener("resize", update); };
   }, [isOpen]);
 
-  // Determine which side modal opens so indicator dot is on correct edge
-  const arrowSide = anchorRect && anchorRect.right + LOCKED_MODAL_GAP + LOCKED_MODAL_WIDTH > window.innerWidth - 8
-    ? "left" : "right";
+  const arrowSide = anchorRect && anchorRect.right + LOCKED_MODAL_GAP + LOCKED_MODAL_WIDTH > window.innerWidth - 8 ? "left" : "right";
 
   return (
     <>
       <article
         ref={cardRef as React.RefObject<HTMLElement>}
-        className="group relative flex flex-col overflow-visible border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer"
+        className="group relative flex flex-col overflow-visible cursor-pointer transition-all"
+        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}
         onMouseEnter={disableHoverModal ? undefined : () => { cardHovered.current = true; openModal(); }}
         onMouseLeave={disableHoverModal ? undefined : () => { cardHovered.current = false; scheduleClose(); }}
       >
-        {/* Pulsing indicator dot on the edge facing the modal */}
         {isOpen && (
-          <div
-            className="absolute top-1/2 -translate-y-1/2 z-10"
-            style={{ [arrowSide === "right" ? "right" : "left"]: -6 }}
-          >
+          <div className="absolute top-1/2 -translate-y-1/2 z-10"
+            style={{ [arrowSide === "right" ? "right" : "left"]:-6 }}>
             <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background:C.yellow }} />
+              <span className="relative inline-flex rounded-full h-3 w-3" style={{ background:C.yellow }} />
             </span>
           </div>
         )}
-
         <div className="relative w-full select-none pointer-events-none overflow-hidden">
           {photo ? (
             <img src={photo} alt="Maid profile" loading="lazy" decoding="async"
               className="block w-full h-auto"
-              style={{ aspectRatio: "3/4", objectFit: "contain", objectPosition: "top center",
-                minHeight: 130, background: "#fff", filter: "blur(10px)", opacity: 0.9, transform: "scale(1.05)" }}
+              style={{ aspectRatio:"3/4", objectFit:"contain", objectPosition:"top center", minHeight:130,
+                background:C.white, filter:"blur(10px)", opacity:0.9, transform:"scale(1.05)" }}
             />
           ) : (
-            <div className="w-full flex items-center justify-center bg-gray-100" style={{ aspectRatio: "3/4", minHeight: 130 }}>
-              <svg className="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                <path strokeLinecap="round" strokeLinejoin="round"
-                  d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            <div className="w-full flex items-center justify-center" style={{ aspectRatio:"3/4", minHeight:130, background:C.surface }}>
+              <svg className="h-10 w-10" style={{ color:C.border }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
               </svg>
             </div>
           )}
           {maid.type && (
-            <div className="absolute top-1.5 left-1.5" style={{ filter: "blur(3px)" }}>
-              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 ${typeColorClass}`}>
-                {getTypeLabel(maid.type)}
-              </span>
+            <div className="absolute top-0 left-0" style={{ filter:"blur(3px)" }}>
+              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 ${typeColorClass}`}>{getTypeLabel(maid.type)}</span>
             </div>
           )}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-            <div className="rounded-full bg-black/40 p-2 backdrop-blur-sm">
+            <div className="p-2" style={{ background:"rgba(12,30,18,0.50)", backdropFilter:"blur(2px)" }}>
               <LockIcon className="h-4 w-4 text-white" />
             </div>
           </div>
         </div>
-
-        <div className="flex flex-col gap-1 p-2.5 flex-1 bg-white">
-          <div className="h-2.5 w-3/4 bg-gray-200 rounded blur-[3px] select-none" />
-          <div className="mt-1 h-2 w-1/2 bg-gray-200 rounded blur-[3px] select-none" />
+        <div className="flex flex-col gap-1 p-2.5 flex-1" style={{ background:C.white }}>
+          <div className="h-2.5 w-3/4 blur-[3px] select-none" style={{ background:C.border }} />
+          <div className="mt-1 h-2 w-1/2 blur-[3px] select-none" style={{ background:C.border }} />
           <div className="mt-1 flex gap-1">
-            <div className="h-4 w-12 bg-gray-200 rounded blur-[3px] select-none" />
-            <div className="h-4 w-8 bg-gray-200 rounded blur-[3px] select-none" />
+            <div className="h-4 w-12 blur-[3px] select-none" style={{ background:C.border }} />
+            <div className="h-4 w-8 blur-[3px] select-none" style={{ background:C.border }} />
           </div>
         </div>
-
         <div className="px-2 pb-2 pt-0 pointer-events-auto">
           <Link to={loginPath}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90 active:bg-primary/80">
-            <LockIcon className="h-3 w-3" />
-            Log in to view
+            className="flex w-full items-center justify-center gap-1.5 px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-white transition-colors"
+            style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)` }}>
+            <LockIcon className="h-3 w-3" />Log in to view
           </Link>
         </div>
       </article>
-
       {isOpen && !disableHoverModal && (
         <LockedMaidHoverModal
-          maid={maid}
-          loginPath={loginPath}
-          anchorRect={anchorRect}
+          maid={maid} loginPath={loginPath} anchorRect={anchorRect}
           onClose={() => { cardHovered.current = false; modalHovered.current = false; if (closeTimer.current) clearTimeout(closeTimer.current); setIsOpen(false); }}
           onMouseEnter={() => { modalHovered.current = true; if (closeTimer.current) clearTimeout(closeTimer.current); }}
           onMouseLeave={() => { modalHovered.current = false; scheduleClose(); }}
@@ -705,8 +585,7 @@ const MaidCard = ({
   maid, isShortlisted, onToggleShortlist, onNavigate, isLoggedIn, loginPath, showCategory, disableHoverPopup = false,
 }: {
   maid: MaidProfile; isShortlisted: boolean; onToggleShortlist: (ref: string) => void;
-  onNavigate?: () => void; isLoggedIn: boolean; loginPath: string; showCategory?: boolean;
-  disableHoverPopup?: boolean;
+  onNavigate?: () => void; isLoggedIn: boolean; loginPath: string; showCategory?: boolean; disableHoverPopup?: boolean;
 }) => {
   if (!isLoggedIn) return <LockedMaidCard maid={maid} loginPath={loginPath} disableHoverModal={disableHoverPopup} />;
 
@@ -736,69 +615,291 @@ const MaidCard = ({
     <>
       <article
         ref={cardRef}
-        className="group flex flex-col overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/50 cursor-pointer"
+        className="group flex flex-col overflow-hidden cursor-pointer transition-all"
+        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <div className="relative w-full bg-white overflow-hidden">
+        <div className="relative w-full overflow-hidden" style={{ background:C.white }}>
           <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
             {photo ? (
               <img src={photo} alt={maid.fullName}
-                className="block w-full h-auto"
-                style={{ aspectRatio: "3/4", objectFit: "contain", objectPosition: "top center", minHeight: 130, background: "#fff" }}
+                className="block w-full h-auto transition-transform duration-300 group-hover:scale-[1.03]"
+                style={{ aspectRatio:"3/4", objectFit:"contain", objectPosition:"top center", minHeight:130, background:C.white }}
                 loading="lazy" decoding="async"
               />
             ) : (
-              <div className="w-full flex items-center justify-center bg-gray-50" style={{ aspectRatio: "3/4", minHeight: 130 }}>
-                <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round"
-                    d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              <div className="w-full flex items-center justify-center" style={{ aspectRatio:"3/4", minHeight:130, background:C.surface }}>
+                <svg className="h-8 w-8" style={{ color:C.border }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                 </svg>
               </div>
             )}
           </Link>
           {maid.type && (
-            <div className="absolute top-1.5 left-1.5">
-              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>
-                {getTypeLabel(maid.type)}
-              </span>
+            <div className="absolute top-0 left-0">
+              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>{getTypeLabel(maid.type)}</span>
             </div>
           )}
           <button
             onClick={(e) => { e.preventDefault(); onToggleShortlist(maid.referenceCode); }}
             className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
-              isShortlisted ? "bg-amber-500" : "bg-black/60 opacity-0 group-hover:opacity-100"
+              isShortlisted ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
+            style={{ background: isShortlisted ? C.yellow : "rgba(12,30,18,0.75)" }}
           >
-            <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-white" : ""}`} />
-            {isShortlisted ? "Shortlisted" : "Shortlist"}
+            <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-current" : ""}`}
+              style={{ color: isShortlisted ? C.dark : C.white }} />
+            <span style={{ color: isShortlisted ? C.dark : C.white }}>{isShortlisted ? "Shortlisted" : "Shortlist"}</span>
           </button>
         </div>
 
-        <div className="flex flex-col gap-0.5 p-2.5 flex-1 bg-white">
-          <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">{maid.fullName || "Unnamed maid"}</h3>
-          {maid.referenceCode && <p className="text-[9px] text-gray-600 font-mono leading-tight">{maid.referenceCode}</p>}
+        <div className="flex flex-col gap-0.5 p-2.5 flex-1" style={{ background:C.white }}>
+          <h3 className="text-xs font-bold line-clamp-1 leading-tight" style={{ color:C.text }}>{maid.fullName || "Unnamed maid"}</h3>
+          {maid.referenceCode && <p className="text-[9px] font-mono leading-tight" style={{ color:C.textMuted }}>{maid.referenceCode}</p>}
           {displayLabel && (
             <p className="inline-flex items-center gap-1 text-[10px] leading-tight mt-0.5">
               <FlagCircle code={flagCode} />
-              <span className="font-semibold text-black">{displayLabel}</span>
+              <span className="font-semibold" style={{ color:C.text }}>{displayLabel}</span>
             </p>
           )}
-          <div className="my-1 border-t border-gray-100" />
-          <div className="flex items-center gap-1.5 text-[10px] text-gray-500 leading-tight">
-            {age !== null && <span className="font-medium text-black">({age}) yrs</span>}
-            {age !== null && maid.maritalStatus && <span className="text-gray-300">·</span>}
-            {maid.maritalStatus && <span className="truncate text-black">{maid.maritalStatus}</span>}
+          <div className="my-1" style={{ borderTop:`1px solid ${C.border}` }} />
+          <div className="flex items-center gap-1.5 text-[10px] leading-tight" style={{ color:C.textMuted }}>
+            {age !== null && <span className="font-medium" style={{ color:C.text }}>({age}) yrs</span>}
+            {age !== null && maid.maritalStatus && <span style={{ color:C.border }}>·</span>}
+            {maid.maritalStatus && <span className="truncate" style={{ color:C.text }}>{maid.maritalStatus}</span>}
           </div>
-          {maid.religion && <p className="text-[9px] text-black leading-tight line-clamp-1">{maid.religion}</p>}
-          {experienceBucket && <p className="text-[9px] text-black leading-tight mt-0.5 line-clamp-1">{experienceBucket}</p>}
+          {maid.religion && <p className="text-[9px] leading-tight line-clamp-1" style={{ color:C.text }}>{maid.religion}</p>}
+          {experienceBucket && <p className="text-[9px] leading-tight mt-0.5 line-clamp-1" style={{ color:C.text }}>{experienceBucket}</p>}
         </div>
       </article>
-
       {hovered && cardRef.current && !disableHoverPopup && (
         <MaidHoverPopup maid={maid} anchorRef={cardRef as React.RefObject<HTMLElement>} />
       )}
     </>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Improved Shortlist Dialog
+// ════════════════════════════════════════════════════════════════════════════
+const ShortlistDialog = ({
+  open, onOpenChange, shortlistRefs, shortlistedMaids, missingShortlistRefs,
+  onToggleShortlist, isLoggedIn, loginPath, isIndianSubcategoryActive, isShortlistOpen, setIsShortlistOpen,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void;
+  shortlistRefs: string[]; shortlistedMaids: MaidProfile[]; missingShortlistRefs: string[];
+  onToggleShortlist: (ref: string) => void;
+  isLoggedIn: boolean; loginPath: string; isIndianSubcategoryActive: boolean;
+  isShortlistOpen: boolean; setIsShortlistOpen: (v: boolean) => void;
+}) => {
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const handleClearAll = () => {
+    if (!confirmClear) { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 3000); return; }
+    shortlistRefs.forEach((ref) => onToggleShortlist(ref));
+    setConfirmClear(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="p-0 gap-0 overflow-hidden [&>button:last-child]:hidden"
+        style={{
+          maxWidth:860,
+          border:`1.5px solid ${C.border}`,
+          borderRadius:20,
+          boxShadow:`0 32px 80px rgba(12,30,18,0.22), 0 4px 20px rgba(12,30,18,0.10)`,
+          background:C.white,
+        }}
+      >
+        {/* ── Modal header ── */}
+        <div style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)`, position:"relative", overflow:"hidden" }}>
+          {/* Yellow left accent */}
+          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:5, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})` }} />
+          {/* Decorative circles */}
+          <div style={{ position:"absolute", right:-30, top:-30, width:130, height:130, borderRadius:"50%", background:"rgba(245,196,0,0.07)" }} />
+          <div style={{ position:"absolute", right:50, bottom:-50, width:100, height:100, borderRadius:"50%", background:"rgba(30,138,76,0.10)" }} />
+
+          <div className="flex items-center justify-between px-6 py-4 pl-8" style={{ position:"relative" }}>
+            <div className="flex items-center gap-4">
+              <div style={{
+                width:46, height:46, borderRadius:13, flexShrink:0,
+                background:"rgba(245,196,0,0.18)", border:`1.5px solid rgba(245,196,0,0.32)`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+              }}>
+                <Star className="h-5 w-5" style={{ color:C.yellowWarm, fill:C.yellowWarm }} />
+              </div>
+              <div>
+                <DialogTitle className="text-white font-bold text-lg leading-tight m-0" style={{ letterSpacing:"-0.2px" }}>
+                  My Shortlist
+                </DialogTitle>
+                <DialogDescription className="text-white/60 text-xs font-medium mt-0.5">
+                  {shortlistRefs.length === 0
+                    ? "No profiles saved yet"
+                    : `${shortlistRefs.length} profile${shortlistRefs.length !== 1 ? "s" : ""} saved · compare your favourites`}
+                </DialogDescription>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {shortlistRefs.length > 0 && (
+                <div style={{
+                  padding:"4px 14px", borderRadius:30,
+                  background:`linear-gradient(135deg, ${C.yellow}, ${C.yellowWarm})`,
+                  color:C.dark, fontSize:13, fontWeight:900,
+                }}>
+                  {shortlistRefs.length}
+                </div>
+              )}
+              <DialogClose asChild>
+                <button className="p-1.5 transition-colors" style={{ color:"rgba(255,255,255,0.5)", background:"rgba(255,255,255,0.08)", borderRadius:8, border:"none", cursor:"pointer" }}
+                  onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.9)")}
+                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}>
+                  <X className="h-4 w-4" />
+                </button>
+              </DialogClose>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Empty state ── */}
+        {shortlistRefs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
+            <div style={{
+              width:72, height:72, borderRadius:20, marginBottom:16,
+              background:C.greenPale, border:`1.5px solid ${C.greenBorder}`,
+              display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              <Star className="h-8 w-8" style={{ color:C.greenMid }} />
+            </div>
+            <p className="font-bold text-lg mb-2" style={{ color:C.text }}>Your shortlist is empty</p>
+            <p className="text-sm mb-6 max-w-sm" style={{ color:C.textMuted }}>
+              Hover over any maid profile and tap the <strong style={{ color:C.yellow }}>★ Shortlist</strong> button to save them here for easy comparison.
+            </p>
+            <button type="button" onClick={() => onOpenChange(false)}
+              className="font-bold text-sm px-6 py-2.5 transition-all"
+              style={{ background:`linear-gradient(135deg, ${C.green}, ${C.greenMid})`, color:C.white, borderRadius:10, border:"none", cursor:"pointer", boxShadow:`0 4px 16px rgba(22,101,58,0.35)` }}>
+              Browse Profiles
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* ── Card grid ── */}
+            <div style={{ maxHeight:"62vh", overflowY:"auto", padding:"20px 24px 0" }}>
+              {missingShortlistRefs.length > 0 && (
+                <div className="mb-4 flex items-center gap-2 px-3 py-2 text-sm"
+                  style={{ background:C.yellowPale, border:`1px solid ${C.yellowBorder}`, borderRadius:10, color:"#92680A" }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.yellow, flexShrink:0, display:"inline-block" }} />
+                  {missingShortlistRefs.length} profile{missingShortlistRefs.length !== 1 ? "s" : ""} in your list could not be found
+                </div>
+              )}
+
+              <div className="grid gap-3" style={{ gridTemplateColumns:"repeat(auto-fill, minmax(140px, 1fr))" }}>
+                {shortlistedMaids.map((maid) => (
+                  <div key={`sl-${maid.referenceCode}`} className="relative group/card">
+                    <MaidCard
+                      maid={maid}
+                      isShortlisted={true}
+                      onToggleShortlist={onToggleShortlist}
+                      onNavigate={() => onOpenChange(false)}
+                      isLoggedIn={isLoggedIn}
+                      loginPath={loginPath}
+                      showCategory={isIndianSubcategoryActive}
+                      disableHoverPopup={true}
+                    />
+                    {/* Quick-remove overlay */}
+                    <button
+                      onClick={() => onToggleShortlist(maid.referenceCode)}
+                      title="Remove from shortlist"
+                      className="absolute top-1.5 right-1.5 opacity-0 group-hover/card:opacity-100 transition-all"
+                      style={{
+                        width:22, height:22, borderRadius:6,
+                        background:"rgba(239,68,68,0.90)", border:"none",
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        cursor:"pointer", color:"white",
+                      }}
+                    >
+                      <X style={{ width:12, height:12 }} />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Missing refs */}
+                {missingShortlistRefs.map((ref) => (
+                  <div key={`missing-${ref}`}
+                    className="flex flex-col items-center justify-center gap-2 text-center p-4"
+                    style={{
+                      border:`1.5px dashed ${C.yellowBorder}`,
+                      background:C.yellowPale, borderRadius:12,
+                      minHeight:160,
+                    }}>
+                    <div style={{ width:34, height:34, borderRadius:10, background:"rgba(245,196,0,0.20)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg style={{ width:16, height:16, color:"#B45309" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
+                      </svg>
+                    </div>
+                    <p className="font-mono text-[10px] break-all" style={{ color:"#92680A" }}>{ref}</p>
+                    <p style={{ fontSize:11, color:"#B45309" }}>Not found</p>
+                    <button type="button" onClick={() => onToggleShortlist(ref)}
+                      style={{ fontSize:11, fontWeight:700, color:"#B45309", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Footer ── */}
+            <div style={{
+              padding:"16px 24px", borderTop:`1px solid ${C.border}`,
+              background:C.surface,
+              display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap",
+            }}>
+              {/* Left: count info */}
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{
+                  padding:"4px 12px", borderRadius:30, fontSize:12, fontWeight:800,
+                  background:C.greenPale, border:`1px solid ${C.greenBorder}`,
+                  color:C.green, display:"flex", alignItems:"center", gap:6,
+                }}>
+                  <CheckCircle2 style={{ width:13, height:13 }} />
+                  {shortlistedMaids.length} saved
+                </div>
+                {missingShortlistRefs.length > 0 && (
+                  <span style={{ fontSize:12, color:C.textMuted }}>· {missingShortlistRefs.length} missing</span>
+                )}
+              </div>
+
+              {/* Right: actions */}
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <button type="button" onClick={() => onOpenChange(false)}
+                  className="font-semibold text-sm px-4 py-2 transition-colors"
+                  style={{
+                    border:`1.5px solid ${C.border}`, background:C.white, color:C.text,
+                    borderRadius:9, cursor:"pointer",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = C.surface)}
+                  onMouseLeave={e => (e.currentTarget.style.background = C.white)}>
+                  Continue browsing
+                </button>
+                <button type="button" onClick={handleClearAll}
+                  className="font-bold text-sm px-4 py-2 transition-all flex items-center gap-2"
+                  style={{
+                    borderRadius:9, border:"none", cursor:"pointer",
+                    background: confirmClear ? "#EF4444" : C.yellowPale,
+                    color: confirmClear ? C.white : "#92680A",
+                    boxShadow: confirmClear ? "0 4px 16px rgba(239,68,68,0.35)" : "none",
+                  }}>
+                  <Trash2 style={{ width:14, height:14 }} />
+                  {confirmClear ? "Tap again to confirm" : "Clear all"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -860,27 +961,27 @@ const MaidSearchPage = ({
 
   const filteredMaids = useMemo(() => {
     const draft: ClientDraft = advancedFilters ?? {
-      keyword: committedFilters.keyword, agencyPreference: "No Preference", biodataCreatedWithin: "No Preference",
-      maidType: committedFilters.maidType, willingOffDays: committedFilters.willingOffDays, hasChildren: false, withVideo: false,
-      natFilipino: committedFilters.nationality === "Filipino", natIndonesian: committedFilters.nationality === "Indonesian",
-      natMyanmar: committedFilters.nationality === "Myanmar", natIndian: committedFilters.nationality === "Indian",
-      natSriLankan: committedFilters.nationality === "Sri Lankan", natCambodian: committedFilters.nationality === "Cambodian",
-      natBangladeshi: committedFilters.nationality === "Bangladeshi", natOthers: committedFilters.nationality === "Others",
-      natNoPreference: committedFilters.nationality === "No Preference",
-      expHomeCountry: false, expSingapore: false, expMalaysia: false, expHongKong: false,
-      expTaiwan: false, expMiddleEast: false, expOtherCountries: false, expNoPreference: true,
-      dutyCareInfant: false, dutyCareYoungChildren: false, dutyCareElderlyDisabled: false,
-      dutyCooking: false, dutyGeneralHousekeeping: false, dutyNoPreference: true,
-      eduCollege: false, eduHighSchool: false, eduSecondary: false, eduPrimary: false, eduNoPreference: true,
-      langEnglish: committedFilters.language === "English", langMandarin: committedFilters.language === "Mandarin",
-      langBahasaIndonesia: committedFilters.language === "Bahasa Indonesia / Malay",
-      langHindi: committedFilters.language === "Hindi", langTamil: committedFilters.language === "Tamil",
-      langNoPreference: committedFilters.language === "No Preference",
-      age21to25: false, age26to30: false, age31to35: false, age36to40: false, age41above: false, ageNoPreference: true,
-      marSingle: false, marMarried: false, marWidowed: false, marDivorced: false, marSeparated: false, marNoPreference: true,
-      height150below: false, height151to155: false, height156to160: false, height161above: false, heightNoPreference: true,
-      relFreeThinker: false, relChristian: false, relCatholic: false, relBuddhist: false,
-      relMuslim: false, relHindu: false, relSikh: false, relOthers: false, relNoPreference: true,
+      keyword:committedFilters.keyword, agencyPreference:"No Preference", biodataCreatedWithin:"No Preference",
+      maidType:committedFilters.maidType, willingOffDays:committedFilters.willingOffDays, hasChildren:false, withVideo:false,
+      natFilipino:committedFilters.nationality==="Filipino", natIndonesian:committedFilters.nationality==="Indonesian",
+      natMyanmar:committedFilters.nationality==="Myanmar", natIndian:committedFilters.nationality==="Indian",
+      natSriLankan:committedFilters.nationality==="Sri Lankan", natCambodian:committedFilters.nationality==="Cambodian",
+      natBangladeshi:committedFilters.nationality==="Bangladeshi", natOthers:committedFilters.nationality==="Others",
+      natNoPreference:committedFilters.nationality==="No Preference",
+      expHomeCountry:false, expSingapore:false, expMalaysia:false, expHongKong:false,
+      expTaiwan:false, expMiddleEast:false, expOtherCountries:false, expNoPreference:true,
+      dutyCareInfant:false, dutyCareYoungChildren:false, dutyCareElderlyDisabled:false,
+      dutyCooking:false, dutyGeneralHousekeeping:false, dutyNoPreference:true,
+      eduCollege:false, eduHighSchool:false, eduSecondary:false, eduPrimary:false, eduNoPreference:true,
+      langEnglish:committedFilters.language==="English", langMandarin:committedFilters.language==="Mandarin",
+      langBahasaIndonesia:committedFilters.language==="Bahasa Indonesia / Malay",
+      langHindi:committedFilters.language==="Hindi", langTamil:committedFilters.language==="Tamil",
+      langNoPreference:committedFilters.language==="No Preference",
+      age21to25:false, age26to30:false, age31to35:false, age36to40:false, age41above:false, ageNoPreference:true,
+      marSingle:false, marMarried:false, marWidowed:false, marDivorced:false, marSeparated:false, marNoPreference:true,
+      height150below:false, height151to155:false, height156to160:false, height161above:false, heightNoPreference:true,
+      relFreeThinker:false, relChristian:false, relCatholic:false, relBuddhist:false,
+      relMuslim:false, relHindu:false, relSikh:false, relOthers:false, relNoPreference:true,
     };
     let result = filterMaidsByDraft(allMaids, draft);
     if (quickLink) result = result.filter((m) => matchesQuickLink(m, quickLink));
@@ -932,22 +1033,22 @@ const MaidSearchPage = ({
     const items: string[] = [];
     if (advancedFilters.keyword?.trim()) items.push(`"${advancedFilters.keyword.trim()}"`);
     if (advancedFilters.maidType) items.push(advancedFilters.maidType);
-    const nats = [advancedFilters.natFilipino && "Filipino", advancedFilters.natIndonesian && "Indonesian",
-      advancedFilters.natMyanmar && "Myanmar", advancedFilters.natIndian && "Indian",
-      advancedFilters.natSriLankan && "Sri Lankan", advancedFilters.natCambodian && "Cambodian",
-      advancedFilters.natBangladeshi && "Bangladeshi"].filter(Boolean) as string[];
+    const nats = [advancedFilters.natFilipino&&"Filipino",advancedFilters.natIndonesian&&"Indonesian",
+      advancedFilters.natMyanmar&&"Myanmar",advancedFilters.natIndian&&"Indian",
+      advancedFilters.natSriLankan&&"Sri Lankan",advancedFilters.natCambodian&&"Cambodian",
+      advancedFilters.natBangladeshi&&"Bangladeshi"].filter(Boolean) as string[];
     if (nats.length) items.push(nats.join(" / "));
-    const duties = [advancedFilters.dutyCareInfant && "Infant care", advancedFilters.dutyCareYoungChildren && "Young children",
-      advancedFilters.dutyCareElderlyDisabled && "Elderly", advancedFilters.dutyCooking && "Cooking",
-      advancedFilters.dutyGeneralHousekeeping && "Housekeeping"].filter(Boolean) as string[];
+    const duties = [advancedFilters.dutyCareInfant&&"Infant care",advancedFilters.dutyCareYoungChildren&&"Young children",
+      advancedFilters.dutyCareElderlyDisabled&&"Elderly",advancedFilters.dutyCooking&&"Cooking",
+      advancedFilters.dutyGeneralHousekeeping&&"Housekeeping"].filter(Boolean) as string[];
     if (duties.length) items.push(duties.join(", "));
-    const langs = [advancedFilters.langEnglish && "English", advancedFilters.langMandarin && "Mandarin",
-      advancedFilters.langBahasaIndonesia && "Bahasa", advancedFilters.langHindi && "Hindi",
-      advancedFilters.langTamil && "Tamil"].filter(Boolean) as string[];
+    const langs = [advancedFilters.langEnglish&&"English",advancedFilters.langMandarin&&"Mandarin",
+      advancedFilters.langBahasaIndonesia&&"Bahasa",advancedFilters.langHindi&&"Hindi",
+      advancedFilters.langTamil&&"Tamil"].filter(Boolean) as string[];
     if (langs.length) items.push(langs.join(" / "));
-    const exps = [advancedFilters.expSingapore && "Singapore exp.", advancedFilters.expMalaysia && "Malaysia exp.",
-      advancedFilters.expHongKong && "HK exp.", advancedFilters.expTaiwan && "Taiwan exp.",
-      advancedFilters.expMiddleEast && "Middle East exp."].filter(Boolean) as string[];
+    const exps = [advancedFilters.expSingapore&&"Singapore exp.",advancedFilters.expMalaysia&&"Malaysia exp.",
+      advancedFilters.expHongKong&&"HK exp.",advancedFilters.expTaiwan&&"Taiwan exp.",
+      advancedFilters.expMiddleEast&&"Middle East exp."].filter(Boolean) as string[];
     if (exps.length) items.push(exps.join(", "));
     if (advancedFilters.willingOffDays) items.push("Off-days OK");
     if (advancedFilters.withVideo) items.push("Has video");
@@ -986,102 +1087,157 @@ const MaidSearchPage = ({
     setSearchParams(new URLSearchParams());
   };
 
-  const selectCls = (active: boolean) =>
-    `w-full rounded border px-2 py-1.5 text-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary/30 ${
-      active ? "border-primary/50 bg-primary/5 font-medium text-foreground" : "border-border bg-background text-foreground"
-    }`;
-
+  // ── Sidebar ──────────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <div className="space-y-0">
-      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-        <div className="bg-primary px-3 py-2">
-          <p className="text-sm font-bold text-primary-foreground">
-            Maid <span className="font-normal opacity-90">Search</span>
-          </p>
+      <div className="overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 12px rgba(12,30,18,0.08)" }}>
+        {/* Header */}
+        <div className="px-4 py-3" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)`, position:"relative" }}>
+          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:4, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})` }} />
+          <div className="flex items-center gap-2 pl-2">
+            <Search className="h-3.5 w-3.5" style={{ color:C.yellow }} />
+            <p className="text-sm font-black tracking-wide" style={{ color:C.white, letterSpacing:"0.05em" }}>
+              MAID <span style={{ color:C.yellowWarm }}>SEARCH</span>
+            </p>
+          </div>
+          <p className="text-[10px] mt-0.5 pl-2" style={{ color:"rgba(255,255,255,0.55)" }}>Find your perfect household helper</p>
         </div>
-        <div className="space-y-3 p-3">
-          <input value={filters.keyword}
-            onChange={(e) => setFilters((p) => ({ ...p, keyword: e.target.value }))}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="Filipino maid, baby sitter, etc."
-            className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
-          />
+
+        <div className="space-y-3 p-3" style={{ background:C.white }}>
+          {/* Keyword */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none" style={{ color:C.textMuted }} />
+            <input value={filters.keyword}
+              onChange={(e) => setFilters((p) => ({ ...p, keyword:e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Filipino maid, baby sitter…"
+              className="w-full pl-8 pr-3 py-2 text-sm focus:outline-none transition-colors"
+              style={{ border:`1.5px solid ${C.border}`, background:C.surface, color:C.text }}
+            />
+          </div>
+
+          {/* Maid Type */}
           <div>
-            <p className="mb-1.5 text-xs font-semibold text-foreground">Maid Type</p>
-            <div className="space-y-1">
-              {MAID_TYPES.map((type) => (
-                <label key={type} className="flex cursor-pointer items-center gap-2">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Maid Type</p>
+            <div className="space-y-0 overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
+              {MAID_TYPES.map((type, i) => (
+                <label key={type}
+                  className="flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors"
+                  style={{
+                    background: filters.maidType === type ? C.dark : C.white,
+                    color: filters.maidType === type ? C.white : C.text,
+                    borderTop: i > 0 ? `1px solid ${C.border}` : "none",
+                  }}>
                   <input type="radio" name="maidType" value={type}
                     checked={filters.maidType === type}
-                    onChange={() => setFilters((p) => ({ ...p, maidType: p.maidType === type ? "" : type }))}
-                    className="h-3.5 w-3.5 accent-primary"
-                  />
-                  <span className="text-sm text-foreground">{type}</span>
+                    onChange={() => setFilters((p) => ({ ...p, maidType:p.maidType===type ? "" : type }))}
+                    className="sr-only" />
+                  <span style={{
+                    width:14, height:14, border:`2px solid ${filters.maidType===type ? C.yellow : C.border}`,
+                    background: filters.maidType===type ? C.yellow : C.white,
+                    display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, transition:"all .15s",
+                  }}>
+                    {filters.maidType === type && <span style={{ display:"block", width:6, height:6, background:C.dark }} />}
+                  </span>
+                  <span className="text-sm font-medium">{type}</span>
                 </label>
               ))}
-              {/* <label className="flex cursor-pointer items-center gap-2">
-                <input type="checkbox" checked={filters.willingOffDays}
-                  onChange={() => setFilters((p) => ({ ...p, willingOffDays: !p.willingOffDays }))}
-                  className="h-3.5 w-3.5 accent-primary"
-                />
-                <span className="text-sm text-foreground">Willing to work on off-days</span>
-              </label> */}
             </div>
           </div>
+
+          {/* Nationality */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-foreground">Nationality</label>
-            <select className={selectCls(filters.nationality !== "No Preference")}
-              value={filters.nationality}
-              onChange={(e) => setFilters((p) => ({ ...p, nationality: e.target.value }))}>
-              <option>No Preference</option>
-              <option>Filipino</option><option>Indonesian</option><option>Myanmar</option>
-              <option>Indian</option><option>Sri Lankan</option><option>Cambodian</option>
-              <option>Bangladeshi</option><option>Others</option>
-            </select>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Nationality</label>
+            <div className="relative">
+              <select
+                className="w-full appearance-none px-3 py-2 text-sm pr-8 focus:outline-none transition-colors"
+                style={{
+                  border:`1.5px solid ${filters.nationality!=="No Preference" ? C.green : C.border}`,
+                  background: filters.nationality!=="No Preference" ? C.dark : C.white,
+                  color: filters.nationality!=="No Preference" ? C.white : C.text,
+                  fontWeight: filters.nationality!=="No Preference" ? 700 : 400,
+                }}
+                value={filters.nationality}
+                onChange={(e) => setFilters((p) => ({ ...p, nationality:e.target.value }))}>
+                <option>No Preference</option>
+                <option>Filipino</option><option>Indonesian</option><option>Myanmar</option>
+                <option>Indian</option><option>Sri Lankan</option><option>Cambodian</option>
+                <option>Bangladeshi</option><option>Others</option>
+              </select>
+              <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 rotate-90 pointer-events-none"
+                style={{ color: filters.nationality!=="No Preference" ? C.yellowWarm : C.textMuted }} />
+            </div>
           </div>
+
+          {/* Language */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-foreground">Language</label>
-            <select className={selectCls(filters.language !== "No Preference")}
-              value={filters.language}
-              onChange={(e) => setFilters((p) => ({ ...p, language: e.target.value }))}>
-              <option>No Preference</option>
-              <option>English</option><option>Mandarin</option>
-              <option>Bahasa Indonesia / Malay</option>
-              <option>Hindi</option><option>Tamil</option>
-            </select>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Language</label>
+            <div className="relative">
+              <select
+                className="w-full appearance-none px-3 py-2 text-sm pr-8 focus:outline-none transition-colors"
+                style={{
+                  border:`1.5px solid ${filters.language!=="No Preference" ? C.green : C.border}`,
+                  background: filters.language!=="No Preference" ? C.dark : C.white,
+                  color: filters.language!=="No Preference" ? C.white : C.text,
+                  fontWeight: filters.language!=="No Preference" ? 700 : 400,
+                }}
+                value={filters.language}
+                onChange={(e) => setFilters((p) => ({ ...p, language:e.target.value }))}>
+                <option>No Preference</option>
+                <option>English</option><option>Mandarin</option>
+                <option>Bahasa Indonesia / Malay</option>
+                <option>Hindi</option><option>Tamil</option>
+              </select>
+              <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 rotate-90 pointer-events-none"
+                style={{ color: filters.language!=="No Preference" ? C.yellowWarm : C.textMuted }} />
+            </div>
           </div>
+
+          {/* Search button */}
           <button type="button" onClick={handleSearch}
-            className="flex w-full items-center justify-center gap-2 rounded bg-primary py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 active:bg-primary/80">
+            className="flex w-full items-center justify-center gap-2 py-2.5 text-sm font-black uppercase tracking-widest transition-all hover:opacity-90 active:scale-[0.99]"
+            style={{ background:`linear-gradient(135deg, ${C.yellow}, ${C.yellowWarm})`, color:C.dark }}>
             <Search className="h-3.5 w-3.5" />
-            Search Maid
+            Search Maids
             {activeFilterCount > 0 && (
-              <span className="ml-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary-foreground/20 px-1 text-[10px] font-bold">
+              <span className="ml-1 inline-flex h-4 min-w-[16px] items-center justify-center px-1 text-[10px] font-black"
+                style={{ background:C.dark, color:C.yellow }}>
                 {activeFilterCount}
               </span>
             )}
           </button>
+
           {activeFilterCount > 0 && (
             <button type="button" onClick={handleReset}
-              className="flex w-full items-center justify-center gap-1.5 rounded border border-border py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive">
-              <X className="h-3 w-3" />
-              Clear all filters
+              className="flex w-full items-center justify-center gap-1.5 py-1.5 text-xs font-medium transition-colors"
+              style={{ border:`1px solid ${C.border}`, color:C.textMuted, background:C.white }}>
+              <X className="h-3 w-3" />Clear all filters
             </button>
           )}
         </div>
       </div>
 
-      <div className="mt-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-        <div className="divide-y divide-border/50">
-          {NATIONALITY_LINKS.map((label) => {
+      {/* Quick links */}
+      <div className="mt-3 overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}>
+        <div className="px-3 py-2" style={{ borderBottom:`1px solid ${C.border}`, background:C.surface }}>
+          <p className="text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Browse by Category</p>
+        </div>
+        <div style={{ background:C.white }}>
+          {NATIONALITY_LINKS.map((label, i) => {
             const linkKey = QUICK_LINKS_BY_LABEL[label];
             const isActive = !!quickLink && quickLink === linkKey;
             return (
               <button key={label} onClick={() => handleQuickLink(label)}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                  isActive ? "bg-primary/10 font-semibold text-primary" : "text-foreground hover:bg-muted/50 hover:text-primary"
-                }`}>
-                <span className="shrink-0 text-primary opacity-60">›</span>
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors"
+                style={{
+                  background: isActive ? `linear-gradient(135deg, ${C.dark}, ${C.darkMid})` : C.white,
+                  color: isActive ? C.white : C.textMuted,
+                  fontWeight: isActive ? 800 : 500,
+                  borderTop: i > 0 ? `1px solid ${C.border}` : "none",
+                }}>
+                <span style={{ color: isActive ? C.yellow : C.border, fontSize:13 }}>›</span>
                 {label}
+                {isActive && <span className="ml-auto" style={{ width:6, height:6, borderRadius:"50%", background:C.yellow, display:"inline-block" }} />}
               </button>
             );
           })}
@@ -1090,46 +1246,77 @@ const MaidSearchPage = ({
     </div>
   );
 
+  // ── Pagination ────────────────────────────────────────────────────────────
   const PaginationBar = () => (
     <div className="flex flex-wrap items-center gap-1">
       <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-        className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40">
+        className="flex h-7 w-7 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ border:`1px solid ${C.border}`, background:C.white, color:C.text }}>
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
       {pages.map((item, index) =>
         item === "..." ? (
-          <span key={`el-${index}`} className="px-1 text-xs text-muted-foreground">…</span>
+          <span key={`el-${index}`} className="px-1 text-xs" style={{ color:C.textMuted }}>…</span>
         ) : (
           <button key={item} onClick={() => setPage(item as number)}
-            className={`flex h-7 min-w-[1.75rem] items-center justify-center rounded-lg border px-2 text-xs font-medium transition-colors ${
-              item === page ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted"
-            }`}>
+            className="flex h-7 min-w-[1.75rem] items-center justify-center border px-2 text-xs font-bold transition-colors"
+            style={{
+              border: item === page ? "none" : `1px solid ${C.border}`,
+              background: item === page ? `linear-gradient(135deg, ${C.green}, ${C.greenMid})` : C.white,
+              color: item === page ? C.white : C.text,
+            }}>
             {item}
           </button>
         )
       )}
       <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-        className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40">
+        className="flex h-7 w-7 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ border:`1px solid ${C.border}`, background:C.white, color:C.text }}>
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
     </div>
   );
 
   return (
-    <div className="client-page-theme min-h-screen bg-background">
+    <div className="client-page-theme min-h-screen" style={{ background:C.slate }}>
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
+      {/* Hero strip */}
+      {!embedded && (
+        <div className="hidden md:block" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)`, borderBottom:`1px solid ${C.greenBorder}` }}>
+          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Sparkles className="h-4 w-4" style={{ color:C.yellow }} />
+              <span className="text-sm font-semibold text-white">Browse verified domestic helper profiles</span>
+              <span style={{ color:"rgba(255,255,255,0.3)" }}>·</span>
+              <span className="text-xs" style={{ color:"rgba(255,255,255,0.5)" }}>
+                {isLoading ? "Loading…" : <><span style={{ color:C.yellowWarm, fontWeight:800 }}>{filteredMaids.length}</span> profiles available</>}
+              </span>
+            </div>
+            {!isLoggedIn && (
+              <Link to={loginPath} className="text-xs font-bold uppercase tracking-wide transition-colors"
+                style={{ color:C.yellowWarm }}>
+                Login to view full profiles →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Mobile top bar */}
-      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur md:hidden">
-        <p className="text-sm font-medium text-foreground">
-          {isLoading ? "Loading…" : `${filteredMaids.length} result${filteredMaids.length !== 1 ? "s" : ""}`}
+      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2.5 md:hidden"
+        style={{ borderBottom:`1px solid ${C.border}`, background:C.white, boxShadow:"0 1px 8px rgba(12,30,18,0.08)" }}>
+        <p className="text-sm font-semibold" style={{ color:C.text }}>
+          {isLoading ? "Loading…" : <><span style={{ color:C.text, fontWeight:800 }}>{filteredMaids.length}</span> results</>}
         </p>
         <button type="button" onClick={() => setMobileSidebarOpen((v) => !v)}
-          className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted">
-          <SlidersHorizontal className="h-3.5 w-3.5" />
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold transition-colors"
+          style={{ border:`1px solid ${C.border}`, background:C.white, color:C.text }}>
+          <Filter className="h-3.5 w-3.5" />
           Filters
           {activeFilterCount > 0 && (
-            <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+            <span className="inline-flex h-4 min-w-[16px] items-center justify-center px-1 text-[10px] font-bold"
+              style={{ background:C.yellow, color:C.dark }}>
               {activeFilterCount}
             </span>
           )}
@@ -1139,12 +1326,15 @@ const MaidSearchPage = ({
       {/* Mobile sidebar drawer */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-30 md:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
-          <div className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-background p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="absolute bottom-0 left-0 right-0 max-h-[88vh] overflow-y-auto p-4"
+            style={{ background:C.surface, boxShadow:"0 -8px 40px rgba(12,30,18,0.20)" }}>
             <div className="mb-4 flex items-center justify-between">
-              <p className="font-semibold">Filters</p>
-              <button type="button" onClick={() => setMobileSidebarOpen(false)}>
-                <X className="h-5 w-5 text-muted-foreground" />
+              <p className="font-black text-sm uppercase tracking-wide" style={{ color:C.text }}>Filters</p>
+              <button type="button" onClick={() => setMobileSidebarOpen(false)}
+                className="p-1.5 transition-colors"
+                style={{ border:`1px solid ${C.border}`, background:C.white, color:C.textMuted }}>
+                <X className="h-4 w-4" />
               </button>
             </div>
             <SidebarContent />
@@ -1152,30 +1342,31 @@ const MaidSearchPage = ({
         </div>
       )}
 
-      <div className="container mx-auto flex flex-col gap-4 px-3 py-4 sm:px-4 md:flex-row md:gap-5 md:py-6">
+      <div className="container mx-auto flex flex-col gap-4 px-3 py-4 sm:px-4 md:flex-row md:gap-5 md:py-5">
+        {/* Sidebar */}
         <aside className="hidden w-56 shrink-0 md:block">
           <div className="sticky top-4"><SidebarContent /></div>
         </aside>
 
+        {/* Main content */}
         <main className="min-w-0 flex-1">
+
           {/* Advanced filters banner */}
           {advancedFilters && advancedFilterSummary.length > 0 && (
-            <div className="mb-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+            <div className="mb-3 px-4 py-3"
+              style={{ borderLeft:`4px solid ${C.yellow}`, background:C.white, boxShadow:"0 1px 6px rgba(12,30,18,0.06)" }}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground">Advanced filters applied</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <p className="text-xs font-black uppercase tracking-widest mb-2" style={{ color:C.textMuted }}>Advanced Filters Active</p>
+                  <div className="flex flex-wrap gap-1.5">
                     {advancedFilterSummary.map((item) => <ActiveFilterPill key={item} label={item} />)}
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={advancedFiltersRaw ? `${basePath}?filters=${encodeURIComponent(advancedFiltersRaw)}` : basePath}>
-                      Edit Filters
-                    </Link>
+                  <Button variant="outline" size="sm" asChild className="text-xs">
+                    <Link to={advancedFiltersRaw ? `${basePath}?filters=${encodeURIComponent(advancedFiltersRaw)}` : basePath}>Edit Filters</Link>
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={handleReset}
-                    className="text-muted-foreground hover:text-destructive">
+                  <Button variant="ghost" size="sm" onClick={handleReset} className="text-xs text-slate-400 hover:text-red-500">
                     <X className="h-3.5 w-3.5 mr-1" />Clear
                   </Button>
                 </div>
@@ -1184,31 +1375,42 @@ const MaidSearchPage = ({
           )}
 
           {/* Shortlist bar */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-            <div className="flex items-center gap-2">
-              <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
-              <span>
-                <span className="font-bold">{shortlistRefs.length}</span>{" "}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"
+            style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale }}>
+            <div className="flex items-center gap-2.5">
+              <div style={{ width:28, height:28, background:C.yellow, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, flexShrink:0 }}>
+                <Star className="h-3.5 w-3.5" style={{ fill:C.dark, color:C.dark }} />
+              </div>
+              <span className="text-sm" style={{ color:"#78560A" }}>
+                <span style={{ fontWeight:900, color:"#5A3E08" }}>{shortlistRefs.length}</span>{" "}
                 {shortlistRefs.length === 1 ? "maid" : "maids"} shortlisted
               </span>
             </div>
-            <Button type="button" variant="link" size="sm"
-              onClick={() => setIsShortlistOpen(true)}
-              className="h-auto p-0 text-amber-800 hover:text-amber-900">
-              My Shortlist
-            </Button>
+            <button type="button" onClick={() => setIsShortlistOpen(true)}
+              className="text-xs font-black uppercase tracking-wider transition-colors"
+              style={{ color:C.green, borderBottom:`1.5px solid ${C.green}`, paddingBottom:1, background:"none", border:"none", cursor:"pointer" }}>
+              View Shortlist →
+            </button>
           </div>
 
           {/* Results header */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              {isLoading ? "Loading profiles…" : (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5"
+            style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(12,30,18,0.04)" }}>
+            <p className="text-sm" style={{ color:C.textMuted }}>
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 border-2 border-t-transparent animate-spin"
+                    style={{ borderColor:`${C.border} ${C.border} ${C.border} ${C.greenMid}` }} />
+                  Loading profiles…
+                </span>
+              ) : (
                 <>
-                  <span className="font-semibold text-foreground">{filteredMaids.length}</span>{" "}
+                  <span style={{ fontWeight:800, color:C.text }}>{filteredMaids.length}</span>{" "}
                   {filteredMaids.length !== 1 ? "profiles" : "profile"} found
                   {quickLink && (
-                    <span className="ml-1 text-muted-foreground/70">
-                      · {QUICK_LINKS[quickLink as QuickLinkKey]}
+                    <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider"
+                      style={{ border:`1px solid ${C.border}`, background:C.surface, color:C.textMuted }}>
+                      {QUICK_LINKS[quickLink as QuickLinkKey]}
                     </span>
                   )}
                 </>
@@ -1221,24 +1423,28 @@ const MaidSearchPage = ({
           {isLoading ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                <div key={i} className="overflow-hidden rounded-xl border border-border bg-muted animate-pulse">
-                  <div className="aspect-[3/4] bg-muted-foreground/10" />
-                  <div className="space-y-1.5 p-2">
-                    <div className="h-2 w-3/4 rounded-full bg-muted-foreground/15" />
-                    <div className="h-2 w-1/2 rounded-full bg-muted-foreground/10" />
-                    <div className="h-2 w-2/3 rounded-full bg-muted-foreground/10" />
+                <div key={i} className="overflow-hidden animate-pulse" style={{ border:`1px solid ${C.border}`, background:C.white }}>
+                  <div className="aspect-[3/4]" style={{ background:C.surface }} />
+                  <div className="space-y-1.5 p-2.5">
+                    <div className="h-2 w-3/4" style={{ background:C.border }} />
+                    <div className="h-2 w-1/2" style={{ background:C.border }} />
+                    <div className="h-2 w-2/3" style={{ background:C.border }} />
                   </div>
                 </div>
               ))}
             </div>
           ) : filteredMaids.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 text-center">
-              <Search className="mb-3 h-10 w-10 text-muted-foreground/25" />
-              <p className="text-base font-semibold text-foreground">No profiles found</p>
-              <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters or search keywords.</p>
+            <div className="flex flex-col items-center justify-center py-20 text-center"
+              style={{ border:`1px dashed ${C.border}`, background:C.white }}>
+              <div style={{ width:64, height:64, background:C.surface, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:16 }}>
+                <Search className="h-7 w-7" style={{ color:C.border }} />
+              </div>
+              <p className="text-base font-bold" style={{ color:C.text }}>No profiles found</p>
+              <p className="mt-1 text-sm" style={{ color:C.textMuted }}>Try adjusting your filters or search keywords.</p>
               {activeFilterCount > 0 && (
                 <button type="button" onClick={handleReset}
-                  className="mt-4 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
+                  className="mt-4 px-5 py-2 text-sm font-semibold transition-colors"
+                  style={{ border:`1px solid ${C.border}`, background:C.white, color:C.text }}>
                   Clear all filters
                 </button>
               )}
@@ -1259,93 +1465,32 @@ const MaidSearchPage = ({
             </div>
           )}
 
+          {/* Bottom pagination */}
           {!isLoading && filteredMaids.length > 0 && (
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                Page <span className="font-medium text-foreground">{page}</span> of{" "}
-                <span className="font-medium text-foreground">{totalPages}</span>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(12,30,18,0.04)" }}>
+              <p className="text-sm" style={{ color:C.textMuted }}>
+                Page <span style={{ fontWeight:800, color:C.text }}>{page}</span> of{" "}
+                <span style={{ fontWeight:800, color:C.text }}>{totalPages}</span>
               </p>
               <PaginationBar />
             </div>
           )}
 
-          {/* Shortlist dialog */}
-          <Dialog open={isShortlistOpen} onOpenChange={setIsShortlistOpen}>
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
-                  My Shortlist
-                  {shortlistRefs.length > 0 && (
-                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[11px] font-bold text-amber-700">
-                      {shortlistRefs.length}
-                    </span>
-                  )}
-                </DialogTitle>
-                <DialogDescription>
-                  Click any profile to view full details. Tap the star to remove from shortlist.
-                </DialogDescription>
-              </DialogHeader>
-              {shortlistRefs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
-                    <Star className="h-7 w-7 text-amber-300" />
-                  </div>
-                  <p className="text-sm font-semibold text-foreground">No maids shortlisted yet</p>
-                  <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-                    Tap the star that appears on any profile card to add it to your shortlist.
-                  </p>
-                </div>
-              ) : (
-                <div className="max-h-[68vh] overflow-y-auto pr-1">
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
-                    {shortlistedMaids.map((maid) => (
-                      <MaidCard
-                        key={`sl-${maid.referenceCode}`}
-                        maid={maid}
-                        isShortlisted={true}
-                        onToggleShortlist={handleToggleShortlist}
-                        onNavigate={() => setIsShortlistOpen(false)}
-                        isLoggedIn={isLoggedIn}
-                        loginPath={loginPath}
-                        showCategory={isIndianSubcategoryActive}
-                        disableHoverPopup={true}
-                      />
-                    ))}
-                    {missingShortlistRefs.map((ref) => (
-                      <div key={`missing-${ref}`}
-                        className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-3 text-center"
-                        style={{ aspectRatio: "3/4" }}>
-                        <svg className="h-6 w-6 text-muted-foreground/25" fill="none" viewBox="0 0 24 24"
-                          stroke="currentColor" strokeWidth={1.5}>
-                          <circle cx="12" cy="12" r="10" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
-                        </svg>
-                        <p className="break-all font-mono text-[9px] text-muted-foreground/70">{ref}</p>
-                        <p className="text-[9px] text-muted-foreground/50">Profile not found</p>
-                        <button type="button" onClick={() => handleToggleShortlist(ref)}
-                          className="text-[10px] font-medium text-destructive hover:underline">Remove</button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
-                    <p className="text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">{shortlistedMaids.length}</span>{" "}
-                      {shortlistedMaids.length === 1 ? "profile" : "profiles"} shortlisted
-                      {missingShortlistRefs.length > 0 && (
-                        <span className="ml-1 text-muted-foreground/60">· {missingShortlistRefs.length} not found</span>
-                      )}
-                    </p>
-                    <button type="button"
-                      onClick={() => shortlistRefs.forEach((ref) => handleToggleShortlist(ref))}
-                      className="text-xs font-medium text-destructive hover:underline">
-                      Clear all
-                    </button>
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
+          {/* ── Improved Shortlist Dialog ── */}
+          <ShortlistDialog
+            open={isShortlistOpen}
+            onOpenChange={setIsShortlistOpen}
+            shortlistRefs={shortlistRefs}
+            shortlistedMaids={shortlistedMaids}
+            missingShortlistRefs={missingShortlistRefs}
+            onToggleShortlist={handleToggleShortlist}
+            isLoggedIn={isLoggedIn}
+            loginPath={loginPath}
+            isIndianSubcategoryActive={isIndianSubcategoryActive}
+            isShortlistOpen={isShortlistOpen}
+            setIsShortlistOpen={setIsShortlistOpen}
+          />
         </main>
       </div>
     </div>
@@ -1354,29 +1499,26 @@ const MaidSearchPage = ({
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ClientDraft = {
-  keyword: string; agencyPreference: string; biodataCreatedWithin: string;
-  maidType: string; willingOffDays: boolean; hasChildren: boolean; withVideo: boolean;
-  natFilipino: boolean; natIndonesian: boolean; natMyanmar: boolean; natIndian: boolean;
-  natSriLankan: boolean; natCambodian: boolean; natBangladeshi: boolean; natOthers: boolean; natNoPreference: boolean;
-  expHomeCountry: boolean; expSingapore: boolean; expMalaysia: boolean; expHongKong: boolean;
-  expTaiwan: boolean; expMiddleEast: boolean; expOtherCountries: boolean; expNoPreference: boolean;
-  dutyCareInfant: boolean; dutyCareYoungChildren: boolean; dutyCareElderlyDisabled: boolean;
-  dutyCooking: boolean; dutyGeneralHousekeeping: boolean; dutyNoPreference: boolean;
-  eduCollege: boolean; eduHighSchool: boolean; eduSecondary: boolean; eduPrimary: boolean; eduNoPreference: boolean;
-  langEnglish: boolean; langMandarin: boolean; langBahasaIndonesia: boolean;
-  langHindi: boolean; langTamil: boolean; langNoPreference: boolean;
-  age21to25: boolean; age26to30: boolean; age31to35: boolean; age36to40: boolean; age41above: boolean; ageNoPreference: boolean;
-  marSingle: boolean; marMarried: boolean; marWidowed: boolean; marDivorced: boolean; marSeparated: boolean; marNoPreference: boolean;
-  height150below: boolean; height151to155: boolean; height156to160: boolean; height161above: boolean; heightNoPreference: boolean;
-  relFreeThinker: boolean; relChristian: boolean; relCatholic: boolean; relBuddhist: boolean;
-  relMuslim: boolean; relHindu: boolean; relSikh: boolean; relOthers: boolean; relNoPreference: boolean;
+  keyword:string; agencyPreference:string; biodataCreatedWithin:string;
+  maidType:string; willingOffDays:boolean; hasChildren:boolean; withVideo:boolean;
+  natFilipino:boolean; natIndonesian:boolean; natMyanmar:boolean; natIndian:boolean;
+  natSriLankan:boolean; natCambodian:boolean; natBangladeshi:boolean; natOthers:boolean; natNoPreference:boolean;
+  expHomeCountry:boolean; expSingapore:boolean; expMalaysia:boolean; expHongKong:boolean;
+  expTaiwan:boolean; expMiddleEast:boolean; expOtherCountries:boolean; expNoPreference:boolean;
+  dutyCareInfant:boolean; dutyCareYoungChildren:boolean; dutyCareElderlyDisabled:boolean;
+  dutyCooking:boolean; dutyGeneralHousekeeping:false; dutyNoPreference:boolean;
+  eduCollege:boolean; eduHighSchool:boolean; eduSecondary:boolean; eduPrimary:boolean; eduNoPreference:boolean;
+  langEnglish:boolean; langMandarin:boolean; langBahasaIndonesia:boolean;
+  langHindi:boolean; langTamil:boolean; langNoPreference:boolean;
+  age21to25:boolean; age26to30:boolean; age31to35:boolean; age36to40:boolean; age41above:boolean; ageNoPreference:boolean;
+  marSingle:boolean; marMarried:boolean; marWidowed:boolean; marDivorced:boolean; marSeparated:boolean; marNoPreference:boolean;
+  height150below:boolean; height151to155:boolean; height156to160:boolean; height161above:boolean; heightNoPreference:boolean;
+  relFreeThinker:boolean; relChristian:boolean; relCatholic:boolean; relBuddhist:boolean;
+  relMuslim:boolean; relHindu:boolean; relSikh:boolean; relOthers:boolean; relNoPreference:boolean;
 };
 
-type SidebarFilters = {
-  keyword: string; maidType: string; willingOffDays: boolean; nationality: string; language: string;
-};
-
-type MaidSearchPageProps = { basePath?: string; loginPath?: string; embedded?: boolean };
+type SidebarFilters = { keyword:string; maidType:string; willingOffDays:boolean; nationality:string; language:string };
+type MaidSearchPageProps = { basePath?:string; loginPath?:string; embedded?:boolean };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MAID_TYPES = ["New Maid", "Transfer Maid", "Ex-Singapore Maid"] as const;
@@ -1384,31 +1526,19 @@ const PAGE_SIZE = 18;
 const INDIAN_SUBCATEGORY_KEYS = new Set(["mizoram", "darjeeling", "manipur", "punjabi"]);
 
 const NATIONALITY_LINKS = [
-  "Most Recent Maid in 3 days", 
-  "English Speaking Maid",
-   "Mandarin Speaking Maid",
-  "Hokkien/Cantonese Speaking",
-  "Filipino Maid", 
-  "Indonesian Maid", 
-  "Myanmar Maid", 
-  "Indian Maid", 
-  "Mizoram Maid",
-  "Darjeeling Maid", 
-  "Manipur Maid", 
-  "Punjabi Maid", 
-  "Sri Lankan Maid", 
-  "Cambodian Maid", 
-  "Bangladeshi Maid",
+  "Most Recent Maid in 3 days","English Speaking Maid","Mandarin Speaking Maid","Hokkien/Cantonese Speaking",
+  "Filipino Maid","Indonesian Maid","Myanmar Maid","Indian Maid","Mizoram Maid","Darjeeling Maid",
+  "Manipur Maid","Punjabi Maid","Sri Lankan Maid","Cambodian Maid","Bangladeshi Maid",
 ] as const;
 
 const QUICK_LINKS = {
-  mostRecent3Days: "Most Recent Maid in 3 days", english: "English Speaking Maid",
-  mandarin: "Mandarin Speaking Maid", hokkienCantonese: "Hokkien/Cantonese Speaking",
-  newMaid: "New Maid", transferMaid: "Transfer Maid", exSingapore: "Ex-Singapore Maid",
-  filipino: "Filipino Maid", indonesian: "Indonesian Maid", myanmar: "Myanmar Maid",
-  indian: "Indian Maid", mizoram: "Mizoram Maid", darjeeling: "Darjeeling Maid",
-  manipur: "Manipur Maid", punjabi: "Punjabi Maid", sriLankan: "Sri Lankan Maid",
-  cambodian: "Cambodian Maid", bangladeshi: "Bangladeshi Maid",
+  mostRecent3Days:"Most Recent Maid in 3 days", english:"English Speaking Maid",
+  mandarin:"Mandarin Speaking Maid", hokkienCantonese:"Hokkien/Cantonese Speaking",
+  newMaid:"New Maid", transferMaid:"Transfer Maid", exSingapore:"Ex-Singapore Maid",
+  filipino:"Filipino Maid", indonesian:"Indonesian Maid", myanmar:"Myanmar Maid",
+  indian:"Indian Maid", mizoram:"Mizoram Maid", darjeeling:"Darjeeling Maid",
+  manipur:"Manipur Maid", punjabi:"Punjabi Maid", sriLankan:"Sri Lankan Maid",
+  cambodian:"Cambodian Maid", bangladeshi:"Bangladeshi Maid",
 } as const;
 
 type QuickLinkKey = keyof typeof QUICK_LINKS;
@@ -1418,10 +1548,10 @@ const QUICK_LINKS_BY_LABEL = Object.fromEntries(
 ) as Record<string, QuickLinkKey>;
 
 const defaultSidebarFilters: SidebarFilters = {
-  keyword: "", maidType: "", willingOffDays: false, nationality: "No Preference", language: "No Preference",
+  keyword:"", maidType:"", willingOffDays:false, nationality:"No Preference", language:"No Preference",
 };
 
-// ── Filter helpers ────────────────────────────────────────────────────────────
+// ── Filter helpers ─────────────────────────────────────────────────────────────
 const parseAdvancedFilters = (searchParams: URLSearchParams): ClientDraft | null => {
   const raw = searchParams.get("filters");
   if (!raw) return null;
@@ -1443,7 +1573,6 @@ const deriveSidebarFilters = (searchParams: URLSearchParams, adv: ClientDraft | 
      adv?.langTamil ? "Tamil" : "No Preference"),
 });
 
-// ── Core filter engine ────────────────────────────────────────────────────────
 const normalizeStr = (s: unknown) => String(s || "").toLowerCase().trim();
 
 const matchesLanguageSkill = (maid: MaidProfile, lang: string) => {
@@ -1490,21 +1619,21 @@ const matchesAge = (maid: MaidProfile, d: ClientDraft): boolean => {
 const matchesEducation = (maid: MaidProfile, d: ClientDraft): boolean => {
   if (d.eduNoPreference) return true;
   const edu = normalizeStr(maid.educationLevel);
-  if (d.eduCollege && (edu.includes("college") || edu.includes("degree") || edu.includes("bachelor") || edu.includes("university"))) return true;
-  if (d.eduHighSchool && (edu.includes("high school") || edu.includes("senior high"))) return true;
-  if (d.eduSecondary && (edu.includes("secondary") || edu.includes("junior high") || edu.includes("middle school"))) return true;
-  if (d.eduPrimary && (edu.includes("primary") || edu.includes("elementary"))) return true;
+  if (d.eduCollege && (edu.includes("college")||edu.includes("degree")||edu.includes("bachelor")||edu.includes("university"))) return true;
+  if (d.eduHighSchool && (edu.includes("high school")||edu.includes("senior high"))) return true;
+  if (d.eduSecondary && (edu.includes("secondary")||edu.includes("junior high")||edu.includes("middle school"))) return true;
+  if (d.eduPrimary && (edu.includes("primary")||edu.includes("elementary"))) return true;
   return false;
 };
 
 const matchesReligion = (maid: MaidProfile, d: ClientDraft): boolean => {
   if (d.relNoPreference) return true;
   const rel = normalizeStr(maid.religion);
-  if (d.relFreeThinker && (rel.includes("free") || rel.includes("none") || rel.includes("atheist") || rel.includes("agnostic"))) return true;
+  if (d.relFreeThinker && (rel.includes("free")||rel.includes("none")||rel.includes("atheist")||rel.includes("agnostic"))) return true;
   if (d.relChristian && rel.includes("christian") && !rel.includes("catholic")) return true;
   if (d.relCatholic && rel.includes("catholic")) return true;
   if (d.relBuddhist && rel.includes("buddh")) return true;
-  if (d.relMuslim && (rel.includes("muslim") || rel.includes("islam"))) return true;
+  if (d.relMuslim && (rel.includes("muslim")||rel.includes("islam"))) return true;
   if (d.relHindu && rel.includes("hindu")) return true;
   if (d.relSikh && rel.includes("sikh")) return true;
   if (d.relOthers) return true;
@@ -1525,11 +1654,11 @@ const matchesMarital = (maid: MaidProfile, d: ClientDraft): boolean => {
 const matchesNationality = (maid: MaidProfile, d: ClientDraft): boolean => {
   if (d.natNoPreference) return true;
   const nat = normalizeStr(maid.nationality);
-  if (d.natFilipino && (nat.includes("filip") || nat.includes("pinoy"))) return true;
+  if (d.natFilipino && (nat.includes("filip")||nat.includes("pinoy"))) return true;
   if (d.natIndonesian && nat.includes("indo")) return true;
-  if (d.natMyanmar && (nat.includes("myan") || nat.includes("burm"))) return true;
+  if (d.natMyanmar && (nat.includes("myan")||nat.includes("burm"))) return true;
   if (d.natIndian && nat.includes("indian")) return true;
-  if (d.natSriLankan && (nat.includes("sri") || nat.includes("lanka"))) return true;
+  if (d.natSriLankan && (nat.includes("sri")||nat.includes("lanka"))) return true;
   if (d.natCambodian && nat.includes("cambod")) return true;
   if (d.natBangladeshi && nat.includes("bangla")) return true;
   if (d.natOthers) {
@@ -1546,52 +1675,51 @@ const matchesExperience = (maid: MaidProfile, d: ClientDraft): boolean => {
     : []).join(" ").toLowerCase();
   if (d.expSingapore && expText.includes("singapore")) return true;
   if (d.expMalaysia && expText.includes("malaysia")) return true;
-  if (d.expHongKong && (expText.includes("hong kong") || expText.includes("hongkong"))) return true;
+  if (d.expHongKong && (expText.includes("hong kong")||expText.includes("hongkong"))) return true;
   if (d.expTaiwan && expText.includes("taiwan")) return true;
-  if (d.expMiddleEast && (expText.includes("dubai") || expText.includes("uae") || expText.includes("saudi") ||
-    expText.includes("qatar") || expText.includes("kuwait") || expText.includes("middle east") ||
-    expText.includes("bahrain") || expText.includes("oman"))) return true;
-  if (d.expHomeCountry || d.expOtherCountries) return true;
+  if (d.expMiddleEast && (expText.includes("dubai")||expText.includes("uae")||expText.includes("saudi")||
+    expText.includes("qatar")||expText.includes("kuwait")||expText.includes("middle east")||
+    expText.includes("bahrain")||expText.includes("oman"))) return true;
+  if (d.expHomeCountry||d.expOtherCountries) return true;
   return false;
 };
 
 const matchesDuties = (maid: MaidProfile, d: ClientDraft): boolean => {
   if (d.dutyNoPreference) return true;
-  const dt = Object.keys(maid.workAreas || {}).join(" ").toLowerCase() + " " +
-    Object.values((maid.skillsPreferences as Record<string, unknown>) || {}).map(String).join(" ").toLowerCase();
-  if (d.dutyCareInfant && (dt.includes("infant") || dt.includes("baby") || dt.includes("newborn"))) return true;
-  if (d.dutyCareYoungChildren && (dt.includes("child") || dt.includes("kid") || dt.includes("toddler"))) return true;
-  if (d.dutyCareElderlyDisabled && (dt.includes("elder") || dt.includes("elderly") || dt.includes("disabled"))) return true;
+  const dt = Object.keys(maid.workAreas||{}).join(" ").toLowerCase()+" "+
+    Object.values((maid.skillsPreferences as Record<string,unknown>)||{}).map(String).join(" ").toLowerCase();
+  if (d.dutyCareInfant && (dt.includes("infant")||dt.includes("baby")||dt.includes("newborn"))) return true;
+  if (d.dutyCareYoungChildren && (dt.includes("child")||dt.includes("kid")||dt.includes("toddler"))) return true;
+  if (d.dutyCareElderlyDisabled && (dt.includes("elder")||dt.includes("elderly")||dt.includes("disabled"))) return true;
   if (d.dutyCooking && dt.includes("cook")) return true;
-  if (d.dutyGeneralHousekeeping && (dt.includes("housekeep") || dt.includes("household") || dt.includes("cleaning") || dt.includes("general"))) return true;
+  if (d.dutyGeneralHousekeeping && (dt.includes("housekeep")||dt.includes("household")||dt.includes("cleaning")||dt.includes("general"))) return true;
   return false;
 };
 
 const matchesBiodataAge = (maid: MaidProfile, d: ClientDraft): boolean => {
-  if (!d.biodataCreatedWithin || d.biodataCreatedWithin === "No Preference") return true;
-  const raw = String(maid.createdAt || maid.updatedAt || "").trim();
+  if (!d.biodataCreatedWithin||d.biodataCreatedWithin==="No Preference") return true;
+  const raw = String(maid.createdAt||maid.updatedAt||"").trim();
   if (!raw) return true;
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return true;
   const now = new Date();
   const cutoff = new Date(now);
   switch (d.biodataCreatedWithin) {
-    case "1 week":   cutoff.setDate(now.getDate() - 7); break;
-    case "2 weeks":  cutoff.setDate(now.getDate() - 14); break;
-    case "1 month":  cutoff.setMonth(now.getMonth() - 1); break;
-    case "3 months": cutoff.setMonth(now.getMonth() - 3); break;
-    case "6 months": cutoff.setMonth(now.getMonth() - 6); break;
-    case "1 year":   cutoff.setFullYear(now.getFullYear() - 1); break;
+    case "1 week":   cutoff.setDate(now.getDate()-7); break;
+    case "2 weeks":  cutoff.setDate(now.getDate()-14); break;
+    case "1 month":  cutoff.setMonth(now.getMonth()-1); break;
+    case "3 months": cutoff.setMonth(now.getMonth()-3); break;
+    case "6 months": cutoff.setMonth(now.getMonth()-6); break;
+    case "1 year":   cutoff.setFullYear(now.getFullYear()-1); break;
     default: return true;
   }
   return date >= cutoff;
 };
 
 const hasPhoto = (maid: MaidProfile): boolean => {
-  if (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) {
-    if (maid.photoDataUrls.some((url) => typeof url === "string" && url.trim().length > 0)) return true;
-  }
-  return typeof maid.photoDataUrl === "string" && maid.photoDataUrl.trim().length > 0;
+  if (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0)
+    if (maid.photoDataUrls.some((url) => typeof url==="string" && url.trim().length>0)) return true;
+  return typeof maid.photoDataUrl==="string" && maid.photoDataUrl.trim().length>0;
 };
 
 const filterMaidsByDraft = (maids: MaidProfile[], draft: ClientDraft): MaidProfile[] =>
@@ -1599,51 +1727,50 @@ const filterMaidsByDraft = (maids: MaidProfile[], draft: ClientDraft): MaidProfi
     if (!hasPhoto(maid)) return false;
     if (draft.keyword.trim()) {
       const kw = draft.keyword.trim().toLowerCase();
-      const searchable = [maid.fullName, maid.referenceCode, maid.nationality, maid.type, maid.religion,
-        maid.maritalStatus, getMaidCategory(maid), ...Object.keys(maid.workAreas || {})].map(normalizeStr).join(" ");
+      const searchable = [maid.fullName,maid.referenceCode,maid.nationality,maid.type,maid.religion,
+        maid.maritalStatus,getMaidCategory(maid),...Object.keys(maid.workAreas||{})].map(normalizeStr).join(" ");
       if (!searchable.includes(kw)) return false;
     }
     if (draft.maidType) {
       const t = normalizeStr(maid.type);
-      if (draft.maidType === "New Maid" && !t.includes("new")) return false;
-      if (draft.maidType === "Transfer Maid" && !t.includes("transfer")) return false;
-      if (draft.maidType === "Ex-Singapore Maid" && !(t.includes("ex-singapore") || t.includes("ex singapore") || t.includes("exsg"))) return false;
+      if (draft.maidType==="New Maid" && !t.includes("new")) return false;
+      if (draft.maidType==="Transfer Maid" && !t.includes("transfer")) return false;
+      if (draft.maidType==="Ex-Singapore Maid" && !(t.includes("ex-singapore")||t.includes("ex singapore")||t.includes("exsg"))) return false;
     }
     if (draft.willingOffDays) {
-      const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
-      const oi = (sp.otherInformation as Record<string, boolean>) || {};
-      const wk = ["Can work on off-days with compensation?", "Willing to work on off-days with compensation?", "Willing to work on off-days with  compensation?"];
+      const sp = (maid.skillsPreferences as Record<string,unknown>)||{};
+      const oi = (sp.otherInformation as Record<string,boolean>)||{};
+      const wk = ["Can work on off-days with compensation?","Willing to work on off-days with compensation?","Willing to work on off-days with  compensation?"];
       if (!wk.some((k) => Boolean(oi[k]))) return false;
     }
     if (draft.withVideo && !maid.videoDataUrl) return false;
-    if (!matchesBiodataAge(maid, draft)) return false;
-    if (!matchesNationality(maid, draft)) return false;
-    if (!matchesExperience(maid, draft)) return false;
-    if (!matchesDuties(maid, draft)) return false;
-    if (!matchesEducation(maid, draft)) return false;
+    if (!matchesBiodataAge(maid,draft)) return false;
+    if (!matchesNationality(maid,draft)) return false;
+    if (!matchesExperience(maid,draft)) return false;
+    if (!matchesDuties(maid,draft)) return false;
+    if (!matchesEducation(maid,draft)) return false;
     if (!draft.langNoPreference) {
-      const lp = (draft.langEnglish && matchesLanguageSkill(maid, "english")) ||
-        (draft.langMandarin && matchesLanguageSkill(maid, "mandarin")) ||
-        (draft.langBahasaIndonesia && matchesLanguageSkill(maid, "bahasa")) ||
-        (draft.langHindi && matchesLanguageSkill(maid, "hindi")) ||
-        (draft.langTamil && matchesLanguageSkill(maid, "tamil"));
+      const lp = (draft.langEnglish&&matchesLanguageSkill(maid,"english"))||
+        (draft.langMandarin&&matchesLanguageSkill(maid,"mandarin"))||
+        (draft.langBahasaIndonesia&&matchesLanguageSkill(maid,"bahasa"))||
+        (draft.langHindi&&matchesLanguageSkill(maid,"hindi"))||
+        (draft.langTamil&&matchesLanguageSkill(maid,"tamil"));
       if (!lp) return false;
     }
-    if (!matchesAge(maid, draft)) return false;
-    if (!matchesMarital(maid, draft)) return false;
-    if (!matchesHeight(maid, draft)) return false;
-    if (!matchesReligion(maid, draft)) return false;
+    if (!matchesAge(maid,draft)) return false;
+    if (!matchesMarital(maid,draft)) return false;
+    if (!matchesHeight(maid,draft)) return false;
+    if (!matchesReligion(maid,draft)) return false;
     return true;
   });
 
-// ── Quick-link matcher ────────────────────────────────────────────────────────
 const normalizeNationality = (value: string) => {
   const lower = value.trim().toLowerCase();
   if (lower.includes("filip")) return "Filipino";
   if (lower.includes("indo")) return "Indonesian";
   if (lower.includes("myan")) return "Myanmar";
   if (lower.includes("indian")) return "Indian";
-  if (lower.includes("sri") || lower.includes("lanka")) return "Sri Lankan";
+  if (lower.includes("sri")||lower.includes("lanka")) return "Sri Lankan";
   if (lower.includes("cambod")) return "Cambodian";
   if (lower.includes("bangla")) return "Bangladeshi";
   return "Others";
@@ -1652,45 +1779,45 @@ const normalizeNationality = (value: string) => {
 const matchesIndianSubcategory = (maid: MaidProfile, term: string): boolean => {
   const nat = normalizeStr(maid.nationality);
   const category = normalizeStr(getMaidCategory(maid));
-  const ac = (maid.agencyContact as Record<string, unknown>) || {};
-  const intro = (maid.introduction as Record<string, unknown>) || {};
-  const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
-  const all = [category, normalizeStr(ac["indianMaidCategory"]), normalizeStr(intro["indianMaidCategory"]), normalizeStr(sp["indianMaidCategory"])].join(" ");
-  return nat.includes(term) || all.includes(term);
+  const ac = (maid.agencyContact as Record<string,unknown>)||{};
+  const intro = (maid.introduction as Record<string,unknown>)||{};
+  const sp = (maid.skillsPreferences as Record<string,unknown>)||{};
+  const all = [category,normalizeStr(ac["indianMaidCategory"]),normalizeStr(intro["indianMaidCategory"]),normalizeStr(sp["indianMaidCategory"])].join(" ");
+  return nat.includes(term)||all.includes(term);
 };
 
 const matchesQuickLink = (maid: MaidProfile, quickLink: QuickLinkKey) => {
   switch (quickLink) {
     case "mostRecent3Days": {
-      const raw = String(maid.createdAt || maid.updatedAt || "").trim();
+      const raw = String(maid.createdAt||maid.updatedAt||"").trim();
       if (!raw) return false;
       const date = new Date(raw);
       if (Number.isNaN(date.getTime())) return false;
-      const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 3);
+      const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-3);
       return date >= cutoff;
     }
-    case "english": return matchesLanguageSkill(maid, "english");
-    case "mandarin": return matchesLanguageSkill(maid, "mandarin");
-    case "hokkienCantonese": return matchesLanguageSkill(maid, "hokkien") || matchesLanguageSkill(maid, "cantonese");
+    case "english": return matchesLanguageSkill(maid,"english");
+    case "mandarin": return matchesLanguageSkill(maid,"mandarin");
+    case "hokkienCantonese": return matchesLanguageSkill(maid,"hokkien")||matchesLanguageSkill(maid,"cantonese");
     case "newMaid": return normalizeStr(maid.type).includes("new");
     case "transferMaid": return normalizeStr(maid.type).includes("transfer");
-    case "exSingapore": return normalizeStr(maid.type).includes("ex-singapore") || normalizeStr(maid.type).includes("ex singapore");
-    case "filipino": return normalizeNationality(String(maid.nationality || "")) === "Filipino";
-    case "indonesian": return normalizeNationality(String(maid.nationality || "")) === "Indonesian";
-    case "myanmar": return normalizeNationality(String(maid.nationality || "")) === "Myanmar";
-    case "indian": return normalizeNationality(String(maid.nationality || "")) === "Indian";
-    case "mizoram": return matchesIndianSubcategory(maid, "mizoram");
-    case "darjeeling": return matchesIndianSubcategory(maid, "darjeeling");
-    case "manipur": return matchesIndianSubcategory(maid, "manipur");
-    case "punjabi": return matchesIndianSubcategory(maid, "punjabi");
-    case "sriLankan": return normalizeNationality(String(maid.nationality || "")) === "Sri Lankan";
-    case "cambodian": return normalizeNationality(String(maid.nationality || "")) === "Cambodian";
-    case "bangladeshi": return normalizeNationality(String(maid.nationality || "")) === "Bangladeshi";
+    case "exSingapore": return normalizeStr(maid.type).includes("ex-singapore")||normalizeStr(maid.type).includes("ex singapore");
+    case "filipino": return normalizeNationality(String(maid.nationality||""))==="Filipino";
+    case "indonesian": return normalizeNationality(String(maid.nationality||""))==="Indonesian";
+    case "myanmar": return normalizeNationality(String(maid.nationality||""))==="Myanmar";
+    case "indian": return normalizeNationality(String(maid.nationality||""))==="Indian";
+    case "mizoram": return matchesIndianSubcategory(maid,"mizoram");
+    case "darjeeling": return matchesIndianSubcategory(maid,"darjeeling");
+    case "manipur": return matchesIndianSubcategory(maid,"manipur");
+    case "punjabi": return matchesIndianSubcategory(maid,"punjabi");
+    case "sriLankan": return normalizeNationality(String(maid.nationality||""))==="Sri Lankan";
+    case "cambodian": return normalizeNationality(String(maid.nationality||""))==="Cambodian";
+    case "bangladeshi": return normalizeNationality(String(maid.nationality||""))==="Bangladeshi";
     default: return true;
   }
 };
 
-// ── UI helpers ────────────────────────────────────────────────────────────────
+// ── UI helpers ─────────────────────────────────────────────────────────────────
 const getPrimaryPhoto = (maid: MaidProfile) =>
   Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
     ? maid.photoDataUrls[0] : maid.photoDataUrl || "";
@@ -1704,27 +1831,28 @@ const getTypeLabel = (type: string) => {
 };
 
 const getMaidTypeBadgeClass = (type?: string) => {
-  const t = (type || "").toLowerCase();
-  if (t.includes("new")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (t.includes("transfer")) return "bg-blue-50 text-blue-700 border-blue-200";
-  return "bg-amber-50 text-amber-700 border-amber-200";
+  const t = (type||"").toLowerCase();
+  if (t.includes("new")) return "text-emerald-700 border-emerald-200 bg-emerald-50";
+  if (t.includes("transfer")) return "text-blue-700 border-blue-200 bg-blue-50";
+  return "text-amber-700 border-amber-200 bg-amber-50";
 };
 
-const pageNumbers = (current: number, total: number): (number | "...")[] => {
-  if (total <= 10) return Array.from({ length: total }, (_, i) => i + 1);
-  const pages: (number | "...")[] = [1];
+const pageNumbers = (current: number, total: number): (number|"...")[] => {
+  if (total <= 10) return Array.from({ length:total }, (_,i) => i+1);
+  const pages: (number|"...")[] = [1];
   if (current > 3) pages.push("...");
-  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
-  if (current < total - 2) pages.push("...");
+  for (let i = Math.max(2,current-1); i <= Math.min(total-1,current+1); i++) pages.push(i);
+  if (current < total-2) pages.push("...");
   pages.push(total);
   return pages;
 };
 
-const ActiveFilterPill = ({ label, onRemove }: { label: string; onRemove?: () => void }) => (
-  <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+const ActiveFilterPill = ({ label, onRemove }: { label:string; onRemove?:()=>void }) => (
+  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide"
+    style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale, color:"#92680A" }}>
     {label}
     {onRemove && (
-      <button type="button" onClick={onRemove} className="ml-0.5 hover:text-destructive">
+      <button type="button" onClick={onRemove} className="ml-0.5 hover:text-red-500">
         <X className="h-2.5 w-2.5" />
       </button>
     )}

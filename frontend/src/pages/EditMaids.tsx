@@ -51,96 +51,105 @@ const decodePdfUtf16Hex = (hex: string) => {
   return new TextDecoder("utf-16be").decode(payload);
 };
 
+// ── Yellow & Green Color Palette ──────────────────────────────────────────
+// Green ramp:  #EAF3DE / #C0DD97 / #97C459 / #639922 / #3B6D11 / #27500A / #173404
+// Amber ramp:  #FAEEDA / #FAC775 / #EF9F27 / #BA7517 / #854F0B / #633806 / #412402
+
 const menuStyles = `
+  :root {
+    --ym-green-50:  #EAF3DE;
+    --ym-green-100: #C0DD97;
+    --ym-green-200: #97C459;
+    --ym-green-400: #639922;
+    --ym-green-600: #3B6D11;
+    --ym-green-800: #27500A;
+    --ym-green-900: #173404;
+    --ym-amber-50:  #FAEEDA;
+    --ym-amber-100: #FAC775;
+    --ym-amber-200: #EF9F27;
+    --ym-amber-400: #BA7517;
+    --ym-amber-600: #854F0B;
+    --ym-amber-800: #633806;
+    --ym-amber-900: #412402;
+  }
+
   @keyframes float-icon {
     0%, 100% { transform: translateY(0px) rotateX(0deg); }
     50% { transform: translateY(-4px) rotateX(6deg); }
   }
+
+  /* ── Public card — green ── */
   .card-public {
-    background: linear-gradient(135deg, hsl(var(--primary)/0.08) 0%, hsl(var(--primary)/0.03) 60%, transparent 100%);
-    border: 1.5px solid hsl(var(--primary)/0.25);
+    background: linear-gradient(135deg, var(--ym-green-50) 0%, color-mix(in srgb, var(--ym-green-50) 40%, transparent) 60%, transparent 100%);
+    border: 1.5px solid color-mix(in srgb, var(--ym-green-200) 50%, transparent);
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   .card-public:hover {
-    background: linear-gradient(135deg, hsl(var(--primary)/0.14) 0%, hsl(var(--primary)/0.06) 60%, transparent 100%);
-    border-color: hsl(var(--primary)/0.55);
-    box-shadow: 0 8px 32px hsl(var(--primary)/0.18), 0 2px 8px hsl(var(--primary)/0.12), inset 0 1px 0 hsl(var(--primary)/0.2);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--ym-green-50) 90%, white) 0%, color-mix(in srgb, var(--ym-green-50) 60%, transparent) 60%, transparent 100%);
+    border-color: var(--ym-green-200);
+    box-shadow: 0 8px 32px color-mix(in srgb, var(--ym-green-400) 22%, transparent), 0 2px 8px color-mix(in srgb, var(--ym-green-400) 12%, transparent);
     transform: translateY(-2px) scale(1.01);
   }
   .card-public:active { transform: translateY(0px) scale(0.99); }
+
+  /* ── Hidden card — amber ── */
   .card-hidden {
-    background: linear-gradient(135deg, hsl(var(--muted)/0.8) 0%, hsl(var(--muted)/0.4) 100%);
-    border: 1.5px solid hsl(var(--border));
+    background: linear-gradient(135deg, var(--ym-amber-50) 0%, color-mix(in srgb, var(--ym-amber-50) 50%, transparent) 100%);
+    border: 1.5px solid color-mix(in srgb, var(--ym-amber-100) 70%, transparent);
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   .card-hidden:hover {
-    background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--muted)/0.6) 100%);
-    border-color: hsl(var(--muted-foreground)/0.35);
-    box-shadow: 0 8px 28px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.1);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--ym-amber-50) 95%, white) 0%, color-mix(in srgb, var(--ym-amber-50) 70%, transparent) 100%);
+    border-color: var(--ym-amber-100);
+    box-shadow: 0 8px 28px color-mix(in srgb, var(--ym-amber-400) 18%, transparent), 0 2px 8px color-mix(in srgb, var(--ym-amber-400) 10%, transparent);
     transform: translateY(-2px) scale(1.01);
   }
   .card-hidden:active { transform: translateY(0px) scale(0.99); }
+
+  /* ── 3-D icon containers ── */
   .icon-3d-public {
     width: 72px; height: 72px;
     border-radius: 22px;
-    background: linear-gradient(145deg, hsl(var(--primary)/0.9), hsl(var(--primary)));
-    box-shadow:
-      0 4px 0 hsl(var(--primary)/0.4),
-      0 8px 20px hsl(var(--primary)/0.35),
-      inset 0 1px 0 rgba(255,255,255,0.3),
-      inset 0 -2px 0 rgba(0,0,0,0.15);
+    background: linear-gradient(145deg, var(--ym-green-200), var(--ym-green-400));
+    box-shadow: 0 4px 0 var(--ym-green-600), 0 8px 20px color-mix(in srgb, var(--ym-green-400) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(0,0,0,0.12);
     display: flex; align-items: center; justify-content: center;
-    position: relative;
-    transform-style: preserve-3d;
-    transition: all 0.3s ease;
+    position: relative; transform-style: preserve-3d; transition: all 0.3s ease;
   }
   .card-public:hover .icon-3d-public {
     animation: float-icon 2s ease-in-out infinite;
-    box-shadow:
-      0 8px 0 hsl(var(--primary)/0.3),
-      0 14px 30px hsl(var(--primary)/0.4),
-      inset 0 1px 0 rgba(255,255,255,0.4),
-      inset 0 -2px 0 rgba(0,0,0,0.15);
+    box-shadow: 0 8px 0 var(--ym-green-600), 0 14px 30px color-mix(in srgb, var(--ym-green-400) 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.12);
   }
   .icon-3d-hidden {
     width: 72px; height: 72px;
     border-radius: 22px;
-    background: linear-gradient(145deg, hsl(var(--muted-foreground)/0.5), hsl(var(--muted-foreground)/0.35));
-    box-shadow:
-      0 4px 0 rgba(0,0,0,0.15),
-      0 8px 20px rgba(0,0,0,0.12),
-      inset 0 1px 0 rgba(255,255,255,0.2),
-      inset 0 -2px 0 rgba(0,0,0,0.1);
+    background: linear-gradient(145deg, var(--ym-amber-200), var(--ym-amber-400));
+    box-shadow: 0 4px 0 var(--ym-amber-600), 0 8px 20px color-mix(in srgb, var(--ym-amber-400) 30%, transparent), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(0,0,0,0.12);
     display: flex; align-items: center; justify-content: center;
-    position: relative;
-    transform-style: preserve-3d;
-    transition: all 0.3s ease;
+    position: relative; transform-style: preserve-3d; transition: all 0.3s ease;
   }
   .card-hidden:hover .icon-3d-hidden {
     animation: float-icon 2s ease-in-out infinite;
-    box-shadow:
-      0 8px 0 rgba(0,0,0,0.12),
-      0 14px 28px rgba(0,0,0,0.16),
-      inset 0 1px 0 rgba(255,255,255,0.25),
-      inset 0 -2px 0 rgba(0,0,0,0.1);
+    box-shadow: 0 8px 0 var(--ym-amber-600), 0 14px 28px color-mix(in srgb, var(--ym-amber-400) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.12);
   }
   .icon-shine {
     position: absolute; top: 0; left: 0; right: 0; height: 50%;
     border-radius: 22px 22px 0 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 100%);
+    background: linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 100%);
     pointer-events: none;
   }
+
+  /* ── Badges ── */
   .badge-live {
     display: inline-flex; align-items: center; gap: 5px;
-    background: hsl(var(--primary)/0.12);
-    border: 1px solid hsl(var(--primary)/0.3);
-    color: hsl(var(--primary));
+    background: var(--ym-green-50);
+    border: 1px solid color-mix(in srgb, var(--ym-green-200) 60%, transparent);
+    color: var(--ym-green-600);
     border-radius: 99px; padding: 2px 10px;
     font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
   }
   .badge-live-dot {
     width: 6px; height: 6px; border-radius: 50%;
-    background: hsl(var(--primary));
+    background: var(--ym-green-400);
     animation: pulse-dot 1.8s ease-in-out infinite;
   }
   @keyframes pulse-dot {
@@ -149,33 +158,31 @@ const menuStyles = `
   }
   .badge-draft {
     display: inline-flex; align-items: center; gap: 5px;
-    background: hsl(var(--muted));
-    border: 1px solid hsl(var(--border));
-    color: hsl(var(--muted-foreground));
+    background: var(--ym-amber-50);
+    border: 1px solid color-mix(in srgb, var(--ym-amber-100) 70%, transparent);
+    color: var(--ym-amber-600);
     border-radius: 99px; padding: 2px 10px;
     font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
   }
+
+  /* ── Search bar glow ── */
   .search-glow:focus-within {
-    box-shadow: 0 0 0 2px hsl(var(--primary)/0.2), 0 2px 8px hsl(var(--primary)/0.1);
-    border-color: hsl(var(--primary)/0.5) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ym-green-400) 22%, transparent), 0 2px 8px color-mix(in srgb, var(--ym-green-400) 10%, transparent);
+    border-color: color-mix(in srgb, var(--ym-green-200) 80%, transparent) !important;
   }
-  .card-arrow {
-    transition: transform 0.2s ease;
-  }
+
+  .card-arrow { transition: transform 0.2s ease; }
   .card-public:hover .card-arrow,
-  .card-hidden:hover .card-arrow {
-    transform: translateX(3px);
-  }
+  .card-hidden:hover .card-arrow { transform: translateX(3px); }
+
+  /* ── Search dropdown ── */
   .search-dropdown {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0; right: 0;
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0;
     background: hsl(var(--background));
-    border: 1.5px solid hsl(var(--primary)/0.3);
+    border: 1.5px solid color-mix(in srgb, var(--ym-green-200) 55%, transparent);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-    z-index: 50;
-    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.05);
+    z-index: 50; overflow: hidden;
     animation: dropdown-in 0.15s cubic-bezier(0.16,1,0.3,1);
   }
   @keyframes dropdown-in {
@@ -184,163 +191,137 @@ const menuStyles = `
   }
   .search-result-item {
     display: flex; align-items: center; gap: 10px;
-    padding: 10px 14px;
-    cursor: pointer;
+    padding: 10px 14px; cursor: pointer;
     transition: background 0.12s ease;
     border-bottom: 1px solid hsl(var(--border)/0.5);
   }
   .search-result-item:last-child { border-bottom: none; }
   .search-result-item:hover,
-  .search-result-item.active { background: hsl(var(--primary)/0.07); }
+  .search-result-item.active { background: var(--ym-green-50); }
   .search-result-avatar {
-    width: 42px; height: 42px;
-    border-radius: 8px;
-    object-fit: cover;
-    flex-shrink: 0;
-    background: hsl(var(--muted));
-    border: 1px solid hsl(var(--border));
+    width: 42px; height: 42px; border-radius: 8px;
+    object-fit: cover; flex-shrink: 0;
+    background: var(--ym-green-50);
+    border: 1px solid color-mix(in srgb, var(--ym-green-200) 40%, transparent);
   }
   .search-result-avatar-placeholder {
-    width: 42px; height: 42px;
-    border-radius: 8px;
-    background: hsl(var(--muted));
-    border: 1px solid hsl(var(--border));
+    width: 42px; height: 42px; border-radius: 8px;
+    background: var(--ym-green-50);
+    border: 1px solid color-mix(in srgb, var(--ym-green-200) 50%, transparent);
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    font-size: 12px;
-    color: hsl(var(--foreground)/0.7);
-    font-weight: 700;
+    flex-shrink: 0; font-size: 12px; color: var(--ym-green-600); font-weight: 700;
   }
   .search-highlight {
-    background: hsl(var(--primary)/0.18);
-    color: hsl(var(--primary));
-    border-radius: 3px;
-    padding: 0 1px;
-    font-weight: 600;
+    background: color-mix(in srgb, var(--ym-amber-100) 55%, transparent);
+    color: var(--ym-amber-600);
+    border-radius: 3px; padding: 0 1px; font-weight: 600;
   }
   .search-badge-public {
     display: inline-flex; align-items: center; gap: 3px;
-    background: hsl(var(--primary)/0.1);
-    color: hsl(var(--primary));
+    background: var(--ym-green-50);
+    color: var(--ym-green-600);
     border-radius: 99px; padding: 2px 8px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
-    flex-shrink: 0;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.03em; flex-shrink: 0;
   }
   .search-badge-hidden {
     display: inline-flex; align-items: center;
-    background: hsl(var(--muted));
-    color: hsl(var(--foreground)/0.6);
+    background: var(--ym-amber-50);
+    color: var(--ym-amber-600);
     border-radius: 99px; padding: 2px 8px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
-    flex-shrink: 0;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.03em; flex-shrink: 0;
   }
 
   /* ── Maid card grid item ── */
   .maid-card {
-    border-radius: 0;
-    overflow: hidden;
+    border-radius: 0; overflow: hidden;
     border: 1.5px solid hsl(var(--border));
     transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
   }
   .maid-card:hover {
-    box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+    box-shadow: 0 6px 24px color-mix(in srgb, var(--ym-green-400) 14%, rgba(0,0,0,0.06));
     transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--ym-green-200) 70%, transparent);
   }
   .maid-card.selected {
-    border-color: hsl(var(--primary));
-    box-shadow: 0 0 0 3px hsl(var(--primary)/0.18);
+    border-color: var(--ym-green-400);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ym-green-400) 20%, transparent);
   }
   .maid-card-photo {
-    width: 100%;
-    aspect-ratio: 3 / 4;
-    object-fit: contain;
-    object-position: top center;
-    display: block;
-    min-height: 130px;
-    background: #ffffff;
-    vertical-align: top;
+    width: 100%; aspect-ratio: 3 / 4; object-fit: contain; object-position: top center;
+    display: block; min-height: 130px; background: #ffffff; vertical-align: top;
   }
   .maid-card-no-photo {
-    width: 100%;
-    aspect-ratio: 3 / 4;
-    min-height: 130px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #ffffff;
-    font-size: 11px;
-    color: #111;
-    font-weight: 500;
+    width: 100%; aspect-ratio: 3 / 4; min-height: 130px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ym-green-50); font-size: 11px;
+    color: var(--ym-green-800); font-weight: 500;
   }
   .maid-card-body {
-    padding: 7px 8px 9px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    padding: 7px 8px 9px; display: flex; flex-direction: column; gap: 4px;
   }
   .maid-card-name {
-    font-size: 12px;
-    font-weight: 800;
-    color: #0a0a0a;
-    line-height: 1.3;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: pointer;
+    font-size: 12px; font-weight: 800; color: #0a0a0a;
+    line-height: 1.3; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; cursor: pointer;
   }
-  .maid-card-name:hover { color: hsl(var(--primary)); }
+  .maid-card-name:hover { color: var(--ym-green-600); }
   .maid-card-meta {
-    font-size: 10.5px;
-    color: #1a1a1a;
-    line-height: 1.55;
-    font-weight: 500;
+    font-size: 10.5px; color: #1a1a1a; line-height: 1.55; font-weight: 500;
   }
-  .maid-card-meta strong {
-    color: #0a0a0a;
-    font-weight: 700;
-  }
+  .maid-card-meta strong { color: #0a0a0a; font-weight: 700; }
   .maid-card-ref {
-    font-size: 10.5px;
-    font-weight: 800;
-    color: #0a0a0a;
-    font-variant-numeric: tabular-nums;
+    font-size: 10.5px; font-weight: 800; color: #0a0a0a; font-variant-numeric: tabular-nums;
   }
-  .maid-card-date {
-    font-size: 10px;
-    color: #2a2a2a;
-    font-weight: 500;
-  }
+  .maid-card-date { font-size: 10px; color: #2a2a2a; font-weight: 500; }
+
+  /* ── Visibility toggle button on card ── */
   .maid-card-vis-btn {
-    display: inline-flex;
-    width: 100%;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    border-radius: 4px;
-    padding: 5px 6px;
-    font-size: 10.5px;
-    font-weight: 700;
-    transition: background 0.15s ease;
-    margin-top: 2px;
-    cursor: pointer;
-    border: none;
-    outline: none;
+    display: inline-flex; width: 100%; align-items: center; justify-content: center;
+    gap: 4px; border-radius: 4px; padding: 5px 6px; font-size: 10.5px; font-weight: 700;
+    transition: background 0.15s ease; margin-top: 2px;
+    cursor: pointer; border: none; outline: none;
   }
   .maid-card-vis-btn.public {
-    background: hsl(var(--primary)/0.10);
-    color: hsl(var(--primary));
+    background: var(--ym-green-50);
+    color: var(--ym-green-600);
+    border: 1px solid color-mix(in srgb, var(--ym-green-200) 50%, transparent);
   }
-  .maid-card-vis-btn.public:hover { background: hsl(var(--primary)/0.20); }
+  .maid-card-vis-btn.public:hover { background: color-mix(in srgb, var(--ym-green-100) 60%, white); }
   .maid-card-vis-btn.hidden-btn {
-    background: hsl(var(--muted));
-    color: hsl(var(--foreground)/0.65);
+    background: var(--ym-amber-50);
+    color: var(--ym-amber-600);
+    border: 1px solid color-mix(in srgb, var(--ym-amber-100) 60%, transparent);
   }
-  .maid-card-vis-btn.hidden-btn:hover { background: hsl(var(--muted)/0.7); }
+  .maid-card-vis-btn.hidden-btn:hover { background: color-mix(in srgb, var(--ym-amber-100) 40%, white); }
+
+  /* ── Bulk actions bar accent ── */
+  .bulk-bar {
+    background: var(--ym-green-50);
+    border: 1px solid color-mix(in srgb, var(--ym-green-200) 45%, transparent);
+    border-radius: 10px;
+  }
+
+  /* ── Status chip in list header ── */
+  .chip-public {
+    background: var(--ym-green-50);
+    color: var(--ym-green-600);
+    border: 1px solid color-mix(in srgb, var(--ym-green-200) 60%, transparent);
+  }
+  .chip-hidden {
+    background: var(--ym-amber-50);
+    color: var(--ym-amber-600);
+    border: 1px solid color-mix(in srgb, var(--ym-amber-100) 60%, transparent);
+  }
+
+  /* ── Back button ── */
+  .back-btn-line {
+    background: var(--ym-green-400);
+  }
+  .back-btn:hover .back-btn-line { width: 100%; }
 `;
 
 // ── Nationality → ISO 3166-1 alpha-2 country code ──────────────────────────
 const NATIONALITY_FLAGS: Record<string, string> = {
-  // Southeast Asia
   filipino: "PH", philippines: "PH",
   indonesian: "ID", indonesia: "ID",
   myanmar: "MM", burmese: "MM",
@@ -349,19 +330,16 @@ const NATIONALITY_FLAGS: Record<string, string> = {
   thai: "TH", thailand: "TH",
   malaysian: "MY", malaysia: "MY",
   singaporean: "SG", singapore: "SG",
-  // South Asia
   indian: "IN", india: "IN",
   "sri lankan": "LK", "sri lanka": "LK",
   bangladeshi: "BD", bangladesh: "BD",
   nepali: "NP", nepal: "NP",
   pakistani: "PK", pakistan: "PK",
-  // East Asia
   chinese: "CN", china: "CN",
   hongkong: "HK", "hong kong": "HK",
   taiwanese: "TW", taiwan: "TW",
   korean: "KR", "south korea": "KR",
   japanese: "JP", japan: "JP",
-  // Africa / Others
   ethiopian: "ET", ethiopia: "ET",
   kenyan: "KE", kenya: "KE",
   ugandan: "UG", uganda: "UG",
@@ -379,24 +357,15 @@ const getNationalityCode = (nationality?: string): string => {
   return "";
 };
 
-/** Circular flag image using flagcdn.com */
 const FlagCircle = ({ code }: { code: string }) => {
   if (!code) return null;
   return (
     <span
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 16,
-        height: 16,
-        borderRadius: "50%",
-        overflow: "hidden",
-        border: "1px solid rgba(0,0,0,0.13)",
-        flexShrink: 0,
-        marginRight: 3,
-        verticalAlign: "middle",
-        background: "#e5e7eb",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 16, height: 16, borderRadius: "50%", overflow: "hidden",
+        border: "1px solid rgba(0,0,0,0.13)", flexShrink: 0,
+        marginRight: 3, verticalAlign: "middle", background: "#e5e7eb",
       }}
     >
       <img
@@ -692,22 +661,13 @@ const EditMaids = () => {
   };
 
   const CSV_FIELD_MAP: Record<string, string> = {
-    name: "fullName",
-    full_name: "fullName",
-    maid_name: "fullName",
-    maidname: "fullName",
-    fullname: "fullName",
-    age: "age",
-    nationality: "nationality",
-    country: "nationality",
-    experience: "experience",
-    years: "experience",
-    years_of_experience: "experience",
-    photo: "photoDataUrl",
-    photo_url: "photoDataUrl",
-    image: "photoDataUrl",
-    image_url: "photoDataUrl",
-    picture: "photoDataUrl",
+    name: "fullName", full_name: "fullName", maid_name: "fullName",
+    maidname: "fullName", fullname: "fullName", age: "age",
+    nationality: "nationality", country: "nationality",
+    experience: "experience", years: "experience",
+    years_of_experience: "experience", photo: "photoDataUrl",
+    photo_url: "photoDataUrl", image: "photoDataUrl",
+    image_url: "photoDataUrl", picture: "photoDataUrl",
   };
 
   const normalizeCsv = (csvText: string): string => {
@@ -737,11 +697,8 @@ const EditMaids = () => {
         body: JSON.stringify({ csv: normalizedCsv }),
       });
       const data = (await response.json()) as {
-        error?: string;
-        created?: number;
-        updated?: number;
-        failed?: number;
-        errors?: string[];
+        error?: string; created?: number; updated?: number;
+        failed?: number; errors?: string[];
       };
       if (!response.ok && response.status !== 207) throw new Error(data.error || "Failed to import CSV");
       const created = data.created ?? 0;
@@ -804,15 +761,11 @@ const EditMaids = () => {
     if (ext === "pdf") {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const rawPdf = Array.from(bytes, (value) => String.fromCharCode(value)).join("");
-
       const subjectHexMatch = rawPdf.match(/\/Subject\s*<([0-9A-Fa-f]+)>/);
       const subjectHex = subjectHexMatch ? decodePdfUtf16Hex(subjectHexMatch[1]) : "";
-
       const subjectStrMatch = rawPdf.match(/\/Subject\s*\(([^)]*)\)/);
       const subjectStr = subjectStrMatch ? subjectStrMatch[1] : "";
-
       const subject = subjectHex || subjectStr;
-
       if (subject.startsWith("MAIDS_CSV_BASE64:")) {
         await importCsvText(decodeBase64Utf8(subject.slice("MAIDS_CSV_BASE64:".length)));
         return;
@@ -830,7 +783,6 @@ const EditMaids = () => {
         else printable += " ";
       }
       const text = printable.replace(/\s+/g, " ").trim();
-
       const extract = (patterns: RegExp[]) => {
         for (const re of patterns) {
           const m = text.match(re);
@@ -838,7 +790,6 @@ const EditMaids = () => {
         }
         return "";
       };
-
       const guessedName = extract([
         /(?:maid\s*name|full\s*name|name\s*of\s*fdw|fdw\s*name|name)\s*[:-]?\s*([A-Za-z][A-Za-z\s'.–-]{1,60}?)(?=\s{2,}|\d|$)/i,
         /1\.\s*Name\s*[:-]?\s*([A-Za-z][A-Za-z\s'.–-]{1,60}?)(?=\s{2,}|\d|$)/i,
@@ -849,12 +800,7 @@ const EditMaids = () => {
       const guessedRef = extract([
         /(?:reference\s*code|ref\.?\s*code|ref\.?\s*no\.?)\s*[:-]?\s*([A-Za-z0-9_-]{2,30})/i,
       ]);
-
-      setManualImportFields({
-        name: guessedName,
-        nationality: guessedNationality,
-        referenceCode: guessedRef,
-      });
+      setManualImportFields({ name: guessedName, nationality: guessedNationality, referenceCode: guessedRef });
       setManualImportOpen(true);
       return;
     }
@@ -866,9 +812,7 @@ const EditMaids = () => {
       const xml = new DOMParser().parseFromString(docXml, "application/xml");
       const text = Array.from(xml.getElementsByTagName("w:t"))
         .map((n) => n.textContent ?? "")
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
+        .join(" ").replace(/\s+/g, " ").trim();
       const refMatch = text.match(/\breference\s*code\b\s*[:-]?\s*([a-z0-9_-]{2,})/i);
       const nameMatch = text.match(/\bfull\s*name\b\s*[:-]?\s*([a-z][^:]{1,80}?)(?=\s{2,}|$)/i);
       if (!refMatch?.[1] || !nameMatch?.[1]) throw new Error("DOCX is missing required fields: referenceCode, fullName");
@@ -917,17 +861,12 @@ const EditMaids = () => {
     if (all.length > 10) toast.error("Max 10 files per upload");
     const list = all.slice(0, 10);
     if (list.length === 0) return;
-
     const approved: File[] = [];
     for (const file of list) {
       const scan = await scanUploadedFile(file);
-      if (!scan.success) {
-        toast.error(`${file.name}: ${scan.message}`);
-        continue;
-      }
+      if (!scan.success) { toast.error(`${file.name}: ${scan.message}`); continue; }
       approved.push(file);
     }
-
     if (approved.length === 0) return;
     setPendingImportFiles(approved);
     setConfirmImportOpen(true);
@@ -956,6 +895,7 @@ const EditMaids = () => {
     await importCsvText(`referenceCode,fullName,nationality\n${escapeCsv(ref)},${escapeCsv(name.trim())},${escapeCsv(nationality.trim())}`);
   };
 
+  // ── Shared dialogs (yellow/green accented) ────────────────────────────────
   const sharedDialogs = (
     <>
       {/* Export */}
@@ -970,7 +910,13 @@ const EditMaids = () => {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>Cancel</Button>
-            <Button onClick={confirmExportPdf} disabled={isExporting}>{isExporting ? "Exporting..." : "Download PDF"}</Button>
+            <Button
+              onClick={confirmExportPdf}
+              disabled={isExporting}
+              style={{ background: "var(--ym-green-400)", color: "#fff", borderColor: "var(--ym-green-600)" }}
+            >
+              {isExporting ? "Exporting..." : "Download PDF"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -991,7 +937,13 @@ const EditMaids = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>Cancel</Button>
-            <Button onClick={() => void confirmImportFiles()} disabled={isImporting || pendingImportFiles.length === 0}>{isImporting ? "Uploading..." : "Upload File"}</Button>
+            <Button
+              onClick={() => void confirmImportFiles()}
+              disabled={isImporting || pendingImportFiles.length === 0}
+              style={{ background: "var(--ym-green-400)", color: "#fff", borderColor: "var(--ym-green-600)" }}
+            >
+              {isImporting ? "Uploading..." : "Upload File"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1036,22 +988,34 @@ const EditMaids = () => {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${pendingVisibilityTarget?.makePublic ? "bg-primary/10" : "bg-muted"}`}>
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+                style={{
+                  background: pendingVisibilityTarget?.makePublic
+                    ? "var(--ym-green-50)"
+                    : "var(--ym-amber-50)",
+                }}
+              >
                 {pendingVisibilityTarget?.makePublic
-                  ? <Eye className="h-5 w-5 text-primary" />
-                  : <EyeOff className="h-5 w-5 text-muted-foreground" />}
+                  ? <Eye className="h-5 w-5" style={{ color: "var(--ym-green-600)" }} />
+                  : <EyeOff className="h-5 w-5" style={{ color: "var(--ym-amber-600)" }} />}
               </div>
               <div>
                 <DialogTitle>
                   {pendingVisibilityTarget?.makePublic ? "Publish maid?" : "Hide maid?"}
                 </DialogTitle>
-                <DialogDescription className="mt-0.5">
-                  This can be reversed at any time.
-                </DialogDescription>
+                <DialogDescription className="mt-0.5">This can be reversed at any time.</DialogDescription>
               </div>
             </div>
           </DialogHeader>
-          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-foreground">
+          <div
+            className="rounded-lg px-4 py-3 text-sm"
+            style={{
+              background: pendingVisibilityTarget?.makePublic ? "var(--ym-green-50)" : "var(--ym-amber-50)",
+              border: `1px solid ${pendingVisibilityTarget?.makePublic ? "color-mix(in srgb, var(--ym-green-200) 50%, transparent)" : "color-mix(in srgb, var(--ym-amber-100) 60%, transparent)"}`,
+              color: pendingVisibilityTarget?.makePublic ? "var(--ym-green-800)" : "var(--ym-amber-800)",
+            }}
+          >
             {pendingVisibilityTarget && "bulk" in pendingVisibilityTarget ? (
               <>
                 <strong>{selected.size} maid{selected.size !== 1 ? "s" : ""}</strong> will be{" "}
@@ -1069,18 +1033,16 @@ const EditMaids = () => {
             )}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setVisibilityDialogOpen(false);
-                setPendingVisibilityTarget(null);
-              }}
-            >
+            <Button variant="outline" onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }}>
               Cancel
             </Button>
             <Button
-              variant={pendingVisibilityTarget?.makePublic ? "default" : "secondary"}
               onClick={() => void confirmVisibilityChange()}
+              style={
+                pendingVisibilityTarget?.makePublic
+                  ? { background: "var(--ym-green-400)", color: "#fff", borderColor: "var(--ym-green-600)" }
+                  : { background: "var(--ym-amber-200)", color: "var(--ym-amber-800)", borderColor: "var(--ym-amber-400)" }
+              }
             >
               {pendingVisibilityTarget?.makePublic
                 ? <><Eye className="mr-2 h-4 w-4" /> Publish</>
@@ -1099,43 +1061,39 @@ const EditMaids = () => {
               This PDF wasn't exported from this system. Review the extracted fields below, fill in anything missing, then click Import.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
+          <div
+            className="rounded-md px-3 py-2 text-xs flex items-start gap-2"
+            style={{
+              background: "var(--ym-amber-50)",
+              border: "1px solid color-mix(in srgb, var(--ym-amber-100) 70%, transparent)",
+              color: "var(--ym-amber-800)",
+            }}
+          >
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <span>Photos cannot be extracted from external PDFs. After importing, open the maid profile and use <strong>Manage Photos</strong> to upload them manually.</span>
           </div>
           <div className="space-y-3 py-1">
             <div className="space-y-1">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Full Name <span className="text-destructive">*</span></label>
-              <Input
-                value={manualImportFields.name}
-                onChange={(e) => setManualImportFields((p) => ({ ...p, name: e.target.value }))}
-                placeholder="e.g. Maria Santos"
-                className="text-sm"
-              />
+              <Input value={manualImportFields.name} onChange={(e) => setManualImportFields((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Maria Santos" className="text-sm" />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nationality</label>
-              <Input
-                value={manualImportFields.nationality}
-                onChange={(e) => setManualImportFields((p) => ({ ...p, nationality: e.target.value }))}
-                placeholder="e.g. Filipino"
-                className="text-sm"
-              />
+              <Input value={manualImportFields.nationality} onChange={(e) => setManualImportFields((p) => ({ ...p, nationality: e.target.value }))} placeholder="e.g. Filipino" className="text-sm" />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reference Code</label>
-              <Input
-                value={manualImportFields.referenceCode}
-                onChange={(e) => setManualImportFields((p) => ({ ...p, referenceCode: e.target.value }))}
-                placeholder="Leave blank to auto-generate"
-                className="text-sm font-mono"
-              />
+              <Input value={manualImportFields.referenceCode} onChange={(e) => setManualImportFields((p) => ({ ...p, referenceCode: e.target.value }))} placeholder="Leave blank to auto-generate" className="text-sm font-mono" />
               <p className="text-[10px] text-muted-foreground">If blank, a temporary code will be assigned — you can edit it later.</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setManualImportOpen(false)} disabled={isImporting}>Cancel</Button>
-            <Button onClick={() => void confirmManualImport()} disabled={isImporting || !manualImportFields.name.trim()}>
+            <Button
+              onClick={() => void confirmManualImport()}
+              disabled={isImporting || !manualImportFields.name.trim()}
+              style={{ background: "var(--ym-green-400)", color: "#fff", borderColor: "var(--ym-green-600)" }}
+            >
               {isImporting ? "Importing…" : "Import"}
             </Button>
           </DialogFooter>
@@ -1144,7 +1102,7 @@ const EditMaids = () => {
     </>
   );
 
-  // ── MENU VIEW ────────────────────────────────────────────────────────────
+  // ── MENU VIEW ─────────────────────────────────────────────────────────────
   if (view === "menu") {
     return (
       <div className="page-container">
@@ -1153,8 +1111,14 @@ const EditMaids = () => {
 
           {/* Quick-search */}
           <div ref={menuSearchRef} className="relative">
-            <div className={`search-glow flex items-center gap-2 rounded-xl border bg-background px-3 py-1 shadow-sm transition-all ${menuSearchOpen ? "border-primary/50" : ""}`}>
-              <Search className={`h-4 w-4 shrink-0 transition-colors ${menuSearchLoading ? "text-primary animate-pulse" : "text-muted-foreground"}`} />
+            <div
+              className={`search-glow flex items-center gap-2 rounded-xl border bg-background px-3 py-1 shadow-sm transition-all ${menuSearchOpen ? "" : ""}`}
+              style={menuSearchOpen ? { borderColor: "color-mix(in srgb, var(--ym-green-200) 80%, transparent)" } : {}}
+            >
+              <Search
+                className={`h-4 w-4 shrink-0 transition-colors ${menuSearchLoading ? "animate-pulse" : "text-muted-foreground"}`}
+                style={menuSearchLoading ? { color: "var(--ym-green-400)" } : {}}
+              />
               <input
                 type="text"
                 placeholder="Quick-search any maid by name or reference code…"
@@ -1188,8 +1152,7 @@ const EditMaids = () => {
               <div className="search-dropdown">
                 {menuSearchResults.map((maid, idx) => {
                   const photo = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
-                    ? maid.photoDataUrls[0]
-                    : maid.photoDataUrl;
+                    ? maid.photoDataUrls[0] : maid.photoDataUrl;
                   const age = calculateAge(maid.dateOfBirth);
                   const vis = (maid as MaidProfile & { _vis?: string })._vis;
                   const flagCode = getNationalityCode(maid.nationality);
@@ -1216,13 +1179,7 @@ const EditMaids = () => {
                         </p>
                         <p className="truncate text-[11px] text-foreground/55 mt-0.5 flex items-center">
                           <span className="font-semibold">{highlightMatch(String(maid.referenceCode), menuSearch)}</span>
-                          {maid.nationality ? (
-                            <>
-                              <span className="mx-1">·</span>
-                              <FlagCircle code={flagCode} />
-                              {maid.nationality}
-                            </>
-                          ) : ""}
+                          {maid.nationality ? (<><span className="mx-1">·</span><FlagCircle code={flagCode} />{maid.nationality}</>) : ""}
                           {age !== null ? ` · ${age} yrs` : ""}
                         </p>
                       </div>
@@ -1246,46 +1203,19 @@ const EditMaids = () => {
             )}
           </div>
 
-          {/* Export / Import toolbar */}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={requestExport} disabled={isExporting} className="flex-1 sm:flex-none">
-              <Download className="mr-2 h-4 w-4" />
-              {isExporting ? "Exporting PDF…" : "Export PDF"}
-            </Button>
-            <label className="inline-flex flex-1 sm:flex-none cursor-pointer">
-              <input
-                type="file"
-                accept=".csv,.xls,.xlsx,.doc,.docx,.pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
-                className="hidden"
-                disabled={isImporting}
-                multiple
-                onChange={(e) => { void requestImportFiles(e.target.files); e.currentTarget.value = ""; }}
-              />
-              <span className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
-                <Upload className="h-4 w-4" />
-                {isImporting ? "Uploading…" : "Upload PDF"}
-              </span>
-            </label>
-          </div>
-
-          <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-foreground/55">
-            PDF is now the main maid export/import format here.
-            Legacy <strong>.csv</strong>, <strong>.xls</strong>/<strong>.xlsx</strong>, and <strong>.doc</strong>/<strong>.docx</strong> files are still supported for older exports.
-          </p>
-
           <hr className="border-border" />
 
           {/* Category cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
-            {/* Public Card */}
+            {/* Public Card — green */}
             <button onClick={() => setView("public")} className="card-public group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center">
-              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full bg-primary/10 blur-2xl" />
-              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full bg-primary/8 blur-xl" />
+              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl" style={{ background: "color-mix(in srgb, var(--ym-green-200) 20%, transparent)" }} />
+              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl" style={{ background: "color-mix(in srgb, var(--ym-green-100) 18%, transparent)" }} />
 
               <div className="icon-3d-public">
                 <div className="icon-shine" />
-                <Eye className="h-8 w-8 text-white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }} />
+                <Eye className="h-8 w-8 text-white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.25))" }} />
               </div>
 
               <div className="space-y-1.5">
@@ -1295,13 +1225,13 @@ const EditMaids = () => {
                     Live
                   </span>
                 </div>
-                <p className="text-lg font-bold tracking-tight text-primary">Maids in Public</p>
+                <p className="text-lg font-bold tracking-tight" style={{ color: "var(--ym-green-700, var(--ym-green-600))" }}>Maids in Public</p>
                 <p className="text-sm text-foreground/60 leading-relaxed">
                   View, edit or remove<br />publicly visible maids
                 </p>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-primary/70 group-hover:text-primary transition-colors">
+              <div className="flex items-center gap-1.5 text-xs font-semibold transition-colors" style={{ color: "var(--ym-green-600)" }}>
                 <span>Open list</span>
                 <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -1309,20 +1239,20 @@ const EditMaids = () => {
               </div>
             </button>
 
-            {/* Hidden Card */}
+            {/* Hidden Card — amber/yellow */}
             <button onClick={() => setView("hidden")} className="card-hidden group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center">
-              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full bg-muted-foreground/6 blur-2xl" />
-              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full bg-muted-foreground/4 blur-xl" />
+              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl" style={{ background: "color-mix(in srgb, var(--ym-amber-200) 18%, transparent)" }} />
+              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl" style={{ background: "color-mix(in srgb, var(--ym-amber-100) 16%, transparent)" }} />
 
               <div className="icon-3d-hidden">
                 <div className="icon-shine" />
-                <EyeOff className="h-8 w-8 text-white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.25))" }} />
+                <EyeOff className="h-8 w-8 text-white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.22))" }} />
               </div>
 
               <div className="space-y-1.5">
                 <div className="mb-2">
                   <span className="badge-draft">
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", opacity: 0.5, display: "inline-block", flexShrink: 0 }} />
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ym-amber-400)", display: "inline-block", flexShrink: 0 }} />
                     Draft
                   </span>
                 </div>
@@ -1332,7 +1262,7 @@ const EditMaids = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/50 group-hover:text-foreground transition-colors">
+              <div className="flex items-center gap-1.5 text-xs font-semibold transition-colors" style={{ color: "var(--ym-amber-600)" }}>
                 <span>Open list</span>
                 <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -1341,7 +1271,14 @@ const EditMaids = () => {
             </button>
           </div>
 
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+          <p
+            className="rounded-md px-3 py-2 text-center text-xs"
+            style={{
+              background: "var(--ym-amber-50)",
+              border: "1px solid color-mix(in srgb, var(--ym-amber-100) 70%, transparent)",
+              color: "var(--ym-amber-700, var(--ym-amber-600))",
+            }}
+          >
             Maids without photos will not be displayed publicly. Add photos first, then make them searchable.
           </p>
         </div>
@@ -1358,20 +1295,24 @@ const EditMaids = () => {
     <div className="page-container" style={{ maxWidth: "100%", width: "100%", paddingLeft: "1.25rem", paddingRight: "1.25rem" }}>
       <style>{menuStyles}</style>
 
+      {/* List header bar */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <button
           onClick={handleBack}
-          className="group inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="back-btn group inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium focus:outline-none focus:ring-2"
+          style={{ color: "var(--ym-green-600)", "--tw-ring-color": "color-mix(in srgb, var(--ym-green-400) 30%, transparent)" } as React.CSSProperties}
         >
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
           <span className="relative">
             Back
-            <span className="absolute left-0 -bottom-0.5 h-px w-0 bg-primary transition-all group-hover:w-full" />
+            <span className="back-btn-line absolute left-0 -bottom-0.5 h-px w-0 transition-all group-hover:w-full" />
           </span>
         </button>
 
         <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${view === "public" ? "bg-primary/10 text-primary" : "bg-muted text-foreground/70"}`}>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${view === "public" ? "chip-public" : "chip-hidden"}`}
+          >
             {view === "public" ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             {view === "public" ? "Public Maids" : "Hidden Maids"}
           </span>
@@ -1403,36 +1344,16 @@ const EditMaids = () => {
                 onClick={() => setSearch("")}
                 className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-colors text-xs"
                 aria-label="Clear search"
-              >
-                ✕
-              </button>
+              >✕</button>
             )}
           </div>
-          <Button variant="outline" onClick={requestExport} disabled={isExporting}>
-            <Download className="mr-2 h-4 w-4" />
-            {isExporting ? "Exporting PDF…" : "Export PDF"}
-          </Button>
-          <label className="inline-flex cursor-pointer">
-            <input
-              type="file"
-              accept=".csv,.xls,.xlsx,.doc,.docx,.pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
-              className="hidden"
-              disabled={isImporting}
-              multiple
-              onChange={(e) => { void requestImportFiles(e.target.files); e.currentTarget.value = ""; }}
-            />
-            <span className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">
-              <Upload className="h-4 w-4" />
-              {isImporting ? "Uploading…" : "Upload PDF"}
-            </span>
-          </label>
         </div>
 
         {/* Bulk actions bar */}
         {maids.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-2.5">
+          <div className="bulk-bar flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
             <label className="flex cursor-pointer items-center gap-2 text-sm font-medium select-none">
-              <button type="button" onClick={toggleAll} className="text-primary">
+              <button type="button" onClick={toggleAll} style={{ color: "var(--ym-green-600)" }}>
                 {allPageSelected
                   ? <CheckSquare className="h-4 w-4" />
                   : <Square className="h-4 w-4 text-muted-foreground" />}
@@ -1449,6 +1370,10 @@ const EditMaids = () => {
                 disabled={selected.size === 0}
                 onClick={() => openVisibilityDialog({ bulk: true, makePublic: view !== "public" })}
                 className="h-8 text-xs"
+                style={selected.size > 0 ? {
+                  borderColor: "color-mix(in srgb, var(--ym-green-200) 60%, transparent)",
+                  color: "var(--ym-green-700, var(--ym-green-600))",
+                } : {}}
               >
                 <EyeOff className="mr-1.5 h-3.5 w-3.5" />
                 {view === "public" ? "Hide Selected" : "Publish Selected"}
@@ -1493,8 +1418,7 @@ const EditMaids = () => {
               const age = calculateAge(maid.dateOfBirth);
               const photoPreview =
                 Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
-                  ? maid.photoDataUrls[0]
-                  : maid.photoDataUrl;
+                  ? maid.photoDataUrls[0] : maid.photoDataUrl;
               const isSelected = selected.has(maid.referenceCode);
               const flagCode = getNationalityCode(maid.nationality);
 
@@ -1511,28 +1435,28 @@ const EditMaids = () => {
                   {/* Photo area */}
                   <div
                     className="relative w-full cursor-pointer"
-                    onClick={() =>
-                      navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
-                        state: { fromView: view },
-                      })
-                    }
+                    onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
                   >
                     {photoPreview ? (
-                      <img
-                        src={photoPreview}
-                        alt={maid.fullName}
-                        className="maid-card-photo"
-                      />
+                      <img src={photoPreview} alt={maid.fullName} className="maid-card-photo" />
                     ) : (
                       <div className="maid-card-no-photo">No Photo</div>
                     )}
 
                     {/* Checkbox */}
-                    <div
-                      className="absolute left-2 top-2"
-                      onClick={(e) => { e.stopPropagation(); toggle(maid.referenceCode); }}
-                    >
-                      <div className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors cursor-pointer ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-white/70 bg-black/25 backdrop-blur-sm"}`}>
+                    <div className="absolute left-2 top-2" onClick={(e) => { e.stopPropagation(); toggle(maid.referenceCode); }}>
+                      <div
+                        className="flex h-5 w-5 items-center justify-center rounded border-2 transition-colors cursor-pointer"
+                        style={isSelected ? {
+                          borderColor: "var(--ym-green-400)",
+                          background: "var(--ym-green-400)",
+                          color: "#fff",
+                        } : {
+                          borderColor: "rgba(255,255,255,0.75)",
+                          background: "rgba(0,0,0,0.25)",
+                          backdropFilter: "blur(4px)",
+                        }}
+                      >
                         {isSelected && <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                       </div>
                     </div>
@@ -1550,15 +1474,10 @@ const EditMaids = () => {
                   <div className="maid-card-body flex-1">
                     <p
                       className="maid-card-name"
-                      onClick={() =>
-                        navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), {
-                          state: { fromView: view },
-                        })
-                      }
+                      onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
                     >
                       {maid.fullName}
                     </p>
-
                     <div className="maid-card-meta">
                       <p>{maid.maritalStatus}{age !== null ? ` · ${age} yrs` : ""}</p>
                       <p className="flex items-center flex-wrap gap-x-0.5">
@@ -1567,12 +1486,10 @@ const EditMaids = () => {
                       </p>
                       <p>{maid.type}</p>
                     </div>
-
                     <div>
                       <p className="maid-card-ref">Ref: {maid.referenceCode}</p>
                       <p className="maid-card-date">Upd: {formatDate(maid.updatedAt)}</p>
                     </div>
-
                     <button
                       className={`maid-card-vis-btn ${view === "public" ? "public" : "hidden-btn"}`}
                       onClick={() => openVisibilityDialog({ maid, makePublic: view !== "public" })}
@@ -1602,7 +1519,13 @@ const EditMaids = () => {
               <button
                 key={i}
                 onClick={() => setPage(i + 1)}
-                className={`h-9 min-w-[2.25rem] rounded-lg border px-3 text-sm font-medium transition-colors ${i + 1 === currentPage ? "bg-primary text-primary-foreground border-primary font-semibold" : "text-foreground/70 hover:bg-muted"}`}
+                className="h-9 min-w-[2.25rem] rounded-lg border px-3 text-sm font-medium transition-colors"
+                style={i + 1 === currentPage ? {
+                  background: "var(--ym-green-400)",
+                  color: "#fff",
+                  borderColor: "var(--ym-green-600)",
+                  fontWeight: 700,
+                } : { color: "hsl(var(--foreground)/0.7)" }}
               >
                 {i + 1}
               </button>
