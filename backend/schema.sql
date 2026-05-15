@@ -126,6 +126,114 @@ ALTER TABLE agency_admins
 
 CREATE INDEX IF NOT EXISTS idx_maids_agency_id ON maids(agency_id);
 
+-- Production-ready support inbox tables
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'support_conversation_status') THEN
+    CREATE TYPE support_conversation_status AS ENUM (
+      'OPEN',
+      'WAITING_CLIENT',
+      'WAITING_SUPPORT',
+      'RESOLVED',
+      'CLOSED'
+    );
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'support_inquiry_category') THEN
+    CREATE TYPE support_inquiry_category AS ENUM (
+      'Booking Concern',
+      'Payment Concern',
+      'Contract Concern',
+      'Maid Replacement',
+      'Technical Support',
+      'General Inquiry'
+    );
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'support_priority_level') THEN
+    CREATE TYPE support_priority_level AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS support_conversations (
+  id BIGSERIAL PRIMARY KEY,
+  client_id INTEGER NOT NULL,
+  agency_id INTEGER NOT NULL DEFAULT 1,
+  conversation_type VARCHAR(20) NOT NULL DEFAULT 'support' CHECK (conversation_type IN ('support', 'agency')),
+  agency_name VARCHAR(255),
+  subject VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status support_conversation_status NOT NULL DEFAULT 'OPEN',
+  category support_inquiry_category NOT NULL DEFAULT 'General Inquiry',
+  priority support_priority_level NOT NULL DEFAULT 'MEDIUM',
+  assigned_admin_id INTEGER REFERENCES agency_admins(id) ON DELETE SET NULL,
+  unread_client INTEGER NOT NULL DEFAULT 0,
+  unread_admin INTEGER NOT NULL DEFAULT 0,
+  last_message_preview TEXT NOT NULL DEFAULT '',
+  last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  client_last_read_at TIMESTAMPTZ,
+  admin_last_read_at TIMESTAMPTZ,
+  resolved_at TIMESTAMPTZ,
+  closed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT support_conversations_scope_key UNIQUE (client_id, agency_id, conversation_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_conversations_agency_status_updated
+  ON support_conversations(agency_id, status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_conversations_client_updated
+  ON support_conversations(client_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_conversations_priority
+  ON support_conversations(priority, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_conversations_assignment
+  ON support_conversations(assigned_admin_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS support_messages (
+  id BIGSERIAL PRIMARY KEY,
+  conversation_id BIGINT NOT NULL REFERENCES support_conversations(id) ON DELETE CASCADE,
+  client_id INTEGER NOT NULL,
+  agency_id INTEGER NOT NULL DEFAULT 1,
+  conversation_type VARCHAR(20) NOT NULL DEFAULT 'support' CHECK (conversation_type IN ('support', 'agency')),
+  sender_role VARCHAR(20) NOT NULL CHECK (sender_role IN ('client', 'agency')),
+  sender_name VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_messages_conversation_created
+  ON support_messages(conversation_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_support_messages_agency_created
+  ON support_messages(agency_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_messages_client_created
+  ON support_messages(client_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS support_notifications (
+  id BIGSERIAL PRIMARY KEY,
+  conversation_id BIGINT NOT NULL REFERENCES support_conversations(id) ON DELETE CASCADE,
+  message_id BIGINT REFERENCES support_messages(id) ON DELETE CASCADE,
+  client_id INTEGER NOT NULL,
+  agency_id INTEGER NOT NULL DEFAULT 1,
+  recipient_type VARCHAR(20) NOT NULL CHECK (recipient_type IN ('client', 'admin')),
+  recipient_admin_id INTEGER REFERENCES agency_admins(id) ON DELETE CASCADE,
+  title VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_notifications_recipient
+  ON support_notifications(recipient_type, agency_id, client_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_notifications_unread
+  ON support_notifications(recipient_type, read_at, created_at DESC);
+
 -- Normalized request messaging support
 CREATE TABLE IF NOT EXISTS requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

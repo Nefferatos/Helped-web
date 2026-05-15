@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCheck,
+  CheckCircle2,
   MessageCircle,
   Search,
   Send,
@@ -9,7 +10,6 @@ import {
   Inbox,
   SlidersHorizontal,
   ChevronDown,
-  Bot,
   Zap,
   Clock,
   Star,
@@ -18,6 +18,9 @@ import {
   Copy,
   Tag,
   AlertCircle,
+  UserCheck,
+  ShieldAlert,
+  CircleDot,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -28,14 +31,21 @@ import {
   getAgencyAdminToken,
   getStoredAgencyAdmin,
 } from "@/lib/agencyAdminAuth";
-import type { AdminConversation, ChatMessage, ConversationType } from "@/lib/chat";
+import type {
+  AdminConversation,
+  ChatMessage,
+  ConversationType,
+  SupportConversationStatus,
+  SupportInquiryCategory,
+  SupportPriority,
+} from "@/lib/chat";
 import { streamSse } from "@/lib/sse";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
 type SortOption = "newest" | "oldest" | "unread" | "name";
 type FilterOption = "all" | "unread" | "support" | "agency";
-type AiStatus = "online" | "offline" | "checking";
+type StatusFilter = "ALL" | SupportConversationStatus;
 
 /* ─── Quick reply templates ─────────────────────────────────────────────── */
 
@@ -74,14 +84,6 @@ function formatDateLabel(iso: string) {
   return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
-function firstName(name: string) {
-  return name.trim().split(/\s+/)[0] || "there";
-}
-
-function normalizeText(value: string) {
-  return value.trim().toLowerCase();
-}
-
 function compactWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -108,99 +110,34 @@ function getConversationTypeLabel(conversationType: ConversationType) {
   return conversationType === "agency" ? "Agency" : "Support";
 }
 
-function getLatestClientMessage(messages: ChatMessage[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].senderRole === "client") return messages[index];
+function getStatusTone(status?: SupportConversationStatus) {
+  switch (status) {
+    case "OPEN":
+      return { label: "Open", bg: "#eff6ff", fg: "#1d4ed8", border: "#bfdbfe" };
+    case "WAITING_CLIENT":
+      return { label: "Waiting Client", bg: "#fff7ed", fg: "#c2410c", border: "#fdba74" };
+    case "WAITING_SUPPORT":
+      return { label: "Waiting Support", bg: "#fef3c7", fg: "#b45309", border: "#fcd34d" };
+    case "RESOLVED":
+      return { label: "Resolved", bg: "#ecfdf5", fg: "#047857", border: "#86efac" };
+    case "CLOSED":
+      return { label: "Closed", bg: "#f3f4f6", fg: "#4b5563", border: "#d1d5db" };
+    default:
+      return { label: "Open", bg: "#eff6ff", fg: "#1d4ed8", border: "#bfdbfe" };
   }
-  return null;
 }
 
-function buildAutoGreeting(conversation: AdminConversation) {
-  const greetingName = firstName(conversation.clientName);
-  if (conversation.conversationType === "agency" && conversation.agencyName) {
-    return `Hi ${greetingName}, thank you for messaging ${conversation.agencyName}. How can we help you today?`;
+function getPriorityTone(priority?: SupportPriority) {
+  switch (priority) {
+    case "URGENT":
+      return { bg: "#fef2f2", fg: "#b91c1c", border: "#fca5a5" };
+    case "HIGH":
+      return { bg: "#fff7ed", fg: "#c2410c", border: "#fdba74" };
+    case "MEDIUM":
+      return { bg: "#fffbeb", fg: "#b45309", border: "#fcd34d" };
+    default:
+      return { bg: "#f0fdf4", fg: "#166534", border: "#86efac" };
   }
-  return `Hi ${greetingName}, thank you for reaching out to our support team. How can we help you today?`;
-}
-
-function buildOfflineAutoReplies(
-  conversation: AdminConversation,
-  messages: ChatMessage[],
-) {
-  const greeting = buildAutoGreeting(conversation);
-  const latestClientMessage = getLatestClientMessage(messages);
-  if (!latestClientMessage) {
-    return [
-      greeting,
-      "Thank you for your message. Please share the details of what you need help with, and we will assist you as soon as possible.",
-      "Could you let us know your preferred maid profile, timeline, and any key requirements so we can guide you better?",
-    ];
-  }
-
-  const text = normalizeText(latestClientMessage.message);
-  const greetingName = firstName(conversation.clientName);
-
-  if (/(price|pricing|cost|budget|fee|fees|salary|how much)/.test(text)) {
-    return [
-      `Hi ${greetingName}, thank you for your question. We can help with the pricing details for this request.`,
-      "Please let us know your budget range and the type of helper you need, and we will recommend the most suitable option.",
-      "We can also break down the agency fees, salary expectations, and any applicable processing costs for you.",
-    ];
-  }
-
-  if (/(interview|schedule|appointment|meet|viewing|visit|available time|when can)/.test(text)) {
-    return [
-      `Hi ${greetingName}, we can help arrange the next step for you.`,
-      "Please share your preferred date and time, and we will check availability and get back to you shortly.",
-      "If you already have a shortlist or reference code, send it over and we will coordinate the interview or viewing faster.",
-    ];
-  }
-
-  if (/(available|availability|still available|can i hire|open)/.test(text)) {
-    return [
-      `Hi ${greetingName}, thank you for checking with us.`,
-      "We will confirm the current availability for you and update you as soon as possible.",
-      "If you have a specific reference code or profile in mind, please send it so we can verify the status accurately.",
-    ];
-  }
-
-  if (/(document|documents|paperwork|permit|application|process|requirement|required)/.test(text)) {
-    return [
-      `Hi ${greetingName}, we can guide you through the requirements.`,
-      "Please let us know whether this is for a new hire, transfer, or replacement so we can advise on the correct documents and process.",
-      "Once we have that, we will share the required paperwork and next steps with you.",
-    ];
-  }
-
-  if (/(recommend|suggest|match|suitable|shortlist|looking for|need a maid|helper)/.test(text)) {
-    return [
-      `Hi ${greetingName}, thank you for sharing what you are looking for.`,
-      "Please tell us the main requirements such as childcare, elderly care, cooking, language preference, and budget, and we will suggest suitable profiles.",
-      "If you already saw a profile you like, send the reference code and we can help compare it with other matching options.",
-    ];
-  }
-
-  if (/(status|update|follow up|follow-up|progress|any news)/.test(text)) {
-    return [
-      `Hi ${greetingName}, thank you for following up.`,
-      "We are checking the latest status for you and will update you shortly.",
-      "If there is a specific application, interview, or profile you are referring to, please mention it so we can respond more precisely.",
-    ];
-  }
-
-  if (/(thank you|thanks)/.test(text)) {
-    return [
-      `You're welcome, ${greetingName}.`,
-      "We're happy to help. If you need anything else, just let us know.",
-      "If you want, we can also help with the next step such as recommendations, scheduling, or paperwork guidance.",
-    ];
-  }
-
-  return [
-    greeting,
-    "Thank you for the details. We are reviewing your request and will get back to you shortly.",
-    "If you can share a little more about what you need, such as the profile, timeline, or concern, we can assist you more accurately.",
-  ];
 }
 
 function groupMessagesByDate(messages: ChatMessage[]) {
@@ -454,6 +391,42 @@ function FilterSortBar({
   );
 }
 
+function StatusTabs({
+  value,
+  onChange,
+}: {
+  value: StatusFilter;
+  onChange: (value: StatusFilter) => void;
+}) {
+  const tabs: { value: StatusFilter; label: string }[] = [
+    { value: "ALL", label: "All statuses" },
+    { value: "OPEN", label: "Open" },
+    { value: "WAITING_SUPPORT", label: "Waiting support" },
+    { value: "WAITING_CLIENT", label: "Waiting client" },
+    { value: "RESOLVED", label: "Resolved" },
+    { value: "CLOSED", label: "Closed" },
+  ];
+
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.value}
+          onClick={() => onChange(tab.value)}
+          className="whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-semibold transition-colors"
+          style={
+            value === tab.value
+              ? { background: "var(--msn-blue)", color: "#fff" }
+              : { background: "#f7f8fa", color: "var(--msn-text-secondary)", border: "1px solid var(--msn-divider)" }
+          }
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /* ─── Conversation list item ─────────────────────────────────────────────── */
 
 function ConversationItem({
@@ -465,6 +438,8 @@ function ConversationItem({
   isActive: boolean;
   onClick: () => void;
 }) {
+  const statusTone = getStatusTone(conversation.status);
+  const priorityTone = getPriorityTone(conversation.priority);
   return (
     <button
       onClick={onClick}
@@ -503,6 +478,22 @@ function ConversationItem({
           >
             {getConversationTypeLabel(conversation.conversationType)}
           </span>
+          {conversation.status && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{ background: statusTone.bg, color: statusTone.fg, border: `1px solid ${statusTone.border}` }}
+            >
+              {statusTone.label}
+            </span>
+          )}
+          {conversation.priority && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{ background: priorityTone.bg, color: priorityTone.fg, border: `1px solid ${priorityTone.border}` }}
+            >
+              {conversation.priority}
+            </span>
+          )}
           {!!conversation.clientCompany && (
             <span className="truncate text-[11px] font-medium" style={{ color: "var(--msn-text-muted)" }}>
               {conversation.clientCompany}
@@ -518,6 +509,11 @@ function ConversationItem({
       </div>
       <div className="flex flex-shrink-0 flex-col items-end gap-1 ml-1">
         <UnreadBadge count={conversation.unreadCount} />
+        {conversation.category && (
+          <span className="max-w-[110px] truncate rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "#f3f4f6", color: "var(--msn-text-secondary)" }}>
+            {conversation.category}
+          </span>
+        )}
         {conversation.conversationType === "agency" && conversation.agencyName && (
           <span className="max-w-[70px] truncate rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)" }}>
             {conversation.agencyName}
@@ -629,38 +625,31 @@ const AdminSupportChat = () => {
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterOption>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [sort, setSort] = useState<SortOption>("newest");
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [aiStatus, setAiStatus] = useState<AiStatus>("checking");
+  const [isUpdatingMeta, setIsUpdatingMeta] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const activeConversationRef = useRef<AdminConversation | null>(null);
   const lastMessageSignatureRef = useRef("");
+  const lastLoadedConversationKeyRef = useRef<string | null>(null);
+  const lastUnreadTotalRef = useRef(0);
   const admin = getStoredAgencyAdmin();
 
   const activeConversation = useMemo(
     () => conversations.find((item) => item.key === activeConversationKey) ?? pendingConversation,
     [activeConversationKey, conversations, pendingConversation],
   );
+  const activeConversationClientId = activeConversation?.clientId ?? null;
+  const activeConversationType = activeConversation?.conversationType ?? null;
+  const activeConversationAgencyId = activeConversation?.agencyId ?? null;
 
   useEffect(() => { activeConversationRef.current = activeConversation; }, [activeConversation]);
-
-  // Check AI status
-  const checkAiStatus = useCallback(async () => {
-    setAiStatus("checking");
-    try {
-      const response = await fetch("/api/ai/status", { headers: { ...getAgencyAdminAuthHeaders() } }).catch(() => null);
-      setAiStatus(response?.ok ? "online" : "offline");
-    } catch {
-      setAiStatus("offline");
-    }
-  }, []);
-
-  useEffect(() => { void checkAiStatus(); }, [checkAiStatus]);
 
   const effectiveConversations = useMemo(() => (
     pendingConversation ? [pendingConversation, ...conversations.filter((c) => c.key !== pendingConversation.key)] : conversations
@@ -686,8 +675,12 @@ const AdminSupportChat = () => {
       case "agency": result = result.filter((c) => c.conversationType === "agency"); break;
     }
 
+    if (statusFilter !== "ALL") {
+      result = result.filter((c) => c.status === statusFilter);
+    }
+
     return sortConversations(result, sort);
-  }, [effectiveConversations, search, filter, sort]);
+  }, [effectiveConversations, search, filter, sort, statusFilter]);
 
   const loadConversations = useCallback(async (silent = false) => {
     const token = getAgencyAdminToken();
@@ -704,7 +697,7 @@ const AdminSupportChat = () => {
       setConversations(data.conversations);
       setActiveConversationKey((prev) => {
         const queryKey = queryClientId
-          ? `${queryClientId}:${queryConversationType}:${queryAgencyId ?? 0}`
+          ? `${queryClientId}:${queryConversationType}:${queryConversationType === "support" ? 1 : (queryAgencyId ?? 0)}`
           : null;
 
         if (queryKey) {
@@ -719,7 +712,7 @@ const AdminSupportChat = () => {
               key: queryKey,
               clientId: queryClientId,
               conversationType: "support",
-              agencyId: undefined,
+              agencyId: 1,
               agencyName: "",
               clientName: queryClientName || `Client ${queryClientId}`,
               clientEmail: "",
@@ -727,6 +720,10 @@ const AdminSupportChat = () => {
               lastMessage: "Ready to start a support conversation.",
               lastMessageAt: new Date().toISOString(),
               unreadCount: 0,
+              status: "OPEN",
+              category: "General Inquiry",
+              priority: "MEDIUM",
+              subject: "Agency Support · General Inquiry",
             });
             return queryKey;
           }
@@ -804,8 +801,21 @@ const AdminSupportChat = () => {
                 current.conversationType === next.conversationType &&
                 (current.conversationType === "support" || current.agencyId === next.agencyId);
               if (isActive) {
-                setMessages((prev) => prev.some((item) => item.id === next.id) ? prev : [...prev, next]);
-                if (next.senderRole === "client") void loadMessages(current, true);
+                setMessages((prev) => {
+                  if (prev.some((item) => item.id === next.id)) return prev;
+                  const updated = [...prev, next].sort(
+                    (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+                  );
+                  lastMessageSignatureRef.current = JSON.stringify(
+                    updated.map((message) => [message.id, message.message, message.createdAt, message.senderRole]),
+                  );
+                  return updated;
+                });
+              }
+              if (next.senderRole === "client" && (!isActive || document.visibilityState !== "visible")) {
+                toast.message(next.senderName, {
+                  description: next.message.length > 90 ? `${next.message.slice(0, 90)}...` : next.message,
+                });
               }
               void loadConversations(true);
             },
@@ -823,14 +833,40 @@ const AdminSupportChat = () => {
   useEffect(() => { void loadConversations(false); }, [loadConversations]);
 
   useEffect(() => {
-    if (activeConversation) {
+    if (!activeConversationKey) {
+      setMessages([]);
       lastMessageSignatureRef.current = "";
-      void loadMessages(activeConversation, false);
+      lastLoadedConversationKeyRef.current = null;
       return;
     }
+
+    const conversation = activeConversationRef.current;
+    if (
+      conversation &&
+      conversation.key === activeConversationKey &&
+      conversation.clientId === activeConversationClientId &&
+      conversation.conversationType === activeConversationType &&
+      (conversation.agencyId ?? null) === activeConversationAgencyId
+    ) {
+      if (lastLoadedConversationKeyRef.current === activeConversationKey) {
+        return;
+      }
+      lastLoadedConversationKeyRef.current = activeConversationKey;
+      lastMessageSignatureRef.current = "";
+      void loadMessages(conversation, false);
+      return;
+    }
+
     setMessages([]);
     lastMessageSignatureRef.current = "";
-  }, [activeConversation, loadMessages]);
+    lastLoadedConversationKeyRef.current = null;
+  }, [
+    activeConversationAgencyId,
+    activeConversationClientId,
+    activeConversationKey,
+    activeConversationType,
+    loadMessages,
+  ]);
 
   useEffect(() => {
     if (!pendingConversation) return;
@@ -847,14 +883,72 @@ const AdminSupportChat = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (aiStatus !== "offline" || !activeConversation || draft.trim()) return;
-    const suggestions = buildOfflineAutoReplies(activeConversation, messages);
-    if (suggestions[0]) setDraft(suggestions[0]);
-  }, [activeConversation, aiStatus, draft, messages]);
+    const unreadNow = conversations.reduce((sum, item) => sum + item.unreadCount, 0);
+    if (unreadNow > lastUnreadTotalRef.current) {
+      try {
+        const context = new (window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)();
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = 880;
+        gainNode.gain.value = 0.03;
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.08);
+      } catch {
+        // ignore notification sound failures
+      }
+    }
+    lastUnreadTotalRef.current = unreadNow;
+  }, [conversations]);
 
   const copyMessage = (text: string) => {
     navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard")).catch(() => toast.error("Copy failed"));
   };
+
+  const updateConversationMeta = useCallback(async (payload: {
+    status?: SupportConversationStatus;
+    category?: SupportInquiryCategory;
+    priority?: SupportPriority;
+  }) => {
+    if (!activeConversation) return;
+    try {
+      setIsUpdatingMeta(true);
+      const response = await fetch(
+        `/api/chats/admin/${activeConversation.clientId}?${buildQueryString(activeConversation)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = (await response.json().catch(() => ({}))) as {
+        conversation?: Partial<AdminConversation>;
+        error?: string;
+      };
+      if (!response.ok || !data.conversation) {
+        throw new Error(data.error || "Failed to update conversation");
+      }
+      setConversations((prev) =>
+        prev.map((item) =>
+          item.key === activeConversation.key
+            ? {
+                ...item,
+                ...data.conversation,
+                assignedAdminName: admin?.username || admin?.agencyName || item.assignedAdminName,
+                assignedAdminId: admin?.id || item.assignedAdminId,
+              }
+            : item,
+        ),
+      );
+      toast.success("Conversation updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update conversation");
+    } finally {
+      setIsUpdatingMeta(false);
+    }
+  }, [activeConversation, admin]);
 
   const sendText = useCallback(async (rawText: string) => {
     if (!activeConversation) return;
@@ -903,6 +997,14 @@ const AdminSupportChat = () => {
   const sendMessage = useCallback(async () => {
     await sendText(draft);
   }, [draft, sendText]);
+
+  const handleRefreshMessages = useCallback(() => {
+    const conversation = activeConversationRef.current;
+    if (!conversation) return;
+    lastLoadedConversationKeyRef.current = conversation.key;
+    lastMessageSignatureRef.current = "";
+    void loadMessages(conversation, false);
+  }, [loadMessages]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); }
@@ -1021,14 +1123,9 @@ const AdminSupportChat = () => {
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => navigate(adminPath("/chatbot-config"))}
-              className="rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors hover:opacity-80"
-              style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)", border: "1px solid #c2deff" }}
-            >
-              Configure bot
-            </button>
-            <AiStatusBanner status={aiStatus} onRetry={checkAiStatus} />
+            <span className="rounded-full px-3 py-1.5 text-[12px] font-semibold" style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)", border: "1px solid #c2deff" }}>
+              Quick replies ready
+            </span>
           </div>
         </div>
 
@@ -1055,12 +1152,15 @@ const AdminSupportChat = () => {
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--msn-text-muted)" }} />
                 <input
                   type="text"
-                  placeholder="Search Messenger"
+                  placeholder="Search Message"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="asc-search h-10 w-full rounded-full border pl-10 pr-4 text-[14px] font-medium outline-none transition-all"
                   style={{ borderColor: "var(--msn-divider)", background: "#f0f2f5", color: "var(--msn-text-primary)" }}
                 />
+              </div>
+              <div className="mb-3">
+                <StatusTabs value={statusFilter} onChange={setStatusFilter} />
               </div>
               <FilterSortBar filter={filter} sort={sort} onFilterChange={setFilter} onSortChange={setSort} />
             </div>
@@ -1124,20 +1224,98 @@ const AdminSupportChat = () => {
                     <p className="text-[14px] font-semibold" style={{ color: "var(--msn-text-primary)" }}>{admin?.agencyName ?? "Agency"}</p>
                     <p className="text-[12px] mt-0.5" style={{ color: "var(--msn-text-secondary)" }}>{activeConversation.clientEmail}</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleRefreshMessages}
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border transition-colors hover:bg-slate-50"
+                    style={{ borderColor: "var(--msn-divider)", color: "var(--msn-text-secondary)" }}
+                    aria-label="Refresh chat"
+                    title="Refresh chat"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
                 </>
               ) : (
                 <p className="text-[15px] font-semibold" style={{ color: "var(--msn-text-secondary)" }}>{headerSubtitle}</p>
               )}
             </div>
 
-            {/* AI / fallback suggestions strip */}
-            {(aiStatus === "online" || aiStatus === "offline") && activeConversation && (
-              <AiSuggestionStrip
-                conversation={activeConversation}
-                messages={messages}
-                status={aiStatus}
-                onSelect={(text) => void sendText(text)}
-              />
+            {activeConversation && (
+              <div className="grid gap-3 px-4 py-3 sm:grid-cols-2 xl:grid-cols-4" style={{ borderBottom: "1px solid var(--msn-divider)", background: "#fcfcfd" }}>
+                <div className="rounded-2xl border px-3 py-3" style={{ borderColor: "var(--msn-divider)", background: "#fff" }}>
+                  <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--msn-text-muted)" }}>Status</p>
+                  <div className="flex items-center gap-2">
+                    <CircleDot className="h-4 w-4" style={{ color: getStatusTone(activeConversation.status).fg }} />
+                    <select
+                      value={activeConversation.status ?? "OPEN"}
+                      disabled={isUpdatingMeta}
+                      onChange={(e) => void updateConversationMeta({ status: e.target.value as SupportConversationStatus })}
+                      className="w-full rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
+                      style={{ borderColor: "var(--msn-divider)", background: "#fff", color: "var(--msn-text-primary)" }}
+                    >
+                      {["OPEN", "WAITING_SUPPORT", "WAITING_CLIENT", "RESOLVED", "CLOSED"].map((status) => (
+                        <option key={status} value={status}>{status.replace(/_/g, " ")}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="rounded-2xl border px-3 py-3" style={{ borderColor: "var(--msn-divider)", background: "#fff" }}>
+                  <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--msn-text-muted)" }}>Category</p>
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-4 w-4" style={{ color: "var(--msn-blue)" }} />
+                    <select
+                      value={activeConversation.category ?? "General Inquiry"}
+                      disabled={isUpdatingMeta}
+                      onChange={(e) => void updateConversationMeta({ category: e.target.value as SupportInquiryCategory })}
+                      className="w-full rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
+                      style={{ borderColor: "var(--msn-divider)", background: "#fff", color: "var(--msn-text-primary)" }}
+                    >
+                      {["Booking Concern", "Payment Concern", "Contract Concern", "Maid Replacement", "Technical Support", "General Inquiry"].map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="rounded-2xl border px-3 py-3" style={{ borderColor: "var(--msn-divider)", background: "#fff" }}>
+                  <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--msn-text-muted)" }}>Priority</p>
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4" style={{ color: getPriorityTone(activeConversation.priority).fg }} />
+                    <select
+                      value={activeConversation.priority ?? "MEDIUM"}
+                      disabled={isUpdatingMeta}
+                      onChange={(e) => void updateConversationMeta({ priority: e.target.value as SupportPriority })}
+                      className="w-full rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
+                      style={{ borderColor: "var(--msn-divider)", background: "#fff", color: "var(--msn-text-primary)" }}
+                    >
+                      {["LOW", "MEDIUM", "HIGH", "URGENT"].map((priority) => (
+                        <option key={priority} value={priority}>{priority}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="rounded-2xl border px-3 py-3" style={{ borderColor: "var(--msn-divider)", background: "#fff" }}>
+                  <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--msn-text-muted)" }}>Owner</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-semibold" style={{ color: "var(--msn-text-primary)" }}>
+                        {activeConversation.assignedAdminName || admin?.username || admin?.agencyName || "Unassigned"}
+                      </p>
+                      <p className="text-[11px]" style={{ color: "var(--msn-text-secondary)" }}>
+                        {activeConversation.subject || "Trackable support inquiry"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isUpdatingMeta}
+                      onClick={() => void updateConversationMeta({ status: "RESOLVED" })}
+                      className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      style={{ background: "#16a34a" }}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Mark resolved
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Messages area */}

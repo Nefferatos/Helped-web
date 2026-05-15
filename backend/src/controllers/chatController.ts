@@ -16,8 +16,10 @@ import {
   getUnreadChatCountForAdminStore,
   getUnreadChatCountForClientStore,
   getChatMessagesForClientStore,
+  getSupportNotificationsStore,
   markChatMessagesReadForAgencyStore,
   markChatMessagesReadForClientStore,
+  updateSupportConversationStore,
   upsertAgencyChatbotConfigStore,
 } from '../store'
 
@@ -111,7 +113,12 @@ export const getMyChatSummary = async (req: Request, res: Response) => {
     }
 
     const unreadCount = await getUnreadChatCountForClientStore(client.id)
-    res.status(200).json({ unreadCount })
+    const notifications = await getSupportNotificationsStore({
+      recipientType: 'client',
+      clientId: client.id,
+      unreadOnly: true,
+    })
+    res.status(200).json({ unreadCount, notifications })
   } catch (error) {
     console.error('Error fetching client chat summary:', error)
     res.status(500).json({ error: 'Failed to fetch chat summary' })
@@ -287,7 +294,12 @@ export const getAdminChatSummary = async (req: Request, res: Response) => {
     }
 
     const unreadCount = await getUnreadChatCountForAdminStore(admin.agencyId)
-    res.status(200).json({ unreadCount })
+    const notifications = await getSupportNotificationsStore({
+      recipientType: 'admin',
+      agencyId: admin.agencyId,
+      unreadOnly: true,
+    })
+    res.status(200).json({ unreadCount, notifications })
   } catch (error) {
     console.error('Error fetching admin chat summary:', error)
     res.status(500).json({ error: 'Failed to fetch chat summary' })
@@ -389,6 +401,64 @@ export const getAdminChatbotConfig = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching admin chatbot config:', error)
     res.status(500).json({ error: 'Failed to fetch chatbot config' })
+  }
+}
+
+export const updateAdminConversationMeta = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const clientId = Number(req.params.clientId)
+    if (!Number.isInteger(clientId)) {
+      return res.status(400).json({ error: 'Valid client id is required' })
+    }
+
+    const context = getConversationContext(req)
+    const agencyId =
+      context.conversationType === 'agency'
+        ? context.agencyId ?? admin.agencyId
+        : admin.agencyId
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const conversation = await updateSupportConversationStore(
+      clientId,
+      context.conversationType,
+      agencyId,
+      {
+        status:
+          typeof body.status === 'string'
+            ? (body.status as Parameters<typeof updateSupportConversationStore>[3]['status'])
+            : undefined,
+        category:
+          typeof body.category === 'string'
+            ? (body.category as Parameters<typeof updateSupportConversationStore>[3]['category'])
+            : undefined,
+        priority:
+          typeof body.priority === 'string'
+            ? (body.priority as Parameters<typeof updateSupportConversationStore>[3]['priority'])
+            : undefined,
+        assignedAdminId:
+          typeof body.assignedAdminId === 'number' ? body.assignedAdminId : admin.id,
+        assignedAdminName:
+          typeof body.assignedAdminName === 'string'
+            ? body.assignedAdminName
+            : admin.username || admin.agencyName,
+        subject: typeof body.subject === 'string' ? body.subject : undefined,
+        description:
+          typeof body.description === 'string' ? body.description : undefined,
+      }
+    )
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+
+    return res.status(200).json({ conversation })
+  } catch (error) {
+    console.error('Error updating admin conversation meta:', error)
+    return res.status(500).json({ error: 'Failed to update support conversation' })
   }
 }
 

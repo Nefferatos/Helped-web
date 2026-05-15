@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { calculateAge, MaidProfile } from "@/lib/maids";
-import { fetchClientUnreadChatCount } from "@/lib/chat";
+import { fetchClientUnreadChatCount, type SupportNotification } from "@/lib/chat";
 import {
   getStoredClient,
   type ClientUser,
@@ -101,6 +101,28 @@ const navItems = [
   { label: "Profile", href: "/client/profile", icon: UserRound },
   { label: "History", href: "/client/history", icon: Clock3 },
 ];
+
+const formatNotificationTime = (iso: string) => {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} hr ago`;
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
+const getClientNotificationHref = (notification: SupportNotification) => {
+  const params = new URLSearchParams();
+  params.set("type", notification.conversationType === "agency" ? "agency" : "support");
+  if (notification.conversationType === "agency" && notification.agencyId) {
+    params.set("agencyId", String(notification.agencyId));
+    if (notification.agencyName) params.set("agencyName", notification.agencyName);
+  }
+  const query = params.toString();
+  return `/client/support-chat${query ? `?${query}` : ""}`;
+};
 
 const MaidCard = ({
   maid,
@@ -195,6 +217,7 @@ const ClientDashboard = () => {
   const [nationality, setNationality] = useState("All Nationalities");
   const [maidType, setMaidType] = useState("All Types");
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -219,7 +242,12 @@ const ClientDashboard = () => {
             clientFetch("/api/client/my-maids"),
             fetch("/api/maids?visibility=public"),
             fetch("/api/company"),
-            fetchClientUnreadChatCount().catch(() => 0),
+            fetchClientUnreadChatCount()
+              .then((result) => {
+                setChatNotifications(result.notifications);
+                return result.unreadCount;
+              })
+              .catch(() => 0),
           ]);
 
         const meData = (await meResponse.json().catch(() => ({}))) as {
@@ -262,8 +290,13 @@ const ClientDashboard = () => {
 
     const interval = window.setInterval(() => {
       void fetchClientUnreadChatCount()
-        .then((c) => setUnreadChatCount(c))
-        .catch(() => undefined);
+        .then((result) => {
+          setUnreadChatCount(result.unreadCount);
+          setChatNotifications(result.notifications);
+        })
+        .catch(() => {
+          setChatNotifications([]);
+        });
     }, 5000);
 
     return () => window.clearInterval(interval);
@@ -394,16 +427,58 @@ const ClientDashboard = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" className="relative rounded-2xl" asChild>
-              <Link to="/client/support-chat">
-                <Bell className="h-5 w-5" />
-                {unreadChatCount > 0 && (
-                  <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                    {unreadChatCount}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="relative rounded-2xl">
+                  <Bell className="h-5 w-5" />
+                  {unreadChatCount > 0 && (
+                    <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[360px] max-w-[calc(100vw-24px)]">
+                <DropdownMenuLabel className="flex items-center justify-between gap-3">
+                  <span>Notifications</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {unreadChatCount > 0 ? `${unreadChatCount} unread` : "All caught up"}
                   </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {chatNotifications.slice(0, 6).map((notification) => (
+                  <DropdownMenuItem key={notification.id} asChild>
+                    <Link to={getClientNotificationHref(notification)} className="flex flex-col items-start gap-1">
+                      <div className="w-full flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium text-foreground">{notification.title}</div>
+                          <div className="text-xs text-muted-foreground">{notification.body}</div>
+                        </div>
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                          Message
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                        <span>{formatNotificationTime(notification.createdAt)}</span>
+                        {notification.status ? <span>{notification.status.replace(/_/g, " ")}</span> : null}
+                        {notification.agencyName ? <span>{notification.agencyName}</span> : null}
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+                {chatNotifications.length === 0 && (
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    No new notifications right now.
+                  </div>
                 )}
-              </Link>
-            </Button>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/client/support-chat" className="justify-center font-medium text-primary">
+                    Open support chat
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

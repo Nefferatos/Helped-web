@@ -15,6 +15,7 @@ import {
   sendMyChatMessage,
   streamAdminChatMessages,
   streamMyChatMessages,
+  updateAdminConversationMeta,
   updateAdminChatbotConfig,
 } from '../controllers/chatController'
 
@@ -36,5 +37,6 @@ router.get('/admin/stream', streamAdminChatMessages)
 router.get('/admin/summary', getAdminChatSummary)
 router.get('/admin/:clientId', getAdminChatMessages)
 router.post('/admin/:clientId', sendAdminChatMessage)
+router.patch('/admin/:clientId', updateAdminConversationMeta)
 
 export default router

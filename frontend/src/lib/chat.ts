@@ -2,9 +2,24 @@ import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { getClientAuthHeaders } from "@/lib/clientAuth";
 
 export type ConversationType = "support" | "agency";
+export type SupportConversationStatus =
+  | "OPEN"
+  | "WAITING_CLIENT"
+  | "WAITING_SUPPORT"
+  | "RESOLVED"
+  | "CLOSED";
+export type SupportInquiryCategory =
+  | "Booking Concern"
+  | "Payment Concern"
+  | "Contract Concern"
+  | "Maid Replacement"
+  | "Technical Support"
+  | "General Inquiry";
+export type SupportPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
 export interface ChatMessage {
   id: number;
+  conversationId?: number;
   clientId: number;
   conversationType: ConversationType;
   agencyId?: number;
@@ -14,10 +29,17 @@ export interface ChatMessage {
   senderRole: "client" | "agency";
   senderName: string;
   message: string;
+  attachments?: Array<{
+    name: string;
+    url: string;
+    mimeType?: string;
+    size?: number;
+  }>;
   createdAt: string;
 }
 
 export interface ClientConversation {
+  id?: number;
   key: string;
   clientId: number;
   conversationType: ConversationType;
@@ -30,9 +52,18 @@ export interface ClientConversation {
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
+  unreadAdmin?: number;
+  unreadClient?: number;
+  status?: SupportConversationStatus;
+  category?: SupportInquiryCategory;
+  priority?: SupportPriority;
+  assignedAdminId?: number;
+  assignedAdminName?: string;
+  subject?: string;
 }
 
 export interface AdminConversation {
+  id?: number;
   key: string;
   clientId: number;
   conversationType: ConversationType;
@@ -46,6 +77,37 @@ export interface AdminConversation {
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
+  unreadAdmin?: number;
+  unreadClient?: number;
+  status?: SupportConversationStatus;
+  category?: SupportInquiryCategory;
+  priority?: SupportPriority;
+  assignedAdminId?: number;
+  assignedAdminName?: string;
+  subject?: string;
+  description?: string;
+}
+
+export interface SupportNotification {
+  id: number;
+  conversationId: number;
+  messageId: number;
+  clientId: number;
+  agencyId: number;
+  recipientType: "client" | "admin";
+  recipientId?: number;
+  title: string;
+  body: string;
+  createdAt: string;
+  readAt?: string;
+  conversationType?: ConversationType;
+  agencyName?: string;
+  clientName?: string;
+  clientEmail?: string;
+  status?: SupportConversationStatus;
+  category?: SupportInquiryCategory;
+  priority?: SupportPriority;
+  subject?: string;
 }
 
 export interface AgencyChatbotTopicOption {
@@ -81,6 +143,7 @@ export interface AgencyChatbotConfig {
 const readUnreadCount = async (response: Response) => {
   const data = (await response.json().catch(() => ({}))) as {
     unreadCount?: number;
+    notifications?: SupportNotification[];
     error?: string;
   };
 
@@ -88,7 +151,10 @@ const readUnreadCount = async (response: Response) => {
     throw new Error(data.error || "Failed to load chat summary");
   }
 
-  return data.unreadCount;
+  return {
+    unreadCount: data.unreadCount,
+    notifications: Array.isArray(data.notifications) ? data.notifications : [],
+  };
 };
 
 export const fetchClientUnreadChatCount = async () => {

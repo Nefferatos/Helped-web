@@ -37,7 +37,7 @@ import {
   getStoredAgencyAdmin,
   type AgencyAdminUser,
 } from "@/lib/agencyAdminAuth";
-import { fetchAdminUnreadChatCount } from "@/lib/chat";
+import { fetchAdminUnreadChatCount, type SupportNotification } from "@/lib/chat";
 
 /* ─── Responsive breakpoint hook ─────────────────────────────────────────── */
 
@@ -155,6 +155,42 @@ type BadgeCounts = {
   unreadChats: number;
   unreadEnquiries: number;
   unreadRequests: number;
+};
+
+const formatNotificationTime = (iso: string) => {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} hr ago`;
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
+const getAdminNotificationHref = (notification: SupportNotification) => {
+  const params = new URLSearchParams();
+  params.set("clientId", String(notification.clientId));
+  params.set("type", notification.conversationType === "agency" ? "agency" : "support");
+  if (notification.clientName) params.set("clientName", notification.clientName);
+  if (notification.conversationType === "agency" && notification.agencyId) {
+    params.set("agencyId", String(notification.agencyId));
+    if (notification.agencyName) params.set("agencyName", notification.agencyName);
+  }
+  return `${adminPath("/chat-support")}?${params.toString()}`;
+};
+
+const getNotificationTone = (priority?: SupportNotification["priority"]) => {
+  switch (priority) {
+    case "URGENT":
+      return { bg: "#fef2f2", fg: "#b91c1c" };
+    case "HIGH":
+      return { bg: "#fff7ed", fg: "#c2410c" };
+    case "MEDIUM":
+      return { bg: "#fffbeb", fg: "#b45309" };
+    default:
+      return { bg: "#eff6ff", fg: "#1d4ed8" };
+  }
 };
 
 /* ─── 3D Icon ────────────────────────────────────────────────────────────── */
@@ -813,6 +849,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     unreadEnquiries: 0,
     unreadRequests: 0,
   });
+  const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>([]);
 
   const [agencyAdmin, setAgencyAdmin] = useState<AgencyAdminUser | null>(
     getStoredAgencyAdmin()
@@ -869,8 +906,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
         // Also get chat count from dedicated endpoint (whichever is higher wins)
         let dedicatedChatCount = 0;
+        let dedicatedNotifications: SupportNotification[] = [];
         try {
-          dedicatedChatCount = await fetchAdminUnreadChatCount();
+          const chatSummary = await fetchAdminUnreadChatCount();
+          dedicatedChatCount = chatSummary.unreadCount;
+          dedicatedNotifications = chatSummary.notifications;
         } catch {
           /* ignore */
         }
@@ -902,6 +942,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           unreadEnquiries,
           unreadRequests,
         });
+        setChatNotifications(dedicatedNotifications);
 
         // Company logo
         if (compRes.ok) {
@@ -957,6 +998,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     badgeCounts.unreadChats +
     badgeCounts.unreadEnquiries +
     badgeCounts.unreadRequests;
+  const visibleChatNotifications = chatNotifications.slice(0, 6);
 
   const sharedSidebarProps = {
     location,
@@ -1199,63 +1241,162 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               gap: 6,
             }}
           >
-            {/* Notification bell with total unread badge */}
-            <button
-              aria-label={`Notifications${totalUnread > 0 ? ` (${totalUnread} unread)` : ""}`}
-              style={{
-                width: 38,
-                height: 38,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 10,
-                border: "1px solid #E5E7EB",
-                background: "#F9FAFB",
-                cursor: "pointer",
-                color: "#6B7280",
-                transition: "background 0.15s, border-color 0.15s",
-                flexShrink: 0,
-                position: "relative",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "#F3F4F6";
-                (e.currentTarget as HTMLButtonElement).style.borderColor =
-                  "#D1D5DB";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "#F9FAFB";
-                (e.currentTarget as HTMLButtonElement).style.borderColor =
-                  "#E5E7EB";
-              }}
-            >
-              <Bell style={{ width: 17, height: 17 }} />
-              {totalUnread > 0 && (
-                <span
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label={`Notifications${totalUnread > 0 ? ` (${totalUnread} unread)` : ""}`}
                   style={{
-                    position: "absolute",
-                    top: 4,
-                    right: 4,
-                    minWidth: 16,
-                    height: 16,
-                    borderRadius: 9999,
-                    background: "#EF4444",
-                    border: "2px solid #fff",
-                    display: "inline-flex",
+                    width: 38,
+                    height: 38,
+                    display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    color: "#fff",
-                    padding: "0 3px",
-                    lineHeight: 1,
+                    borderRadius: 10,
+                    border: "1px solid #E5E7EB",
+                    background: "#F9FAFB",
+                    cursor: "pointer",
+                    color: "#6B7280",
+                    transition: "background 0.15s, border-color 0.15s",
+                    flexShrink: 0,
+                    position: "relative",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      "#F3F4F6";
+                    (e.currentTarget as HTMLButtonElement).style.borderColor =
+                      "#D1D5DB";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      "#F9FAFB";
+                    (e.currentTarget as HTMLButtonElement).style.borderColor =
+                      "#E5E7EB";
                   }}
                 >
-                  {totalUnread > 99 ? "99+" : totalUnread}
-                </span>
-              )}
-            </button>
+                  <Bell style={{ width: 17, height: 17 }} />
+                  {totalUnread > 0 && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 4,
+                        right: 4,
+                        minWidth: 16,
+                        height: 16,
+                        borderRadius: 9999,
+                        background: "#EF4444",
+                        border: "2px solid #fff",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: "#fff",
+                        padding: "0 3px",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {totalUnread > 99 ? "99+" : totalUnread}
+                    </span>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[380px] max-w-[calc(100vw-24px)]">
+                <DropdownMenuLabel className="flex items-center justify-between gap-3">
+                  <span>Notifications</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {totalUnread > 0 ? `${totalUnread} unread` : "All caught up"}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                {badgeCounts.unreadRequests > 0 && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      to={adminPath("/requests")}
+                      className="flex items-start justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground">Requests need review</div>
+                        <div className="text-xs text-muted-foreground">
+                          {badgeCounts.unreadRequests} unread request{badgeCounts.unreadRequests !== 1 ? "s" : ""}
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                        Requests
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+
+                {badgeCounts.unreadEnquiries > 0 && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      to={adminPath("/enquiry")}
+                      className="flex items-start justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground">Enquiries need follow-up</div>
+                        <div className="text-xs text-muted-foreground">
+                          {badgeCounts.unreadEnquiries} unread enquir{badgeCounts.unreadEnquiries !== 1 ? "ies" : "y"}
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        Enquiry
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+
+                {visibleChatNotifications.map((notification) => {
+                  const tone = getNotificationTone(notification.priority);
+                  return (
+                    <DropdownMenuItem key={notification.id} asChild>
+                      <Link
+                        to={getAdminNotificationHref(notification)}
+                        className="flex items-start justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium text-foreground">
+                            {notification.clientName || notification.title}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {notification.body}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                            <span>{formatNotificationTime(notification.createdAt)}</span>
+                            {notification.status ? <span>{notification.status.replace(/_/g, " ")}</span> : null}
+                            {notification.category ? <span>{notification.category}</span> : null}
+                          </div>
+                        </div>
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{ background: tone.bg, color: tone.fg }}
+                        >
+                          {notification.priority || "OPEN"}
+                        </span>
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+
+                {totalUnread === 0 && (
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    No new notifications right now.
+                  </div>
+                )}
+
+                {visibleChatNotifications.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to={adminPath("/chat-support")} className="justify-center font-medium text-primary">
+                        Open support inbox
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Help */}
             {isDesktop && (

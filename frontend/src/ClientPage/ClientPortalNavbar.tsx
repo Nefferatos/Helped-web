@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Bell, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -14,6 +14,7 @@ import {
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
+import { fetchClientUnreadChatCount, type SupportNotification } from "@/lib/chat";
 import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import "./ClientTheme.css";
 
@@ -31,10 +32,34 @@ const allTabs = [
 // mobile drawer instead of occupying a grid tile.
 const mobileGridTabs = allTabs.filter((t) => t.to !== "/client/enquiry");
 
+const formatNotificationTime = (iso: string) => {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} hr ago`;
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
+const getClientNotificationHref = (notification: SupportNotification) => {
+  const params = new URLSearchParams();
+  params.set("type", notification.conversationType === "agency" ? "agency" : "support");
+  if (notification.conversationType === "agency" && notification.agencyId) {
+    params.set("agencyId", String(notification.agencyId));
+    if (notification.agencyName) params.set("agencyName", notification.agencyName);
+  }
+  const query = params.toString();
+  return `/client/support-chat${query ? `?${query}` : ""}`;
+};
+
 const ClientPortalNavbar = () => {
   const location = useLocation();
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>([]);
 
   const isActive = useCallback(
     (to: string) => {
@@ -66,6 +91,33 @@ const ClientPortalNavbar = () => {
       cancelled = true;
     };
   }, [location.pathname, location.hash]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadNotifications = async () => {
+      try {
+        const summary = await fetchClientUnreadChatCount();
+        if (!active) return;
+        setUnreadChatCount(summary.unreadCount);
+        setChatNotifications(summary.notifications);
+      } catch {
+        if (!active) return;
+        setUnreadChatCount(0);
+        setChatNotifications([]);
+      }
+    };
+
+    void loadNotifications();
+    const intervalId = window.setInterval(() => {
+      void loadNotifications();
+    }, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const activeKey = useMemo(
     () => allTabs.find((tab) => isActive(tab.to))?.to ?? "",
@@ -133,6 +185,66 @@ const ClientPortalNavbar = () => {
               Request Maid hidden on tablet (md–lg) — reappears at xl
               where there's room alongside the full desktop nav.     ── */}
         <div className="flex items-center gap-2 shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border bg-background/60 hover:bg-muted transition"
+                aria-label={`Notifications${unreadChatCount > 0 ? ` (${unreadChatCount} unread)` : ""}`}
+              >
+                <Bell className="h-4.5 w-4.5" />
+                {unreadChatCount > 0 && (
+                  <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                    {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                  </span>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[360px] max-w-[calc(100vw-24px)]">
+              <DropdownMenuLabel className="flex items-center justify-between gap-3">
+                <span>Notifications</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {unreadChatCount > 0 ? `${unreadChatCount} unread` : "All caught up"}
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {chatNotifications.slice(0, 6).map((notification) => (
+                <DropdownMenuItem key={notification.id} asChild>
+                  <Link to={getClientNotificationHref(notification)} className="flex flex-col items-start gap-1">
+                    <div className="w-full flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground">
+                          {notification.title}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {notification.body}
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                        Message
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                      <span>{formatNotificationTime(notification.createdAt)}</span>
+                      {notification.status ? <span>{notification.status.replace(/_/g, " ")}</span> : null}
+                      {notification.agencyName ? <span>{notification.agencyName}</span> : null}
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+              {chatNotifications.length === 0 && (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  No new notifications right now.
+                </div>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/client/support-chat" className="justify-center font-medium text-primary">
+                  Open support chat
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button asChild className="rounded-full hidden xl:inline-flex">
             <Link to="/client/maids?intent=request">Request Maid</Link>
           </Button>

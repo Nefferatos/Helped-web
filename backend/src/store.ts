@@ -168,6 +168,81 @@ export interface ChatMessageRecord {
   readByClient: boolean
 }
 
+export type SupportConversationStatus =
+  | 'OPEN'
+  | 'WAITING_CLIENT'
+  | 'WAITING_SUPPORT'
+  | 'RESOLVED'
+  | 'CLOSED'
+
+export type SupportInquiryCategory =
+  | 'Booking Concern'
+  | 'Payment Concern'
+  | 'Contract Concern'
+  | 'Maid Replacement'
+  | 'Technical Support'
+  | 'General Inquiry'
+
+export type SupportPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+
+export interface SupportConversationRecord {
+  id: number
+  clientId: number
+  conversationType: 'support' | 'agency'
+  agencyId: number
+  agencyName?: string
+  subject: string
+  description: string
+  status: SupportConversationStatus
+  category: SupportInquiryCategory
+  priority: SupportPriority
+  assignedAdminId?: number
+  assignedAdminName?: string
+  lastMessageAt: string
+  lastMessagePreview: string
+  unreadClient: number
+  unreadAdmin: number
+  clientLastReadAt?: string
+  adminLastReadAt?: string
+  resolvedAt?: string
+  closedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SupportMessageRecord {
+  id: number
+  conversationId: number
+  clientId: number
+  conversationType: 'support' | 'agency'
+  agencyId: number
+  agencyName?: string
+  senderRole: 'client' | 'agency'
+  senderName: string
+  message: string
+  attachments: Array<{
+    name: string
+    url: string
+    mimeType?: string
+    size?: number
+  }>
+  createdAt: string
+}
+
+export interface SupportNotificationRecord {
+  id: number
+  conversationId: number
+  messageId: number
+  clientId: number
+  agencyId: number
+  recipientType: 'client' | 'admin'
+  recipientId?: number
+  title: string
+  body: string
+  createdAt: string
+  readAt?: string
+}
+
 export interface AgencyChatbotTopicRecord {
   id: string
   label: string
@@ -280,6 +355,9 @@ interface AppData {
   agencyAdminSessions: AgencyAdminSessionRecord[]
   directSales: DirectSaleRecord[]
   chatMessages: ChatMessageRecord[]
+  supportConversations: SupportConversationRecord[]
+  supportMessages: SupportMessageRecord[]
+  supportNotifications: SupportNotificationRecord[]
   agencyChatbotConfigs: AgencyChatbotConfigRecord[]
   requestConversations: RequestConversationRecord[]
   requestMessages: RequestMessageRecord[]
@@ -295,6 +373,9 @@ interface AppData {
     agencyAdmins: number
     directSales: number
     chatMessages: number
+    supportConversations: number
+    supportMessages: number
+    supportNotifications: number
     employers: number
     employmentContracts: number
     employerContractFiles: number
@@ -410,6 +491,9 @@ const defaultData = (): AppData => ({
   agencyAdminSessions: [],
   directSales: [],
   chatMessages: [],
+  supportConversations: [],
+  supportMessages: [],
+  supportNotifications: [],
   agencyChatbotConfigs: [],
   requestConversations: [],
   requestMessages: [],
@@ -425,6 +509,9 @@ const defaultData = (): AppData => ({
     agencyAdmins: 2,
     directSales: 1,
     chatMessages: 1,
+    supportConversations: 1,
+    supportMessages: 1,
+    supportNotifications: 1,
     employers: 1,
     employmentContracts: 1,
     employerContractFiles: 1,
@@ -669,6 +756,283 @@ const normalizeAgencyChatbotConfig = (
         : now(),
   }
 }
+
+const DEFAULT_SUPPORT_CATEGORY: SupportInquiryCategory = 'General Inquiry'
+const DEFAULT_SUPPORT_PRIORITY: SupportPriority = 'MEDIUM'
+const DEFAULT_SUPPORT_STATUS: SupportConversationStatus = 'OPEN'
+
+const trimSupportText = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim()
+
+const inferSupportCategory = (value: string): SupportInquiryCategory => {
+  const text = value.toLowerCase()
+  if (/(book|booking|placement|schedule|interview|appointment)/.test(text)) {
+    return 'Booking Concern'
+  }
+  if (/(payment|billing|invoice|fee|fees|refund|salary)/.test(text)) {
+    return 'Payment Concern'
+  }
+  if (/(contract|renewal|agreement|extension|terms)/.test(text)) {
+    return 'Contract Concern'
+  }
+  if (/(replace|replacement|transfer|change helper|new helper)/.test(text)) {
+    return 'Maid Replacement'
+  }
+  if (/(bug|technical|login|system|portal|error|website|upload)/.test(text)) {
+    return 'Technical Support'
+  }
+  return DEFAULT_SUPPORT_CATEGORY
+}
+
+const inferSupportPriority = (value: string): SupportPriority => {
+  const text = value.toLowerCase()
+  if (/(urgent|asap|emergency|immediately)/.test(text)) return 'URGENT'
+  if (/(complaint|issue|problem|stuck|cannot|can't|fail)/.test(text)) return 'HIGH'
+  if (/(follow up|follow-up|status|update|check)/.test(text)) return 'MEDIUM'
+  return 'LOW'
+}
+
+const buildSupportConversationSubject = (
+  conversationType: 'support' | 'agency',
+  category: SupportInquiryCategory,
+  agencyName?: string
+) => {
+  if (conversationType === 'agency') {
+    return agencyName?.trim() ? `${agencyName.trim()} · ${category}` : category
+  }
+  return `Agency Support · ${category}`
+}
+
+const normalizeSupportConversationStatus = (value: unknown): SupportConversationStatus => {
+  if (
+    value === 'OPEN' ||
+    value === 'WAITING_CLIENT' ||
+    value === 'WAITING_SUPPORT' ||
+    value === 'RESOLVED' ||
+    value === 'CLOSED'
+  ) {
+    return value
+  }
+  return DEFAULT_SUPPORT_STATUS
+}
+
+const normalizeSupportConversationCategory = (value: unknown): SupportInquiryCategory => {
+  if (
+    value === 'Booking Concern' ||
+    value === 'Payment Concern' ||
+    value === 'Contract Concern' ||
+    value === 'Maid Replacement' ||
+    value === 'Technical Support' ||
+    value === 'General Inquiry'
+  ) {
+    return value
+  }
+  return DEFAULT_SUPPORT_CATEGORY
+}
+
+const normalizeSupportPriority = (value: unknown): SupportPriority => {
+  if (value === 'LOW' || value === 'MEDIUM' || value === 'HIGH' || value === 'URGENT') {
+    return value
+  }
+  return DEFAULT_SUPPORT_PRIORITY
+}
+
+const buildSupportConversationKey = (
+  clientId: number,
+  conversationType: 'support' | 'agency',
+  agencyId: number
+) => `${clientId}:${conversationType}:${agencyId}`
+
+const normalizeSupportConversation = (
+  record: Partial<SupportConversationRecord>,
+  index: number
+): SupportConversationRecord => ({
+  id: Number(record.id ?? index + 1) || index + 1,
+  clientId: Number(record.clientId ?? 0) || 0,
+  conversationType: record.conversationType === 'agency' ? 'agency' : 'support',
+  agencyId: normalizeAgencyId(record.agencyId),
+  agencyName: trimSupportText(record.agencyName),
+  subject: trimSupportText(record.subject) || 'Support inquiry',
+  description: trimSupportText(record.description),
+  status: normalizeSupportConversationStatus(record.status),
+  category: normalizeSupportConversationCategory(record.category),
+  priority: normalizeSupportPriority(record.priority),
+  assignedAdminId: Number.isInteger(Number(record.assignedAdminId))
+    ? Number(record.assignedAdminId)
+    : undefined,
+  assignedAdminName: trimSupportText(record.assignedAdminName),
+  lastMessageAt: record.lastMessageAt ?? record.updatedAt ?? record.createdAt ?? now(),
+  lastMessagePreview: trimSupportText(record.lastMessagePreview),
+  unreadClient: Number(record.unreadClient ?? 0) || 0,
+  unreadAdmin: Number(record.unreadAdmin ?? 0) || 0,
+  clientLastReadAt: record.clientLastReadAt,
+  adminLastReadAt: record.adminLastReadAt,
+  resolvedAt: record.resolvedAt,
+  closedAt: record.closedAt,
+  createdAt: record.createdAt ?? now(),
+  updatedAt: record.updatedAt ?? record.lastMessageAt ?? now(),
+})
+
+const normalizeSupportMessage = (
+  record: Partial<SupportMessageRecord>,
+  index: number
+): SupportMessageRecord => ({
+  id: Number(record.id ?? index + 1) || index + 1,
+  conversationId: Number(record.conversationId ?? 0) || 0,
+  clientId: Number(record.clientId ?? 0) || 0,
+  conversationType: record.conversationType === 'agency' ? 'agency' : 'support',
+  agencyId: normalizeAgencyId(record.agencyId),
+  agencyName: trimSupportText(record.agencyName),
+  senderRole: record.senderRole === 'client' ? 'client' : 'agency',
+  senderName: trimSupportText(record.senderName) || 'Support',
+  message: trimSupportText(record.message),
+  attachments: Array.isArray(record.attachments)
+    ? record.attachments
+        .map((attachment) => ({
+          name: trimSupportText(attachment?.name),
+          url: trimSupportText(attachment?.url),
+          mimeType: trimSupportText(attachment?.mimeType),
+          size: Number(attachment?.size ?? 0) || undefined,
+        }))
+        .filter((attachment) => attachment.name.length > 0 && attachment.url.length > 0)
+    : [],
+  createdAt: record.createdAt ?? now(),
+})
+
+const normalizeSupportNotification = (
+  record: Partial<SupportNotificationRecord>,
+  index: number
+): SupportNotificationRecord => ({
+  id: Number(record.id ?? index + 1) || index + 1,
+  conversationId: Number(record.conversationId ?? 0) || 0,
+  messageId: Number(record.messageId ?? 0) || 0,
+  clientId: Number(record.clientId ?? 0) || 0,
+  agencyId: normalizeAgencyId(record.agencyId),
+  recipientType: record.recipientType === 'client' ? 'client' : 'admin',
+  recipientId: Number.isInteger(Number(record.recipientId))
+    ? Number(record.recipientId)
+    : undefined,
+  title: trimSupportText(record.title) || 'Support update',
+  body: trimSupportText(record.body),
+  createdAt: record.createdAt ?? now(),
+  readAt: record.readAt,
+})
+
+const migrateLegacyChatToSupport = (
+  messages: ChatMessageRecord[]
+): Pick<AppData, 'supportConversations' | 'supportMessages' | 'supportNotifications'> => {
+  const supportConversations = new Map<string, SupportConversationRecord>()
+  const supportMessages: SupportMessageRecord[] = []
+  const supportNotifications: SupportNotificationRecord[] = []
+  let nextConversationId = 1
+  let nextNotificationId = 1
+
+  const sorted = [...messages].sort(
+    (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+  )
+
+  for (const message of sorted) {
+    const agencyId = normalizeAgencyId(message.agencyId)
+    const key = buildSupportConversationKey(
+      message.clientId,
+      message.conversationType,
+      agencyId
+    )
+    const category = inferSupportCategory(message.message)
+    const priority = inferSupportPriority(message.message)
+
+    let conversation = supportConversations.get(key)
+    if (!conversation) {
+      conversation = {
+        id: nextConversationId++,
+        clientId: message.clientId,
+        conversationType: message.conversationType,
+        agencyId,
+        agencyName: message.agencyName ?? '',
+        subject: buildSupportConversationSubject(
+          message.conversationType,
+          category,
+          message.agencyName
+        ),
+        description:
+          message.conversationType === 'agency'
+            ? 'Direct conversation with agency support.'
+            : 'General support and follow-up for client inquiries.',
+        status: message.senderRole === 'client' ? 'WAITING_SUPPORT' : 'WAITING_CLIENT',
+        category,
+        priority,
+        lastMessageAt: message.createdAt,
+        lastMessagePreview: trimSupportText(message.message).slice(0, 160),
+        unreadClient: 0,
+        unreadAdmin: 0,
+        createdAt: message.createdAt,
+        updatedAt: message.createdAt,
+      }
+      supportConversations.set(key, conversation)
+    }
+
+    supportMessages.push({
+      id: message.id,
+      conversationId: conversation.id,
+      clientId: message.clientId,
+      conversationType: message.conversationType,
+      agencyId,
+      agencyName: message.agencyName ?? '',
+      senderRole: message.senderRole,
+      senderName: message.senderName,
+      message: trimSupportText(message.message),
+      attachments: [],
+      createdAt: message.createdAt,
+    })
+
+    conversation.lastMessageAt = message.createdAt
+    conversation.updatedAt = message.createdAt
+    conversation.lastMessagePreview = trimSupportText(message.message).slice(0, 160)
+    conversation.category =
+      conversation.category === DEFAULT_SUPPORT_CATEGORY ? category : conversation.category
+    conversation.priority =
+      conversation.priority === DEFAULT_SUPPORT_PRIORITY ? priority : conversation.priority
+
+    if (message.senderRole === 'client') {
+      conversation.status = 'WAITING_SUPPORT'
+      if (!message.readByAgency) {
+        conversation.unreadAdmin += 1
+        supportNotifications.push({
+          id: nextNotificationId++,
+          conversationId: conversation.id,
+          messageId: message.id,
+          clientId: message.clientId,
+          agencyId,
+          recipientType: 'admin',
+          title: 'New client support message',
+          body: trimSupportText(message.message).slice(0, 180),
+          createdAt: message.createdAt,
+        })
+      }
+    } else {
+      conversation.status = 'WAITING_CLIENT'
+      if (!message.readByClient) {
+        conversation.unreadClient += 1
+        supportNotifications.push({
+          id: nextNotificationId++,
+          conversationId: conversation.id,
+          messageId: message.id,
+          clientId: message.clientId,
+          agencyId,
+          recipientType: 'client',
+          title: 'Support replied to your inquiry',
+          body: trimSupportText(message.message).slice(0, 180),
+          createdAt: message.createdAt,
+        })
+      }
+    }
+  }
+
+  return {
+    supportConversations: Array.from(supportConversations.values()),
+    supportMessages,
+    supportNotifications,
+  }
+}
 const hashPassword = (password: string) =>
   scryptSync(password, 'agency-admin-auth', 64).toString('hex')
 const verifyPassword = (password: string, passwordHash?: string) => {
@@ -761,6 +1125,14 @@ const normalizeAgencyAdmins = (
 
 const mergeAppData = (raw: Partial<AppData>): AppData => {
   const defaults = defaultData()
+  const legacyChatMessages =
+    raw.chatMessages?.map((message) => ({
+      ...message,
+      conversationType: message.conversationType ?? 'support',
+      agencyId: normalizeAgencyId(message.agencyId),
+      agencyName: message.agencyName ?? '',
+    })) ?? defaults.chatMessages
+  const migratedSupport = migrateLegacyChatToSupport(legacyChatMessages)
   const normalizedAgencyAdmins = normalizeAgencyAdmins(
     (raw.agencyAdmins ?? defaults.agencyAdmins).map((admin) => ({
       ...admin,
@@ -850,13 +1222,22 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       updatedAt: directSale.updatedAt ?? directSale.createdAt ?? now(),
       updatedBy: directSale.updatedBy ?? 'migration',
     })),
-    chatMessages:
-      raw.chatMessages?.map((message) => ({
-        ...message,
-        conversationType: message.conversationType ?? 'support',
-        agencyId: normalizeAgencyId(message.agencyId),
-        agencyName: message.agencyName ?? '',
-      })) ?? defaults.chatMessages,
+    chatMessages: legacyChatMessages,
+    supportConversations: (
+      raw.supportConversations?.length
+        ? raw.supportConversations
+        : migratedSupport.supportConversations
+    ).map((conversation, index) => normalizeSupportConversation(conversation, index)),
+    supportMessages: (
+      raw.supportMessages?.length ? raw.supportMessages : migratedSupport.supportMessages
+    )
+      .map((message, index) => normalizeSupportMessage(message, index))
+      .filter((message) => message.message.length > 0),
+    supportNotifications: (
+      raw.supportNotifications?.length
+        ? raw.supportNotifications
+        : migratedSupport.supportNotifications
+    ).map((notification, index) => normalizeSupportNotification(notification, index)),
     agencyChatbotConfigs: (
       raw.agencyChatbotConfigs ?? defaults.agencyChatbotConfigs
     ).map((config) =>
@@ -999,6 +1380,20 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       chatMessages:
         raw.counters?.chatMessages ??
         ((raw.chatMessages?.length ?? 0) + 1 || defaults.counters.chatMessages),
+      supportConversations:
+        raw.counters?.supportConversations ??
+        ((raw.supportConversations?.length ??
+          migratedSupport.supportConversations.length ??
+          0) + 1 || defaults.counters.supportConversations),
+      supportMessages:
+        raw.counters?.supportMessages ??
+        ((raw.supportMessages?.length ?? migratedSupport.supportMessages.length ?? 0) + 1 ||
+          defaults.counters.supportMessages),
+      supportNotifications:
+        raw.counters?.supportNotifications ??
+        ((raw.supportNotifications?.length ??
+          migratedSupport.supportNotifications.length ??
+          0) + 1 || defaults.counters.supportNotifications),
       employers:
         raw.counters?.employers ??
         ((raw.employers?.length ?? 0) + 1 || defaults.counters.employers),
@@ -1863,6 +2258,107 @@ export const getAgencyAdminsStore = async () => {
   return [...data.agencyAdmins]
 }
 
+const getAgencyAvatarForSupport = (data: AppData, agencyId: number) =>
+  data.agencyAdmins.find(
+    (item) =>
+      normalizeAgencyId(item.agencyId) === normalizeAgencyId(agencyId) &&
+      item.profileImageUrl?.trim()
+  )?.profileImageUrl ??
+  data.companyProfile.logo_data_url ??
+  ''
+
+const getSupportConversationByContext = (
+  data: AppData,
+  clientId: number,
+  conversationType: 'support' | 'agency',
+  agencyId: number
+) =>
+  data.supportConversations.find(
+    (conversation) =>
+      conversation.clientId === clientId &&
+      conversation.conversationType === conversationType &&
+      conversation.agencyId === normalizeAgencyId(agencyId)
+  ) ?? null
+
+const ensureSupportConversationRecord = (
+  data: AppData,
+  payload: {
+    clientId: number
+    conversationType: 'support' | 'agency'
+    agencyId?: number
+    agencyName?: string
+    initialMessage: string
+    senderRole: 'client' | 'agency'
+  }
+) => {
+  const agencyId = normalizeAgencyId(payload.agencyId)
+  const existing = getSupportConversationByContext(
+    data,
+    payload.clientId,
+    payload.conversationType,
+    agencyId
+  )
+  if (existing) {
+    return existing
+  }
+
+  const category = inferSupportCategory(payload.initialMessage)
+  const conversation: SupportConversationRecord = {
+    id: data.counters.supportConversations++,
+    clientId: payload.clientId,
+    conversationType: payload.conversationType,
+    agencyId,
+    agencyName: payload.agencyName ?? '',
+    subject: buildSupportConversationSubject(
+      payload.conversationType,
+      category,
+      payload.agencyName
+    ),
+    description:
+      payload.conversationType === 'agency'
+        ? 'Direct conversation with agency support.'
+        : 'General support and follow-up for client inquiries.',
+    status: payload.senderRole === 'client' ? 'WAITING_SUPPORT' : 'WAITING_CLIENT',
+    category,
+    priority: inferSupportPriority(payload.initialMessage),
+    lastMessageAt: now(),
+    lastMessagePreview: '',
+    unreadClient: 0,
+    unreadAdmin: 0,
+    createdAt: now(),
+    updatedAt: now(),
+  }
+
+  data.supportConversations.push(conversation)
+  return conversation
+}
+
+const syncLegacyChatMessageFromSupport = (
+  data: AppData,
+  message: SupportMessageRecord
+) => {
+  const existing = data.chatMessages.find((record) => record.id === message.id)
+  const legacy: ChatMessageRecord = {
+    id: message.id,
+    clientId: message.clientId,
+    conversationType: message.conversationType,
+    agencyId: message.agencyId,
+    agencyName: message.agencyName ?? '',
+    senderRole: message.senderRole,
+    senderName: message.senderName,
+    message: message.message,
+    createdAt: message.createdAt,
+    readByAgency: message.senderRole === 'agency',
+    readByClient: message.senderRole === 'client',
+  }
+
+  if (existing) {
+    Object.assign(existing, legacy)
+  } else {
+    data.chatMessages.push(legacy)
+  }
+}
+
 export const getChatMessagesForClientStore = async (
   clientId: number,
   conversationType: 'support' | 'agency' = 'support',
@@ -1874,22 +2370,17 @@ export const getChatMessagesForClientStore = async (
     throw new Error('CLIENT_NOT_FOUND')
   }
   const resolvedAgencyId = normalizeAgencyId(agencyId)
-  const agencyProfileImageUrl =
-    data.agencyAdmins.find(
-      (item) =>
-        normalizeAgencyId(item.agencyId) === resolvedAgencyId &&
-        item.profileImageUrl?.trim()
-    )?.profileImageUrl ??
-    data.companyProfile.logo_data_url ??
-    ''
+  const agencyProfileImageUrl = getAgencyAvatarForSupport(data, resolvedAgencyId)
+  const conversation = getSupportConversationByContext(
+    data,
+    clientId,
+    conversationType,
+    resolvedAgencyId
+  )
+  if (!conversation) return []
 
-  return data.chatMessages
-    .filter(
-      (message) =>
-        message.clientId === clientId &&
-        message.conversationType === conversationType &&
-        message.agencyId === resolvedAgencyId
-    )
+  return data.supportMessages
+    .filter((message) => message.conversationId === conversation.id)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     .map((message) => ({
       ...message,
@@ -1900,7 +2391,7 @@ export const getChatMessagesForClientStore = async (
 
 export const getLatestChatMessageIdForClientStore = async (clientId: number) => {
   const data = await loadData()
-  return data.chatMessages
+  return data.supportMessages
     .filter((message) => message.clientId === clientId)
     .reduce((maxId, message) => Math.max(maxId, message.id), 0)
 }
@@ -1909,7 +2400,7 @@ export const getLatestChatMessageIdForAgencyStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
-  return data.chatMessages
+  return data.supportMessages
     .filter((message) => message.agencyId === agencyId)
     .reduce((maxId, message) => Math.max(maxId, message.id), 0)
 }
@@ -1927,22 +2418,19 @@ export const getChatMessagesAfterIdForClientStore = async (
   const conversationType = options?.conversationType ?? 'support'
   const agencyId = normalizeAgencyId(options?.agencyId)
   const client = data.clients.find((item) => item.id === clientId)
-  const agencyProfileImageUrl =
-    data.agencyAdmins.find(
-      (item) =>
-        normalizeAgencyId(item.agencyId) === agencyId &&
-        item.profileImageUrl?.trim()
-    )?.profileImageUrl ??
-    data.companyProfile.logo_data_url ??
-    ''
+  const agencyProfileImageUrl = getAgencyAvatarForSupport(data, agencyId)
+  const scopedConversation = getSupportConversationByContext(
+    data,
+    clientId,
+    conversationType,
+    agencyId
+  )
 
-  return data.chatMessages
+  return data.supportMessages
     .filter((message) => {
       if (message.clientId !== clientId || message.id <= afterId) return false
       if (options?.includeAll) return true
-      return (
-        message.conversationType === conversationType && message.agencyId === agencyId
-      )
+      return scopedConversation ? message.conversationId === scopedConversation.id : false
     })
     .sort((a, b) => a.id - b.id)
     .map((message) => ({
@@ -1958,15 +2446,8 @@ export const getChatMessagesAfterIdForAgencyStore = async (
 ) => {
   const data = await loadData()
   const resolvedAgencyId = normalizeAgencyId(agencyId)
-  const agencyProfileImageUrl =
-    data.agencyAdmins.find(
-      (item) =>
-        normalizeAgencyId(item.agencyId) === resolvedAgencyId &&
-        item.profileImageUrl?.trim()
-    )?.profileImageUrl ??
-    data.companyProfile.logo_data_url ??
-    ''
-  return data.chatMessages
+  const agencyProfileImageUrl = getAgencyAvatarForSupport(data, resolvedAgencyId)
+  return data.supportMessages
     .filter((message) => message.agencyId === resolvedAgencyId && message.id > afterId)
     .sort((a, b) => a.id - b.id)
     .map((message) => {
@@ -2027,74 +2508,48 @@ export const getChatConversationsStore = async (
 ) => {
   const data = await loadData()
   const resolvedAgencyId = normalizeAgencyId(agencyId)
-  const agencyProfileImageUrl =
-    data.agencyAdmins.find(
-      (item) =>
-        normalizeAgencyId(item.agencyId) === resolvedAgencyId &&
-        item.profileImageUrl?.trim()
-    )?.profileImageUrl ??
-    data.companyProfile.logo_data_url ??
-    ''
-  const conversations = new Map<
-    string,
-    {
-      key: string
-      clientId: number
-      conversationType: 'support' | 'agency'
-      agencyId?: number
-      agencyName?: string
-      clientName: string
-      clientEmail: string
-      clientCompany: string
-      clientProfileImageUrl?: string
-      agencyProfileImageUrl?: string
-      lastMessage: string
-      lastMessageAt: string
-      unreadCount: number
-    }
-  >()
-
-  data.chatMessages
-    .filter((message) => message.agencyId === resolvedAgencyId)
-    .forEach((message) => {
-    const client = data.clients.find((item) => item.id === message.clientId)
-    if (!client) return
-
-    const key = `${message.clientId}:${message.conversationType}:${message.agencyId ?? 0}`
-    const existing = conversations.get(key)
-    const unreadIncrement =
-      message.senderRole === 'client' && !message.readByAgency ? 1 : 0
-
-    if (!existing) {
-      conversations.set(key, {
-        key,
+  const agencyProfileImageUrl = getAgencyAvatarForSupport(data, resolvedAgencyId)
+  return data.supportConversations
+    .filter((conversation) => conversation.agencyId === resolvedAgencyId)
+    .map((conversation) => {
+      const client = data.clients.find((item) => item.id === conversation.clientId)
+      if (!client) return null
+      return {
+        key: buildSupportConversationKey(
+          conversation.clientId,
+          conversation.conversationType,
+          conversation.agencyId
+        ),
+        id: conversation.id,
         clientId: client.id,
-        conversationType: message.conversationType,
-        agencyId: message.agencyId,
-        agencyName: message.agencyName || '',
+        conversationType: conversation.conversationType,
+        agencyId: conversation.agencyId,
+        agencyName: conversation.agencyName || '',
         clientName: client.name,
         clientEmail: client.email,
         clientCompany: client.company || '',
         clientProfileImageUrl: client.profileImageUrl ?? '',
         agencyProfileImageUrl,
-        lastMessage: message.message,
-        lastMessageAt: message.createdAt,
-        unreadCount: unreadIncrement,
-      })
-      return
-    }
-
-    existing.unreadCount += unreadIncrement
-    if (
-      new Date(message.createdAt).getTime() >=
-      new Date(existing.lastMessageAt).getTime()
-    ) {
-      existing.lastMessage = message.message
-      existing.lastMessageAt = message.createdAt
-    }
+        lastMessage: conversation.lastMessagePreview,
+        lastMessageAt: conversation.lastMessageAt,
+        unreadCount: conversation.unreadAdmin,
+        unreadAdmin: conversation.unreadAdmin,
+        unreadClient: conversation.unreadClient,
+        status: conversation.status,
+        category: conversation.category,
+        priority: conversation.priority,
+        assignedAdminId: conversation.assignedAdminId,
+        assignedAdminName: conversation.assignedAdminName,
+        subject: conversation.subject,
+        description: conversation.description,
+      }
     })
-
-  return Array.from(conversations.values()).sort(
+    .filter(
+      (
+        conversation
+      ): conversation is NonNullable<typeof conversation> => Boolean(conversation)
+    )
+    .sort(
     (a, b) =>
       new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
   )
@@ -2114,22 +2569,67 @@ export const createChatMessageStore = async (payload: {
   if (!client) {
     throw new Error('CLIENT_NOT_FOUND')
   }
-
-  const record: ChatMessageRecord = {
-    id: data.counters.chatMessages++,
+  const conversation = ensureSupportConversationRecord(data, {
+    clientId: payload.clientId,
+    conversationType: payload.conversationType,
+    agencyId: payload.agencyId,
+    agencyName: payload.agencyName,
+    initialMessage: payload.message,
+    senderRole: payload.senderRole,
+  })
+  const timestamp = now()
+  const record: SupportMessageRecord = {
+    id: data.counters.supportMessages++,
+    conversationId: conversation.id,
     clientId: payload.clientId,
     conversationType: payload.conversationType,
     agencyId: normalizeAgencyId(payload.agencyId),
     agencyName: payload.agencyName ?? '',
     senderRole: payload.senderRole,
     senderName: payload.senderName,
-    message: payload.message,
-    createdAt: now(),
-    readByAgency: payload.senderRole === 'agency',
-    readByClient: payload.senderRole === 'client',
+    message: trimSupportText(payload.message),
+    attachments: [],
+    createdAt: timestamp,
   }
 
-  data.chatMessages.push(record)
+  conversation.lastMessageAt = timestamp
+  conversation.updatedAt = timestamp
+  conversation.lastMessagePreview = record.message.slice(0, 160)
+  conversation.category =
+    conversation.category === DEFAULT_SUPPORT_CATEGORY
+      ? inferSupportCategory(record.message)
+      : conversation.category
+  conversation.priority =
+    inferSupportPriority(record.message) === 'URGENT'
+      ? 'URGENT'
+      : conversation.priority === 'LOW'
+      ? inferSupportPriority(record.message)
+      : conversation.priority
+  conversation.status = payload.senderRole === 'client' ? 'WAITING_SUPPORT' : 'WAITING_CLIENT'
+  conversation.resolvedAt = undefined
+  conversation.closedAt = undefined
+  if (payload.senderRole === 'client') {
+    conversation.unreadAdmin += 1
+  } else {
+    conversation.unreadClient += 1
+  }
+
+  data.supportMessages.push(record)
+  syncLegacyChatMessageFromSupport(data, record)
+  data.supportNotifications.push({
+    id: data.counters.supportNotifications++,
+    conversationId: conversation.id,
+    messageId: record.id,
+    clientId: payload.clientId,
+    agencyId: conversation.agencyId,
+    recipientType: payload.senderRole === 'client' ? 'admin' : 'client',
+    title:
+      payload.senderRole === 'client'
+        ? 'New client support message'
+        : 'Support replied to your inquiry',
+    body: record.message.slice(0, 180),
+    createdAt: timestamp,
+  })
   await saveData(data)
   return record
 }
@@ -2140,6 +2640,23 @@ export const markChatMessagesReadForAgencyStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
+  const conversation = getSupportConversationByContext(
+    data,
+    clientId,
+    conversationType,
+    agencyId
+  )
+  if (conversation) {
+    conversation.unreadAdmin = 0
+    conversation.adminLastReadAt = now()
+    data.supportNotifications = data.supportNotifications.map((notification) =>
+      notification.conversationId === conversation.id &&
+      notification.recipientType === 'admin' &&
+      !notification.readAt
+        ? { ...notification, readAt: conversation.adminLastReadAt }
+        : notification
+    )
+  }
   data.chatMessages = data.chatMessages.map((message) =>
     message.clientId === clientId &&
     message.senderRole === 'client' &&
@@ -2157,6 +2674,23 @@ export const markChatMessagesReadForClientStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
+  const conversation = getSupportConversationByContext(
+    data,
+    clientId,
+    conversationType,
+    agencyId
+  )
+  if (conversation) {
+    conversation.unreadClient = 0
+    conversation.clientLastReadAt = now()
+    data.supportNotifications = data.supportNotifications.map((notification) =>
+      notification.conversationId === conversation.id &&
+      notification.recipientType === 'client' &&
+      !notification.readAt
+        ? { ...notification, readAt: conversation.clientLastReadAt }
+        : notification
+    )
+  }
   data.chatMessages = data.chatMessages.map((message) =>
     message.clientId === clientId &&
     message.senderRole === 'agency' &&
@@ -2172,12 +2706,9 @@ export const getUnreadAgencyChatCountStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
-  return data.chatMessages.filter(
-    (message) =>
-      message.agencyId === agencyId &&
-      message.senderRole === 'client' &&
-      !message.readByAgency
-  ).length
+  return data.supportConversations
+    .filter((conversation) => conversation.agencyId === normalizeAgencyId(agencyId))
+    .reduce((sum, conversation) => sum + conversation.unreadAdmin, 0)
 }
 
 export const createDirectSaleStore = async (
@@ -2455,82 +2986,47 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
     throw new Error('CLIENT_NOT_FOUND')
   }
 
-  const conversations = new Map<
-    string,
-    {
-      key: string
-      clientId: number
-      conversationType: 'support' | 'agency'
-      agencyId?: number
-      agencyName?: string
-      clientProfileImageUrl?: string
-      agencyProfileImageUrl?: string
-      title: string
-      description: string
-      lastMessage: string
-      lastMessageAt: string
-      unreadCount: number
-    }
-  >()
-
-  data.chatMessages
-    .filter((message) => message.clientId === clientId)
-    .forEach((message) => {
-      const resolvedAgencyId = normalizeAgencyId(message.agencyId)
-      const agencyProfileImageUrl =
-        data.agencyAdmins.find(
-          (item) =>
-            normalizeAgencyId(item.agencyId) === resolvedAgencyId &&
-            item.profileImageUrl?.trim()
-        )?.profileImageUrl ??
-        data.companyProfile.logo_data_url ??
-        ''
-      const key = `${message.conversationType}:${message.agencyId ?? 0}`
-      const existing = conversations.get(key)
-      const unreadIncrement =
-        message.senderRole === 'agency' && !message.readByClient ? 1 : 0
-      const title =
-        message.conversationType === 'agency'
-          ? message.agencyName || 'Agency'
-          : 'Agency Support'
-      const description =
-        message.conversationType === 'agency'
+  const conversations = data.supportConversations
+    .filter((conversation) => conversation.clientId === clientId)
+    .map((conversation) => ({
+      key: `${conversation.conversationType}:${conversation.agencyId ?? 0}`,
+      id: conversation.id,
+      clientId,
+      conversationType: conversation.conversationType,
+      agencyId: conversation.agencyId,
+      agencyName: conversation.agencyName || '',
+      clientProfileImageUrl: client.profileImageUrl ?? '',
+      agencyProfileImageUrl: getAgencyAvatarForSupport(data, conversation.agencyId),
+      title:
+        conversation.conversationType === 'agency'
+          ? conversation.agencyName || 'Agency'
+          : 'Agency Support',
+      description:
+        conversation.description ||
+        (conversation.conversationType === 'agency'
           ? 'Direct chat with agency'
-          : 'General help, follow-up, and request support'
+          : 'General help, follow-up, and request support'),
+      lastMessage: conversation.lastMessagePreview,
+      lastMessageAt: conversation.lastMessageAt,
+      unreadCount: conversation.unreadClient,
+      unreadAdmin: conversation.unreadAdmin,
+      unreadClient: conversation.unreadClient,
+      status: conversation.status,
+      category: conversation.category,
+      priority: conversation.priority,
+      assignedAdminId: conversation.assignedAdminId,
+      assignedAdminName: conversation.assignedAdminName,
+      subject: conversation.subject,
+    }))
 
-      if (!existing) {
-        conversations.set(key, {
-          key,
-          clientId,
-          conversationType: message.conversationType,
-          agencyId: message.agencyId,
-          agencyName: message.agencyName || '',
-          clientProfileImageUrl: client.profileImageUrl ?? '',
-          agencyProfileImageUrl,
-          title,
-          description,
-          lastMessage: message.message,
-          lastMessageAt: message.createdAt,
-          unreadCount: unreadIncrement,
-        })
-        return
-      }
-
-      existing.unreadCount += unreadIncrement
-      if (
-        new Date(message.createdAt).getTime() >=
-        new Date(existing.lastMessageAt).getTime()
-      ) {
-        existing.lastMessage = message.message
-        existing.lastMessageAt = message.createdAt
-      }
-    })
-
-  if (!conversations.has('support:0')) {
-    conversations.set('support:0', {
-      key: 'support:0',
+  if (!conversations.some((conversation) => conversation.key === 'support:1')) {
+    conversations.push({
+      id: 0,
+      key: 'support:1',
       clientId,
       conversationType: 'support',
+      agencyId: DEFAULT_AGENCY_ID,
+      agencyName: '',
       clientProfileImageUrl: client.profileImageUrl ?? '',
       agencyProfileImageUrl:
         data.companyProfile.logo_data_url ??
@@ -2541,10 +3037,18 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
       lastMessage: '',
       lastMessageAt: client.createdAt,
       unreadCount: 0,
+      unreadAdmin: 0,
+      unreadClient: 0,
+      status: 'OPEN',
+      category: 'General Inquiry',
+      priority: 'MEDIUM',
+      subject: 'Agency Support · General Inquiry',
+      assignedAdminId: undefined,
+      assignedAdminName: '',
     })
   }
 
-  return Array.from(conversations.values()).sort(
+  return conversations.sort(
     (a, b) =>
       new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
   )
@@ -2566,6 +3070,110 @@ export const getUnreadChatCountForClientStore = async (clientId: number) => {
     (sum, conversation) => sum + conversation.unreadCount,
     0
   )
+}
+
+export const updateSupportConversationStore = async (
+  clientId: number,
+  conversationType: 'support' | 'agency',
+  agencyId: number,
+  updates: Partial<
+    Pick<
+      SupportConversationRecord,
+      | 'status'
+      | 'category'
+      | 'priority'
+      | 'assignedAdminId'
+      | 'assignedAdminName'
+      | 'subject'
+      | 'description'
+    >
+  >
+) => {
+  const data = await loadData()
+  const conversation = getSupportConversationByContext(
+    data,
+    clientId,
+    conversationType,
+    agencyId
+  )
+  if (!conversation) return null
+
+  if (updates.status) {
+    conversation.status = normalizeSupportConversationStatus(updates.status)
+    if (conversation.status === 'RESOLVED') {
+      conversation.resolvedAt = now()
+    }
+    if (conversation.status === 'CLOSED') {
+      conversation.closedAt = now()
+    }
+  }
+  if (updates.category) {
+    conversation.category = normalizeSupportConversationCategory(updates.category)
+  }
+  if (updates.priority) {
+    conversation.priority = normalizeSupportPriority(updates.priority)
+  }
+  if (typeof updates.assignedAdminId !== 'undefined') {
+    conversation.assignedAdminId = updates.assignedAdminId
+  }
+  if (typeof updates.assignedAdminName !== 'undefined') {
+    conversation.assignedAdminName = updates.assignedAdminName
+  }
+  if (typeof updates.subject === 'string' && updates.subject.trim()) {
+    conversation.subject = updates.subject.trim()
+  }
+  if (typeof updates.description === 'string') {
+    conversation.description = updates.description.trim()
+  }
+  conversation.updatedAt = now()
+  await saveData(data)
+  return conversation
+}
+
+export const getSupportNotificationsStore = async (options: {
+  recipientType: 'client' | 'admin'
+  clientId?: number
+  agencyId?: number
+  unreadOnly?: boolean
+}) => {
+  const data = await loadData()
+  return data.supportNotifications
+    .filter((notification) => {
+      if (notification.recipientType !== options.recipientType) return false
+      if (typeof options.clientId === 'number' && notification.clientId !== options.clientId) {
+        return false
+      }
+      if (typeof options.agencyId === 'number' && notification.agencyId !== options.agencyId) {
+        return false
+      }
+      if (options.unreadOnly && notification.readAt) return false
+      return true
+    })
+    .sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+    )
+    .map((notification) => {
+      const conversation =
+        data.supportConversations.find(
+          (item) => item.id === notification.conversationId
+        ) ?? null
+      const client =
+        conversation
+          ? data.clients.find((item) => item.id === conversation.clientId) ?? null
+          : data.clients.find((item) => item.id === notification.clientId) ?? null
+
+      return {
+        ...notification,
+        conversationType: conversation?.conversationType ?? 'support',
+        agencyName: conversation?.agencyName ?? '',
+        clientName: client?.name ?? '',
+        clientEmail: client?.email ?? '',
+        status: conversation?.status ?? 'OPEN',
+        category: conversation?.category ?? 'General Inquiry',
+        priority: conversation?.priority ?? 'MEDIUM',
+        subject: conversation?.subject ?? '',
+      }
+    })
 }
 
 export const getClientHistoryStore = async (clientId: number) => {
