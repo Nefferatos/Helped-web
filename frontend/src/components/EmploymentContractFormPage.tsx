@@ -34,6 +34,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { downloadMergedEmployerPdf, printMergedEmployerPdf } from "@/lib/employerPdf";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
 import { getExperienceBucket, type MaidProfile } from "@/lib/maids";
 
@@ -65,6 +66,20 @@ type MaidSearchResult = Pick<
 >;
 
 type EmploymentContractPageMode = "create" | "edit" | "view";
+
+const fileIdentity = (file: UploadedFile) => `${file.category}::${file.name}::${file.url}`;
+
+const mergeUploadedFiles = (current: UploadedFile[], incoming: UploadedFile[]) => {
+  const merged = [...current];
+  const seen = new Set(current.map(fileIdentity));
+  for (const file of incoming) {
+    const key = fileIdentity(file);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(file);
+  }
+  return merged;
+};
 
 /* ─────────────────── constants ─────────────────── */
 const GENERATED_FORMS: { category: string; hasTemplate: boolean }[] = [
@@ -254,7 +269,7 @@ function DatePicker({ day, month, year, onDay, onMonth, onYear }: {
 const CategoryFileUpload = ({
   category, hasTemplate, refCode, uploads, onUpload, readOnly = false,
 }: {
-  category: string; hasTemplate: boolean; refCode: string; uploads: UploadedFile[]; onUpload: (files: UploadedFile[]) => void; readOnly?: boolean;
+  category: string; hasTemplate: boolean; refCode: string; uploads: UploadedFile[]; onUpload: (updater: (files: UploadedFile[]) => UploadedFile[]) => void; readOnly?: boolean;
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -268,19 +283,23 @@ const CategoryFileUpload = ({
       for (const file of files) {
         const fd = new FormData();
         fd.append("file", file); fd.append("category", category); fd.append("refCode", refCode);
-        const res = await fetch("/api/employer-files", { method: "POST", body: fd });
+        const res = await fetch("/api/employer-files", {
+          method: "POST",
+          headers: getAgencyAdminAuthHeaders(),
+          body: fd,
+        });
         const data = (await res.json().catch(() => ({}))) as { error?: string; fileUrl?: string; fileName?: string; category?: string };
         if (!res.ok || !data.fileUrl || !data.fileName) throw new Error(data.error || `Failed to upload ${file.name}`);
         uploaded.push({ name: data.fileName, url: data.fileUrl, category: data.category || category });
       }
-      onUpload([...uploads, ...uploaded]);
+      onUpload((current) => mergeUploadedFiles(current, uploaded));
       toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to upload file");
     } finally { setIsUploading(false); e.target.value = ""; }
   };
 
-  const removeUpload = (idx: number) => onUpload(uploads.filter((_, i) => i !== idx));
+  const removeUpload = (idx: number) => onUpload((current) => current.filter((_, i) => i !== idx));
 
   return (
     <div className="space-y-2 py-1.5">
@@ -366,7 +385,11 @@ const BulkUploadModal = ({
       setPendingFiles((p) => p.map((f) => f.id === pf.id ? { ...f, status: "uploading" } : f));
       try {
         const fd = new FormData(); fd.append("file", pf.file); fd.append("category", pf.category); fd.append("refCode", refCode);
-        const res = await fetch("/api/employer-files", { method: "POST", body: fd });
+        const res = await fetch("/api/employer-files", {
+          method: "POST",
+          headers: getAgencyAdminAuthHeaders(),
+          body: fd,
+        });
         const data = (await res.json().catch(() => ({}))) as { error?: string; fileUrl?: string; fileName?: string };
         if (!res.ok || !data.fileUrl || !data.fileName) throw new Error(data.error || `Failed to upload ${pf.file.name}`);
         results[pf.category] = [...(results[pf.category] ?? []), { name: data.fileName, url: data.fileUrl, category: pf.category }];
@@ -706,10 +729,16 @@ export const EmploymentContractPage = ({
   const removeFamilyMember = (idx: number) => setFamilyMembers((p) => p.filter((_, i) => i !== idx));
   const updateFamilyMember = (idx: number, field: string, value: string) =>
     setFamilyMembers((p) => p.map((fm, i) => i === idx ? { ...fm, [field]: value } : fm));
-  const updateCategoryUploads = (cat: string, files: UploadedFile[]) =>
-    setCategoryUploads((p) => ({ ...p, [cat]: files }));
+  const updateCategoryUploads = (cat: string, updater: (files: UploadedFile[]) => UploadedFile[]) =>
+    setCategoryUploads((p) => ({ ...p, [cat]: updater(p[cat] ?? []) }));
   const handleBulkUploadComplete = (by: Record<string, UploadedFile[]>) => {
-    setCategoryUploads((p) => { const m = { ...p }; for (const [c, fs] of Object.entries(by)) m[c] = [...(m[c] ?? []), ...fs]; return m; });
+    setCategoryUploads((p) => {
+      const next = { ...p };
+      for (const [category, files] of Object.entries(by)) {
+        next[category] = mergeUploadedFiles(next[category] ?? [], files);
+      }
+      return next;
+    });
   };
 
   const transformFamilyMembers = (members: typeof familyMembers) =>
@@ -1327,7 +1356,7 @@ export const EmploymentContractPage = ({
                         hasTemplate={cat.hasTemplate}
                         refCode={refCode || agency.caseReferenceNumber || "temp"}
                         uploads={uploads}
-                        onUpload={(files) => updateCategoryUploads(cat.category, files)}
+                        onUpload={(updater) => updateCategoryUploads(cat.category, updater)}
                       />
                       {uploads.length > 0 && (
                         <div className="mt-1.5 pl-6 space-y-1">

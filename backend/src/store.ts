@@ -528,6 +528,7 @@ const dataFile = configuredDataFile
 const defaultDataFile = path.join(dataDir, 'app-data.json')
 
 let cache: AppData | null = null
+let pendingSave: Promise<void> = Promise.resolve()
 
 const stripBom = (value: string) => value.replace(/^\uFEFF/, '')
 const generateEmailConfirmationCode = () =>
@@ -1445,7 +1446,10 @@ const loadData = async (): Promise<AppData> => {
 
 const saveData = async (data: AppData) => {
   cache = data
-  await writeFile(dataFile, JSON.stringify(data, null, 2), 'utf8')
+  pendingSave = pendingSave.then(() =>
+    writeFile(dataFile, JSON.stringify(data, null, 2), 'utf8')
+  )
+  await pendingSave
 }
 
 export const initializeStore = async () => {
