@@ -58,7 +58,6 @@ const HomePage = lazyRoute(() => import("@/pages/HomePage"));
 const AgencyProfile = lazyRoute(() => import("@/pages/AgencyProfile"));
 const AgencyProfileEdit = lazyRoute(() => import("@/pages/AgencyProfileEdit"));
 const AgencyChatbotConfig = lazyRoute(() => import("@/pages/AgencyChatbotConfig"));
-const AgencyAdminLogin = lazyRoute(() => import("@/pages/AgencyAdminLogin"));
 const AddMaid = lazyRoute(() => import("@/pages/AddMaid"));
 const EditMaids = lazyRoute(() => import("@/pages/EditMaids"));
 const MaidProfile = lazyRoute(() => import("@/pages/MaidProfile"));
@@ -294,7 +293,6 @@ const App = () => {
             <Route path="/auth/callback" element={withRouteLoader(<AuthCallback />)} />
             <Route path="/agencies" element={withRouteLoader(<AgenciesPage />)} />
             <Route path="/agencies/:id" element={withRouteLoader(<AgencyDetailsPage />)} />
-            <Route path="/agencyadmin/login" element={withRouteLoader(<AgencyAdminLogin />)} />
             <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
             <Route path="/agencyadmin/dashboard" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>)} />
