@@ -263,7 +263,7 @@ function DateDivider({ label }: { label: string }) {
 
 /* ─── AI Status Banner ───────────────────────────────────────────────────── */
 
-function AiStatusBanner({ status, onRetry }: { status: AiStatus; onRetry: () => void }) {
+/* function AiStatusBanner({ status, onRetry }: { status: AiStatus; onRetry: () => void }) {
   if (status === "online") {
     return (
       <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold" style={{ background: "#e7f8ee", color: "#1a7a3c", border: "1px solid #b8f0cc" }}>
@@ -284,7 +284,7 @@ function AiStatusBanner({ status, onRetry }: { status: AiStatus; onRetry: () => 
     );
   }
   return null;
-}
+} */
 
 /* ─── Quick Reply Panel ─────────────────────────────────────────────────── */
 
@@ -564,7 +564,7 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
 
 /* ─── AI Suggestion Strip ────────────────────────────────────────────────── */
 
-function AiSuggestionStrip({
+/* function AiSuggestionStrip({
   conversation,
   messages,
   status,
@@ -606,7 +606,7 @@ function AiSuggestionStrip({
       ))}
     </div>
   );
-}
+} */
 
 /* ─── Main component ─────────────────────────────────────────────────────── */
 
