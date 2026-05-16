@@ -191,6 +191,39 @@
   ],
   "inquiries": [
     {
+      "id": 50,
+      "createdAt": "2026-05-16T01:36:00.407Z",
+      "name": "Hann",
+      "contact": "jnaathan@gmail.com",
+      "message": "hoo",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 49,
+      "createdAt": "2026-05-16T01:34:50.268Z",
+      "name": "Hann",
+      "contact": "jnaathan@gmail.com",
+      "message": "hoo",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 48,
+      "createdAt": "2026-05-16T01:34:37.586Z",
+      "name": "Hann",
+      "contact": "jnaathan@gamail",
+      "message": "hoo",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
       "id": 47,
       "createdAt": "2026-05-13T00:08:33.460Z",
       "name": "test",
@@ -2961,6 +2994,90 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 170,
+      "createdAt": "2026-05-16T01:36:00.416Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 169,
+      "createdAt": "2026-05-16T01:35:59.656Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "hoo",
+        "name": "Hann",
+        "contact": "jnaathan@gmail.com",
+        "requestId": "1a4f42e6-a85f-4356-9a0f-3d8a0b1c6bf7"
+      }
+    },
+    {
+      "id": 168,
+      "createdAt": "2026-05-16T01:34:50.281Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 167,
+      "createdAt": "2026-05-16T01:34:49.529Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "hoo",
+        "name": "Hann",
+        "contact": "jnaathan@gmail.com",
+        "requestId": "a7aa8b39-343f-46be-aa92-2f0961133cbf"
+      }
+    },
+    {
+      "id": 166,
+      "createdAt": "2026-05-16T01:34:37.596Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 165,
+      "createdAt": "2026-05-16T01:34:36.534Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "hoo",
+        "name": "Hann",
+        "contact": "jnaathan@gamail",
+        "requestId": "e39e6103-66b6-4e36-92eb-ec77a4ff0a0f"
+      }
+    },
     {
       "id": 164,
       "createdAt": "2026-05-13T00:08:33.652Z",
@@ -5866,6 +5983,51 @@
   ],
   "decisionLogs": [
     {
+      "id": 59,
+      "createdAt": "2026-05-16T01:36:00.425Z",
+      "requestId": "1a4f42e6-a85f-4356-9a0f-3d8a0b1c6bf7",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 770,
+      "fallbackUsed": true
+    },
+    {
+      "id": 58,
+      "createdAt": "2026-05-16T01:34:50.286Z",
+      "requestId": "a7aa8b39-343f-46be-aa92-2f0961133cbf",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 757,
+      "fallbackUsed": true
+    },
+    {
+      "id": 57,
+      "createdAt": "2026-05-16T01:34:37.602Z",
+      "requestId": "e39e6103-66b6-4e36-92eb-ec77a4ff0a0f",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 1072,
+      "fallbackUsed": true
+    },
+    {
       "id": 56,
       "createdAt": "2026-05-13T00:08:33.672Z",
       "requestId": "0ad7a44f-b423-4790-b4a0-c2d5f94f420f",
@@ -7293,13 +7455,13 @@
   ],
   "counters": {
     "leads": 7,
-    "inquiries": 48,
+    "inquiries": 51,
     "matches": 124,
     "schedules": 5,
     "contracts": 6,
     "notifications": 20,
-    "automationLogs": 165,
-    "decisionLogs": 57,
+    "automationLogs": 171,
+    "decisionLogs": 60,
     "makeDeliveries": 13
   }
 }

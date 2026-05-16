@@ -1,8 +1,10 @@
 import { Request, Response } from 'express'
-import { getRequestAgencyId } from '../auth'
+import { getAuthenticatedClient, getRequestAgencyId } from '../auth'
 import {
   addEnquiryStore,
+  createChatMessageStore,
   deleteEnquiryStore,
+  getClientByEmailStore,
   getEnquiriesStore,
 } from '../store'
 
@@ -44,6 +46,13 @@ export const createEnquiry = async (req: Request, res: Response) => {
         .json({ error: 'username, email, phone, and message are required' })
     }
 
+    const authenticatedClient = await getAuthenticatedClient(req)
+    const matchedClient =
+      authenticatedClient &&
+      authenticatedClient.email.trim().toLowerCase() === email.trim().toLowerCase()
+        ? authenticatedClient
+        : await getClientByEmailStore(email)
+
     const enquiry = await addEnquiryStore({
       username,
       date:
@@ -58,7 +67,20 @@ export const createEnquiry = async (req: Request, res: Response) => {
       email,
       phone,
       message,
+      clientId: matchedClient?.id,
+      clientName: matchedClient?.name || undefined,
     }, agencyId)
+
+    if (matchedClient) {
+      await createChatMessageStore({
+        clientId: matchedClient.id,
+        conversationType: 'support',
+        agencyId,
+        senderRole: 'client',
+        senderName: matchedClient.name || username,
+        message: message.trim(),
+      })
+    }
 
     res.status(201).json({ enquiry })
   } catch (error) {

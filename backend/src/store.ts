@@ -91,6 +91,8 @@ export interface EnquiryRecord {
   email: string
   phone: string
   message: string
+  clientId?: number
+  clientName?: string
   createdAt: string
 }
 
@@ -1790,7 +1792,25 @@ export const getEnquiriesStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
-  let enquiries = data.enquiries.filter((enquiry) => enquiry.agencyId === agencyId)
+  let enquiries = data.enquiries
+    .filter((enquiry) => enquiry.agencyId === agencyId)
+    .map((enquiry) => {
+      const matchedClient =
+        typeof enquiry.clientId === 'number' && enquiry.clientId > 0
+          ? data.clients.find((client) => client.id === enquiry.clientId) ?? null
+          : data.clients.find(
+              (client) =>
+                client.email.trim().toLowerCase() === enquiry.email.trim().toLowerCase()
+            ) ?? null
+
+      return matchedClient
+        ? {
+            ...enquiry,
+            clientId: matchedClient.id,
+            clientName: matchedClient.name,
+          }
+        : enquiry
+    })
 
   if (search?.trim()) {
     const term = search.trim().toLowerCase()
@@ -1804,6 +1824,17 @@ export const getEnquiriesStore = async (
   }
 
   return enquiries.sort((a, b) => b.id - a.id)
+}
+
+export const getClientByEmailStore = async (email: string) => {
+  const data = await loadData()
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!normalizedEmail) return null
+  return (
+    data.clients.find(
+      (client) => client.email.trim().toLowerCase() === normalizedEmail
+    ) ?? null
+  )
 }
 
 export const getClientsStore = async () => {

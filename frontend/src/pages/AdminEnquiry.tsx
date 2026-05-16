@@ -315,7 +315,17 @@ function NotesPanel({
 }
 
 /* ─── Quick contact actions ─────────────────────────────────────────────── */
-function QuickContact({ email, phone }: { email: string; phone: string }) {
+function QuickContact({
+  email,
+  phone,
+  canOpenChat,
+  onOpenChat,
+}: {
+  email: string;
+  phone: string;
+  canOpenChat: boolean;
+  onOpenChat: () => void;
+}) {
   const copy = (text: string, label: string) => {
     navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied!`));
   };
@@ -334,15 +344,21 @@ function QuickContact({ email, phone }: { email: string; phone: string }) {
         <Copy className="h-3 w-3 text-sky-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
       </button>
 
-      {/* Mailto button */}
-      <a
-        href={`mailto:${email}`}
-        title="Open in mail app"
-        className="flex items-center gap-1.5 rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-1.5 hover:bg-indigo-100 transition-colors"
+      {/* Chat reply button */}
+      <button
+        type="button"
+        onClick={onOpenChat}
+        disabled={!canOpenChat}
+        title={canOpenChat ? "Reply in chat support" : "Cannot open chat without a registered client account"}
+        className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 transition-colors ${
+          canOpenChat
+            ? "bg-indigo-50 border-indigo-100 hover:bg-indigo-100"
+            : "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+        }`}
       >
         <Reply className="h-3.5 w-3.5 text-indigo-500" />
-        <span className="text-[13px] font-semibold text-indigo-900">Reply</span>
-      </a>
+        <span className={`text-[13px] font-semibold ${canOpenChat ? "text-indigo-900" : "text-gray-400"}`}>Reply in Chat</span>
+      </button>
 
       {/* Phone copy */}
       {phone ? (
@@ -443,7 +459,7 @@ function EnquiryCard({
               type="button"
               onClick={() => onOpenSupportChat(enq)}
               disabled={!enq.clientId}
-              title={enq.clientId ? "Open this enquiry in support chat" : "Cannot open chat without a registered client account"}
+              title={enq.clientId ? "Open this enquiry in client support chat" : "Cannot open chat without a registered client account"}
               className={`flex h-9 min-w-[120px] items-center justify-center rounded-xl border-2 px-3 text-sm font-semibold transition-all duration-200 ${
                 enq.clientId
                   ? "border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
@@ -451,7 +467,7 @@ function EnquiryCard({
               }`}
             >
               <Inbox className="mr-2 h-4 w-4" />
-              Support
+              Open Chat
             </button>
             <NotesPanel
               note={enq.note ?? ""}
@@ -464,7 +480,12 @@ function EnquiryCard({
 
         {/* Quick contact actions */}
         <div className="mb-3">
-          <QuickContact email={enq.email} phone={enq.phone} />
+          <QuickContact
+            email={enq.email}
+            phone={enq.phone}
+            canOpenChat={Boolean(enq.clientId)}
+            onOpenChat={() => onOpenSupportChat(enq)}
+          />
         </div>
 
         {/* Date */}
@@ -678,9 +699,16 @@ const AdminEnquiry = () => {
     params.set("clientId", String(enquiry.clientId));
     params.set("type", "support");
     params.set("clientName", enquiry.clientName ?? enquiry.username);
+    params.set("enquiryId", String(enquiry.id));
+    params.set("enquiryEmail", enquiry.email);
+    params.set("enquiryMessage", enqSummary(enquiry.message));
 
     navigate(adminPath(`/chat-support?${params.toString()}`));
   };
+
+  function enqSummary(message: string) {
+    return message.replace(/\s+/g, " ").trim().slice(0, 240);
+  }
 
   /* ── Select toggle ── */
   const handleSelect = (id: number) => {

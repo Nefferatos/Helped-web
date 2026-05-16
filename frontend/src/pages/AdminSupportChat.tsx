@@ -88,6 +88,12 @@ function compactWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function buildEnquiryPreview(message: string) {
+  const normalized = compactWhitespace(message);
+  if (!normalized) return "Opened from enquiries page";
+  return normalized.length > 120 ? `${normalized.slice(0, 119)}...` : normalized;
+}
+
 function sanitizeConversationPreview(message: string, senderRole?: ChatMessage["senderRole"]) {
   const normalized = compactWhitespace(message);
   if (!normalized) return "No messages yet";
@@ -617,6 +623,8 @@ const AdminSupportChat = () => {
   const queryConversationType: ConversationType = searchParams.get("type") === "agency" ? "agency" : "support";
   const queryAgencyId = queryConversationType === "agency" ? Number(searchParams.get("agencyId") ?? "0") : undefined;
   const queryClientName = searchParams.get("clientName") ?? "";
+  const queryEnquiryEmail = searchParams.get("enquiryEmail") ?? "";
+  const queryEnquiryMessage = searchParams.get("enquiryMessage") ?? "";
   const [pendingConversation, setPendingConversation] = useState<AdminConversation | null>(null);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [conversations, setConversations] = useState<AdminConversation[]>([]);
@@ -708,6 +716,7 @@ const AdminSupportChat = () => {
           }
 
           if (queryConversationType === "support") {
+            const enquiryPreview = buildEnquiryPreview(queryEnquiryMessage);
             setPendingConversation({
               key: queryKey,
               clientId: queryClientId,
@@ -715,10 +724,11 @@ const AdminSupportChat = () => {
               agencyId: 1,
               agencyName: "",
               clientName: queryClientName || `Client ${queryClientId}`,
-              clientEmail: "",
+              clientEmail: queryEnquiryEmail,
               clientCompany: "",
-              lastMessage: "Ready to start a support conversation.",
+              lastMessage: enquiryPreview,
               lastMessageAt: new Date().toISOString(),
+              description: enquiryPreview,
               unreadCount: 0,
               status: "OPEN",
               category: "General Inquiry",
@@ -739,7 +749,7 @@ const AdminSupportChat = () => {
     } finally {
       if (!silent) setIsLoadingConversations(false);
     }
-  }, [navigate, queryAgencyId, queryClientId, queryClientName, queryConversationType]);
+  }, [navigate, queryAgencyId, queryClientId, queryClientName, queryConversationType, queryEnquiryEmail, queryEnquiryMessage]);
 
   const loadMessages = useCallback(async (conversation: AdminConversation, silent = false) => {
     try {
@@ -1329,7 +1339,7 @@ const AdminSupportChat = () => {
               ) : !activeConversation ? (
                 <EmptyState label="Select a conversation to get started." />
               ) : messages.length === 0 ? (
-                <EmptyState label="No messages yet. Say hello!" />
+                <EmptyState label={activeConversation.description || "No messages yet. Say hello!"} />
               ) : (
                 messageGroups.map(({ label, messages: groupMsgs }) => (
                   <div key={label} className="flex flex-col gap-2">
