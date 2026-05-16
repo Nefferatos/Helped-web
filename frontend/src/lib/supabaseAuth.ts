@@ -161,7 +161,7 @@ export const handleInvalidClientSession = async (redirectTo = "/employer-login")
 
   try {
     if (supabase) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
     }
   } catch {
     // Keep clearing local state even when Supabase rejects the sign-out.
@@ -256,7 +256,7 @@ export const logoutClientPortal = async (redirectTo = "/") => {
           },
         })
       : Promise.resolve(),
-    supabase ? supabase.auth.signOut() : Promise.resolve(),
+    supabase ? supabase.auth.signOut({ scope: "local" }) : Promise.resolve(),
   ]);
 
   if (typeof window !== "undefined") {

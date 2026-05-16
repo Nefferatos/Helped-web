@@ -88,7 +88,7 @@ const ClientEmployerLogin = () => {
             description: "Please verify your email before logging in.",
             variant: "destructive",
           });
-          await sb.auth.signOut();
+          await sb.auth.signOut({ scope: "local" });
           setIsSubmitting(false); // fix: reset loading state so button un-freezes
           return;
         }

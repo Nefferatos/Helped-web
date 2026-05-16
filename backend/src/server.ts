@@ -41,6 +41,7 @@ const app: Express = express()
 const port = process.env.PORT || 3000
 const frontendDist = path.resolve(__dirname, '../../frontend/dist')
 const hasFrontendSite = fs.existsSync(frontendDist)
+const uploadsDir = path.resolve(__dirname, '../data/uploads')
 
 const resolveCorsOrigin = () => {
   const configured = process.env.CORS_ORIGIN?.trim()
@@ -79,6 +80,13 @@ app.use(
 // Global JSON + urlencoded for all other routes.
 app.use(express.json({ limit: '120mb' }))
 app.use(express.urlencoded({ extended: true, limit: '120mb' }))
+app.use(
+  '/uploads',
+  express.static(uploadsDir, {
+    maxAge: '30d',
+    immutable: true,
+  })
+)
 
 // ─── Health / utility endpoints ───────────────────────────────────────────────
 app.get('/api/health', (_req: Request, res: Response) => {

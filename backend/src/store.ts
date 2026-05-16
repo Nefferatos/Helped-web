@@ -319,6 +319,7 @@ export interface EmployerContractFileRecord {
   size: number
   type: string
   dataBase64: string
+  storagePath?: string
   category: string
   refCode: string
   createdAt: string
@@ -385,6 +386,236 @@ interface AppData {
 }
 
 const now = () => new Date().toISOString()
+const uploadsRoot = path.resolve(__dirname, '../data/uploads')
+
+const sanitizePathSegment = (value: string, fallback: string) => {
+  const sanitized = value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+  return sanitized || fallback
+}
+
+const ensureUploadDir = async (...segments: string[]) => {
+  const dir = path.join(uploadsRoot, ...segments)
+  await mkdir(dir, { recursive: true })
+  return dir
+}
+
+const dataUrlPattern = /^data:([^;,]+)?(?:;charset=[^;,]+)?;base64,(.+)$/i
+
+const extensionForMimeType = (mimeType: string) => {
+  switch (mimeType.toLowerCase()) {
+    case 'image/jpeg':
+      return '.jpg'
+    case 'image/png':
+      return '.png'
+    case 'image/webp':
+      return '.webp'
+    case 'image/gif':
+      return '.gif'
+    case 'video/mp4':
+      return '.mp4'
+    case 'video/webm':
+      return '.webm'
+    case 'video/ogg':
+      return '.ogv'
+    case 'application/pdf':
+      return '.pdf'
+    default:
+      return ''
+  }
+}
+
+const decodeDataUrl = (value: string) => {
+  const match = value.match(dataUrlPattern)
+  if (!match) return null
+  const mimeType = match[1] || 'application/octet-stream'
+  const buffer = Buffer.from(match[2], 'base64')
+  if (!buffer.length) return null
+  return { mimeType, buffer }
+}
+
+const writeUploadBuffer = async (
+  segments: string[],
+  fileName: string,
+  buffer: Buffer
+) => {
+  const dir = await ensureUploadDir(...segments)
+  const filePath = path.join(dir, fileName)
+  await writeFile(filePath, buffer)
+  return filePath
+}
+
+const toUploadUrl = (...segments: string[]) => `/${segments.join('/')}`
+
+const toUploadRelativePath = (...segments: string[]) => segments.join('/')
+
+const persistMaidMediaValue = async (
+  value: string,
+  agencyId: number,
+  referenceCode: string,
+  kind: 'photos' | 'videos',
+  index: number
+) => {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (!trimmed.startsWith('data:')) {
+    return trimmed
+  }
+
+  const decoded = decodeDataUrl(trimmed)
+  if (!decoded) {
+    return trimmed
+  }
+
+  const safeRef = sanitizePathSegment(referenceCode, 'maid')
+  const extension = extensionForMimeType(decoded.mimeType)
+  const fileName = `${kind.slice(0, -1)}-${index + 1}-${randomUUID()}${extension}`
+  await writeUploadBuffer(
+    ['maids', `agency-${agencyId}`, safeRef, kind],
+    fileName,
+    decoded.buffer
+  )
+  return toUploadUrl('uploads', 'maids', `agency-${agencyId}`, safeRef, kind, fileName)
+}
+
+const persistMaidMediaFields = async (
+  maid: Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>,
+  agencyId: number
+) => {
+  const normalizedPhotos = (
+    Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
+      ? maid.photoDataUrls
+      : maid.photoDataUrl
+      ? [maid.photoDataUrl]
+      : []
+  )
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .slice(0, 5)
+
+  const persistedPhotos = await Promise.all(
+    normalizedPhotos.map((photo, index) =>
+      persistMaidMediaValue(photo, agencyId, maid.referenceCode, 'photos', index)
+    )
+  )
+
+  const persistedVideo =
+    typeof maid.videoDataUrl === 'string' && maid.videoDataUrl.trim().startsWith('data:')
+      ? await persistMaidMediaValue(
+          maid.videoDataUrl,
+          agencyId,
+          maid.referenceCode,
+          'videos',
+          0
+        )
+      : maid.videoDataUrl?.trim() || ''
+
+  return {
+    ...maid,
+    photoDataUrls: persistedPhotos,
+    photoDataUrl: persistedPhotos[0] ?? '',
+    videoDataUrl: persistedVideo,
+    hasPhoto: persistedPhotos.length > 0,
+  }
+}
+
+const persistEmployerContractFilePayload = async (
+  file: {
+    name: string
+    size: number
+    type: string
+    dataBase64: string
+    category?: string
+    refCode?: string
+  },
+  agencyId: number
+) => {
+  const buffer = Buffer.from(file.dataBase64, 'base64')
+  const safeRef = sanitizePathSegment(String(file.refCode ?? ''), 'general')
+  const safeName = sanitizePathSegment(file.name, 'document')
+  const extension = path.extname(safeName) || extensionForMimeType(file.type) || '.bin'
+  const baseName = path.basename(safeName, path.extname(safeName)) || 'document'
+  const fileName = `${baseName}-${randomUUID()}${extension}`
+  const relativePath = toUploadRelativePath(
+    'employer-contract-files',
+    `agency-${agencyId}`,
+    safeRef,
+    fileName
+  )
+  await writeUploadBuffer(
+    ['employer-contract-files', `agency-${agencyId}`, safeRef],
+    fileName,
+    buffer
+  )
+  return {
+    storagePath: relativePath,
+    size: buffer.length,
+  }
+}
+
+const migrateLegacyMediaInData = async (data: AppData) => {
+  let changed = false
+
+  for (let index = 0; index < data.maids.length; index += 1) {
+    const maid = data.maids[index]
+    const migrated = await persistMaidMediaFields(
+      {
+        ...maid,
+        photoDataUrls: maid.photoDataUrls,
+        photoDataUrl: maid.photoDataUrl,
+        videoDataUrl: maid.videoDataUrl,
+      },
+      maid.agencyId
+    )
+
+    const photosChanged =
+      JSON.stringify(migrated.photoDataUrls) !== JSON.stringify(maid.photoDataUrls) ||
+      migrated.photoDataUrl !== maid.photoDataUrl
+    const videoChanged = migrated.videoDataUrl !== maid.videoDataUrl
+
+    if (photosChanged || videoChanged || migrated.hasPhoto !== maid.hasPhoto) {
+      data.maids[index] = {
+        ...maid,
+        photoDataUrls: migrated.photoDataUrls,
+        photoDataUrl: migrated.photoDataUrl,
+        videoDataUrl: migrated.videoDataUrl,
+        hasPhoto: migrated.hasPhoto,
+      }
+      changed = true
+    }
+  }
+
+  for (let index = 0; index < data.employerContractFiles.length; index += 1) {
+    const file = data.employerContractFiles[index]
+    if (file.storagePath || !file.dataBase64.trim()) {
+      continue
+    }
+
+    const persisted = await persistEmployerContractFilePayload(
+      {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        dataBase64: file.dataBase64,
+        category: file.category,
+        refCode: file.refCode,
+      },
+      file.agencyId
+    )
+
+    data.employerContractFiles[index] = {
+      ...file,
+      size: persisted.size,
+      storagePath: persisted.storagePath,
+      dataBase64: '',
+    }
+    changed = true
+  }
+
+  return changed
+}
 
 const defaultData = (): AppData => ({
   companyProfile: {
@@ -1354,6 +1585,10 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       size: Number((record as { size?: unknown }).size ?? 0) || 0,
       type: String((record as { type?: unknown }).type ?? ''),
       dataBase64: String((record as { dataBase64?: unknown }).dataBase64 ?? ''),
+      storagePath:
+        typeof (record as { storagePath?: unknown }).storagePath === 'string'
+          ? (record as { storagePath: string }).storagePath
+          : undefined,
       category: String((record as { category?: unknown }).category ?? ''),
       refCode: String((record as { refCode?: unknown }).refCode ?? ''),
       createdAt: record.createdAt ?? now(),
@@ -1441,6 +1676,9 @@ const loadData = async (): Promise<AppData> => {
   const raw = await readFile(dataFile, 'utf8')
   cache = mergeAppData(JSON.parse(stripBom(raw)) as Partial<AppData>)
   await writeFile(dataFile, JSON.stringify(cache, null, 2), 'utf8')
+  if (await migrateLegacyMediaInData(cache)) {
+    await saveData(cache)
+  }
   return cache
 }
 
@@ -1639,10 +1877,11 @@ export const createMaidStore = async (
     throw new Error('REFERENCE_CODE_EXISTS')
   }
 
+  const persistedMaid = await persistMaidMediaFields(maid, agencyId)
   const record: MaidRecord = {
-    ...maid,
+    ...persistedMaid,
     agencyId,
-    status: maid.status ?? 'available',
+    status: persistedMaid.status ?? 'available',
     id: data.counters.maids++,
     createdAt: now(),
     updatedAt: now(),
@@ -1673,9 +1912,10 @@ export const updateMaidStore = async (
     throw new Error('REFERENCE_CODE_EXISTS')
   }
 
+  const persistedUpdates = await persistMaidMediaFields(updates, agencyId)
   data.maids[index] = {
     ...data.maids[index],
-    ...updates,
+    ...persistedUpdates,
     agencyId,
     updatedAt: now(),
   }
@@ -1712,11 +1952,18 @@ export const updateMaidPhotoStore = async (
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
   )
   if (index === -1) return null
+  const persistedPhoto = await persistMaidMediaValue(
+    photoDataUrl,
+    agencyId,
+    referenceCode,
+    'photos',
+    0
+  )
   data.maids[index] = {
     ...data.maids[index],
-    photoDataUrls: photoDataUrl ? [photoDataUrl] : [],
-    photoDataUrl,
-    hasPhoto: Boolean(photoDataUrl),
+    photoDataUrls: persistedPhoto ? [persistedPhoto] : [],
+    photoDataUrl: persistedPhoto,
+    hasPhoto: Boolean(persistedPhoto),
     updatedAt: now(),
   }
   await saveData(data)
@@ -1743,7 +1990,9 @@ export const addMaidPhotoStore = async (
     if (nextPhotos.length >= 5) {
       throw new Error('PHOTO_LIMIT_REACHED')
     }
-    nextPhotos.push(photoDataUrl)
+    nextPhotos.push(
+      await persistMaidMediaValue(photoDataUrl, agencyId, referenceCode, 'photos', nextPhotos.length)
+    )
   }
   data.maids[index] = {
     ...data.maids[index],
@@ -1766,9 +2015,13 @@ export const updateMaidVideoStore = async (
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
   )
   if (index === -1) return null
+  const persistedVideo =
+    typeof videoDataUrl === 'string' && videoDataUrl.trim().startsWith('data:')
+      ? await persistMaidMediaValue(videoDataUrl, agencyId, referenceCode, 'videos', 0)
+      : videoDataUrl
   data.maids[index] = {
     ...data.maids[index],
-    videoDataUrl,
+    videoDataUrl: persistedVideo,
     updatedAt: now(),
   }
   await saveData(data)
@@ -2070,9 +2323,6 @@ export const authenticateClientStore = async (
 
 export const createClientSessionStore = async (clientId: number) => {
   const data = await loadData()
-  data.clientSessions = data.clientSessions.filter(
-    (session) => session.clientId !== clientId
-  )
   const session: ClientSessionRecord = {
     token: randomBytes(24).toString('hex'),
     clientId,
@@ -3539,17 +3789,23 @@ export const addEmployerContractFilesStore = async (
 ) => {
   const data = await loadData()
   const createdAt = now()
-  const records: EmployerContractFileRecord[] = files.map((file) => ({
-    id: data.counters.employerContractFiles++,
-    agencyId,
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    dataBase64: file.dataBase64,
-    category: String(file.category ?? ''),
-    refCode: String(file.refCode ?? ''),
-    createdAt,
-  }))
+  const records: EmployerContractFileRecord[] = await Promise.all(
+    files.map(async (file) => {
+      const persisted = await persistEmployerContractFilePayload(file, agencyId)
+      return {
+        id: data.counters.employerContractFiles++,
+        agencyId,
+        name: file.name,
+        size: persisted.size,
+        type: file.type,
+        dataBase64: '',
+        storagePath: persisted.storagePath,
+        category: String(file.category ?? ''),
+        refCode: String(file.refCode ?? ''),
+        createdAt,
+      }
+    })
+  )
   data.employerContractFiles.unshift(...records)
   await saveData(data)
   return records

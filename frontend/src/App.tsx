@@ -231,7 +231,7 @@ const App = () => {
         try {
           const { data } = await supabase.auth.getSession();
           if (data.session) {
-            await supabase.auth.signOut({ scope: "global" });
+            await supabase.auth.signOut({ scope: "local" });
           }
         } catch (error) {
           console.error("Failed to clear Supabase session after logout:", error);
@@ -259,7 +259,7 @@ const App = () => {
 
       if (session?.user) {
         if (isClientLogoutPending()) {
-          void supabase.auth.signOut({ scope: "global" }).finally(() => {
+          void supabase.auth.signOut({ scope: "local" }).finally(() => {
             clearClientAuth();
             clearSupabaseSessionStorage();
           });

@@ -1,4 +1,6 @@
 import { Request, Response } from 'express'
+import { readFile } from 'fs/promises'
+import path from 'path'
 import { getRequestAgencyId } from '../auth'
 import {
   addEmployerContractFilesStore,
@@ -11,6 +13,7 @@ const MAX_FILES = 10
 const MAX_BYTES_PER_FILE = 100 * 1024 * 1024
 const PDF_ONLY_MESSAGE = 'Only PDF files are allowed'
 const FILE_SIZE_LIMIT_MESSAGE = 'File exceeds 100MB limit'
+const uploadsRoot = path.resolve(__dirname, '../../data/uploads')
 
 const normalizeBase64 = (value: string) => value.replace(/\s+/g, '')
 
@@ -239,7 +242,9 @@ const sendEmployerContractFile = async (
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' })
     const file = await getEmployerContractFileStore(id, agencyId)
     if (!file) return res.status(404).json({ error: 'File not found' })
-    const buffer = Buffer.from(file.dataBase64, 'base64')
+    const buffer = file.storagePath
+      ? await readFile(path.join(uploadsRoot, file.storagePath))
+      : Buffer.from(file.dataBase64, 'base64')
     const safeFileName = file.name.replace(new RegExp(escapeRegExp('"'), 'g'), '')
     res.status(200)
       .setHeader('Content-Type', file.type || 'application/octet-stream')
