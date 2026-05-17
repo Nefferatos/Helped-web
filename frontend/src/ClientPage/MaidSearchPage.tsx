@@ -405,8 +405,8 @@ const LockedMaidHoverModal = ({
       {empHistory.length > 0 && (
         <div className="px-4 py-3 border-b" style={{ background:C.white, borderColor:C.border }}>
           <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:6 }}>Employment History</p>
-          <div className="overflow-hidden">
-            <table className="w-full text-xs border-collapse" style={{ tableLayout:"fixed" }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
               <thead>
                 <tr style={{ background:C.surface }}>
                   {["From","To","Country","Duties"].map(h => (
@@ -435,8 +435,8 @@ const LockedMaidHoverModal = ({
       {displayRows.length > 0 && (
         <div className="px-4 py-3" style={{ background:C.white }}>
           <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:6 }}>Skills</p>
-          <div className="overflow-hidden">
-            <table className="w-full text-xs border-collapse" style={{ tableLayout:"fixed" }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
               <thead>
                 <tr style={{ background:C.surface }}>
                   {["Area","Willing","Exp.","Rating"].map((h, i) => (
