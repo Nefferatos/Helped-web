@@ -336,7 +336,7 @@ const LockedMaidHoverModal = ({
     hasWorkAreaData ? workAreaRows : skillRows.map((s) => ({ name:s.name, willing:s.willing, evaluation:s.evaluation }));
 
   return (
-    <div ref={modalRef} style={{ ...pos, overflowY:"auto", border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 20px 60px rgba(12,30,18,0.20)" }}
+    <div ref={modalRef} style={{ ...pos, overflowY:"auto", overflowX:"hidden", border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 20px 60px rgba(12,30,18,0.20)" }}
       className="relative"
       onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
     >
@@ -405,8 +405,8 @@ const LockedMaidHoverModal = ({
       {empHistory.length > 0 && (
         <div className="px-4 py-3 border-b" style={{ background:C.white, borderColor:C.border }}>
           <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:6 }}>Employment History</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
+          <div className="overflow-hidden">
+            <table className="w-full text-xs border-collapse" style={{ tableLayout:"fixed" }}>
               <thead>
                 <tr style={{ background:C.surface }}>
                   {["From","To","Country","Duties"].map(h => (
@@ -419,8 +419,8 @@ const LockedMaidHoverModal = ({
                   const e = emp as Record<string, unknown>;
                   return (
                     <tr key={idx} style={{ background: idx % 2 === 0 ? C.white : C.surface }}>
-                      <td className="px-2 py-1.5 whitespace-nowrap" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["from"]||e["From"]||e["startYear"]||e["startDate"]||"—")}</td>
-                      <td className="px-2 py-1.5 whitespace-nowrap" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["to"]||e["To"]||e["endYear"]||e["endDate"]||"—")}</td>
+                      <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>{String(e["from"]||e["From"]||e["startYear"]||e["startDate"]||"—")}</td>
+                      <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>{String(e["to"]||e["To"]||e["endYear"]||e["endDate"]||"—")}</td>
                       <td className="px-2 py-1.5 blur-[3px] select-none" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["country"]||e["Country"]||e["location"]||"—")}</td>
                       <td className="px-2 py-1.5 blur-[3px] select-none max-w-[70px] truncate" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["duties"]||e["Duties"]||e["employer"]||"—")}</td>
                     </tr>
@@ -435,8 +435,8 @@ const LockedMaidHoverModal = ({
       {displayRows.length > 0 && (
         <div className="px-4 py-3" style={{ background:C.white }}>
           <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:6 }}>Skills</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
+          <div className="overflow-hidden">
+            <table className="w-full text-xs border-collapse" style={{ tableLayout:"fixed" }}>
               <thead>
                 <tr style={{ background:C.surface }}>
                   {["Area","Willing","Exp.","Rating"].map((h, i) => (
@@ -1073,7 +1073,9 @@ const MaidSearchPage = ({
   const handleQuickLink = (label: string) => {
     const quickLinkKey = QUICK_LINKS_BY_LABEL[label] ?? "";
     const next = new URLSearchParams();
-    if (quickLinkKey) next.set("quick", quickLinkKey);
+    if (quickLinkKey && quickLinkKey !== quickLink) {
+      next.set("quick", quickLinkKey);
+    }
     setFilters(defaultSidebarFilters);
     setCommittedFilters(defaultSidebarFilters);
     setPage(1);
@@ -1344,7 +1346,7 @@ const MaidSearchPage = ({
 
       <div className="container mx-auto flex flex-col gap-4 px-3 py-4 sm:px-4 md:flex-row md:gap-5 md:py-5">
         {/* Sidebar */}
-        <aside className="hidden w-56 shrink-0 md:block">
+        <aside className="hidden w-60 shrink-0 md:block">
           <div className="sticky top-4"><SidebarContent /></div>
         </aside>
 
