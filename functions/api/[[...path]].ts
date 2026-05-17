@@ -2897,13 +2897,18 @@ app.delete(
   }),
 );
 
+const compareReferenceCodes = (left: string | undefined, right: string | undefined) =>
+  String(left ?? "").localeCompare(String(right ?? ""), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+
 app.get(
   "/api/employers",
   safeApi(async (c) => {
     const data = await loadData(c.env);
-    const employers = [...data.employers].sort(
-      (left, right) =>
-        new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+    const employers = [...data.employers].sort((left, right) =>
+      compareReferenceCodes(left.refCode, right.refCode),
     );
     return c.json({ employers });
   }),
@@ -2959,14 +2964,29 @@ app.post(
     }
 
     const data = await loadData(c.env);
+    const existingRefCode = toTrimmedString(body.existingRefCode);
     const incomingRef =
       toTrimmedString(body.refCode) ||
       toTrimmedString(
         (agencyPayload as { caseReferenceNumber?: unknown }).caseReferenceNumber,
       );
-    const existingIndex = incomingRef
+    const existingIndex = existingRefCode
+      ? data.employers.findIndex((item) => item.refCode === existingRefCode)
+      : incomingRef
       ? data.employers.findIndex((item) => item.refCode === incomingRef)
       : -1;
+
+    if (
+      incomingRef &&
+      existingRefCode &&
+      incomingRef !== existingRefCode &&
+      data.employers.some(
+        (item, index) => item.refCode === incomingRef && index !== existingIndex,
+      )
+    ) {
+      return c.json({ error: "Reference number already in use" }, 409);
+    }
+
     const id =
       existingIndex === -1
         ? data.counters.employers++
@@ -3016,7 +3036,11 @@ app.post(
     }
 
     const existingEmploymentContractIndex = data.employmentContracts.findIndex(
-      (item) => item.refCode === refCode || item.employerRefCode === refCode,
+      (item) =>
+        item.refCode === existingRefCode ||
+        item.employerRefCode === existingRefCode ||
+        item.refCode === refCode ||
+        item.employerRefCode === refCode,
     );
     const employmentContractId =
       existingEmploymentContractIndex === -1

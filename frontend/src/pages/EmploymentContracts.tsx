@@ -39,11 +39,32 @@ type EmployerRow = {
   spouseNationality: string;
   maid: string;
   maidNationality: string;
+  maidPhoto: string;
 };
 
 const PAGE_SIZE = 20;
 
-/* ─── Skeleton row ─────────────────────────────────────────────────────── */
+/* ─── helpers ── */
+const getPrimaryPhoto = (maid: Record<string, unknown>): string => {
+  const arr = Array.isArray(maid.photoDataUrls)
+    ? maid.photoDataUrls.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    : [];
+  return arr[0] || String(maid.photoDataUrl ?? "").trim();
+};
+
+const sortByRefDesc = (rows: EmployerRow[]): EmployerRow[] =>
+  [...rows].sort((a, b) => {
+    const na = parseInt(a.ref, 10);
+    const nb = parseInt(b.ref, 10);
+    const aIsNum = !isNaN(na);
+    const bIsNum = !isNaN(nb);
+    if (aIsNum && bIsNum) return nb - na;
+    if (aIsNum) return -1;
+    if (bIsNum) return 1;
+    return a.ref.localeCompare(b.ref);
+  });
+
+/* ─── Skeleton row ── */
 function SkeletonRow() {
   return (
     <div className="animate-pulse flex items-center gap-4 rounded-2xl border border-gray-100 bg-white px-5 py-4">
@@ -57,7 +78,7 @@ function SkeletonRow() {
   );
 }
 
-/* ─── Confirm delete modal ─────────────────────────────────────────────── */
+/* ─── Confirm delete modal ── */
 function ConfirmModal({
   count,
   onConfirm,
@@ -73,7 +94,9 @@ function ConfirmModal({
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100">
           <AlertTriangle className="h-7 w-7 text-red-600" />
         </div>
-        <p className="text-[20px] font-bold text-gray-900 mb-1.5">Delete {count} contract{count !== 1 ? "s" : ""}?</p>
+        <p className="text-[20px] font-bold text-gray-900 mb-1.5">
+          Delete {count} contract{count !== 1 ? "s" : ""}?
+        </p>
         <p className="text-[15px] text-gray-500 leading-relaxed mb-6">
           This action cannot be undone. All selected employment records will be permanently removed.
         </p>
@@ -96,18 +119,56 @@ function ConfirmModal({
   );
 }
 
-/* ─── Main component ───────────────────────────────────────────────────── */
+/* ─── Maid avatar — photo if available, initials fallback ── */
+function MaidAvatar({ name, photo }: { name: string; photo: string }) {
+  const [imgError, setImgError] = useState(false);
+  const initials = name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+
+  if (photo && !imgError) {
+    return (
+      <div
+        className="h-9 w-7 shrink-0 overflow-hidden border border-gray-200 bg-gray-100"
+        style={{ borderRadius: 0 }}
+      >
+        <img
+          src={photo}
+          alt={name}
+          className="h-full w-full object-cover object-top"
+          onError={() => setImgError(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-bold text-[11px]">
+      {initials || <User className="h-4 w-4" />}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/*                   EmploymentContracts                   */
+/* ═══════════════════════════════════════════════════════ */
 const EmploymentContracts = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [employers, setEmployers] = useState<EmployerRow[]>(() =>
-    mockEmployers.map((item) => ({
-      ...item,
-      employerNationality: "",
-      spouseNationality: "",
-      maidNationality: "",
-    })),
+    sortByRefDesc(
+      mockEmployers.map((item) => ({
+        ...item,
+        employerNationality: "",
+        spouseNationality: "",
+        maidNationality: "",
+        maidPhoto: "",
+      })),
+    ),
   );
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -136,13 +197,23 @@ const EmploymentContracts = () => {
   /* ── Filtering & pagination ── */
   const filteredEmployers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return employers;
-    return employers.filter((r) =>
-      [r.ref, r.employer, r.employerNationality, r.spouse, r.spouseNationality, r.maid, r.maidNationality]
-        .join(" ")
-        .toLowerCase()
-        .includes(term),
-    );
+    const filtered = term
+      ? employers.filter((r) =>
+          [
+            r.ref,
+            r.employer,
+            r.employerNationality,
+            r.spouse,
+            r.spouseNationality,
+            r.maid,
+            r.maidNationality,
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(term),
+        )
+      : employers;
+    return sortByRefDesc(filtered);
   }, [employers, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filteredEmployers.length / PAGE_SIZE));
@@ -153,10 +224,16 @@ const EmploymentContracts = () => {
     return filteredEmployers.slice(start, start + PAGE_SIZE);
   }, [currentPage, filteredEmployers]);
 
-  useEffect(() => { if (page !== currentPage) setPage(currentPage); }, [currentPage, page]);
-  useEffect(() => { setPage(1); setSelected(new Set()); }, [searchTerm]);
+  useEffect(() => {
+    if (page !== currentPage) setPage(currentPage);
+  }, [currentPage, page]);
 
-  /* ── Load ── */
+  useEffect(() => {
+    setPage(1);
+    setSelected(new Set());
+  }, [searchTerm]);
+
+  /* ── Load employers ── */
   const loadEmployers = async () => {
     try {
       setIsLoading(true);
@@ -192,10 +269,11 @@ const EmploymentContracts = () => {
           spouseNationality: String(sp.nationality ?? ""),
           maid: String(maid.name ?? ""),
           maidNationality: String(maid.nationality ?? ""),
+          maidPhoto: getPrimaryPhoto(maid),
         };
       });
 
-      setEmployers(rows.filter((r) => r.ref));
+      setEmployers(sortByRefDesc(rows.filter((r) => r.ref)));
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Failed to load employers");
     } finally {
@@ -203,7 +281,9 @@ const EmploymentContracts = () => {
     }
   };
 
-  useEffect(() => { void loadEmployers(); }, []);
+  useEffect(() => {
+    void loadEmployers();
+  }, []);
 
   /* ── Duplicate ── */
   const handleDuplicate = async () => {
@@ -263,7 +343,9 @@ const EmploymentContracts = () => {
     try {
       setIsMutating(true);
       for (const ref of refs) {
-        const response = await fetch(`/api/employers/${encodeURIComponent(ref)}`, { method: "DELETE" });
+        const response = await fetch(`/api/employers/${encodeURIComponent(ref)}`, {
+          method: "DELETE",
+        });
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         if (!response.ok) throw new Error(data.error || `Failed to delete ${ref}`);
       }
@@ -299,13 +381,11 @@ const EmploymentContracts = () => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
         .ec-root, .ec-root * { font-family: 'DM Sans', sans-serif; }
-
         @keyframes ecFadeUp {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         .ec-row-enter { animation: ecFadeUp 0.28s cubic-bezier(0.16,1,0.3,1) both; }
-
         .ec-row-hover:hover { background: linear-gradient(135deg, #f0fdf9 0%, #f8faff 100%); }
       `}</style>
 
@@ -322,13 +402,14 @@ const EmploymentContracts = () => {
         {/* ── Page header ── */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-13 w-13 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg" style={{ height: 52, width: 52 }}>
+            <div
+              className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg"
+              style={{ height: 52, width: 52 }}
+            >
               <FileText className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-[22px] font-bold leading-tight text-gray-900">
-                Employment Contracts
-              </h2>
+              <h2 className="text-[22px] font-bold leading-tight text-gray-900">Employment Contracts</h2>
               <p className="text-[14px] text-gray-500 font-medium mt-0.5">
                 Manage contracts &amp; employment forms
               </p>
@@ -363,12 +444,39 @@ const EmploymentContracts = () => {
         {/* ── Stat strip ── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: "Total Contracts", value: employers.length, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100", icon: <FileText className="h-5 w-5 text-emerald-600" /> },
-            { label: "Employers", value: employers.filter((e) => e.employer).length, color: "text-sky-700", bg: "bg-sky-50 border-sky-100", icon: <User className="h-5 w-5 text-sky-600" /> },
-            { label: "With Spouse", value: employers.filter((e) => e.spouse).length, color: "text-violet-700", bg: "bg-violet-50 border-violet-100", icon: <Users className="h-5 w-5 text-violet-600" /> },
-            { label: "Maids Placed", value: employers.filter((e) => e.maid).length, color: "text-amber-700", bg: "bg-amber-50 border-amber-100", icon: <Star className="h-5 w-5 text-amber-500" /> },
+            {
+              label: "Total Contracts",
+              value: employers.length,
+              color: "text-emerald-700",
+              bg: "bg-emerald-50 border-emerald-100",
+              icon: <FileText className="h-5 w-5 text-emerald-600" />,
+            },
+            {
+              label: "Employers",
+              value: employers.filter((e) => e.employer).length,
+              color: "text-sky-700",
+              bg: "bg-sky-50 border-sky-100",
+              icon: <User className="h-5 w-5 text-sky-600" />,
+            },
+            {
+              label: "With Spouse",
+              value: employers.filter((e) => e.spouse).length,
+              color: "text-violet-700",
+              bg: "bg-violet-50 border-violet-100",
+              icon: <Users className="h-5 w-5 text-violet-600" />,
+            },
+            {
+              label: "Maids Placed",
+              value: employers.filter((e) => e.maid).length,
+              color: "text-amber-700",
+              bg: "bg-amber-50 border-amber-100",
+              icon: <Star className="h-5 w-5 text-amber-500" />,
+            },
           ].map((s) => (
-            <div key={s.label} className={`rounded-2xl border px-4 py-3.5 ${s.bg} flex items-center gap-3`}>
+            <div
+              key={s.label}
+              className={`rounded-2xl border px-4 py-3.5 ${s.bg} flex items-center gap-3`}
+            >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm">
                 {s.icon}
               </div>
@@ -385,22 +493,19 @@ const EmploymentContracts = () => {
 
           {/* Toolbar */}
           <div className="border-b border-gray-100 bg-gray-50/60 px-5 py-4 space-y-3">
-            {/* Action buttons */}
             <div className="flex flex-wrap gap-2.5">
               <button
                 onClick={() => navigate(adminPath("/employment-contracts/new"))}
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-[14px] font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition-all"
               >
-                <Plus className="h-4 w-4" />
-                Add New Contract
+                <Plus className="h-4 w-4" /> Add New Contract
               </button>
               <button
                 disabled={selected.size === 0 || isMutating}
                 onClick={() => void handleDuplicate()}
                 className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-5 py-2.5 text-[14px] font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-40 disabled:cursor-default active:scale-95 transition-all"
               >
-                <Copy className="h-4 w-4" />
-                Duplicate
+                <Copy className="h-4 w-4" /> Duplicate
                 {selected.size > 0 && (
                   <span className="ml-0.5 rounded-full bg-sky-200 px-2 py-0.5 text-[12px]">
                     {selected.size}
@@ -412,8 +517,7 @@ const EmploymentContracts = () => {
                 onClick={() => setShowDeleteModal(true)}
                 className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-5 py-2.5 text-[14px] font-bold text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-default active:scale-95 transition-all"
               >
-                <Trash2 className="h-4 w-4" />
-                Delete
+                <Trash2 className="h-4 w-4" /> Delete
                 {selected.size > 0 && (
                   <span className="ml-0.5 rounded-full bg-red-200 px-2 py-0.5 text-[12px]">
                     {selected.size}
@@ -422,11 +526,10 @@ const EmploymentContracts = () => {
               </button>
             </div>
 
-            {/* Helper text */}
             <p className="text-[13px] text-gray-500 leading-relaxed">
               Click <span className="font-bold text-emerald-700">Add New Contract</span> for a blank form,
-              click a row to <span className="font-bold text-gray-700">view or edit</span> it, or
-              check the boxes to <span className="font-bold text-sky-700">duplicate</span> /
+              click a row to <span className="font-bold text-gray-700">view or edit</span> it, or check
+              the boxes to <span className="font-bold text-sky-700">duplicate</span> /
               <span className="font-bold text-red-600"> delete</span> selected records.
             </p>
 
@@ -455,9 +558,10 @@ const EmploymentContracts = () => {
             </div>
           </div>
 
-          {/* Table-style list header */}
+          {/* Table header */}
           {!isLoading && !loadError && paginatedEmployers.length > 0 && (
-            <div className="grid items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-2.5"
+            <div
+              className="grid items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-2.5"
               style={{ gridTemplateColumns: "72px 110px 1fr 1fr 1fr 44px" }}
             >
               <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Ref #</p>
@@ -483,7 +587,9 @@ const EmploymentContracts = () => {
           <div className="divide-y divide-gray-100 px-3 py-2">
             {isLoading ? (
               <div className="space-y-2 py-2">
-                {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonRow key={i} />
+                ))}
               </div>
             ) : loadError ? (
               <div className="flex flex-col items-center justify-center py-14 text-center">
@@ -505,7 +611,9 @@ const EmploymentContracts = () => {
                 </div>
                 <p className="text-[17px] font-bold text-gray-700">No contracts found</p>
                 <p className="mt-1.5 text-[14px] text-gray-400 max-w-[240px] leading-relaxed">
-                  {searchTerm ? "Try a different search term." : "Add your first employment contract to get started."}
+                  {searchTerm
+                    ? "Try a different search term."
+                    : "Add your first employment contract to get started."}
                 </p>
                 {searchTerm && (
                   <button
@@ -522,14 +630,20 @@ const EmploymentContracts = () => {
                 return (
                   <div
                     key={emp.ref}
-                    className={`ec-row-enter ec-row-hover group grid cursor-pointer items-center gap-3 rounded-xl px-3 py-3.5 transition-all ${
-                      isSelected ? "bg-emerald-50 border border-emerald-200" : "border border-transparent"
+                    className={`ec-row-enter ec-row-hover group grid cursor-pointer items-center gap-3 rounded-xl px-3 py-3 transition-all ${
+                      isSelected
+                        ? "bg-emerald-50 border border-emerald-200"
+                        : "border border-transparent"
                     }`}
                     style={{
                       gridTemplateColumns: "72px 110px 1fr 1fr 1fr 44px",
                       animationDelay: `${i * 0.035}s`,
                     }}
-                    onClick={() => navigate(adminPath(`/employment-contracts/${encodeURIComponent(emp.ref)}`))}
+                    onClick={() =>
+                      navigate(
+                        adminPath(`/employment-contracts/${encodeURIComponent(emp.ref)}`),
+                      )
+                    }
                   >
                     {/* Ref */}
                     <div>
@@ -544,7 +658,12 @@ const EmploymentContracts = () => {
                     {/* Employer */}
                     <div className="min-w-0 flex items-center gap-2.5">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 font-bold text-[12px]">
-                        {emp.employer.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?"}
+                        {emp.employer
+                          .split(" ")
+                          .slice(0, 2)
+                          .map((w) => w[0])
+                          .join("")
+                          .toUpperCase() || "?"}
                       </div>
                       <p className="text-[14px] font-bold text-gray-900 truncate leading-snug">
                         {emp.employer || "—"}
@@ -556,23 +675,37 @@ const EmploymentContracts = () => {
                       {emp.spouse ? (
                         <>
                           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 font-bold text-[11px]">
-                            {emp.spouse.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
+                            {emp.spouse
+                              .split(" ")
+                              .slice(0, 2)
+                              .map((w) => w[0])
+                              .join("")
+                              .toUpperCase()}
                           </div>
-                          <p className="text-[14px] font-semibold text-gray-700 truncate">{emp.spouse}</p>
+                          <p className="text-[14px] font-semibold text-gray-700 truncate">
+                            {emp.spouse}
+                          </p>
                         </>
                       ) : (
                         <p className="text-[14px] text-gray-300 font-medium">—</p>
                       )}
                     </div>
 
-                    {/* Maid */}
+                    {/* Maid — photo + name, click row to edit */}
                     <div className="min-w-0 flex items-center gap-2">
                       {emp.maid ? (
                         <>
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-bold text-[11px]">
-                            {emp.maid.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
+                          <MaidAvatar name={emp.maid} photo={emp.maidPhoto} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[14px] font-bold text-emerald-800 truncate leading-snug">
+                              {emp.maid}
+                            </p>
+                            {emp.maidNationality && (
+                              <p className="text-[11px] text-gray-400 font-medium truncate">
+                                {emp.maidNationality}
+                              </p>
+                            )}
                           </div>
-                          <p className="text-[14px] font-bold text-emerald-800 truncate">{emp.maid}</p>
                         </>
                       ) : (
                         <p className="text-[14px] text-gray-300 font-medium">—</p>
@@ -582,7 +715,10 @@ const EmploymentContracts = () => {
                     {/* Checkbox */}
                     <div
                       className="flex justify-center"
-                      onClick={(e) => { e.stopPropagation(); toggleSelect(emp.ref); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelect(emp.ref);
+                      }}
                     >
                       {isSelected ? (
                         <CheckSquare className="h-5 w-5 text-emerald-600" />
@@ -610,7 +746,9 @@ const EmploymentContracts = () => {
               <div className="flex items-center gap-1.5 flex-wrap justify-center">
                 {pageNumbers.map((p, idx) =>
                   p === "..." ? (
-                    <span key={`e-${idx}`} className="px-1 text-[14px] text-gray-400 font-medium">…</span>
+                    <span key={`e-${idx}`} className="px-1 text-[14px] text-gray-400 font-medium">
+                      …
+                    </span>
                   ) : (
                     <button
                       key={p}
@@ -653,7 +791,8 @@ const EmploymentContracts = () => {
           <p className="text-center text-[13px] text-gray-400 font-medium">
             Showing{" "}
             <span className="font-bold text-gray-700">
-              {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredEmployers.length)}
+              {(currentPage - 1) * PAGE_SIZE + 1}–
+              {Math.min(currentPage * PAGE_SIZE, filteredEmployers.length)}
             </span>{" "}
             of <span className="font-bold text-gray-700">{filteredEmployers.length}</span> contracts
           </p>

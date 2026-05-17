@@ -251,15 +251,20 @@ const StyledSelect = ({
 };
 
 /* ─────────────────────────────────────────
-   CSS injected into iframe to hide the
-   host app's navigation / header bar
+   CSS injected into the iframe to:
+   1. Hide nav / header bars
+   2. Hide the action toolbar row (Back to all maids,
+      All Maids, Shortlist, Tell Friend, My Shortlist,
+      Contact Agency, the back link above the card)
+   3. Remove the login-prompt banner
 ───────────────────────────────────────── */
-const HIDE_NAV_CSS = `
+const HIDE_CHROME_CSS = `
+  /* ── navigation & site header ── */
   nav,
   header,
   [class*="navbar"],
   [class*="Navbar"],
-  [class*="header"]:not([class*="card"]):not([class*="section"]),
+  [class*="header"]:not([class*="card"]):not([class*="section"]):not([class*="Section"]):not([class*="Card"]),
   [class*="Header"]:not([class*="Card"]):not([class*="Section"]),
   [class*="nav-bar"],
   [class*="top-bar"],
@@ -270,14 +275,76 @@ const HIDE_NAV_CSS = `
   [role="banner"] {
     display: none !important;
   }
-  body { padding-top: 0 !important; margin-top: 0 !important; }
+
+  /* ── "Back to all maids" link above the card ── */
+  a[href*="/maids/search"],
+  a[href*="/maids"][href$="search"] {
+    display: none !important;
+  }
+
+  /* ── The toolbar strip that holds All Maids / Shortlist /
+         Tell Friend / My Shortlist / Contact Agency ──
+     It is a flex-wrap bar sitting just inside .content-card */
+  .content-card > div:first-child:has(a[href*="/maids"]),
+  .content-card > div:first-child:has(button),
+  [class*="content-card"] > div:first-child:has(a[href*="/maids"]) {
+    display: none !important;
+  }
+
+  /* Fallback: target every flex row whose first child is
+     an <a> pointing to /maids or /employer-login —
+     these are always toolbar rows */
+  div.flex:has(> a[href*="/client/maids"]),
+  div.flex:has(> a[href*="/employer-login"]) {
+    display: none !important;
+  }
+
+  /* ── Login prompt banner ── */
+  div:has(> p + div > a[href*="employer-login"]) {
+    display: none !important;
+  }
+
+  /* ── "Back to all maids" anchor rendered as a Link ── */
+  a[href*="maids/search"] {
+    display: none !important;
+  }
+
+  /* ── Remove any top body padding left by hidden nav ── */
+  body {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+    /* GPU-accelerated scroll — eliminates jank inside the iframe */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Force GPU compositing on the main scroll containers so
+     scroll is handled on the compositor thread (no main-thread lag) */
+  html, body, .page-container, [class*="content-card"], main {
+    transform: translateZ(0);
+    will-change: scroll-position;
+    backface-visibility: hidden;
+  }
+
+  /* Allow native touch scroll on all containers */
+  html, body, * {
+    touch-action: pan-y;
+  }
+
+  /* Prevent any CSS transition/animation from stealing scroll frames */
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 `;
 
 /* ─────────────────────────────────────────
    MaidProfileModal
-   • No header bar — iframe fills the panel
+   • iframe fills the panel (same as original)
+   • Injects CSS to strip toolbar + back links
+   • Smooth open / close animation
    • Floating close + new-tab buttons
-   • Injects CSS on load to hide inner nav
 ───────────────────────────────────────── */
 const MaidProfileModal = ({
   referenceCode,
@@ -286,132 +353,219 @@ const MaidProfileModal = ({
   referenceCode: string;
   onClose: () => void;
 }) => {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const iframeRef  = useRef<HTMLIFrameElement>(null);
+  const [visible, setVisible] = useState(false);   // drives the enter animation
+  const [loaded,  setLoaded]  = useState(false);   // show spinner until iframe ready
 
-  const handleIframeLoad = () => {
-    try {
-      const doc = iframeRef.current?.contentDocument;
-      if (!doc) return;
-      const style = doc.createElement("style");
-      style.textContent = HIDE_NAV_CSS;
-      doc.head.appendChild(style);
-    } catch {
-      /* cross-origin — cannot inject; floating buttons still work */
-    }
+  /* Trigger enter animation on next tick */
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  /* Close with exit animation */
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 260); // matches transition duration
   };
 
+  /* Keyboard */
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Lock body scroll */
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, []);
 
+  /* Inject CSS once iframe loads */
+  const handleIframeLoad = () => {
+    setLoaded(true);
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc) return;
+      const style = doc.createElement("style");
+      style.textContent = HIDE_CHROME_CSS;
+      doc.head.appendChild(style);
+
+      /* Extra JS pass — remove toolbar element directly if CSS :has()
+         isn't supported in the embedded page's browser context.       */
+      try {
+        const toolbar = doc.querySelector<HTMLElement>(
+          '.content-card > div:first-child, [class*="flex-wrap"]',
+        );
+        if (toolbar && toolbar.querySelector('a[href*="/maids"]')) {
+          toolbar.style.display = "none";
+        }
+        doc.querySelectorAll<HTMLElement>('a[href*="maids/search"]').forEach((el) => {
+          el.style.display = "none";
+        });
+      } catch { /* cross-origin guard */ }
+    } catch { /* cross-origin — CSS injection blocked; floating buttons still work */ }
+  };
+
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 9999,
-        background: "rgba(5,15,9,0.82)",
-        backdropFilter: "blur(6px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "24px 16px",
-      }}
-    >
+    <>
+      {/* ── Keyframe styles injected once ── */}
+      <style>{`
+        @keyframes crp-backdrop-in  { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes crp-backdrop-out { from { opacity: 1 } to { opacity: 0 } }
+        @keyframes crp-panel-in     { from { opacity: 0; transform: scale(0.96) translateY(18px) } to { opacity: 1; transform: scale(1) translateY(0) } }
+        @keyframes crp-panel-out    { from { opacity: 1; transform: scale(1) translateY(0) } to { opacity: 0; transform: scale(0.96) translateY(18px) } }
+
+        .crp-backdrop {
+          animation: crp-backdrop-in 0.22s cubic-bezier(0.22,1,0.36,1) forwards;
+        }
+        .crp-backdrop.crp-leaving {
+          animation: crp-backdrop-out 0.26s cubic-bezier(0.22,1,0.36,1) forwards;
+        }
+        .crp-panel {
+          animation: crp-panel-in 0.28s cubic-bezier(0.22,1,0.36,1) forwards;
+        }
+        .crp-panel.crp-leaving {
+          animation: crp-panel-out 0.26s cubic-bezier(0.22,1,0.36,1) forwards;
+        }
+      `}</style>
+
+      {/* ── Backdrop ── */}
       <div
-        onClick={(e) => e.stopPropagation()}
+        className={cn("crp-backdrop", !visible && "crp-leaving")}
+        onClick={handleClose}
         style={{
-          position: "relative",
-          width: "100%", maxWidth: 1100,
-          height: "calc(100vh - 48px)", maxHeight: 900,
-          borderRadius: 20, overflow: "hidden",
-          background: C.white,
-          boxShadow: `0 32px 80px rgba(5,15,9,0.6), 0 0 0 2px ${C.greenBorder}`,
-          display: "flex", flexDirection: "column",
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(5,15,9,0.88)",
+          /* NO backdrop-filter blur here — it forces the browser to
+             repaint the entire backdrop on every iframe scroll event,
+             which is the primary cause of iframe scroll jank.        */
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "24px 16px",
         }}
       >
-        {/* Yellow accent line along very top of panel */}
-        <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: 4, zIndex: 20,
-          background: `linear-gradient(90deg, ${C.yellow}, ${C.yellowBright} 40%, ${C.greenBright} 70%, ${C.yellow})`,
-          boxShadow: `0 2px 12px ${C.yellow}90`,
-        }} />
-
-        {/* Floating: New tab pill */}
-        <a
-          href={`/maids/${encodeURIComponent(referenceCode)}`}
-          target="_blank"
-          rel="noreferrer"
+        {/* ── Panel ── */}
+        <div
+          className={cn("crp-panel", !visible && "crp-leaving")}
+          onClick={(e) => e.stopPropagation()}
           style={{
-            position: "absolute", top: 14, right: 62, zIndex: 20,
-            display: "inline-flex", alignItems: "center", gap: 5,
-            padding: "7px 14px", borderRadius: 999,
-            background: C.dark,
-            border: `1.5px solid ${C.greenBorder}`,
-            color: "rgba(255,255,255,0.75)",
-            fontSize: 11, fontWeight: 800, textDecoration: "none",
-            boxShadow: "0 4px 16px rgba(5,15,9,0.45)",
-            transition: "all .15s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = C.greenMid;
-            e.currentTarget.style.color = C.white;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = C.dark;
-            e.currentTarget.style.color = "rgba(255,255,255,0.75)";
+            position: "relative",
+            width: "100%", maxWidth: 1100,
+            height: "calc(100vh - 48px)", maxHeight: 900,
+            borderRadius: 20, overflow: "hidden",
+            background: C.white,
+            boxShadow: `0 32px 80px rgba(5,15,9,0.65), 0 0 0 2px ${C.greenBorder}`,
+            display: "flex", flexDirection: "column",
           }}
         >
-          <ExternalLink style={{ width: 11, height: 11 }} />
-          New tab
-        </a>
+          {/* Yellow + green accent line at very top */}
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0, height: 4, zIndex: 20,
+            background: `linear-gradient(90deg, ${C.yellow}, ${C.yellowBright} 40%, ${C.greenBright} 70%, ${C.yellow})`,
+            boxShadow: `0 2px 14px ${C.yellow}90`,
+          }} />
 
-        {/* Floating: Close button */}
-        <button
-          type="button" onClick={onClose} title="Close"
-          style={{
-            position: "absolute", top: 10, right: 12, zIndex: 20,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 40, height: 40, borderRadius: 999,
-            background: C.dark,
-            border: `1.5px solid ${C.greenBorder}`,
-            color: "rgba(255,255,255,0.85)",
-            cursor: "pointer",
-            boxShadow: "0 4px 16px rgba(5,15,9,0.45)",
-            transition: "all .15s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#B91C1C";
-            e.currentTarget.style.borderColor = "rgba(252,165,165,0.4)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = C.dark;
-            e.currentTarget.style.borderColor = C.greenBorder;
-          }}
-        >
-          <X style={{ width: 18, height: 18 }} />
-        </button>
+          {/* Floating: open in new tab */}
+          {/* <a
+            href={`/maids/${encodeURIComponent(referenceCode)}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              position: "absolute", top: 14, right: 62, zIndex: 30,
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "7px 14px", borderRadius: 999,
+              background: C.dark,
+              border: `1.5px solid ${C.greenBorder}`,
+              color: "rgba(255,255,255,0.75)",
+              fontSize: 11, fontWeight: 800, textDecoration: "none",
+              boxShadow: "0 4px 16px rgba(5,15,9,0.45)",
+              transition: "background 0.15s, color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = C.greenMid;
+              e.currentTarget.style.color = C.white;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = C.dark;
+              e.currentTarget.style.color = "rgba(255,255,255,0.75)";
+            }}
+          >
+            <ExternalLink style={{ width: 11, height: 11 }} />
+            New tab
+          </a> */}
 
-        {/* Iframe — fills the entire panel */}
-        <iframe
-          ref={iframeRef}
-          src={`/maids/${encodeURIComponent(referenceCode)}`}
-          title={`Maid profile ${referenceCode}`}
-          onLoad={handleIframeLoad}
-          style={{
-            flex: 1, width: "100%", border: "none",
-            display: "block", background: C.surface,
-            marginTop: 4, /* clear the yellow top accent line */
-          }}
-          loading="lazy"
-        />
+          {/* Floating: close */}
+          <button
+            type="button" onClick={handleClose} title="Close (Esc)"
+            style={{
+              position: "absolute", top: 10, right: 12, zIndex: 30,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 40, height: 40, borderRadius: 999,
+              background: C.dark,
+              border: `1.5px solid ${C.greenBorder}`,
+              color: "rgba(255,255,255,0.85)",
+              cursor: "pointer",
+              boxShadow: "0 4px 16px rgba(5,15,9,0.45)",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#B91C1C";
+              e.currentTarget.style.borderColor = "rgba(252,165,165,0.4)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = C.dark;
+              e.currentTarget.style.borderColor = C.greenBorder;
+            }}
+          >
+            <X style={{ width: 18, height: 18 }} />
+          </button>
+
+          {/* Loading spinner shown until iframe fires onLoad */}
+          {!loaded && (
+            <div style={{
+              position: "absolute", inset: 0, zIndex: 10,
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 12,
+              background: C.surface,
+              marginTop: 4,
+            }}>
+              <Loader2
+                className="animate-spin"
+                style={{ width: 32, height: 32, color: C.greenMid }}
+              />
+              <p style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>
+                Loading profile…
+              </p>
+            </div>
+          )}
+
+          {/* Iframe — fills the panel.
+              will-change + translateZ forces the browser to composite the
+              iframe on its own GPU layer so scrolling inside it never
+              blocks the main thread → no jank.                          */}
+          <iframe
+            ref={iframeRef}
+            src={`/maids/${encodeURIComponent(referenceCode)}`}
+            title={`Maid profile ${referenceCode}`}
+            onLoad={handleIframeLoad}
+            scrolling="yes"
+            style={{
+              flex: 1, width: "100%", border: "none",
+              display: "block",
+              background: C.surface,
+              marginTop: 4,
+              opacity: loaded ? 1 : 0,
+              transition: "opacity 0.25s ease",
+              willChange: "transform",
+              transform: "translateZ(0)",
+              backfaceVisibility: "hidden" as const,
+            }}
+          />
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -426,14 +580,12 @@ const CardHeader = ({ eyebrow, title, subtitle }: { eyebrow: string; title: stri
       borderRadius: "18px 18px 0 0",
     }}
   >
-    {/* Left yellow bar */}
     <div style={{
       position: "absolute", left: 0, top: 0, bottom: 0, width: 5,
       background: `linear-gradient(180deg, ${C.yellowBright}, ${C.yellow})`,
       borderRadius: "18px 0 0 0",
       boxShadow: `3px 0 10px ${C.yellow}60`,
     }} />
-    {/* Top glow line */}
     <div style={{
       position: "absolute", top: 0, left: 0, right: 0, height: 2,
       background: `linear-gradient(90deg, ${C.yellow}00, ${C.yellow}70, ${C.yellow}00)`,
@@ -556,7 +708,10 @@ const ClientRequestsPage = () => {
       setSelectedRequestId(request.id);
       setChatDraft("");
       setRequirements(defaultRequirements);
-      setForm({ agencyId: "", nationality: "No Preference", primaryDuty: "No Preference", ageGroup: "No Preference", language: "No Preference", budget: "", otherRequirements: "" });
+      setForm({
+        agencyId: "", nationality: "No Preference", primaryDuty: "No Preference",
+        ageGroup: "No Preference", language: "No Preference", budget: "", otherRequirements: "",
+      });
       toast.success("Your request is now in review.");
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to submit request"),
@@ -689,7 +844,10 @@ const ClientRequestsPage = () => {
     <div className="min-h-screen w-full" style={{ background: C.surface }}>
 
       {profileModalRef && (
-        <MaidProfileModal referenceCode={profileModalRef} onClose={() => setProfileModalRef(null)} />
+        <MaidProfileModal
+          referenceCode={profileModalRef}
+          onClose={() => setProfileModalRef(null)}
+        />
       )}
 
       {/* Decorative blobs */}
@@ -710,7 +868,6 @@ const ClientRequestsPage = () => {
           borderBottom: `2px solid ${C.greenBorder}`,
         }}
       >
-        {/* Electric multi-color top line */}
         <div style={{
           position: "absolute", top: 0, left: 0, right: 0, height: 4,
           background: `linear-gradient(90deg, ${C.yellow}, ${C.yellowBright} 35%, ${C.greenBright} 65%, ${C.yellow})`,
@@ -751,7 +908,7 @@ const ClientRequestsPage = () => {
 
       {/* ── Main ── */}
       <main className="relative w-full px-6 py-6">
-        <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]" style={{ minHeight: "calc(100vh - 140px)" }}>
+        <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr] items-start" style={{ minHeight: "calc(100vh - 140px)" }}>
 
           {/* ═══════════ LEFT ═══════════ */}
           <div className="space-y-5 min-w-0">
@@ -773,7 +930,10 @@ const ClientRequestsPage = () => {
                 {/* Agency */}
                 <div className="grid gap-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Agency</label>
-                  <StyledSelect value={form.agencyId || "No Preference"} onChange={(v) => setForm((c) => ({ ...c, agencyId: v === "No Preference" ? "" : v }))}>
+                  <StyledSelect
+                    value={form.agencyId || "No Preference"}
+                    onChange={(v) => setForm((c) => ({ ...c, agencyId: v === "No Preference" ? "" : v }))}
+                  >
                     <option value="No Preference">Choose an agency</option>
                     <option value="admin">Admin Agency</option>
                     {(agenciesQuery.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -785,12 +945,15 @@ const ClientRequestsPage = () => {
                   {[
                     { key: "nationality", label: "Nationality", opts: NATIONALITY_OPTIONS },
                     { key: "primaryDuty", label: "Primary Duty", opts: PRIMARY_DUTY_OPTIONS },
-                    { key: "ageGroup", label: "Age Group", opts: AGE_GROUP_OPTIONS },
-                    { key: "language", label: "Language", opts: LANGUAGE_OPTIONS },
+                    { key: "ageGroup",    label: "Age Group",    opts: AGE_GROUP_OPTIONS },
+                    { key: "language",    label: "Language",     opts: LANGUAGE_OPTIONS },
                   ].map(({ key, label, opts }) => (
                     <div key={key} className="grid gap-1.5">
                       <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>{label}</label>
-                      <StyledSelect value={form[key as keyof typeof form]} onChange={(v) => setForm((c) => ({ ...c, [key]: v }))}>
+                      <StyledSelect
+                        value={form[key as keyof typeof form]}
+                        onChange={(v) => setForm((c) => ({ ...c, [key]: v }))}
+                      >
                         {opts.map((o) => <option key={o} value={o}>{o}</option>)}
                       </StyledSelect>
                     </div>
@@ -818,7 +981,7 @@ const ClientRequestsPage = () => {
                       value={form.otherRequirements}
                       onChange={(e) => setForm((c) => ({ ...c, otherRequirements: e.target.value }))}
                       onFocus={(e) => { e.currentTarget.style.borderColor = C.greenMid; }}
-                      onBlur={(e) => { e.currentTarget.style.borderColor = C.border; }}
+                      onBlur={(e)  => { e.currentTarget.style.borderColor = C.border;  }}
                       placeholder="Share your household needs, caregiving priorities, or anything the agency should know."
                     />
                   </div>
@@ -833,11 +996,11 @@ const ClientRequestsPage = () => {
                   <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: C.textMuted }}>Special requirements</p>
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { key: "noOffDay", label: "No Off-day" },
-                      { key: "hasChildren", label: "Has child(ren)" },
-                      { key: "married", label: "Married" },
-                      { key: "newMaid", label: "New Maid" },
-                      { key: "transferMaid", label: "Transfer Maid" },
+                      { key: "noOffDay",        label: "No Off-day" },
+                      { key: "hasChildren",     label: "Has child(ren)" },
+                      { key: "married",         label: "Married" },
+                      { key: "newMaid",         label: "New Maid" },
+                      { key: "transferMaid",    label: "Transfer Maid" },
                       { key: "exSingaporeMaid", label: "Ex-Singapore Maid" },
                     ].map((item) => {
                       const checked = requirements[item.key as keyof RequirementsState];
@@ -895,7 +1058,9 @@ const ClientRequestsPage = () => {
                   onMouseEnter={(e) => { e.currentTarget.style.background = C.greenPale; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = C.white; }}
                 >
-                  {requestsQuery.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+                  {requestsQuery.isFetching
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCcw className="h-3.5 w-3.5" />}
                   Refresh
                 </button>
               </div>
@@ -916,7 +1081,7 @@ const ClientRequestsPage = () => {
                 ) : (
                   <div className="grid gap-2.5 lg:grid-cols-2">
                     {requests.map((request) => {
-                      const meta = requestStatusMeta[request.status];
+                      const meta   = requestStatusMeta[request.status];
                       const active = selectedRequest?.id === request.id;
                       return (
                         <button
@@ -931,7 +1096,7 @@ const ClientRequestsPage = () => {
                             boxShadow: active ? `0 2px 20px ${C.greenGlow}` : "0 1px 4px rgba(5,15,9,0.04)",
                           }}
                           onMouseEnter={(e) => { if (!active) { e.currentTarget.style.borderColor = C.greenBorder; e.currentTarget.style.transform = "translateY(-1px)"; } }}
-                          onMouseLeave={(e) => { if (!active) { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = ""; } }}
+                          onMouseLeave={(e) => { if (!active) { e.currentTarget.style.borderColor = C.border;     e.currentTarget.style.transform = "";               } }}
                         >
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
@@ -948,8 +1113,8 @@ const ClientRequestsPage = () => {
                             <span className="shrink-0 self-start px-3 py-1 text-xs font-bold" style={{
                               borderRadius: 999,
                               background: meta.badgeClassName?.includes("emerald") ? C.greenPale : C.yellowPale,
-                              color: meta.badgeClassName?.includes("emerald") ? C.green : C.yellowDeep,
-                              border: `1px solid ${meta.badgeClassName?.includes("emerald") ? C.greenBorder : C.yellowBorder}`,
+                              color:      meta.badgeClassName?.includes("emerald") ? C.green     : C.yellowDeep,
+                              border:     `1px solid ${meta.badgeClassName?.includes("emerald") ? C.greenBorder : C.yellowBorder}`,
                             }}>
                               {meta.label}
                             </span>
@@ -965,7 +1130,7 @@ const ClientRequestsPage = () => {
 
           {/* ═══════════ RIGHT ═══════════ */}
           <div className="min-w-0">
-            <div className="sticky top-4 overflow-hidden" style={{
+            <div className="sticky top-6 overflow-hidden" style={{
               borderRadius: 20,
               border: `1.5px solid ${C.border}`,
               background: C.white,
@@ -976,7 +1141,7 @@ const ClientRequestsPage = () => {
                 title={selectedRequest ? "Live request status" : "Select a request"}
               />
 
-              <div className="px-6 py-5 space-y-5 overflow-y-auto" style={{ maxHeight: "calc(100vh - 160px)" }}>
+              <div className="px-6 py-5 space-y-5 overflow-y-auto" style={{ maxHeight: "calc(100vh - 70px)" }}>
                 {selectedRequest ? (
                   <>
                     {/* Summary */}
@@ -1012,9 +1177,9 @@ const ClientRequestsPage = () => {
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center" style={{
                               borderRadius: 8,
                               background: item.active ? `linear-gradient(135deg, ${item.color}, ${item.color}bb)` : C.surface,
-                              color: item.active ? C.white : C.border,
-                              border: item.active ? "none" : `1.5px solid ${C.border}`,
-                              boxShadow: item.active ? `0 3px 14px ${item.color}44` : "none",
+                              color:       item.active ? C.white : C.border,
+                              border:      item.active ? "none"  : `1.5px solid ${C.border}`,
+                              boxShadow:   item.active ? `0 3px 14px ${item.color}44` : "none",
                             }}>
                               {item.icon}
                             </div>
@@ -1039,11 +1204,9 @@ const ClientRequestsPage = () => {
                     {selectedRequest.status === "interested" && selectedRequest.maids.length > 0 && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 px-3 py-2" style={{
-                          borderRadius: 10,
-                          background: C.yellowPale,
+                          borderRadius: 10, background: C.yellowPale,
                           border: `1px solid ${C.yellowBorder}`,
-                          borderLeftWidth: 4,
-                          borderLeftColor: C.yellow,
+                          borderLeftWidth: 4, borderLeftColor: C.yellow,
                         }}>
                           <Star className="h-3.5 w-3.5 shrink-0" style={{ color: C.yellow, fill: C.yellow }} />
                           <div>
@@ -1055,11 +1218,12 @@ const ClientRequestsPage = () => {
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                           {selectedRequest.maids.map((maid) => (
-                            <div key={maid.referenceCode}
+                            <div
+                              key={maid.referenceCode}
                               className="relative overflow-hidden transition-all duration-200"
                               style={{ borderRadius: 14, border: `1.5px solid ${C.border}`, background: C.white, boxShadow: "0 2px 8px rgba(5,15,9,0.06)" }}
                               onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.greenMid; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 6px 22px ${C.greenGlow}`; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 2px 8px rgba(5,15,9,0.06)"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border;   e.currentTarget.style.transform = "";               e.currentTarget.style.boxShadow = "0 2px 8px rgba(5,15,9,0.06)"; }}
                             >
                               <div className="relative w-full overflow-hidden" style={{ background: C.surface }}>
                                 <MaidPhotoLarge maid={maid} />
