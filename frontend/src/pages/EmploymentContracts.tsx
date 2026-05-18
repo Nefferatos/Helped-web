@@ -44,10 +44,20 @@ type EmployerRow = {
 
 const PAGE_SIZE = 20;
 
+// ─── Shared grid layout ────────────────────────────────────────────────────────
+// Must be identical in the header row and every data row.
+// Columns: Ref | Date | Employer | Spouse | Maid | Checkbox
+const GRID_COLS = "80px 120px minmax(0,1.4fr) minmax(0,1fr) minmax(0,1.2fr) 44px";
+// Both the sticky header row and every data row MUST use this same padding.
+// Any difference here is what causes the columns to look misaligned.
+const ROW_PX = "px-3";
+
 /* ─── helpers ── */
 const getPrimaryPhoto = (maid: Record<string, unknown>): string => {
   const arr = Array.isArray(maid.photoDataUrls)
-    ? maid.photoDataUrls.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    ? maid.photoDataUrls.filter(
+        (v): v is string => typeof v === "string" && v.trim().length > 0,
+      )
     : [];
   return arr[0] || String(maid.photoDataUrl ?? "").trim();
 };
@@ -67,13 +77,25 @@ const sortByRefDesc = (rows: EmployerRow[]): EmployerRow[] =>
 /* ─── Skeleton row ── */
 function SkeletonRow() {
   return (
-    <div className="animate-pulse flex items-center gap-4 rounded-2xl border border-gray-100 bg-white px-5 py-4">
-      <div className="h-5 w-16 rounded-lg bg-gray-100" />
-      <div className="h-5 w-24 rounded-lg bg-gray-100" />
-      <div className="h-5 flex-1 rounded-lg bg-gray-100" />
-      <div className="h-5 w-32 rounded-lg bg-gray-100" />
-      <div className="h-5 w-32 rounded-lg bg-gray-100" />
-      <div className="h-5 w-8 rounded bg-gray-100" />
+    <div
+      className="animate-pulse grid items-center gap-3 rounded-xl px-3 py-3"
+      style={{ gridTemplateColumns: GRID_COLS }}
+    >
+      <div className="h-7 w-14 rounded-lg bg-gray-100" />
+      <div className="h-4 w-20 rounded-lg bg-gray-100" />
+      <div className="flex items-center gap-2.5">
+        <div className="h-8 w-8 rounded-full bg-gray-100 shrink-0" />
+        <div className="h-4 flex-1 rounded-lg bg-gray-100" />
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="h-7 w-7 rounded-full bg-gray-100 shrink-0" />
+        <div className="h-4 flex-1 rounded-lg bg-gray-100" />
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="h-9 w-7 rounded bg-gray-100 shrink-0" />
+        <div className="h-4 flex-1 rounded-lg bg-gray-100" />
+      </div>
+      <div className="h-5 w-5 rounded bg-gray-100 mx-auto" />
     </div>
   );
 }
@@ -98,7 +120,8 @@ function ConfirmModal({
           Delete {count} contract{count !== 1 ? "s" : ""}?
         </p>
         <p className="text-[15px] text-gray-500 leading-relaxed mb-6">
-          This action cannot be undone. All selected employment records will be permanently removed.
+          This action cannot be undone. All selected employment records will be
+          permanently removed.
         </p>
         <div className="flex gap-3">
           <button
@@ -119,7 +142,7 @@ function ConfirmModal({
   );
 }
 
-/* ─── Maid avatar — photo if available, initials fallback ── */
+/* ─── Maid avatar ── */
 function MaidAvatar({ name, photo }: { name: string; photo: string }) {
   const [imgError, setImgError] = useState(false);
   const initials = name
@@ -275,7 +298,9 @@ const EmploymentContracts = () => {
 
       setEmployers(sortByRefDesc(rows.filter((r) => r.ref)));
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Failed to load employers");
+      setLoadError(
+        error instanceof Error ? error.message : "Failed to load employers",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -293,42 +318,81 @@ const EmploymentContracts = () => {
     try {
       setIsMutating(true);
       for (const ref of refs) {
-        const existingResponse = await fetch(`/api/employers/${encodeURIComponent(ref)}`);
-        const existingData = (await existingResponse.json().catch(() => ({}))) as {
-          employer?: {
-            maid?: Record<string, unknown>;
-            agency?: Record<string, unknown>;
-            employer?: Record<string, unknown>;
-            spouse?: Record<string, unknown>;
-            familyMembers?: Array<Record<string, unknown>>;
-            documents?: Array<Record<string, unknown>>;
-          };
-          error?: string;
-        };
-        if (!existingResponse.ok || !existingData.employer) {
-          throw new Error(existingData.error || `Failed to load ${ref}`);
+        // ── 1. Fetch the existing record ──────────────────────────────────
+        let getJson: Record<string, unknown>;
+        try {
+          const getRes = await fetch(`/api/employers/${encodeURIComponent(ref)}`);
+          const text = await getRes.text();
+          try {
+            getJson = JSON.parse(text) as Record<string, unknown>;
+          } catch {
+            throw new Error(`Server returned non-JSON for ${ref}: ${text.slice(0, 120)}`);
+          }
+          if (!getRes.ok) {
+            throw new Error(
+              (getJson.error as string) || `GET /api/employers/${ref} → ${getRes.status}`,
+            );
+          }
+        } catch (err) {
+          throw err instanceof Error ? err : new Error(String(err));
         }
-        const createResponse = await fetch("/api/employers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            refCode: null,
-            maid: existingData.employer.maid ?? {},
-            agency: existingData.employer.agency ?? {},
-            employer: existingData.employer.employer ?? {},
-            spouse: existingData.employer.spouse ?? {},
-            familyMembers: existingData.employer.familyMembers ?? [],
-            documents: existingData.employer.documents ?? [],
-          }),
-        });
-        const createData = (await createResponse.json().catch(() => ({}))) as { error?: string };
-        if (!createResponse.ok) throw new Error(createData.error || `Failed to duplicate ${ref}`);
+
+        // ── 2. Unwrap the record — handle both {employer:{…}} and flat shapes ─
+        // Some APIs wrap under `data`, `record`, or `employer`; others return
+        // the fields at the root level.
+        const record =
+          (getJson.employer as Record<string, unknown> | undefined) ??
+          (getJson.record  as Record<string, unknown> | undefined) ??
+          (getJson.data    as Record<string, unknown> | undefined) ??
+          getJson;
+
+        if (!record || typeof record !== "object") {
+          throw new Error(`Unexpected response shape for ${ref}: ${JSON.stringify(getJson).slice(0, 200)}`);
+        }
+
+        const payload = {
+          refCode: null,            // let the server assign a new ref
+          maid:          (record.maid          as Record<string, unknown>) ?? {},
+          agency:        (record.agency        as Record<string, unknown>) ?? {},
+          employer:      (record.employer      as Record<string, unknown>) ?? {},
+          spouse:        (record.spouse        as Record<string, unknown>) ?? {},
+          familyMembers: (record.familyMembers as Array<Record<string, unknown>>) ?? [],
+          documents:     (record.documents     as Array<Record<string, unknown>>) ?? [],
+        };
+
+        // ── 3. POST the duplicate ─────────────────────────────────────────
+        let postJson: Record<string, unknown>;
+        try {
+          const postRes = await fetch("/api/employers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const text = await postRes.text();
+          try {
+            postJson = JSON.parse(text) as Record<string, unknown>;
+          } catch {
+            throw new Error(`Server returned non-JSON on create: ${text.slice(0, 120)}`);
+          }
+          if (!postRes.ok) {
+            throw new Error(
+              (postJson.error as string) || `POST /api/employers → ${postRes.status}`,
+            );
+          }
+        } catch (err) {
+          throw err instanceof Error ? err : new Error(String(err));
+        }
       }
-      toast.success(`${refs.length} contract${refs.length === 1 ? "" : "s"} duplicated`);
+
+      toast.success(
+        `${refs.length} contract${refs.length === 1 ? "" : "s"} duplicated`,
+      );
       setSelected(new Set());
       await loadEmployers();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to duplicate");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to duplicate",
+      );
     } finally {
       setIsMutating(false);
     }
@@ -343,13 +407,19 @@ const EmploymentContracts = () => {
     try {
       setIsMutating(true);
       for (const ref of refs) {
-        const response = await fetch(`/api/employers/${encodeURIComponent(ref)}`, {
-          method: "DELETE",
-        });
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        if (!response.ok) throw new Error(data.error || `Failed to delete ${ref}`);
+        const response = await fetch(
+          `/api/employers/${encodeURIComponent(ref)}`,
+          { method: "DELETE" },
+        );
+        const data = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!response.ok)
+          throw new Error(data.error || `Failed to delete ${ref}`);
       }
-      toast.success(`${refs.length} contract${refs.length === 1 ? "" : "s"} deleted`);
+      toast.success(
+        `${refs.length} contract${refs.length === 1 ? "" : "s"} deleted`,
+      );
       setSelected(new Set());
       await loadEmployers();
     } catch (error) {
@@ -361,10 +431,15 @@ const EmploymentContracts = () => {
 
   /* ── Page numbers ── */
   const pageNumbers = useMemo(() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (totalPages <= 7)
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: (number | "...")[] = [];
     for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+      if (
+        i === 1 ||
+        i === totalPages ||
+        (i >= currentPage - 2 && i <= currentPage + 2)
+      ) {
         pages.push(i);
       } else if (pages[pages.length - 1] !== "...") {
         pages.push("...");
@@ -374,7 +449,8 @@ const EmploymentContracts = () => {
   }, [totalPages, currentPage]);
 
   const allSelected =
-    paginatedEmployers.length > 0 && paginatedEmployers.every((e) => selected.has(e.ref));
+    paginatedEmployers.length > 0 &&
+    paginatedEmployers.every((e) => selected.has(e.ref));
 
   return (
     <>
@@ -409,7 +485,9 @@ const EmploymentContracts = () => {
               <FileText className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-[22px] font-bold leading-tight text-gray-900">Employment Contracts</h2>
+              <h2 className="text-[22px] font-bold leading-tight text-gray-900">
+                Employment Contracts
+              </h2>
               <p className="text-[14px] text-gray-500 font-medium mt-0.5">
                 Manage contracts &amp; employment forms
               </p>
@@ -420,7 +498,9 @@ const EmploymentContracts = () => {
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-2">
               <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <span className="text-[15px] font-bold text-emerald-800">{filteredEmployers.length}</span>
+              <span className="text-[15px] font-bold text-emerald-800">
+                {filteredEmployers.length}
+              </span>
               <span className="text-[13px] text-emerald-700 font-medium">
                 {searchTerm ? "matching" : "total"}
               </span>
@@ -428,14 +508,20 @@ const EmploymentContracts = () => {
             {searchTerm && (
               <div className="flex items-center gap-2 rounded-2xl bg-gray-100 border border-gray-200 px-4 py-2">
                 <span className="text-[13px] text-gray-500 font-medium">of</span>
-                <span className="text-[15px] font-bold text-gray-800">{employers.length}</span>
+                <span className="text-[15px] font-bold text-gray-800">
+                  {employers.length}
+                </span>
                 <span className="text-[13px] text-gray-500 font-medium">total</span>
               </div>
             )}
             {selected.size > 0 && (
               <div className="flex items-center gap-2 rounded-2xl bg-violet-50 border border-violet-200 px-4 py-2">
-                <span className="text-[15px] font-bold text-violet-800">{selected.size}</span>
-                <span className="text-[13px] text-violet-700 font-medium">selected</span>
+                <span className="text-[15px] font-bold text-violet-800">
+                  {selected.size}
+                </span>
+                <span className="text-[13px] text-violet-700 font-medium">
+                  selected
+                </span>
               </div>
             )}
           </div>
@@ -481,8 +567,12 @@ const EmploymentContracts = () => {
                 {s.icon}
               </div>
               <div>
-                <p className={`text-[24px] font-bold leading-none ${s.color}`}>{s.value}</p>
-                <p className="mt-1 text-[12px] font-semibold text-gray-500">{s.label}</p>
+                <p className={`text-[24px] font-bold leading-none ${s.color}`}>
+                  {s.value}
+                </p>
+                <p className="mt-1 text-[12px] font-semibold text-gray-500">
+                  {s.label}
+                </p>
               </div>
             </div>
           ))}
@@ -495,7 +585,9 @@ const EmploymentContracts = () => {
           <div className="border-b border-gray-100 bg-gray-50/60 px-5 py-4 space-y-3">
             <div className="flex flex-wrap gap-2.5">
               <button
-                onClick={() => navigate(adminPath("/employment-contracts/new"))}
+                onClick={() =>
+                  navigate(adminPath("/employment-contracts/new"))
+                }
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-[14px] font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition-all"
               >
                 <Plus className="h-4 w-4" /> Add New Contract
@@ -527,10 +619,14 @@ const EmploymentContracts = () => {
             </div>
 
             <p className="text-[13px] text-gray-500 leading-relaxed">
-              Click <span className="font-bold text-emerald-700">Add New Contract</span> for a blank form,
-              click a row to <span className="font-bold text-gray-700">view or edit</span> it, or check
-              the boxes to <span className="font-bold text-sky-700">duplicate</span> /
-              <span className="font-bold text-red-600"> delete</span> selected records.
+              Click{" "}
+              <span className="font-bold text-emerald-700">Add New Contract</span>{" "}
+              for a blank form, click a row to{" "}
+              <span className="font-bold text-gray-700">view or edit</span> it,
+              or check the boxes to{" "}
+              <span className="font-bold text-sky-700">duplicate</span> /
+              <span className="font-bold text-red-600"> delete</span> selected
+              records.
             </p>
 
             {/* Search */}
@@ -558,17 +654,28 @@ const EmploymentContracts = () => {
             </div>
           </div>
 
-          {/* Table header */}
+          {/* ── Table header — uses the SAME GRID_COLS as data rows ── */}
           {!isLoading && !loadError && paginatedEmployers.length > 0 && (
             <div
-              className="grid items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-2.5"
-              style={{ gridTemplateColumns: "72px 110px 1fr 1fr 1fr 44px" }}
+              className={`grid items-center gap-3 border-b border-gray-100 bg-gray-50 ${ROW_PX} py-2.5`}
+              style={{ gridTemplateColumns: GRID_COLS }}
             >
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Ref #</p>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Date</p>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Employer</p>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Spouse</p>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Maid</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                Ref #
+              </p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                Date
+              </p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                Employer
+              </p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                Spouse
+              </p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                Maid
+              </p>
+              {/* Checkbox toggle-all — aligned with data-row checkboxes */}
               <button
                 onClick={toggleAll}
                 className="flex items-center justify-center text-gray-400 hover:text-emerald-600 transition-colors"
@@ -583,10 +690,10 @@ const EmploymentContracts = () => {
             </div>
           )}
 
-          {/* List body */}
-          <div className="divide-y divide-gray-100 px-3 py-2">
+          {/* ── List body ── */}
+          <div className="divide-y divide-gray-100 py-2">
             {isLoading ? (
-              <div className="space-y-2 py-2">
+              <div className="space-y-1 py-2">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <SkeletonRow key={i} />
                 ))}
@@ -609,7 +716,9 @@ const EmploymentContracts = () => {
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
                   <FileText className="h-6 w-6 text-gray-400" />
                 </div>
-                <p className="text-[17px] font-bold text-gray-700">No contracts found</p>
+                <p className="text-[17px] font-bold text-gray-700">
+                  No contracts found
+                </p>
                 <p className="mt-1.5 text-[14px] text-gray-400 max-w-[240px] leading-relaxed">
                   {searchTerm
                     ? "Try a different search term."
@@ -630,32 +739,37 @@ const EmploymentContracts = () => {
                 return (
                   <div
                     key={emp.ref}
-                    className={`ec-row-enter ec-row-hover group grid cursor-pointer items-center gap-3 rounded-xl px-3 py-3 transition-all ${
+                    className={`ec-row-enter ec-row-hover group grid cursor-pointer items-center gap-3 rounded-xl ${ROW_PX} py-3 transition-all ${
                       isSelected
                         ? "bg-emerald-50 border border-emerald-200"
                         : "border border-transparent"
                     }`}
                     style={{
-                      gridTemplateColumns: "72px 110px 1fr 1fr 1fr 44px",
+                      // ← Same constant used in the header
+                      gridTemplateColumns: GRID_COLS,
                       animationDelay: `${i * 0.035}s`,
                     }}
                     onClick={() =>
                       navigate(
-                        adminPath(`/employment-contracts/${encodeURIComponent(emp.ref)}`),
+                        adminPath(
+                          `/employment-contracts/${encodeURIComponent(emp.ref)}`,
+                        ),
                       )
                     }
                   >
-                    {/* Ref */}
+                    {/* Col 1 — Ref */}
                     <div>
                       <span className="inline-block rounded-lg bg-gray-100 px-2.5 py-1 text-[13px] font-bold text-gray-600 font-mono">
                         {emp.ref}
                       </span>
                     </div>
 
-                    {/* Date */}
-                    <p className="text-[13px] font-semibold text-gray-500">{emp.date || "—"}</p>
+                    {/* Col 2 — Date */}
+                    <p className="text-[13px] font-semibold text-gray-500 truncate">
+                      {emp.date || "—"}
+                    </p>
 
-                    {/* Employer */}
+                    {/* Col 3 — Employer */}
                     <div className="min-w-0 flex items-center gap-2.5">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 font-bold text-[12px]">
                         {emp.employer
@@ -670,7 +784,7 @@ const EmploymentContracts = () => {
                       </p>
                     </div>
 
-                    {/* Spouse */}
+                    {/* Col 4 — Spouse */}
                     <div className="min-w-0 flex items-center gap-2">
                       {emp.spouse ? (
                         <>
@@ -691,7 +805,7 @@ const EmploymentContracts = () => {
                       )}
                     </div>
 
-                    {/* Maid — photo + name, click row to edit */}
+                    {/* Col 5 — Maid */}
                     <div className="min-w-0 flex items-center gap-2">
                       {emp.maid ? (
                         <>
@@ -712,7 +826,7 @@ const EmploymentContracts = () => {
                       )}
                     </div>
 
-                    {/* Checkbox */}
+                    {/* Col 6 — Checkbox */}
                     <div
                       className="flex justify-center"
                       onClick={(e) => {
@@ -732,7 +846,7 @@ const EmploymentContracts = () => {
             )}
           </div>
 
-          {/* Pagination */}
+          {/* ── Pagination ── */}
           {totalPages > 1 && (
             <div className="flex flex-wrap items-center justify-between border-t border-gray-100 bg-gray-50/50 px-5 py-3.5 gap-3">
               <button
@@ -746,7 +860,10 @@ const EmploymentContracts = () => {
               <div className="flex items-center gap-1.5 flex-wrap justify-center">
                 {pageNumbers.map((p, idx) =>
                   p === "..." ? (
-                    <span key={`e-${idx}`} className="px-1 text-[14px] text-gray-400 font-medium">
+                    <span
+                      key={`e-${idx}`}
+                      className="px-1 text-[14px] text-gray-400 font-medium"
+                    >
                       …
                     </span>
                   ) : (
@@ -794,7 +911,11 @@ const EmploymentContracts = () => {
               {(currentPage - 1) * PAGE_SIZE + 1}–
               {Math.min(currentPage * PAGE_SIZE, filteredEmployers.length)}
             </span>{" "}
-            of <span className="font-bold text-gray-700">{filteredEmployers.length}</span> contracts
+            of{" "}
+            <span className="font-bold text-gray-700">
+              {filteredEmployers.length}
+            </span>{" "}
+            contracts
           </p>
         )}
       </div>

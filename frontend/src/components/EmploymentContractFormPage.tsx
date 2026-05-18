@@ -997,7 +997,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
                       <SelectTrigger className={selTrigger}><SelectValue placeholder="Select witness" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Balamurugan S/O Subramaniam (R1218275)">Balamurugan S/O Subramaniam (R1218275)</SelectItem>
-                        <SelectItem value="Rahimunisha Binti Muhammadhan (R1107570)">Rahimunisha Binti Muhammadhan (R1107570)</SelectItem>
+                        <SelectItem value="HO BAH WANG (R1106320)">HO BAH WANG (R1106320)</SelectItem>
                       </SelectContent>
                     </Select>
                   </Field2>

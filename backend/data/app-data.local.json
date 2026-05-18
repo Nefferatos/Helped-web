@@ -5642,6 +5642,7 @@
     {
       "refCode": "00009",
       "id": 9,
+      "agencyId": 1,
       "maid": {
         "referenceCode": "12312",
         "name": "qwewqe",
@@ -5736,11 +5737,10 @@
           "dateOfBirthYear": "2002"
         }
       ],
+      "notificationDate": {},
       "documents": [],
       "createdAt": "2026-04-17T00:47:35.576Z",
-      "updatedAt": "2026-04-17T05:47:54.607Z",
-      "notificationDate": {},
-      "agencyId": 1
+      "updatedAt": "2026-05-18T07:46:37.832Z"
     },
     {
       "refCode": "00008",
@@ -5851,13 +5851,10 @@
           "dateOfBirthYear": "1910"
         }
       ],
-      "notificationDate": {
-        "month": "APRIL",
-        "year": "2020"
-      },
+      "notificationDate": {},
       "documents": [],
       "createdAt": "2026-04-16T23:34:44.973Z",
-      "updatedAt": "2026-05-17T09:50:45.952Z"
+      "updatedAt": "2026-05-18T07:43:49.790Z"
     },
     {
       "refCode": "00007",
@@ -5956,13 +5953,10 @@
           "dateOfBirthYear": "1910"
         }
       ],
-      "notificationDate": {
-        "month": "",
-        "year": ""
-      },
+      "notificationDate": {},
       "documents": [],
       "createdAt": "2026-04-15T21:52:17.683Z",
-      "updatedAt": "2026-05-17T10:13:42.698Z"
+      "updatedAt": "2026-05-18T07:43:49.865Z"
     },
     {
       "refCode": "00005",
@@ -6053,10 +6047,7 @@
           "dateOfBirthYear": "1910"
         }
       ],
-      "notificationDate": {
-        "month": "",
-        "year": ""
-      },
+      "notificationDate": {},
       "documents": [
         {
           "category": "Maid Biodata Form",
@@ -6130,7 +6121,7 @@
         }
       ],
       "createdAt": "2026-04-14T21:52:07.832Z",
-      "updatedAt": "2026-05-17T10:47:18.999Z"
+      "updatedAt": "2026-05-18T07:43:49.924Z"
     },
     {
       "refCode": "00004",
@@ -6221,17 +6212,15 @@
           "dateOfBirthYear": "1910"
         }
       ],
-      "notificationDate": {
-        "month": "",
-        "year": ""
-      },
+      "notificationDate": {},
       "documents": [],
       "createdAt": "2026-04-14T21:07:41.160Z",
-      "updatedAt": "2026-04-27T06:21:26.454Z"
+      "updatedAt": "2026-05-18T07:43:49.982Z"
     },
     {
       "refCode": "00002",
       "id": 2,
+      "agencyId": 1,
       "maid": {
         "name": "Anna Valdez",
         "nationality": "Filipino maid",
@@ -6300,6 +6289,7 @@
           "dateOfBirth": ""
         }
       ],
+      "notificationDate": {},
       "documents": [
         {
           "category": "Maid Biodata Form",
@@ -6318,9 +6308,7 @@
         }
       ],
       "createdAt": "2026-04-12T20:14:31.480Z",
-      "updatedAt": "2026-04-14T19:44:02.812Z",
-      "notificationDate": {},
-      "agencyId": 1
+      "updatedAt": "2026-05-18T07:43:50.040Z"
     },
     {
       "refCode": "00001",
@@ -6411,10 +6399,7 @@
           "dateOfBirthYear": "1910"
         }
       ],
-      "notificationDate": {
-        "month": "",
-        "year": ""
-      },
+      "notificationDate": {},
       "documents": [
         {
           "category": "Maid Biodata Form",
@@ -6433,7 +6418,7 @@
         }
       ],
       "createdAt": "2026-04-12T19:40:19.514Z",
-      "updatedAt": "2026-05-17T10:23:34.055Z"
+      "updatedAt": "2026-05-18T07:46:48.893Z"
     }
   ],
   "employmentContracts": [
@@ -6502,7 +6487,7 @@
         "passportOfReplacement": ""
       },
       "createdAt": "2026-04-17T00:47:35.578Z",
-      "updatedAt": "2026-04-17T05:47:54.607Z"
+      "updatedAt": "2026-05-18T07:46:37.832Z"
     },
     {
       "id": 7,
@@ -6570,7 +6555,7 @@
         "passportOfReplacement": ""
       },
       "createdAt": "2026-04-16T23:34:44.973Z",
-      "updatedAt": "2026-05-17T09:50:45.952Z"
+      "updatedAt": "2026-05-18T07:43:49.790Z"
     },
     {
       "id": 6,
@@ -6629,7 +6614,7 @@
         "communicationToBuy": ""
       },
       "createdAt": "2026-04-15T21:52:17.683Z",
-      "updatedAt": "2026-05-17T10:13:42.698Z"
+      "updatedAt": "2026-05-18T07:43:49.865Z"
     },
     {
       "id": 5,
@@ -6744,7 +6729,7 @@
         "communicationToBuy": "45445"
       },
       "createdAt": "2026-04-14T21:52:07.833Z",
-      "updatedAt": "2026-05-17T10:47:18.999Z"
+      "updatedAt": "2026-05-18T07:43:49.924Z"
     },
     {
       "id": 3,
@@ -6803,7 +6788,7 @@
         "communicationToBuy": ""
       },
       "createdAt": "2026-04-14T21:07:41.160Z",
-      "updatedAt": "2026-04-27T06:21:26.454Z"
+      "updatedAt": "2026-05-18T07:43:49.982Z"
     },
     {
       "id": 2,
@@ -6856,7 +6841,7 @@
         "referenceCode": "00111"
       },
       "createdAt": "2026-04-12T20:14:31.480Z",
-      "updatedAt": "2026-04-14T19:44:02.812Z"
+      "updatedAt": "2026-05-18T07:43:50.040Z"
     },
     {
       "id": 1,
@@ -6915,7 +6900,7 @@
         "communicationToBuy": ""
       },
       "createdAt": "2026-04-12T19:40:19.514Z",
-      "updatedAt": "2026-05-17T10:23:34.055Z"
+      "updatedAt": "2026-05-18T07:46:48.893Z"
     }
   ],
   "employerContractFiles": [
