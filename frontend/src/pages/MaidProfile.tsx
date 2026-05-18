@@ -966,46 +966,131 @@ const MaidProfilePage = () => {
 
       {/* ── Manage Photos Dialog ── */}
       <Dialog open={isManagePhotosOpen} onOpenChange={setIsManagePhotosOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-black">Manage Photos</DialogTitle>
-            <DialogDescription className="text-sm text-black">Slot 1: Passport Size · Slot 2: Full body · Slots 3–5: Extra</DialogDescription>
+            <DialogDescription className="text-sm text-black">
+              Slot 1 → passport size · Slot 2 → full body · Slots 3–5 → extras
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-black">Passport Size</p>
-              <div className="h-36 overflow-hidden rounded border bg-gray-100 flex items-center justify-center text-sm text-black">
-                {passportOrTwoByTwoPhoto ? <img src={passportOrTwoByTwoPhoto} alt="passport" className="h-full w-full object-contain" /> : "No photo"}
+
+          <div className="flex gap-6 items-start flex-wrap">
+
+            {/* Slot 1 — Passport 100×125 */}
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-bold text-black flex items-center gap-1.5">
+                Passport size
+                <span className="text-xs font-normal text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                  100 × 125 px
+                </span>
+              </p>
+              <div className="group relative overflow-hidden rounded border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center"
+                style={{ width: 100, height: 125 }}>
+                {passportOrTwoByTwoPhoto
+                  ? <>
+                      <img src={passportOrTwoByTwoPhoto} alt="passport"
+                        className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        disabled={isMediaSaving}
+                        onClick={() => void removePhotoAt(0)}
+                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label="Remove passport photo">✕</button>
+                    </>
+                  : <span className="text-xs text-gray-400 text-center px-2">Click to upload</span>}
               </div>
-              <p className="text-sm text-blue-600">Required: 100×125 px</p>
-              <input type="file" accept="image/*" disabled={isMediaSaving} className="text-sm" onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
-              <Button type="button" variant="outline" size="sm" disabled={isMediaSaving || !passportOrTwoByTwoPhoto} onClick={() => void removePhotoAt(0)}>Remove</Button>
+              <label className="text-xs text-blue-600 cursor-pointer hover:underline flex items-center gap-1">
+                <span>{passportOrTwoByTwoPhoto ? "Replace" : "Upload"}</span>
+                <input type="file" accept="image/*" className="sr-only"
+                  disabled={isMediaSaving}
+                  onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
+              </label>
+              <p className="text-xs text-gray-400">JPG / PNG · max 2 MB</p>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-black">Full body</p>
-              <div className="h-52 overflow-hidden rounded border bg-gray-100 flex items-center justify-center text-sm text-black">
-                {fullBodyPhoto ? <img src={fullBodyPhoto} alt="full body" className="h-full w-full object-contain" /> : "No photo"}
+
+            <div className="w-px self-stretch bg-gray-200" />
+
+            {/* Slot 2 — Full body 240×400 */}
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-bold text-black flex items-center gap-1.5">
+                Full body
+                <span className="text-xs font-normal text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                  240 × 400 px
+                </span>
+              </p>
+              <div className="group relative overflow-hidden rounded border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center"
+                style={{ width: 120, height: 200 }}>
+                {fullBodyPhoto
+                  ? <>
+                      <img src={fullBodyPhoto} alt="full body"
+                        className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        disabled={isMediaSaving}
+                        onClick={() => void removePhotoAt(1)}
+                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label="Remove full body photo">✕</button>
+                    </>
+                  : <span className="text-xs text-gray-400 text-center px-2">Click to upload</span>}
               </div>
-              <p className="text-sm text-blue-600">Required: 240×400 px</p>
-              <input type="file" accept="image/*" disabled={isMediaSaving} className="text-sm" onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
-              <Button type="button" variant="outline" size="sm" disabled={isMediaSaving || !fullBodyPhoto} onClick={() => void removePhotoAt(1)}>Remove</Button>
+              <label className="text-xs text-blue-600 cursor-pointer hover:underline flex items-center gap-1">
+                <span>{fullBodyPhoto ? "Replace" : "Upload"}</span>
+                <input type="file" accept="image/*" className="sr-only"
+                  disabled={isMediaSaving}
+                  onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
+              </label>
+              <p className="text-xs text-gray-400">JPG / PNG · max 2 MB</p>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-black">Extra ({extraPhotos.length}/3)</p>
-              <div className="grid grid-cols-3 gap-1.5">
+
+            <div className="w-px self-stretch bg-gray-200" />
+
+            {/* Slots 3–5 — Extras */}
+            <div className="flex flex-col gap-2 flex-1 min-w-[180px]">
+              <p className="text-sm font-bold text-black flex items-center gap-1.5">
+                Extra photos
+                <span className="text-xs font-normal bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
+                  {extraPhotos.length} / 3
+                </span>
+              </p>
+              <div className="grid grid-cols-3 gap-2">
                 {extraPhotos.map((photo, index) => (
-                  <div key={`${photo}-${index}`} className="relative h-16 overflow-hidden rounded border bg-gray-100">
-                    <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-contain" />
-                    <button type="button" className="absolute right-0.5 top-0.5 rounded bg-black/70 text-white px-1 text-sm" onClick={() => void removePhotoAt(index + 2)} disabled={isMediaSaving}>✕</button>
+                  <div key={`${photo}-${index}`}
+                    className="group relative overflow-hidden rounded border border-gray-300 bg-gray-100"
+                    style={{ width: 80, height: 80 }}>
+                    <img src={photo} alt={`extra ${index + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      disabled={isMediaSaving}
+                      onClick={() => void removePhotoAt(index + 2)}
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label={`Remove extra photo ${index + 1}`}>✕</button>
                   </div>
                 ))}
+                {extraPhotos.length < 3 && (
+                  <label
+                    className="flex items-center justify-center rounded border-2 border-dashed border-gray-300 bg-gray-50 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                    style={{ width: 80, height: 80 }}>
+                    <span className="text-2xl text-gray-400">+</span>
+                    <input type="file" accept="image/*" className="sr-only"
+                      disabled={isMediaSaving || photos.length >= 5}
+                      onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
+                  </label>
+                )}
               </div>
-              <input type="file" accept="image/*" disabled={isMediaSaving || photos.length >= 5} className="text-sm" onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
-              <p className="text-sm text-black">Max 5 total</p>
+              <p className="text-xs text-gray-400">Max 3 extras · JPG / PNG</p>
+              <p className="text-xs text-black mt-1">
+                <span className="font-bold">{photos.length}</span> / 5 total photos used
+              </p>
             </div>
+
           </div>
+
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsManagePhotosOpen(false)} disabled={isMediaSaving}>Close</Button>
+            <Button type="button" variant="outline"
+              onClick={() => setIsManagePhotosOpen(false)}
+              disabled={isMediaSaving}>
+              {isMediaSaving ? "Saving…" : "Close"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
