@@ -1,11 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-
-export type SupabaseAuthUser = {
-  id: string;
-  email?: string;
-  phone?: string;
-  user_metadata?: Record<string, unknown>;
-};
+import { verifySupabaseToken, type SupabaseAuthUser } from "../lib/supabaseAuthVerify";
 
 const getBearerToken = (req: Request) => {
   const header = req.headers.authorization;
@@ -31,52 +25,14 @@ export const requireSupabaseAuth = async (
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    return res.status(500).json({
-      error: "Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
-    });
-  }
-
   try {
-    // FIX: Add a 5-second timeout so a Supabase outage doesn't hang every
-    // request indefinitely and cascade into your own API being unresponsive.
-    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      headers: {
-        apikey: supabaseServiceRoleKey,
-        authorization: `Bearer ${token}`,
-        accept: "application/json",
-      },
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!response.ok) {
-      let details = "";
-      try {
-        details = await response.text();
-      } catch {
-        // ignore
-      }
-      console.error("Supabase auth verify failed:", {
-        status: response.status,
-        supabaseUrl,
-        tokenLength: token.length,
-        details: details.slice(0, 300),
-      });
+    const user = await verifySupabaseToken(token);
+    if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-
-    const user = (await response.json()) as SupabaseAuthUser;
     (req as Request & { supabaseUser?: SupabaseAuthUser }).supabaseUser = user;
     next();
   } catch (error) {
-    // AbortError means the Supabase call timed out — return 503 so callers
-    // can distinguish a network issue from a bad token.
-    if (error instanceof Error && error.name === "AbortError") {
-      console.error("Supabase auth verify timed out");
-      return res.status(503).json({ error: "Auth service unavailable" });
-    }
     console.error("Supabase auth verify failed:", error);
     return res.status(401).json({ error: "Unauthorized" });
   }

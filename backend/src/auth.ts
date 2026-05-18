@@ -5,6 +5,7 @@ import {
   getClientByTokenStore,
   getOrCreateClientBySupabaseUserStore,
 } from './store'
+import { verifySupabaseToken } from './lib/supabaseAuthVerify'
 import {
   getAgencyAdminByTokenRecord,
   getAgencyAdminSessionByTokenRecord,
@@ -39,50 +40,12 @@ export const getAuthenticatedClient = async (
     return null
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/$/, '')
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    console.error('Missing Supabase env vars: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+  const user = await verifySupabaseToken(token)
+  if (!user) {
     return null
   }
 
-  try {
-    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      headers: {
-        apikey: supabaseServiceRoleKey,
-        authorization: `Bearer ${token}`,
-        accept: 'application/json',
-      },
-    })
-
-    if (!response.ok) {
-      let details = ''
-      try {
-        details = await response.text()
-      } catch {
-        // ignore
-      }
-      console.error('Supabase auth verify failed:', {
-        status: response.status,
-        supabaseUrl,
-        tokenLength: token.length,
-        details: details.slice(0, 300),
-      })
-      return null
-    }
-
-    const user = (await response.json()) as {
-      id: string
-      email?: string
-      phone?: string
-      user_metadata?: Record<string, unknown>
-    }
-
-    return await getOrCreateClientBySupabaseUserStore(user)
-  } catch (err) {
-    console.error('Supabase auth error:', err)
-    return null
-  }
+  return await getOrCreateClientBySupabaseUserStore(user)
 }
 
 export const getAuthenticatedAgencyAdmin = async (
