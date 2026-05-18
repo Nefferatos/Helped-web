@@ -33,6 +33,7 @@ type ImportBatchProgress = {
   completed: number;
   failed: number;
   stage: string;
+  cancelled?: boolean;
 };
 
 let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
@@ -706,6 +707,7 @@ const EditMaids = () => {
   const [menuActiveIndex, setMenuActiveIndex] = useState(-1);
   const menuSearchRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const cancelImportRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!menuSearch.trim()) {
@@ -1039,20 +1041,25 @@ const EditMaids = () => {
     if (!referenceCode) throw new Error("referenceCode is required in the imported file");
     try {
       setIsImporting(true);
-      const probe = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`);
-      const exists = probe.ok;
-      const response = await fetch(
-        exists ? `/api/maids/${encodeURIComponent(referenceCode)}` : "/api/maids",
-        {
-          method: exists ? "PUT" : "POST",
+      // Optimistic POST — no probe round-trip needed. Fall back to PUT on 409 Conflict.
+      let response = await fetch("/api/maids", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      let existed = false;
+      if (response.status === 409) {
+        existed = true;
+        response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }
-      );
+        });
+      }
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
       if (!response.ok || !data.maid) throw new Error(data.error || "Failed to import maid profile");
       if (!options?.suppressSuccessToast) {
-        toast.success(exists ? "Maid profile updated" : "Maid profile created");
+        toast.success(existed ? "Maid profile updated" : "Maid profile created");
       }
       const importedVisibility = data.maid.isPublic ? "public" : "hidden";
       if (!options?.skipReload) {
@@ -1192,22 +1199,26 @@ const EditMaids = () => {
     if (all.length > 50) toast.error("Max 50 files per upload");
     const list = all.slice(0, 50);
     if (list.length === 0) return;
+    // Scan all files in parallel instead of sequentially
+    const scanResults = await Promise.all(list.map((file) => scanUploadedFile(file)));
     const approved: File[] = [];
-    for (const file of list) {
-      const scan = await scanUploadedFile(file);
-      if (!scan.success) { toast.error(`${file.name}: ${scan.message}`); continue; }
-      approved.push(file);
-    }
+    scanResults.forEach((scan, i) => {
+      if (!scan.success) { toast.error(`${list[i]!.name}: ${scan.message}`); }
+      else { approved.push(list[i]!); }
+    });
     if (approved.length === 0) return;
     setPendingImportFiles(approved);
     setConfirmImportOpen(true);
   };
+
+  const PARALLEL_BATCH_SIZE = 5;
 
   const confirmImportFiles = async () => {
     const files = pendingImportFiles;
     setConfirmImportOpen(false);
     setPendingImportFiles([]);
     if (files.length === 0) return;
+    cancelImportRef.current = false;
     setImportBatchProgress({
       active: true,
       total: files.length,
@@ -1216,35 +1227,47 @@ const EditMaids = () => {
       completed: 0,
       failed: 0,
       stage: "Preparing files",
+      cancelled: false,
     });
     let completed = 0;
     let failed = 0;
-    for (const [index, file] of files.entries()) {
-      try {
-        setImportBatchProgress((prev) => ({
-          ...prev,
-          currentIndex: index + 1,
-          currentFileName: file.name,
-          stage: "Uploading and processing",
-        }));
-        await waitForPaint();
-        await handleImportFile(file, { skipReload: true, suppressSuccessToast: true });
-        completed += 1;
-        setImportBatchProgress((prev) => ({
-          ...prev,
-          completed,
-          stage: "Saving imported data",
-        }));
-      } catch (error) {
-        failed += 1;
-        setImportBatchProgress((prev) => ({
-          ...prev,
-          failed,
-          stage: "Continuing with remaining files",
-        }));
-        toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `${file.name}: Failed to import`);
-      }
+    for (let batchStart = 0; batchStart < files.length; batchStart += PARALLEL_BATCH_SIZE) {
+      if (cancelImportRef.current) break;
+      const batch = files.slice(batchStart, batchStart + PARALLEL_BATCH_SIZE);
+      const batchNum = Math.floor(batchStart / PARALLEL_BATCH_SIZE) + 1;
+      setImportBatchProgress((prev) => ({
+        ...prev,
+        currentIndex: batchStart + batch.length,
+        currentFileName: batch.map((f) => f.name).join(", "),
+        stage: `Uploading batch ${batchNum} of ${Math.ceil(files.length / PARALLEL_BATCH_SIZE)}`,
+      }));
+      await waitForPaint();
+      const results = await Promise.allSettled(
+        batch.map((file) =>
+          handleImportFile(file, { skipReload: true, suppressSuccessToast: true })
+        )
+      );
+      results.forEach((result, i) => {
+        if (result.status === "fulfilled") {
+          completed += 1;
+        } else {
+          failed += 1;
+          const file = batch[i];
+          toast.error(
+            result.reason instanceof Error
+              ? `${file?.name}: ${result.reason.message}`
+              : `${file?.name}: Failed to import`
+          );
+        }
+      });
+      setImportBatchProgress((prev) => ({
+        ...prev,
+        completed,
+        failed,
+        stage: failed > 0 ? "Continuing with remaining files" : "Saving imported data",
+      }));
     }
+    const wasCancelled = cancelImportRef.current;
     await reloadVisibleMaids("public");
     setImportBatchProgress((prev) => ({
       ...prev,
@@ -1252,9 +1275,14 @@ const EditMaids = () => {
       currentIndex: prev.total,
       completed,
       failed,
-      stage: failed ? "Completed with some failed files" : "Completed successfully",
+      cancelled: wasCancelled,
+      stage: wasCancelled ? "Upload cancelled" : failed ? "Completed with some failed files" : "Completed successfully",
     }));
-    toast.success(`Bulk upload finished: ${completed} uploaded${failed ? `, ${failed} failed` : ""}`);
+    if (wasCancelled) {
+      toast.error(`Upload cancelled — ${completed} file${completed !== 1 ? "s" : ""} imported before cancel`);
+    } else {
+      toast.success(`Bulk upload finished: ${completed} uploaded${failed ? `, ${failed} failed` : ""}`);
+    }
   };
 
   const confirmManualImport = async () => {
@@ -1760,43 +1788,173 @@ const EditMaids = () => {
 
         {(importBatchProgress.active || importBatchProgress.completed > 0 || importBatchProgress.failed > 0) && (
           <div
-            className="rounded-xl border px-4 py-3"
+            className="rounded-xl border overflow-hidden"
             style={{
-              background: "var(--ym-green-50)",
-              borderColor: "color-mix(in srgb, var(--ym-green-200) 65%, transparent)",
-              color: "var(--ym-green-800)",
+              background: importBatchProgress.cancelled
+                ? "var(--ym-amber-50)"
+                : importBatchProgress.failed > 0 && !importBatchProgress.active
+                  ? "color-mix(in srgb, #fef2f2 85%, var(--ym-green-50))"
+                  : "var(--ym-green-50)",
+              borderColor: importBatchProgress.cancelled
+                ? "color-mix(in srgb, var(--ym-amber-200) 70%, transparent)"
+                : importBatchProgress.failed > 0 && !importBatchProgress.active
+                  ? "color-mix(in srgb, #fecaca 60%, transparent)"
+                  : "color-mix(in srgb, var(--ym-green-200) 65%, transparent)",
             }}
           >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">
-                  {importBatchProgress.active ? "Bulk upload in progress" : "Latest bulk upload summary"}
+            {/* Header row */}
+            <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                {importBatchProgress.active ? (
+                  <Loader2
+                    className="h-4 w-4 shrink-0 animate-spin"
+                    style={{ color: "var(--ym-green-600)" }}
+                  />
+                ) : importBatchProgress.cancelled ? (
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" style={{ color: "var(--ym-amber-600)" }}>
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                ) : importBatchProgress.failed > 0 ? (
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                ) : (
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" style={{ color: "var(--ym-green-600)" }}>
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M5 8l2.5 2.5L11 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+                <p
+                  className="text-sm font-bold truncate"
+                  style={{
+                    color: importBatchProgress.cancelled
+                      ? "var(--ym-amber-800)"
+                      : "var(--ym-green-800)",
+                  }}
+                >
+                  {importBatchProgress.active
+                    ? "Bulk upload in progress…"
+                    : importBatchProgress.cancelled
+                      ? "Upload cancelled"
+                      : importBatchProgress.failed > 0
+                        ? "Completed with errors"
+                        : "Upload complete"}
                 </p>
-                <p className="mt-1 text-xs">
-                  {importBatchProgress.total > 0
-                    ? `File ${Math.max(importBatchProgress.currentIndex, importBatchProgress.completed + importBatchProgress.failed)} of ${importBatchProgress.total}`
-                    : "No files queued"}
-                  {importBatchProgress.currentFileName ? ` • ${importBatchProgress.currentFileName}` : ""}
-                </p>
-                {importBatchProgress.stage ? (
-                  <p className="mt-1 text-xs opacity-80">{importBatchProgress.stage}</p>
-                ) : null}
               </div>
-              <div className="flex items-center gap-2 text-xs font-semibold">
-                {importBatchProgress.active && <Loader2 className="h-4 w-4 animate-spin" />}
-                <span>{importBatchProgress.completed} uploaded</span>
-                <span>{importBatchProgress.failed} failed</span>
-                <span>
-                  {importBatchProgress.total > 0 ? `${uploadProgressPercent}% complete` : "0% complete"}
+
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Stats chips */}
+                {importBatchProgress.completed > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                    style={{ background: "var(--ym-green-100)", color: "var(--ym-green-700)" }}
+                  >
+                    <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {importBatchProgress.completed}
+                  </span>
+                )}
+                {importBatchProgress.failed > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600">
+                    <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                      <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                    {importBatchProgress.failed}
+                  </span>
+                )}
+                <span
+                  className="text-xs font-bold tabular-nums"
+                  style={{ color: "var(--ym-green-700)" }}
+                >
+                  {uploadProgressPercent}%
                 </span>
+
+                {/* Cancel button — only while active */}
+                {importBatchProgress.active && (
+                  <button
+                    type="button"
+                    onClick={() => { cancelImportRef.current = true; }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors"
+                    style={{
+                      background: "#fff",
+                      borderColor: "color-mix(in srgb, var(--ym-amber-200) 80%, transparent)",
+                      color: "var(--ym-amber-700)",
+                    }}
+                    title="Stop after the current batch finishes"
+                  >
+                    <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                      <rect x="2.5" y="2.5" width="7" height="7" rx="1" fill="currentColor" />
+                    </svg>
+                    Cancel
+                  </button>
+                )}
+
+                {/* Dismiss button — only when done */}
+                {!importBatchProgress.active && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setImportBatchProgress({
+                        active: false, total: 0, currentIndex: 0,
+                        currentFileName: "", completed: 0, failed: 0,
+                        stage: "", cancelled: false,
+                      })
+                    }
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-black/8 text-foreground/40 hover:bg-black/14 transition-colors text-[10px]"
+                    aria-label="Dismiss"
+                  >✕</button>
+                )}
               </div>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/70">
+
+            {/* Stage + current file */}
+            <div className="px-4 pb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              {importBatchProgress.stage && (
+                <span
+                  className="text-xs"
+                  style={{
+                    color: importBatchProgress.cancelled
+                      ? "var(--ym-amber-700)"
+                      : "var(--ym-green-700)",
+                    opacity: 0.85,
+                  }}
+                >
+                  {importBatchProgress.stage}
+                </span>
+              )}
+              {importBatchProgress.active && importBatchProgress.currentFileName && (
+                <span
+                  className="inline-block max-w-[280px] truncate rounded-md px-2 py-0.5 text-[11px] font-medium"
+                  style={{
+                    background: "color-mix(in srgb, var(--ym-green-200) 30%, white)",
+                    color: "var(--ym-green-800)",
+                  }}
+                  title={importBatchProgress.currentFileName}
+                >
+                  {importBatchProgress.currentFileName}
+                </span>
+              )}
+              {importBatchProgress.total > 0 && (
+                <span className="ml-auto text-[11px] font-semibold" style={{ color: "var(--ym-green-700)", opacity: 0.7 }}>
+                  {Math.max(importBatchProgress.currentIndex, importBatchProgress.completed + importBatchProgress.failed)} / {importBatchProgress.total} files
+                </span>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            <div className="mx-4 mb-3 h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.7)" }}>
               <div
-                className="h-full rounded-full transition-all duration-300"
+                className="h-full rounded-full transition-all duration-500 ease-out"
                 style={{
                   width: `${uploadProgressPercent}%`,
-                  background: "var(--ym-green-400)",
+                  background: importBatchProgress.cancelled
+                    ? "var(--ym-amber-400)"
+                    : importBatchProgress.failed > 0 && !importBatchProgress.active
+                      ? "linear-gradient(90deg, var(--ym-green-400) 0%, #f87171 100%)"
+                      : "linear-gradient(90deg, var(--ym-green-400) 0%, var(--ym-green-200) 100%)",
+                  boxShadow: importBatchProgress.active
+                    ? "0 0 8px color-mix(in srgb, var(--ym-green-400) 50%, transparent)"
+                    : "none",
                 }}
               />
             </div>
