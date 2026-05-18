@@ -32,6 +32,7 @@ type ImportBatchProgress = {
   currentFileName: string;
   completed: number;
   failed: number;
+  stage: string;
 };
 
 let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
@@ -47,6 +48,11 @@ const loadJsZip = async (): Promise<JSZipConstructor> => {
   const module = await jsZipLoader as { default?: unknown };
   return (module.default ?? module) as JSZipConstructor;
 };
+
+const waitForPaint = () =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
 
 const loadXlsx = async () => {
   xlsxLoader ??= import("xlsx");
@@ -674,6 +680,7 @@ const EditMaids = () => {
     currentFileName: "",
     completed: 0,
     failed: 0,
+    stage: "",
   });
   const [page, setPage] = useState(1);
   const [maidToSendThroughAgency, setMaidToSendThroughAgency] = useState<MaidProfile | null>(null);
@@ -976,7 +983,24 @@ const EditMaids = () => {
     return [normalizedHeaders.join(","), ...lines.slice(1)].join("\n");
   };
 
-  const importCsvText = async (csvText: string) => {
+  const reloadVisibleMaids = async (preferredVisibility?: "public" | "hidden") => {
+    const reloadVisibility = preferredVisibility ?? visibility ?? "public";
+    const params = new URLSearchParams({ visibility: reloadVisibility });
+    if (search.trim()) params.set("search", search.trim());
+    const reload = await fetch(`/api/maids?${params.toString()}`);
+    const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[] };
+    if (reload.ok && reloadData.maids) {
+      setMaids(reloadData.maids);
+      if (view === "menu" && reloadData.maids.length > 0) {
+        setView(reloadVisibility === "hidden" ? "hidden" : "public");
+      }
+    }
+  };
+
+  const importCsvText = async (
+    csvText: string,
+    options?: { skipReload?: boolean; suppressSuccessToast?: boolean }
+  ) => {
     const normalizedCsv = normalizeCsv(csvText);
     try {
       setIsImporting(true);
@@ -993,16 +1017,12 @@ const EditMaids = () => {
       const created = data.created ?? 0;
       const updated = data.updated ?? 0;
       const failed = data.failed ?? 0;
-      toast.success(`Import done: ${created} created, ${updated} updated${failed ? `, ${failed} failed` : ""}`);
+      if (!options?.suppressSuccessToast) {
+        toast.success(`Import done: ${created} created, ${updated} updated${failed ? `, ${failed} failed` : ""}`);
+      }
       if (failed && data.errors?.length) toast.error(data.errors.slice(0, 2).join(" | "));
-      const reloadVisibility = visibility ?? "public";
-      const params = new URLSearchParams({ visibility: reloadVisibility });
-      if (search.trim()) params.set("search", search.trim());
-      const reload = await fetch(`/api/maids?${params.toString()}`);
-      const reloadData = (await reload.json()) as { maids?: MaidProfile[] };
-      if (reload.ok && reloadData.maids) {
-        setMaids(reloadData.maids);
-        if (view === "menu" && reloadData.maids.length > 0) setView(reloadVisibility === "hidden" ? "hidden" : "public");
+      if (!options?.skipReload) {
+        await reloadVisibleMaids();
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to import CSV");
@@ -1011,7 +1031,10 @@ const EditMaids = () => {
     }
   };
 
-  const importSingleMaidProfile = async (payload: MaidProfile) => {
+  const importSingleMaidProfile = async (
+    payload: MaidProfile,
+    options?: { skipReload?: boolean; suppressSuccessToast?: boolean }
+  ) => {
     const referenceCode = String(payload.referenceCode || "").trim();
     if (!referenceCode) throw new Error("referenceCode is required in the imported file");
     try {
@@ -1028,23 +1051,22 @@ const EditMaids = () => {
       );
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
       if (!response.ok || !data.maid) throw new Error(data.error || "Failed to import maid profile");
-      toast.success(exists ? "Maid profile updated" : "Maid profile created");
+      if (!options?.suppressSuccessToast) {
+        toast.success(exists ? "Maid profile updated" : "Maid profile created");
+      }
       const importedVisibility = data.maid.isPublic ? "public" : "hidden";
-      const reloadVisibility = visibility ?? importedVisibility;
-      const params = new URLSearchParams({ visibility: reloadVisibility });
-      if (search.trim()) params.set("search", search.trim());
-      const reload = await fetch(`/api/maids?${params.toString()}`);
-      const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[] };
-      if (reload.ok && reloadData.maids) {
-        setMaids(reloadData.maids);
-        if (view === "menu") setView(reloadVisibility === "hidden" ? "hidden" : "public");
+      if (!options?.skipReload) {
+        await reloadVisibleMaids(importedVisibility);
       }
     } finally {
       setIsImporting(false);
     }
   };
 
-  const handleImportFile = async (file: File) => {
+  const handleImportFile = async (
+    file: File,
+    options?: { skipReload?: boolean; suppressSuccessToast?: boolean }
+  ) => {
     const name = file.name.toLowerCase();
     const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
     if (ext === "pdf") {
@@ -1056,11 +1078,17 @@ const EditMaids = () => {
       const subjectStr = subjectStrMatch ? subjectStrMatch[1] : "";
       const subject = subjectHex || subjectStr;
       if (subject.startsWith("MAIDS_CSV_BASE64:")) {
-        await importCsvText(decodeBase64Utf8(subject.slice("MAIDS_CSV_BASE64:".length)));
+        await importCsvText(
+          decodeBase64Utf8(subject.slice("MAIDS_CSV_BASE64:".length)),
+          options
+        );
         return;
       }
       if (subject.startsWith("MAID_PROFILE_JSON_BASE64:")) {
-        await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(subject.slice("MAID_PROFILE_JSON_BASE64:".length))) as MaidProfile);
+        await importSingleMaidProfile(
+          JSON.parse(decodeBase64Utf8(subject.slice("MAID_PROFILE_JSON_BASE64:".length))) as MaidProfile,
+          options
+        );
         return;
       }
       const max = Math.min(bytes.length, 2 * 1024 * 1024);
@@ -1110,7 +1138,10 @@ const EditMaids = () => {
         if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
         return v;
       };
-      await importCsvText(`referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`);
+      await importCsvText(
+        `referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`,
+        options
+      );
       return;
     }
     if (ext === "xlsx") {
@@ -1124,7 +1155,7 @@ const EditMaids = () => {
             : [];
           return acc;
         }, {});
-        await importSingleMaidProfile(buildImportedMaidProfile(rowsBySheet));
+        await importSingleMaidProfile(buildImportedMaidProfile(rowsBySheet), options);
         return;
       }
       const sheetName = workbook.SheetNames[0];
@@ -1138,16 +1169,16 @@ const EditMaids = () => {
         throw new Error("XLSX is missing required columns: referenceCode, fullName");
       }
       const csvText = XLSX.utils.sheet_to_csv(sheet);
-      await importCsvText(csvText);
+      await importCsvText(csvText, options);
       return;
     }
-    if (ext === "csv") { await importCsvText(await file.text()); return; }
+    if (ext === "csv") { await importCsvText(await file.text(), options); return; }
     if (ext === "xls" || ext === "doc") {
       const content = await file.text();
       const maidsCsvBase64 = extractBase64Marker(content, "MAIDS_CSV_BASE64");
-      if (maidsCsvBase64) { await importCsvText(decodeBase64Utf8(maidsCsvBase64)); return; }
+      if (maidsCsvBase64) { await importCsvText(decodeBase64Utf8(maidsCsvBase64), options); return; }
       const maidProfileBase64 = extractBase64Marker(content, "MAID_PROFILE_JSON_BASE64");
-      if (maidProfileBase64) { await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile); return; }
+      if (maidProfileBase64) { await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile, options); return; }
       throw new Error('This file is missing import data. Please import files exported from "Export Maids" or from a maid bio-data export.');
     }
     throw new Error("Unsupported file type. Supported: .csv, .xls, .xlsx, .doc, .docx, .pdf");
@@ -1184,37 +1215,44 @@ const EditMaids = () => {
       currentFileName: "",
       completed: 0,
       failed: 0,
+      stage: "Preparing files",
     });
     let completed = 0;
     let failed = 0;
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       try {
         setImportBatchProgress((prev) => ({
           ...prev,
-          currentIndex: prev.completed + prev.failed + 1,
+          currentIndex: index + 1,
           currentFileName: file.name,
+          stage: "Uploading and processing",
         }));
-        await handleImportFile(file);
+        await waitForPaint();
+        await handleImportFile(file, { skipReload: true, suppressSuccessToast: true });
         completed += 1;
         setImportBatchProgress((prev) => ({
           ...prev,
           completed,
+          stage: "Saving imported data",
         }));
       } catch (error) {
         failed += 1;
         setImportBatchProgress((prev) => ({
           ...prev,
           failed,
+          stage: "Continuing with remaining files",
         }));
         toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `${file.name}: Failed to import`);
       }
     }
+    await reloadVisibleMaids("public");
     setImportBatchProgress((prev) => ({
       ...prev,
       active: false,
       currentIndex: prev.total,
       completed,
       failed,
+      stage: failed ? "Completed with some failed files" : "Completed successfully",
     }));
     toast.success(`Bulk upload finished: ${completed} uploaded${failed ? `, ${failed} failed` : ""}`);
   };
@@ -1229,6 +1267,16 @@ const EditMaids = () => {
   };
 
   // ── Shared dialogs (yellow/green accented) ────────────────────────────────
+  const hasActiveUploadFile =
+    importBatchProgress.active &&
+    importBatchProgress.currentIndex > importBatchProgress.completed + importBatchProgress.failed;
+  const uploadProgressUnits =
+    importBatchProgress.completed + importBatchProgress.failed + (hasActiveUploadFile ? 0.35 : 0);
+  const uploadProgressPercent =
+    importBatchProgress.total > 0
+      ? Math.min(100, Math.round((uploadProgressUnits / importBatchProgress.total) * 100))
+      : 0;
+
   const sharedDialogs = (
     <>
       {/* Export */}
@@ -1730,15 +1778,16 @@ const EditMaids = () => {
                     : "No files queued"}
                   {importBatchProgress.currentFileName ? ` • ${importBatchProgress.currentFileName}` : ""}
                 </p>
+                {importBatchProgress.stage ? (
+                  <p className="mt-1 text-xs opacity-80">{importBatchProgress.stage}</p>
+                ) : null}
               </div>
               <div className="flex items-center gap-2 text-xs font-semibold">
                 {importBatchProgress.active && <Loader2 className="h-4 w-4 animate-spin" />}
                 <span>{importBatchProgress.completed} uploaded</span>
                 <span>{importBatchProgress.failed} failed</span>
                 <span>
-                  {importBatchProgress.total > 0
-                    ? `${Math.round(((importBatchProgress.completed + importBatchProgress.failed) / importBatchProgress.total) * 100)}% complete`
-                    : "0% complete"}
+                  {importBatchProgress.total > 0 ? `${uploadProgressPercent}% complete` : "0% complete"}
                 </span>
               </div>
             </div>
@@ -1746,7 +1795,7 @@ const EditMaids = () => {
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{
-                  width: `${importBatchProgress.total > 0 ? ((importBatchProgress.completed + importBatchProgress.failed) / importBatchProgress.total) * 100 : 0}%`,
+                  width: `${uploadProgressPercent}%`,
                   background: "var(--ym-green-400)",
                 }}
               />

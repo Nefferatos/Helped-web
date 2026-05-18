@@ -1675,7 +1675,6 @@ const loadData = async (): Promise<AppData> => {
   await ensureDataFile()
   const raw = await readFile(dataFile, 'utf8')
   cache = mergeAppData(JSON.parse(stripBom(raw)) as Partial<AppData>)
-  await writeFile(dataFile, JSON.stringify(cache, null, 2), 'utf8')
   if (await migrateLegacyMediaInData(cache)) {
     await saveData(cache)
   }

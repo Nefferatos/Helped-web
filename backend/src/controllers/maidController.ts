@@ -94,6 +94,61 @@ const csvColumns = [
   'hasPhoto',
 ] as const
 
+type MaidListPayload = Array<MaidRecord & { agencyName: string }>
+
+type MaidListCacheEntry = {
+  expiresAt: number
+  payload: MaidListPayload
+}
+
+const MAID_LIST_CACHE_TTL_MS = 10_000
+const maidListCache = new Map<string, MaidListCacheEntry>()
+
+const clearMaidListCache = () => {
+  maidListCache.clear()
+}
+
+const buildMaidListCacheKey = (params: {
+  search?: string
+  visibility?: string
+  agencyId: number | 'all-public'
+}) =>
+  JSON.stringify({
+    search: params.search?.trim().toLowerCase() ?? '',
+    visibility: params.visibility ?? '',
+    agencyId: params.agencyId,
+  })
+
+const getCachedMaidList = (key: string) => {
+  const cached = maidListCache.get(key)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    maidListCache.delete(key)
+    return null
+  }
+  return cached.payload
+}
+
+const setCachedMaidList = (key: string, payload: MaidListPayload) => {
+  maidListCache.set(key, {
+    payload,
+    expiresAt: Date.now() + MAID_LIST_CACHE_TTL_MS,
+  })
+}
+
+const withAgencyNames = async (maids: MaidRecord[]): Promise<MaidListPayload> => {
+  const agencyIds = Array.from(new Set(maids.map((maid) => maid.agencyId)))
+  const agencyEntries = await Promise.all(
+    agencyIds.map(async (agencyId) => [agencyId, await getAgencyNameByIdStore(agencyId)] as const)
+  )
+  const agencyNameMap = new Map<number, string>(agencyEntries)
+
+  return maids.map((maid) => ({
+    ...maid,
+    agencyName: agencyNameMap.get(maid.agencyId) ?? `Agency ${maid.agencyId}`,
+  }))
+}
+
 const requiredFields: Array<keyof MaidProfile> = [
   'fullName',
   'referenceCode',
@@ -243,6 +298,17 @@ export const getMaidList = async (req: Request, res: Response) => {
       visibility === 'public' &&
       requestedAgencyId == null
 
+    const resolvedAgencyId = requestedAgencyId ?? (await getRequestAgencyId(req))
+    const cacheKey = buildMaidListCacheKey({
+      search: typeof search === 'string' ? search : undefined,
+      visibility: typeof visibility === 'string' ? visibility : undefined,
+      agencyId: shouldUseAllPublic ? 'all-public' : resolvedAgencyId,
+    })
+    const cachedPayload = getCachedMaidList(cacheKey)
+    if (cachedPayload) {
+      return res.status(200).json({ maids: cachedPayload })
+    }
+
     const maids = shouldUseAllPublic
       ? await getAllMaidsStore(
           typeof search === 'string' ? search : undefined,
@@ -251,15 +317,11 @@ export const getMaidList = async (req: Request, res: Response) => {
       : await getMaidsStore(
           typeof search === 'string' ? search : undefined,
           typeof visibility === 'string' ? visibility : undefined,
-          requestedAgencyId ?? (await getRequestAgencyId(req))
+          resolvedAgencyId
         )
 
-    const payload = await Promise.all(
-      maids.map(async (maid) => ({
-        ...maid,
-        agencyName: await getAgencyNameByIdStore(maid.agencyId),
-      }))
-    )
+    const payload = await withAgencyNames(maids)
+    setCachedMaidList(cacheKey, payload)
     res.status(200).json({ maids: payload })
   } catch (error) {
     console.error('Error fetching maids:', error)
@@ -520,6 +582,7 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
     }
 
     const statusCode = errors.length > 0 ? 207 : 200
+    clearMaidListCache()
     res.status(statusCode).json({
       message: 'CSV import completed',
       created,
@@ -575,6 +638,7 @@ export const createMaid = async (req: Request, res: Response) => {
     }
 
     const created = await createMaidStore(toMaidRecord(payload as MaidProfile), agencyId)
+    clearMaidListCache()
     res.status(201).json({ maid: created })
   } catch (error) {
     if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {
@@ -631,6 +695,7 @@ export const updateMaid = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Maid not found' })
     }
 
+    clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
     if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {
@@ -657,6 +722,7 @@ export const updateMaidVisibility = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Maid not found' })
     }
 
+    clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
     console.error('Error updating maid visibility:', error)
@@ -678,6 +744,7 @@ export const updateMaidPhoto = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Maid not found' })
     }
 
+    clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
     console.error('Error updating maid photo:', error)
@@ -699,6 +766,7 @@ export const addMaidPhoto = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Maid not found' })
     }
 
+    clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
     if (error instanceof Error && error.message === 'PHOTO_LIMIT_REACHED') {
@@ -723,6 +791,7 @@ export const updateMaidVideo = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Maid not found' })
     }
 
+    clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
     console.error('Error updating maid video:', error)
@@ -740,6 +809,7 @@ export const deleteMaid = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Maid not found' })
     }
 
+    clearMaidListCache()
     res.status(200).json({ message: 'Maid deleted successfully' })
   } catch (error) {
     console.error('Error deleting maid:', error)
