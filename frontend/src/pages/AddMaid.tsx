@@ -1,7 +1,7 @@
 // ─── AddMaid.tsx (with PDF auto-fill + functional evaluation checkboxes) ──────
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Star, ChevronRight, User, Briefcase, Clock, FileText, Globe, Lock, CheckCircle } from "lucide-react";
+import { Star, ChevronRight, User, Briefcase, Clock, FileText, Globe, Lock, CheckCircle, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -34,13 +34,279 @@ const tabs = [
   { label: "Private Info", icon: Lock },
 ];
 
+let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
+
+const loadXlsx = async () => {
+  xlsxLoader ??= import("xlsx");
+  return await xlsxLoader;
+};
+
+const normalizeImportLabel = (value: unknown) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/[•►]/g, "")
+    .trim()
+    .toLowerCase();
+
+const cleanImportedValue = (value: unknown) => {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (/^(?:not stated|none stated|not provided(?: in biodata)?|blank in biodata|not specified|none)$/i.test(text)) {
+    return "";
+  }
+  return text;
+};
+
+const parseImportedNumber = (value: unknown) => {
+  const text = cleanImportedValue(value);
+  if (!text) return 0;
+  const match = text.match(/-?\d+/);
+  return match ? Number(match[0]) : 0;
+};
+
+const parseImportedDate = (value: unknown) => {
+  const text = cleanImportedValue(value);
+  if (!text) return "";
+  const match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (!match) return "";
+  const [, dd, mm, yyyy] = match;
+  return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+};
+
+const parseImportedBoolean = (value: unknown): boolean | undefined => {
+  const text = cleanImportedValue(value).toLowerCase();
+  if (!text) return undefined;
+  if (/(^|[^a-z])(yes|check|checked|true)([^a-z]|$)/.test(text)) return true;
+  if (/(^|[^a-z])(no|unchecked|false)([^a-z]|$)/.test(text)) return false;
+  return undefined;
+};
+
+const importedRowMap = (rows: unknown[][]) => {
+  const map = new Map<string, string>();
+  rows.forEach((row) => {
+    const label = cleanImportedValue(row[0]);
+    if (!label) return;
+    map.set(normalizeImportLabel(label), cleanImportedValue(row[1]));
+  });
+  return map;
+};
+
+const importedSectionValues = (rows: unknown[][]) => {
+  const sections = new Map<string, string>();
+  let currentSection = "";
+  rows.forEach((row) => {
+    const first = cleanImportedValue(row[0]);
+    const second = cleanImportedValue(row[1]);
+    if (!first) return;
+    if (first.toLowerCase().includes("introduction tab") || first.toLowerCase().includes("private info")) {
+      currentSection = normalizeImportLabel(first);
+      return;
+    }
+    if (normalizeImportLabel(first) === "value" && currentSection && second) {
+      sections.set(currentSection, second);
+    }
+  });
+  return sections;
+};
+
+const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): MaidProfile => {
+  const profileRows = rowsBySheet.Profile ?? [];
+  const skillsRows = rowsBySheet.Skills ?? [];
+  const employmentRows = rowsBySheet["Employment History"] ?? [];
+  const introRows = rowsBySheet["Introduction & Private"] ?? [];
+
+  const profileMap = importedRowMap(profileRows);
+  const introSections = importedSectionValues(introRows);
+
+  const otherInformation: Record<string, boolean> = {};
+  for (const row of skillsRows) {
+    const label = cleanImportedValue(row[0]);
+    const value = row[1];
+    if (
+      [
+        "Able to handle pork?",
+        "Able to eat pork?",
+        "Able to care for dog/cat?",
+        "Able to do simple sewing?",
+        "Able to do gardening work?",
+      ].includes(label)
+    ) {
+      const parsed = parseImportedBoolean(value);
+      if (parsed !== undefined) otherInformation[label] = parsed;
+    }
+  }
+
+  const evaluationMethods: string[] = [];
+  const evalRows = new Map<string, string>();
+  skillsRows.forEach((row) => {
+    const label = cleanImportedValue(row[0]);
+    const value = cleanImportedValue(row[1]);
+    if (label) evalRows.set(label, value);
+  });
+  if (parseImportedBoolean(evalRows.get("Interviewed by Singapore EA"))) {
+    evaluationMethods.push(EVAL_PARENT_INTERVIEWED);
+  }
+  EVAL_SUB_OPTIONS.forEach((option) => {
+    if (parseImportedBoolean(evalRows.get(option))) {
+      evaluationMethods.push(option);
+    }
+  });
+
+  const workAreaLabelMap: Record<string, string> = {
+    "care of infants/children (age range: infants–4 yr)": "Care of infants/children",
+    "care of elderly": "Care of elderly",
+    "care of disabled": "Care of disabled",
+    "general housework": "General housework",
+    "cooking (vegetarian & non-vegetarian)": "Cooking",
+    "language abilities (hindi, english)": "Language abilities (spoken)",
+    "other skills": "Other skills, if any",
+  };
+
+  const workAreas: Record<string, unknown> = {};
+  skillsRows.forEach((row) => {
+    const sourceLabel = normalizeImportLabel(row[0]);
+    const targetLabel = workAreaLabelMap[sourceLabel];
+    if (!targetLabel) return;
+    const rating = parseImportedNumber(row[3]);
+    const note = cleanImportedValue(row[4]);
+    workAreas[targetLabel] = {
+      willing: parseImportedBoolean(row[1]),
+      experience: parseImportedBoolean(row[2]),
+      yearsOfExperience: "",
+      rating: rating || null,
+      note,
+      evaluation: [rating ? `${rating}/5` : "", note].filter(Boolean).join(" - "),
+    };
+  });
+
+  const languageSkills = {
+    ...defaultMaidProfile.languageSkills,
+  };
+  skillsRows.forEach((row) => {
+    const label = cleanImportedValue(row[0]);
+    const value = cleanImportedValue(row[1]);
+    if (!label || !value) return;
+    if (label === "English" || label === "Hindi") {
+      languageSkills[label] = value;
+    }
+  });
+
+  const employmentHistory = employmentRows
+    .slice(3)
+    .map((row) => ({
+      from: cleanImportedValue(row[0]),
+      to: cleanImportedValue(row[1]),
+      country: cleanImportedValue(row[2]),
+      employer: cleanImportedValue(row[3]),
+      duties: cleanImportedValue(row[4]),
+      remarks: cleanImportedValue(row[5]),
+    }))
+    .filter((row) => Object.values(row).some(Boolean));
+
+  const availabilityInterviewOptions: string[] = [];
+  employmentRows.forEach((row) => {
+    const label = cleanImportedValue(row[0]);
+    const checked = parseImportedBoolean(row[1]);
+    if (checked !== true) return;
+    if (label === "By Phone") availabilityInterviewOptions.push("FDW can be interviewed by phone");
+    if (label === "By Video-conference") availabilityInterviewOptions.push("FDW can be interviewed by video-conference");
+    if (label === "In Person") availabilityInterviewOptions.push("FDW can be interviewed in person");
+  });
+
+  const pastIllnesses: Record<string, boolean> = {
+    "(I) Mental illness": parseImportedBoolean(profileMap.get(normalizeImportLabel("Mental illness"))) ?? false,
+    "(II) Epilepsy": parseImportedBoolean(profileMap.get(normalizeImportLabel("Epilepsy"))) ?? false,
+    "(III) Asthma": parseImportedBoolean(profileMap.get(normalizeImportLabel("Asthma"))) ?? false,
+    "(IV) Diabetes": parseImportedBoolean(profileMap.get(normalizeImportLabel("Diabetes"))) ?? false,
+    "(V) Hypertension": parseImportedBoolean(profileMap.get(normalizeImportLabel("Hypertension"))) ?? false,
+    "(VI) Tuberculosis": parseImportedBoolean(profileMap.get(normalizeImportLabel("Tuberculosis"))) ?? false,
+    "(VII) Heart disease": parseImportedBoolean(profileMap.get(normalizeImportLabel("Heart disease"))) ?? false,
+    "(VIII) Malaria": parseImportedBoolean(profileMap.get(normalizeImportLabel("Malaria"))) ?? false,
+    "(IX) Operations": parseImportedBoolean(profileMap.get(normalizeImportLabel("Operations"))) ?? false,
+  };
+
+  const foodHandlingPreferences = [
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling — No Pork"))) ? "No Pork" : "",
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling — No Beef"))) ? "No Beef" : "",
+  ].filter(Boolean).join(", ");
+
+  return {
+    ...defaultMaidProfile,
+    fullName: cleanImportedValue(profileMap.get(normalizeImportLabel("Full Name *"))),
+    referenceCode: cleanImportedValue(profileMap.get(normalizeImportLabel("Ref Code *"))),
+    type: cleanImportedValue(profileMap.get(normalizeImportLabel("Type"))),
+    nationality: cleanImportedValue(profileMap.get(normalizeImportLabel("Nationality"))),
+    dateOfBirth: parseImportedDate(profileMap.get(normalizeImportLabel("Date of Birth *"))),
+    placeOfBirth: cleanImportedValue(profileMap.get(normalizeImportLabel("Place of Birth"))),
+    height: parseImportedNumber(profileMap.get(normalizeImportLabel("Height (cm)"))),
+    weight: parseImportedNumber(profileMap.get(normalizeImportLabel("Weight (kg)"))),
+    religion: cleanImportedValue(profileMap.get(normalizeImportLabel("Religion"))),
+    maritalStatus: cleanImportedValue(profileMap.get(normalizeImportLabel("Marital Status"))),
+    numberOfChildren: parseImportedNumber(profileMap.get(normalizeImportLabel("Number of Children"))),
+    numberOfSiblings: parseImportedNumber(profileMap.get(normalizeImportLabel("Number of Siblings"))),
+    homeAddress: cleanImportedValue(profileMap.get(normalizeImportLabel("Residential Address in Home Country"))),
+    airportRepatriation: cleanImportedValue(profileMap.get(normalizeImportLabel("Port / Airport for Repatriation"))),
+    educationLevel: cleanImportedValue(profileMap.get(normalizeImportLabel("Education Level"))),
+    languageSkills,
+    workAreas,
+    employmentHistory,
+    introduction: {
+      intro: cleanImportedValue(
+        introSections.get(normalizeImportLabel("Introduction Tab (introduction.intro)")),
+      ),
+      publicIntro: cleanImportedValue(
+        introSections.get(normalizeImportLabel("Public Introduction Tab (introduction.publicIntro)")),
+      ),
+      agesOfChildren: cleanImportedValue(profileMap.get(normalizeImportLabel("Ages of Children"))),
+      presentSalary: cleanImportedValue(profileMap.get(normalizeImportLabel("Present Salary (S$)"))),
+      expectedSalary: cleanImportedValue(profileMap.get(normalizeImportLabel("Expected Salary (S$)"))),
+      availability: cleanImportedValue(profileMap.get(normalizeImportLabel("Availability"))),
+      maidLoan: cleanImportedValue(profileMap.get(normalizeImportLabel("Maid Loan (S$)"))),
+      offdayCompensation: cleanImportedValue(profileMap.get(normalizeImportLabel("Off-day Compensation (S$/day)"))),
+      allergies: cleanImportedValue(profileMap.get(normalizeImportLabel("Allergies"))),
+      physicalDisabilities: cleanImportedValue(profileMap.get(normalizeImportLabel("Physical Disabilities"))),
+      dietaryRestrictions: cleanImportedValue(profileMap.get(normalizeImportLabel("Dietary Restrictions"))),
+      foodHandlingPreferences,
+      otherRemarks: cleanImportedValue(profileMap.get(normalizeImportLabel("Other Remarks"))),
+      pastIllnesses,
+    },
+    skillsPreferences: {
+      indianMaidCategory: cleanImportedValue(profileMap.get(normalizeImportLabel("Indian Maid Category"))),
+      otherInformation,
+      offDaysPerMonth: cleanImportedValue(profileMap.get(normalizeImportLabel("Rest Days per Month"))),
+      evaluationMethods,
+      availabilityInterviewOptions,
+      privateInfo: cleanImportedValue(
+        introSections.get(normalizeImportLabel("Private Info — Historical Record (skillsPreferences.privateInfo)")),
+      ),
+      interviewedBy: cleanImportedValue(
+        introSections.get(normalizeImportLabel("Interviewed By (skillsPreferences.interviewedBy)")),
+      ),
+      referredBy: cleanImportedValue(
+        introSections.get(normalizeImportLabel("Referred By (skillsPreferences.referredBy)")),
+      ),
+    },
+    agencyContact: {
+      phone: cleanImportedValue(
+        introSections.get(normalizeImportLabel("Private Info — Agency Contact (agencyContact.phone)")),
+      ),
+      passportNo: cleanImportedValue(
+        introSections.get(normalizeImportLabel("Private Info — Passport Number (agencyContact.passportNo)")),
+      ),
+      homeCountryContactNumber: cleanImportedValue(profileMap.get(normalizeImportLabel("Contact Number in Home Country"))),
+    },
+  };
+};
+
 const AddMaid = () => {
   const navigate = useNavigate();
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState<MaidProfile>(defaultMaidProfile);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isImportingExcel, setIsImportingExcel] = useState(false);
   const [isManagePhotosOpen, setIsManagePhotosOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [maxUnlockedTab, setMaxUnlockedTab] = useState(0);
@@ -58,6 +324,37 @@ const AddMaid = () => {
   );
 
   const handleUploadPhoto = useCallback(() => setIsManagePhotosOpen(true), []);
+
+  const handleImportExcel = useCallback(async (file?: File) => {
+    if (!file) return;
+    try {
+      setIsImportingExcel(true);
+      const XLSX = await loadXlsx();
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const rowsBySheet = workbook.SheetNames.reduce<Record<string, unknown[][]>>((acc, sheetName) => {
+        const sheet = workbook.Sheets[sheetName];
+        acc[sheetName] = sheet
+          ? (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][])
+          : [];
+        return acc;
+      }, {});
+      const imported = buildImportedMaidProfile(rowsBySheet);
+      if (!imported.fullName || !imported.referenceCode) {
+        throw new Error("The Excel file is missing the maid name or reference code.");
+      }
+      setFormData((prev) => ({
+        ...prev,
+        ...imported,
+        languageSkills: { ...prev.languageSkills, ...imported.languageSkills },
+      }));
+      setActiveTab(0);
+      toast.success("Excel data loaded into the maid bio-data form");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to import Excel file");
+    } finally {
+      setIsImportingExcel(false);
+    }
+  }, []);
 
   const photos = useMemo(
     () =>
@@ -212,13 +509,43 @@ const AddMaid = () => {
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
-            <span>Agency Admin</span>
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-amber-600 font-medium">Add New Maid</span>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
+                <span>Agency Admin</span>
+                <ChevronRight className="h-3 w-3" />
+                <span className="text-amber-600 font-medium">Add New Maid</span>
+              </div>
+              <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Add Maid Profile</h1>
+              <p className="text-slate-500 mt-1">Complete all sections to create a comprehensive maid profile.</p>
+            </div>
+            <div className="flex flex-col items-start gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => excelInputRef.current?.click()}
+                disabled={isImportingExcel}
+                className="rounded-xl border-amber-200 bg-white text-amber-700 hover:bg-amber-50"
+              >
+                {isImportingExcel ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                {isImportingExcel ? "Reading Excel..." : "Upload Excel File"}
+              </Button>
+              <p className="max-w-xs text-xs leading-relaxed text-slate-500">
+                Use the Excel layout from your maid sample file. The upload will fill this bio-data form automatically.
+              </p>
+              <input
+                ref={excelInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  void handleImportExcel(file);
+                }}
+              />
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Add Maid Profile</h1>
-          <p className="text-slate-500 mt-1">Complete all sections to create a comprehensive maid profile.</p>
         </div>
 
         {/* PDF Auto-fill Banner */}

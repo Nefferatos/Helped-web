@@ -10,8 +10,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { calculateAge, formatDate, MaidProfile } from "@/lib/maids";
-import { Search, Eye, EyeOff, Trash2, Download, Upload, ArrowLeft, AlertTriangle, CheckSquare, Square } from "lucide-react";
+import { calculateAge, defaultMaidProfile, formatDate, MaidProfile } from "@/lib/maids";
+import { Search, Eye, EyeOff, Trash2, Download, Upload, ArrowLeft, AlertTriangle, CheckSquare, Square, Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
@@ -24,6 +24,15 @@ type VisibilityTarget =
   | { bulk: true; makePublic: boolean };
 
 const PAGE_SIZE = 14;
+
+type ImportBatchProgress = {
+  active: boolean;
+  total: number;
+  currentIndex: number;
+  currentFileName: string;
+  completed: number;
+  failed: number;
+};
 
 let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
 
@@ -42,6 +51,277 @@ const loadJsZip = async (): Promise<JSZipConstructor> => {
 const loadXlsx = async () => {
   xlsxLoader ??= import("xlsx");
   return await xlsxLoader;
+};
+
+const EVAL_PARENT_INTERVIEWED = "Interviewed by Singapore EA";
+const EVAL_SUB_OPTIONS = [
+  "Interviewed via telephone/teleconference",
+  "Interviewed via videoconference",
+  "Interviewed in person",
+  "Interviewed in person and also made observation of FDW in the areas of work listed in table",
+];
+
+const normalizeImportLabel = (value: unknown) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/[•►]/g, "")
+    .trim()
+    .toLowerCase();
+
+const cleanImportedValue = (value: unknown) => {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (/^(?:not stated|none stated|not provided(?: in biodata)?|blank in biodata|not specified|none)$/i.test(text)) {
+    return "";
+  }
+  return text;
+};
+
+const parseImportedNumber = (value: unknown) => {
+  const text = cleanImportedValue(value);
+  if (!text) return 0;
+  const match = text.match(/-?\d+/);
+  return match ? Number(match[0]) : 0;
+};
+
+const parseImportedDate = (value: unknown) => {
+  const text = cleanImportedValue(value);
+  if (!text) return "";
+  const match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (!match) return "";
+  const [, dd, mm, yyyy] = match;
+  return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+};
+
+const parseImportedBoolean = (value: unknown): boolean | undefined => {
+  const text = cleanImportedValue(value).toLowerCase();
+  if (!text) return undefined;
+  if (/(^|[^a-z])(yes|check|checked|true)([^a-z]|$)/.test(text)) return true;
+  if (/(^|[^a-z])(no|unchecked|false)([^a-z]|$)/.test(text)) return false;
+  return undefined;
+};
+
+const importedRowMap = (rows: unknown[][]) => {
+  const map = new Map<string, string>();
+  rows.forEach((row) => {
+    const label = cleanImportedValue(row[0]);
+    if (!label) return;
+    map.set(normalizeImportLabel(label), cleanImportedValue(row[1]));
+  });
+  return map;
+};
+
+const importedSectionValues = (rows: unknown[][]) => {
+  const sections = new Map<string, string>();
+  let currentSection = "";
+  rows.forEach((row) => {
+    const first = cleanImportedValue(row[0]);
+    const second = cleanImportedValue(row[1]);
+    if (!first) return;
+    if (first.toLowerCase().includes("introduction tab") || first.toLowerCase().includes("private info") || first.toLowerCase().includes("interviewed by") || first.toLowerCase().includes("referred by")) {
+      currentSection = normalizeImportLabel(first);
+      if (second) sections.set(currentSection, second);
+      return;
+    }
+    if (normalizeImportLabel(first) === "value") {
+      sections.set(currentSection, second);
+    }
+  });
+  return sections;
+};
+
+const isRichMaidWorkbook = (sheetNames: string[]) =>
+  sheetNames.includes("Profile") && sheetNames.includes("Skills") && sheetNames.includes("Employment History");
+
+const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): MaidProfile => {
+  const profileRows = rowsBySheet.Profile ?? [];
+  const skillsRows = rowsBySheet.Skills ?? [];
+  const employmentRows = rowsBySheet["Employment History"] ?? [];
+  const introRows = rowsBySheet["Introduction & Private"] ?? [];
+
+  const profileMap = importedRowMap(profileRows);
+  const introSections = importedSectionValues(introRows);
+
+  const otherInformation: Record<string, boolean> = {};
+  for (const row of skillsRows) {
+    const label = cleanImportedValue(row[0]);
+    const parsed = parseImportedBoolean(row[1]);
+    if (
+      parsed !== undefined &&
+      [
+        "Able to handle pork?",
+        "Able to eat pork?",
+        "Able to care for dog/cat?",
+        "Able to do simple sewing?",
+        "Able to do gardening work?",
+        "Willing to wash car?",
+        "Willing to work on off-days with compensation?",
+      ].includes(label)
+    ) {
+      otherInformation[label] = parsed;
+    }
+  }
+
+  const evalRows = new Map<string, string>();
+  skillsRows.forEach((row) => {
+    const label = cleanImportedValue(row[0]);
+    if (label) evalRows.set(label, cleanImportedValue(row[1]));
+  });
+  const evaluationMethods: string[] = [];
+  if (parseImportedBoolean(evalRows.get("Interviewed by Singapore EA"))) {
+    evaluationMethods.push(EVAL_PARENT_INTERVIEWED);
+  }
+  EVAL_SUB_OPTIONS.forEach((option) => {
+    if (parseImportedBoolean(evalRows.get(option))) evaluationMethods.push(option);
+  });
+
+  const workAreaLabelMap: Record<string, string> = {
+    "care of infants/children (age range: infants–4 yr)": "Care of infants/children",
+    "care of infants/children (age range: infantsâ€“4 yr)": "Care of infants/children",
+    "care of elderly": "Care of elderly",
+    "care of disabled": "Care of disabled",
+    "general housework": "General housework",
+    "cooking (vegetarian & non-vegetarian)": "Cooking",
+    "language abilities (hindi, english)": "Language abilities (spoken)",
+    "language abilities (spoken)": "Language abilities (spoken)",
+    "other skills": "Other skills, if any",
+    "other skills, if any": "Other skills, if any",
+  };
+
+  const workAreas: Record<string, unknown> = {};
+  skillsRows.forEach((row) => {
+    const targetLabel = workAreaLabelMap[normalizeImportLabel(row[0])];
+    if (!targetLabel) return;
+    const fourth = cleanImportedValue(row[3]);
+    const fifth = cleanImportedValue(row[4]);
+    const ratingCandidate = [fourth, fifth].find((value) => /^\d+(\.\d+)?$/.test(value));
+    const rating = ratingCandidate ? Number(ratingCandidate) : null;
+    const note = [fifth, fourth].find((value) => value && !/^\d+(\.\d+)?$/.test(value)) ?? "";
+    workAreas[targetLabel] = {
+      willing: parseImportedBoolean(row[1]),
+      experience: parseImportedBoolean(row[2]),
+      yearsOfExperience: "",
+      rating,
+      note,
+      evaluation: [rating != null ? `${rating}/5` : "", note].filter(Boolean).join(" - "),
+    };
+  });
+
+  const languageSkills = { ...defaultMaidProfile.languageSkills };
+  skillsRows.forEach((row) => {
+    const label = cleanImportedValue(row[0]);
+    const value = cleanImportedValue(row[1]);
+    if (!label || !value) return;
+    if (label === "English" || label === "Hindi" || label === "Tamil") {
+      languageSkills[label] = value;
+    }
+  });
+
+  const employmentHeaderIndex = employmentRows.findIndex(
+    (row) => cleanImportedValue(row[0]) === "From" && cleanImportedValue(row[1]) === "To",
+  );
+  const employmentHistory =
+    employmentHeaderIndex === -1
+      ? []
+      : employmentRows
+          .slice(employmentHeaderIndex + 1)
+          .map((row) => ({
+            from: cleanImportedValue(row[0]),
+            to: cleanImportedValue(row[1]),
+            country: cleanImportedValue(row[2]),
+            employer: cleanImportedValue(row[3]),
+            duties: cleanImportedValue(row[4]),
+            remarks: cleanImportedValue(row[5]),
+          }))
+          .filter((row) => Object.values(row).some(Boolean) && row.from !== "By Phone");
+
+  const availabilityInterviewOptions: string[] = [];
+  employmentRows.forEach((row) => {
+    const label = cleanImportedValue(row[0]);
+    const checked = parseImportedBoolean(row[1]);
+    if (checked !== true) return;
+    if (label === "By Phone") availabilityInterviewOptions.push("FDW can be interviewed by phone");
+    if (label === "By Video-conference") availabilityInterviewOptions.push("FDW can be interviewed by video-conference");
+    if (label === "In Person") availabilityInterviewOptions.push("FDW can be interviewed in person");
+  });
+
+  const pastIllnesses: Record<string, boolean> = {
+    "(I) Mental illness": parseImportedBoolean(profileMap.get(normalizeImportLabel("Mental illness"))) ?? false,
+    "(II) Epilepsy": parseImportedBoolean(profileMap.get(normalizeImportLabel("Epilepsy"))) ?? false,
+    "(III) Asthma": parseImportedBoolean(profileMap.get(normalizeImportLabel("Asthma"))) ?? false,
+    "(IV) Diabetes": parseImportedBoolean(profileMap.get(normalizeImportLabel("Diabetes"))) ?? false,
+    "(V) Hypertension": parseImportedBoolean(profileMap.get(normalizeImportLabel("Hypertension"))) ?? false,
+    "(VI) Tuberculosis": parseImportedBoolean(profileMap.get(normalizeImportLabel("Tuberculosis"))) ?? false,
+    "(VII) Heart disease": parseImportedBoolean(profileMap.get(normalizeImportLabel("Heart disease"))) ?? false,
+    "(VIII) Malaria": parseImportedBoolean(profileMap.get(normalizeImportLabel("Malaria"))) ?? false,
+    "(IX) Operations": parseImportedBoolean(profileMap.get(normalizeImportLabel("Operations"))) ?? false,
+  };
+
+  const foodHandlingPreferences = [
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling — No Pork"))) ? "No Pork" : "",
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling â€” No Pork"))) ? "No Pork" : "",
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling — No Beef"))) ? "No Beef" : "",
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling â€” No Beef"))) ? "No Beef" : "",
+  ]
+    .filter(Boolean)
+    .filter((value, index, self) => self.indexOf(value) === index)
+    .join(", ");
+
+  return {
+    ...defaultMaidProfile,
+    fullName: cleanImportedValue(profileMap.get(normalizeImportLabel("Full Name *"))),
+    referenceCode: cleanImportedValue(profileMap.get(normalizeImportLabel("Ref Code *"))),
+    type: cleanImportedValue(profileMap.get(normalizeImportLabel("Type"))),
+    nationality: cleanImportedValue(profileMap.get(normalizeImportLabel("Nationality"))),
+    dateOfBirth: parseImportedDate(profileMap.get(normalizeImportLabel("Date of Birth *"))),
+    placeOfBirth: cleanImportedValue(profileMap.get(normalizeImportLabel("Place of Birth"))),
+    height: parseImportedNumber(profileMap.get(normalizeImportLabel("Height (cm)"))),
+    weight: parseImportedNumber(profileMap.get(normalizeImportLabel("Weight (kg)"))),
+    religion: cleanImportedValue(profileMap.get(normalizeImportLabel("Religion"))),
+    maritalStatus: cleanImportedValue(profileMap.get(normalizeImportLabel("Marital Status"))),
+    numberOfChildren: parseImportedNumber(profileMap.get(normalizeImportLabel("Number of Children"))),
+    numberOfSiblings: parseImportedNumber(profileMap.get(normalizeImportLabel("Number of Siblings"))),
+    homeAddress: cleanImportedValue(profileMap.get(normalizeImportLabel("Residential Address in Home Country"))),
+    airportRepatriation: cleanImportedValue(profileMap.get(normalizeImportLabel("Port / Airport for Repatriation"))),
+    educationLevel: cleanImportedValue(profileMap.get(normalizeImportLabel("Education Level"))),
+    languageSkills,
+    workAreas,
+    employmentHistory,
+    introduction: {
+      intro: cleanImportedValue(introSections.get(normalizeImportLabel("Introduction Tab (introduction.intro)"))),
+      publicIntro: cleanImportedValue(introSections.get(normalizeImportLabel("Public Introduction Tab (introduction.publicIntro)"))),
+      agesOfChildren: cleanImportedValue(profileMap.get(normalizeImportLabel("Ages of Children"))),
+      presentSalary: cleanImportedValue(profileMap.get(normalizeImportLabel("Present Salary (S$)"))),
+      expectedSalary: cleanImportedValue(profileMap.get(normalizeImportLabel("Expected Salary (S$)"))),
+      availability: cleanImportedValue(profileMap.get(normalizeImportLabel("Availability"))),
+      maidLoan: cleanImportedValue(profileMap.get(normalizeImportLabel("Maid Loan (S$)"))),
+      offdayCompensation: cleanImportedValue(profileMap.get(normalizeImportLabel("Off-day Compensation (S$/day)"))),
+      allergies: cleanImportedValue(profileMap.get(normalizeImportLabel("Allergies"))),
+      physicalDisabilities: cleanImportedValue(profileMap.get(normalizeImportLabel("Physical Disabilities"))),
+      dietaryRestrictions: cleanImportedValue(profileMap.get(normalizeImportLabel("Dietary Restrictions"))),
+      foodHandlingPreferences,
+      otherRemarks: cleanImportedValue(profileMap.get(normalizeImportLabel("Other Remarks"))),
+      pastIllnesses,
+    },
+    skillsPreferences: {
+      indianMaidCategory: cleanImportedValue(profileMap.get(normalizeImportLabel("Indian Maid Category"))),
+      otherInformation,
+      offDaysPerMonth: cleanImportedValue(profileMap.get(normalizeImportLabel("Rest Days per Month"))),
+      evaluationMethods,
+      availabilityInterviewOptions,
+      privateInfo: cleanImportedValue(introSections.get(normalizeImportLabel("Private Info — Historical Record (skillsPreferences.privateInfo)"))) ||
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info â€” Historical Record (skillsPreferences.privateInfo)"))),
+      interviewedBy: cleanImportedValue(introSections.get(normalizeImportLabel("Interviewed By (skillsPreferences.interviewedBy)"))),
+      referredBy: cleanImportedValue(introSections.get(normalizeImportLabel("Referred By (skillsPreferences.referredBy)"))),
+    },
+    agencyContact: {
+      phone: cleanImportedValue(introSections.get(normalizeImportLabel("Private Info — Agency Contact (agencyContact.phone)"))) ||
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info â€” Agency Contact (agencyContact.phone)"))),
+      passportNo: cleanImportedValue(introSections.get(normalizeImportLabel("Private Info — Passport Number (agencyContact.passportNo)"))) ||
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info â€” Passport Number (agencyContact.passportNo)"))),
+      homeCountryContactNumber: cleanImportedValue(profileMap.get(normalizeImportLabel("Contact Number in Home Country"))),
+    },
+  };
 };
 
 const decodePdfUtf16Hex = (hex: string) => {
@@ -387,6 +667,14 @@ const EditMaids = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [importBatchProgress, setImportBatchProgress] = useState<ImportBatchProgress>({
+    active: false,
+    total: 0,
+    currentIndex: 0,
+    currentFileName: "",
+    completed: 0,
+    failed: 0,
+  });
   const [page, setPage] = useState(1);
   const [maidToSendThroughAgency, setMaidToSendThroughAgency] = useState<MaidProfile | null>(null);
   const [maidToDirectHire, setMaidToDirectHire] = useState<MaidProfile | null>(null);
@@ -410,6 +698,7 @@ const EditMaids = () => {
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
   const [menuActiveIndex, setMenuActiveIndex] = useState(-1);
   const menuSearchRef = useRef<HTMLDivElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!menuSearch.trim()) {
@@ -827,6 +1116,17 @@ const EditMaids = () => {
     if (ext === "xlsx") {
       const XLSX = await loadXlsx();
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      if (isRichMaidWorkbook(workbook.SheetNames)) {
+        const rowsBySheet = workbook.SheetNames.reduce<Record<string, unknown[][]>>((acc, sheetName) => {
+          const sheet = workbook.Sheets[sheetName];
+          acc[sheetName] = sheet
+            ? (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][])
+            : [];
+          return acc;
+        }, {});
+        await importSingleMaidProfile(buildImportedMaidProfile(rowsBySheet));
+        return;
+      }
       const sheetName = workbook.SheetNames[0];
       const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
       if (!sheet) throw new Error("XLSX does not contain importable data");
@@ -858,8 +1158,8 @@ const EditMaids = () => {
   const requestImportFiles = async (files?: FileList | File[]) => {
     if (!files || isImporting) return;
     const all = Array.from(files);
-    if (all.length > 10) toast.error("Max 10 files per upload");
-    const list = all.slice(0, 10);
+    if (all.length > 50) toast.error("Max 50 files per upload");
+    const list = all.slice(0, 50);
     if (list.length === 0) return;
     const approved: File[] = [];
     for (const file of list) {
@@ -877,13 +1177,46 @@ const EditMaids = () => {
     setConfirmImportOpen(false);
     setPendingImportFiles([]);
     if (files.length === 0) return;
+    setImportBatchProgress({
+      active: true,
+      total: files.length,
+      currentIndex: 0,
+      currentFileName: "",
+      completed: 0,
+      failed: 0,
+    });
+    let completed = 0;
+    let failed = 0;
     for (const file of files) {
       try {
+        setImportBatchProgress((prev) => ({
+          ...prev,
+          currentIndex: prev.completed + prev.failed + 1,
+          currentFileName: file.name,
+        }));
         await handleImportFile(file);
+        completed += 1;
+        setImportBatchProgress((prev) => ({
+          ...prev,
+          completed,
+        }));
       } catch (error) {
+        failed += 1;
+        setImportBatchProgress((prev) => ({
+          ...prev,
+          failed,
+        }));
         toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `${file.name}: Failed to import`);
       }
     }
+    setImportBatchProgress((prev) => ({
+      ...prev,
+      active: false,
+      currentIndex: prev.total,
+      completed,
+      failed,
+    }));
+    toast.success(`Bulk upload finished: ${completed} uploaded${failed ? `, ${failed} failed` : ""}`);
   };
 
   const confirmManualImport = async () => {
@@ -935,6 +1268,9 @@ const EditMaids = () => {
             <span className="font-semibold">Selected file{pendingImportFiles.length === 1 ? "" : "s"}:</span>{" "}
             {pendingImportFiles.length ? pendingImportFiles.map((f) => f.name).join(", ") : "None"}
           </div>
+          <p className="text-xs text-muted-foreground">
+            Bulk upload supports up to 50 files at once. CSV and Excel files are recommended for larger batch imports.
+          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>Cancel</Button>
             <Button
@@ -1347,7 +1683,76 @@ const EditMaids = () => {
               >✕</button>
             )}
           </div>
+          {view === "public" && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => importInputRef.current?.click()}
+                disabled={isImporting || importBatchProgress.active}
+                className="h-10 border-[color:var(--ym-green-200)] text-[color:var(--ym-green-700)] hover:bg-[color:var(--ym-green-50)]"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {importBatchProgress.active ? "Uploading..." : "Bulk Upload CSV/Excel"}
+              </Button>
+              <input
+                ref={importInputRef}
+                type="file"
+                multiple
+                accept=".csv,.xls,.xlsx,.pdf,.doc,.docx"
+                className="hidden"
+                onChange={(event) => {
+                  void requestImportFiles(event.target.files ?? undefined);
+                  event.target.value = "";
+                }}
+              />
+            </>
+          )}
         </div>
+
+        {(importBatchProgress.active || importBatchProgress.completed > 0 || importBatchProgress.failed > 0) && (
+          <div
+            className="rounded-xl border px-4 py-3"
+            style={{
+              background: "var(--ym-green-50)",
+              borderColor: "color-mix(in srgb, var(--ym-green-200) 65%, transparent)",
+              color: "var(--ym-green-800)",
+            }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">
+                  {importBatchProgress.active ? "Bulk upload in progress" : "Latest bulk upload summary"}
+                </p>
+                <p className="mt-1 text-xs">
+                  {importBatchProgress.total > 0
+                    ? `File ${Math.max(importBatchProgress.currentIndex, importBatchProgress.completed + importBatchProgress.failed)} of ${importBatchProgress.total}`
+                    : "No files queued"}
+                  {importBatchProgress.currentFileName ? ` • ${importBatchProgress.currentFileName}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                {importBatchProgress.active && <Loader2 className="h-4 w-4 animate-spin" />}
+                <span>{importBatchProgress.completed} uploaded</span>
+                <span>{importBatchProgress.failed} failed</span>
+                <span>
+                  {importBatchProgress.total > 0
+                    ? `${Math.round(((importBatchProgress.completed + importBatchProgress.failed) / importBatchProgress.total) * 100)}% complete`
+                    : "0% complete"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/70">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${importBatchProgress.total > 0 ? ((importBatchProgress.completed + importBatchProgress.failed) / importBatchProgress.total) * 100 : 0}%`,
+                  background: "var(--ym-green-400)",
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Bulk actions bar */}
         {maids.length > 0 && (
