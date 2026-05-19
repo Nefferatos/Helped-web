@@ -575,7 +575,12 @@ const EditMaids = () => {
   useEffect(() => { if (page !== currentPage) setPage(currentPage); }, [currentPage, page]);
 
   const toggle = (ref: string) => {
-    setSelected((prev) => { const next = new Set(prev); next.has(ref) ? next.delete(ref) : next.add(ref); return next; });
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(ref)) next.delete(ref);
+      else next.add(ref);
+      return next;
+    });
   };
 
   const toggleAll = () => {

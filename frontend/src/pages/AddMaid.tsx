@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { defaultMaidProfile, type MaidProfile } from "@/lib/maids";
 import { useNavigate } from "react-router-dom";
+import { compressImage, getImageSizeInMB } from "@/lib/imageCompression";
 
 import { PdfAutofillBanner } from "./PdfAutofill";
 
@@ -316,7 +317,28 @@ const AddMaid = () => {
     (file: File) =>
       new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onload = async () => {
+          try {
+            const dataUrl = String(reader.result || "");
+            // Compress image for better performance and storage
+            const originalSize = getImageSizeInMB(dataUrl);
+            const compressed = await compressImage(dataUrl, {
+              maxWidth: 2000,
+              maxHeight: 2000,
+              quality: 0.85,
+              maxSizeMB: 1.5,
+            });
+            const compressedSize = getImageSizeInMB(compressed);
+            if (originalSize > 0.5) {
+              console.log(
+                `[Image Compression] Original: ${originalSize.toFixed(2)}MB → Compressed: ${compressedSize.toFixed(2)}MB`
+              );
+            }
+            resolve(compressed);
+          } catch (error) {
+            reject(error);
+          }
+        };
         reader.onerror = () => reject(new Error("Failed to read file"));
         reader.readAsDataURL(file);
       }),
@@ -473,20 +495,23 @@ const AddMaid = () => {
       toast.error("Maid Name and Ref Code are required");
       return;
     }
-    const shouldCreate = activeTab === 0 && !isCreated;
+    
+    // Only save when on the last tab (after collecting all data)
+    if (activeTab !== tabs.length - 1) {
+      // Just move to next tab without saving
+      setMaxUnlockedTab((prev) => Math.max(prev, Math.min(activeTab + 1, tabs.length - 1)));
+      setActiveTab((t) => t + 1);
+      return;
+    }
+
+    const shouldCreate = !isCreated;
     setIsSaving(true);
     setSaveError(null);
     try {
       const savedMaid = await saveMaid(payload, shouldCreate);
       setFormData(savedMaid);
-      if (activeTab >= tabs.length - 1) {
-        toast.success("Maid profile saved successfully");
-        navigate("/agencyadmin/edit-maids");
-        return;
-      }
-      if (shouldCreate) setIsCreated(true);
-      setMaxUnlockedTab((prev) => Math.max(prev, Math.min(activeTab + 1, tabs.length - 1)));
-      setActiveTab((t) => t + 1);
+      toast.success("Maid profile saved successfully");
+      navigate("/agencyadmin/edit-maids");
     } catch (error) {
       console.error("[AddMaid] Save failed:", error);
       setSaveError("Failed to save maid. Please try again.");
@@ -497,6 +522,7 @@ const AddMaid = () => {
   }, [buildPayload, activeTab, isCreated, isSaving, navigate, saveMaid]);
 
   const handleSubmit = useCallback(() => {
+    // Show confirmation only on the last tab (7 tabs, so index 6 is last)
     if (activeTab === tabs.length - 1) {
       setIsConfirmOpen(true);
     } else {
@@ -599,7 +625,7 @@ const AddMaid = () => {
 
         {/* Active Tab Content */}
         {(() => {
-          const primaryLabel = activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue";
+          const primaryLabel = activeTab >= tabs.length - 1 ? "Complete & Save" : "Continue to Next";
           const ActiveTab = TabComponents[activeTab];
           return (
             <ActiveTab
@@ -618,16 +644,14 @@ const AddMaid = () => {
         <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
-              <DialogTitle className="text-lg font-bold">Confirm Submission</DialogTitle>
+              <DialogTitle className="text-lg font-bold">Complete Maid Profile</DialogTitle>
               <DialogDescription className="text-slate-500">
-                {activeTab >= tabs.length - 1
-                  ? "You are about to complete and submit this profile. Continue?"
-                  : "Are you sure you want to save this information and continue?"}
+                You have completed all sections. Your maid profile with compressed images will be saved and optimized for faster uploads.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => setIsConfirmOpen(false)} disabled={isSaving} className="rounded-xl">
-                Cancel
+                Back
               </Button>
               <Button
                 type="button"
@@ -635,7 +659,7 @@ const AddMaid = () => {
                 disabled={isSaving}
                 className="rounded-xl bg-amber-400 text-slate-900 hover:bg-amber-500 font-semibold"
               >
-                {isSaving ? "Saving..." : "Confirm & Save"}
+                {isSaving ? "Saving..." : "Save & Submit"}
               </Button>
             </DialogFooter>
           </DialogContent>
