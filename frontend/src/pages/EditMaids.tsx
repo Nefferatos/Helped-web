@@ -36,6 +36,40 @@ type ImportBatchProgress = {
   cancelled?: boolean;
 };
 
+type PreparedImportOperation =
+  | {
+      type: "csv";
+      csv: string;
+      fileName: string;
+    }
+  | {
+      type: "profile";
+      payload: MaidProfile;
+      fileName: string;
+    };
+
+type ImportBatchResult = {
+  fileName: string;
+  created: number;
+  updated: number;
+  failed: number;
+  errors: string[];
+};
+
+class ManualImportRequiredError extends Error {
+  guessedName: string;
+  guessedNationality: string;
+  guessedReferenceCode: string;
+
+  constructor(fields: { guessedName: string; guessedNationality: string; guessedReferenceCode: string }) {
+    super("This PDF is missing embedded import data and needs manual confirmation.");
+    this.name = "ManualImportRequiredError";
+    this.guessedName = fields.guessedName;
+    this.guessedNationality = fields.guessedNationality;
+    this.guessedReferenceCode = fields.guessedReferenceCode;
+  }
+}
+
 let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
 
 type JSZipConstructor = { new(): { loadAsync: (data: ArrayBuffer) => Promise<{ file: (path: string) => { async: (type: "text") => Promise<string> } | null }> }; loadAsync: (data: ArrayBuffer) => Promise<{ file: (path: string) => { async: (type: "text") => Promise<string> } | null }> };
@@ -670,6 +704,7 @@ const EditMaids = () => {
   const [view, setView] = useState<ViewMode>("menu");
   const [search, setSearch] = useState("");
   const [maids, setMaids] = useState<MaidProfile[]>([]);
+  const [totalMaids, setTotalMaids] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -708,6 +743,7 @@ const EditMaids = () => {
   const menuSearchRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const cancelImportRef = useRef<boolean>(false);
+  const activeImportControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!menuSearch.trim()) {
@@ -793,12 +829,17 @@ const EditMaids = () => {
     const load = async () => {
       try {
         setIsLoading(true);
-        const params = new URLSearchParams({ visibility });
+        const params = new URLSearchParams({ visibility, page: String(page), pageSize: String(PAGE_SIZE) });
         if (search.trim()) params.set("search", search.trim());
         const response = await fetch(`/api/maids?${params.toString()}`, { signal: controller.signal });
-        const data = (await response.json()) as { error?: string; maids?: MaidProfile[] };
+        const data = (await response.json()) as {
+          error?: string;
+          maids?: MaidProfile[];
+          total?: number;
+        };
         if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
         setMaids(data.maids);
+        setTotalMaids(data.total ?? data.maids.length);
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           toast.error(error instanceof Error ? error.message : "Failed to load maids");
@@ -809,19 +850,16 @@ const EditMaids = () => {
     };
     void load();
     return () => controller.abort();
-  }, [search, visibility]);
+  }, [search, visibility, page]);
 
   useEffect(() => {
     setPage(1);
     setSelected(new Set());
   }, [search, view]);
 
-  const totalPages = Math.max(1, Math.ceil(maids.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalMaids / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const paginatedMaids = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return maids.slice(start, start + PAGE_SIZE);
-  }, [currentPage, maids]);
+  const paginatedMaids = maids;
 
   useEffect(() => {
     if (page !== currentPage) setPage(currentPage);
@@ -846,6 +884,7 @@ const EditMaids = () => {
 
   const removeLocal = (referenceCode: string) => {
     setMaids((prev) => prev.filter((m) => m.referenceCode !== referenceCode));
+    setTotalMaids((prev) => Math.max(0, prev - 1));
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(referenceCode);
@@ -987,12 +1026,20 @@ const EditMaids = () => {
 
   const reloadVisibleMaids = async (preferredVisibility?: "public" | "hidden") => {
     const reloadVisibility = preferredVisibility ?? visibility ?? "public";
-    const params = new URLSearchParams({ visibility: reloadVisibility });
+    const params = new URLSearchParams({
+      visibility: reloadVisibility,
+      page: String(page),
+      pageSize: String(PAGE_SIZE),
+    });
     if (search.trim()) params.set("search", search.trim());
     const reload = await fetch(`/api/maids?${params.toString()}`);
-    const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[] };
+    const reloadData = (await reload.json().catch(() => ({}))) as {
+      maids?: MaidProfile[];
+      total?: number;
+    };
     if (reload.ok && reloadData.maids) {
       setMaids(reloadData.maids);
+      setTotalMaids(reloadData.total ?? reloadData.maids.length);
       if (view === "menu" && reloadData.maids.length > 0) {
         setView(reloadVisibility === "hidden" ? "hidden" : "public");
       }
@@ -1070,10 +1117,9 @@ const EditMaids = () => {
     }
   };
 
-  const handleImportFile = async (
-    file: File,
-    options?: { skipReload?: boolean; suppressSuccessToast?: boolean }
-  ) => {
+  const prepareImportOperationFromFile = async (
+    file: File
+  ): Promise<PreparedImportOperation> => {
     const name = file.name.toLowerCase();
     const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
     if (ext === "pdf") {
@@ -1085,18 +1131,20 @@ const EditMaids = () => {
       const subjectStr = subjectStrMatch ? subjectStrMatch[1] : "";
       const subject = subjectHex || subjectStr;
       if (subject.startsWith("MAIDS_CSV_BASE64:")) {
-        await importCsvText(
-          decodeBase64Utf8(subject.slice("MAIDS_CSV_BASE64:".length)),
-          options
-        );
-        return;
+        return {
+          type: "csv",
+          csv: normalizeCsv(decodeBase64Utf8(subject.slice("MAIDS_CSV_BASE64:".length))),
+          fileName: file.name,
+        };
       }
       if (subject.startsWith("MAID_PROFILE_JSON_BASE64:")) {
-        await importSingleMaidProfile(
-          JSON.parse(decodeBase64Utf8(subject.slice("MAID_PROFILE_JSON_BASE64:".length))) as MaidProfile,
-          options
-        );
-        return;
+        return {
+          type: "profile",
+          payload: JSON.parse(
+            decodeBase64Utf8(subject.slice("MAID_PROFILE_JSON_BASE64:".length))
+          ) as MaidProfile,
+          fileName: file.name,
+        };
       }
       const max = Math.min(bytes.length, 2 * 1024 * 1024);
       let printable = "";
@@ -1124,9 +1172,11 @@ const EditMaids = () => {
       const guessedRef = extract([
         /(?:reference\s*code|ref\.?\s*code|ref\.?\s*no\.?)\s*[:-]?\s*([A-Za-z0-9_-]{2,30})/i,
       ]);
-      setManualImportFields({ name: guessedName, nationality: guessedNationality, referenceCode: guessedRef });
-      setManualImportOpen(true);
-      return;
+      throw new ManualImportRequiredError({
+        guessedName,
+        guessedNationality,
+        guessedReferenceCode: guessedRef,
+      });
     }
     if (ext === "docx") {
       const JSZip = await loadJsZip();
@@ -1145,11 +1195,13 @@ const EditMaids = () => {
         if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
         return v;
       };
-      await importCsvText(
-        `referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`,
-        options
-      );
-      return;
+      return {
+        type: "csv",
+        csv: normalizeCsv(
+          `referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`
+        ),
+        fileName: file.name,
+      };
     }
     if (ext === "xlsx") {
       const XLSX = await loadXlsx();
@@ -1162,8 +1214,11 @@ const EditMaids = () => {
             : [];
           return acc;
         }, {});
-        await importSingleMaidProfile(buildImportedMaidProfile(rowsBySheet), options);
-        return;
+        return {
+          type: "profile",
+          payload: buildImportedMaidProfile(rowsBySheet),
+          fileName: file.name,
+        };
       }
       const sheetName = workbook.SheetNames[0];
       const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
@@ -1175,20 +1230,60 @@ const EditMaids = () => {
       if (!headerIndexes.has("referencecode") || !headerIndexes.has("fullname")) {
         throw new Error("XLSX is missing required columns: referenceCode, fullName");
       }
-      const csvText = XLSX.utils.sheet_to_csv(sheet);
-      await importCsvText(csvText, options);
-      return;
+      return {
+        type: "csv",
+        csv: normalizeCsv(XLSX.utils.sheet_to_csv(sheet)),
+        fileName: file.name,
+      };
     }
-    if (ext === "csv") { await importCsvText(await file.text(), options); return; }
+    if (ext === "csv") {
+      return {
+        type: "csv",
+        csv: normalizeCsv(await file.text()),
+        fileName: file.name,
+      };
+    }
     if (ext === "xls" || ext === "doc") {
       const content = await file.text();
       const maidsCsvBase64 = extractBase64Marker(content, "MAIDS_CSV_BASE64");
-      if (maidsCsvBase64) { await importCsvText(decodeBase64Utf8(maidsCsvBase64), options); return; }
+      if (maidsCsvBase64) {
+        return {
+          type: "csv",
+          csv: normalizeCsv(decodeBase64Utf8(maidsCsvBase64)),
+          fileName: file.name,
+        };
+      }
       const maidProfileBase64 = extractBase64Marker(content, "MAID_PROFILE_JSON_BASE64");
-      if (maidProfileBase64) { await importSingleMaidProfile(JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile, options); return; }
+      if (maidProfileBase64) {
+        return {
+          type: "profile",
+          payload: JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile,
+          fileName: file.name,
+        };
+      }
       throw new Error('This file is missing import data. Please import files exported from "Export Maids" or from a maid bio-data export.');
     }
     throw new Error("Unsupported file type. Supported: .csv, .xls, .xlsx, .doc, .docx, .pdf");
+  };
+
+  const uploadPreparedImportBatch = async (
+    operations: PreparedImportOperation[],
+    signal: AbortSignal
+  ) => {
+    const response = await fetch("/api/maids/import.batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operations }),
+      signal,
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      results?: ImportBatchResult[];
+    };
+    if (!response.ok && response.status !== 207) {
+      throw new Error(data.error || "Failed to import batch");
+    }
+    return data.results ?? [];
   };
 
   const requestExport = () => { if (!isExporting) setConfirmExportOpen(true); };
@@ -1219,6 +1314,7 @@ const EditMaids = () => {
     setPendingImportFiles([]);
     if (files.length === 0) return;
     cancelImportRef.current = false;
+    activeImportControllerRef.current = null;
     setImportBatchProgress({
       active: true,
       total: files.length,
@@ -1237,42 +1333,100 @@ const EditMaids = () => {
       const batchNum = Math.floor(batchStart / PARALLEL_BATCH_SIZE) + 1;
       setImportBatchProgress((prev) => ({
         ...prev,
-        currentIndex: batchStart + batch.length,
+        currentIndex: batchStart,
         currentFileName: batch.map((f) => f.name).join(", "),
-        stage: `Uploading batch ${batchNum} of ${Math.ceil(files.length / PARALLEL_BATCH_SIZE)}`,
+        stage: `Preparing batch ${batchNum} of ${Math.ceil(files.length / PARALLEL_BATCH_SIZE)}`,
       }));
       await waitForPaint();
-      const results = await Promise.allSettled(
-        batch.map((file) =>
-          handleImportFile(file, { skipReload: true, suppressSuccessToast: true })
-        )
+      const preparedResults = await Promise.allSettled(
+        batch.map((file) => prepareImportOperationFromFile(file))
       );
-      results.forEach((result, i) => {
+      const operations: PreparedImportOperation[] = [];
+      preparedResults.forEach((result, i) => {
+        const file = batch[i];
         if (result.status === "fulfilled") {
-          completed += 1;
+          operations.push(result.value);
+          return;
+        }
+
+        if (result.reason instanceof ManualImportRequiredError) {
+          if (files.length === 1) {
+            setManualImportFields({
+              name: result.reason.guessedName,
+              nationality: result.reason.guessedNationality,
+              referenceCode: result.reason.guessedReferenceCode,
+            });
+            setManualImportOpen(true);
+            cancelImportRef.current = true;
+            return;
+          }
+          toast.error(`${file?.name}: PDF needs manual import, so it was skipped`);
         } else {
-          failed += 1;
-          const file = batch[i];
           toast.error(
             result.reason instanceof Error
               ? `${file?.name}: ${result.reason.message}`
-              : `${file?.name}: Failed to import`
+              : `${file?.name}: Failed to prepare import`
           );
         }
+        failed += 1;
       });
+      if (cancelImportRef.current) break;
+      if (operations.length === 0) {
+        setImportBatchProgress((prev) => ({
+          ...prev,
+          completed,
+          failed,
+          currentIndex: Math.min(prev.total, batchStart + batch.length),
+          stage: failed > 0 ? "Continuing with remaining files" : "Ready for next batch",
+        }));
+        continue;
+      }
+      setImportBatchProgress((prev) => ({
+        ...prev,
+        currentIndex: batchStart + operations.length,
+        currentFileName: operations.map((operation) => operation.fileName).join(", "),
+        stage: `Uploading batch ${batchNum} of ${Math.ceil(files.length / PARALLEL_BATCH_SIZE)}`,
+      }));
+      await waitForPaint();
+      try {
+        const controller = new AbortController();
+        activeImportControllerRef.current = controller;
+        const batchResults = await uploadPreparedImportBatch(operations, controller.signal);
+        batchResults.forEach((result) => {
+          if (result.failed > 0) {
+            failed += 1;
+            if (result.errors.length > 0) {
+              toast.error(`${result.fileName}: ${result.errors.slice(0, 2).join(" | ")}`);
+            }
+          } else {
+            completed += 1;
+          }
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError" && cancelImportRef.current) {
+          break;
+        }
+        failed += operations.length;
+        toast.error(error instanceof Error ? error.message : "Failed to upload batch");
+      } finally {
+        activeImportControllerRef.current = null;
+      }
       setImportBatchProgress((prev) => ({
         ...prev,
         completed,
         failed,
+        currentIndex: Math.min(prev.total, batchStart + batch.length),
         stage: failed > 0 ? "Continuing with remaining files" : "Saving imported data",
       }));
     }
     const wasCancelled = cancelImportRef.current;
-    await reloadVisibleMaids("public");
+    if (completed > 0) {
+      await reloadVisibleMaids("public");
+    }
     setImportBatchProgress((prev) => ({
       ...prev,
       active: false,
-      currentIndex: prev.total,
+      currentIndex: wasCancelled ? Math.min(prev.currentIndex, prev.total) : prev.total,
       completed,
       failed,
       cancelled: wasCancelled,
@@ -1873,7 +2027,10 @@ const EditMaids = () => {
                 {importBatchProgress.active && (
                   <button
                     type="button"
-                    onClick={() => { cancelImportRef.current = true; }}
+                    onClick={() => {
+                      cancelImportRef.current = true;
+                      activeImportControllerRef.current?.abort();
+                    }}
                     className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors"
                     style={{
                       background: "#fff",
@@ -2118,7 +2275,7 @@ const EditMaids = () => {
         )}
 
         {/* Pagination */}
-        {maids.length > PAGE_SIZE && (
+        {totalMaids > PAGE_SIZE && (
           <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
             <button
               className="h-9 rounded-lg border px-3 text-sm font-medium text-foreground/70 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted transition-colors"

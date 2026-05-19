@@ -1864,6 +1864,48 @@ export const getPublicMaidByReferenceCodeStore = async (referenceCode: string) =
   )
 }
 
+export type MaidStorePayload = Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>
+
+export const bulkUpsertMaidRecordsStore = async (
+  records: MaidStorePayload[],
+  agencyId: number = DEFAULT_AGENCY_ID
+) => {
+  const data = await loadData()
+  let created = 0
+  let updated = 0
+
+  for (const record of records) {
+    const index = data.maids.findIndex(
+      (maid) => maid.referenceCode === record.referenceCode && maid.agencyId === agencyId
+    )
+    const persisted = await persistMaidMediaFields(record, agencyId)
+
+    if (index === -1) {
+      const newRecord: MaidRecord = {
+        ...persisted,
+        agencyId,
+        status: persisted.status ?? 'available',
+        id: data.counters.maids++,
+        createdAt: now(),
+        updatedAt: now(),
+      }
+      data.maids.unshift(newRecord)
+      created += 1
+    } else {
+      data.maids[index] = {
+        ...data.maids[index],
+        ...persisted,
+        agencyId,
+        updatedAt: now(),
+      }
+      updated += 1
+    }
+  }
+
+  await saveData(data)
+  return { created, updated }
+}
+
 export const createMaidStore = async (
   maid: Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>,
   agencyId: number = DEFAULT_AGENCY_ID

@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { getAuthenticatedAgencyAdmin, getRequestAgencyId } from '../auth'
 import {
   addMaidPhotoStore,
+  bulkUpsertMaidRecordsStore,
   createMaidStore,
   deleteMaidStore,
   getAgencyNameByIdStore,
@@ -44,6 +45,26 @@ interface MaidProfile {
   videoDataUrl?: string
   isPublic?: boolean
   hasPhoto?: boolean
+}
+
+type MaidImportOperation =
+  | {
+      type: 'csv'
+      csv?: string
+      fileName?: string
+    }
+  | {
+      type: 'profile'
+      payload?: Partial<MaidProfile>
+      fileName?: string
+    }
+
+type MaidImportOperationResult = {
+  fileName: string
+  created: number
+  updated: number
+  failed: number
+  errors: string[]
 }
 
 const defaultMaidProfile = {
@@ -112,11 +133,19 @@ const buildMaidListCacheKey = (params: {
   search?: string
   visibility?: string
   agencyId: number | 'all-public'
+  page?: number | null
+  pageSize?: number | null
+  offset?: number | null
+  limit?: number | null
 }) =>
   JSON.stringify({
     search: params.search?.trim().toLowerCase() ?? '',
     visibility: params.visibility ?? '',
     agencyId: params.agencyId,
+    page: params.page ?? null,
+    pageSize: params.pageSize ?? null,
+    offset: params.offset ?? null,
+    limit: params.limit ?? null,
   })
 
 const getCachedMaidList = (key: string) => {
@@ -287,10 +316,134 @@ const parsePositiveInteger = (value: unknown) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
 }
 
+const buildMaidProfilesFromCsv = (
+  csv: string,
+  existingByReferenceCode: Map<string, MaidRecord>
+) => {
+  const lines = csv
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  if (lines.length < 2) {
+    return {
+      profiles: [] as Array<Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>>,
+      created: 0,
+      updated: 0,
+      errors: ['CSV must include header and at least one row'],
+    }
+  }
+
+  const headers = parseCsvRow(lines[0])
+  const headerSet = new Set(headers)
+  if (!headerSet.has('referenceCode') || !headerSet.has('fullName')) {
+    return {
+      profiles: [] as Array<Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>>,
+      created: 0,
+      updated: 0,
+      errors: ['CSV must include referenceCode and fullName columns'],
+    }
+  }
+
+  const profiles: Array<Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>> = []
+  const errors: string[] = []
+  let created = 0
+  let updated = 0
+
+  for (let i = 1; i < lines.length; i += 1) {
+    const rowValues = parseCsvRow(lines[i])
+    const rowMap = Object.fromEntries(headers.map((h, index) => [h, rowValues[index] ?? '']))
+    const referenceCode = (rowMap.referenceCode || '').trim()
+    const fullName = (rowMap.fullName || '').trim()
+
+    if (!referenceCode || !fullName) {
+      errors.push(`Row ${i + 1}: referenceCode and fullName are required`)
+      continue
+    }
+
+    const existing = existingByReferenceCode.get(referenceCode)
+    const base: MaidRecord | (typeof defaultMaidProfile & { fullName: string; referenceCode: string }) =
+      existing ??
+      ({
+        ...defaultMaidProfile,
+        fullName,
+        referenceCode,
+      } as const)
+
+    const profile: MaidProfile = {
+      ...base,
+      fullName: fullName || base.fullName,
+      referenceCode,
+      type: rowMap.type || base.type,
+      nationality: rowMap.nationality || base.nationality,
+      dateOfBirth: rowMap.dateOfBirth || base.dateOfBirth,
+      placeOfBirth: rowMap.placeOfBirth || base.placeOfBirth,
+      height: parseNumber(rowMap.height, base.height),
+      weight: parseNumber(rowMap.weight, base.weight),
+      religion: rowMap.religion || base.religion,
+      maritalStatus: rowMap.maritalStatus || base.maritalStatus,
+      numberOfChildren: parseNumber(
+        rowMap.numberOfChildren,
+        base.numberOfChildren
+      ),
+      numberOfSiblings: parseNumber(
+        rowMap.numberOfSiblings,
+        base.numberOfSiblings
+      ),
+      homeAddress: rowMap.homeAddress || base.homeAddress,
+      airportRepatriation: rowMap.airportRepatriation || base.airportRepatriation,
+      educationLevel: rowMap.educationLevel || base.educationLevel,
+      languageSkills: base.languageSkills,
+      skillsPreferences: base.skillsPreferences,
+      workAreas: base.workAreas,
+      employmentHistory: base.employmentHistory,
+      introduction: base.introduction,
+      agencyContact: base.agencyContact,
+      photoDataUrl: existing?.photoDataUrl ?? '',
+      photoDataUrls: existing?.photoDataUrls ?? [],
+      videoDataUrl: existing?.videoDataUrl ?? '',
+      isPublic: parseBoolean(rowMap.isPublic, base.isPublic),
+      hasPhoto: parseBoolean(rowMap.hasPhoto, base.hasPhoto),
+    }
+
+    try {
+      const record = toMaidRecord(profile)
+      profiles.push(record)
+      if (existing) {
+        updated += 1
+      } else {
+        created += 1
+      }
+      existingByReferenceCode.set(referenceCode, {
+        ...(existing ?? {
+          id: 0,
+          agencyId: 0,
+          createdAt: '',
+          updatedAt: '',
+        }),
+        ...record,
+      })
+    } catch (error) {
+      errors.push(
+        `Row ${i + 1}: ${
+          error instanceof Error ? error.message : 'Failed to parse maid record'
+        }`
+      )
+    }
+  }
+
+  return { profiles, created, updated, errors }
+}
+
 export const getMaidList = async (req: Request, res: Response) => {
   try {
     const { search, visibility } = req.query
     const requestedAgencyId = parsePositiveInteger(req.query.agencyId)
+    const page = parsePositiveInteger(req.query.page)
+    const pageSize = parsePositiveInteger(req.query.pageSize)
+    const offset = parsePositiveInteger(req.query.offset) ?? 0
+    const limit = pageSize ?? parsePositiveInteger(req.query.limit)
     const admin = await getAuthenticatedAgencyAdmin(req)
     const shouldUseAllPublic =
       !admin &&
@@ -303,10 +456,20 @@ export const getMaidList = async (req: Request, res: Response) => {
       search: typeof search === 'string' ? search : undefined,
       visibility: typeof visibility === 'string' ? visibility : undefined,
       agencyId: shouldUseAllPublic ? 'all-public' : resolvedAgencyId,
+      page,
+      pageSize,
+      offset,
+      limit,
     })
-    const cachedPayload = getCachedMaidList(cacheKey)
+    const useCache = page == null && pageSize == null && limit == null && offset === 0
+    const cachedPayload = useCache ? getCachedMaidList(cacheKey) : null
     if (cachedPayload) {
-      return res.status(200).json({ maids: cachedPayload })
+      return res.status(200).json({
+        maids: cachedPayload,
+        total: cachedPayload.length,
+        page: 1,
+        pageSize: cachedPayload.length,
+      })
     }
 
     const maids = shouldUseAllPublic
@@ -320,9 +483,20 @@ export const getMaidList = async (req: Request, res: Response) => {
           resolvedAgencyId
         )
 
-    const payload = await withAgencyNames(maids)
-    setCachedMaidList(cacheKey, payload)
-    res.status(200).json({ maids: payload })
+    const total = maids.length
+    const effectiveOffset = page != null && pageSize != null ? (page - 1) * pageSize : offset
+    const pagedMaids = limit != null ? maids.slice(effectiveOffset, effectiveOffset + limit) : maids
+    const payload = await withAgencyNames(pagedMaids)
+    const responsePayload = {
+      maids: payload,
+      total,
+      page: page ?? 1,
+      pageSize: limit ?? total,
+    }
+    if (useCache) {
+      setCachedMaidList(cacheKey, responsePayload.maids)
+    }
+    res.status(200).json(responsePayload)
   } catch (error) {
     console.error('Error fetching maids:', error)
     res.status(500).json({ error: 'Failed to fetch maids' })
@@ -505,9 +679,9 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'CSV must include referenceCode and fullName columns' })
     }
 
-    let created = 0
-    let updated = 0
     const errors: string[] = []
+
+    const batchProfiles: Array<Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>> = []
 
     for (let i = 1; i < lines.length; i += 1) {
       const rowValues = parseCsvRow(lines[i])
@@ -565,34 +739,171 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
       }
 
       try {
-        if (existing) {
-          await updateMaidStore(referenceCode, toMaidRecord(profile), agencyId)
-          updated += 1
-        } else {
-          await createMaidStore(toMaidRecord(profile), agencyId)
-          created += 1
-        }
+        batchProfiles.push(toMaidRecord(profile))
       } catch (error) {
         errors.push(
           `Row ${i + 1}: ${
-            error instanceof Error ? error.message : 'Failed to save maid record'
+            error instanceof Error ? error.message : 'Failed to parse maid record'
           }`
         )
       }
+    }
+
+    let batchResult = { created: 0, updated: 0 }
+    if (batchProfiles.length > 0) {
+      batchResult = await bulkUpsertMaidRecordsStore(batchProfiles, agencyId)
     }
 
     const statusCode = errors.length > 0 ? 207 : 200
     clearMaidListCache()
     res.status(statusCode).json({
       message: 'CSV import completed',
-      created,
-      updated,
+      created: batchResult.created,
+      updated: batchResult.updated,
       failed: errors.length,
       errors,
     })
   } catch (error) {
     console.error('Error importing maids CSV:', error)
     res.status(500).json({ error: 'Failed to import maids CSV' })
+  }
+}
+
+export const importMaidsBatch = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const { operations } = req.body as { operations?: MaidImportOperation[] }
+
+    if (!Array.isArray(operations) || operations.length === 0) {
+      return res.status(400).json({ error: 'At least one import operation is required' })
+    }
+
+    const existingMaids = await getAllMaidsStore()
+    const existingByReferenceCode = new Map(
+      existingMaids
+        .filter((maid) => maid.agencyId === agencyId)
+        .map((maid) => [maid.referenceCode, maid] as const)
+    )
+
+    const records: Array<Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>> = []
+    const results: MaidImportOperationResult[] = []
+    let created = 0
+    let updated = 0
+    let failed = 0
+
+    for (let index = 0; index < operations.length; index += 1) {
+      const operation = operations[index]
+      const fileName =
+        typeof operation.fileName === 'string' && operation.fileName.trim()
+          ? operation.fileName.trim()
+          : `Import ${index + 1}`
+
+      if (operation.type === 'csv') {
+        if (!operation.csv?.trim()) {
+          failed += 1
+          results.push({
+            fileName,
+            created: 0,
+            updated: 0,
+            failed: 1,
+            errors: ['CSV content is required'],
+          })
+          continue
+        }
+
+        const parsed = buildMaidProfilesFromCsv(operation.csv, existingByReferenceCode)
+        records.push(...parsed.profiles)
+        created += parsed.created
+        updated += parsed.updated
+        if (parsed.errors.length > 0) failed += 1
+        results.push({
+          fileName,
+          created: parsed.created,
+          updated: parsed.updated,
+          failed: parsed.errors.length > 0 ? 1 : 0,
+          errors: parsed.errors,
+        })
+        continue
+      }
+
+      if (operation.type === 'profile') {
+        if (!operation.payload) {
+          failed += 1
+          results.push({
+            fileName,
+            created: 0,
+            updated: 0,
+            failed: 1,
+            errors: ['Maid profile payload is required'],
+          })
+          continue
+        }
+
+        const validationError = validateMaidPayload(operation.payload)
+        if (validationError) {
+          failed += 1
+          results.push({
+            fileName,
+            created: 0,
+            updated: 0,
+            failed: 1,
+            errors: [validationError],
+          })
+          continue
+        }
+
+        const record = toMaidRecord(operation.payload as MaidProfile)
+        const existed = existingByReferenceCode.has(record.referenceCode)
+        records.push(record)
+        existingByReferenceCode.set(record.referenceCode, {
+          ...(existingByReferenceCode.get(record.referenceCode) ?? {
+            id: 0,
+            agencyId: agencyId,
+            createdAt: '',
+            updatedAt: '',
+          }),
+          ...record,
+        })
+        if (existed) {
+          updated += 1
+        } else {
+          created += 1
+        }
+        results.push({
+          fileName,
+          created: existed ? 0 : 1,
+          updated: existed ? 1 : 0,
+          failed: 0,
+          errors: [],
+        })
+        continue
+      }
+
+      failed += 1
+      results.push({
+        fileName,
+        created: 0,
+        updated: 0,
+        failed: 1,
+        errors: ['Unsupported import operation type'],
+      })
+    }
+
+    if (records.length > 0) {
+      await bulkUpsertMaidRecordsStore(records, agencyId)
+    }
+
+    clearMaidListCache()
+    res.status(failed > 0 ? 207 : 200).json({
+      message: 'Batch import completed',
+      created,
+      updated,
+      failed,
+      results,
+    })
+  } catch (error) {
+    console.error('Error importing maids batch:', error)
+    res.status(500).json({ error: 'Failed to import maids batch' })
   }
 }
 

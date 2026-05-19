@@ -2033,6 +2033,213 @@ const toMaidRecordPayload = (
   };
 };
 
+type MaidImportOperation =
+  | {
+      type: "csv";
+      csv?: string;
+      fileName?: string;
+    }
+  | {
+      type: "profile";
+      payload?: Record<string, unknown>;
+      fileName?: string;
+    };
+
+type MaidImportOperationResult = {
+  fileName: string;
+  created: number;
+  updated: number;
+  failed: number;
+  errors: string[];
+};
+
+const applyCsvImportToData = (data: AppData, csv: string) => {
+  const lines = csv
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    return {
+      created: 0,
+      updated: 0,
+      errors: ["CSV must include header and at least one row"],
+    };
+  }
+
+  const headers = parseCsvRow(lines[0]);
+  const headerSet = new Set(headers);
+  if (!headerSet.has("referenceCode") || !headerSet.has("fullName")) {
+    return {
+      created: 0,
+      updated: 0,
+      errors: ["CSV must include referenceCode and fullName columns"],
+    };
+  }
+
+  let created = 0;
+  let updated = 0;
+  const errors: string[] = [];
+
+  for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
+    const rowValues = parseCsvRow(lines[lineIndex]);
+    const rowMap = Object.fromEntries(
+      headers.map((header, index) => [header, rowValues[index] ?? ""]),
+    );
+    const referenceCode = String(rowMap.referenceCode ?? "").trim();
+    const fullName = String(rowMap.fullName ?? "").trim();
+
+    if (!referenceCode || !fullName) {
+      errors.push(
+        `Row ${lineIndex + 1}: referenceCode and fullName are required`,
+      );
+      continue;
+    }
+
+    const existingIndex = data.maids.findIndex(
+      (maid) => maid.referenceCode === referenceCode,
+    );
+    const existing = existingIndex === -1 ? null : data.maids[existingIndex];
+    const base = existing ?? {
+      ...defaultMaidProfile,
+      fullName,
+      referenceCode,
+    };
+    const languageSkills = parseJsonObject<Record<string, string>>(
+      rowMap.languageSkills,
+      base.languageSkills,
+    );
+    const skillsPreferences = parseJsonObject<Record<string, unknown>>(
+      rowMap.skillsPreferences,
+      base.skillsPreferences,
+    );
+    const workAreas = parseJsonObject<Record<string, unknown>>(
+      rowMap.workAreas,
+      base.workAreas,
+    );
+    const employmentHistory = parseJsonArray<Record<string, unknown>>(
+      rowMap.employmentHistory,
+      base.employmentHistory,
+    );
+    const introduction = parseJsonObject<Record<string, unknown>>(
+      rowMap.introduction,
+      base.introduction,
+    );
+    const agencyContact = parseJsonObject<Record<string, unknown>>(
+      rowMap.agencyContact,
+      base.agencyContact,
+    );
+    const photoDataUrls = parseJsonArray<string>(
+      rowMap.photoDataUrls,
+      existing?.photoDataUrls ?? base.photoDataUrls,
+    ).filter(
+      (item): item is string =>
+        typeof item === "string" && item.trim().length > 0,
+    );
+    const photoDataUrl =
+      rowMap.photoDataUrl?.trim() ||
+      photoDataUrls[0] ||
+      existing?.photoDataUrl ||
+      base.photoDataUrl;
+    const payload = {
+      ...base,
+      fullName,
+      referenceCode,
+      status: rowMap.status || existing?.status || base.status,
+      type: rowMap.type || base.type,
+      nationality: rowMap.nationality || base.nationality,
+      dateOfBirth: rowMap.dateOfBirth || base.dateOfBirth,
+      placeOfBirth: rowMap.placeOfBirth || base.placeOfBirth,
+      height: parseNumber(rowMap.height, base.height),
+      weight: parseNumber(rowMap.weight, base.weight),
+      religion: rowMap.religion || base.religion,
+      maritalStatus: rowMap.maritalStatus || base.maritalStatus,
+      numberOfChildren: parseNumber(
+        rowMap.numberOfChildren,
+        base.numberOfChildren,
+      ),
+      numberOfSiblings: parseNumber(
+        rowMap.numberOfSiblings,
+        base.numberOfSiblings,
+      ),
+      homeAddress: rowMap.homeAddress || base.homeAddress,
+      airportRepatriation: rowMap.airportRepatriation || base.airportRepatriation,
+      educationLevel: rowMap.educationLevel || base.educationLevel,
+      languageSkills,
+      skillsPreferences,
+      workAreas,
+      employmentHistory,
+      introduction,
+      agencyContact,
+      photoDataUrl,
+      photoDataUrls,
+      videoDataUrl:
+        rowMap.videoDataUrl || existing?.videoDataUrl || base.videoDataUrl,
+      isPublic: parseBoolean(String(rowMap.isPublic ?? ""), base.isPublic),
+      hasPhoto: parseBoolean(
+        String(rowMap.hasPhoto ?? ""),
+        photoDataUrls.length > 0 || Boolean(photoDataUrl) || base.hasPhoto,
+      ),
+    };
+
+    const recordPayload = toMaidRecordPayload(payload);
+    if (existing) {
+      data.maids[existingIndex] = {
+        ...data.maids[existingIndex],
+        ...recordPayload,
+        updatedAt: now(),
+      };
+      updated += 1;
+    } else {
+      data.maids.unshift({
+        ...recordPayload,
+        id: data.counters.maids++,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      created += 1;
+    }
+  }
+
+  return { created, updated, errors };
+};
+
+const upsertImportedMaidProfileInData = (
+  data: AppData,
+  payload: Record<string, unknown>,
+) => {
+  const validationError = validateMaidPayload(payload);
+  if (validationError) {
+    return { created: 0, updated: 0, errors: [validationError] };
+  }
+
+  const recordPayload = toMaidRecordPayload(payload);
+  const referenceCode = normalizeReferenceCode(recordPayload.referenceCode);
+  const index = data.maids.findIndex(
+    (maid) => maid.referenceCode === referenceCode,
+  );
+
+  if (index === -1) {
+    data.maids.unshift({
+      ...recordPayload,
+      referenceCode,
+      id: data.counters.maids++,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    return { created: 1, updated: 0, errors: [] };
+  }
+
+  data.maids[index] = {
+    ...data.maids[index],
+    ...recordPayload,
+    referenceCode,
+    updatedAt: now(),
+  };
+  return { created: 0, updated: 1, errors: [] };
+};
+
 const ensureMaidPresent = async (
   env: Bindings,
   referenceCode: string,
@@ -2347,31 +2554,50 @@ app.delete(
 app.get(
   "/api/maids",
   safeApi(async (c) => {
-    const search = c.req.query("search")?.trim().toLowerCase();
-    const visibility = c.req.query("visibility");
-    const data = await loadData(c.env);
+    const parsePositiveInt = (value?: string) => {
+      if (!value) return undefined
+      const parsed = Number(value)
+      return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+    }
 
-    let maids = [...data.maids];
+    const search = c.req.query("search")?.trim().toLowerCase()
+    const visibility = c.req.query("visibility")
+    const page = parsePositiveInt(c.req.query("page"))
+    const pageSize = parsePositiveInt(c.req.query("pageSize"))
+    const offset = parsePositiveInt(c.req.query("offset")) ?? 0
+    const limit = pageSize ?? parsePositiveInt(c.req.query("limit"))
+    const data = await loadData(c.env)
+
+    let maids = [...data.maids]
     if (search) {
       maids = maids.filter(
         (maid) =>
           maid.fullName.toLowerCase().includes(search) ||
           maid.referenceCode.toLowerCase().includes(search),
-      );
+      )
     }
 
     if (visibility === "public" || visibility === "hidden") {
-      const isPublic = visibility === "public";
-      maids = maids.filter((maid) => maid.isPublic === isPublic);
+      const isPublic = visibility === "public"
+      maids = maids.filter((maid) => maid.isPublic === isPublic)
     }
 
     maids.sort(
       (left, right) =>
         new Date(right.updatedAt).getTime() -
         new Date(left.updatedAt).getTime(),
-    );
+    )
 
-    return c.json({ maids });
+    const total = maids.length
+    const effectiveOffset = page != null && pageSize != null ? (page - 1) * pageSize : offset
+    const pagedMaids = limit != null ? maids.slice(effectiveOffset, effectiveOffset + limit) : maids
+
+    return c.json({
+      maids: pagedMaids,
+      total,
+      page: page ?? 1,
+      pageSize: limit ?? total,
+    })
   }),
 );
 
@@ -2470,153 +2696,8 @@ app.post(
       return c.json({ error: "CSV content is required" }, 400);
     }
 
-    const lines = body.csv
-      .replace(/\r/g, "")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    if (lines.length < 2) {
-      return c.json(
-        { error: "CSV must include header and at least one row" },
-        400,
-      );
-    }
-
-    const headers = parseCsvRow(lines[0]);
-    const headerSet = new Set(headers);
-    if (!headerSet.has("referenceCode") || !headerSet.has("fullName")) {
-      return c.json(
-        { error: "CSV must include referenceCode and fullName columns" },
-        400,
-      );
-    }
-
     const data = await loadData(c.env);
-    let created = 0;
-    let updated = 0;
-    const errors: string[] = [];
-
-    for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
-      const rowValues = parseCsvRow(lines[lineIndex]);
-      const rowMap = Object.fromEntries(
-        headers.map((header, index) => [header, rowValues[index] ?? ""]),
-      );
-      const referenceCode = String(rowMap.referenceCode ?? "").trim();
-      const fullName = String(rowMap.fullName ?? "").trim();
-
-      if (!referenceCode || !fullName) {
-        errors.push(
-          `Row ${lineIndex + 1}: referenceCode and fullName are required`,
-        );
-        continue;
-      }
-
-      const existingIndex = data.maids.findIndex(
-        (maid) => maid.referenceCode === referenceCode,
-      );
-      const existing = existingIndex === -1 ? null : data.maids[existingIndex];
-      const base = existing ?? {
-        ...defaultMaidProfile,
-        fullName,
-        referenceCode,
-      };
-      const languageSkills = parseJsonObject<Record<string, string>>(
-        rowMap.languageSkills,
-        base.languageSkills,
-      );
-      const skillsPreferences = parseJsonObject<Record<string, unknown>>(
-        rowMap.skillsPreferences,
-        base.skillsPreferences,
-      );
-      const workAreas = parseJsonObject<Record<string, unknown>>(
-        rowMap.workAreas,
-        base.workAreas,
-      );
-      const employmentHistory = parseJsonArray<Record<string, unknown>>(
-        rowMap.employmentHistory,
-        base.employmentHistory,
-      );
-      const introduction = parseJsonObject<Record<string, unknown>>(
-        rowMap.introduction,
-        base.introduction,
-      );
-      const agencyContact = parseJsonObject<Record<string, unknown>>(
-        rowMap.agencyContact,
-        base.agencyContact,
-      );
-      const photoDataUrls = parseJsonArray<string>(
-        rowMap.photoDataUrls,
-        existing?.photoDataUrls ?? base.photoDataUrls,
-      ).filter(
-        (item): item is string =>
-          typeof item === "string" && item.trim().length > 0,
-      );
-      const photoDataUrl =
-        rowMap.photoDataUrl?.trim() ||
-        photoDataUrls[0] ||
-        existing?.photoDataUrl ||
-        base.photoDataUrl;
-      const payload = {
-        ...base,
-        fullName,
-        referenceCode,
-        status: rowMap.status || existing?.status || base.status,
-        type: rowMap.type || base.type,
-        nationality: rowMap.nationality || base.nationality,
-        dateOfBirth: rowMap.dateOfBirth || base.dateOfBirth,
-        placeOfBirth: rowMap.placeOfBirth || base.placeOfBirth,
-        height: parseNumber(rowMap.height, base.height),
-        weight: parseNumber(rowMap.weight, base.weight),
-        religion: rowMap.religion || base.religion,
-        maritalStatus: rowMap.maritalStatus || base.maritalStatus,
-        numberOfChildren: parseNumber(
-          rowMap.numberOfChildren,
-          base.numberOfChildren,
-        ),
-        numberOfSiblings: parseNumber(
-          rowMap.numberOfSiblings,
-          base.numberOfSiblings,
-        ),
-        homeAddress: rowMap.homeAddress || base.homeAddress,
-        airportRepatriation:
-          rowMap.airportRepatriation || base.airportRepatriation,
-        educationLevel: rowMap.educationLevel || base.educationLevel,
-        languageSkills,
-        skillsPreferences,
-        workAreas,
-        employmentHistory,
-        introduction,
-        agencyContact,
-        photoDataUrl,
-        photoDataUrls,
-        videoDataUrl:
-          rowMap.videoDataUrl || existing?.videoDataUrl || base.videoDataUrl,
-        isPublic: parseBoolean(String(rowMap.isPublic ?? ""), base.isPublic),
-        hasPhoto: parseBoolean(
-          String(rowMap.hasPhoto ?? ""),
-          photoDataUrls.length > 0 || Boolean(photoDataUrl) || base.hasPhoto,
-        ),
-      };
-
-      const recordPayload = toMaidRecordPayload(payload);
-      if (existing) {
-        data.maids[existingIndex] = {
-          ...data.maids[existingIndex],
-          ...recordPayload,
-          updatedAt: now(),
-        };
-        updated += 1;
-      } else {
-        data.maids.unshift({
-          ...recordPayload,
-          id: data.counters.maids++,
-          createdAt: now(),
-          updatedAt: now(),
-        });
-        created += 1;
-      }
-    }
+    const { created, updated, errors } = applyCsvImportToData(data, body.csv);
 
     await saveData(c.env, data);
     return c.json(
@@ -2628,6 +2709,112 @@ app.post(
         errors,
       },
       errors.length > 0 ? 207 : 200,
+    );
+  }),
+);
+
+app.post(
+  "/api/maids/import.batch",
+  safeApi(async (c) => {
+    const body = await parseBody<{ operations?: MaidImportOperation[] }>(c.req.raw);
+    const operations = Array.isArray(body?.operations) ? body.operations : [];
+
+    if (operations.length === 0) {
+      return c.json({ error: "At least one import operation is required" }, 400);
+    }
+
+    const data = await loadData(c.env);
+    const results: MaidImportOperationResult[] = [];
+    let created = 0;
+    let updated = 0;
+    let failed = 0;
+    let changed = false;
+
+    for (const [index, operation] of operations.entries()) {
+      const fileName =
+        typeof operation.fileName === "string" && operation.fileName.trim()
+          ? operation.fileName.trim()
+          : `Import ${index + 1}`;
+
+      if (operation.type === "csv") {
+        if (!operation.csv?.trim()) {
+          failed += 1;
+          results.push({
+            fileName,
+            created: 0,
+            updated: 0,
+            failed: 1,
+            errors: ["CSV content is required"],
+          });
+          continue;
+        }
+
+        const result = applyCsvImportToData(data, operation.csv);
+        created += result.created;
+        updated += result.updated;
+        changed ||= result.created > 0 || result.updated > 0;
+        if (result.errors.length > 0) failed += 1;
+        results.push({
+          fileName,
+          created: result.created,
+          updated: result.updated,
+          failed: result.errors.length > 0 ? 1 : 0,
+          errors: result.errors,
+        });
+        continue;
+      }
+
+      if (operation.type === "profile") {
+        if (!operation.payload || typeof operation.payload !== "object") {
+          failed += 1;
+          results.push({
+            fileName,
+            created: 0,
+            updated: 0,
+            failed: 1,
+            errors: ["Maid profile payload is required"],
+          });
+          continue;
+        }
+
+        const result = upsertImportedMaidProfileInData(data, operation.payload);
+        created += result.created;
+        updated += result.updated;
+        changed ||= result.created > 0 || result.updated > 0;
+        if (result.errors.length > 0) failed += 1;
+        results.push({
+          fileName,
+          created: result.created,
+          updated: result.updated,
+          failed: result.errors.length > 0 ? 1 : 0,
+          errors: result.errors,
+        });
+        continue;
+      }
+
+      failed += 1;
+      results.push({
+        fileName,
+        created: 0,
+        updated: 0,
+        failed: 1,
+        errors: ["Unsupported import operation type"],
+      });
+    }
+
+    if (changed) {
+      await saveData(c.env, data);
+    }
+
+    return c.json(
+      {
+        message: "Batch import completed",
+        created,
+        updated,
+        failed,
+        results,
+      },
+      failed > 0 ? 207 : 200,
     );
   }),
 );
@@ -2933,6 +3120,7 @@ app.post(
   safeApi(async (c) => {
     const body = await parseBody<{
       refCode?: string | null;
+      existingRefCode?: string | null;
       maid?: Record<string, unknown>;
       agency?: Record<string, unknown>;
       employer?: Record<string, unknown>;
