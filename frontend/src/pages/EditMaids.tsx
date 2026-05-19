@@ -37,16 +37,8 @@ type ImportBatchProgress = {
 };
 
 type PreparedImportOperation =
-  | {
-      type: "csv";
-      csv: string;
-      fileName: string;
-    }
-  | {
-      type: "profile";
-      payload: MaidProfile;
-      fileName: string;
-    };
+  | { type: "csv"; csv: string; fileName: string }
+  | { type: "profile"; payload: MaidProfile; fileName: string };
 
 type ImportBatchResult = {
   fileName: string;
@@ -60,7 +52,6 @@ class ManualImportRequiredError extends Error {
   guessedName: string;
   guessedNationality: string;
   guessedReferenceCode: string;
-
   constructor(fields: { guessedName: string; guessedNationality: string; guessedReferenceCode: string }) {
     super("This PDF is missing embedded import data and needs manual confirmation.");
     this.name = "ManualImportRequiredError";
@@ -72,22 +63,26 @@ class ManualImportRequiredError extends Error {
 
 let xlsxLoader: Promise<typeof import("xlsx")> | null = null;
 
-type JSZipConstructor = { new(): { loadAsync: (data: ArrayBuffer) => Promise<{ file: (path: string) => { async: (type: "text") => Promise<string> } | null }> }; loadAsync: (data: ArrayBuffer) => Promise<{ file: (path: string) => { async: (type: "text") => Promise<string> } | null }> };
+type JSZipConstructor = {
+  new(): {
+    loadAsync: (data: ArrayBuffer) => Promise<{
+      file: (path: string) => { async: (type: "text") => Promise<string> } | null;
+    }>;
+  };
+  loadAsync: (data: ArrayBuffer) => Promise<{
+    file: (path: string) => { async: (type: "text") => Promise<string> } | null;
+  }>;
+};
 
 let jsZipLoader: Promise<unknown> | null = null;
 
 const loadJsZip = async (): Promise<JSZipConstructor> => {
-  if (!jsZipLoader) {
-    jsZipLoader = import("jszip");
-  }
+  if (!jsZipLoader) jsZipLoader = import("jszip");
   const module = await jsZipLoader as { default?: unknown };
   return (module.default ?? module) as JSZipConstructor;
 };
 
-const waitForPaint = () =>
-  new Promise<void>((resolve) => {
-    window.setTimeout(resolve, 0);
-  });
+const waitForPaint = () => new Promise<void>((resolve) => { window.setTimeout(resolve, 0); });
 
 const loadXlsx = async () => {
   xlsxLoader ??= import("xlsx");
@@ -103,18 +98,12 @@ const EVAL_SUB_OPTIONS = [
 ];
 
 const normalizeImportLabel = (value: unknown) =>
-  String(value ?? "")
-    .replace(/\s+/g, " ")
-    .replace(/[•►]/g, "")
-    .trim()
-    .toLowerCase();
+  String(value ?? "").replace(/\s+/g, " ").replace(/[\u2022\u25ba]/g, "").trim().toLowerCase();
 
 const cleanImportedValue = (value: unknown) => {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   if (!text) return "";
-  if (/^(?:not stated|none stated|not provided(?: in biodata)?|blank in biodata|not specified|none)$/i.test(text)) {
-    return "";
-  }
+  if (/^(?:not stated|none stated|not provided(?: in biodata)?|blank in biodata|not specified|none)$/i.test(text)) return "";
   return text;
 };
 
@@ -159,27 +148,31 @@ const importedSectionValues = (rows: unknown[][]) => {
     const first = cleanImportedValue(row[0]);
     const second = cleanImportedValue(row[1]);
     if (!first) return;
-    if (first.toLowerCase().includes("introduction tab") || first.toLowerCase().includes("private info") || first.toLowerCase().includes("interviewed by") || first.toLowerCase().includes("referred by")) {
+    if (
+      first.toLowerCase().includes("introduction tab") ||
+      first.toLowerCase().includes("private info") ||
+      first.toLowerCase().includes("interviewed by") ||
+      first.toLowerCase().includes("referred by")
+    ) {
       currentSection = normalizeImportLabel(first);
       if (second) sections.set(currentSection, second);
       return;
     }
-    if (normalizeImportLabel(first) === "value") {
-      sections.set(currentSection, second);
-    }
+    if (normalizeImportLabel(first) === "value") sections.set(currentSection, second);
   });
   return sections;
 };
 
 const isRichMaidWorkbook = (sheetNames: string[]) =>
-  sheetNames.includes("Profile") && sheetNames.includes("Skills") && sheetNames.includes("Employment History");
+  sheetNames.includes("Profile") &&
+  sheetNames.includes("Skills") &&
+  sheetNames.includes("Employment History");
 
 const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): MaidProfile => {
   const profileRows = rowsBySheet.Profile ?? [];
   const skillsRows = rowsBySheet.Skills ?? [];
   const employmentRows = rowsBySheet["Employment History"] ?? [];
   const introRows = rowsBySheet["Introduction & Private"] ?? [];
-
   const profileMap = importedRowMap(profileRows);
   const introSections = importedSectionValues(introRows);
 
@@ -190,13 +183,9 @@ const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): Mai
     if (
       parsed !== undefined &&
       [
-        "Able to handle pork?",
-        "Able to eat pork?",
-        "Able to care for dog/cat?",
-        "Able to do simple sewing?",
-        "Able to do gardening work?",
-        "Willing to wash car?",
-        "Willing to work on off-days with compensation?",
+        "Able to handle pork?", "Able to eat pork?", "Able to care for dog/cat?",
+        "Able to do simple sewing?", "Able to do gardening work?",
+        "Willing to wash car?", "Willing to work on off-days with compensation?",
       ].includes(label)
     ) {
       otherInformation[label] = parsed;
@@ -209,16 +198,12 @@ const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): Mai
     if (label) evalRows.set(label, cleanImportedValue(row[1]));
   });
   const evaluationMethods: string[] = [];
-  if (parseImportedBoolean(evalRows.get("Interviewed by Singapore EA"))) {
-    evaluationMethods.push(EVAL_PARENT_INTERVIEWED);
-  }
-  EVAL_SUB_OPTIONS.forEach((option) => {
-    if (parseImportedBoolean(evalRows.get(option))) evaluationMethods.push(option);
-  });
+  if (parseImportedBoolean(evalRows.get("Interviewed by Singapore EA"))) evaluationMethods.push(EVAL_PARENT_INTERVIEWED);
+  EVAL_SUB_OPTIONS.forEach((option) => { if (parseImportedBoolean(evalRows.get(option))) evaluationMethods.push(option); });
 
   const workAreaLabelMap: Record<string, string> = {
-    "care of infants/children (age range: infants–4 yr)": "Care of infants/children",
-    "care of infants/children (age range: infantsâ€“4 yr)": "Care of infants/children",
+    "care of infants/children (age range: infants\u20134 yr)": "Care of infants/children",
+    "care of infants/children (age range: infants\u00e2\u20ac\u20224 yr)": "Care of infants/children",
     "care of elderly": "Care of elderly",
     "care of disabled": "Care of disabled",
     "general housework": "General housework",
@@ -235,9 +220,9 @@ const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): Mai
     if (!targetLabel) return;
     const fourth = cleanImportedValue(row[3]);
     const fifth = cleanImportedValue(row[4]);
-    const ratingCandidate = [fourth, fifth].find((value) => /^\d+(\.\d+)?$/.test(value));
+    const ratingCandidate = [fourth, fifth].find((v) => /^\d+(\.\d+)?$/.test(v));
     const rating = ratingCandidate ? Number(ratingCandidate) : null;
-    const note = [fifth, fourth].find((value) => value && !/^\d+(\.\d+)?$/.test(value)) ?? "";
+    const note = [fifth, fourth].find((v) => v && !/^\d+(\.\d+)?$/.test(v)) ?? "";
     workAreas[targetLabel] = {
       willing: parseImportedBoolean(row[1]),
       experience: parseImportedBoolean(row[2]),
@@ -253,13 +238,11 @@ const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): Mai
     const label = cleanImportedValue(row[0]);
     const value = cleanImportedValue(row[1]);
     if (!label || !value) return;
-    if (label === "English" || label === "Hindi" || label === "Tamil") {
-      languageSkills[label] = value;
-    }
+    if (label === "English" || label === "Hindi" || label === "Tamil") languageSkills[label] = value;
   });
 
   const employmentHeaderIndex = employmentRows.findIndex(
-    (row) => cleanImportedValue(row[0]) === "From" && cleanImportedValue(row[1]) === "To",
+    (row) => cleanImportedValue(row[0]) === "From" && cleanImportedValue(row[1]) === "To"
   );
   const employmentHistory =
     employmentHeaderIndex === -1
@@ -299,13 +282,13 @@ const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): Mai
   };
 
   const foodHandlingPreferences = [
-    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling — No Pork"))) ? "No Pork" : "",
-    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling â€” No Pork"))) ? "No Pork" : "",
-    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling — No Beef"))) ? "No Beef" : "",
-    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling â€” No Beef"))) ? "No Beef" : "",
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling \u2014 No Pork"))) ? "No Pork" : "",
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling \u00e2\u20ac\u201d No Pork"))) ? "No Pork" : "",
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling \u2014 No Beef"))) ? "No Beef" : "",
+    parseImportedBoolean(profileMap.get(normalizeImportLabel("Food Handling \u00e2\u20ac\u201d No Beef"))) ? "No Beef" : "",
   ]
     .filter(Boolean)
-    .filter((value, index, self) => self.indexOf(value) === index)
+    .filter((v, idx, self) => self.indexOf(v) === idx)
     .join(", ");
 
   return {
@@ -350,16 +333,19 @@ const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): Mai
       offDaysPerMonth: cleanImportedValue(profileMap.get(normalizeImportLabel("Rest Days per Month"))),
       evaluationMethods,
       availabilityInterviewOptions,
-      privateInfo: cleanImportedValue(introSections.get(normalizeImportLabel("Private Info — Historical Record (skillsPreferences.privateInfo)"))) ||
-        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info â€” Historical Record (skillsPreferences.privateInfo)"))),
+      privateInfo:
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info \u2014 Historical Record (skillsPreferences.privateInfo)"))) ||
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info \u00e2\u20ac\u201d Historical Record (skillsPreferences.privateInfo)"))),
       interviewedBy: cleanImportedValue(introSections.get(normalizeImportLabel("Interviewed By (skillsPreferences.interviewedBy)"))),
       referredBy: cleanImportedValue(introSections.get(normalizeImportLabel("Referred By (skillsPreferences.referredBy)"))),
     },
     agencyContact: {
-      phone: cleanImportedValue(introSections.get(normalizeImportLabel("Private Info — Agency Contact (agencyContact.phone)"))) ||
-        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info â€” Agency Contact (agencyContact.phone)"))),
-      passportNo: cleanImportedValue(introSections.get(normalizeImportLabel("Private Info — Passport Number (agencyContact.passportNo)"))) ||
-        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info â€” Passport Number (agencyContact.passportNo)"))),
+      phone:
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info \u2014 Agency Contact (agencyContact.phone)"))) ||
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info \u00e2\u20ac\u201d Agency Contact (agencyContact.phone)"))),
+      passportNo:
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info \u2014 Passport Number (agencyContact.passportNo)"))) ||
+        cleanImportedValue(introSections.get(normalizeImportLabel("Private Info \u00e2\u20ac\u201d Passport Number (agencyContact.passportNo)"))),
       homeCountryContactNumber: cleanImportedValue(profileMap.get(normalizeImportLabel("Contact Number in Home Country"))),
     },
   };
@@ -371,275 +357,6 @@ const decodePdfUtf16Hex = (hex: string) => {
   const payload = bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff ? bytes.slice(2) : bytes;
   return new TextDecoder("utf-16be").decode(payload);
 };
-
-// ── Yellow & Green Color Palette ──────────────────────────────────────────
-// Green ramp:  #EAF3DE / #C0DD97 / #97C459 / #639922 / #3B6D11 / #27500A / #173404
-// Amber ramp:  #FAEEDA / #FAC775 / #EF9F27 / #BA7517 / #854F0B / #633806 / #412402
-
-const menuStyles = `
-  :root {
-    --ym-green-50:  #EAF3DE;
-    --ym-green-100: #C0DD97;
-    --ym-green-200: #97C459;
-    --ym-green-400: #639922;
-    --ym-green-600: #3B6D11;
-    --ym-green-800: #27500A;
-    --ym-green-900: #173404;
-    --ym-amber-50:  #FAEEDA;
-    --ym-amber-100: #FAC775;
-    --ym-amber-200: #EF9F27;
-    --ym-amber-400: #BA7517;
-    --ym-amber-600: #854F0B;
-    --ym-amber-800: #633806;
-    --ym-amber-900: #412402;
-  }
-
-  @keyframes float-icon {
-    0%, 100% { transform: translateY(0px) rotateX(0deg); }
-    50% { transform: translateY(-4px) rotateX(6deg); }
-  }
-
-  /* ── Public card — green ── */
-  .card-public {
-    background: linear-gradient(135deg, var(--ym-green-50) 0%, color-mix(in srgb, var(--ym-green-50) 40%, transparent) 60%, transparent 100%);
-    border: 1.5px solid color-mix(in srgb, var(--ym-green-200) 50%, transparent);
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  .card-public:hover {
-    background: linear-gradient(135deg, color-mix(in srgb, var(--ym-green-50) 90%, white) 0%, color-mix(in srgb, var(--ym-green-50) 60%, transparent) 60%, transparent 100%);
-    border-color: var(--ym-green-200);
-    box-shadow: 0 8px 32px color-mix(in srgb, var(--ym-green-400) 22%, transparent), 0 2px 8px color-mix(in srgb, var(--ym-green-400) 12%, transparent);
-    transform: translateY(-2px) scale(1.01);
-  }
-  .card-public:active { transform: translateY(0px) scale(0.99); }
-
-  /* ── Hidden card — amber ── */
-  .card-hidden {
-    background: linear-gradient(135deg, var(--ym-amber-50) 0%, color-mix(in srgb, var(--ym-amber-50) 50%, transparent) 100%);
-    border: 1.5px solid color-mix(in srgb, var(--ym-amber-100) 70%, transparent);
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  .card-hidden:hover {
-    background: linear-gradient(135deg, color-mix(in srgb, var(--ym-amber-50) 95%, white) 0%, color-mix(in srgb, var(--ym-amber-50) 70%, transparent) 100%);
-    border-color: var(--ym-amber-100);
-    box-shadow: 0 8px 28px color-mix(in srgb, var(--ym-amber-400) 18%, transparent), 0 2px 8px color-mix(in srgb, var(--ym-amber-400) 10%, transparent);
-    transform: translateY(-2px) scale(1.01);
-  }
-  .card-hidden:active { transform: translateY(0px) scale(0.99); }
-
-  /* ── 3-D icon containers ── */
-  .icon-3d-public {
-    width: 72px; height: 72px;
-    border-radius: 22px;
-    background: linear-gradient(145deg, var(--ym-green-200), var(--ym-green-400));
-    box-shadow: 0 4px 0 var(--ym-green-600), 0 8px 20px color-mix(in srgb, var(--ym-green-400) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(0,0,0,0.12);
-    display: flex; align-items: center; justify-content: center;
-    position: relative; transform-style: preserve-3d; transition: all 0.3s ease;
-  }
-  .card-public:hover .icon-3d-public {
-    animation: float-icon 2s ease-in-out infinite;
-    box-shadow: 0 8px 0 var(--ym-green-600), 0 14px 30px color-mix(in srgb, var(--ym-green-400) 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.12);
-  }
-  .icon-3d-hidden {
-    width: 72px; height: 72px;
-    border-radius: 22px;
-    background: linear-gradient(145deg, var(--ym-amber-200), var(--ym-amber-400));
-    box-shadow: 0 4px 0 var(--ym-amber-600), 0 8px 20px color-mix(in srgb, var(--ym-amber-400) 30%, transparent), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(0,0,0,0.12);
-    display: flex; align-items: center; justify-content: center;
-    position: relative; transform-style: preserve-3d; transition: all 0.3s ease;
-  }
-  .card-hidden:hover .icon-3d-hidden {
-    animation: float-icon 2s ease-in-out infinite;
-    box-shadow: 0 8px 0 var(--ym-amber-600), 0 14px 28px color-mix(in srgb, var(--ym-amber-400) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.12);
-  }
-  .icon-shine {
-    position: absolute; top: 0; left: 0; right: 0; height: 50%;
-    border-radius: 22px 22px 0 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 100%);
-    pointer-events: none;
-  }
-
-  /* ── Badges ── */
-  .badge-live {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: var(--ym-green-50);
-    border: 1px solid color-mix(in srgb, var(--ym-green-200) 60%, transparent);
-    color: var(--ym-green-600);
-    border-radius: 99px; padding: 2px 10px;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
-  }
-  .badge-live-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--ym-green-400);
-    animation: pulse-dot 1.8s ease-in-out infinite;
-  }
-  @keyframes pulse-dot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
-  }
-  .badge-draft {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: var(--ym-amber-50);
-    border: 1px solid color-mix(in srgb, var(--ym-amber-100) 70%, transparent);
-    color: var(--ym-amber-600);
-    border-radius: 99px; padding: 2px 10px;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
-  }
-
-  /* ── Search bar glow ── */
-  .search-glow:focus-within {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ym-green-400) 22%, transparent), 0 2px 8px color-mix(in srgb, var(--ym-green-400) 10%, transparent);
-    border-color: color-mix(in srgb, var(--ym-green-200) 80%, transparent) !important;
-  }
-
-  .card-arrow { transition: transform 0.2s ease; }
-  .card-public:hover .card-arrow,
-  .card-hidden:hover .card-arrow { transform: translateX(3px); }
-
-  /* ── Search dropdown ── */
-  .search-dropdown {
-    position: absolute; top: calc(100% + 6px); left: 0; right: 0;
-    background: hsl(var(--background));
-    border: 1.5px solid color-mix(in srgb, var(--ym-green-200) 55%, transparent);
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.05);
-    z-index: 50; overflow: hidden;
-    animation: dropdown-in 0.15s cubic-bezier(0.16,1,0.3,1);
-  }
-  @keyframes dropdown-in {
-    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-    to   { opacity: 1; transform: translateY(0)    scale(1); }
-  }
-  .search-result-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 14px; cursor: pointer;
-    transition: background 0.12s ease;
-    border-bottom: 1px solid hsl(var(--border)/0.5);
-  }
-  .search-result-item:last-child { border-bottom: none; }
-  .search-result-item:hover,
-  .search-result-item.active { background: var(--ym-green-50); }
-  .search-result-avatar {
-    width: 42px; height: 42px; border-radius: 8px;
-    object-fit: cover; flex-shrink: 0;
-    background: var(--ym-green-50);
-    border: 1px solid color-mix(in srgb, var(--ym-green-200) 40%, transparent);
-  }
-  .search-result-avatar-placeholder {
-    width: 42px; height: 42px; border-radius: 8px;
-    background: var(--ym-green-50);
-    border: 1px solid color-mix(in srgb, var(--ym-green-200) 50%, transparent);
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; font-size: 12px; color: var(--ym-green-600); font-weight: 700;
-  }
-  .search-highlight {
-    background: color-mix(in srgb, var(--ym-amber-100) 55%, transparent);
-    color: var(--ym-amber-600);
-    border-radius: 3px; padding: 0 1px; font-weight: 600;
-  }
-  .search-badge-public {
-    display: inline-flex; align-items: center; gap: 3px;
-    background: var(--ym-green-50);
-    color: var(--ym-green-600);
-    border-radius: 99px; padding: 2px 8px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.03em; flex-shrink: 0;
-  }
-  .search-badge-hidden {
-    display: inline-flex; align-items: center;
-    background: var(--ym-amber-50);
-    color: var(--ym-amber-600);
-    border-radius: 99px; padding: 2px 8px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.03em; flex-shrink: 0;
-  }
-
-  /* ── Maid card grid item ── */
-  .maid-card {
-    border-radius: 0; overflow: hidden;
-    border: 1.5px solid hsl(var(--border));
-    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-  }
-  .maid-card:hover {
-    box-shadow: 0 6px 24px color-mix(in srgb, var(--ym-green-400) 14%, rgba(0,0,0,0.06));
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--ym-green-200) 70%, transparent);
-  }
-  .maid-card.selected {
-    border-color: var(--ym-green-400);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ym-green-400) 20%, transparent);
-  }
-  .maid-card-photo {
-    width: 100%; aspect-ratio: 3 / 4; object-fit: contain; object-position: top center;
-    display: block; min-height: 130px; background: #ffffff; vertical-align: top;
-  }
-  .maid-card-no-photo {
-    width: 100%; aspect-ratio: 3 / 4; min-height: 130px;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--ym-green-50); font-size: 11px;
-    color: var(--ym-green-800); font-weight: 500;
-  }
-  .maid-card-body {
-    padding: 7px 8px 9px; display: flex; flex-direction: column; gap: 4px;
-  }
-  .maid-card-name {
-    font-size: 12px; font-weight: 800; color: #0a0a0a;
-    line-height: 1.3; white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; cursor: pointer;
-  }
-  .maid-card-name:hover { color: var(--ym-green-600); }
-  .maid-card-meta {
-    font-size: 10.5px; color: #1a1a1a; line-height: 1.55; font-weight: 500;
-  }
-  .maid-card-meta strong { color: #0a0a0a; font-weight: 700; }
-  .maid-card-ref {
-    font-size: 10.5px; font-weight: 800; color: #0a0a0a; font-variant-numeric: tabular-nums;
-  }
-  .maid-card-date { font-size: 10px; color: #2a2a2a; font-weight: 500; }
-
-  /* ── Visibility toggle button on card ── */
-  .maid-card-vis-btn {
-    display: inline-flex; width: 100%; align-items: center; justify-content: center;
-    gap: 4px; border-radius: 4px; padding: 5px 6px; font-size: 10.5px; font-weight: 700;
-    transition: background 0.15s ease; margin-top: 2px;
-    cursor: pointer; border: none; outline: none;
-  }
-  .maid-card-vis-btn.public {
-    background: var(--ym-green-50);
-    color: var(--ym-green-600);
-    border: 1px solid color-mix(in srgb, var(--ym-green-200) 50%, transparent);
-  }
-  .maid-card-vis-btn.public:hover { background: color-mix(in srgb, var(--ym-green-100) 60%, white); }
-  .maid-card-vis-btn.hidden-btn {
-    background: var(--ym-amber-50);
-    color: var(--ym-amber-600);
-    border: 1px solid color-mix(in srgb, var(--ym-amber-100) 60%, transparent);
-  }
-  .maid-card-vis-btn.hidden-btn:hover { background: color-mix(in srgb, var(--ym-amber-100) 40%, white); }
-
-  /* ── Bulk actions bar accent ── */
-  .bulk-bar {
-    background: var(--ym-green-50);
-    border: 1px solid color-mix(in srgb, var(--ym-green-200) 45%, transparent);
-    border-radius: 10px;
-  }
-
-  /* ── Status chip in list header ── */
-  .chip-public {
-    background: var(--ym-green-50);
-    color: var(--ym-green-600);
-    border: 1px solid color-mix(in srgb, var(--ym-green-200) 60%, transparent);
-  }
-  .chip-hidden {
-    background: var(--ym-amber-50);
-    color: var(--ym-amber-600);
-    border: 1px solid color-mix(in srgb, var(--ym-amber-100) 60%, transparent);
-  }
-
-  /* ── Back button ── */
-  .back-btn-line {
-    background: var(--ym-green-400);
-  }
-  .back-btn:hover .back-btn-line { width: 100%; }
-`;
 
 // ── Nationality → ISO 3166-1 alpha-2 country code ──────────────────────────
 const NATIONALITY_FLAGS: Record<string, string> = {
@@ -681,22 +398,47 @@ const getNationalityCode = (nationality?: string): string => {
 const FlagCircle = ({ code }: { code: string }) => {
   if (!code) return null;
   return (
-    <span
-      style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 16, height: 16, borderRadius: "50%", overflow: "hidden",
-        border: "1px solid rgba(0,0,0,0.13)", flexShrink: 0,
-        marginRight: 3, verticalAlign: "middle", background: "#e5e7eb",
-      }}
-    >
+    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full overflow-hidden border border-black/[0.13] flex-shrink-0 mr-1 align-middle bg-gray-200">
       <img
         src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
         alt={code}
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        className="w-full h-full object-cover block"
       />
     </span>
   );
 };
+
+// ── Keyframe animations injected once ──────────────────────────────────────
+const globalStyles = `
+  @keyframes float-icon {
+    0%, 100% { transform: translateY(0px) rotateX(0deg); }
+    50%       { transform: translateY(-4px) rotateX(6deg); }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.8); }
+  }
+  @keyframes dropdown-in {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-float-icon { animation: float-icon 2s ease-in-out infinite; }
+  .animate-dropdown-in { animation: dropdown-in 0.15s cubic-bezier(0.16,1,0.3,1); }
+  .animate-pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
+  .animate-fade-in-up { animation: fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+
+  /* card hover arrow nudge */
+  .card-arrow { transition: transform 0.2s ease; }
+  .group:hover .card-arrow { transform: translateX(3px); }
+
+  /* back button underline */
+  .back-btn-line { width: 0; transition: width 0.2s ease; background: #639922; height: 1px; position: absolute; left: 0; bottom: -2px; }
+  .back-btn:hover .back-btn-line { width: 100%; }
+`;
 
 const EditMaids = () => {
   const navigate = useNavigate();
@@ -710,13 +452,8 @@ const EditMaids = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [importBatchProgress, setImportBatchProgress] = useState<ImportBatchProgress>({
-    active: false,
-    total: 0,
-    currentIndex: 0,
-    currentFileName: "",
-    completed: 0,
-    failed: 0,
-    stage: "",
+    active: false, total: 0, currentIndex: 0, currentFileName: "",
+    completed: 0, failed: 0, stage: "",
   });
   const [page, setPage] = useState(1);
   const [maidToSendThroughAgency, setMaidToSendThroughAgency] = useState<MaidProfile | null>(null);
@@ -725,16 +462,12 @@ const EditMaids = () => {
   const [confirmExportOpen, setConfirmExportOpen] = useState(false);
   const [confirmImportOpen, setConfirmImportOpen] = useState(false);
   const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
-
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<"selected" | MaidProfile | null>(null);
-
   const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
   const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
-
   const [manualImportOpen, setManualImportOpen] = useState(false);
   const [manualImportFields, setManualImportFields] = useState({ name: "", nationality: "", referenceCode: "" });
-
   const [menuSearch, setMenuSearch] = useState("");
   const [menuSearchResults, setMenuSearchResults] = useState<(MaidProfile & { _vis?: string })[]>([]);
   const [menuSearchLoading, setMenuSearchLoading] = useState(false);
@@ -746,11 +479,7 @@ const EditMaids = () => {
   const activeImportControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!menuSearch.trim()) {
-      setMenuSearchResults([]);
-      setMenuSearchOpen(false);
-      return;
-    }
+    if (!menuSearch.trim()) { setMenuSearchResults([]); setMenuSearchOpen(false); return; }
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
@@ -771,20 +500,15 @@ const EditMaids = () => {
         setMenuSearchResults(combined);
         setMenuSearchOpen(true);
         setMenuActiveIndex(-1);
-      } catch {
-        // silently ignore abort errors
-      } finally {
-        setMenuSearchLoading(false);
-      }
+      } catch { /* silently ignore abort errors */ }
+      finally { setMenuSearchLoading(false); }
     }, 220);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [menuSearch]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (menuSearchRef.current && !menuSearchRef.current.contains(e.target as Node)) {
-        setMenuSearchOpen(false);
-      }
+      if (menuSearchRef.current && !menuSearchRef.current.contains(e.target as Node)) setMenuSearchOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -797,23 +521,20 @@ const EditMaids = () => {
     return (
       <>
         {text.slice(0, idx)}
-        <mark className="search-highlight">{text.slice(idx, idx + query.length)}</mark>
+        <mark className="bg-amber-100/70 text-amber-600 rounded-[3px] px-px font-semibold">
+          {text.slice(idx, idx + query.length)}
+        </mark>
         {text.slice(idx + query.length)}
       </>
     );
   }, []);
 
   useEffect(() => {
-    if (location.state?.fromView) {
-      setView(location.state.fromView);
-    }
+    if (location.state?.fromView) setView(location.state.fromView);
   }, [location.state]);
 
   const handleBack = () => {
-    if (view !== "menu") {
-      setView("menu");
-      return;
-    }
+    if (view !== "menu") { setView("menu"); return; }
     navigate(adminPath("/"));
   };
 
@@ -832,64 +553,40 @@ const EditMaids = () => {
         const params = new URLSearchParams({ visibility, page: String(page), pageSize: String(PAGE_SIZE) });
         if (search.trim()) params.set("search", search.trim());
         const response = await fetch(`/api/maids?${params.toString()}`, { signal: controller.signal });
-        const data = (await response.json()) as {
-          error?: string;
-          maids?: MaidProfile[];
-          total?: number;
-        };
+        const data = (await response.json()) as { error?: string; maids?: MaidProfile[]; total?: number };
         if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
         setMaids(data.maids);
         setTotalMaids(data.total ?? data.maids.length);
       } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
+        if (!(error instanceof DOMException && error.name === "AbortError"))
           toast.error(error instanceof Error ? error.message : "Failed to load maids");
-        }
-      } finally {
-        setIsLoading(false);
-      }
+      } finally { setIsLoading(false); }
     };
     void load();
     return () => controller.abort();
   }, [search, visibility, page]);
 
-  useEffect(() => {
-    setPage(1);
-    setSelected(new Set());
-  }, [search, view]);
+  useEffect(() => { setPage(1); setSelected(new Set()); }, [search, view]);
 
   const totalPages = Math.max(1, Math.ceil(totalMaids / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginatedMaids = maids;
 
-  useEffect(() => {
-    if (page !== currentPage) setPage(currentPage);
-  }, [currentPage, page]);
+  useEffect(() => { if (page !== currentPage) setPage(currentPage); }, [currentPage, page]);
 
   const toggle = (ref: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(ref)) next.delete(ref);
-      else next.add(ref);
-      return next;
-    });
+    setSelected((prev) => { const next = new Set(prev); next.has(ref) ? next.delete(ref) : next.add(ref); return next; });
   };
 
   const toggleAll = () => {
-    if (selected.size === paginatedMaids.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(paginatedMaids.map((m) => m.referenceCode)));
-    }
+    if (selected.size === paginatedMaids.length) setSelected(new Set());
+    else setSelected(new Set(paginatedMaids.map((m) => m.referenceCode)));
   };
 
   const removeLocal = (referenceCode: string) => {
     setMaids((prev) => prev.filter((m) => m.referenceCode !== referenceCode));
     setTotalMaids((prev) => Math.max(0, prev - 1));
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.delete(referenceCode);
-      return next;
-    });
+    setSelected((prev) => { const next = new Set(prev); next.delete(referenceCode); return next; });
   };
 
   const deleteMaid = async (referenceCode: string) => {
@@ -910,11 +607,7 @@ const EditMaids = () => {
     removeLocal(maid.referenceCode);
   };
 
-  const openDeleteDialog = (target: "selected" | MaidProfile) => {
-    setDeleteTarget(target);
-    setDeleteDialogOpen(true);
-  };
-
+  const openDeleteDialog = (target: "selected" | MaidProfile) => { setDeleteTarget(target); setDeleteDialogOpen(true); };
   const getDeleteLabel = () => {
     if (!deleteTarget) return "";
     if (deleteTarget === "selected") return `${selected.size} maid${selected.size !== 1 ? "s" : ""}`;
@@ -932,36 +625,25 @@ const EditMaids = () => {
         await deleteMaid((deleteTarget as MaidProfile).referenceCode);
         toast.success("Maid deleted");
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete");
-    }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to delete"); }
   };
 
-  const openVisibilityDialog = (target: VisibilityTarget) => {
-    setPendingVisibilityTarget(target);
-    setVisibilityDialogOpen(true);
-  };
+  const openVisibilityDialog = (target: VisibilityTarget) => { setPendingVisibilityTarget(target); setVisibilityDialogOpen(true); };
 
   const confirmVisibilityChange = async () => {
     if (!pendingVisibilityTarget) return;
     setVisibilityDialogOpen(false);
     try {
       if ("bulk" in pendingVisibilityTarget) {
-        for (const maid of maids.filter((m) => selected.has(m.referenceCode))) {
+        for (const maid of maids.filter((m) => selected.has(m.referenceCode)))
           await toggleVisibility(maid, pendingVisibilityTarget.makePublic);
-        }
-        toast.success(
-          pendingVisibilityTarget.makePublic ? "Selected maids made public" : "Selected maids hidden"
-        );
+        toast.success(pendingVisibilityTarget.makePublic ? "Selected maids made public" : "Selected maids hidden");
       } else {
         await toggleVisibility(pendingVisibilityTarget.maid, pendingVisibilityTarget.makePublic);
         toast.success(pendingVisibilityTarget.makePublic ? "Maid published" : "Maid hidden");
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update visibility");
-    } finally {
-      setPendingVisibilityTarget(null);
-    }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to update visibility"); }
+    finally { setPendingVisibilityTarget(null); }
   };
 
   const handleExportPdf = async () => {
@@ -979,11 +661,8 @@ const EditMaids = () => {
       if (!data.maids) throw new Error(data.error || "Failed to prepare PDF export");
       await exportMaidProfilesToPdf(data.maids);
       toast.success("PDF exported");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to export PDF");
-    } finally {
-      setIsExporting(false);
-    }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to export PDF"); }
+    finally { setIsExporting(false); }
   };
 
   const decodeBase64Utf8 = (value: string) => {
@@ -998,12 +677,9 @@ const EditMaids = () => {
   };
 
   const CSV_FIELD_MAP: Record<string, string> = {
-    name: "fullName", full_name: "fullName", maid_name: "fullName",
-    maidname: "fullName", fullname: "fullName", age: "age",
-    nationality: "nationality", country: "nationality",
-    experience: "experience", years: "experience",
-    years_of_experience: "experience", photo: "photoDataUrl",
-    photo_url: "photoDataUrl", image: "photoDataUrl",
+    name: "fullName", full_name: "fullName", maid_name: "fullName", maidname: "fullName", fullname: "fullName",
+    age: "age", nationality: "nationality", country: "nationality", experience: "experience", years: "experience",
+    years_of_experience: "experience", photo: "photoDataUrl", photo_url: "photoDataUrl", image: "photoDataUrl",
     image_url: "photoDataUrl", picture: "photoDataUrl",
   };
 
@@ -1026,30 +702,18 @@ const EditMaids = () => {
 
   const reloadVisibleMaids = async (preferredVisibility?: "public" | "hidden") => {
     const reloadVisibility = preferredVisibility ?? visibility ?? "public";
-    const params = new URLSearchParams({
-      visibility: reloadVisibility,
-      page: String(page),
-      pageSize: String(PAGE_SIZE),
-    });
+    const params = new URLSearchParams({ visibility: reloadVisibility, page: String(page), pageSize: String(PAGE_SIZE) });
     if (search.trim()) params.set("search", search.trim());
     const reload = await fetch(`/api/maids?${params.toString()}`);
-    const reloadData = (await reload.json().catch(() => ({}))) as {
-      maids?: MaidProfile[];
-      total?: number;
-    };
+    const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[]; total?: number };
     if (reload.ok && reloadData.maids) {
       setMaids(reloadData.maids);
       setTotalMaids(reloadData.total ?? reloadData.maids.length);
-      if (view === "menu" && reloadData.maids.length > 0) {
-        setView(reloadVisibility === "hidden" ? "hidden" : "public");
-      }
+      if (view === "menu" && reloadData.maids.length > 0) setView(reloadVisibility === "hidden" ? "hidden" : "public");
     }
   };
 
-  const importCsvText = async (
-    csvText: string,
-    options?: { skipReload?: boolean; suppressSuccessToast?: boolean }
-  ) => {
+  const importCsvText = async (csvText: string, options?: { skipReload?: boolean; suppressSuccessToast?: boolean }) => {
     const normalizedCsv = normalizeCsv(csvText);
     try {
       setIsImporting(true);
@@ -1058,68 +722,43 @@ const EditMaids = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ csv: normalizedCsv }),
       });
-      const data = (await response.json()) as {
-        error?: string; created?: number; updated?: number;
-        failed?: number; errors?: string[];
-      };
+      const data = (await response.json()) as { error?: string; created?: number; updated?: number; failed?: number; errors?: string[] };
       if (!response.ok && response.status !== 207) throw new Error(data.error || "Failed to import CSV");
       const created = data.created ?? 0;
       const updated = data.updated ?? 0;
       const failed = data.failed ?? 0;
-      if (!options?.suppressSuccessToast) {
+      if (!options?.suppressSuccessToast)
         toast.success(`Import done: ${created} created, ${updated} updated${failed ? `, ${failed} failed` : ""}`);
-      }
       if (failed && data.errors?.length) toast.error(data.errors.slice(0, 2).join(" | "));
-      if (!options?.skipReload) {
-        await reloadVisibleMaids();
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to import CSV");
-    } finally {
-      setIsImporting(false);
-    }
+      if (!options?.skipReload) await reloadVisibleMaids();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to import CSV"); }
+    finally { setIsImporting(false); }
   };
 
-  const importSingleMaidProfile = async (
-    payload: MaidProfile,
-    options?: { skipReload?: boolean; suppressSuccessToast?: boolean }
-  ) => {
+  const importSingleMaidProfile = async (payload: MaidProfile, options?: { skipReload?: boolean; suppressSuccessToast?: boolean }) => {
     const referenceCode = String(payload.referenceCode || "").trim();
     if (!referenceCode) throw new Error("referenceCode is required in the imported file");
     try {
       setIsImporting(true);
-      // Optimistic POST — no probe round-trip needed. Fall back to PUT on 409 Conflict.
       let response = await fetch("/api/maids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
       let existed = false;
       if (response.status === 409) {
         existed = true;
         response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
         });
       }
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
       if (!response.ok || !data.maid) throw new Error(data.error || "Failed to import maid profile");
-      if (!options?.suppressSuccessToast) {
-        toast.success(existed ? "Maid profile updated" : "Maid profile created");
-      }
+      if (!options?.suppressSuccessToast) toast.success(existed ? "Maid profile updated" : "Maid profile created");
       const importedVisibility = data.maid.isPublic ? "public" : "hidden";
-      if (!options?.skipReload) {
-        await reloadVisibleMaids(importedVisibility);
-      }
-    } finally {
-      setIsImporting(false);
-    }
+      if (!options?.skipReload) await reloadVisibleMaids(importedVisibility);
+    } finally { setIsImporting(false); }
   };
 
-  const prepareImportOperationFromFile = async (
-    file: File
-  ): Promise<PreparedImportOperation> => {
+  const prepareImportOperationFromFile = async (file: File): Promise<PreparedImportOperation> => {
     const name = file.name.toLowerCase();
     const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
     if (ext === "pdf") {
@@ -1130,22 +769,10 @@ const EditMaids = () => {
       const subjectStrMatch = rawPdf.match(/\/Subject\s*\(([^)]*)\)/);
       const subjectStr = subjectStrMatch ? subjectStrMatch[1] : "";
       const subject = subjectHex || subjectStr;
-      if (subject.startsWith("MAIDS_CSV_BASE64:")) {
-        return {
-          type: "csv",
-          csv: normalizeCsv(decodeBase64Utf8(subject.slice("MAIDS_CSV_BASE64:".length))),
-          fileName: file.name,
-        };
-      }
-      if (subject.startsWith("MAID_PROFILE_JSON_BASE64:")) {
-        return {
-          type: "profile",
-          payload: JSON.parse(
-            decodeBase64Utf8(subject.slice("MAID_PROFILE_JSON_BASE64:".length))
-          ) as MaidProfile,
-          fileName: file.name,
-        };
-      }
+      if (subject.startsWith("MAIDS_CSV_BASE64:"))
+        return { type: "csv", csv: normalizeCsv(decodeBase64Utf8(subject.slice("MAIDS_CSV_BASE64:".length))), fileName: file.name };
+      if (subject.startsWith("MAID_PROFILE_JSON_BASE64:"))
+        return { type: "profile", payload: JSON.parse(decodeBase64Utf8(subject.slice("MAID_PROFILE_JSON_BASE64:".length))) as MaidProfile, fileName: file.name };
       const max = Math.min(bytes.length, 2 * 1024 * 1024);
       let printable = "";
       for (let i = 0; i < max && printable.length < 12000; i += 1) {
@@ -1156,27 +783,16 @@ const EditMaids = () => {
       }
       const text = printable.replace(/\s+/g, " ").trim();
       const extract = (patterns: RegExp[]) => {
-        for (const re of patterns) {
-          const m = text.match(re);
-          if (m?.[1]?.trim()) return m[1].trim().slice(0, 120);
-        }
+        for (const re of patterns) { const m = text.match(re); if (m?.[1]?.trim()) return m[1].trim().slice(0, 120); }
         return "";
       };
       const guessedName = extract([
         /(?:maid\s*name|full\s*name|name\s*of\s*fdw|fdw\s*name|name)\s*[:-]?\s*([A-Za-z][A-Za-z\s'.–-]{1,60}?)(?=\s{2,}|\d|$)/i,
         /1\.\s*Name\s*[:-]?\s*([A-Za-z][A-Za-z\s'.–-]{1,60}?)(?=\s{2,}|\d|$)/i,
       ]);
-      const guessedNationality = extract([
-        /nationality\s*[:-]?\s*([A-Za-z][A-Za-z\s]{1,40}?)(?=\s{2,}|\d|$)/i,
-      ]);
-      const guessedRef = extract([
-        /(?:reference\s*code|ref\.?\s*code|ref\.?\s*no\.?)\s*[:-]?\s*([A-Za-z0-9_-]{2,30})/i,
-      ]);
-      throw new ManualImportRequiredError({
-        guessedName,
-        guessedNationality,
-        guessedReferenceCode: guessedRef,
-      });
+      const guessedNationality = extract([/nationality\s*[:-]?\s*([A-Za-z][A-Za-z\s]{1,40}?)(?=\s{2,}|\d|$)/i]);
+      const guessedRef = extract([/(?:reference\s*code|ref\.?\s*code|ref\.?\s*no\.?)\s*[:-]?\s*([A-Za-z0-9_-]{2,30})/i]);
+      throw new ManualImportRequiredError({ guessedName, guessedNationality, guessedReferenceCode: guessedRef });
     }
     if (ext === "docx") {
       const JSZip = await loadJsZip();
@@ -1184,24 +800,12 @@ const EditMaids = () => {
       const docXml = await zip.file("word/document.xml")?.async("text");
       if (!docXml) throw new Error("DOCX does not contain importable data");
       const xml = new DOMParser().parseFromString(docXml, "application/xml");
-      const text = Array.from(xml.getElementsByTagName("w:t"))
-        .map((n) => n.textContent ?? "")
-        .join(" ").replace(/\s+/g, " ").trim();
+      const text = Array.from(xml.getElementsByTagName("w:t")).map((n) => n.textContent ?? "").join(" ").replace(/\s+/g, " ").trim();
       const refMatch = text.match(/\breference\s*code\b\s*[:-]?\s*([a-z0-9_-]{2,})/i);
       const nameMatch = text.match(/\bfull\s*name\b\s*[:-]?\s*([a-z][^:]{1,80}?)(?=\s{2,}|$)/i);
       if (!refMatch?.[1] || !nameMatch?.[1]) throw new Error("DOCX is missing required fields: referenceCode, fullName");
-      const escapeCsv = (value: string) => {
-        const v = String(value ?? "");
-        if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
-        return v;
-      };
-      return {
-        type: "csv",
-        csv: normalizeCsv(
-          `referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`
-        ),
-        fileName: file.name,
-      };
+      const escapeCsv = (value: string) => { const v = String(value ?? ""); if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`; return v; };
+      return { type: "csv", csv: normalizeCsv(`referenceCode,fullName\n${escapeCsv(refMatch[1])},${escapeCsv(nameMatch[1].trim())}`), fileName: file.name };
     }
     if (ext === "xlsx") {
       const XLSX = await loadXlsx();
@@ -1209,16 +813,10 @@ const EditMaids = () => {
       if (isRichMaidWorkbook(workbook.SheetNames)) {
         const rowsBySheet = workbook.SheetNames.reduce<Record<string, unknown[][]>>((acc, sheetName) => {
           const sheet = workbook.Sheets[sheetName];
-          acc[sheetName] = sheet
-            ? (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][])
-            : [];
+          acc[sheetName] = sheet ? (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false }) as unknown[][]) : [];
           return acc;
         }, {});
-        return {
-          type: "profile",
-          payload: buildImportedMaidProfile(rowsBySheet),
-          fileName: file.name,
-        };
+        return { type: "profile", payload: buildImportedMaidProfile(rowsBySheet), fileName: file.name };
       }
       const sheetName = workbook.SheetNames[0];
       const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
@@ -1227,79 +825,46 @@ const EditMaids = () => {
       const header = Array.isArray(rows[0]) ? rows[0] : [];
       const headerIndexes = new Map<string, number>();
       header.forEach((h, idx) => headerIndexes.set(String(h ?? "").trim().toLowerCase(), idx));
-      if (!headerIndexes.has("referencecode") || !headerIndexes.has("fullname")) {
+      if (!headerIndexes.has("referencecode") || !headerIndexes.has("fullname"))
         throw new Error("XLSX is missing required columns: referenceCode, fullName");
-      }
-      return {
-        type: "csv",
-        csv: normalizeCsv(XLSX.utils.sheet_to_csv(sheet)),
-        fileName: file.name,
-      };
+      return { type: "csv", csv: normalizeCsv(XLSX.utils.sheet_to_csv(sheet)), fileName: file.name };
     }
-    if (ext === "csv") {
-      return {
-        type: "csv",
-        csv: normalizeCsv(await file.text()),
-        fileName: file.name,
-      };
-    }
+    if (ext === "csv") return { type: "csv", csv: normalizeCsv(await file.text()), fileName: file.name };
     if (ext === "xls" || ext === "doc") {
       const content = await file.text();
       const maidsCsvBase64 = extractBase64Marker(content, "MAIDS_CSV_BASE64");
-      if (maidsCsvBase64) {
-        return {
-          type: "csv",
-          csv: normalizeCsv(decodeBase64Utf8(maidsCsvBase64)),
-          fileName: file.name,
-        };
-      }
+      if (maidsCsvBase64) return { type: "csv", csv: normalizeCsv(decodeBase64Utf8(maidsCsvBase64)), fileName: file.name };
       const maidProfileBase64 = extractBase64Marker(content, "MAID_PROFILE_JSON_BASE64");
-      if (maidProfileBase64) {
-        return {
-          type: "profile",
-          payload: JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile,
-          fileName: file.name,
-        };
-      }
+      if (maidProfileBase64) return { type: "profile", payload: JSON.parse(decodeBase64Utf8(maidProfileBase64)) as MaidProfile, fileName: file.name };
       throw new Error('This file is missing import data. Please import files exported from "Export Maids" or from a maid bio-data export.');
     }
     throw new Error("Unsupported file type. Supported: .csv, .xls, .xlsx, .doc, .docx, .pdf");
   };
 
-  const uploadPreparedImportBatch = async (
-    operations: PreparedImportOperation[],
-    signal: AbortSignal
-  ) => {
+  const uploadPreparedImportBatch = async (operations: PreparedImportOperation[], signal: AbortSignal) => {
     const response = await fetch("/api/maids/import.batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operations }),
-      signal,
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operations }), signal,
     });
-    const data = (await response.json().catch(() => ({}))) as {
-      error?: string;
-      results?: ImportBatchResult[];
-    };
-    if (!response.ok && response.status !== 207) {
-      throw new Error(data.error || "Failed to import batch");
-    }
+    const data = (await response.json().catch(() => ({}))) as { error?: string; results?: ImportBatchResult[] };
+    if (!response.ok && response.status !== 207) throw new Error(data.error || "Failed to import batch");
     return data.results ?? [];
   };
 
   const requestExport = () => { if (!isExporting) setConfirmExportOpen(true); };
   const confirmExportPdf = () => { setConfirmExportOpen(false); void handleExportPdf(); };
+
   const requestImportFiles = async (files?: FileList | File[]) => {
     if (!files || isImporting) return;
     const all = Array.from(files);
     if (all.length > 50) toast.error("Max 50 files per upload");
     const list = all.slice(0, 50);
     if (list.length === 0) return;
-    // Scan all files in parallel instead of sequentially
     const scanResults = await Promise.all(list.map((file) => scanUploadedFile(file)));
     const approved: File[] = [];
     scanResults.forEach((scan, i) => {
-      if (!scan.success) { toast.error(`${list[i]!.name}: ${scan.message}`); }
-      else { approved.push(list[i]!); }
+      if (!scan.success) toast.error(`${list[i]!.name}: ${scan.message}`);
+      else approved.push(list[i]!);
     });
     if (approved.length === 0) return;
     setPendingImportFiles(approved);
@@ -1315,16 +880,7 @@ const EditMaids = () => {
     if (files.length === 0) return;
     cancelImportRef.current = false;
     activeImportControllerRef.current = null;
-    setImportBatchProgress({
-      active: true,
-      total: files.length,
-      currentIndex: 0,
-      currentFileName: "",
-      completed: 0,
-      failed: 0,
-      stage: "Preparing files",
-      cancelled: false,
-    });
+    setImportBatchProgress({ active: true, total: files.length, currentIndex: 0, currentFileName: "", completed: 0, failed: 0, stage: "Preparing files", cancelled: false });
     let completed = 0;
     let failed = 0;
     for (let batchStart = 0; batchStart < files.length; batchStart += PARALLEL_BATCH_SIZE) {
@@ -1332,111 +888,55 @@ const EditMaids = () => {
       const batch = files.slice(batchStart, batchStart + PARALLEL_BATCH_SIZE);
       const batchNum = Math.floor(batchStart / PARALLEL_BATCH_SIZE) + 1;
       setImportBatchProgress((prev) => ({
-        ...prev,
-        currentIndex: batchStart,
-        currentFileName: batch.map((f) => f.name).join(", "),
+        ...prev, currentIndex: batchStart, currentFileName: batch.map((f) => f.name).join(", "),
         stage: `Preparing batch ${batchNum} of ${Math.ceil(files.length / PARALLEL_BATCH_SIZE)}`,
       }));
       await waitForPaint();
-      const preparedResults = await Promise.allSettled(
-        batch.map((file) => prepareImportOperationFromFile(file))
-      );
+      const preparedResults = await Promise.allSettled(batch.map((file) => prepareImportOperationFromFile(file)));
       const operations: PreparedImportOperation[] = [];
       preparedResults.forEach((result, i) => {
         const file = batch[i];
-        if (result.status === "fulfilled") {
-          operations.push(result.value);
-          return;
-        }
-
+        if (result.status === "fulfilled") { operations.push(result.value); return; }
         if (result.reason instanceof ManualImportRequiredError) {
           if (files.length === 1) {
-            setManualImportFields({
-              name: result.reason.guessedName,
-              nationality: result.reason.guessedNationality,
-              referenceCode: result.reason.guessedReferenceCode,
-            });
+            setManualImportFields({ name: result.reason.guessedName, nationality: result.reason.guessedNationality, referenceCode: result.reason.guessedReferenceCode });
             setManualImportOpen(true);
             cancelImportRef.current = true;
             return;
           }
           toast.error(`${file?.name}: PDF needs manual import, so it was skipped`);
         } else {
-          toast.error(
-            result.reason instanceof Error
-              ? `${file?.name}: ${result.reason.message}`
-              : `${file?.name}: Failed to prepare import`
-          );
+          toast.error(result.reason instanceof Error ? `${file?.name}: ${result.reason.message}` : `${file?.name}: Failed to prepare import`);
         }
         failed += 1;
       });
       if (cancelImportRef.current) break;
       if (operations.length === 0) {
-        setImportBatchProgress((prev) => ({
-          ...prev,
-          completed,
-          failed,
-          currentIndex: Math.min(prev.total, batchStart + batch.length),
-          stage: failed > 0 ? "Continuing with remaining files" : "Ready for next batch",
-        }));
+        setImportBatchProgress((prev) => ({ ...prev, completed, failed, currentIndex: Math.min(prev.total, batchStart + batch.length), stage: failed > 0 ? "Continuing with remaining files" : "Ready for next batch" }));
         continue;
       }
-      setImportBatchProgress((prev) => ({
-        ...prev,
-        currentIndex: batchStart + operations.length,
-        currentFileName: operations.map((operation) => operation.fileName).join(", "),
-        stage: `Uploading batch ${batchNum} of ${Math.ceil(files.length / PARALLEL_BATCH_SIZE)}`,
-      }));
+      setImportBatchProgress((prev) => ({ ...prev, currentIndex: batchStart + operations.length, currentFileName: operations.map((op) => op.fileName).join(", "), stage: `Uploading batch ${batchNum} of ${Math.ceil(files.length / PARALLEL_BATCH_SIZE)}` }));
       await waitForPaint();
       try {
         const controller = new AbortController();
         activeImportControllerRef.current = controller;
         const batchResults = await uploadPreparedImportBatch(operations, controller.signal);
         batchResults.forEach((result) => {
-          if (result.failed > 0) {
-            failed += 1;
-            if (result.errors.length > 0) {
-              toast.error(`${result.fileName}: ${result.errors.slice(0, 2).join(" | ")}`);
-            }
-          } else {
-            completed += 1;
-          }
+          if (result.failed > 0) { failed += 1; if (result.errors.length > 0) toast.error(`${result.fileName}: ${result.errors.slice(0, 2).join(" | ")}`); }
+          else completed += 1;
         });
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError" && cancelImportRef.current) {
-          break;
-        }
+        if (error instanceof DOMException && error.name === "AbortError" && cancelImportRef.current) break;
         failed += operations.length;
         toast.error(error instanceof Error ? error.message : "Failed to upload batch");
-      } finally {
-        activeImportControllerRef.current = null;
-      }
-      setImportBatchProgress((prev) => ({
-        ...prev,
-        completed,
-        failed,
-        currentIndex: Math.min(prev.total, batchStart + batch.length),
-        stage: failed > 0 ? "Continuing with remaining files" : "Saving imported data",
-      }));
+      } finally { activeImportControllerRef.current = null; }
+      setImportBatchProgress((prev) => ({ ...prev, completed, failed, currentIndex: Math.min(prev.total, batchStart + batch.length), stage: failed > 0 ? "Continuing with remaining files" : "Saving imported data" }));
     }
     const wasCancelled = cancelImportRef.current;
-    if (completed > 0) {
-      await reloadVisibleMaids("public");
-    }
-    setImportBatchProgress((prev) => ({
-      ...prev,
-      active: false,
-      currentIndex: wasCancelled ? Math.min(prev.currentIndex, prev.total) : prev.total,
-      completed,
-      failed,
-      cancelled: wasCancelled,
-      stage: wasCancelled ? "Upload cancelled" : failed ? "Completed with some failed files" : "Completed successfully",
-    }));
-    if (wasCancelled) {
-      toast.error(`Upload cancelled — ${completed} file${completed !== 1 ? "s" : ""} imported before cancel`);
-    } else {
-      toast.success(`Bulk upload finished: ${completed} uploaded${failed ? `, ${failed} failed` : ""}`);
-    }
+    if (completed > 0) await reloadVisibleMaids("public");
+    setImportBatchProgress((prev) => ({ ...prev, active: false, currentIndex: wasCancelled ? Math.min(prev.currentIndex, prev.total) : prev.total, completed, failed, cancelled: wasCancelled, stage: wasCancelled ? "Upload cancelled" : failed ? "Completed with some failed files" : "Completed successfully" }));
+    if (wasCancelled) toast.error(`Upload cancelled — ${completed} file${completed !== 1 ? "s" : ""} imported before cancel`);
+    else toast.success(`Bulk upload finished: ${completed} uploaded${failed ? `, ${failed} failed` : ""}`);
   };
 
   const confirmManualImport = async () => {
@@ -1448,17 +948,12 @@ const EditMaids = () => {
     await importCsvText(`referenceCode,fullName,nationality\n${escapeCsv(ref)},${escapeCsv(name.trim())},${escapeCsv(nationality.trim())}`);
   };
 
-  // ── Shared dialogs (yellow/green accented) ────────────────────────────────
-  const hasActiveUploadFile =
-    importBatchProgress.active &&
-    importBatchProgress.currentIndex > importBatchProgress.completed + importBatchProgress.failed;
-  const uploadProgressUnits =
-    importBatchProgress.completed + importBatchProgress.failed + (hasActiveUploadFile ? 0.35 : 0);
-  const uploadProgressPercent =
-    importBatchProgress.total > 0
-      ? Math.min(100, Math.round((uploadProgressUnits / importBatchProgress.total) * 100))
-      : 0;
+  // ── Upload progress helpers ────────────────────────────────────────────────
+  const hasActiveUploadFile = importBatchProgress.active && importBatchProgress.currentIndex > importBatchProgress.completed + importBatchProgress.failed;
+  const uploadProgressUnits = importBatchProgress.completed + importBatchProgress.failed + (hasActiveUploadFile ? 0.35 : 0);
+  const uploadProgressPercent = importBatchProgress.total > 0 ? Math.min(100, Math.round((uploadProgressUnits / importBatchProgress.total) * 100)) : 0;
 
+  // ── Shared Dialogs ─────────────────────────────────────────────────────────
   const sharedDialogs = (
     <>
       {/* Export */}
@@ -1467,17 +962,12 @@ const EditMaids = () => {
           <DialogHeader>
             <DialogTitle>Export maids PDF?</DialogTitle>
             <DialogDescription>
-              Download a PDF summary of your maid records.
-              The PDF also carries import data so it can be uploaded back into the maids manager later.
+              Download a PDF summary of your maid records. The PDF also carries import data so it can be uploaded back into the maids manager later.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>Cancel</Button>
-            <Button
-              onClick={confirmExportPdf}
-              disabled={isExporting}
-              style={{ background: "var(--ym-green-400)", color: "#fff", borderColor: "var(--ym-green-600)" }}
-            >
+            <Button onClick={confirmExportPdf} disabled={isExporting} className="bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]">
               {isExporting ? "Exporting..." : "Download PDF"}
             </Button>
           </DialogFooter>
@@ -1498,15 +988,13 @@ const EditMaids = () => {
             <span className="font-semibold">Selected file{pendingImportFiles.length === 1 ? "" : "s"}:</span>{" "}
             {pendingImportFiles.length ? pendingImportFiles.map((f) => f.name).join(", ") : "None"}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Bulk upload supports up to 50 files at once. CSV and Excel files are recommended for larger batch imports.
-          </p>
+          <p className="text-xs text-muted-foreground">Bulk upload supports up to 50 files at once. CSV and Excel files are recommended for larger batch imports.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>Cancel</Button>
             <Button
               onClick={() => void confirmImportFiles()}
               disabled={isImporting || pendingImportFiles.length === 0}
-              style={{ background: "var(--ym-green-400)", color: "#fff", borderColor: "var(--ym-green-600)" }}
+              className="bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
             >
               {isImporting ? "Uploading..." : "Upload File"}
             </Button>
@@ -1524,9 +1012,7 @@ const EditMaids = () => {
               </div>
               <div>
                 <DialogTitle className="text-destructive">Confirm Deletion</DialogTitle>
-                <DialogDescription className="mt-0.5">
-                  This action <strong>cannot be undone</strong>.
-                </DialogDescription>
+                <DialogDescription className="mt-0.5">This action <strong>cannot be undone</strong>.</DialogDescription>
               </div>
             </div>
           </DialogHeader>
@@ -1536,79 +1022,42 @@ const EditMaids = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={() => void confirmDelete()}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Yes, Delete
+              <Trash2 className="mr-2 h-4 w-4" /> Yes, Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Visibility */}
-      <Dialog
-        open={visibilityDialogOpen}
-        onOpenChange={(open) => {
-          setVisibilityDialogOpen(open);
-          if (!open) setPendingVisibilityTarget(null);
-        }}
-      >
+      <Dialog open={visibilityDialogOpen} onOpenChange={(open) => { setVisibilityDialogOpen(open); if (!open) setPendingVisibilityTarget(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-                style={{
-                  background: pendingVisibilityTarget?.makePublic
-                    ? "var(--ym-green-50)"
-                    : "var(--ym-amber-50)",
-                }}
-              >
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${pendingVisibilityTarget?.makePublic ? "bg-[#EAF3DE]" : "bg-[#FAEEDA]"}`}>
                 {pendingVisibilityTarget?.makePublic
-                  ? <Eye className="h-5 w-5" style={{ color: "var(--ym-green-600)" }} />
-                  : <EyeOff className="h-5 w-5" style={{ color: "var(--ym-amber-600)" }} />}
+                  ? <Eye className="h-5 w-5 text-[#3B6D11]" />
+                  : <EyeOff className="h-5 w-5 text-[#854F0B]" />}
               </div>
               <div>
-                <DialogTitle>
-                  {pendingVisibilityTarget?.makePublic ? "Publish maid?" : "Hide maid?"}
-                </DialogTitle>
+                <DialogTitle>{pendingVisibilityTarget?.makePublic ? "Publish maid?" : "Hide maid?"}</DialogTitle>
                 <DialogDescription className="mt-0.5">This can be reversed at any time.</DialogDescription>
               </div>
             </div>
           </DialogHeader>
-          <div
-            className="rounded-lg px-4 py-3 text-sm"
-            style={{
-              background: pendingVisibilityTarget?.makePublic ? "var(--ym-green-50)" : "var(--ym-amber-50)",
-              border: `1px solid ${pendingVisibilityTarget?.makePublic ? "color-mix(in srgb, var(--ym-green-200) 50%, transparent)" : "color-mix(in srgb, var(--ym-amber-100) 60%, transparent)"}`,
-              color: pendingVisibilityTarget?.makePublic ? "var(--ym-green-800)" : "var(--ym-amber-800)",
-            }}
-          >
+          <div className={`rounded-lg px-4 py-3 text-sm ${pendingVisibilityTarget?.makePublic ? "bg-[#EAF3DE] border border-[#97C459]/50 text-[#27500A]" : "bg-[#FAEEDA] border border-[#FAC775]/60 text-[#633806]"}`}>
             {pendingVisibilityTarget && "bulk" in pendingVisibilityTarget ? (
-              <>
-                <strong>{selected.size} maid{selected.size !== 1 ? "s" : ""}</strong> will be{" "}
-                <strong>
-                  {pendingVisibilityTarget.makePublic ? "made visible to the public" : "hidden from public view"}
-                </strong>.
-              </>
+              <><strong>{selected.size} maid{selected.size !== 1 ? "s" : ""}</strong> will be{" "}<strong>{pendingVisibilityTarget.makePublic ? "made visible to the public" : "hidden from public view"}</strong>.</>
             ) : (
-              <>
-                <strong>{(pendingVisibilityTarget as { maid: MaidProfile } | null)?.maid?.fullName}</strong> will be{" "}
-                <strong>
-                  {pendingVisibilityTarget?.makePublic ? "visible to the public" : "hidden from public view"}
-                </strong>.
-              </>
+              <><strong>{(pendingVisibilityTarget as { maid: MaidProfile } | null)?.maid?.fullName}</strong> will be{" "}<strong>{pendingVisibilityTarget?.makePublic ? "visible to the public" : "hidden from public view"}</strong>.</>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }}>Cancel</Button>
             <Button
               onClick={() => void confirmVisibilityChange()}
-              style={
-                pendingVisibilityTarget?.makePublic
-                  ? { background: "var(--ym-green-400)", color: "#fff", borderColor: "var(--ym-green-600)" }
-                  : { background: "var(--ym-amber-200)", color: "var(--ym-amber-800)", borderColor: "var(--ym-amber-400)" }
-              }
+              className={pendingVisibilityTarget?.makePublic
+                ? "bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
+                : "bg-[#EF9F27] hover:bg-[#BA7517] text-[#412402] border-[#BA7517]"}
             >
               {pendingVisibilityTarget?.makePublic
                 ? <><Eye className="mr-2 h-4 w-4" /> Publish</>
@@ -1627,14 +1076,7 @@ const EditMaids = () => {
               This PDF wasn't exported from this system. Review the extracted fields below, fill in anything missing, then click Import.
             </DialogDescription>
           </DialogHeader>
-          <div
-            className="rounded-md px-3 py-2 text-xs flex items-start gap-2"
-            style={{
-              background: "var(--ym-amber-50)",
-              border: "1px solid color-mix(in srgb, var(--ym-amber-100) 70%, transparent)",
-              color: "var(--ym-amber-800)",
-            }}
-          >
+          <div className="rounded-md px-3 py-2 text-xs flex items-start gap-2 bg-[#FAEEDA] border border-[#FAC775]/70 text-[#633806]">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <span>Photos cannot be extracted from external PDFs. After importing, open the maid profile and use <strong>Manage Photos</strong> to upload them manually.</span>
           </div>
@@ -1658,7 +1100,7 @@ const EditMaids = () => {
             <Button
               onClick={() => void confirmManualImport()}
               disabled={isImporting || !manualImportFields.name.trim()}
-              style={{ background: "var(--ym-green-400)", color: "#fff", borderColor: "var(--ym-green-600)" }}
+              className="bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
             >
               {isImporting ? "Importing…" : "Import"}
             </Button>
@@ -1672,19 +1114,13 @@ const EditMaids = () => {
   if (view === "menu") {
     return (
       <div className="page-container">
-        <style>{menuStyles}</style>
+        <style>{globalStyles}</style>
         <div className="content-card animate-fade-in-up space-y-6">
 
           {/* Quick-search */}
           <div ref={menuSearchRef} className="relative">
-            <div
-              className={`search-glow flex items-center gap-2 rounded-xl border bg-background px-3 py-1 shadow-sm transition-all ${menuSearchOpen ? "" : ""}`}
-              style={menuSearchOpen ? { borderColor: "color-mix(in srgb, var(--ym-green-200) 80%, transparent)" } : {}}
-            >
-              <Search
-                className={`h-4 w-4 shrink-0 transition-colors ${menuSearchLoading ? "animate-pulse" : "text-muted-foreground"}`}
-                style={menuSearchLoading ? { color: "var(--ym-green-400)" } : {}}
-              />
+            <div className={`flex items-center gap-2 rounded-xl border bg-background px-3 py-1 shadow-sm transition-all ${menuSearchOpen ? "border-[#97C459]/80" : "border-border"}`}>
+              <Search className={`h-4 w-4 shrink-0 transition-colors ${menuSearchLoading ? "animate-pulse text-[#639922]" : "text-muted-foreground"}`} />
               <input
                 type="text"
                 placeholder="Quick-search any maid by name or reference code…"
@@ -1714,28 +1150,25 @@ const EditMaids = () => {
               )}
             </div>
 
+            {/* Dropdown results */}
             {menuSearchOpen && menuSearchResults.length > 0 && (
-              <div className="search-dropdown">
+              <div className="animate-dropdown-in absolute top-[calc(100%+6px)] left-0 right-0 bg-background border-[1.5px] border-[#97C459]/55 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.10),0_2px_8px_rgba(0,0,0,0.05)] z-50 overflow-hidden">
                 {menuSearchResults.map((maid, idx) => {
-                  const photo = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
-                    ? maid.photoDataUrls[0] : maid.photoDataUrl;
+                  const photo = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl;
                   const age = calculateAge(maid.dateOfBirth);
                   const vis = (maid as MaidProfile & { _vis?: string })._vis;
                   const flagCode = getNationalityCode(maid.nationality);
                   return (
                     <div
                       key={maid.referenceCode}
-                      className={`search-result-item ${idx === menuActiveIndex ? "active" : ""}`}
+                      className={`flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer transition-colors border-b border-border/50 last:border-b-0 ${idx === menuActiveIndex ? "bg-[#EAF3DE]" : "hover:bg-[#EAF3DE]"}`}
                       onMouseEnter={() => setMenuActiveIndex(idx)}
-                      onClick={() => {
-                        navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: vis ?? "public" } });
-                        setMenuSearchOpen(false);
-                      }}
+                      onClick={() => { navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: vis ?? "public" } }); setMenuSearchOpen(false); }}
                     >
                       {photo ? (
-                        <img src={photo} alt={maid.fullName} className="search-result-avatar" />
+                        <img src={photo} alt={maid.fullName} className="w-[42px] h-[42px] rounded-lg object-cover flex-shrink-0 bg-[#EAF3DE] border border-[#97C459]/40" />
                       ) : (
-                        <div className="search-result-avatar-placeholder">
+                        <div className="w-[42px] h-[42px] rounded-lg bg-[#EAF3DE] border border-[#97C459]/50 flex items-center justify-center flex-shrink-0 text-xs font-bold text-[#3B6D11]">
                           {maid.fullName.slice(0, 2).toUpperCase()}
                         </div>
                       )}
@@ -1745,11 +1178,11 @@ const EditMaids = () => {
                         </p>
                         <p className="truncate text-[11px] text-foreground/55 mt-0.5 flex items-center">
                           <span className="font-semibold">{highlightMatch(String(maid.referenceCode), menuSearch)}</span>
-                          {maid.nationality ? (<><span className="mx-1">·</span><FlagCircle code={flagCode} />{maid.nationality}</>) : ""}
+                          {maid.nationality && (<><span className="mx-1">·</span><FlagCircle code={flagCode} />{maid.nationality}</>)}
                           {age !== null ? ` · ${age} yrs` : ""}
                         </p>
                       </div>
-                      <span className={vis === "public" ? "search-badge-public" : "search-badge-hidden"}>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide flex-shrink-0 ${vis === "public" ? "bg-[#EAF3DE] text-[#3B6D11]" : "bg-[#FAEEDA] text-[#854F0B]"}`}>
                         {vis === "public" ? "Public" : "Hidden"}
                       </span>
                     </div>
@@ -1762,7 +1195,7 @@ const EditMaids = () => {
             )}
 
             {menuSearchOpen && !menuSearchLoading && menuSearchResults.length === 0 && menuSearch.trim() && (
-              <div className="search-dropdown px-4 py-5 text-center">
+              <div className="animate-dropdown-in absolute top-[calc(100%+6px)] left-0 right-0 bg-background border-[1.5px] border-[#97C459]/55 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.10)] z-50 overflow-hidden px-4 py-5 text-center">
                 <p className="text-sm font-medium text-foreground/70">No maids found</p>
                 <p className="text-xs text-foreground/40 mt-1">Try a different name or reference code</p>
               </div>
@@ -1775,29 +1208,39 @@ const EditMaids = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
             {/* Public Card — green */}
-            <button onClick={() => setView("public")} className="card-public group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center">
-              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl" style={{ background: "color-mix(in srgb, var(--ym-green-200) 20%, transparent)" }} />
-              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl" style={{ background: "color-mix(in srgb, var(--ym-green-100) 18%, transparent)" }} />
+            <button
+              onClick={() => setView("public")}
+              className="group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center
+                bg-gradient-to-br from-[#EAF3DE] via-[#EAF3DE]/40 to-transparent
+                border-[1.5px] border-[#97C459]/50
+                transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
+                hover:border-[#97C459] hover:shadow-[0_8px_32px_rgba(99,153,34,0.22),0_2px_8px_rgba(99,153,34,0.12)]
+                hover:-translate-y-0.5 hover:scale-[1.01] active:translate-y-0 active:scale-[0.99]"
+            >
+              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl bg-[#97C459]/20" />
+              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl bg-[#C0DD97]/18" />
 
-              <div className="icon-3d-public">
-                <div className="icon-shine" />
-                <Eye className="h-8 w-8 text-white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.25))" }} />
+              {/* 3-D icon */}
+              <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-gradient-to-br from-[#97C459] to-[#639922]
+                shadow-[0_4px_0_#3B6D11,0_8px_20px_rgba(99,153,34,0.35),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_0_rgba(0,0,0,0.12)]
+                transition-all duration-300
+                group-hover:animate-float-icon group-hover:shadow-[0_8px_0_#3B6D11,0_14px_30px_rgba(99,153,34,0.40),inset_0_1px_0_rgba(255,255,255,0.40),inset_0_-2px_0_rgba(0,0,0,0.12)]">
+                <div className="absolute inset-0 rounded-[22px] rounded-b-none h-1/2 bg-gradient-to-b from-white/28 to-transparent pointer-events-none" />
+                <Eye className="h-8 w-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)]" />
               </div>
 
               <div className="space-y-1.5">
                 <div className="mb-2">
-                  <span className="badge-live">
-                    <span className="badge-live-dot" />
+                  <span className="inline-flex items-center gap-[5px] bg-[#EAF3DE] border border-[#97C459]/60 text-[#3B6D11] rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]">
+                    <span className="animate-pulse-dot w-1.5 h-1.5 rounded-full bg-[#639922]" />
                     Live
                   </span>
                 </div>
-                <p className="text-lg font-bold tracking-tight" style={{ color: "var(--ym-green-700, var(--ym-green-600))" }}>Maids in Public</p>
-                <p className="text-sm text-foreground/60 leading-relaxed">
-                  View, edit or remove<br />publicly visible maids
-                </p>
+                <p className="text-lg font-bold tracking-tight text-[#3B6D11]">Maids in Public</p>
+                <p className="text-sm text-foreground/60 leading-relaxed">View, edit or remove<br />publicly visible maids</p>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs font-semibold transition-colors" style={{ color: "var(--ym-green-600)" }}>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#3B6D11]">
                 <span>Open list</span>
                 <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -1805,30 +1248,40 @@ const EditMaids = () => {
               </div>
             </button>
 
-            {/* Hidden Card — amber/yellow */}
-            <button onClick={() => setView("hidden")} className="card-hidden group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center">
-              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl" style={{ background: "color-mix(in srgb, var(--ym-amber-200) 18%, transparent)" }} />
-              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl" style={{ background: "color-mix(in srgb, var(--ym-amber-100) 16%, transparent)" }} />
+            {/* Hidden Card — amber */}
+            <button
+              onClick={() => setView("hidden")}
+              className="group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center
+                bg-gradient-to-br from-[#FAEEDA] via-[#FAEEDA]/50 to-transparent
+                border-[1.5px] border-[#FAC775]/70
+                transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
+                hover:border-[#FAC775] hover:shadow-[0_8px_28px_rgba(186,117,23,0.18),0_2px_8px_rgba(186,117,23,0.10)]
+                hover:-translate-y-0.5 hover:scale-[1.01] active:translate-y-0 active:scale-[0.99]"
+            >
+              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl bg-[#EF9F27]/18" />
+              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl bg-[#FAC775]/16" />
 
-              <div className="icon-3d-hidden">
-                <div className="icon-shine" />
-                <EyeOff className="h-8 w-8 text-white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.22))" }} />
+              {/* 3-D icon */}
+              <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-gradient-to-br from-[#EF9F27] to-[#BA7517]
+                shadow-[0_4px_0_#854F0B,0_8px_20px_rgba(186,117,23,0.30),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_0_rgba(0,0,0,0.12)]
+                transition-all duration-300
+                group-hover:animate-float-icon group-hover:shadow-[0_8px_0_#854F0B,0_14px_28px_rgba(186,117,23,0.35),inset_0_1px_0_rgba(255,255,255,0.40),inset_0_-2px_0_rgba(0,0,0,0.12)]">
+                <div className="absolute inset-0 rounded-[22px] rounded-b-none h-1/2 bg-gradient-to-b from-white/28 to-transparent pointer-events-none" />
+                <EyeOff className="h-8 w-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.22)]" />
               </div>
 
               <div className="space-y-1.5">
                 <div className="mb-2">
-                  <span className="badge-draft">
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ym-amber-400)", display: "inline-block", flexShrink: 0 }} />
+                  <span className="inline-flex items-center gap-[5px] bg-[#FAEEDA] border border-[#FAC775]/70 text-[#854F0B] rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#EF9F27] flex-shrink-0" />
                     Draft
                   </span>
                 </div>
                 <p className="text-lg font-bold tracking-tight text-foreground">Maids Hidden</p>
-                <p className="text-sm text-foreground/60 leading-relaxed">
-                  Manage drafts &amp; maids<br />hidden from public view
-                </p>
+                <p className="text-sm text-foreground/60 leading-relaxed">Manage drafts &amp; maids<br />hidden from public view</p>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs font-semibold transition-colors" style={{ color: "var(--ym-amber-600)" }}>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#854F0B]">
                 <span>Open list</span>
                 <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -1837,18 +1290,10 @@ const EditMaids = () => {
             </button>
           </div>
 
-          <p
-            className="rounded-md px-3 py-2 text-center text-xs"
-            style={{
-              background: "var(--ym-amber-50)",
-              border: "1px solid color-mix(in srgb, var(--ym-amber-100) 70%, transparent)",
-              color: "var(--ym-amber-700, var(--ym-amber-600))",
-            }}
-          >
+          <p className="rounded-md px-3 py-2 text-center text-xs bg-[#FAEEDA] border border-[#FAC775]/70 text-[#854F0B]">
             Maids without photos will not be displayed publicly. Add photos first, then make them searchable.
           </p>
         </div>
-
         {sharedDialogs}
       </div>
     );
@@ -1858,27 +1303,28 @@ const EditMaids = () => {
   const allPageSelected = paginatedMaids.length > 0 && paginatedMaids.every((m) => selected.has(m.referenceCode));
 
   return (
-    <div className="page-container" style={{ maxWidth: "100%", width: "100%", paddingLeft: "1.25rem", paddingRight: "1.25rem" }}>
-      <style>{menuStyles}</style>
+    <div className="page-container w-full max-w-full px-5">
+      <style>{globalStyles}</style>
 
       {/* List header bar */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <button
           onClick={handleBack}
-          className="back-btn group inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium focus:outline-none focus:ring-2"
-          style={{ color: "var(--ym-green-600)", "--tw-ring-color": "color-mix(in srgb, var(--ym-green-400) 30%, transparent)" } as React.CSSProperties}
+          className="back-btn group inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-[#639922] focus:outline-none focus:ring-2 focus:ring-[#639922]/30"
         >
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
           <span className="relative">
             Back
-            <span className="back-btn-line absolute left-0 -bottom-0.5 h-px w-0 transition-all group-hover:w-full" />
+            <span className="back-btn-line" />
           </span>
         </button>
 
         <div className="flex items-center gap-2">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${view === "public" ? "chip-public" : "chip-hidden"}`}
-          >
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
+            view === "public"
+              ? "bg-[#EAF3DE] text-[#3B6D11] border-[#97C459]/60"
+              : "bg-[#FAEEDA] text-[#854F0B] border-[#FAC775]/60"
+          }`}>
             {view === "public" ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             {view === "public" ? "Public Maids" : "Hidden Maids"}
           </span>
@@ -1890,17 +1336,17 @@ const EditMaids = () => {
         </div>
       </div>
 
-      <div className="content-card animate-fade-in-up space-y-4" style={{ maxWidth: "100%", width: "100%" }}>
+      <div className="content-card animate-fade-in-up w-full max-w-full space-y-4">
 
         {/* Toolbar */}
         <div className="flex flex-wrap gap-2">
-          <div className="search-glow flex flex-1 min-w-48 items-center gap-2 rounded-lg border bg-background px-3 shadow-sm transition-all">
+          <div className="flex flex-1 min-w-48 items-center gap-2 rounded-lg border border-input bg-background px-3 shadow-sm focus-within:border-input focus-within:shadow-sm focus-within:[outline:none] focus-within:[box-shadow:none]">
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Input
               placeholder="Search by name or reference code…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border-0 shadow-none focus-visible:ring-0 px-0"
+              className="border-0 bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-0 px-0"
               autoComplete="off"
               spellCheck={false}
             />
@@ -1920,7 +1366,7 @@ const EditMaids = () => {
                 variant="outline"
                 onClick={() => importInputRef.current?.click()}
                 disabled={isImporting || importBatchProgress.active}
-                className="h-10 border-[color:var(--ym-green-200)] text-[color:var(--ym-green-700)] hover:bg-[color:var(--ym-green-50)]"
+                className="h-10 border-[#C0DD97] text-[#3B6D11] hover:bg-[#EAF3DE]"
               >
                 <Upload className="mr-2 h-4 w-4" />
                 {importBatchProgress.active ? "Uploading..." : "Bulk Upload CSV/Excel"}
@@ -1931,60 +1377,40 @@ const EditMaids = () => {
                 multiple
                 accept=".csv,.xls,.xlsx,.pdf,.doc,.docx"
                 className="hidden"
-                onChange={(event) => {
-                  void requestImportFiles(event.target.files ?? undefined);
-                  event.target.value = "";
-                }}
+                onChange={(event) => { void requestImportFiles(event.target.files ?? undefined); event.target.value = ""; }}
               />
             </>
           )}
         </div>
 
+        {/* Batch upload progress */}
         {(importBatchProgress.active || importBatchProgress.completed > 0 || importBatchProgress.failed > 0) && (
-          <div
-            className="rounded-xl border overflow-hidden"
-            style={{
-              background: importBatchProgress.cancelled
-                ? "var(--ym-amber-50)"
-                : importBatchProgress.failed > 0 && !importBatchProgress.active
-                  ? "color-mix(in srgb, #fef2f2 85%, var(--ym-green-50))"
-                  : "var(--ym-green-50)",
-              borderColor: importBatchProgress.cancelled
-                ? "color-mix(in srgb, var(--ym-amber-200) 70%, transparent)"
-                : importBatchProgress.failed > 0 && !importBatchProgress.active
-                  ? "color-mix(in srgb, #fecaca 60%, transparent)"
-                  : "color-mix(in srgb, var(--ym-green-200) 65%, transparent)",
-            }}
-          >
-            {/* Header row */}
+          <div className={`rounded-xl border overflow-hidden ${
+            importBatchProgress.cancelled
+              ? "bg-[#FAEEDA] border-[#EF9F27]/70"
+              : importBatchProgress.failed > 0 && !importBatchProgress.active
+                ? "bg-[#fef2f2]/85 border-[#fecaca]/60"
+                : "bg-[#EAF3DE] border-[#97C459]/65"
+          }`}>
+            {/* Header */}
             <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
               <div className="flex items-center gap-2 min-w-0">
                 {importBatchProgress.active ? (
-                  <Loader2
-                    className="h-4 w-4 shrink-0 animate-spin"
-                    style={{ color: "var(--ym-green-600)" }}
-                  />
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#3B6D11]" />
                 ) : importBatchProgress.cancelled ? (
-                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" style={{ color: "var(--ym-amber-600)" }}>
+                  <svg className="h-4 w-4 shrink-0 text-[#854F0B]" viewBox="0 0 16 16" fill="none">
                     <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
                     <path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
                 ) : importBatchProgress.failed > 0 ? (
                   <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
                 ) : (
-                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" style={{ color: "var(--ym-green-600)" }}>
+                  <svg className="h-4 w-4 shrink-0 text-[#3B6D11]" viewBox="0 0 16 16" fill="none">
                     <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
                     <path d="M5 8l2.5 2.5L11 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
-                <p
-                  className="text-sm font-bold truncate"
-                  style={{
-                    color: importBatchProgress.cancelled
-                      ? "var(--ym-amber-800)"
-                      : "var(--ym-green-800)",
-                  }}
-                >
+                <p className={`text-sm font-bold truncate ${importBatchProgress.cancelled ? "text-[#633806]" : "text-[#27500A]"}`}>
                   {importBatchProgress.active
                     ? "Bulk upload in progress…"
                     : importBatchProgress.cancelled
@@ -1996,12 +1422,8 @@ const EditMaids = () => {
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {/* Stats chips */}
                 {importBatchProgress.completed > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                    style={{ background: "var(--ym-green-100)", color: "var(--ym-green-700)" }}
-                  >
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[#C0DD97] text-[#3B6D11]">
                     <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
                       <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -2016,27 +1438,13 @@ const EditMaids = () => {
                     {importBatchProgress.failed}
                   </span>
                 )}
-                <span
-                  className="text-xs font-bold tabular-nums"
-                  style={{ color: "var(--ym-green-700)" }}
-                >
-                  {uploadProgressPercent}%
-                </span>
+                <span className="text-xs font-bold tabular-nums text-[#3B6D11]">{uploadProgressPercent}%</span>
 
-                {/* Cancel button — only while active */}
                 {importBatchProgress.active && (
                   <button
                     type="button"
-                    onClick={() => {
-                      cancelImportRef.current = true;
-                      activeImportControllerRef.current?.abort();
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors"
-                    style={{
-                      background: "#fff",
-                      borderColor: "color-mix(in srgb, var(--ym-amber-200) 80%, transparent)",
-                      color: "var(--ym-amber-700)",
-                    }}
+                    onClick={() => { cancelImportRef.current = true; activeImportControllerRef.current?.abort(); }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#EF9F27]/80 bg-white px-2.5 py-1 text-xs font-semibold text-[#BA7517] transition-colors hover:bg-[#FAEEDA]"
                     title="Stop after the current batch finishes"
                   >
                     <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
@@ -2045,18 +1453,10 @@ const EditMaids = () => {
                     Cancel
                   </button>
                 )}
-
-                {/* Dismiss button — only when done */}
                 {!importBatchProgress.active && (
                   <button
                     type="button"
-                    onClick={() =>
-                      setImportBatchProgress({
-                        active: false, total: 0, currentIndex: 0,
-                        currentFileName: "", completed: 0, failed: 0,
-                        stage: "", cancelled: false,
-                      })
-                    }
+                    onClick={() => setImportBatchProgress({ active: false, total: 0, currentIndex: 0, currentFileName: "", completed: 0, failed: 0, stage: "", cancelled: false })}
                     className="flex h-5 w-5 items-center justify-center rounded-full bg-black/8 text-foreground/40 hover:bg-black/14 transition-colors text-[10px]"
                     aria-label="Dismiss"
                   >✕</button>
@@ -2067,51 +1467,37 @@ const EditMaids = () => {
             {/* Stage + current file */}
             <div className="px-4 pb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
               {importBatchProgress.stage && (
-                <span
-                  className="text-xs"
-                  style={{
-                    color: importBatchProgress.cancelled
-                      ? "var(--ym-amber-700)"
-                      : "var(--ym-green-700)",
-                    opacity: 0.85,
-                  }}
-                >
+                <span className={`text-xs opacity-85 ${importBatchProgress.cancelled ? "text-[#BA7517]" : "text-[#3B6D11]"}`}>
                   {importBatchProgress.stage}
                 </span>
               )}
               {importBatchProgress.active && importBatchProgress.currentFileName && (
                 <span
-                  className="inline-block max-w-[280px] truncate rounded-md px-2 py-0.5 text-[11px] font-medium"
-                  style={{
-                    background: "color-mix(in srgb, var(--ym-green-200) 30%, white)",
-                    color: "var(--ym-green-800)",
-                  }}
+                  className="inline-block max-w-[280px] truncate rounded-md px-2 py-0.5 text-[11px] font-medium bg-[#97C459]/30 text-[#27500A]"
                   title={importBatchProgress.currentFileName}
                 >
                   {importBatchProgress.currentFileName}
                 </span>
               )}
               {importBatchProgress.total > 0 && (
-                <span className="ml-auto text-[11px] font-semibold" style={{ color: "var(--ym-green-700)", opacity: 0.7 }}>
+                <span className="ml-auto text-[11px] font-semibold text-[#3B6D11] opacity-70">
                   {Math.max(importBatchProgress.currentIndex, importBatchProgress.completed + importBatchProgress.failed)} / {importBatchProgress.total} files
                 </span>
               )}
             </div>
 
             {/* Progress bar */}
-            <div className="mx-4 mb-3 h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.7)" }}>
+            <div className="mx-4 mb-3 h-2 overflow-hidden rounded-full bg-white/70">
               <div
                 className="h-full rounded-full transition-all duration-500 ease-out"
                 style={{
                   width: `${uploadProgressPercent}%`,
                   background: importBatchProgress.cancelled
-                    ? "var(--ym-amber-400)"
+                    ? "#EF9F27"
                     : importBatchProgress.failed > 0 && !importBatchProgress.active
-                      ? "linear-gradient(90deg, var(--ym-green-400) 0%, #f87171 100%)"
-                      : "linear-gradient(90deg, var(--ym-green-400) 0%, var(--ym-green-200) 100%)",
-                  boxShadow: importBatchProgress.active
-                    ? "0 0 8px color-mix(in srgb, var(--ym-green-400) 50%, transparent)"
-                    : "none",
+                      ? "linear-gradient(90deg, #639922 0%, #f87171 100%)"
+                      : "linear-gradient(90deg, #639922 0%, #C0DD97 100%)",
+                  boxShadow: importBatchProgress.active ? "0 0 8px rgba(99,153,34,0.5)" : "none",
                 }}
               />
             </div>
@@ -2120,9 +1506,9 @@ const EditMaids = () => {
 
         {/* Bulk actions bar */}
         {maids.length > 0 && (
-          <div className="bulk-bar flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#EAF3DE] border border-[#97C459]/45 rounded-xl">
             <label className="flex cursor-pointer items-center gap-2 text-sm font-medium select-none">
-              <button type="button" onClick={toggleAll} style={{ color: "var(--ym-green-600)" }}>
+              <button type="button" onClick={toggleAll} className="text-[#639922]">
                 {allPageSelected
                   ? <CheckSquare className="h-4 w-4" />
                   : <Square className="h-4 w-4 text-muted-foreground" />}
@@ -2138,11 +1524,7 @@ const EditMaids = () => {
                 size="sm"
                 disabled={selected.size === 0}
                 onClick={() => openVisibilityDialog({ bulk: true, makePublic: view !== "public" })}
-                className="h-8 text-xs"
-                style={selected.size > 0 ? {
-                  borderColor: "color-mix(in srgb, var(--ym-green-200) 60%, transparent)",
-                  color: "var(--ym-green-700, var(--ym-green-600))",
-                } : {}}
+                className={`h-8 text-xs ${selected.size > 0 ? "border-[#97C459]/60 text-[#3B6D11]" : ""}`}
               >
                 <EyeOff className="mr-1.5 h-3.5 w-3.5" />
                 {view === "public" ? "Hide Selected" : "Publish Selected"}
@@ -2185,21 +1567,18 @@ const EditMaids = () => {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
             {paginatedMaids.map((maid, i) => {
               const age = calculateAge(maid.dateOfBirth);
-              const photoPreview =
-                Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
-                  ? maid.photoDataUrls[0] : maid.photoDataUrl;
+              const photoPreview = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl;
               const isSelected = selected.has(maid.referenceCode);
               const flagCode = getNationalityCode(maid.nationality);
 
               return (
                 <div
                   key={maid.referenceCode}
-                  className={`maid-card group relative flex flex-col ${isSelected ? "selected" : ""}`}
-                  style={{
-                    animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards",
-                    animationDelay: `${i * 0.04}s`,
-                    opacity: 0,
-                  }}
+                  className={`group relative flex flex-col overflow-hidden border-[1.5px] transition-all duration-200 ease-in-out
+                    hover:shadow-[0_6px_24px_rgba(99,153,34,0.14),0_2px_6px_rgba(0,0,0,0.06)]
+                    hover:-translate-y-0.5 hover:border-[#97C459]/70
+                    ${isSelected ? "border-[#639922] shadow-[0_0_0_3px_rgba(99,153,34,0.20)]" : "border-border"}`}
+                  style={{ animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards", animationDelay: `${i * 0.04}s`, opacity: 0 }}
                 >
                   {/* Photo area */}
                   <div
@@ -2207,26 +1586,25 @@ const EditMaids = () => {
                     onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
                   >
                     {photoPreview ? (
-                      <img src={photoPreview} alt={maid.fullName} className="maid-card-photo" />
+                      <img src={photoPreview} alt={maid.fullName} className="w-full aspect-[3/4] object-contain object-top block min-h-[130px] bg-white align-top" />
                     ) : (
-                      <div className="maid-card-no-photo">No Photo</div>
+                      <div className="w-full aspect-[3/4] min-h-[130px] flex items-center justify-center bg-[#EAF3DE] text-[11px] text-[#27500A] font-medium">
+                        No Photo
+                      </div>
                     )}
 
                     {/* Checkbox */}
                     <div className="absolute left-2 top-2" onClick={(e) => { e.stopPropagation(); toggle(maid.referenceCode); }}>
-                      <div
-                        className="flex h-5 w-5 items-center justify-center rounded border-2 transition-colors cursor-pointer"
-                        style={isSelected ? {
-                          borderColor: "var(--ym-green-400)",
-                          background: "var(--ym-green-400)",
-                          color: "#fff",
-                        } : {
-                          borderColor: "rgba(255,255,255,0.75)",
-                          background: "rgba(0,0,0,0.25)",
-                          backdropFilter: "blur(4px)",
-                        }}
-                      >
-                        {isSelected && <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                      <div className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors cursor-pointer ${
+                        isSelected
+                          ? "border-[#639922] bg-[#639922] text-white"
+                          : "border-white/75 bg-black/25 backdrop-blur-sm"
+                      }`}>
+                        {isSelected && (
+                          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
                       </div>
                     </div>
 
@@ -2240,14 +1618,14 @@ const EditMaids = () => {
                   </div>
 
                   {/* Card body */}
-                  <div className="maid-card-body flex-1">
+                  <div className="flex flex-1 flex-col gap-1 p-[7px_8px_9px]">
                     <p
-                      className="maid-card-name"
+                      className="text-xs font-extrabold text-[#0a0a0a] leading-[1.3] whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer hover:text-[#3B6D11] transition-colors"
                       onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
                     >
                       {maid.fullName}
                     </p>
-                    <div className="maid-card-meta">
+                    <div className="text-[10.5px] text-[#1a1a1a] leading-[1.55] font-medium">
                       <p>{maid.maritalStatus}{age !== null ? ` · ${age} yrs` : ""}</p>
                       <p className="flex items-center flex-wrap gap-x-0.5">
                         <FlagCircle code={flagCode} />
@@ -2256,11 +1634,15 @@ const EditMaids = () => {
                       <p>{maid.type}</p>
                     </div>
                     <div>
-                      <p className="maid-card-ref">Ref: {maid.referenceCode}</p>
-                      <p className="maid-card-date">Upd: {formatDate(maid.updatedAt)}</p>
+                      <p className="text-[10.5px] font-extrabold text-[#0a0a0a] tabular-nums">Ref: {maid.referenceCode}</p>
+                      <p className="text-[10px] text-[#2a2a2a] font-medium">Upd: {formatDate(maid.updatedAt)}</p>
                     </div>
                     <button
-                      className={`maid-card-vis-btn ${view === "public" ? "public" : "hidden-btn"}`}
+                      className={`mt-0.5 inline-flex w-full items-center justify-center gap-1 rounded px-1.5 py-1.5 text-[10.5px] font-bold transition-colors cursor-pointer border ${
+                        view === "public"
+                          ? "bg-[#EAF3DE] text-[#3B6D11] border-[#97C459]/50 hover:bg-[#C0DD97]/60"
+                          : "bg-[#FAEEDA] text-[#854F0B] border-[#FAC775]/60 hover:bg-[#FAC775]/40"
+                      }`}
                       onClick={() => openVisibilityDialog({ maid, makePublic: view !== "public" })}
                     >
                       {view === "public"
@@ -2288,13 +1670,11 @@ const EditMaids = () => {
               <button
                 key={i}
                 onClick={() => setPage(i + 1)}
-                className="h-9 min-w-[2.25rem] rounded-lg border px-3 text-sm font-medium transition-colors"
-                style={i + 1 === currentPage ? {
-                  background: "var(--ym-green-400)",
-                  color: "#fff",
-                  borderColor: "var(--ym-green-600)",
-                  fontWeight: 700,
-                } : { color: "hsl(var(--foreground)/0.7)" }}
+                className={`h-9 min-w-[2.25rem] rounded-lg border px-3 text-sm font-medium transition-colors ${
+                  i + 1 === currentPage
+                    ? "bg-[#639922] text-white border-[#3B6D11] font-bold"
+                    : "text-foreground/70 hover:bg-muted"
+                }`}
               >
                 {i + 1}
               </button>
@@ -2317,30 +1697,21 @@ const EditMaids = () => {
         open={Boolean(maidToSendThroughAgency)}
         onOpenChange={(open) => { if (!open) setMaidToSendThroughAgency(null); }}
         actionType="interested"
-        onSuccess={(updatedMaid) => {
-          setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m));
-          setMaidToSendThroughAgency(null);
-        }}
+        onSuccess={(updatedMaid) => { setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m)); setMaidToSendThroughAgency(null); }}
       />
       <SendMaidToClientDialog
         maid={maidToDirectHire}
         open={Boolean(maidToDirectHire)}
         onOpenChange={(open) => { if (!open) setMaidToDirectHire(null); }}
         actionType="direct_hire"
-        onSuccess={(updatedMaid) => {
-          setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m));
-          setMaidToDirectHire(null);
-        }}
+        onSuccess={(updatedMaid) => { setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m)); setMaidToDirectHire(null); }}
       />
       <SendMaidToClientDialog
         maid={maidToReject}
         open={Boolean(maidToReject)}
         onOpenChange={(open) => { if (!open) setMaidToReject(null); }}
         actionType="rejected"
-        onSuccess={(updatedMaid) => {
-          setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m));
-          setMaidToReject(null);
-        }}
+        onSuccess={(updatedMaid) => { setMaids((prev) => prev.map((m) => m.referenceCode === updatedMaid.referenceCode ? updatedMaid : m)); setMaidToReject(null); }}
       />
     </div>
   );

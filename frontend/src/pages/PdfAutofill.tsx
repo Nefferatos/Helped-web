@@ -1,83 +1,59 @@
-// PdfAutofill.tsx  — bold button with AI icon + arc % indicator + popup
-// + daily usage tracking with localStorage + midnight countdown
-// Usage: import { PdfAutofillBanner } from "./PdfAutofill";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, AlertCircle, X, FileText, Zap } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import type { MaidProfile } from "@/lib/maids";
 
-// ─── Gemini config ────────────────────────────────────────────────────────────
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+// ─── pdf.js setup ─────────────────────────────────────────────────────────────
+import * as pdfjsLib from "pdfjs-dist";
+import PdfWorker from "pdfjs-dist/build/pdf.worker?url";
+pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorker;
 
-// gemini-2.0-flash was retired March 2026 — replaced with stable 2.5-flash-lite as fallback
-const GEMINI_MODELS = [
-  "gemini-2.5-flash-preview-05-20",
-  "gemini-2.5-flash-lite",
+const GROQ_API_KEY  = import.meta.env.VITE_GROQ_API_KEY as string;
+const GROQ_BASE     = "https://api.groq.com/openai/v1/chat/completions";
+
+const GROQ_MODELS = [
+  "meta-llama/llama-4-scout-17b-16e-instruct",
+  "llama-3.3-70b-versatile",
 ] as const;
 
-const geminiUrl = (model: string) =>
-  `${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`;
-
 const RETRYABLE_CODES = new Set([429, 500, 503]);
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 1500;
+const MAX_RETRIES     = 3;
+const BASE_DELAY_MS   = 1500;
 
-// ─── Usage tracking config ────────────────────────────────────────────────────
-// Gemini 2.5 Flash free tier: ~500 RPD (conservative limit set below)
-const DAILY_LIMIT = 20; // conservative daily cap shown to users
-const STORAGE_KEY = "pdfAutofill_usage";
+// ─── Usage tracking ────────────────────────────────────────────────────────────
+const DAILY_LIMIT = 50;
+const STORAGE_KEY = "pdfAutofill_usage_groq";
 
-interface UsageRecord {
-  date: string;   // YYYY-MM-DD in Pacific Time
-  count: number;
-}
+interface UsageRecord { date: string; count: number; }
 
 function getPacificDateString(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 }
-
 function loadUsage(): UsageRecord {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { date: getPacificDateString(), count: 0 };
     const parsed = JSON.parse(raw) as UsageRecord;
-    // Reset if it's a new day (Pacific Time)
-    if (parsed.date !== getPacificDateString()) {
-      return { date: getPacificDateString(), count: 0 };
-    }
+    if (parsed.date !== getPacificDateString()) return { date: getPacificDateString(), count: 0 };
     return parsed;
-  } catch {
-    return { date: getPacificDateString(), count: 0 };
-  }
+  } catch { return { date: getPacificDateString(), count: 0 }; }
 }
-
 function saveUsage(record: UsageRecord): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
-  } catch {
-    // localStorage unavailable — fail silently
-  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(record)); } catch { /* ignore */ }
 }
-
 function incrementUsage(): UsageRecord {
   const current = loadUsage();
-  const updated = { date: current.date, count: current.count + 1 };
+  const updated  = { date: current.date, count: current.count + 1 };
   saveUsage(updated);
   return updated;
 }
-
-/** Milliseconds until midnight Pacific Time */
 function msTillMidnightPacific(): number {
-  const now = new Date();
-  // Get current time in Pacific
+  const now        = new Date();
   const pacificNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-  const midnight = new Date(pacificNow);
+  const midnight   = new Date(pacificNow);
   midnight.setHours(24, 0, 0, 0);
   return midnight.getTime() - pacificNow.getTime();
 }
-
 function formatCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(totalSec / 3600);
@@ -99,135 +75,139 @@ const EVAL_SUB_OPTIONS = [
   "Interviewed in person and also made observation of FDW in the areas of work listed in table",
 ];
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function isOverloaded(msg: string) {
   const l = msg.toLowerCase();
-  return (
-    l.includes("high demand") ||
-    l.includes("overloaded") ||
-    l.includes("try again") ||
-    l.includes("quota") ||
-    l.includes("rate limit")
-  );
+  return l.includes("high demand") || l.includes("overloaded") ||
+         l.includes("try again")   || l.includes("quota")      || l.includes("rate limit");
 }
+async function sleep(ms: number) { return new Promise<void>((r) => setTimeout(r, ms)); }
 
-async function sleep(ms: number) {
-  return new Promise<void>((r) => setTimeout(r, ms));
-}
-
+// ─── Types ────────────────────────────────────────────────────────────────────
 type Status = "idle" | "reading" | "extracting" | "done" | "error" | "limit";
 
 interface ExtractedData {
-  referenceCode?: string | null;
-  type?: string | null;
-  fullName?: string | null;
-  dateOfBirth?: string | null;
-  placeOfBirth?: string | null;
-  height?: number | null;
-  weight?: number | null;
-  nationality?: string | null;
-  homeAddress?: string | null;
-  airportRepatriation?: string | null;
-  homeCountryContact?: string | null;
-  religion?: string | null;
-  educationLevel?: string | null;
-  education?: string | null;
-  // FIX A: numberOfSiblings now also accepts string (e.g. "6/7") in addition to number
-  numberOfSiblings?: number | string | null;
-  numberOfSibling?: number | string | null;
-  siblingCount?: number | string | null;
-  maritalStatus?: string | null;
-  numberOfChildren?: number | null;
-  agesOfChildren?: string | null;
-  allergies?: string | null;
-  illnesses?: Record<string, boolean> | null;
-  physicalDisabilities?: string | null;
-  dietaryRestrictions?: string | null;
+  referenceCode?:           string | null;
+  type?:                    string | null;
+  fullName?:                string | null;
+  dateOfBirth?:             string | null;
+  placeOfBirth?:            string | null;
+  height?:                  number | null;
+  weight?:                  number | null;
+  nationality?:             string | null;
+  homeAddress?:             string | null;
+  airportRepatriation?:     string | null;
+  homeCountryContact?:      string | null;
+  religion?:                string | null;
+  educationLevel?:          string | null;
+  education?:               string | null;
+  numberOfSiblings?:        number | string | null;
+  numberOfSibling?:         number | string | null;
+  siblingCount?:            number | string | null;
+  maritalStatus?:           string | null;
+  numberOfChildren?:        number | null;
+  agesOfChildren?:          string | null;
+  allergies?:               string | null;
+  illnesses?:               Record<string, boolean> | null;
+  physicalDisabilities?:    string | null;
+  dietaryRestrictions?:     string | null;
   foodHandlingPreferences?: string | null;
-  offDaysPerMonth?: number | null;
-  otherRemarks?: string | null;
+  offDaysPerMonth?:         number | null;
+  otherRemarks?:            string | null;
   skills?: Array<{
-    area: string;
-    willing?: boolean | null;
-    experience?: boolean | null;
+    area:               string;
+    willing?:           boolean | null;
+    experience?:        boolean | null;
     yearsOfExperience?: string | null;
-    rating?: number | null;
-    note?: string | null;
-    subNote?: string | null;
+    rating?:            number | null;
+    note?:              string | null;
+    subNote?:           string | null;
   }> | null;
   employmentHistory?: Array<{
-    from?: string | null;
-    to?: string | null;
-    country?: string | null;
+    from?:     string | null;
+    to?:       string | null;
+    country?:  string | null;
     employer?: string | null;
-    duties?: string | null;
-    remarks?: string | null;
+    duties?:   string | null;
+    remarks?:  string | null;
   }> | null;
-  languageSkills?: Record<string, string> | null;
-  presentSalary?: string | null;
-  expectedSalary?: string | null;
-  availability?: string | null;
-  publicIntro?: string | null;
-  ableHandlePork?: boolean | null;
-  ableEatPork?: boolean | null;
-  ableCareForPets?: boolean | null;
-  ableSewing?: boolean | null;
-  ableGardening?: boolean | null;
-  willingWashCar?: boolean | null;
-  willingWorkOffDay?: boolean | null;
-  interviewAvailability?: string[] | null;
-  availabilityRemark?: string | null;
-  intro?: string | null;
-  passportNo?: string | null;
-  phone?: string | null;
-  privateInfo?: string | null;
-  interviewedBy?: string | null;
-  referredBy?: string | null;
-  evalByDeclaration?: boolean | null;
-  evalInterviewedBySgEA?: boolean | null;
-  evalInterviewSubOption?: string | null;
-  maidType?: string | null;
+  languageSkills?:            Record<string, string> | null;
+  presentSalary?:             string | null;
+  expectedSalary?:            string | null;
+  availability?:              string | null;
+  publicIntro?:               string | null;
+  ableHandlePork?:            boolean | null;
+  ableEatPork?:               boolean | null;
+  ableCareForPets?:           boolean | null;
+  ableSewing?:                boolean | null;
+  ableGardening?:             boolean | null;
+  willingWashCar?:            boolean | null;
+  willingWorkOffDay?:         boolean | null;
+  interviewAvailability?:     string[] | null;
+  availabilityRemark?:        string | null;
+  intro?:                     string | null;
+  passportNo?:                string | null;
+  phone?:                     string | null;
+  privateInfo?:               string | null;
+  interviewedBy?:             string | null;
+  referredBy?:                string | null;
+  evalByDeclaration?:         boolean | null;
+  evalInterviewedBySgEA?:     boolean | null;
+  // FIX: replaced single evalInterviewSubOption with an array to capture ALL checked sub-options
+  evalInterviewSubOptions?:   string[] | null;
+  maidType?:                  string | null;
 }
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
+// ─── pdf.js text extraction ───────────────────────────────────────────────────
+async function extractPdfText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf         = await loadingTask.promise;
+  const pageTexts: string[] = [];
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page        = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const lines: Map<number, string[]> = new Map();
+    for (const item of textContent.items) {
+      if (!("str" in item)) continue;
+      const y = Math.round((item as { transform: number[] }).transform[5] / 2) * 2;
+      if (!lines.has(y)) lines.set(y, []);
+      lines.get(y)!.push((item as { str: string }).str);
+    }
+    const sortedLines = Array.from(lines.entries())
+      .sort(([a], [b]) => b - a)
+      .map(([, parts]) => parts.join(" ").trim())
+      .filter(Boolean);
+    pageTexts.push(sortedLines.join("\n"));
+  }
+  return pageTexts.join("\n\n--- PAGE BREAK ---\n\n");
 }
 
 // ─── JSON repair ──────────────────────────────────────────────────────────────
-
 function fixUnescapedControlChars(s: string): string {
-  let out = "";
-  let inStr = false;
-  let i = 0;
+  let out = ""; let inStr = false; let i = 0;
   while (i < s.length) {
     const ch = s[i];
     if (inStr) {
       if (ch === "\\") { out += ch + (s[i + 1] ?? ""); i += 2; continue; }
-      if (ch === '"') { inStr = false; out += ch; i++; continue; }
+      if (ch === '"')  { inStr = false; out += ch; i++; continue; }
       if (ch === "\n") { out += "\\n"; i++; continue; }
       if (ch === "\r") { out += "\\r"; i++; continue; }
       if (ch === "\t") { out += "\\t"; i++; continue; }
       const code = ch.charCodeAt(0);
       if (code < 0x20) { out += `\\u${code.toString(16).padStart(4, "0")}`; i++; continue; }
-    } else {
-      if (ch === '"') inStr = true;
-    }
-    out += ch;
-    i++;
+    } else { if (ch === '"') inStr = true; }
+    out += ch; i++;
   }
   return out;
 }
 
 function repairJson(raw: string): string {
   let s = raw.replace(/^```(?:json)?\s*/im, "").replace(/\s*```\s*$/im, "").trim();
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
+  const start = s.indexOf("{"); const end = s.lastIndexOf("}");
   if (start === -1 || end === -1 || end <= start)
-    throw new Error("No JSON object found in Gemini response");
+    throw new Error("No JSON object found in Groq response");
   s = s.slice(start, end + 1);
   s = s.replace(/\/\/[^\n\r]*/g, "");
   s = fixUnescapedControlChars(s);
@@ -235,129 +215,82 @@ function repairJson(raw: string): string {
   return s;
 }
 
-function parseGeminiJson(raw: string): ExtractedData {
+function parseGroqJson(raw: string): ExtractedData {
   const attempts: Array<() => string> = [
     () => repairJson(raw),
-    () => {
-      const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-      if (!m?.[1]) throw new Error("No code fence");
-      return repairJson(m[1]);
-    },
-    () => {
-      const start = raw.indexOf("{");
-      const end = raw.lastIndexOf("}");
-      if (start === -1 || end === -1 || end <= start) throw new Error("No braces");
-      return repairJson(raw.slice(start, end + 1));
-    },
+    () => { const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/i); if (!m?.[1]) throw new Error("No code fence"); return repairJson(m[1]); },
+    () => { const start = raw.indexOf("{"); const end = raw.lastIndexOf("}"); if (start === -1 || end === -1 || end <= start) throw new Error("No braces"); return repairJson(raw.slice(start, end + 1)); },
   ];
   const errors: string[] = [];
   for (const attempt of attempts) {
     try {
       const repaired = attempt();
-      const parsed = JSON.parse(repaired) as ExtractedData;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const parsed   = JSON.parse(repaired) as ExtractedData;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
         return normalizeExtractedData(parsed);
-      }
       errors.push("Not a plain object");
-    } catch (e) {
-      errors.push((e as Error).message);
-    }
+    } catch (e) { errors.push((e as Error).message); }
   }
   console.error("[PdfAutofill] All parse strategies failed:", errors, raw.slice(0, 1000));
-  throw new Error(`Could not extract JSON from Gemini response: ${errors.join(" | ")}`);
+  throw new Error(`Could not extract JSON from Groq response: ${errors.join(" | ")}`);
 }
 
-// ─── FIX A: Parse siblings — supports integer, float, or "X/Y" fraction strings ──
-
-/**
- * Resolves a siblings value to a plain integer.
- * Handles:
- *   - number  → returned as-is if finite integer, or Math.floor
- *   - "6"     → 6
- *   - "6/7"   → 6   (numerator = the FDW's own sibling rank or count among N total)
- *   - "6 of 7"→ 6
- *   - "3.0"   → 3
- */
+// ─── Sibling value parser ─────────────────────────────────────────────────────
 function parseSiblingValue(value: unknown): number | string | null {
   if (value == null) return null;
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? Math.floor(value) : null;
-  }
-
+  if (typeof value === "number") return Number.isFinite(value) ? Math.floor(value) : null;
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return null;
-
-    // Handle "X/Y" or "X of Y" fraction formats — take the numerator (X)
-    const fractionMatch = trimmed.match(/^(\d+)\s*\/\s*\d+$/);
-    if (fractionMatch) {
-      return trimmed; // preserve "6/7" as-is
-    }
-
-    // Plain number string
+    if (trimmed.match(/^(\d+)\s*\/\s*\d+$/)) return trimmed; // preserve "6/7"
     const parsed = parseFloat(trimmed);
     if (Number.isFinite(parsed)) return Math.floor(parsed);
   }
-
   return null;
 }
 
 function normalizeExtractedData(input: ExtractedData): ExtractedData {
   const raw = input as ExtractedData & Record<string, unknown>;
   const toNullableString = (...values: unknown[]) => {
-    for (const value of values) {
-      if (typeof value === "string" && value.trim()) return value.trim();
-    }
+    for (const value of values) if (typeof value === "string" && value.trim()) return value.trim();
     return null;
   };
   const toNullableNumber = (...values: unknown[]) => {
     for (const value of values) {
       if (typeof value === "number" && Number.isFinite(value)) return value;
-      if (typeof value === "string" && value.trim()) {
-        const parsed = Number(value.trim());
-        if (Number.isFinite(parsed)) return parsed;
-      }
+      if (typeof value === "string" && value.trim()) { const p = Number(value.trim()); if (Number.isFinite(p)) return p; }
     }
     return null;
   };
+  const resolvedSiblings =
+    parseSiblingValue(input.numberOfSiblings) ?? parseSiblingValue(input.numberOfSibling) ??
+    parseSiblingValue(input.siblingCount)     ?? parseSiblingValue(raw.number_of_siblings) ??
+    parseSiblingValue(raw.siblings)           ?? null;
 
-  // FIX A: Use dedicated sibling parser that handles fraction strings
-  const resolvedSiblings = parseSiblingValue(input.numberOfSiblings)
-    ?? parseSiblingValue(input.numberOfSibling)
-    ?? parseSiblingValue(input.siblingCount)
-    ?? parseSiblingValue(raw.number_of_siblings)
-    ?? parseSiblingValue(raw.siblings)
-    ?? null;
+  // FIX: normalise legacy single-string evalInterviewSubOption → evalInterviewSubOptions array
+  let subOptions = input.evalInterviewSubOptions;
+  if (!Array.isArray(subOptions) || subOptions.length === 0) {
+    const legacy = (raw.evalInterviewSubOption as string | null | undefined);
+    if (legacy && typeof legacy === "string" && legacy.trim()) subOptions = [legacy.trim()];
+    else subOptions = null;
+  }
 
   return {
     ...input,
-    referenceCode: toNullableString(
-      input.referenceCode,
-      raw.refCode,
-      raw.reference_code,
-      raw.reference,
-      raw.code,
-    ),
-    type: toNullableString(input.type, input.maidType, raw.maid_type, raw.typeOfMaid),
-    height: toNullableNumber(input.height, raw.heightCm, raw.height_cm),
-    educationLevel: toNullableString(
-      input.educationLevel,
-      input.education,
-      raw.education_level,
-      raw.educationLevelName,
-    ),
-    // FIX A: always a plain integer or null
-    numberOfSiblings: resolvedSiblings, // already number | string | null
+    referenceCode:          toNullableString(input.referenceCode, raw.refCode, raw.reference_code, raw.reference, raw.code),
+    type:                   toNullableString(input.type, input.maidType, raw.maid_type, raw.typeOfMaid),
+    height:                 toNullableNumber(input.height, raw.heightCm, raw.height_cm),
+    educationLevel:         toNullableString(input.educationLevel, input.education, raw.education_level, raw.educationLevelName),
+    numberOfSiblings:       resolvedSiblings,
+    evalInterviewSubOptions: subOptions,
   };
 }
 
 // ─── Prompt ───────────────────────────────────────────────────────────────────
-
-function buildPrompt(): string {
+function buildPrompt(pdfText: string): string {
   return `You are a data extraction assistant for FDW (Foreign Domestic Worker) bio-data forms.
 
-Extract ALL information from this PDF and return ONLY a valid JSON object.
+Below is the full text extracted from a PDF biodata form. Extract ALL information and return ONLY a valid JSON object.
 
 MANDATORY OUTPUT RULES:
 1. Output ONLY the raw JSON object. No markdown, no code fences, no explanation.
@@ -366,7 +299,7 @@ MANDATORY OUTPUT RULES:
 4. No trailing commas after the last item in any object or array.
 5. No JavaScript comments.
 6. Use null for any missing field.
-7. For boolean fields: use true or false (not strings). If explicitly marked Yes/Willing/checked use true. If No/Unwilling/unchecked use false. Use null only if truly absent.
+7. For boolean fields: use true or false (not strings). If explicitly marked Yes/Willing/checked use true. If No/Unwilling/unchecked use false. Use null only if the field is entirely absent from the form.
 
 Return this exact JSON structure:
 
@@ -445,173 +378,162 @@ Return this exact JSON structure:
   "referredBy": null,
   "evalByDeclaration": null,
   "evalInterviewedBySgEA": null,
-  "evalInterviewSubOption": null
+  "evalInterviewSubOptions": []
 }
 
-Field rules:
-- referenceCode: the agency / FDW reference code if shown on the biodata form; otherwise null
-- dateOfBirth: YYYY-MM-DD format (convert from any format found)
-- type: MUST be exactly one of: "New maid", "Transfer maid", "APS maid", "Ex-Singapore maid", "Ex-Hong Kong maid", "Ex-Taiwan maid", "Ex-Malaysia maid", "Ex-Middle East maid", "Applying to work in Hong Kong", "Applying to work in Canada", "Applying to work in Taiwan"
-- height: number in cm only (convert from feet/inches if needed)
-- weight: number in kg only (convert from lbs if needed)
-- nationality: append " maid" e.g. "Filipino maid", "Indonesian maid"
-- educationLevel: MUST be exactly one of: "Primary Level (≤6 yrs)", "Secondary Level (7–9 yrs)", "High School (10–12 yrs)", "Vocational Course", "College / Degree (≥13 yrs)"
-- maritalStatus: MUST be exactly one of: "Single", "Single Parent", "Married", "Divorced", "Widowed", "Separated"
+=== CRITICAL FIELD RULES ===
 
-- numberOfSiblings: Extract the raw value exactly as written in the form — this may be a plain integer (e.g. 3), a decimal (e.g. 3.0), or a fraction string like "6/7" meaning the FDW is 1 of 7 siblings (return the string "6/7" exactly). Do NOT convert fractions to decimals. Return null only if the field is completely absent.
-
-- illnesses: This is a checklist of medical conditions. For EACH condition below, set true ONLY if the form explicitly marks it as checked, ticked, circled, underlined, or written "Yes" next to it. Set false if it is clearly unchecked, crossed out, or marked "No" / "None". If the entire medical history section is absent from the form, set ALL to false.
-  The nine conditions to extract are EXACTLY:
-    "(I) Mental illness"        — any psychiatric condition, depression, anxiety disorder
-    "(II) Epilepsy"             — seizure disorder, fits
-    "(III) Asthma"              — respiratory/breathing condition
-    "(IV) Diabetes"             — blood sugar condition, diabetic
-    "(V) Hypertension"          — high blood pressure
-    "(VI) Tuberculosis"         — TB, lung disease
-    "(VII) Heart disease"       — cardiac condition, heart problem
-    "(VIII) Malaria"            — mosquito-borne fever
-    "(IX) Operations"           — any past surgery, surgical procedure, operation
-  IMPORTANT: Do NOT infer or assume any illness is present unless it is explicitly stated in the form. If the form lists "Nil", "None", "No known illness", or leaves all boxes blank, set ALL nine values to false.
-
-- physicalDisabilities: Any stated physical disability, impairment, or limitation (e.g. "None", "Colour blind", "Hearing impairment"). Use null only if the field is entirely absent from the form.
-
-- allergies: Any stated allergies (e.g. "None", "Seafood allergy", "Dust allergy"). Use null only if the field is entirely absent.
-
-- dietaryRestrictions: Specific foods or ingredients the FDW does NOT eat due to religious, cultural, personal, or health reasons. Examples: "No pork", "Halal only", "Vegetarian", "No beef". Use null only if the field is entirely absent.
-
-- foodHandlingPreferences: The FDW's stated preferences or restrictions regarding PREPARING and HANDLING food for the employer's household — distinct from what she personally eats. This covers:
-    • Whether she can cook or handle pork/lard even if she does not eat it herself
-    • Whether she can cook or handle beef/non-halal meat
-    • Whether she can cook seafood she is allergic to
-    • Any other stated preference about the foods she is willing or unwilling to cook or touch
-  Examples of values: "Can handle pork but cannot eat", "Cannot handle or cook pork and lard", "Can cook all cuisines including pork", "Halal cooking only", "Can prepare non-halal food for employer".
-  Use null only if the field is entirely absent. Do NOT duplicate values already captured in dietaryRestrictions.
-
-- skills[].area: MUST be exactly one of: "Care of infants/children", "Care of elderly", "Care of disabled", "General housework", "Cooking", "Language abilities (spoken)", "Other skills, if any"
-- skills[].willing: true if the form shows Yes/Willing/checked, false if No/Unwilling. Do NOT use null if a value is present.
-- skills[].experience: true if the form shows Yes/has experience, false if No/no experience. Do NOT use null if a value is present.
-- skills[].yearsOfExperience: ALWAYS a string. If experience is true and years are stated, use the number as a string (e.g. "2"). If experience is true but no years are stated, use "". If experience is false, use "". NEVER use null here.
-- skills[].rating: number 1–5 if a star/score rating is shown, otherwise null
-- skills[].note: any text note or assessment/observation comment for this skill area, or "" if none. NEVER null.
-- skills[].subNote: the text written in the sub-field below the area name. Specifically:
-    - For "Care of infants/children": the age range text (e.g. "0-3 years")
-    - For "Cooking": the cuisines text (e.g. "Chinese, Western, Indian")
-    - For "Language abilities (spoken)": the languages specified (e.g. "English, Tagalog")
-    - For "Other skills, if any": the skill description text
-    - For all other areas: "" (empty string)
-  Use "" if the sub-field is blank. NEVER null.
-- IMPORTANT: Include ALL 7 skill rows in the skills array, even if some have no data.
-- employmentHistory[]: one object per employer. Include ALL employers found in the PDF.
-- employmentHistory[].from: 4-digit year string (e.g. "2019"), or "" if unknown
-- employmentHistory[].to: 4-digit year string (e.g. "2022"), or "" if unknown
-- employmentHistory[].country: country name as a string (e.g. "Singapore"), or "" if unknown
-- employmentHistory[].employer: employer's full name, or "" if unknown
-- employmentHistory[].duties: ALL text describing the maid's main duties / responsibilities for this employer. Copy the full text. Use "" if none. NEVER null.
-- employmentHistory[].remarks: any remarks, feedback, or notes about this employment period. Use "" if none. NEVER null.
-- languageSkills values: MUST be exactly one of: "Zero", "Poor", "Little", "Fair", "Good" or null
-- interviewAvailability: array of applicable strings from: ["FDW is not available for interview", "FDW can be interviewed by phone", "FDW can be interviewed by video-conference", "FDW can be interviewed in person"]
-- evalByDeclaration: true if the form indicates "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA" is checked/selected
-- evalInterviewedBySgEA: true if the form indicates "Interviewed by Singapore EA" is checked/selected
-- evalInterviewSubOption: if evalInterviewedBySgEA is true, set this to whichever ONE of the following sub-options is checked — use the exact string:
+EVALUATION METHOD (B1 section):
+- evalByDeclaration: true ONLY if the checkbox "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA" has a tick/check mark (☑). false if the checkbox is present but empty (☐). null only if the entire B1 section is absent.
+- evalInterviewedBySgEA: true ONLY if the checkbox "Interviewed by Singapore EA" has a tick/check mark (☑). false if present but unchecked. null if absent.
+- evalInterviewSubOptions: an ARRAY of ALL sub-options under "Interviewed by Singapore EA" that are ticked. Each element must be EXACTLY one of:
     "Interviewed via telephone/teleconference"
     "Interviewed via videoconference"
     "Interviewed in person"
     "Interviewed in person and also made observation of FDW in the areas of work listed in table"
-  Set to null if none applies.
-- ableHandlePork / ableEatPork / ableCareForPets / ableSewing / ableGardening / willingWashCar / willingWorkOffDay: true/false based on Yes/No in the form. Do NOT use null if a Yes/No answer is clearly present.
-- intro: the maid's personal self-introduction paragraph (first-person narrative about herself)
-- publicIntro: a public-facing summary suitable for employer viewing
-- availabilityRemark: any remarks about availability or interview conditions
-- passportNo: passport number and expiry if present (e.g. "R8833831 · Expiry: 28/01/2028")
-- phone: maid's or foreign agency's WhatsApp/contact number
-- privateInfo: any internal agency notes, historical records, or confidential remarks
-- interviewedBy: name of staff who interviewed the maid
-- referredBy: name of referrer if mentioned`;
+  Include EVERY sub-option that has a tick. Empty array [] if none are ticked or if evalInterviewedBySgEA is false.
+  EXAMPLE: if both telephone and videoconference are ticked → ["Interviewed via telephone/teleconference", "Interviewed via videoconference"]
+
+SKILLS TABLE (B section):
+- skills[].willing: true if "Yes", false if "No". IMPORTANT: for "Language abilities (spoken)" row, the Willingness column is typically N/A or blank/crossed-out — output null in that case, NOT true or false.
+- skills[].experience: true if "Yes", false if "No", null if blank.
+- skills[].rating: extract the NUMBER from "Rate: N" or "N/5" patterns (1–5). null if not present.
+- skills[].note: the assessment/observation text (e.g. "She has experience taking care of children within her family."). "" if blank.
+- skills[].subNote: for Cooking → list of cuisines; for Language abilities → list of languages; for Care of infants → age range; for Other skills → skill description. "" if blank.
+
+LANGUAGE SKILLS:
+- Infer proficiency ONLY from explicit assessment notes. Use EXACTLY one of: "Zero", "Poor", "Little", "Fair", "Good".
+- "communicates well" or "communicate well" → "Good"
+- "basic knowledge" → "Little"
+- "fair" → "Fair"
+- "poor" → "Poor"
+- If not mentioned at all → null (do NOT guess).
+
+FOOD HANDLING PREFERENCES (field 18 — checkboxes "No pork", "No beef", "Others"):
+- This field is about what food the FDW prefers NOT to handle/prepare for the employer.
+- Output a string listing only the checked options (e.g. "No pork", "No beef", "No pork, No beef").
+- If ALL checkboxes are empty/unchecked, output null. Do NOT output "None" or false.
+- Do NOT confuse this with dietary restrictions (what the FDW herself does not eat).
+
+DIETARY RESTRICTIONS (field 17):
+- What the FDW herself does not eat. null if the field is blank/empty.
+
+INTERVIEW AVAILABILITY (Section D checkboxes):
+- interviewAvailability: array of checked options from:
+    "FDW is not available for interview"
+    "FDW can be interviewed by phone"
+    "FDW can be interviewed by video-conference"
+    "FDW can be interviewed in person"
+- Check ONLY the actual checkboxes in Section D. Empty array [] if all are unchecked.
+- availabilityRemark: if the remarks/introduction text mentions how the FDW can be interviewed (e.g. "available via WhatsApp video call"), capture that here as a string. null if not mentioned.
+
+ILLNESSES (field 15):
+- Set true ONLY if the checkbox in the "Yes" column is ticked (☑).
+- Set false if the checkbox in the "No" column is ticked, OR if both columns are blank.
+- Do NOT infer illness from text. Only trust explicit checkbox state.
+
+PHYSICAL DISABILITIES (field 16): Any stated physical disability or "None". null only if field is entirely absent/blank.
+ALLERGIES (field 14): Any stated allergies or "None". null only if field is entirely absent/blank.
+
+OTHER FIELD RULES:
+- referenceCode: agency/FDW reference code shown on the form (e.g. "IND-MP-PIP-9554"). null if absent.
+- dateOfBirth: YYYY-MM-DD format.
+- type: MUST be exactly one of: "New maid", "Transfer maid", "APS maid", "Ex-Singapore maid", "Ex-Hong Kong maid", "Ex-Taiwan maid", "Ex-Malaysia maid", "Ex-Middle East maid", "Applying to work in Hong Kong", "Applying to work in Canada", "Applying to work in Taiwan"
+- height: number in cm only.
+- weight: number in kg only.
+- nationality: append " maid" e.g. "Indian maid", "Filipino maid".
+- educationLevel: MUST be exactly one of: "Primary Level (≤6 yrs)", "Secondary Level (7–9 yrs)", "High School (10–12 yrs)", "Vocational Course", "College / Degree (≥13 yrs)"
+- maritalStatus: MUST be exactly one of: "Single", "Single Parent", "Married", "Divorced", "Widowed", "Separated"
+- numberOfSiblings: extract raw value as written — plain integer or fraction string like "6/7". Do NOT convert fractions.
+- employmentHistory[].from / .to: 4-digit year string or "".
+- employmentHistory[].duties / .remarks: full text or "". NEVER null.
+- intro: maid's personal self-introduction paragraph (from "Other Remarks" or similar section).
+- publicIntro: public-facing summary for employer viewing.
+- presentSalary: current salary if stated (e.g. "$510 + $50").
+- expectedSalary: expected salary if stated.
+- phone: agency or maid contact number.
+- privateInfo: internal agency notes or confidential remarks.
+
+--- PDF TEXT BEGINS ---
+${pdfText}
+--- PDF TEXT ENDS ---`;
 }
 
-// ─── Gemini call ──────────────────────────────────────────────────────────────
-
-async function callGemini(base64: string, model: string): Promise<ExtractedData> {
-  const res = await fetch(geminiUrl(model), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+// ─── Groq API call ────────────────────────────────────────────────────────────
+async function callGroq(pdfText: string, model: string): Promise<ExtractedData> {
+  const res = await fetch(GROQ_BASE, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_API_KEY}` },
     body: JSON.stringify({
-      contents: [{
-        parts: [
-          { text: buildPrompt() },
-          { inline_data: { mime_type: "application/pdf", data: base64 } },
-        ],
-      }],
-      generationConfig: { temperature: 0.0, maxOutputTokens: 8192 },
+      model,
+      temperature:     0,
+      max_tokens:      8192,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "You are a precise data extraction assistant. Always respond with valid JSON only." },
+        { role: "user",   content: buildPrompt(pdfText) },
+      ],
     }),
   });
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    const msg = err.error?.message ?? `Gemini error ${res.status}`;
-    const e = new Error(msg) as Error & { status: number };
-    e.status = res.status;
+    const msg = err.error?.message ?? `Groq error ${res.status}`;
+    const e   = new Error(msg) as Error & { status: number };
+    e.status  = res.status;
     throw e;
   }
 
   const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
-    promptFeedback?: { blockReason?: string };
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+    error?: { message?: string };
   };
+  if (data.error?.message) throw new Error(data.error.message);
 
-  if (data.promptFeedback?.blockReason)
-    throw new Error(`Gemini blocked: ${data.promptFeedback.blockReason}`);
-
-  const candidate = data.candidates?.[0];
-  if (candidate?.finishReason === "SAFETY")
-    throw new Error("Gemini refused due to safety filters");
-
-  const raw = candidate?.content?.parts?.[0]?.text ?? "";
-  if (!raw.trim())
-    throw new Error(`Gemini returned an empty response (finishReason: ${candidate?.finishReason ?? "unknown"})`);
-
-  return parseGeminiJson(raw);
+  const raw = data.choices?.[0]?.message?.content ?? "";
+  if (!raw.trim()) {
+    const reason = data.choices?.[0]?.finish_reason ?? "unknown";
+    throw new Error(`Groq returned an empty response (finish_reason: ${reason})`);
+  }
+  return parseGroqJson(raw);
 }
 
+// ─── Main extraction pipeline ─────────────────────────────────────────────────
 async function extractFromPdf(
   file: File,
   onRetry?: (attempt: number, model: string, delayMs: number) => void,
 ): Promise<ExtractedData> {
-  const base64 = await fileToBase64(file);
+  const pdfText = await extractPdfText(file);
+  if (!pdfText.trim())
+    throw new Error("Could not extract any text from this PDF. It may be a scanned image — please use a text-based biodata PDF.");
 
-  for (let modelIdx = 0; modelIdx < GEMINI_MODELS.length; modelIdx++) {
-    const model = GEMINI_MODELS[modelIdx];
+  for (let modelIdx = 0; modelIdx < GROQ_MODELS.length; modelIdx++) {
+    const model = GROQ_MODELS[modelIdx];
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        return await callGemini(base64, model);
+        return await callGroq(pdfText, model);
       } catch (err) {
-        const e = err as Error & { status?: number };
-        const retryable =
-          (e.status !== undefined && RETRYABLE_CODES.has(e.status)) || isOverloaded(e.message);
-        const isLastAttempt = attempt === MAX_RETRIES;
-        const isLastModel   = modelIdx === GEMINI_MODELS.length - 1;
-
+        const e           = err as Error & { status?: number };
+        const retryable   = (e.status !== undefined && RETRYABLE_CODES.has(e.status)) || isOverloaded(e.message);
+        const isLastAttempt = attempt  === MAX_RETRIES;
+        const isLastModel   = modelIdx === GROQ_MODELS.length - 1;
         if (!retryable) {
           if (isLastModel) throw new Error(e.message);
           console.warn(`[PdfAutofill] Model ${model} non-retryable: ${e.message}. Trying next…`);
           break;
         }
         if (isLastAttempt && isLastModel) throw new Error(e.message);
-        if (isLastAttempt) {
-          console.warn(`[PdfAutofill] Model ${model} exhausted, trying fallback…`);
-          break;
-        }
+        if (isLastAttempt) { console.warn(`[PdfAutofill] Model ${model} exhausted, trying fallback…`); break; }
         const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
         onRetry?.(attempt, model, delay);
         await sleep(delay);
       }
     }
   }
-  throw new Error("All Gemini models unavailable. Please try again later.");
+  throw new Error("All Groq models unavailable. Please try again later.");
 }
 
 // ─── Map extracted data → MaidProfile ────────────────────────────────────────
-
 function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfile {
   const e = extracted;
 
@@ -629,88 +551,76 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
 
   const resolveType = (raw?: string | null): string => {
     if (!raw) return prev.type ?? "";
-    const normalized = raw.toLowerCase().trim();
+    const n = raw.toLowerCase().trim();
     const typeMap: Array<[string[], string]> = [
-      [["new maid", "new"], "New maid"],
-      [["transfer maid", "transfer"], "Transfer maid"],
-      [["aps maid", "aps"], "APS maid"],
-      [["ex-singapore maid", "ex singapore maid", "ex singapore"], "Ex-Singapore maid"],
-      [["ex-hong kong maid", "ex hong kong maid", "hong kong"], "Ex-Hong Kong maid"],
-      [["ex-taiwan maid", "ex taiwan maid", "taiwan"], "Ex-Taiwan maid"],
-      [["ex-malaysia maid", "ex malaysia maid", "malaysia"], "Ex-Malaysia maid"],
-      [["ex-middle east maid", "ex middle east maid", "middle east"], "Ex-Middle East maid"],
-      [["applying to work in hong kong"], "Applying to work in Hong Kong"],
-      [["applying to work in canada"], "Applying to work in Canada"],
-      [["applying to work in taiwan"], "Applying to work in Taiwan"],
+      [["new maid", "new"],                         "New maid"],
+      [["transfer maid", "transfer"],               "Transfer maid"],
+      [["aps maid", "aps"],                         "APS maid"],
+      [["ex-singapore maid", "ex singapore"],       "Ex-Singapore maid"],
+      [["ex-hong kong maid", "hong kong"],          "Ex-Hong Kong maid"],
+      [["ex-taiwan maid", "ex taiwan"],             "Ex-Taiwan maid"],
+      [["ex-malaysia maid", "ex malaysia"],         "Ex-Malaysia maid"],
+      [["ex-middle east maid", "middle east"],      "Ex-Middle East maid"],
+      [["applying to work in hong kong"],           "Applying to work in Hong Kong"],
+      [["applying to work in canada"],              "Applying to work in Canada"],
+      [["applying to work in taiwan"],              "Applying to work in Taiwan"],
     ];
-    for (const [needles, value] of typeMap) {
-      if (needles.some((needle) => normalized.includes(needle))) return value;
-    }
+    for (const [needles, value] of typeMap)
+      if (needles.some((needle) => n.includes(needle))) return value;
     return raw.trim();
   };
 
   const resolveEducationLevel = (raw?: string | null): string => {
     if (!raw) return prev.educationLevel ?? "";
-    const normalized = raw
-      .toLowerCase()
-      .replace(/[–—]/g, "-")
-      .replace(/≤/g, "<=")
-      .replace(/≥/g, ">=")
-      .trim();
-    if (normalized.includes("primary")) return "Primary Level (≤6 yrs)";
-    if (normalized.includes("secondary")) return "Secondary Level (7–9 yrs)";
-    if (normalized.includes("high school")) return "High School (10–12 yrs)";
-    if (normalized.includes("vocational")) return "Vocational Course";
-    if (normalized.includes("college") || normalized.includes("degree")) {
-      return "College / Degree (≥13 yrs)";
-    }
+    const n = raw.toLowerCase().replace(/[–—]/g, "-").replace(/≤/g, "<=").replace(/≥/g, ">=").trim();
+    if (n.includes("primary"))                          return "Primary Level (≤6 yrs)";
+    if (n.includes("secondary"))                        return "Secondary Level (7–9 yrs)";
+    if (n.includes("high school"))                      return "High School (10–12 yrs)";
+    if (n.includes("vocational"))                       return "Vocational Course";
+    if (n.includes("college") || n.includes("degree")) return "College / Degree (≥13 yrs)";
     return raw.trim();
   };
 
   const areaMap: Record<string, string> = {
-    "care of infants": "Care of infants/children",
-    "care of infants/children": "Care of infants/children",
-    "infants": "Care of infants/children",
-    "care of elderly": "Care of elderly",
-    "elderly": "Care of elderly",
-    "care of disabled": "Care of disabled",
-    "disabled": "Care of disabled",
-    "general housework": "General housework",
-    "housework": "General housework",
-    "cooking": "Cooking",
-    "language abilities": "Language abilities (spoken)",
-    "language abilities (spoken)": "Language abilities (spoken)",
-    "other skills": "Other skills, if any",
-    "other skills, if any": "Other skills, if any",
+    "care of infants":              "Care of infants/children",
+    "care of infants/children":     "Care of infants/children",
+    "infants":                      "Care of infants/children",
+    "care of elderly":              "Care of elderly",
+    "elderly":                      "Care of elderly",
+    "care of disabled":             "Care of disabled",
+    "disabled":                     "Care of disabled",
+    "general housework":            "General housework",
+    "housework":                    "General housework",
+    "cooking":                      "Cooking",
+    "language abilities":           "Language abilities (spoken)",
+    "language abilities (spoken)":  "Language abilities (spoken)",
+    "other skills":                 "Other skills, if any",
+    "other skills, if any":         "Other skills, if any",
   };
   const resolveArea = (raw: string) => areaMap[raw.toLowerCase().trim()] ?? raw;
 
-  const prevWorkAreas = (prev.workAreas as Record<string, unknown>) ?? {};
-  const workAreas: Record<string, unknown> = { ...prevWorkAreas };
+  const prevWorkAreas     = (prev.workAreas         as Record<string, unknown>) ?? {};
+  const prevSP            = (prev.skillsPreferences as Record<string, unknown>) ?? {};
+  const prevWorkAreaNotes = (prevSP.workAreaNotes   as Record<string, string>)  ?? {};
 
-  const prevSP = (prev.skillsPreferences as Record<string, unknown>) ?? {};
-  const prevWorkAreaNotes = (prevSP.workAreaNotes as Record<string, string>) ?? {};
-  const workAreaNotes: Record<string, string> = { ...prevWorkAreaNotes };
+  const workAreas:     Record<string, unknown> = { ...prevWorkAreas };
+  const workAreaNotes: Record<string, string>  = { ...prevWorkAreaNotes };
 
   if (Array.isArray(e.skills)) {
     for (const s of e.skills) {
       if (!s.area) continue;
-      const area = resolveArea(s.area);
-      const willing    = s.willing    === true ? true : s.willing    === false ? false : undefined;
-      const experience = s.experience === true ? true : s.experience === false ? false : undefined;
-      const rating = typeof s.rating === "number" ? s.rating : null;
-      const note   = typeof s.note === "string" ? s.note : (s.note ?? "");
-      const rawYears = s.yearsOfExperience;
-      const yearsOfExperience =
-        rawYears == null ? "" :
-        typeof rawYears === "number" ? String(rawYears) :
-        String(rawYears);
+      const area              = resolveArea(s.area);
+      const willing           = s.willing    === true ? true : s.willing    === false ? false : undefined;
+      const experience        = s.experience === true ? true : s.experience === false ? false : undefined;
+      const rating            = typeof s.rating === "number" ? s.rating : null;
+      const note              = typeof s.note === "string" ? s.note : (s.note ?? "");
+      const yearsOfExperience = s.yearsOfExperience == null ? "" :
+        typeof s.yearsOfExperience === "number" ? String(s.yearsOfExperience) : String(s.yearsOfExperience);
 
       workAreas[area] = {
         willing, experience, yearsOfExperience, rating, note,
         evaluation: rating !== null ? `${rating}/5${note ? ` - ${note}` : ""}` : note || "N.A.",
       };
-
       if (typeof s.subNote === "string" && s.subNote.trim()) {
         const subKey = area === "Other skills, if any" ? "Other Skill" : area;
         workAreaNotes[subKey] = s.subNote.trim();
@@ -726,80 +636,73 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
         }))
       : ((prev.employmentHistory ?? [{}]) as Record<string, unknown>[]);
 
-  const prevLangs = (prev.languageSkills as Record<string, string>) ?? {};
+  const prevLangs  = (prev.languageSkills as Record<string, string>) ?? {};
   const langSkills: Record<string, string> = { ...prevLangs };
   if (e.languageSkills && typeof e.languageSkills === "object")
     for (const [k, v] of Object.entries(e.languageSkills)) if (v) langSkills[k] = v;
 
-  const prevOI = (prevSP.otherInformation as Record<string, boolean>) ?? {};
+  const prevOI    = (prevSP.otherInformation as Record<string, boolean>) ?? {};
   const otherInfo: Record<string, boolean> = { ...prevOI };
-  if (e.ableHandlePork    != null) otherInfo["Able to handle pork?"] = e.ableHandlePork;
-  if (e.ableEatPork       != null) otherInfo["Able to eat pork?"] = e.ableEatPork;
-  if (e.ableCareForPets   != null) otherInfo["Able to care for dog/cat?"] = e.ableCareForPets;
-  if (e.ableSewing        != null) otherInfo["Able to do simple sewing?"] = e.ableSewing;
-  if (e.ableGardening     != null) otherInfo["Able to do gardening work?"] = e.ableGardening;
-  if (e.willingWashCar    != null) otherInfo["Willing to wash car?"] = e.willingWashCar;
+  if (e.ableHandlePork    != null) otherInfo["Able to handle pork?"]                           = e.ableHandlePork;
+  if (e.ableEatPork       != null) otherInfo["Able to eat pork?"]                              = e.ableEatPork;
+  if (e.ableCareForPets   != null) otherInfo["Able to care for dog/cat?"]                      = e.ableCareForPets;
+  if (e.ableSewing        != null) otherInfo["Able to do simple sewing?"]                      = e.ableSewing;
+  if (e.ableGardening     != null) otherInfo["Able to do gardening work?"]                     = e.ableGardening;
+  if (e.willingWashCar    != null) otherInfo["Willing to wash car?"]                           = e.willingWashCar;
   if (e.willingWorkOffDay != null) otherInfo["Willing to work on off-days with compensation?"] = e.willingWorkOffDay;
 
-  const hasSgExp =
-    empHistory.length > 0
-      ? empHistory.some((h) => String(h["country"] ?? "").toLowerCase().includes("singapore"))
-      : undefined;
+  const hasSgExp = empHistory.length > 0
+    ? empHistory.some((h) => String(h["country"] ?? "").toLowerCase().includes("singapore"))
+    : undefined;
 
-  const prevIntro    = (prev.introduction as Record<string, unknown>) ?? {};
+  const prevIntro     = (prev.introduction as Record<string, unknown>) ?? {};
   const prevIllnesses = (prevIntro.pastIllnesses as Record<string, boolean>) ?? {};
   const mergedIllnesses: Record<string, boolean> = { ...prevIllnesses };
   if (e.illnesses && typeof e.illnesses === "object")
     for (const [k, v] of Object.entries(e.illnesses)) if (v != null) mergedIllnesses[k] = v;
 
+  // ── FIX: handle evalInterviewSubOptions array (multiple sub-options) ──────
   const prevEvalMethods = Array.isArray(prevSP.evaluationMethods)
-    ? (prevSP.evaluationMethods as string[])
-    : [];
+    ? (prevSP.evaluationMethods as string[]) : [];
   const evalSet = new Set<string>(prevEvalMethods);
 
-  if (e.evalByDeclaration === true) {
-    evalSet.add(EVAL_PARENT_DECLARATION);
-  } else if (e.evalByDeclaration === false) {
-    evalSet.delete(EVAL_PARENT_DECLARATION);
-  }
+  if (e.evalByDeclaration === true)  evalSet.add(EVAL_PARENT_DECLARATION);
+  else if (e.evalByDeclaration === false) evalSet.delete(EVAL_PARENT_DECLARATION);
 
   if (e.evalInterviewedBySgEA === true) {
     evalSet.add(EVAL_PARENT_INTERVIEWED);
-    if (e.evalInterviewSubOption && EVAL_SUB_OPTIONS.includes(e.evalInterviewSubOption)) {
-      evalSet.add(e.evalInterviewSubOption);
+    // Add ALL checked sub-options (array), filter to only valid strings
+    const subOpts = Array.isArray(e.evalInterviewSubOptions) ? e.evalInterviewSubOptions : [];
+    for (const sub of subOpts) {
+      if (typeof sub === "string" && EVAL_SUB_OPTIONS.includes(sub)) evalSet.add(sub);
     }
   } else if (e.evalInterviewedBySgEA === false) {
     evalSet.delete(EVAL_PARENT_INTERVIEWED);
     for (const sub of EVAL_SUB_OPTIONS) evalSet.delete(sub);
   }
 
-  const evaluationMethods = Array.from(evalSet);
-
-  // FIX A: numberOfSiblings is already a plain integer from normalizeExtractedData
-    const resolvedSiblings = e.numberOfSiblings != null ? e.numberOfSiblings : null;
-
+  const resolvedSiblings = e.numberOfSiblings != null ? e.numberOfSiblings : null;
 
   return {
     ...prev,
-    referenceCode:     e.referenceCode     != null ? e.referenceCode     : prev.referenceCode,
-    type:              resolveType(e.type),
-    fullName:          e.fullName          != null ? e.fullName          : prev.fullName,
-    dateOfBirth:       e.dateOfBirth       != null ? e.dateOfBirth       : prev.dateOfBirth,
-    placeOfBirth:      e.placeOfBirth      != null ? e.placeOfBirth      : prev.placeOfBirth,
-    height:            e.height            != null ? e.height            : prev.height,
-    weight:            e.weight            != null ? e.weight            : prev.weight,
-    nationality:       resolveNationality(e.nationality),
-    homeAddress:       e.homeAddress       != null ? e.homeAddress       : prev.homeAddress,
+    referenceCode:       e.referenceCode    != null ? e.referenceCode    : prev.referenceCode,
+    type:                resolveType(e.type),
+    fullName:            e.fullName         != null ? e.fullName         : prev.fullName,
+    dateOfBirth:         e.dateOfBirth      != null ? e.dateOfBirth      : prev.dateOfBirth,
+    placeOfBirth:        e.placeOfBirth     != null ? e.placeOfBirth     : prev.placeOfBirth,
+    height:              e.height           != null ? e.height           : prev.height,
+    weight:              e.weight           != null ? e.weight           : prev.weight,
+    nationality:         resolveNationality(e.nationality),
+    homeAddress:         e.homeAddress      != null ? e.homeAddress      : prev.homeAddress,
     airportRepatriation: e.airportRepatriation != null ? e.airportRepatriation : prev.airportRepatriation,
-    religion:          e.religion          != null ? e.religion          : prev.religion,
-    educationLevel:    resolveEducationLevel(e.educationLevel),
-    // FIX A: use resolved integer (parseSiblingValue already ran in normalizeExtractedData)
-    numberOfSiblings:  resolvedSiblings != null ? (resolvedSiblings as unknown as number) : prev.numberOfSiblings,
-    maritalStatus:     e.maritalStatus     != null ? e.maritalStatus     : prev.maritalStatus,
-    numberOfChildren:  e.numberOfChildren  != null ? e.numberOfChildren  : prev.numberOfChildren,
-    languageSkills: langSkills,
+    religion:            e.religion         != null ? e.religion         : prev.religion,
+    educationLevel:      resolveEducationLevel(e.educationLevel),
+    numberOfSiblings:    resolvedSiblings != null ? (resolvedSiblings as unknown as number) : prev.numberOfSiblings,
+    maritalStatus:       e.maritalStatus    != null ? e.maritalStatus    : prev.maritalStatus,
+    numberOfChildren:    e.numberOfChildren != null ? e.numberOfChildren : prev.numberOfChildren,
+    languageSkills:      langSkills,
     workAreas,
-    employmentHistory: empHistory,
+    employmentHistory:   empHistory,
     agencyContact: {
       ...((prev.agencyContact as Record<string, unknown>) ?? {}),
       ...(e.homeCountryContact != null ? { homeCountryContactNumber: e.homeCountryContact } : {}),
@@ -810,37 +713,35 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
       ...prevSP,
       ...(e.offDaysPerMonth != null ? { offDaysPerMonth: String(e.offDaysPerMonth) } : {}),
       ...(hasSgExp !== undefined ? { sgExperience: hasSgExp } : {}),
-      otherInformation: otherInfo,
+      otherInformation:  otherInfo,
       workAreaNotes,
-      evaluationMethods,
+      evaluationMethods: Array.from(evalSet),
       ...(Array.isArray(e.interviewAvailability) && e.interviewAvailability.length > 0
         ? { availabilityInterviewOptions: e.interviewAvailability } : {}),
       ...(e.availabilityRemark != null ? { availabilityRemark: e.availabilityRemark } : {}),
-      ...(e.interviewedBy != null ? { interviewedBy: e.interviewedBy } : {}),
-      ...(e.referredBy    != null ? { referredBy: e.referredBy }       : {}),
-      ...(e.privateInfo   != null ? { privateInfo: e.privateInfo }     : {}),
+      ...(e.interviewedBy      != null ? { interviewedBy: e.interviewedBy }           : {}),
+      ...(e.referredBy         != null ? { referredBy: e.referredBy }                 : {}),
+      ...(e.privateInfo        != null ? { privateInfo: e.privateInfo }               : {}),
     },
     introduction: {
       ...prevIntro,
       ...(e.allergies               != null ? { allergies: e.allergies }                             : {}),
       ...(e.physicalDisabilities    != null ? { physicalDisabilities: e.physicalDisabilities }       : {}),
       ...(e.dietaryRestrictions     != null ? { dietaryRestrictions: e.dietaryRestrictions }         : {}),
-      // FIX B: foodHandlingPreferences is now accurately extracted by the improved prompt
       ...(e.foodHandlingPreferences != null ? { foodHandlingPreferences: e.foodHandlingPreferences } : {}),
       pastIllnesses: mergedIllnesses,
-      ...(e.agesOfChildren  != null ? { agesOfChildren: e.agesOfChildren }       : {}),
-      ...(e.presentSalary   != null ? { presentSalary: String(e.presentSalary) } : {}),
-      ...(e.expectedSalary  != null ? { expectedSalary: String(e.expectedSalary)} : {}),
-      ...(e.availability    != null ? { availability: e.availability }           : {}),
-      ...(e.otherRemarks    != null ? { otherRemarks: e.otherRemarks }           : {}),
-      ...(e.intro           != null ? { intro: e.intro }                         : {}),
-      ...(e.publicIntro     != null ? { publicIntro: e.publicIntro }             : {}),
+      ...(e.agesOfChildren  != null ? { agesOfChildren: e.agesOfChildren }         : {}),
+      ...(e.presentSalary   != null ? { presentSalary: String(e.presentSalary) }   : {}),
+      ...(e.expectedSalary  != null ? { expectedSalary: String(e.expectedSalary) } : {}),
+      ...(e.availability    != null ? { availability: e.availability }             : {}),
+      ...(e.otherRemarks    != null ? { otherRemarks: e.otherRemarks }             : {}),
+      ...(e.intro           != null ? { intro: e.intro }                           : {}),
+      ...(e.publicIntro     != null ? { publicIntro: e.publicIntro }               : {}),
     },
   };
 }
 
 // ─── Count filled fields ──────────────────────────────────────────────────────
-
 function countFields(e: ExtractedData): number {
   let n = 0;
   for (const v of Object.values(e)) {
@@ -854,128 +755,67 @@ function countFields(e: ExtractedData): number {
 }
 
 // ─── Stage config ─────────────────────────────────────────────────────────────
-
 const STAGE_LABELS: Record<Status, { label: string; sublabel: string }> = {
-  idle:       { label: "AI PDF Upload",   sublabel: "Auto-fill from biodata PDF"  },
-  reading:    { label: "Reading PDF…",    sublabel: "Loading file into memory"    },
-  extracting: { label: "Extracting…",     sublabel: "Gemini AI analysing fields"  },
-  done:       { label: "Done!",           sublabel: "Form auto-filled"            },
-  error:      { label: "Failed",          sublabel: "Click to retry"              },
-  limit:      { label: "Limit reached",   sublabel: "Resets at midnight PT"       },
+  idle:       { label: "AI PDF Upload",  sublabel: "Auto-fill from biodata PDF" },
+  reading:    { label: "Reading PDF…",   sublabel: "Extracting text from PDF"   },
+  extracting: { label: "Extracting…",    sublabel: "Groq AI analysing fields"   },
+  done:       { label: "Done!",          sublabel: "Form auto-filled"           },
+  error:      { label: "Failed",         sublabel: "Click to retry"             },
+  limit:      { label: "Limit reached",  sublabel: "Resets at midnight PT"      },
 };
 
-const STAGES = STAGE_LABELS;
-
 // ─── AI Brain SVG icon ────────────────────────────────────────────────────────
-
 const AiBrainIcon = ({ className = "" }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.7"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    aria-hidden
-  >
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
     <path d="M9.5 2a2.5 2.5 0 0 1 2.45 2H12a2.5 2.5 0 0 1 2.45-2 2.5 2.5 0 0 1 2.5 2.5c0 .28-.05.55-.13.8A4 4 0 0 1 20 9a4 4 0 0 1-1.22 2.88A3.5 3.5 0 0 1 15.5 17H8.5a3.5 3.5 0 0 1-3.28-4.12A4 4 0 0 1 4 9a4 4 0 0 1 3.18-3.7 2.5 2.5 0 0 1-.18-.8A2.5 2.5 0 0 1 9.5 2z" />
-    <line x1="12" y1="4" x2="12" y2="17" />
-    <line x1="8"  y1="9" x2="16" y2="9" />
-    <line x1="8"  y1="13" x2="16" y2="13" />
-    <path d="M10 17v2a2 2 0 0 0 4 0v-2" />
+    <line x1="12" y1="4" x2="12" y2="17" /><line x1="8" y1="9" x2="16" y2="9" />
+    <line x1="8" y1="13" x2="16" y2="13" /><path d="M10 17v2a2 2 0 0 0 4 0v-2" />
   </svg>
 );
 
 // ─── Arc progress indicator ───────────────────────────────────────────────────
-
 const ArcProgress = ({ pct, size = 44 }: { pct: number; size?: number }) => {
-  const cx = size / 2;
-  const cy = size / 2;
-  const r  = (size - 6) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (pct / 100) * circ;
-
+  const cx = size / 2; const cy = size / 2; const r = (size - 6) / 2; const circ = 2 * Math.PI * r;
   return (
-    <svg
-      width={size}
-      height={size}
-      className="absolute inset-0 -rotate-90"
-      style={{ pointerEvents: "none" }}
-      aria-hidden
-    >
+    <svg width={size} height={size} className="absolute inset-0 -rotate-90" style={{ pointerEvents: "none" }} aria-hidden>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="2.5" />
-      <circle
-        cx={cx} cy={cy} r={r}
-        fill="none"
-        stroke="rgba(255,255,255,0.95)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        style={{ transition: "stroke-dashoffset 0.5s cubic-bezier(0.4,0,0.2,1)" }}
-      />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="2.5" strokeLinecap="round"
+        strokeDasharray={circ} strokeDashoffset={circ - (pct / 100) * circ}
+        style={{ transition: "stroke-dashoffset 0.5s cubic-bezier(0.4,0,0.2,1)" }} />
     </svg>
   );
 };
 
-// ─── Usage dots indicator ─────────────────────────────────────────────────────
-
+// ─── Usage dots ───────────────────────────────────────────────────────────────
 const UsageDots = ({ used, total }: { used: number; total: number }) => {
-  const dots = Array.from({ length: total }, (_, i) => i < used);
-  // Show max 10 dots visually, scale remaining
-  const maxVisible = 10;
-  const visible = dots.slice(0, maxVisible);
-
+  const maxVisible = 10; const visible = Math.min(total, maxVisible);
   return (
     <div className="flex items-center gap-0.5 flex-wrap" style={{ maxWidth: 120 }}>
-      {visible.map((isUsed, i) => (
-        <div
-          key={i}
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: isUsed ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.2)",
-            transition: "background 0.3s ease",
-          }}
-        />
+      {Array.from({ length: visible }, (_, i) => (
+        <div key={i} style={{ width: 6, height: 6, borderRadius: "50%",
+          background: i < used ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.2)",
+          transition: "background 0.3s ease" }} />
       ))}
-      {total > maxVisible && (
-        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", marginLeft: 2 }}>
-          +{total - maxVisible}
-        </span>
-      )}
+      {total > maxVisible && <span style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", marginLeft: 2 }}>+{total - maxVisible}</span>}
     </div>
   );
 };
 
 // ─── Popup ────────────────────────────────────────────────────────────────────
-
 type PopupProps = {
-  status: Status;
-  fileName: string | null;
-  fieldCount: number;
-  errMsg: string;
-  pct: number;
-  usedToday: number;
-  countdown: string;
-  onClose: () => void;
-  onRetry: () => void;
+  status: Status; fileName: string | null; fieldCount: number; errMsg: string;
+  pct: number; usedToday: number; countdown: string; onClose: () => void; onRetry: () => void;
 };
-
 const STATUS_ORDER: Status[] = ["idle", "reading", "extracting", "done", "error", "limit"];
 
-const UploadPopup = ({
-  status, fileName, fieldCount, errMsg, pct, usedToday, countdown, onClose, onRetry,
-}: PopupProps) => {
-  const cfg      = STAGES[status];
+const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, countdown, onClose, onRetry }: PopupProps) => {
+  const cfg      = STAGE_LABELS[status];
   const isActive = status === "reading" || status === "extracting";
   const isDone   = status === "done";
   const isError  = status === "error";
   const isLimit  = status === "limit";
   const curIdx   = STATUS_ORDER.indexOf(status);
-  const remaining = Math.max(0, DAILY_LIMIT - usedToday);
 
   useEffect(() => {
     if (!isDone) return;
@@ -984,30 +824,21 @@ const UploadPopup = ({
   }, [isDone, onClose]);
 
   const borderColor = isDone ? "#10b981" : isError || isLimit ? "#f43f5e" : "#334155";
-  const glowColor   = isDone
-    ? "rgba(16,185,129,0.14)"
-    : isError || isLimit
-    ? "rgba(244,63,94,0.14)"
-    : "rgba(0,0,0,0)";
+  const glowColor   = isDone ? "rgba(16,185,129,0.14)" : isError || isLimit ? "rgba(244,63,94,0.14)" : "rgba(0,0,0,0)";
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-40"
+      <div className="fixed inset-0 z-40"
         style={{ background: "rgba(15,23,42,0.28)", backdropFilter: "blur(2px)" }}
-        onClick={isDone || isError || isLimit ? onClose : undefined}
-      />
-      <div
-        role="dialog"
-        aria-label="PDF upload progress"
+        onClick={isDone || isError || isLimit ? onClose : undefined} />
+      <div role="dialog" aria-label="PDF upload progress"
         className="fixed bottom-5 right-5 z-50 w-[320px] overflow-hidden rounded-2xl"
         style={{
           background: "linear-gradient(148deg,#1e293b 0%,#0f172a 100%)",
           border: `1px solid ${borderColor}`,
           boxShadow: `0 0 0 1px ${borderColor},0 20px 60px ${glowColor},0 6px 20px rgba(0,0,0,0.55)`,
           animation: "fdwPopIn .28s cubic-bezier(.34,1.56,.64,1)",
-        }}
-      >
+        }}>
         <style>{`
           @keyframes fdwPopIn{from{opacity:0;transform:translateY(12px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}
           @keyframes fdwShimmer{0%{transform:translateX(-100%)}100%{transform:translateX(220%)}}
@@ -1017,43 +848,30 @@ const UploadPopup = ({
           .fdw-pulse{animation:fdwPulse 1.8s ease infinite}
         `}</style>
 
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07]">
           <div className="flex items-center gap-2.5">
-            <div
-              className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{
-                background: isDone
-                  ? "rgba(16,185,129,.18)"
-                  : isError || isLimit
-                  ? "rgba(244,63,94,.18)"
-                  : "rgba(251,191,36,.15)",
-              }}
-            >
-              {isDone      ? <CheckCircle className="h-4 w-4 text-emerald-400" />
-               : isError   ? <AlertCircle className="h-4 w-4 text-rose-400" />
-               : isLimit   ? <Zap className="h-4 w-4 text-rose-400" />
+            <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: isDone ? "rgba(16,185,129,.18)" : isError || isLimit ? "rgba(244,63,94,.18)" : "rgba(251,191,36,.15)" }}>
+              {isDone ? <CheckCircle className="h-4 w-4 text-emerald-400" />
+               : isError ? <AlertCircle className="h-4 w-4 text-rose-400" />
+               : isLimit ? <Zap className="h-4 w-4 text-rose-400" />
                : <AiBrainIcon className="h-4 w-4 text-amber-400" />}
             </div>
             <span className="text-[13px] font-bold text-white tracking-tight">AI PDF Upload</span>
             {isActive && (
               <span className="fdw-pulse inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide bg-amber-400/15 text-amber-300 border border-amber-400/20">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />
-                LIVE
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />LIVE
               </span>
             )}
           </div>
           {(isDone || isError || isLimit) && (
-            <button
-              type="button" onClick={onClose}
-              className="h-6 w-6 rounded-md flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
-            >
+            <button type="button" onClick={onClose}
+              className="h-6 w-6 rounded-md flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition-colors">
               <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
 
-        {/* Body */}
         <div className="px-4 py-4 space-y-3.5">
           {fileName && !isLimit && (
             <div className="flex items-center gap-2.5 rounded-xl px-3 py-2 bg-white/[0.05] border border-white/[0.07]">
@@ -1062,7 +880,6 @@ const UploadPopup = ({
             </div>
           )}
 
-          {/* Limit reached state */}
           {isLimit ? (
             <div className="space-y-3">
               <div className="rounded-xl px-3 py-3 bg-rose-500/10 border border-rose-500/20">
@@ -1087,48 +904,37 @@ const UploadPopup = ({
                 <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
                   <ArcProgress pct={pct} size={64} />
                   <div className="relative z-10 flex flex-col items-center leading-none">
-                    {isDone ? (
-                      <CheckCircle className="h-6 w-6 text-emerald-400" />
-                    ) : isError ? (
-                      <AlertCircle className="h-6 w-6 text-rose-400" />
-                    ) : (
-                      <>
-                        <span className="text-[15px] font-black text-white tabular-nums">{pct}</span>
-                        <span className="text-[9px] font-bold text-slate-400 -mt-0.5">%</span>
-                      </>
-                    )}
+                    {isDone ? <CheckCircle className="h-6 w-6 text-emerald-400" />
+                     : isError ? <AlertCircle className="h-6 w-6 text-rose-400" />
+                     : (<><span className="text-[15px] font-black text-white tabular-nums">{pct}</span>
+                           <span className="text-[9px] font-bold text-slate-400 -mt-0.5">%</span></>)}
                   </div>
                 </div>
-
                 <div className="min-w-0">
-                  <p className={`text-sm font-bold leading-tight ${
-                    isDone ? "text-emerald-400" : isError ? "text-rose-400" : "text-white"
-                  }`}>{cfg.label}</p>
+                  <p className={`text-sm font-bold leading-tight ${isDone ? "text-emerald-400" : isError ? "text-rose-400" : "text-white"}`}>
+                    {cfg.label}
+                  </p>
                   <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
                     {isError ? (errMsg || cfg.sublabel) : cfg.sublabel}
                   </p>
                   {isDone && fieldCount > 0 && (
-                    <p className="text-[11px] text-emerald-400 font-semibold mt-1.5">
-                      ✓ {fieldCount} fields auto-filled
-                    </p>
+                    <p className="text-[11px] text-emerald-400 font-semibold mt-1.5">✓ {fieldCount} fields auto-filled</p>
                   )}
                 </div>
               </div>
 
               {!isError && (
                 <div className="h-[5px] w-full rounded-full bg-white/[0.07] overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${isDone ? "bg-emerald-500" : "bg-amber-400"} ${isActive ? "fdw-shimmer" : ""}`}
-                    style={{ width: `${pct}%`, transition: "width 0.18s linear" }}
-                  />
+                  <div className={`h-full rounded-full ${isDone ? "bg-emerald-500" : "bg-amber-400"} ${isActive ? "fdw-shimmer" : ""}`}
+                    style={{ width: `${pct}%`, transition: "width 0.18s linear" }} />
                 </div>
               )}
 
               {!isError && (
                 <div className="flex items-start justify-between px-0.5">
                   {(["reading", "extracting", "done"] as Status[]).map((s) => {
-                    const mine   = STATUS_ORDER.indexOf(s);
-                    const isNow  = status === s;
+                    const mine  = STATUS_ORDER.indexOf(s);
+                    const isNow = status === s;
                     const isPast = curIdx > mine && !isError;
                     const labels: Record<string, string> = { reading: "Read", extracting: "Extract", done: "Fill" };
                     return (
@@ -1136,11 +942,11 @@ const UploadPopup = ({
                         <div className={`h-2 w-2 rounded-full transition-all duration-300 ${
                           isPast ? "bg-emerald-500 scale-110"
                           : isNow ? "bg-amber-400 scale-125 shadow-[0_0_0_3px_rgba(251,191,36,0.22)]"
-                          : "bg-slate-700"
-                        }`} />
+                          : "bg-slate-700"}`} />
                         <span className={`text-[9px] font-semibold uppercase tracking-wide ${
-                          isPast ? "text-emerald-400" : isNow ? "text-amber-400" : "text-slate-600"
-                        }`}>{labels[s]}</span>
+                          isPast ? "text-emerald-400" : isNow ? "text-amber-400" : "text-slate-600"}`}>
+                          {labels[s]}
+                        </span>
                       </div>
                     );
                   })}
@@ -1148,23 +954,20 @@ const UploadPopup = ({
               )}
 
               {isError && (
-                <button
-                  type="button" onClick={onRetry}
-                  className="w-full py-2 rounded-xl text-[13px] font-semibold text-rose-400 border border-rose-500/25 hover:bg-rose-500/10 transition-colors"
-                >
+                <button type="button" onClick={onRetry}
+                  className="w-full py-2 rounded-xl text-[13px] font-semibold text-rose-400 border border-rose-500/25 hover:bg-rose-500/10 transition-colors">
                   Try again
                 </button>
               )}
 
-              {/* Usage counter at bottom of popup (non-limit states) */}
               {!isError && (
                 <div className="pt-1 border-t border-white/[0.05]">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] text-slate-500">Today's usage</span>
                     <span className={`text-[10px] font-bold ${
-                      remaining <= 3 ? "text-rose-400" : remaining <= 7 ? "text-amber-400" : "text-slate-400"
-                    }`}>
-                      {remaining} left of {DAILY_LIMIT}
+                      DAILY_LIMIT - usedToday <= 5  ? "text-rose-400"
+                      : DAILY_LIMIT - usedToday <= 15 ? "text-amber-400" : "text-slate-400"}`}>
+                      {Math.max(0, DAILY_LIMIT - usedToday)} left of {DAILY_LIMIT}
                     </span>
                   </div>
                   <UsageDots used={usedToday} total={DAILY_LIMIT} />
@@ -1185,59 +988,46 @@ const UploadPopup = ({
 };
 
 // ─── Main exported component ──────────────────────────────────────────────────
-
 export function PdfAutofillBanner({
-  formData,
-  setFormData,
+  formData, setFormData,
 }: {
   formData: MaidProfile;
   setFormData: React.Dispatch<React.SetStateAction<MaidProfile>>;
 }) {
-  const [status,        setStatus]       = useState<Status>("idle");
-  const [fileName,      setFileName]     = useState<string | null>(null);
-  const [fieldCount,    setFieldCount]   = useState(0);
-  const [errMsg,        setErrMsg]       = useState("");
-  const [showPopup,     setShowPopup]    = useState(false);
-  const [liveProgress,  setLiveProgress] = useState(0);
-  const [usedToday,     setUsedToday]    = useState(() => loadUsage().count);
-  const [countdown,     setCountdown]    = useState(() => formatCountdown(msTillMidnightPacific()));
+  const [status,       setStatus]       = useState<Status>("idle");
+  const [fileName,     setFileName]     = useState<string | null>(null);
+  const [fieldCount,   setFieldCount]   = useState(0);
+  const [errMsg,       setErrMsg]       = useState("");
+  const [showPopup,    setShowPopup]    = useState(false);
+  const [liveProgress, setLiveProgress] = useState(0);
+  const [usedToday,    setUsedToday]    = useState(() => loadUsage().count);
+  const [countdown,    setCountdown]    = useState(() => formatCountdown(msTillMidnightPacific()));
 
-  const inputRef       = useRef<HTMLInputElement>(null);
-  const processingRef  = useRef(false);
-  const tickerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inputRef      = useRef<HTMLInputElement>(null);
+  const processingRef = useRef(false);
+  const tickerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Countdown clock ──────────────────────────────────────────────────────
   useEffect(() => {
     countdownRef.current = setInterval(() => {
       setCountdown(formatCountdown(msTillMidnightPacific()));
-      // Also refresh usage count (handles day rollover)
       const fresh = loadUsage();
       setUsedToday(fresh.count);
-      if (status === "limit" && fresh.count < DAILY_LIMIT) {
-        setStatus("idle");
-      }
+      if (status === "limit" && fresh.count < DAILY_LIMIT) setStatus("idle");
     }, 1000);
-    return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
+    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
   }, [status]);
 
-  // ── Progress ticker helpers ──────────────────────────────────────────────
   const startTicker = useCallback((from: number, target: number, durationMs: number) => {
     if (tickerRef.current) clearInterval(tickerRef.current);
-    const steps   = Math.max(1, Math.round(durationMs / 80));
-    const delta   = (target - from) / steps;
-    let   current = from;
-    let   step    = 0;
+    const steps = Math.max(1, Math.round(durationMs / 80));
+    const delta = (target - from) / steps;
+    let current = from; let step = 0;
     tickerRef.current = setInterval(() => {
       step++;
       current = Math.min(target, from + delta * step);
       setLiveProgress(Math.round(current));
-      if (step >= steps) {
-        if (tickerRef.current) clearInterval(tickerRef.current);
-        tickerRef.current = null;
-      }
+      if (step >= steps) { if (tickerRef.current) clearInterval(tickerRef.current); tickerRef.current = null; }
     }, 80);
   }, []);
 
@@ -1247,105 +1037,55 @@ export function PdfAutofillBanner({
 
   const reset = useCallback(() => {
     stopTicker();
-    setStatus("idle");
-    setFileName(null);
-    setFieldCount(0);
-    setErrMsg("");
-    setShowPopup(false);
-    setLiveProgress(0);
+    setStatus("idle"); setFileName(null); setFieldCount(0); setErrMsg("");
+    setShowPopup(false); setLiveProgress(0);
     processingRef.current = false;
     if (inputRef.current) inputRef.current.value = "";
-    // Refresh usage in case of day rollover
     setUsedToday(loadUsage().count);
   }, [stopTicker]);
 
-  const process = useCallback(
-    async (file: File) => {
-      if (!file.type.includes("pdf")) { toast.error("Please upload a PDF file"); return; }
-      if (processingRef.current) return;
+  const process = useCallback(async (file: File) => {
+    if (!file.type.includes("pdf")) { toast.error("Please upload a PDF file"); return; }
+    if (processingRef.current) return;
+    const currentUsage = loadUsage();
+    if (currentUsage.count >= DAILY_LIMIT) {
+      setUsedToday(currentUsage.count); setStatus("limit"); setShowPopup(true); return;
+    }
+    processingRef.current = true;
+    setFileName(file.name); setErrMsg(""); setShowPopup(true);
+    setStatus("reading"); setLiveProgress(1); startTicker(1, 25, 1200);
+    try {
+      setStatus("extracting"); startTicker(25, 92, 12000);
+      const extracted = await extractFromPdf(file);
+      const updated   = incrementUsage(); setUsedToday(updated.count);
+      stopTicker(); startTicker(92, 99, 400); await sleep(420);
+      const count = countFields(extracted);
+      setFieldCount(count);
+      setFormData((prev) => applyToProfile(extracted, prev));
+      stopTicker(); setLiveProgress(100); setStatus("done");
+      toast.success(`Auto-filled ${count} fields from biodata PDF`);
+    } catch (err) {
+      stopTicker();
+      const msg = err instanceof Error ? err.message : "Extraction failed";
+      setErrMsg(msg); setLiveProgress(0); setStatus("error"); toast.error(msg);
+    } finally { processingRef.current = false; }
+  }, [setFormData, startTicker, stopTicker]);
 
-      // Check limit before starting
-      const currentUsage = loadUsage();
-      if (currentUsage.count >= DAILY_LIMIT) {
-        setUsedToday(currentUsage.count);
-        setStatus("limit");
-        setShowPopup(true);
-        return;
-      }
-
-      processingRef.current = true;
-
-      setFileName(file.name);
-      setErrMsg("");
-      setShowPopup(true);
-
-      // Phase 1: reading
-      setStatus("reading");
-      setLiveProgress(1);
-      startTicker(1, 15, 600);
-
-      try {
-        // Phase 2: extracting
-        setStatus("extracting");
-        startTicker(15, 92, 18000);
-
-        const extracted = await extractFromPdf(file);
-
-        // Increment usage only on success
-        const updated = incrementUsage();
-        setUsedToday(updated.count);
-
-        // Phase 3: applying
-        stopTicker();
-        startTicker(92, 99, 400);
-        await sleep(420);
-
-        const count = countFields(extracted);
-        setFieldCount(count);
-        setFormData((prev) => applyToProfile(extracted, prev));
-
-        // Phase 4: done
-        stopTicker();
-        setLiveProgress(100);
-        setStatus("done");
-        toast.success(`Auto-filled ${count} fields from biodata PDF`);
-      } catch (err) {
-        stopTicker();
-        const msg = err instanceof Error ? err.message : "Extraction failed";
-        setErrMsg(msg);
-        setLiveProgress(0);
-        setStatus("error");
-        toast.error(msg);
-      } finally {
-        processingRef.current = false;
-      }
-    },
-    [setFormData, startTicker, stopTicker],
-  );
-
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const f = e.target.files?.[0];
-      if (f) void process(f);
-    },
-    [process],
-  );
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (f) void process(f);
+  }, [process]);
 
   const handleButtonClick = useCallback(() => {
     const currentUsage = loadUsage();
     if (currentUsage.count >= DAILY_LIMIT) {
-      setUsedToday(currentUsage.count);
-      setStatus("limit");
-      setShowPopup(true);
-      return;
+      setUsedToday(currentUsage.count); setStatus("limit"); setShowPopup(true); return;
     }
     if (status === "idle") inputRef.current?.click();
     else setShowPopup(true);
   }, [status]);
 
   const handleRetry = useCallback(() => {
-    reset();
-    setTimeout(() => inputRef.current?.click(), 80);
+    reset(); setTimeout(() => inputRef.current?.click(), 80);
   }, [reset]);
 
   const isProcessing = status === "reading" || status === "extracting";
@@ -1355,176 +1095,86 @@ export function PdfAutofillBanner({
   const remaining    = Math.max(0, DAILY_LIMIT - usedToday);
   const pct          = liveProgress;
 
-  const BTN_SIZE = 44;
-  const BTN_R    = (BTN_SIZE - 6) / 2;
-  const BTN_CIRC = 2 * Math.PI * BTN_R;
-  const BTN_OFF  = BTN_CIRC - (pct / 100) * BTN_CIRC;
+  const BTN_SIZE = 44; const BTN_R = (BTN_SIZE - 6) / 2;
+  const BTN_CIRC = 2 * Math.PI * BTN_R; const BTN_OFF = BTN_CIRC - (pct / 100) * BTN_CIRC;
 
-  // Button gradient based on remaining uses
   const buttonBg = isDone
     ? "linear-gradient(135deg,#059669,#10b981)"
-    : isError
-    ? "linear-gradient(135deg,#e11d48,#f43f5e)"
-    : isLimit
-    ? "linear-gradient(135deg,#7f1d1d,#991b1b)"
-    : isProcessing
-    ? "linear-gradient(135deg,#d97706,#f59e0b)"
-    : remaining <= 3
-    ? "linear-gradient(135deg,#b91c1c,#dc2626)"   // red when nearly out
-    : remaining <= 7
-    ? "linear-gradient(135deg,#92400e,#d97706)"   // amber-ish when low
-    : "linear-gradient(135deg,#b45309,#f59e0b)";  // normal
+    : isError ? "linear-gradient(135deg,#e11d48,#f43f5e)"
+    : isLimit ? "linear-gradient(135deg,#7f1d1d,#991b1b)"
+    : isProcessing ? "linear-gradient(135deg,#d97706,#f59e0b)"
+    : remaining <= 5  ? "linear-gradient(135deg,#b91c1c,#dc2626)"
+    : remaining <= 15 ? "linear-gradient(135deg,#92400e,#d97706)"
+    : "linear-gradient(135deg,#b45309,#f59e0b)";
 
   const buttonShadow = isDone
     ? "0 2px 12px rgba(16,185,129,0.45), 0 1px 3px rgba(0,0,0,0.2)"
-    : isError || isLimit
-    ? "0 2px 12px rgba(244,63,94,0.45), 0 1px 3px rgba(0,0,0,0.2)"
+    : isError || isLimit ? "0 2px 12px rgba(244,63,94,0.45), 0 1px 3px rgba(0,0,0,0.2)"
     : "0 2px 16px rgba(245,158,11,0.55), 0 1px 4px rgba(0,0,0,0.2)";
 
   return (
     <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="application/pdf"
-        className="sr-only"
-        onChange={handleFileChange}
-        disabled={isProcessing || isLimit}
-      />
+      <input ref={inputRef} type="file" accept="application/pdf" className="sr-only"
+        onChange={handleFileChange} disabled={isProcessing || isLimit} />
 
-      <button
-        type="button"
-        onClick={handleButtonClick}
+      <button type="button" onClick={handleButtonClick}
         className="relative inline-flex items-center gap-0 overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-500"
-        style={{
-          height: 44,
-          borderRadius: 14,
-          padding: 0,
-          border: "none",
-          background: buttonBg,
-          boxShadow: buttonShadow,
-          cursor: isProcessing ? "default" : "pointer",
-          transition: "all 0.2s ease",
-        }}
-      >
-        {/* Left icon area */}
-        <span
-          className="relative flex items-center justify-center shrink-0"
-          style={{ width: BTN_SIZE, height: BTN_SIZE }}
-        >
+        style={{ height: 44, borderRadius: 14, padding: 0, border: "none", background: buttonBg,
+          boxShadow: buttonShadow, cursor: isProcessing ? "default" : "pointer", transition: "all 0.2s ease" }}>
+
+        <span className="relative flex items-center justify-center shrink-0" style={{ width: BTN_SIZE, height: BTN_SIZE }}>
           {isProcessing && (
-            <svg
-              width={BTN_SIZE}
-              height={BTN_SIZE}
-              className="absolute inset-0 -rotate-90"
-              style={{ pointerEvents: "none" }}
-              aria-hidden
-            >
-              <circle cx={BTN_SIZE / 2} cy={BTN_SIZE / 2} r={BTN_R} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5" />
-              <circle
-                cx={BTN_SIZE / 2} cy={BTN_SIZE / 2} r={BTN_R}
-                fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeDasharray={BTN_CIRC}
-                strokeDashoffset={BTN_OFF}
-                style={{ transition: "stroke-dashoffset 0.5s cubic-bezier(0.4,0,0.2,1)" }}
-              />
+            <svg width={BTN_SIZE} height={BTN_SIZE} className="absolute inset-0 -rotate-90"
+              style={{ pointerEvents: "none" }} aria-hidden>
+              <circle cx={BTN_SIZE/2} cy={BTN_SIZE/2} r={BTN_R} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5" />
+              <circle cx={BTN_SIZE/2} cy={BTN_SIZE/2} r={BTN_R} fill="none" stroke="rgba(255,255,255,0.95)"
+                strokeWidth="2.5" strokeLinecap="round" strokeDasharray={BTN_CIRC} strokeDashoffset={BTN_OFF}
+                style={{ transition: "stroke-dashoffset 0.5s cubic-bezier(0.4,0,0.2,1)" }} />
             </svg>
           )}
-
           <span className="relative z-10 flex flex-col items-center leading-none">
-            {isProcessing ? (
-              <>
-                <span className="text-[12px] font-black text-white tabular-nums leading-none">{pct}</span>
-                <span className="text-[8px] font-bold text-white/70 leading-none">%</span>
-              </>
-            ) : isDone ? (
-              <CheckCircle className="h-5 w-5 text-white" />
-            ) : isError ? (
-              <AlertCircle className="h-5 w-5 text-white" />
-            ) : isLimit ? (
-              <Zap className="h-5 w-5 text-white" />
-            ) : (
-              <AiBrainIcon className="h-5 w-5 text-white" />
-            )}
+            {isProcessing ? (<><span className="text-[12px] font-black text-white tabular-nums leading-none">{pct}</span>
+                               <span className="text-[8px] font-bold text-white/70 leading-none">%</span></>)
+             : isDone  ? <CheckCircle className="h-5 w-5 text-white" />
+             : isError ? <AlertCircle className="h-5 w-5 text-white" />
+             : isLimit ? <Zap className="h-5 w-5 text-white" />
+             : <AiBrainIcon className="h-5 w-5 text-white" />}
           </span>
         </span>
 
-        <span
-          className="shrink-0 self-stretch"
-          style={{ width: 1, background: "rgba(255,255,255,0.25)", margin: "8px 0" }}
-          aria-hidden
-        />
+        <span className="shrink-0 self-stretch"
+          style={{ width: 1, background: "rgba(255,255,255,0.25)", margin: "8px 0" }} aria-hidden />
 
-        {/* Text area */}
         <span className="flex flex-col items-start justify-center px-3 leading-tight">
           <span className="text-[13px] font-bold text-white whitespace-nowrap">
-            {isProcessing
-              ? "Analysing PDF…"
-              : isDone
-              ? `Filled · ${fieldCount} fields`
-              : isError
-              ? "Upload Failed"
-              : isLimit
-              ? "Daily limit reached"
-              : "AI PDF Upload"}
+            {isProcessing ? "Analysing PDF…" : isDone ? `Filled · ${fieldCount} fields`
+             : isError ? "Upload Failed" : isLimit ? "Daily limit reached" : "AI PDF Upload"}
           </span>
           <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "rgba(255,255,255,0.72)" }}>
-            {isProcessing
-              ? STAGES[status].sublabel
-              : isDone
-              ? "Click to view details"
-              : isError
-              ? "Click to retry"
-              : isLimit
-              ? `Resets in ${countdown}`
-              : remaining <= 3
-              ? `Only ${remaining} left today`
-              : `${remaining} of ${DAILY_LIMIT} remaining today`}
+            {isProcessing ? STAGE_LABELS[status].sublabel : isDone ? "Click to view details"
+             : isError ? "Click to retry" : isLimit ? `Resets in ${countdown}`
+             : remaining <= 5 ? `Only ${remaining} left today` : `${remaining} of ${DAILY_LIMIT} remaining today`}
           </span>
         </span>
 
-        {/* Usage mini-dots on the right (idle/error only) */}
         {!isProcessing && !isDone && !isLimit && (
           <span className="pr-3 pl-1 self-center flex flex-col items-end gap-1" aria-hidden>
-            {/* Mini usage dots */}
             <div className="flex gap-[3px]">
               {Array.from({ length: Math.min(DAILY_LIMIT, 10) }, (_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: 4,
-                    height: 4,
-                    borderRadius: "50%",
-                    background: i < usedToday
-                      ? "rgba(255,255,255,0.75)"
-                      : "rgba(255,255,255,0.2)",
-                  }}
-                />
+                <div key={i} style={{ width: 4, height: 4, borderRadius: "50%",
+                  background: i < usedToday ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.2)" }} />
               ))}
             </div>
           </span>
         )}
 
-        <span
-          className="pointer-events-none absolute inset-0 rounded-[14px] opacity-0 hover:opacity-100 transition-opacity duration-200"
-          style={{ background: "rgba(255,255,255,0.08)" }}
-          aria-hidden
-        />
+        <span className="pointer-events-none absolute inset-0 rounded-[14px] opacity-0 hover:opacity-100 transition-opacity duration-200"
+          style={{ background: "rgba(255,255,255,0.08)" }} aria-hidden />
       </button>
 
       {showPopup && (
-        <UploadPopup
-          status={status}
-          fileName={fileName}
-          fieldCount={fieldCount}
-          errMsg={errMsg}
-          pct={pct}
-          usedToday={usedToday}
-          countdown={countdown}
-          onClose={reset}
-          onRetry={handleRetry}
-        />
+        <UploadPopup status={status} fileName={fileName} fieldCount={fieldCount} errMsg={errMsg}
+          pct={pct} usedToday={usedToday} countdown={countdown} onClose={reset} onRetry={handleRetry} />
       )}
     </>
   );

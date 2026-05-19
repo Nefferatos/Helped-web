@@ -221,7 +221,6 @@ const MaidProfilePage = () => {
     if (!maid || isBringingToTop) return;
     try {
       setIsBringingToTop(true);
-      // Try dedicated endpoint first; fallback to a PUT that bumps updatedAt
       const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/bring-to-top`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -421,16 +420,12 @@ const MaidProfilePage = () => {
       <div className="mb-4">
         {/* Header row: icon + title */}
         <div className="flex items-center justify-center gap-3 mb-3">
-          {/* Maid+magnifier icon — matches the screenshot */}
           <div className="relative shrink-0 w-14 h-14">
-            {/* person silhouette */}
             <svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg" className="absolute inset-0 w-full h-full">
               <circle cx="22" cy="14" r="10" fill="#5a3e2b" />
               <ellipse cx="22" cy="36" rx="14" ry="12" fill="#5a3e2b" />
-              {/* magnifier glass */}
               <circle cx="36" cy="36" r="10" fill="none" stroke="#cc2200" strokeWidth="3.5" />
               <line x1="43" y1="43" x2="51" y2="51" stroke="#cc2200" strokeWidth="4" strokeLinecap="round" />
-              {/* white glare on lens */}
               <circle cx="33" cy="33" r="2.5" fill="white" fillOpacity="0.4" />
             </svg>
           </div>
@@ -527,11 +522,11 @@ const MaidProfilePage = () => {
           >
             {isReplaceSearching ? "Searching…" : "Search"}
           </button>
-        </div>{/* end search row */}
-      </div>{/* end header+search block */}
+        </div>
+      </div>
 
       {/* ══════════════════════════════════════════════
-          BOND PAPER WRAPPER — all biodata content inside
+          BOND PAPER WRAPPER
       ══════════════════════════════════════════════ */}
       <div
         className="bg-white mx-auto px-8 py-6"
@@ -546,7 +541,7 @@ const MaidProfilePage = () => {
           maxWidth: "100%",
         }}
       >
-        {/* ── Top Navigation Bar — inside bond paper ── */}
+        {/* ── Top Navigation Bar ── */}
         <div className="mb-5 pb-2 border-b-2 border-gray-300">
           <div className="flex flex-wrap items-center gap-y-1.5">
             <span
@@ -616,6 +611,7 @@ const MaidProfilePage = () => {
 
           {/* Right: PDF Download + Photos */}
           <div className="flex flex-col gap-3 items-start">
+            {/* PDF download button */}
             <button
               onClick={handleExportPdf}
               className="flex items-center gap-2 text-blue-700 underline text-sm font-medium hover:text-blue-900 transition-colors"
@@ -628,7 +624,10 @@ const MaidProfilePage = () => {
 
             <p className="text-sm font-bold text-black">{photos.length}/5 photos</p>
 
-            <div className="flex gap-2">
+            {/* ── Photo pair: passport + full body ── */}
+            <div className="flex flex-row gap-2 items-start">
+
+              {/* Slot 1: Passport/2x2 */}
               <div className="flex flex-col items-center gap-1">
                 <button
                   type="button"
@@ -643,14 +642,21 @@ const MaidProfilePage = () => {
                         <span className="rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">View</span>
                       </span>
                     </>
-                  ) : <span className="text-sm text-black">No photo</span>}
+                  ) : (
+                    <span className="text-sm text-black">No photo</span>
+                  )}
                 </button>
                 {maid.type && (
-                  <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded uppercase">
-                    {maid.type.replace(" maid", "").toUpperCase()}
+                  <span
+                    className="text-xs font-bold text-white bg-green-600 py-0.5 rounded uppercase text-center leading-tight"
+                    style={{ width: "7rem" /* 112px = w-28 */ }}
+                  >
+                    {maid.type.toUpperCase()}
                   </span>
                 )}
               </div>
+
+              {/* Slot 2: Full body */}
               <div className="flex flex-col items-center gap-1">
                 <button
                   type="button"
@@ -665,16 +671,23 @@ const MaidProfilePage = () => {
                         <span className="rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">View</span>
                       </span>
                     </>
-                  ) : <span className="text-sm text-black">No photo</span>}
+                  ) : (
+                    <span className="text-sm text-black">No photo</span>
+                  )}
                 </button>
                 {maid.type && (
-                  <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded uppercase">
-                    {maid.type.replace(" maid", "").toUpperCase()}
+                  <span
+                    className="text-xs font-bold text-white bg-green-600 py-0.5 rounded uppercase text-center leading-tight"
+                    style={{ width: "7rem" }}
+                  >
+                    {maid.type.toUpperCase()}
                   </span>
                 )}
               </div>
             </div>
+            {/* ── end photo pair ── */}
 
+            {/* Extra photos (slots 3–5) */}
             {extraPhotos.length > 0 && (
               <div className="flex gap-1.5 flex-wrap">
                 {extraPhotos.map((photo, index) => (
@@ -988,8 +1001,7 @@ const MaidProfilePage = () => {
                 style={{ width: 100, height: 125 }}>
                 {passportOrTwoByTwoPhoto
                   ? <>
-                      <img src={passportOrTwoByTwoPhoto} alt="passport"
-                        className="w-full h-full object-cover" />
+                      <img src={passportOrTwoByTwoPhoto} alt="passport" className="w-full h-full object-cover" />
                       <button
                         type="button"
                         disabled={isMediaSaving}
@@ -1022,8 +1034,7 @@ const MaidProfilePage = () => {
                 style={{ width: 120, height: 200 }}>
                 {fullBodyPhoto
                   ? <>
-                      <img src={fullBodyPhoto} alt="full body"
-                        className="w-full h-full object-cover" />
+                      <img src={fullBodyPhoto} alt="full body" className="w-full h-full object-cover" />
                       <button
                         type="button"
                         disabled={isMediaSaving}

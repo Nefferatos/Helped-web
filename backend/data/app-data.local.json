@@ -42,6 +42,489 @@
   ],
   "maids": [
     {
+      "fullName": "Meena Sunar Biswakarma",
+      "referenceCode": "asd2132",
+      "status": "available",
+      "type": "Transfer maid",
+      "nationality": "Indian maid",
+      "dateOfBirth": "1985-10-08",
+      "placeOfBirth": "Darjeeling",
+      "height": 156,
+      "weight": 50,
+      "religion": "Hindu",
+      "maritalStatus": "Married",
+      "numberOfChildren": 1,
+      "numberOfSiblings": 1,
+      "homeAddress": "West Bengal, Darjeeling, Bagdogra",
+      "airportRepatriation": "Bagdogra",
+      "educationLevel": "Secondary Level (7–9 yrs)",
+      "languageSkills": {
+        "English": "Fair",
+        "Mandarin/Chinese-Dialect": "",
+        "Bahasa Indonesia/Malaysia": "",
+        "Hindi": "Good",
+        "Tamil": ""
+      },
+      "skillsPreferences": {
+        "offDaysPerMonth": "2",
+        "sgExperience": true,
+        "otherInformation": {
+          "Able to handle pork?": false,
+          "Able to eat pork?": false
+        },
+        "workAreaNotes": {
+          "Care of infants/children": "1 & 2 years old",
+          "Cooking": "Thai, Chinese, Indian and Mexi",
+          "Language abilities (spoken)": "Hindi, English",
+          "Other Skill": "Cooking"
+        },
+        "evaluationMethods": [
+          "Interviewed by Singapore EA",
+          "Interviewed via telephone/teleconference",
+          "Interviewed via videoconference",
+          "Interviewed in person"
+        ],
+        "availabilityInterviewOptions": [
+          "FDW can be interviewed by phone",
+          "FDW can be interviewed by video-conference",
+          "FDW can be interviewed in person"
+        ]
+      },
+      "workAreas": {
+        "Care of infants/children": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 2,
+          "note": "She has experience in taking care of an infant",
+          "evaluation": "2/5 - She has experience in taking care of an infant"
+        },
+        "Care of elderly": {
+          "willing": true,
+          "experience": false,
+          "yearsOfExperience": "",
+          "rating": null,
+          "note": "She has no experience but she is willing",
+          "evaluation": "She has no experience but she is willing"
+        },
+        "Care of disabled": {
+          "willing": true,
+          "experience": false,
+          "yearsOfExperience": "",
+          "rating": null,
+          "note": "She has no experience but she is willing to be trained if needed",
+          "evaluation": "She has no experience but she is willing to be trained if needed"
+        },
+        "General housework": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 4,
+          "note": "She able to multi-task in doing all the household chores",
+          "evaluation": "4/5 - She able to multi-task in doing all the household chores"
+        },
+        "Cooking": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 4,
+          "note": "She can cook different cuisine like Thai, Chinese, Indian and Mexican food",
+          "evaluation": "4/5 - She can cook different cuisine like Thai, Chinese, Indian and Mexican food"
+        },
+        "Language abilities (spoken)": {
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": null,
+          "note": "She can communicate well in English and Hindi",
+          "evaluation": "She can communicate well in English and Hindi"
+        },
+        "Other skills, if any": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 4,
+          "note": "",
+          "evaluation": "4/5"
+        }
+      },
+      "employmentHistory": [
+        {
+          "from": "2018",
+          "to": "2021",
+          "country": "Singapore",
+          "employer": "INDIAN",
+          "duties": "General house work and taking care of 2 years old baby boy",
+          "remarks": "Family of 3 - Finish Contract"
+        },
+        {
+          "from": "2021",
+          "to": "2022",
+          "country": "Singapore",
+          "employer": "INDIAN",
+          "duties": "General house work and taking care of 1 year old baby boy",
+          "remarks": "Did not finish because employer change into small house and she has no room"
+        },
+        {
+          "from": "2022",
+          "to": "2024",
+          "country": "Singapore",
+          "employer": "INDIAN",
+          "duties": "General house work, cooking and marketing",
+          "remarks": "Couple only - Finish contract"
+        },
+        {
+          "from": "2024",
+          "to": "2026",
+          "country": "Singapore",
+          "employer": "INDIAN",
+          "duties": "General house work, cooking and marketing",
+          "remarks": ""
+        }
+      ],
+      "introduction": {
+        "foodHandlingPreferences": "No pork, No beef",
+        "pastIllnesses": {
+          "(I) Mental illness": false,
+          "(II) Epilepsy": false,
+          "(III) Asthma": false,
+          "(IV) Diabetes": false,
+          "(V) Hypertension": false,
+          "(VI) Tuberculosis": false,
+          "(VII) Heart disease": false,
+          "(VIII) Malaria": false,
+          "(IX) Operations": false
+        },
+        "agesOfChildren": "15 yrs old",
+        "presentSalary": "$800 + $60",
+        "otherRemarks": "Meena Sunar Biswakarma is an Indian helper from Darjeeling, West Bengal. She is married and has one child. She has completed her secondary level education and can communicate in English at a fair level, with good proficiency in Hindi. Meena is an ex-Singapore helper with experience in general housework, childcare, and cooking. She is skilled in preparing a variety of cuisines, including Indian, Thai, Chinese, and simple Mexican dishes. Meena is hardworking, responsible, and experienced in managing household tasks independently, making her a suitable choice for families seeking a reliable and versatile domestic helper. Her salary is $800 + $60 and 2 off days OR $800 and 4 off days. Any no off days less than 4 have to be compensated per MOM rulings. Employment history will be made available before signing the contract, and we will give the FIN number for the employer to double-check at MOM website She has NO medical conditions stated in the official MOM 4 page bio data",
+        "intro": "Meena Sunar Biswakarma is an Indian helper from Darjeeling, West Bengal. She is married and has one child. She has completed her secondary level education and can communicate in English at a fair level, with good proficiency in Hindi. Meena is an ex-Singapore helper with experience in general housework, childcare, and cooking. She is skilled in preparing a variety of cuisines, including Indian, Thai, Chinese, and simple Mexican dishes. Meena is hardworking, responsible, and experienced in managing household tasks independently, making her a suitable choice for families seeking a reliable and versatile domestic helper. Her salary is $800 + $60 and 2 off days OR $800 and 4 off days. Any no off days less than 4 have to be compensated per MOM rulings. Employment history will be made available before signing the contract, and we will give the FIN number for the employer to double-check at MOM website She has NO medical conditions stated in the official MOM 4 page bio data"
+      },
+      "agencyContact": {
+        "phone": "80730757"
+      },
+      "photoDataUrl": "",
+      "photoDataUrls": [],
+      "videoDataUrl": "",
+      "isPublic": true,
+      "hasPhoto": false,
+      "agencyId": 1,
+      "id": 124,
+      "createdAt": "2026-05-19T07:02:31.884Z",
+      "updatedAt": "2026-05-19T07:03:07.906Z"
+    },
+    {
+      "fullName": "HoiNeiLhing Singsit",
+      "referenceCode": "IND-MP-PIP-9554a",
+      "status": "available",
+      "type": "Transfer maid",
+      "nationality": "Indian maid",
+      "dateOfBirth": "1993-01-01",
+      "placeOfBirth": "Manipur",
+      "height": 156,
+      "weight": 60,
+      "religion": "Christian",
+      "maritalStatus": "Single",
+      "numberOfChildren": 0,
+      "numberOfSiblings": "6/7",
+      "homeAddress": "Kangpokpi district Manipur",
+      "airportRepatriation": "Dimapur Airport",
+      "educationLevel": "High School (10–12 yrs)",
+      "languageSkills": {
+        "English": "Good",
+        "Mandarin/Chinese-Dialect": "",
+        "Bahasa Indonesia/Malaysia": "",
+        "Hindi": "Good",
+        "Tamil": ""
+      },
+      "skillsPreferences": {
+        "sgExperience": true,
+        "otherInformation": {
+          "Able to handle pork?": false,
+          "Able to eat pork?": false
+        },
+        "workAreaNotes": {
+          "Care of infants/children": "Please specify age range:",
+          "Cooking": "Please specify cuisines:",
+          "Language abilities (spoken)": "Please specify:",
+          "Other Skill": "Please specify:"
+        },
+        "evaluationMethods": [
+          "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA"
+        ],
+        "offDaysPerMonth": "2",
+        "availabilityInterviewOptions": [
+          "FDW can be interviewed by phone",
+          "FDW can be interviewed by video-conference"
+        ]
+      },
+      "workAreas": {
+        "Care of infants/children": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 3,
+          "note": "She has experience taking care of children within her family.",
+          "evaluation": "3/5 - She has experience taking care of children within her family."
+        },
+        "Care of elderly": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 3,
+          "note": "She has experience assisting elderly persons, specifically her own parents.",
+          "evaluation": "3/5 - She has experience assisting elderly persons, specifically her own parents."
+        },
+        "Care of disabled": {
+          "willing": true,
+          "experience": false,
+          "yearsOfExperience": "",
+          "rating": 2,
+          "note": "She has no prior experience in caring for persons with disabilities but is willing to learn and handle the responsibility if required.",
+          "evaluation": "2/5 - She has no prior experience in caring for persons with disabilities but is willing to learn and handle the responsibility if required."
+        },
+        "General housework": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 4,
+          "note": "She is capable of multitasking and efficiently managing all household chores",
+          "evaluation": "4/5 - She is capable of multitasking and efficiently managing all household chores"
+        },
+        "Cooking": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 4,
+          "note": "She can cook Manipur and North Indian dishes.",
+          "evaluation": "4/5 - She can cook Manipur and North Indian dishes."
+        },
+        "Language abilities (spoken)": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 3,
+          "note": "She can communicate well in English and has basic knowledge of Hindi.",
+          "evaluation": "3/5 - She can communicate well in English and has basic knowledge of Hindi."
+        },
+        "Other skills, if any": {
+          "willing": true,
+          "experience": true,
+          "yearsOfExperience": "",
+          "rating": 3,
+          "note": "She is diligent and takes pride in keeping the house clean.",
+          "evaluation": "3/5 - She is diligent and takes pride in keeping the house clean."
+        }
+      },
+      "employmentHistory": [
+        {
+          "from": "2026",
+          "to": "2026",
+          "country": "Singapore",
+          "employer": "INDIAN",
+          "duties": "General household work and taking care of 2 kids",
+          "remarks": "2 months"
+        }
+      ],
+      "introduction": {
+        "pastIllnesses": {
+          "(I) Mental illness": false,
+          "(II) Epilepsy": false,
+          "(III) Asthma": false,
+          "(IV) Diabetes": false,
+          "(V) Hypertension": false,
+          "(VI) Tuberculosis": false,
+          "(VII) Heart disease": false,
+          "(VIII) Malaria": false,
+          "(IX) Operations": false
+        },
+        "foodHandlingPreferences": "No pork",
+        "intro": "HoiNeiLhing Singsit is from Manipur, India, and is applying for a position as a Domestic Helper in Singapore. She is single, Christian, and the 6th of 7 siblings. She is a high school graduate, born and raised in Kangpokpi District, Manipur. She has experience in childcare, as she regularly helps her relatives take care of their children. She also assists her parents and is fully responsible for all household chores in her own home. Although she has not worked in another household, she is experienced in managing household duties independently, as she handles all chores in her family home. She can cook Manipur and North Indian dishes and is willing to follow recipes. She is comfortable cooking both vegetarian and non-vegetarian meals. She is open to working with any family who is willing to hire her, except for landed houses. HoiNeiLhing is seeking an opportunity to work in Singapore to earn a stable income, save for her future, and provide financial support to her parents. She is available for an interview anytime via WhatsApp video call. Her salary is $510 + $50 and 2 off days, or $500 and 4 off days. Any no-off days less than 4 have to be compensated per MOM rulings."
+      },
+      "agencyContact": {},
+      "photoDataUrl": "",
+      "photoDataUrls": [],
+      "videoDataUrl": "",
+      "isPublic": true,
+      "hasPhoto": false,
+      "agencyId": 1,
+      "id": 121,
+      "createdAt": "2026-05-19T06:22:55.442Z",
+      "updatedAt": "2026-05-19T06:25:35.510Z"
+    },
+    {
+      "fullName": "Ruth Poumei",
+      "referenceCode": "IND-MP-KIM-6250",
+      "status": "available",
+      "type": "Ex-Singapore Helper / Manipur Helper",
+      "nationality": "Indian",
+      "dateOfBirth": "1990-03-03",
+      "placeOfBirth": "Charachandpur",
+      "height": 153,
+      "weight": 50,
+      "religion": "Christian",
+      "maritalStatus": "Single",
+      "numberOfChildren": 0,
+      "numberOfSiblings": 3,
+      "homeAddress": "Churuchandpur",
+      "airportRepatriation": "Imphal",
+      "educationLevel": "Secondary Level",
+      "languageSkills": {
+        "Hindi": "Conversational",
+        "Tamil": "",
+        "English": "Conversational",
+        "Mandarin/Chinese-Dialect": "",
+        "Bahasa Indonesia/Malaysia": ""
+      },
+      "skillsPreferences": {
+        "referredBy": "",
+        "privateInfo": "",
+        "interviewedBy": "",
+        "offDaysPerMonth": "2",
+        "otherInformation": {
+          "Able to eat pork?": true,
+          "Able to handle pork?": true
+        },
+        "evaluationMethods": [
+          "Interviewed by Singapore EA",
+          "Interviewed via telephone/teleconference",
+          "Interviewed via videoconference"
+        ],
+        "indianMaidCategory": "Manipur Helper",
+        "availabilityInterviewOptions": [
+          "FDW can be interviewed by video-conference"
+        ]
+      },
+      "workAreas": {
+        "Cooking": {
+          "note": "Can cook North Indian foods, vegetarian and non-vegetarian",
+          "rating": 4,
+          "willing": true,
+          "evaluation": "4/5 - Can cook North Indian foods, vegetarian and non-vegetarian",
+          "experience": true,
+          "yearsOfExperience": ""
+        },
+        "Care of elderly": {
+          "note": "No experience but willing",
+          "rating": 2,
+          "willing": true,
+          "evaluation": "2/5 - No experience but willing",
+          "experience": false,
+          "yearsOfExperience": ""
+        },
+        "Care of disabled": {
+          "note": "No experience but willing to be trained",
+          "rating": null,
+          "willing": true,
+          "evaluation": "No experience but willing to be trained",
+          "experience": false,
+          "yearsOfExperience": ""
+        },
+        "General housework": {
+          "note": "Able to multi-task all household chores",
+          "rating": 4,
+          "willing": true,
+          "evaluation": "4/5 - Able to multi-task all household chores",
+          "experience": true,
+          "yearsOfExperience": ""
+        },
+        "Other skills, if any": {
+          "note": "",
+          "rating": null,
+          "evaluation": "",
+          "yearsOfExperience": ""
+        },
+        "Care of infants/children": {
+          "note": "Experience taking care of young children",
+          "rating": 4,
+          "willing": true,
+          "evaluation": "4/5 - Experience taking care of young children",
+          "experience": true,
+          "yearsOfExperience": ""
+        },
+        "Language abilities (spoken)": {
+          "note": "Speaks English and Hindi fairly",
+          "rating": 4,
+          "evaluation": "4/5 - Speaks English and Hindi fairly",
+          "experience": true,
+          "yearsOfExperience": ""
+        }
+      },
+      "employmentHistory": [
+        {
+          "to": "2022",
+          "from": "2022",
+          "duties": "General household work and taking care of 2 children (same employer)",
+          "country": "Singapore",
+          "remarks": "Worked 2 months – employer relocated and she was transferred to their friend",
+          "employer": "North Indian"
+        },
+        {
+          "to": "2022",
+          "from": "2022",
+          "duties": "General household work while original maid is on 1 month home leave",
+          "country": "Singapore",
+          "remarks": "Mother got sick; opted to go home rather than be transferred again",
+          "employer": "Indian"
+        },
+        {
+          "to": "2021",
+          "from": "2018",
+          "duties": "General household work and taking care of 2 children",
+          "country": "Singapore",
+          "remarks": "3 years",
+          "employer": "North Indian"
+        },
+        {
+          "to": "2018",
+          "from": "2018",
+          "duties": "General household work and took care of the whole family needs",
+          "country": "Singapore",
+          "remarks": "1 month only – could not cope with 9 members of the family",
+          "employer": "Indian-Punjabi"
+        }
+      ],
+      "introduction": {
+        "intro": "Ruth Poumei is an experienced and patient Christian helper from Manipur, India, with over 4 years of experience working in Singapore. A 10th-grade graduate who speaks both English and Hindi. Ruth is highly regarded for her positive attitude and strong work ethic. Her most significant tenure was with a North Indian family where she served for over 3 years. She is proficient in North Indian cooking and comfortable in both vegetarian and non-vegetarian households. Salary: $650 + $50 (2 off days) or $650 (4 off days).",
+        "maidLoan": "",
+        "allergies": "",
+        "publicIntro": "Ruth Poumei — Indian helper (Manipur) with 4+ years Singapore experience. Skilled in North Indian cooking, child care, and general housework. Speaks English and Hindi.",
+        "availability": "Available",
+        "otherRemarks": "",
+        "pastIllnesses": {
+          "(III) Asthma": false,
+          "(II) Epilepsy": false,
+          "(IV) Diabetes": false,
+          "(VIII) Malaria": false,
+          "(IX) Operations": false,
+          "(V) Hypertension": false,
+          "(VI) Tuberculosis": false,
+          "(I) Mental illness": false,
+          "(VII) Heart disease": false
+        },
+        "presentSalary": "",
+        "agesOfChildren": "",
+        "expectedSalary": "$650 + $50 (2 off days) or $650 (4 off days)",
+        "offdayCompensation": "As per MOM rulings",
+        "dietaryRestrictions": "",
+        "physicalDisabilities": "",
+        "foodHandlingPreferences": ""
+      },
+      "agencyContact": {
+        "phone": "",
+        "passportNo": "",
+        "homeCountryContactNumber": ""
+      },
+      "photoDataUrl": "",
+      "photoDataUrls": [],
+      "videoDataUrl": "",
+      "isPublic": true,
+      "hasPhoto": false,
+      "agencyId": 1,
+      "id": 120,
+      "createdAt": "2026-05-19T00:38:36.858Z",
+      "updatedAt": "2026-05-19T00:38:36.858Z"
+    },
+    {
       "fullName": "Biodata Saraswat",
       "referenceCode": "833542",
       "status": "available",
@@ -164,14 +647,14 @@
       "status": "available",
       "type": "New maid",
       "nationality": "Indian maid",
-      "dateOfBirth": "1997-04-11",
+      "dateOfBirth": "1996-04-11",
       "placeOfBirth": "Moonda Kotee Tea Gar",
       "height": 159,
       "weight": 54,
       "religion": "Hindu",
       "maritalStatus": "Single",
       "numberOfChildren": 0,
-      "numberOfSiblings": 0,
+      "numberOfSiblings": "0",
       "homeAddress": "Moonda Kotee Tea Garden, Sonada, district - Darjeeling",
       "airportRepatriation": "",
       "educationLevel": "College / Degree (≥13 yrs)",
@@ -183,8 +666,15 @@
         "Bahasa Indonesia/Malaysia": "Poor"
       },
       "skillsPreferences": {
-        "sgExperience": false,
+        "indianMaidCategory": "Darjeeling maid",
+        "availabilityRemark": "",
+        "privateInfo": "",
         "offDaysPerMonth": "2",
+        "availabilityInterviewOptions": [
+          "FDW can be interviewed by phone",
+          "FDW can be interviewed by video-conference"
+        ],
+        "workAreaNotes": {},
         "otherInformation": {
           "Able to eat pork?": true,
           "Able to handle pork?": true,
@@ -192,68 +682,90 @@
           "Able to care for dog/cat?": true,
           "Able to do simple sewing?": true,
           "Able to do gardening work?": true,
-          "Willing to work on off-days with compensation?": true
+          "Willing to work on off-days with compensation?": true,
+          "Can work on off-days with compensation?": false,
+          "Willing to work on off-days with  compensation?": false
         },
-        "indianMaidCategory": "Darjeeling maid",
-        "availabilityInterviewOptions": [
-          "FDW can be interviewed by phone",
-          "FDW can be interviewed by video-conference"
-        ]
+        "interviewedBy": "",
+        "referredBy": "",
+        "evaluationMethods": [],
+        "sgExperience": false
       },
       "workAreas": {
         "Cooking": {
-          "note": "She can cook vegetarian and non-vegetarian foods",
-          "rating": 3,
           "willing": true,
-          "evaluation": "3/5 - She can cook vegetarian and non-vegetarian foods",
           "experience": true,
-          "yearsOfExperience": ""
+          "evaluation": "3/5 - She can cook vegetarian and non-vegetarian foods",
+          "yearsOfExperience": "",
+          "rating": 3,
+          "note": "She can cook vegetarian and non-vegetarian foods"
         },
         "Care of elderly": {
-          "note": "She has no employment experience, but she is very much willing",
-          "rating": 3,
           "willing": true,
-          "evaluation": "3/5 - She has no employment experience, but she is very much willing",
           "experience": true,
-          "yearsOfExperience": ""
+          "evaluation": "3/5 - She has no employment experience, but she is very much willing",
+          "yearsOfExperience": "",
+          "rating": 3,
+          "note": "She has no employment experience, but she is very much willing"
         },
         "Care of disabled": {
-          "note": "She is willing to be trained if needed",
-          "rating": 3,
           "willing": true,
-          "evaluation": "3/5 - She is willing to be trained if needed",
           "experience": true,
-          "yearsOfExperience": ""
+          "evaluation": "3/5 - She is willing to be trained if needed",
+          "yearsOfExperience": "",
+          "rating": 3,
+          "note": "She is willing to be trained if needed"
         },
         "General housework": {
-          "note": "She able to multi-task in doing all the household chores",
-          "rating": 4,
           "willing": true,
-          "evaluation": "4/5 - She able to multi-task in doing all the household chores",
           "experience": true,
-          "yearsOfExperience": ""
+          "evaluation": "4/5 - She able to multi-task in doing all the household chores",
+          "yearsOfExperience": "",
+          "rating": 4,
+          "note": "She able to multi-task in doing all the household chores"
         },
         "Care of infants/children": {
-          "note": "Don't want to take care of infant of kids",
-          "rating": null,
           "willing": false,
-          "evaluation": "Don't want to take care of infant of kids",
           "experience": false,
-          "yearsOfExperience": ""
+          "evaluation": "Don't want to take care of infant of kids",
+          "yearsOfExperience": "",
+          "rating": null,
+          "note": "Don't want to take care of infant of kids"
         },
         "Language abilities (spoken)": {
-          "note": "She can communicate in Hindi and English",
-          "rating": 4,
-          "evaluation": "4/5 - She can communicate in Hindi and English",
+          "willing": false,
           "experience": true,
-          "yearsOfExperience": ""
+          "evaluation": "4/5 - She can communicate in Hindi and English",
+          "yearsOfExperience": "",
+          "rating": 4,
+          "note": "She can communicate in Hindi and English"
+        },
+        "Other skills, if any": {
+          "willing": false,
+          "experience": false,
+          "evaluation": "N.A.",
+          "yearsOfExperience": "",
+          "rating": null,
+          "note": ""
         }
       },
-      "employmentHistory": [],
+      "employmentHistory": [
+        {
+          "from": "",
+          "to": "",
+          "country": "",
+          "employer": "",
+          "duties": "",
+          "remarks": ""
+        }
+      ],
       "introduction": {
         "intro": "Priyanka Dewan is Indian helper from Darjeeling. She is single and comes from a family with two siblings. She holds a Master’s degree (M.A), indicating a good educational background and ability to learn quickly. She can communicate in English at a fair level.\n\nShe is willing to take care of elderly and is comfortable handling household pets such as dogs. She is also open to working with Indian and vegetarian families. While she does not have prior overseas or domestic work experience, she is motivated to work and gain experience.\n\nPriyanka prefers to work in apartment settings and is not open to landed houses. She is not experienced in infant or childcare but is willing to focus on general household duties and elderly care.\n\nHer salary is $510 + $50 and 2 off days, or $510 and 4 off days. Any no-off days less than 4 have to be compensated per MOM rulings.\n\nShe has NO medical conditions stated in the official MOM 4 page bio data.\n\nNon-disclaimer: We have to the best of our ability verify that the above information given is true; nevertheless, we cannot guarantee it as the information is given by the candidates.",
         "publicIntro": "Priyanka Dewan is Indian helper from Darjeeling. She is single and comes from a family with two siblings. She holds a Master’s degree (M.A), indicating a good educational background and ability to learn quickly. She can communicate in English at a fair level.\n\nShe is willing to take care of elderly and is comfortable handling household pets such as dogs. She is also open to working with Indian and vegetarian families. While she does not have prior overseas or domestic work experience, she is motivated to work and gain experience.\n\nPriyanka prefers to work in apartment settings and is not open to landed houses. She is not experienced in infant or childcare but is willing to focus on general household duties and elderly care.\n\nHer salary is disclosed privately thru email and WhatsApp to employer only. Any off day in-lieu additional allowance per MOM calculation: basic salary divided by 26 days\n\nNon disclaimer:\nWe have to the best of our ability verify that the above information given are true nevertheless we cannot guarantee it as information are given by the candidates and their agents.",
-        "availability": "Anytime",
+        "allergies": "",
+        "physicalDisabilities": "",
+        "dietaryRestrictions": "",
+        "foodHandlingPreferences": "",
         "pastIllnesses": {
           "(III) Asthma": false,
           "(II) Epilepsy": false,
@@ -264,9 +776,25 @@
           "(VI) Tuberculosis": false,
           "(I) Mental illness": false,
           "(VII) Heart disease": false
-        }
+        },
+        "otherIllnesses": "",
+        "otherRemarks": "",
+        "availability": "Anytime",
+        "contractEnds": "",
+        "presentSalary": "",
+        "expectedSalary": "",
+        "offdayCompensation": "",
+        "agesOfChildren": "",
+        "maidLoan": ""
       },
-      "agencyContact": {},
+      "agencyContact": {
+        "companyName": "",
+        "licenseNo": "",
+        "contactPerson": "",
+        "phone": "",
+        "passportNo": "",
+        "homeCountryContactNumber": ""
+      },
       "photoDataUrl": "/uploads/maids/agency-1/IND-DAR-PRI-9698/photos/photo-1-1100e725-1f02-4a0d-a411-8922c210958c.jpg",
       "photoDataUrls": [
         "/uploads/maids/agency-1/IND-DAR-PRI-9698/photos/photo-1-1100e725-1f02-4a0d-a411-8922c210958c.jpg",
@@ -279,7 +807,7 @@
       "agencyId": 1,
       "id": 104,
       "createdAt": "2026-05-06T13:14:28.751Z",
-      "updatedAt": "2026-05-06T13:14:28.751Z"
+      "updatedAt": "2026-05-19T01:59:29.038Z"
     },
     {
       "fullName": "BB",
@@ -4337,7 +4865,7 @@
       "unreadClient": 0,
       "unreadAdmin": 0,
       "clientLastReadAt": "2026-05-17T12:51:00.171Z",
-      "adminLastReadAt": "2026-05-17T11:02:13.981Z",
+      "adminLastReadAt": "2026-05-19T06:21:13.545Z",
       "createdAt": "2026-04-28T09:24:21.182Z",
       "updatedAt": "2026-05-15T03:30:54.745Z"
     }
@@ -7412,7 +7940,7 @@
   "counters": {
     "momPersonnel": 1,
     "testimonials": 2,
-    "maids": 120,
+    "maids": 125,
     "enquiries": 13,
     "clients": 9,
     "agencyAdmins": 3,

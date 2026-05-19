@@ -78,7 +78,7 @@ const navItems = [
     badgeKey: null,
   },
   {
-    label: "New Maid",
+    label: "Add Maid",
     path: adminPath("/add-maid"),
     icon: UserPlus,
     iconBg: "linear-gradient(145deg, #FCA5A5, #DC2626)",
