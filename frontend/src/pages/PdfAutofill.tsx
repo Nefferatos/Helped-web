@@ -19,6 +19,10 @@ const GROQ_MODELS = [
 const RETRYABLE_CODES = new Set([429, 500, 503]);
 const MAX_RETRIES     = 3;
 const BASE_DELAY_MS   = 1500;
+const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_PAGES = 25;
+const MAX_PDF_TEXT_CHARS = 120000;
+const GROQ_TIMEOUT_MS = 45000;
 
 // ─── Usage tracking ────────────────────────────────────────────────────────────
 const DAILY_LIMIT = 50;
@@ -160,9 +164,16 @@ interface ExtractedData {
 
 // ─── pdf.js text extraction ───────────────────────────────────────────────────
 async function extractPdfText(file: File): Promise<string> {
+  if (file.size > MAX_PDF_SIZE_BYTES) {
+    throw new Error("PDF is too large. Please upload a PDF smaller than 10MB.");
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf         = await loadingTask.promise;
+  if (pdf.numPages > MAX_PDF_PAGES) {
+    throw new Error(`PDF has too many pages. Please keep it to ${MAX_PDF_PAGES} pages or fewer.`);
+  }
   const pageTexts: string[] = [];
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -181,7 +192,11 @@ async function extractPdfText(file: File): Promise<string> {
       .filter(Boolean);
     pageTexts.push(sortedLines.join("\n"));
   }
-  return pageTexts.join("\n\n--- PAGE BREAK ---\n\n");
+  const combinedText = pageTexts.join("\n\n--- PAGE BREAK ---\n\n");
+  if (combinedText.length > MAX_PDF_TEXT_CHARS) {
+    throw new Error("PDF text is too long to process safely. Please upload a shorter biodata PDF.");
+  }
+  return combinedText;
 }
 
 // ─── JSON repair ──────────────────────────────────────────────────────────────
@@ -461,9 +476,16 @@ ${pdfText}
 
 // ─── Groq API call ────────────────────────────────────────────────────────────
 async function callGroq(pdfText: string, model: string): Promise<ExtractedData> {
+  if (!GROQ_API_KEY?.trim()) {
+    throw new Error("Missing Groq API key for PDF autofill.");
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
   const res = await fetch(GROQ_BASE, {
     method:  "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_API_KEY}` },
+    signal: controller.signal,
     body: JSON.stringify({
       model,
       temperature:     0,
@@ -474,6 +496,13 @@ async function callGroq(pdfText: string, model: string): Promise<ExtractedData> 
         { role: "user",   content: buildPrompt(pdfText) },
       ],
     }),
+  }).catch((error: unknown) => {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("PDF autofill timed out. Please try a smaller file.");
+    }
+    throw error;
+  }).finally(() => {
+    window.clearTimeout(timeoutId);
   });
 
   if (!res.ok) {

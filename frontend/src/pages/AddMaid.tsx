@@ -9,10 +9,14 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { defaultMaidProfile, type MaidProfile } from "@/lib/maids";
+import { startMaidSaveTask } from "@/lib/maidSaveProgress";
 import { useNavigate } from "react-router-dom";
 import { compressImage, getImageSizeInMB } from "@/lib/imageCompression";
 
 import { PdfAutofillBanner } from "./PdfAutofill";
+
+const stripInlineMedia = (value?: string) =>
+  typeof value === "string" && value.trim().startsWith("data:") ? "" : value || "";
 
 // ─── Evaluation method constants ──────────────────────────────────────────────
 const EVAL_PARENT_DECLARATION =
@@ -345,7 +349,13 @@ const AddMaid = () => {
     [],
   );
 
-  const handleUploadPhoto = useCallback(() => setIsManagePhotosOpen(true), []);
+  const handleUploadPhoto = useCallback(() => {
+    if (!isCreated || !formData.id) {
+      toast.error("Save the maid profile first, then upload photos from Edit Maid.");
+      return;
+    }
+    setIsManagePhotosOpen(true);
+  }, [formData.id, isCreated]);
 
   const handleImportExcel = useCallback(async (file?: File) => {
     if (!file) return;
@@ -398,6 +408,10 @@ const AddMaid = () => {
         toast.error("Ref Code is required before uploading photos");
         return;
       }
+      if (!isCreated || !formData.id) {
+        toast.error("Save the maid profile first, then upload photos from Edit Maid.");
+        return;
+      }
       const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
       const optimistic: MaidProfile = {
         ...formData,
@@ -409,22 +423,23 @@ const AddMaid = () => {
       try {
         setIsUploadingPhoto(true);
         setFormData(optimistic);
-        const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
+        const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}/photo-gallery`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-          body: JSON.stringify(optimistic),
+          body: JSON.stringify({ photoDataUrls: cleaned }),
         });
         const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
         if (!response.ok || !data.maid) throw new Error(data.error || "Failed to upload photos");
         setFormData(data.maid);
         toast.success("Photos updated");
       } catch (error) {
+        setFormData(formData);
         toast.error(error instanceof Error ? error.message : "Failed to upload photos");
       } finally {
         setIsUploadingPhoto(false);
       }
     },
-    [formData],
+    [formData, formData.id, isCreated],
   );
 
   const replacePhotoAt = useCallback(
@@ -469,24 +484,12 @@ const AddMaid = () => {
     type: String(formData.type || "").trim(),
     nationality: String(formData.nationality || "").trim(),
     placeOfBirth: String(formData.placeOfBirth || "").trim(),
+    photoDataUrl: stripInlineMedia(formData.photoDataUrl),
+    photoDataUrls: (Array.isArray(formData.photoDataUrls) ? formData.photoDataUrls : [])
+      .map((item) => stripInlineMedia(item))
+      .filter(Boolean),
+    videoDataUrl: stripInlineMedia(formData.videoDataUrl),
   }), [formData]);
-
-  const saveMaid = useCallback(
-    async (payload: MaidProfile, shouldCreate: boolean) => {
-      const refCode = payload.referenceCode;
-      const url = shouldCreate ? "/api/maids" : `/api/maids/${encodeURIComponent(refCode)}`;
-      const method = shouldCreate ? "POST" : "PUT";
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-        body: JSON.stringify(payload),
-      });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
-      if (!response.ok || !data.maid) throw new Error(data.error || "Failed to save maid profile");
-      return data.maid;
-    },
-    [],
-  );
 
   const performSave = useCallback(async () => {
     if (isSaving) return;
@@ -508,10 +511,20 @@ const AddMaid = () => {
     setIsSaving(true);
     setSaveError(null);
     try {
-      const savedMaid = await saveMaid(payload, shouldCreate);
-      setFormData(savedMaid);
-      toast.success("Maid profile saved successfully");
-      navigate("/agencyadmin/edit-maids");
+      const { taskId, promise } = startMaidSaveTask({
+        payload,
+        shouldCreate,
+        authHeaders: getAgencyAdminAuthHeaders(),
+      });
+
+      void promise.catch(() => undefined);
+
+      navigate("/agencyadmin/edit-maids", {
+        state: {
+          fromView: "public",
+          saveTaskId: taskId,
+        },
+      });
     } catch (error) {
       console.error("[AddMaid] Save failed:", error);
       setSaveError("Failed to save maid. Please try again.");
@@ -519,7 +532,7 @@ const AddMaid = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [buildPayload, activeTab, isCreated, isSaving, navigate, saveMaid]);
+  }, [buildPayload, activeTab, isCreated, isSaving, navigate]);
 
   const handleSubmit = useCallback(() => {
     // Show confirmation only on the last tab (7 tabs, so index 6 is last)

@@ -387,6 +387,7 @@ interface AppData {
 
 const now = () => new Date().toISOString()
 const uploadsRoot = path.resolve(__dirname, '../data/uploads')
+const MAX_MAID_MEDIA_BYTES = 5 * 1024 * 1024
 
 const sanitizePathSegment = (value: string, fallback: string) => {
   const sanitized = value
@@ -432,7 +433,12 @@ const decodeDataUrl = (value: string) => {
   const match = value.match(dataUrlPattern)
   if (!match) return null
   const mimeType = match[1] || 'application/octet-stream'
-  const buffer = Buffer.from(match[2], 'base64')
+  const base64 = match[2]
+  const estimatedBytes = Math.floor((base64.length * 3) / 4)
+  if (estimatedBytes > MAX_MAID_MEDIA_BYTES) {
+    throw new Error('MAID_MEDIA_TOO_LARGE')
+  }
+  const buffer = Buffer.from(base64, 'base64')
   if (!buffer.length) return null
   return { mimeType, buffer }
 }
@@ -2040,6 +2046,38 @@ export const addMaidPhotoStore = async (
     photoDataUrls: nextPhotos,
     photoDataUrl: nextPhotos[0] ?? '',
     hasPhoto: nextPhotos.length > 0,
+    updatedAt: now(),
+  }
+  await saveData(data)
+  return data.maids[index]
+}
+
+export const replaceMaidPhotosStore = async (
+  referenceCode: string,
+  photoDataUrls: string[],
+  agencyId: number = DEFAULT_AGENCY_ID
+) => {
+  const data = await loadData()
+  const index = data.maids.findIndex(
+    (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
+  )
+  if (index === -1) return null
+
+  const normalizedPhotos = photoDataUrls
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .slice(0, 5)
+
+  const persistedPhotos = await Promise.all(
+    normalizedPhotos.map((photo, photoIndex) =>
+      persistMaidMediaValue(photo, agencyId, referenceCode, 'photos', photoIndex)
+    )
+  )
+
+  data.maids[index] = {
+    ...data.maids[index],
+    photoDataUrls: persistedPhotos,
+    photoDataUrl: persistedPhotos[0] ?? '',
+    hasPhoto: persistedPhotos.length > 0,
     updatedAt: now(),
   }
   await saveData(data)

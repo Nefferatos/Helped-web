@@ -9,6 +9,7 @@ import {
   getMaidByReferenceCode,
   getMaidList,
   importMaidsCsv,
+  replaceMaidPhotos,
   updateMaid,
   updateMaidPhoto,
   updateMaidVideo,
@@ -28,6 +29,7 @@ router.put('/:referenceCode', updateMaid)
 router.patch('/:referenceCode/visibility', updateMaidVisibility)
 router.patch('/:referenceCode/photo', updateMaidPhoto)
 router.patch('/:referenceCode/photos', addMaidPhoto)
+router.put('/:referenceCode/photo-gallery', replaceMaidPhotos)
 router.patch('/:referenceCode/video', updateMaidVideo)
 router.delete('/:referenceCode', deleteMaid)
 

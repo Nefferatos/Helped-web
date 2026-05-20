@@ -11,6 +11,7 @@ import {
   getMaidsStore,
   getPublicMaidByReferenceCodeStore,
   MaidRecord,
+  replaceMaidPhotosStore,
   updateMaidPhotoStore,
   updateMaidVideoStore,
   updateMaidStore,
@@ -214,6 +215,9 @@ const validateMaidPayload = (maid: Partial<MaidProfile>) => {
 
   return null
 }
+
+const isMediaTooLargeError = (error: unknown) =>
+  error instanceof Error && error.message === 'MAID_MEDIA_TOO_LARGE'
 
 const toMaidRecord = (
   maid: MaidProfile
@@ -952,6 +956,9 @@ export const createMaid = async (req: Request, res: Response) => {
     clearMaidListCache()
     res.status(201).json({ maid: created })
   } catch (error) {
+    if (isMediaTooLargeError(error)) {
+      return res.status(413).json({ error: 'Uploaded photo or video is too large. Please use a smaller file.' })
+    }
     if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {
       return res.status(409).json({ error: 'Reference code already exists' })
     }
@@ -1009,6 +1016,9 @@ export const updateMaid = async (req: Request, res: Response) => {
     clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
+    if (isMediaTooLargeError(error)) {
+      return res.status(413).json({ error: 'Uploaded photo or video is too large. Please use a smaller file.' })
+    }
     if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {
       return res.status(409).json({ error: 'Reference code already exists' })
     }
@@ -1058,6 +1068,9 @@ export const updateMaidPhoto = async (req: Request, res: Response) => {
     clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
+    if (isMediaTooLargeError(error)) {
+      return res.status(413).json({ error: 'Uploaded photo or video is too large. Please use a smaller file.' })
+    }
     console.error('Error updating maid photo:', error)
     res.status(500).json({ error: 'Failed to update maid photo' })
   }
@@ -1080,11 +1093,39 @@ export const addMaidPhoto = async (req: Request, res: Response) => {
     clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
+    if (isMediaTooLargeError(error)) {
+      return res.status(413).json({ error: 'Uploaded photo or video is too large. Please use a smaller file.' })
+    }
     if (error instanceof Error && error.message === 'PHOTO_LIMIT_REACHED') {
       return res.status(400).json({ error: 'Maximum 5 photos allowed per maid' })
     }
     console.error('Error adding maid photo:', error)
     res.status(500).json({ error: 'Failed to add maid photo' })
+  }
+}
+
+export const replaceMaidPhotos = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const { referenceCode } = req.params
+    const { photoDataUrls } = req.body as { photoDataUrls?: string[] }
+    if (!Array.isArray(photoDataUrls)) {
+      return res.status(400).json({ error: 'photoDataUrls array is required' })
+    }
+
+    const result = await replaceMaidPhotosStore(referenceCode, photoDataUrls, agencyId)
+    if (!result) {
+      return res.status(404).json({ error: 'Maid not found' })
+    }
+
+    clearMaidListCache()
+    res.status(200).json({ maid: result })
+  } catch (error) {
+    if (isMediaTooLargeError(error)) {
+      return res.status(413).json({ error: 'Uploaded photo or video is too large. Please use a smaller file.' })
+    }
+    console.error('Error replacing maid photos:', error)
+    res.status(500).json({ error: 'Failed to replace maid photos' })
   }
 }
 
@@ -1105,6 +1146,9 @@ export const updateMaidVideo = async (req: Request, res: Response) => {
     clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
+    if (isMediaTooLargeError(error)) {
+      return res.status(413).json({ error: 'Uploaded photo or video is too large. Please use a smaller file.' })
+    }
     console.error('Error updating maid video:', error)
     res.status(500).json({ error: 'Failed to update maid video' })
   }

@@ -204,15 +204,23 @@ app.use(errorHandler)
 const startServer = async () => {
   try {
     await initializeStore()
-    await initializeDatabase()
-    await syncAgencyAdminsFromStoreRecords(await getAgencyAdminsStore())
     await initializeWorkflowStore()
+
+    try {
+      await initializeDatabase()
+      await syncAgencyAdminsFromStoreRecords(await getAgencyAdminsStore())
+    } catch (error) {
+      console.warn(
+        '[server] Database initialization unavailable; continuing in degraded local-store mode:',
+        error instanceof Error ? error.message : error
+      )
+    }
 
     app.listen(port, () => {
       console.log(`Server is running at http://localhost:${port}`)
     })
   } catch (error) {
-    console.error('Failed to initialize database:', error)
+    console.error('Failed to initialize server:', error)
     process.exit(1)
   }
 }

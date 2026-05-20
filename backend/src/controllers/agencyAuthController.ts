@@ -1,5 +1,10 @@
 import { Request, Response } from 'express'
-import { getAuthenticatedAgencyAdmin, getRequestToken } from '../auth'
+import {
+  getAuthenticatedAgencyAdmin,
+  getRequestToken,
+  rememberAgencyAdminSession,
+  revokeAgencyAdminSession,
+} from '../auth'
 import {
   registerAgencyAdminStore,
 } from '../store'
@@ -66,6 +71,7 @@ export const registerAgencyAdmin = async (req: Request, res: Response) => {
       throw new Error('AGENCY_ADMIN_SYNC_FAILED')
     }
     const session = await createAgencyAdminSessionRecord(sqlAdmin.id)
+    rememberAgencyAdminSession(session.token, sqlAdmin)
     console.log('LOGIN:', sqlAdmin.id, session.token)
 
     res.status(201).json({
@@ -119,6 +125,7 @@ export const loginAgencyAdmin = async (req: Request, res: Response) => {
     }
 
     const session = await createAgencyAdminSessionRecord(admin.id)
+    rememberAgencyAdminSession(session.token, admin)
     console.log('[agency-auth] login success:', {
       adminId: admin.id,
       agencyId: admin.agencyId,
@@ -156,6 +163,7 @@ export const logoutAgencyAdmin = async (req: Request, res: Response) => {
     }
 
     await deleteAgencyAdminSessionRecord(token)
+    revokeAgencyAdminSession(token)
     res.status(200).json({ message: 'Logged out successfully' })
   } catch (error) {
     console.error('Error logging out agency admin:', error)

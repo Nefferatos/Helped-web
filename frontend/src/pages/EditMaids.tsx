@@ -10,7 +10,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { calculateAge, defaultMaidProfile, formatDate, MaidProfile } from "@/lib/maids";
+import {
+  dismissMaidSaveTask,
+  readMaidSaveTask,
+  subscribeToMaidSaveTask,
+  type MaidSaveTaskSnapshot,
+} from "@/lib/maidSaveProgress";
 import { Search, Eye, EyeOff, Trash2, Download, Upload, ArrowLeft, AlertTriangle, CheckSquare, Square, Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
@@ -47,6 +54,11 @@ type ImportBatchResult = {
   failed: number;
   errors: string[];
 };
+
+type EditMaidsLocationState = {
+  fromView?: ViewMode;
+  saveTaskId?: string;
+} | null;
 
 class ManualImportRequiredError extends Error {
   guessedName: string;
@@ -443,6 +455,7 @@ const globalStyles = `
 const EditMaids = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const locationState = (location.state ?? null) as EditMaidsLocationState;
   const [view, setView] = useState<ViewMode>("menu");
   const [search, setSearch] = useState("");
   const [maids, setMaids] = useState<MaidProfile[]>([]);
@@ -473,6 +486,9 @@ const EditMaids = () => {
   const [menuSearchLoading, setMenuSearchLoading] = useState(false);
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
   const [menuActiveIndex, setMenuActiveIndex] = useState(-1);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
+  const [saveProgressTask, setSaveProgressTask] = useState<MaidSaveTaskSnapshot | null>(null);
+  const [saveProgressDialogOpen, setSaveProgressDialogOpen] = useState(false);
   const menuSearchRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const cancelImportRef = useRef<boolean>(false);
@@ -533,6 +549,27 @@ const EditMaids = () => {
     if (location.state?.fromView) setView(location.state.fromView);
   }, [location.state]);
 
+  useEffect(() => {
+    const taskId = locationState?.saveTaskId;
+    if (!taskId) return;
+
+    const snapshot = readMaidSaveTask(taskId);
+    if (snapshot) {
+      setSaveProgressTask(snapshot);
+      setSaveProgressDialogOpen(true);
+    }
+
+    const unsubscribe = subscribeToMaidSaveTask(taskId, (nextSnapshot) => {
+      setSaveProgressTask(nextSnapshot);
+      setSaveProgressDialogOpen(true);
+      if (nextSnapshot.status === "success") {
+        setListRefreshKey((value) => value + 1);
+      }
+    });
+
+    return unsubscribe;
+  }, [locationState?.saveTaskId]);
+
   const handleBack = () => {
     if (view !== "menu") { setView("menu"); return; }
     navigate(adminPath("/"));
@@ -564,7 +601,7 @@ const EditMaids = () => {
     };
     void load();
     return () => controller.abort();
-  }, [search, visibility, page]);
+  }, [search, visibility, page, listRefreshKey]);
 
   useEffect(() => { setPage(1); setSelected(new Set()); }, [search, view]);
 
@@ -668,6 +705,18 @@ const EditMaids = () => {
       toast.success("PDF exported");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to export PDF"); }
     finally { setIsExporting(false); }
+  };
+
+  const saveProgressIsActive =
+    saveProgressTask?.status === "uploading" || saveProgressTask?.status === "processing";
+
+  const closeSaveProgressDialog = (open: boolean) => {
+    if (saveProgressIsActive) return;
+    setSaveProgressDialogOpen(open);
+    if (!open && saveProgressTask) {
+      dismissMaidSaveTask(saveProgressTask.id);
+      setSaveProgressTask(null);
+    }
   };
 
   const decodeBase64Utf8 = (value: string) => {
@@ -961,6 +1010,79 @@ const EditMaids = () => {
   // ── Shared Dialogs ─────────────────────────────────────────────────────────
   const sharedDialogs = (
     <>
+      {/* Save progress */}
+      <Dialog open={saveProgressDialogOpen} onOpenChange={closeSaveProgressDialog}>
+        <DialogContent
+          className="max-w-md"
+          onInteractOutside={(event) => {
+            if (saveProgressIsActive) event.preventDefault();
+          }}
+          onEscapeKeyDown={(event) => {
+            if (saveProgressIsActive) event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {saveProgressTask?.status === "success"
+                ? "Maid Profile Saved"
+                : saveProgressTask?.status === "error"
+                  ? "Save Failed"
+                  : "Saving Maid Profile"}
+            </DialogTitle>
+            <DialogDescription>
+              {saveProgressTask
+                ? `${saveProgressTask.maidName} (${saveProgressTask.referenceCode || "no ref code"})`
+                : "Tracking maid profile upload progress."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-lg border border-[#97C459]/30 bg-[#F8FBF3] px-4 py-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-[#27500A]">
+                  {saveProgressTask?.stage || "Preparing maid profile upload..."}
+                </span>
+                <span className="text-sm font-bold text-[#3B6D11]">
+                  {saveProgressTask?.percent ?? 0}%
+                </span>
+              </div>
+              <Progress
+                value={saveProgressTask?.percent ?? 0}
+                className="h-2.5 bg-[#DCEAC7]"
+              />
+            </div>
+
+            {saveProgressTask?.status === "error" && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {saveProgressTask.error || "Failed to save maid profile."}
+              </div>
+            )}
+
+            {saveProgressTask?.status === "success" && (
+              <div className="rounded-lg border border-[#97C459]/40 bg-[#EAF3DE] px-4 py-3 text-sm text-[#27500A]">
+                The maid profile is ready and the public maids list has been refreshed.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            {saveProgressIsActive ? (
+              <Button disabled className="bg-[#639922] text-white">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </Button>
+            ) : (
+              <Button
+                onClick={() => closeSaveProgressDialog(false)}
+                className="bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
+              >
+                Close
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Export */}
       <Dialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
         <DialogContent>

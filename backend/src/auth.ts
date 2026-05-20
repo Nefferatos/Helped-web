@@ -8,8 +8,15 @@ import {
 import { verifySupabaseToken } from './lib/supabaseAuthVerify'
 import {
   getAgencyAdminByTokenRecord,
-  getAgencyAdminSessionByTokenRecord,
 } from './repositories/agencyAdminRepository'
+
+type CachedAgencyAdminSession = {
+  admin: AgencyAdminRecord
+  expiresAt: number
+}
+
+const AGENCY_ADMIN_SESSION_CACHE_TTL_MS = 12 * 60 * 60 * 1000
+const agencyAdminSessionCache = new Map<string, CachedAgencyAdminSession>()
 
 const getBearerToken = (req: Request) => {
   const header = req.headers.authorization
@@ -18,6 +25,42 @@ const getBearerToken = (req: Request) => {
   }
 
   return header.slice('Bearer '.length).trim() || null
+}
+
+const getCachedAgencyAdmin = (token: string) => {
+  const cached = agencyAdminSessionCache.get(token)
+  if (!cached) {
+    return null
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    agencyAdminSessionCache.delete(token)
+    return null
+  }
+
+  return cached.admin
+}
+
+export const rememberAgencyAdminSession = (
+  token: string,
+  admin: AgencyAdminRecord
+) => {
+  if (!token.trim()) {
+    return
+  }
+
+  agencyAdminSessionCache.set(token, {
+    admin,
+    expiresAt: Date.now() + AGENCY_ADMIN_SESSION_CACHE_TTL_MS,
+  })
+}
+
+export const revokeAgencyAdminSession = (token: string) => {
+  if (!token.trim()) {
+    return
+  }
+
+  agencyAdminSessionCache.delete(token)
 }
 
 export const getAuthenticatedClient = async (
@@ -60,19 +103,36 @@ export const getAuthenticatedAgencyAdmin = async (
     return null
   }
 
-  const session = await getAgencyAdminSessionByTokenRecord(token)
-  if (!session) {
-    return null
+  const cachedAdmin = getCachedAgencyAdmin(token)
+  if (cachedAdmin) {
+    req.admin = cachedAdmin
+    req.agencyId = cachedAdmin.agencyId
+    return cachedAdmin
   }
 
-  const admin = await getAgencyAdminByTokenRecord(token)
-  if (!admin) {
-    return null
-  }
+  try {
+    const admin = await getAgencyAdminByTokenRecord(token)
+    if (!admin) {
+      return null
+    }
 
-  req.admin = admin
-  req.agencyId = admin.agencyId
-  return admin
+    rememberAgencyAdminSession(token, admin)
+    req.admin = admin
+    req.agencyId = admin.agencyId
+    return admin
+  } catch (error) {
+    const cachedFallback = getCachedAgencyAdmin(token)
+    if (cachedFallback) {
+      console.warn(
+        '[auth] Falling back to cached agency admin session after database error'
+      )
+      req.admin = cachedFallback
+      req.agencyId = cachedFallback.agencyId
+      return cachedFallback
+    }
+
+    throw error
+  }
 }
 
 export const getRequestToken = (req: Request) => getBearerToken(req)
