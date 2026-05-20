@@ -179,7 +179,6 @@ const ShortlistMaidCard = ({
         </button>
       </div>
 
-      {/* Card body — all text black */}
       <div className="flex flex-col gap-0.5 p-2.5 flex-1 bg-white">
         <h3 className="text-xs font-bold text-black line-clamp-1 leading-tight">
           {maid.fullName || "Unnamed maid"}
@@ -279,7 +278,6 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
       "",
       fromName.trim() ? `From: ${fromName.trim()} <${fromEmail.trim()}>` : `From: ${fromEmail.trim()}`,
     ].filter(Boolean);
-
     const mailto = `mailto:${encodeURIComponent(toEmail.trim())}?subject=${encodeURIComponent(subject.trim())}&body=${encodeURIComponent(lines.join("\n"))}`;
     window.location.href = mailto;
   };
@@ -331,7 +329,6 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
         className="relative w-full max-w-md rounded-xl bg-white shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3.5">
           <h2 className="text-sm font-semibold text-black">
             Tell your friend about this {maid.nationality || ""}.
@@ -355,7 +352,6 @@ const TellFriendModal = ({ maid, agencyName, agencyPhone, agencyContactPerson, o
         ) : (
           <div className="px-5 py-4 space-y-3">
             <div className="grid grid-cols-[60px_1fr] items-start gap-x-3 gap-y-2">
-              {/* Labels */}
               <label className="pt-2 text-right text-xs font-semibold text-black">To</label>
               <div className="space-y-1.5">
                 <input
@@ -483,14 +479,12 @@ const getYouTubeEmbedUrl = (value?: string) => {
 
 // ── Shared small components ───────────────────────────────────────────────────
 
-/** Section card header — uppercase label strip */
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
   <div className="border-b bg-gray-50 px-4 py-2">
     <p className="text-[11px] font-bold uppercase tracking-widest text-black">{children}</p>
   </div>
 );
 
-/** Yes / No pill badge */
 const YesNoBadge = ({ yes }: { yes: boolean }) => (
   <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
     yes ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-black"
@@ -499,7 +493,6 @@ const YesNoBadge = ({ yes }: { yes: boolean }) => (
   </span>
 );
 
-/** Star rating display */
 const StarDisplay = ({ evaluation }: { evaluation?: string }) => {
   const raw = String(evaluation || "").trim();
   if (!raw || raw === "—" || raw === "N.A." || raw === "-") {
@@ -549,7 +542,8 @@ const LanguageRating = ({ level }: { level?: string }) => {
   );
 };
 
-/** Key-value row in a two-column grid */
+
+
 const KVRow = ({ label, value }: { label: string; value: string }) => (
   <div className="contents">
     <p className="py-1 pr-3 text-[12px] font-semibold text-black border-b border-dashed border-gray-200 leading-snug">{label}</p>
@@ -668,7 +662,6 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
       .filter(([language, level]) => !allowedKeys.has(language) && level.trim());
   }, [maid?.languageSkills]);
 
-  // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="client-page-theme min-h-screen bg-card">
@@ -680,7 +673,6 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
     );
   }
 
-  // ── Profile not found ────────────────────────────────────────────────────
   if (!maid) {
     return (
       <div className="client-page-theme min-h-screen bg-card">
@@ -777,6 +769,12 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
     ["Maid Loan",        String(introduction?.maidLoan || "N/A")],
     ["Private Info",     String(skillsPreferences?.privateInfo || "N/A")],
   ];
+
+  // Filtered work areas for skills table
+  const filteredWorkAreas = orderedWorkAreas.filter(([, config]) => {
+    const ev = String(config.evaluation || "").trim();
+    return Boolean(config.willing || config.experience || (ev && ev !== "-" && ev !== "N.A."));
+  });
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -893,8 +891,8 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               <p className="font-bold text-black text-sm leading-snug">{agencyName}</p>
               <p className="text-black">Lic. No.: {company?.license_no || String(agencyContact?.licenseNo || "N/A")}</p>
               <p className="text-sm text-black">
-              Please call: <span className="font-bold">{String(agencyContact.contactPerson || "Bala/Ricky")}</span>
-            </p>
+                Please call: <span className="font-bold">{String(agencyContact.contactPerson || "Bala/Ricky")}</span>
+              </p>
               <p className="text-black">Phone: <span className="font-semibold text-primary">{agencyPhone || "N/A"}</span></p>
               <div className="pt-2 mt-1 border-t">
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${(maid.status || "available") === "available" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-black"}`}>
@@ -962,22 +960,28 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
               <SectionHeader>Personal Details</SectionHeader>
               <div className="grid grid-cols-[140px_1fr] p-4 text-sm">
                 {detailRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
+
+                {/* ── LANGUAGES — always star ratings ── */}
                 <p className="py-1 pr-3 text-[12px] font-semibold text-black border-b border-dashed border-gray-200">Languages</p>
-                <div className="py-1 text-[13px] border-b border-dashed border-gray-200 space-y-1">
+                <div className="py-1 text-[13px] border-b border-dashed border-gray-200 space-y-1.5">
                   {fixedLanguages.map(([lang, level]) => (
-                    <div key={lang} className="flex items-center justify-between gap-3 text-black">
-                      <span className="font-medium">{lang}</span>
+                    <div key={lang} className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-black text-[12px] leading-tight">{lang}</span>
                       <LanguageRating level={level} />
                     </div>
                   ))}
                   {otherLanguages.length > 0 && (
-                    <button type="button" className="text-primary text-[12px] hover:underline" onClick={() => setShowOtherLanguages((p) => !p)}>
+                    <button
+                      type="button"
+                      className="text-primary text-[12px] hover:underline"
+                      onClick={() => setShowOtherLanguages((p) => !p)}
+                    >
                       {showOtherLanguages ? "Hide others" : `+${otherLanguages.length} more`}
                     </button>
                   )}
                   {showOtherLanguages && otherLanguages.map(([lang, level]) => (
-                    <div key={lang} className="flex items-center justify-between gap-3 text-black">
-                      <span>{lang}</span>
+                    <div key={lang} className="flex items-center justify-between gap-2">
+                      <span className="text-black text-[12px] leading-tight">{lang}</span>
                       <LanguageRating level={level} />
                     </div>
                   ))}
@@ -1015,7 +1019,7 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
           <div className={`rounded-lg border overflow-hidden ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
             <SectionHeader>Maid Skills</SectionHeader>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[480px]">
                 <thead>
                   <tr className="border-b bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-black">
                     <th className="px-4 py-2.5 text-left">Area of Work</th>
@@ -1028,35 +1032,30 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y text-xs">
-                  {orderedWorkAreas
-                    .filter(([, config]) => {
-                      const ev = String(config.evaluation || "").trim();
-                      return Boolean(config.willing || config.experience || (ev && ev !== "-" && ev !== "N.A."));
-                    })
-                    .map(([area, config]) => {
-                      const rawAge      = String(workAreaNotes["Care of infants/children"] || "").trim();
-                      const formattedAge = rawAge ? rawAge.replace(/\s*-\s*/g, "–") : "";
-                      const needsYears   = formattedAge && !/year/i.test(formattedAge);
-                      const areaLabel    = area === "Care of infants/children" && formattedAge
-                        ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})`
-                        : area;
-                      const yrs = String(config.yearsOfExperience || "").trim();
-                      return (
-                        <tr key={area} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-[13px] text-black">{areaLabel}</td>
-                          <td className="px-4 py-2 text-center"><YesNoBadge yes={Boolean(config.willing)} /></td>
-                          <td className="px-4 py-2 text-center">
-                            <div className="flex flex-col items-center gap-1">
-                              <YesNoBadge yes={Boolean(config.experience)} />
-                              {config.experience && yrs && (
-                                <span className="text-[11px] text-black">{yrs} {Number(yrs) === 1 ? "year" : "years"}</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 text-center"><StarDisplay evaluation={config.evaluation} /></td>
-                        </tr>
-                      );
-                    })}
+                  {filteredWorkAreas.map(([area, config]) => {
+                    const rawAge       = String(workAreaNotes["Care of infants/children"] || "").trim();
+                    const formattedAge = rawAge ? rawAge.replace(/\s*-\s*/g, "–") : "";
+                    const needsYears   = formattedAge && !/year/i.test(formattedAge);
+                    const areaLabel    = area === "Care of infants/children" && formattedAge
+                      ? `Care of infants/children (${formattedAge}${needsYears ? " years" : ""})`
+                      : area;
+                    const yrs = String(config.yearsOfExperience || "").trim();
+                    return (
+                      <tr key={area} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-[13px] text-black">{areaLabel}</td>
+                        <td className="px-4 py-2 text-center"><YesNoBadge yes={Boolean(config.willing)} /></td>
+                        <td className="px-4 py-2 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <YesNoBadge yes={Boolean(config.experience)} />
+                            {config.experience && yrs && (
+                              <span className="text-[11px] text-black">{yrs} {Number(yrs) === 1 ? "year" : "years"}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-center"><StarDisplay evaluation={config.evaluation} /></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1084,7 +1083,9 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
           {employment.length > 0 && (
             <div className={`rounded-lg border overflow-hidden ${!isLoggedIn ? "select-none blur-sm" : ""}`}>
               <SectionHeader>Employment History</SectionHeader>
-              <div className="overflow-x-auto">
+
+              {/* Desktop table (md+) */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-black">
@@ -1109,6 +1110,57 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile stacked cards (< md) */}
+              <div className="block md:hidden divide-y">
+                {employment.map((item, index) => {
+                  const row = item as Record<string, string>;
+                  const from    = formatDate(row.from) === "N/A" ? "—" : formatDate(row.from);
+                  const to      = formatDate(row.to)   === "N/A" ? "—" : formatDate(row.to);
+                  const country  = row.country  || "—";
+                  const employer = row.employer || "—";
+                  const duties   = row.duties   || "—";
+                  const remarks  = row.remarks  || "—";
+                  return (
+                    <div key={`${maid.referenceCode}-mob-${index}`} className="px-4 py-3 space-y-2">
+                      {/* Header row: job number + period */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 text-[11px] font-bold text-black flex-shrink-0">
+                          {index + 1}
+                        </span>
+                        <span className="text-[12px] font-semibold text-black flex-1 text-right">
+                          {from} — {to}
+                        </span>
+                      </div>
+                      {/* Country + employer */}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Country</p>
+                          <p className="text-[13px] text-black leading-snug">{country}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Employer</p>
+                          <p className="text-[13px] text-black leading-snug">{employer}</p>
+                        </div>
+                      </div>
+                      {/* Duties */}
+                      {duties !== "—" && (
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Duties</p>
+                          <p className="text-[13px] text-black leading-snug">{duties}</p>
+                        </div>
+                      )}
+                      {/* Remarks */}
+                      {remarks !== "—" && (
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Remarks</p>
+                          <p className="text-[13px] text-black leading-snug">{remarks}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -12,8 +12,8 @@ const GROQ_API_KEY  = import.meta.env.VITE_GROQ_API_KEY as string;
 const GROQ_BASE     = "https://api.groq.com/openai/v1/chat/completions";
 
 const GROQ_MODELS = [
+  "meta-llama/llama-4-maverick-17b-128e-instruct",
   "meta-llama/llama-4-scout-17b-16e-instruct",
-  "llama-3.3-70b-versatile",
 ] as const;
 
 const RETRYABLE_CODES = new Set([429, 500, 503]);
