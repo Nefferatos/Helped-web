@@ -979,130 +979,157 @@ const MaidProfilePage = () => {
 
       {/* ── Manage Photos Dialog ── */}
       <Dialog open={isManagePhotosOpen} onOpenChange={setIsManagePhotosOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-black">Manage Photos</DialogTitle>
-            <DialogDescription className="text-sm text-black">
-              Slot 1 → passport size · Slot 2 → full body · Slots 3–5 → extras
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-2xl rounded-3xl p-0 overflow-hidden">
+          <div className="bg-white px-7 py-5 border-b border-slate-200">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold tracking-tight text-black">
+                📷 Manage Photos
+              </DialogTitle>
+              <DialogDescription className="text-slate-600 text-xs mt-0.5 font-medium">
+                Slot 1 → passport size · Slot 2 → full body · Slots 3–5 → extras
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
-          <div className="flex gap-6 items-start flex-wrap">
+          <div className="px-7 py-6 flex gap-6 items-start flex-wrap bg-white">
 
-            {/* Slot 1 — Passport 100×125 */}
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-bold text-black flex items-center gap-1.5">
-                Passport size
-                <span className="text-xs font-normal text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                  100 × 125 px
-                </span>
-              </p>
-              <div className="group relative overflow-hidden rounded border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center"
-                style={{ width: 100, height: 125 }}>
-                {passportOrTwoByTwoPhoto
-                  ? <>
-                      <img src={passportOrTwoByTwoPhoto} alt="passport" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        disabled={isMediaSaving}
-                        onClick={() => void removePhotoAt(0)}
-                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label="Remove passport photo">✕</button>
-                    </>
-                  : <span className="text-xs text-gray-400 text-center px-2">Click to upload</span>}
+            {/* Slot 1 — Passport */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-widest text-black">Passport</span>
               </div>
-              <label className="text-xs text-blue-600 cursor-pointer hover:underline flex items-center gap-1">
-                <span>{passportOrTwoByTwoPhoto ? "Replace" : "Upload"}</span>
-                <input type="file" accept="image/*" className="sr-only"
-                  disabled={isMediaSaving}
-                  onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
+              <div
+                className="group relative overflow-hidden border-2 border-dashed border-slate-300 bg-slate-100 hover:border-indigo-400 hover:bg-indigo-50/40 transition-all duration-200 flex flex-col items-center justify-center gap-2"
+                style={{ width: 100, height: 125, borderRadius: 0 }}
+              >
+                {passportOrTwoByTwoPhoto ? (
+                  <>
+                    <img src={passportOrTwoByTwoPhoto} alt="passport" className="w-full h-full object-contain" style={{ borderRadius: 0 }} />
+                    <button type="button" disabled={isMediaSaving} onClick={() => void removePhotoAt(0)}
+                      className="absolute top-1.5 right-1.5 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 hover:bg-red-500"
+                      aria-label="Remove passport photo">✕</button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                      </svg>
+                    </div>
+                    <span className="text-[10px] text-slate-600 font-semibold">No photo</span>
+                  </>
+                )}
+              </div>
+              <span className="text-[10px] text-black font-bold">100 × 125 px</span>
+              <label className="cursor-pointer">
+                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 transition-all duration-150 ${passportOrTwoByTwoPhoto ? "bg-slate-200 text-black hover:bg-slate-300" : "bg-amber-400 text-black hover:bg-amber-500 shadow-sm shadow-amber-200"}`} style={{ borderRadius: 0 }}>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                  </svg>
+                  {passportOrTwoByTwoPhoto ? "Replace" : "Upload"}
+                </span>
+                <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
               </label>
-              <p className="text-xs text-gray-400">JPG / PNG · max 2 MB</p>
+              <p className="text-[10px] text-slate-500 font-medium">JPG / PNG · max 2 MB</p>
             </div>
 
-            <div className="w-px self-stretch bg-gray-200" />
+            <div className="w-px self-stretch bg-slate-200" />
 
-            {/* Slot 2 — Full body 240×400 */}
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-bold text-black flex items-center gap-1.5">
-                Full body
-                <span className="text-xs font-normal text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                  240 × 400 px
-                </span>
-              </p>
-              <div className="group relative overflow-hidden rounded border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center"
-                style={{ width: 120, height: 200 }}>
-                {fullBodyPhoto
-                  ? <>
-                      <img src={fullBodyPhoto} alt="full body" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        disabled={isMediaSaving}
-                        onClick={() => void removePhotoAt(1)}
-                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label="Remove full body photo">✕</button>
-                    </>
-                  : <span className="text-xs text-gray-400 text-center px-2">Click to upload</span>}
+            {/* Slot 2 — Full body */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-widest text-black">Full body</span>
               </div>
-              <label className="text-xs text-blue-600 cursor-pointer hover:underline flex items-center gap-1">
-                <span>{fullBodyPhoto ? "Replace" : "Upload"}</span>
-                <input type="file" accept="image/*" className="sr-only"
-                  disabled={isMediaSaving}
-                  onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
+              <div
+                className="group relative overflow-hidden border-2 border-dashed border-slate-300 bg-slate-100 hover:border-indigo-400 hover:bg-indigo-50/40 transition-all duration-200 flex flex-col items-center justify-center gap-2"
+                style={{ width: 110, height: 190, borderRadius: 0 }}
+              >
+                {fullBodyPhoto ? (
+                  <>
+                    <img src={fullBodyPhoto} alt="full body" className="w-full h-full object-contain" style={{ borderRadius: 0 }} />
+                    <button type="button" disabled={isMediaSaving} onClick={() => void removePhotoAt(1)}
+                      className="absolute top-1.5 right-1.5 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 hover:bg-red-500"
+                      aria-label="Remove full body photo">✕</button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                      </svg>
+                    </div>
+                    <span className="text-[10px] text-slate-600 font-semibold">No photo</span>
+                  </>
+                )}
+              </div>
+              <span className="text-[10px] text-black font-bold">240 × 400 px</span>
+              <label className="cursor-pointer">
+                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 transition-all duration-150 ${fullBodyPhoto ? "bg-slate-200 text-black hover:bg-slate-300" : "bg-amber-400 text-black hover:bg-amber-500 shadow-sm shadow-amber-200"}`} style={{ borderRadius: 0 }}>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                  </svg>
+                  {fullBodyPhoto ? "Replace" : "Upload"}
+                </span>
+                <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
               </label>
-              <p className="text-xs text-gray-400">JPG / PNG · max 2 MB</p>
+              <p className="text-[10px] text-slate-500 font-medium">JPG / PNG · max 2 MB</p>
             </div>
 
-            <div className="w-px self-stretch bg-gray-200" />
+            <div className="w-px self-stretch bg-slate-200" />
 
             {/* Slots 3–5 — Extras */}
-            <div className="flex flex-col gap-2 flex-1 min-w-[180px]">
-              <p className="text-sm font-bold text-black flex items-center gap-1.5">
-                Extra photos
-                <span className="text-xs font-normal bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
+            <div className="flex flex-col gap-3 flex-1 min-w-[180px]">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-widest text-black">Extras</span>
+                <span className="text-[10px] font-semibold bg-slate-200 text-black border border-slate-300 px-2 py-0.5 rounded-full">
                   {extraPhotos.length} / 3
                 </span>
-              </p>
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 {extraPhotos.map((photo, index) => (
-                  <div key={`${photo}-${index}`}
-                    className="group relative overflow-hidden rounded border border-gray-300 bg-gray-100"
-                    style={{ width: 80, height: 80 }}>
-                    <img src={photo} alt={`extra ${index + 1}`} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      disabled={isMediaSaving}
-                      onClick={() => void removePhotoAt(index + 2)}
-                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  <div key={`${photo}-${index}`} className="group relative overflow-hidden border border-slate-300 bg-slate-100" style={{ width: 78, height: 78, borderRadius: 0 }}>
+                    <img src={photo} alt={`extra ${index + 1}`} className="w-full h-full object-contain" style={{ borderRadius: 0 }} />
+                    <button type="button" disabled={isMediaSaving} onClick={() => void removePhotoAt(index + 2)}
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 hover:bg-red-500"
                       aria-label={`Remove extra photo ${index + 1}`}>✕</button>
                   </div>
                 ))}
                 {extraPhotos.length < 3 && (
-                  <label
-                    className="flex items-center justify-center rounded border-2 border-dashed border-gray-300 bg-gray-50 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
-                    style={{ width: 80, height: 80 }}>
-                    <span className="text-2xl text-gray-400">+</span>
-                    <input type="file" accept="image/*" className="sr-only"
-                      disabled={isMediaSaving || photos.length >= 5}
-                      onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
+                  <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-300 bg-slate-100 cursor-pointer hover:border-amber-400 hover:bg-amber-50/50 transition-all duration-200" style={{ width: 78, height: 78, borderRadius: 0 }}>
+                    <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center">
+                      <span className="text-black text-base font-bold leading-none">+</span>
+                    </div>
+                    <span className="text-[10px] text-black font-semibold">Add</span>
+                    <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving || photos.length >= 5} onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
                   </label>
                 )}
+                {Array.from({ length: Math.max(0, 2 - extraPhotos.length) }).map((_, i) => (
+                  <div key={`placeholder-${i}`} className="border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center" style={{ width: 78, height: 78, borderRadius: 0 }}>
+                    <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909" />
+                    </svg>
+                  </div>
+                ))}
               </div>
-              <p className="text-xs text-gray-400">Max 3 extras · JPG / PNG</p>
-              <p className="text-xs text-black mt-1">
-                <span className="font-bold">{photos.length}</span> / 5 total photos used
-              </p>
+              <p className="text-[10px] text-slate-500 font-medium">Max 3 extras · JPG / PNG</p>
+              <div className="mt-1 flex items-center gap-2">
+                <div className="flex gap-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className={`w-4 h-1.5 transition-colors ${i < photos.length ? "bg-amber-400" : "bg-slate-200"}`} style={{ borderRadius: 0 }} />
+                  ))}
+                </div>
+                <p className="text-[10px] text-black font-bold">{photos.length} / 5 used</p>
+              </div>
             </div>
 
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline"
-              onClick={() => setIsManagePhotosOpen(false)}
-              disabled={isMediaSaving}>
+          <div className="px-7 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <Button type="button" variant="outline" onClick={() => setIsManagePhotosOpen(false)} disabled={isMediaSaving}
+              className="text-sm font-bold text-black border-slate-400 hover:bg-slate-100 px-5" style={{ borderRadius: 0 }}>
               {isMediaSaving ? "Saving…" : "Close"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
