@@ -350,12 +350,8 @@ const AddMaid = () => {
   );
 
   const handleUploadPhoto = useCallback(() => {
-    if (!isCreated || !formData.id) {
-      toast.error("Save the maid profile first, then upload photos from Edit Maid.");
-      return;
-    }
     setIsManagePhotosOpen(true);
-  }, [formData.id, isCreated]);
+  }, []);
 
   const handleImportExcel = useCallback(async (file?: File) => {
     if (!file) return;
@@ -404,14 +400,6 @@ const AddMaid = () => {
   const savePhotos = useCallback(
     async (nextPhotos: string[]) => {
       const referenceCode = String(formData.referenceCode || "").trim();
-      if (!referenceCode) {
-        toast.error("Ref Code is required before uploading photos");
-        return;
-      }
-      if (!isCreated || !formData.id) {
-        toast.error("Save the maid profile first, then upload photos from Edit Maid.");
-        return;
-      }
       const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
       const optimistic: MaidProfile = {
         ...formData,
@@ -420,6 +408,19 @@ const AddMaid = () => {
         photoDataUrl: cleaned[0] || "",
         hasPhoto: cleaned.length > 0,
       };
+
+      if (!isCreated || !formData.id) {
+        // On Add Maid, photos are staged locally until the first create request.
+        // The backend persists these data URLs into hosted files during save.
+        setFormData(optimistic);
+        return;
+      }
+
+      if (!referenceCode) {
+        toast.error("Ref Code is required before uploading photos");
+        return;
+      }
+
       try {
         setIsUploadingPhoto(true);
         setFormData(optimistic);
@@ -439,7 +440,7 @@ const AddMaid = () => {
         setIsUploadingPhoto(false);
       }
     },
-    [formData, formData.id, isCreated],
+    [formData, isCreated],
   );
 
   const replacePhotoAt = useCallback(
@@ -484,9 +485,9 @@ const AddMaid = () => {
     type: String(formData.type || "").trim(),
     nationality: String(formData.nationality || "").trim(),
     placeOfBirth: String(formData.placeOfBirth || "").trim(),
-    photoDataUrl: stripInlineMedia(formData.photoDataUrl),
+    photoDataUrl: String(formData.photoDataUrl || "").trim(),
     photoDataUrls: (Array.isArray(formData.photoDataUrls) ? formData.photoDataUrls : [])
-      .map((item) => stripInlineMedia(item))
+      .map((item) => String(item || "").trim())
       .filter(Boolean),
     videoDataUrl: stripInlineMedia(formData.videoDataUrl),
   }), [formData]);
