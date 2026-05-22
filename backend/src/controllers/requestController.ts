@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import {
   getAuthenticatedAgencyAdmin,
   getAuthenticatedClient,
+  getRequestAgencyId,
 } from '../auth'
 import {
   getAllMaidsStore,
@@ -13,6 +14,7 @@ import {
 import {
   createRequestRecord,
   getRequestRecordById,
+  getRequestMetricsByAgencyId,
   listRequestRecords,
   type SqlRequestRecord,
   updateRequestMaidsRecord,
@@ -31,6 +33,10 @@ const REQUEST_STATUSES: RequestStatus[] = [
 ]
 
 const requestStatusSet = new Set<RequestStatus>(REQUEST_STATUSES)
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const isUuid = (value: string) => uuidPattern.test(value)
 
 const toRequestStatus = (value: unknown): RequestStatus => {
   const normalized = String(value ?? '').trim()
@@ -241,7 +247,7 @@ export const getRequest = async (req: Request, res: Response) => {
     const admin = await getAuthenticatedAgencyAdmin(req)
     const client = admin ? null : await getAuthenticatedClient(req)
     const id = String(req.params.id ?? '').trim()
-    if (!id) {
+    if (!id || !isUuid(id)) {
       return res.status(400).json({ error: 'Valid request id is required' })
     }
 
@@ -269,6 +275,26 @@ export const getRequest = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching request:', error)
     res.status(500).json({ error: 'Failed to fetch request' })
+  }
+}
+
+export const getUnreadRequestCount = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const agencyId = await getRequestAgencyId(req)
+    const metrics = await getRequestMetricsByAgencyId(agencyId)
+
+    res.status(200).json({
+      unreadCount: metrics.pending,
+      count: metrics.pending,
+    })
+  } catch (error) {
+    console.error('Error fetching unread request count:', error)
+    res.status(500).json({ error: 'Failed to fetch unread request count' })
   }
 }
 
@@ -387,7 +413,7 @@ export const patchRequestStatus = async (req: Request, res: Response) => {
     }
 
     const id = String(req.params.id ?? '').trim()
-    if (!id) {
+    if (!id || !isUuid(id)) {
       return res.status(400).json({ error: 'Valid request id is required' })
     }
 
@@ -436,7 +462,7 @@ export const patchRequestMaids = async (req: Request, res: Response) => {
     }
 
     const id = String(req.params.id ?? '').trim()
-    if (!id) {
+    if (!id || !isUuid(id)) {
       return res.status(400).json({ error: 'Valid request id is required' })
     }
 
