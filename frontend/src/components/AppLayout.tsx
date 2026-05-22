@@ -874,25 +874,19 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
     const loadAll = async (silent = false) => {
       try {
-        const [summaryRes, compRes, enquiryRes, requestRes] = await Promise.all([
+        const [summaryRes, compRes] = await Promise.all([
           fetch("/api/company/summary", {
             headers: { ...getAgencyAdminAuthHeaders() },
           }),
           fetch("/api/company", {
             headers: { ...getAgencyAdminAuthHeaders() },
           }),
-          // Fetch unread enquiry count
-          fetch("/api/enquiry/unread-count", {
-            headers: { ...getAgencyAdminAuthHeaders() },
-          }),
-          // Fetch unread request count
-          fetch("/api/requests/unread-count", {
-            headers: { ...getAgencyAdminAuthHeaders() },
-          }),
         ]);
 
         const summaryData = (await summaryRes.json().catch(() => ({}))) as {
           unreadAgencyChats?: number;
+          enquiries?: number;
+          pendingRequests?: number;
           error?: string;
         };
 
@@ -915,25 +909,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           /* ignore */
         }
 
-        // Enquiry unread count
-        let unreadEnquiries = 0;
-        if (enquiryRes.ok) {
-          const enquiryData = (await enquiryRes.json().catch(() => ({}))) as {
-            unreadCount?: number;
-            count?: number;
-          };
-          unreadEnquiries = enquiryData.unreadCount ?? enquiryData.count ?? 0;
-        }
-
-        // Request unread count
-        let unreadRequests = 0;
-        if (requestRes.ok) {
-          const requestData = (await requestRes.json().catch(() => ({}))) as {
-            unreadCount?: number;
-            count?: number;
-          };
-          unreadRequests = requestData.unreadCount ?? requestData.count ?? 0;
-        }
+        const unreadEnquiries = summaryData.enquiries ?? 0;
+        const unreadRequests = summaryData.pendingRequests ?? 0;
 
         if (!active) return;
 
