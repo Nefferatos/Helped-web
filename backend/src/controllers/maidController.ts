@@ -116,7 +116,12 @@ const csvColumns = [
   'hasPhoto',
 ] as const
 
-type MaidListPayload = Array<MaidRecord & { agencyName: string }>
+type MaidListItem = Omit<MaidRecord, 'homeAddress' | 'agencyContact' | 'videoDataUrl' | 'photoDataUrls'> & {
+  photoDataUrls: string[]
+  agencyName: string
+}
+
+type MaidListPayload = MaidListItem[]
 
 type MaidListCacheEntry = {
   expiresAt: number
@@ -166,6 +171,45 @@ const setCachedMaidList = (key: string, payload: MaidListPayload) => {
   })
 }
 
+const toMaidListItem = (maid: MaidRecord, agencyName: string): MaidListItem => {
+  const primaryPhoto =
+    (Array.isArray(maid.photoDataUrls) ? maid.photoDataUrls[0] : null) ||
+    maid.photoDataUrl ||
+    ''
+
+  return {
+    id: maid.id,
+    agencyId: maid.agencyId,
+    agencyName,
+    fullName: maid.fullName,
+    referenceCode: maid.referenceCode,
+    status: maid.status,
+    type: maid.type,
+    nationality: maid.nationality,
+    dateOfBirth: maid.dateOfBirth,
+    placeOfBirth: maid.placeOfBirth,
+    height: maid.height,
+    weight: maid.weight,
+    religion: maid.religion,
+    maritalStatus: maid.maritalStatus,
+    numberOfChildren: maid.numberOfChildren,
+    numberOfSiblings: maid.numberOfSiblings,
+    airportRepatriation: maid.airportRepatriation,
+    educationLevel: maid.educationLevel,
+    languageSkills: maid.languageSkills,
+    skillsPreferences: maid.skillsPreferences,
+    workAreas: maid.workAreas,
+    employmentHistory: maid.employmentHistory,
+    introduction: maid.introduction,
+    photoDataUrl: primaryPhoto,
+    photoDataUrls: primaryPhoto ? [primaryPhoto] : [],
+    isPublic: maid.isPublic,
+    hasPhoto: maid.hasPhoto,
+    createdAt: maid.createdAt,
+    updatedAt: maid.updatedAt,
+  }
+}
+
 const withAgencyNames = async (maids: MaidRecord[]): Promise<MaidListPayload> => {
   const agencyIds = Array.from(new Set(maids.map((maid) => maid.agencyId)))
   const agencyEntries = await Promise.all(
@@ -174,8 +218,10 @@ const withAgencyNames = async (maids: MaidRecord[]): Promise<MaidListPayload> =>
   const agencyNameMap = new Map<number, string>(agencyEntries)
 
   return maids.map((maid) => ({
-    ...maid,
-    agencyName: agencyNameMap.get(maid.agencyId) ?? `Agency ${maid.agencyId}`,
+    ...toMaidListItem(
+      maid,
+      agencyNameMap.get(maid.agencyId) ?? `Agency ${maid.agencyId}`
+    ),
   }))
 }
 

@@ -346,6 +346,44 @@ export interface EmploymentContractRecord {
   updatedAt: string
 }
 
+const defaultMaidLanguageSkills = {
+  English: '',
+  'Mandarin/Chinese-Dialect': '',
+  'Bahasa Indonesia/Malaysia': '',
+  Hindi: '',
+  Tamil: '',
+}
+
+const defaultMaidRecordValues = {
+  fullName: '',
+  referenceCode: '',
+  status: 'available',
+  type: '',
+  nationality: '',
+  dateOfBirth: '',
+  placeOfBirth: '',
+  height: 0,
+  weight: 0,
+  religion: '',
+  maritalStatus: '',
+  numberOfChildren: 0,
+  numberOfSiblings: 0,
+  homeAddress: '',
+  airportRepatriation: '',
+  educationLevel: '',
+  languageSkills: defaultMaidLanguageSkills,
+  skillsPreferences: {},
+  workAreas: {},
+  employmentHistory: [] as Array<Record<string, unknown>>,
+  introduction: {},
+  agencyContact: {},
+  photoDataUrls: [] as string[],
+  photoDataUrl: '',
+  videoDataUrl: '',
+  isPublic: false,
+  hasPhoto: false,
+}
+
 interface AppData {
   companyProfile: CompanyProfileRecord
   momPersonnel: MOMPersonnelRecord[]
@@ -780,6 +818,78 @@ const normalizeTextList = (value: unknown) =>
         .map((item) => String(item ?? '').trim())
         .filter((item) => item.length > 0)
     : []
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const compactObject = (value: unknown): Record<string, unknown> => {
+  if (!isPlainObject(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => {
+      if (entry == null) return false
+      if (typeof entry === 'string') return entry.trim().length > 0
+      if (Array.isArray(entry)) return entry.length > 0
+      if (isPlainObject(entry)) return Object.keys(entry).length > 0
+      return true
+    })
+  )
+}
+
+const compactMaidRecordForStorage = (maid: MaidRecord) => {
+  const normalizedPhotos = Array.isArray(maid.photoDataUrls)
+    ? maid.photoDataUrls.filter((item) => typeof item === 'string' && item.trim().length > 0)
+    : []
+  const compactLanguageSkills = compactObject(maid.languageSkills)
+  const compactSkillsPreferences = compactObject(maid.skillsPreferences)
+  const compactWorkAreas = compactObject(maid.workAreas)
+  const compactIntroduction = compactObject(maid.introduction)
+  const compactAgencyContact = compactObject(maid.agencyContact)
+  const compactEmploymentHistory = Array.isArray(maid.employmentHistory)
+    ? maid.employmentHistory.filter((item) => isPlainObject(item) && Object.keys(compactObject(item)).length > 0)
+    : []
+
+  return {
+    id: maid.id,
+    agencyId: maid.agencyId,
+    fullName: maid.fullName,
+    referenceCode: maid.referenceCode,
+    ...(maid.status && maid.status !== defaultMaidRecordValues.status ? { status: maid.status } : {}),
+    ...(maid.type ? { type: maid.type } : {}),
+    ...(maid.nationality ? { nationality: maid.nationality } : {}),
+    ...(maid.dateOfBirth ? { dateOfBirth: maid.dateOfBirth } : {}),
+    ...(maid.placeOfBirth ? { placeOfBirth: maid.placeOfBirth } : {}),
+    ...(maid.height ? { height: maid.height } : {}),
+    ...(maid.weight ? { weight: maid.weight } : {}),
+    ...(maid.religion ? { religion: maid.religion } : {}),
+    ...(maid.maritalStatus ? { maritalStatus: maid.maritalStatus } : {}),
+    ...(maid.numberOfChildren ? { numberOfChildren: maid.numberOfChildren } : {}),
+    ...(maid.numberOfSiblings ? { numberOfSiblings: maid.numberOfSiblings } : {}),
+    ...(maid.homeAddress ? { homeAddress: maid.homeAddress } : {}),
+    ...(maid.airportRepatriation ? { airportRepatriation: maid.airportRepatriation } : {}),
+    ...(maid.educationLevel ? { educationLevel: maid.educationLevel } : {}),
+    ...(Object.keys(compactLanguageSkills).length > 0 ? { languageSkills: compactLanguageSkills } : {}),
+    ...(Object.keys(compactSkillsPreferences).length > 0
+      ? { skillsPreferences: compactSkillsPreferences }
+      : {}),
+    ...(Object.keys(compactWorkAreas).length > 0 ? { workAreas: compactWorkAreas } : {}),
+    ...(compactEmploymentHistory.length > 0 ? { employmentHistory: compactEmploymentHistory } : {}),
+    ...(Object.keys(compactIntroduction).length > 0 ? { introduction: compactIntroduction } : {}),
+    ...(Object.keys(compactAgencyContact).length > 0 ? { agencyContact: compactAgencyContact } : {}),
+    ...(normalizedPhotos.length > 0
+      ? {
+          photoDataUrls: normalizedPhotos,
+          photoDataUrl: normalizedPhotos[0] ?? '',
+          hasPhoto: true,
+        }
+      : {}),
+    ...(maid.videoDataUrl ? { videoDataUrl: maid.videoDataUrl } : {}),
+    ...(maid.isPublic ? { isPublic: true } : {}),
+    createdAt: maid.createdAt,
+    updatedAt: maid.updatedAt,
+  }
+}
 const defaultAgencyChatbotTopics = (): AgencyChatbotTopicRecord[] => [
   {
     id: 'placement',
@@ -1408,15 +1518,30 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     momPersonnel: raw.momPersonnel ?? defaults.momPersonnel,
     testimonials: raw.testimonials ?? defaults.testimonials,
     maids: (raw.maids ?? defaults.maids).map((maid) => {
+      const normalizedLanguageSkills = isPlainObject(maid.languageSkills)
+        ? Object.fromEntries(
+            Object.entries(maid.languageSkills).map(([key, value]) => [key, String(value ?? '')])
+          )
+        : {}
       const normalizedPhotos = Array.isArray(maid.photoDataUrls)
         ? maid.photoDataUrls.filter((item) => typeof item === 'string' && item.trim())
         : maid.photoDataUrl
         ? [maid.photoDataUrl]
         : []
       return {
+        ...defaultMaidRecordValues,
         ...maid,
         agencyId: normalizeAgencyId((maid as { agencyId?: unknown }).agencyId),
         status: maid.status ?? 'available',
+        languageSkills: {
+          ...defaultMaidRecordValues.languageSkills,
+          ...normalizedLanguageSkills,
+        },
+        skillsPreferences: isPlainObject(maid.skillsPreferences) ? maid.skillsPreferences : {},
+        workAreas: isPlainObject(maid.workAreas) ? maid.workAreas : {},
+        employmentHistory: Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [],
+        introduction: isPlainObject(maid.introduction) ? maid.introduction : {},
+        agencyContact: isPlainObject(maid.agencyContact) ? maid.agencyContact : {},
         photoDataUrls: normalizedPhotos.slice(0, 5),
         photoDataUrl: normalizedPhotos[0] ?? maid.photoDataUrl ?? '',
         videoDataUrl: maid.videoDataUrl ?? '',
@@ -1689,8 +1814,12 @@ const loadData = async (): Promise<AppData> => {
 
 const saveData = async (data: AppData) => {
   cache = data
+  const serialized = JSON.stringify({
+    ...data,
+    maids: data.maids.map(compactMaidRecordForStorage),
+  })
   pendingSave = pendingSave.then(() =>
-    writeFile(dataFile, JSON.stringify(data, null, 2), 'utf8')
+    writeFile(dataFile, serialized, 'utf8')
   )
   await pendingSave
 }

@@ -105,7 +105,15 @@ export const startMaidSaveTask = ({
   const refCode = payload.referenceCode;
   const url = shouldCreate ? "/api/maids" : `/api/maids/${encodeURIComponent(refCode)}`;
   const method = shouldCreate ? "POST" : "PUT";
-  const body = JSON.stringify(payload);
+  const normalizedPhotos = Array.isArray(payload.photoDataUrls)
+    ? payload.photoDataUrls.filter((item) => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const requestPayload: MaidProfile = {
+    ...payload,
+    photoDataUrls: normalizedPhotos,
+    photoDataUrl: normalizedPhotos.length > 0 ? "" : String(payload.photoDataUrl || "").trim(),
+  };
+  const body = JSON.stringify(requestPayload);
 
   const promise = new Promise<MaidProfile>((resolve, reject) => {
     const request = new XMLHttpRequest();
