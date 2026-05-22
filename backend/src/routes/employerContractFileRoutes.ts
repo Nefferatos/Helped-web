@@ -9,7 +9,6 @@ import {
 
 const router: Router = express.Router()
 
-router.use(express.raw({ type: 'multipart/form-data', limit: '110mb' }))
 router.get('/', listEmployerContractFiles)
 router.post('/', uploadEmployerContractFiles)
 router.get('/:id/view', viewEmployerContractFile)
@@ -17,4 +16,3 @@ router.get('/:id/download', downloadEmployerContractFile)
 router.delete('/:id', deleteEmployerContractFile)
 
 export default router
-

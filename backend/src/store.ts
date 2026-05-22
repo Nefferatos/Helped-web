@@ -4285,6 +4285,7 @@ export const addEmployerContractFilesStore = async (
     size: number
     type: string
     dataBase64: string
+    storagePath?: string
     category?: string
     refCode?: string
   }>,
@@ -4294,7 +4295,12 @@ export const addEmployerContractFilesStore = async (
   const createdAt = now()
   const records: EmployerContractFileRecord[] = await Promise.all(
     files.map(async (file) => {
-      const persisted = await persistEmployerContractFilePayload(file, agencyId)
+      const persisted = file.storagePath
+        ? {
+            storagePath: file.storagePath,
+            size: file.size,
+          }
+        : await persistEmployerContractFilePayload(file, agencyId)
       return {
         id: data.counters.employerContractFiles++,
         agencyId,

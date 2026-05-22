@@ -860,6 +860,19 @@ type SupabaseAppDataConfig = {
   rowId: string;
 };
 
+const SUPABASE_APP_DATA_BASE = Symbol("supabaseAppDataBase");
+const SUPABASE_APP_DATA_UPDATED_AT = Symbol("supabaseAppDataUpdatedAt");
+
+type SupabaseTrackedAppData = AppData & {
+  [SUPABASE_APP_DATA_BASE]?: AppData;
+  [SUPABASE_APP_DATA_UPDATED_AT]?: string;
+};
+
+type SupabaseAppDataRow = {
+  data: AppData;
+  updatedAt: string;
+};
+
 const decodeSupabaseJwtClaims = (jwt: string) => {
   const parts = jwt.split(".");
   if (parts.length < 2) return null;
@@ -946,12 +959,281 @@ const readSupabaseError = async (response: Response) => {
   return await response.text();
 };
 
-const loadDataFromSupabase = async (
+const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const deepEqual = (left: unknown, right: unknown) =>
+  JSON.stringify(left) === JSON.stringify(right);
+
+const attachSupabaseTracking = (
+  data: AppData,
+  base: AppData,
+  updatedAt: string,
+): AppData => {
+  Object.defineProperty(data, SUPABASE_APP_DATA_BASE, {
+    value: cloneJson(base),
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  Object.defineProperty(data, SUPABASE_APP_DATA_UPDATED_AT, {
+    value: updatedAt,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  return data;
+};
+
+const getSupabaseTrackedBase = (data: AppData) =>
+  (data as SupabaseTrackedAppData)[SUPABASE_APP_DATA_BASE];
+
+const getSupabaseTrackedUpdatedAt = (data: AppData) =>
+  (data as SupabaseTrackedAppData)[SUPABASE_APP_DATA_UPDATED_AT];
+
+const syncAppDataInPlace = (target: AppData, source: AppData) => {
+  for (const key of Object.keys(target) as Array<keyof AppData>) {
+    delete target[key];
+  }
+  Object.assign(target, cloneJson(source));
+};
+
+const mergeValueWithBase = (
+  baseValue: unknown,
+  localValue: unknown,
+  remoteValue: unknown,
+): unknown => {
+  if (deepEqual(localValue, baseValue)) {
+    return cloneJson(remoteValue);
+  }
+
+  if (deepEqual(remoteValue, baseValue)) {
+    return cloneJson(localValue);
+  }
+
+  if (isPlainObject(baseValue) && isPlainObject(localValue) && isPlainObject(remoteValue)) {
+    const merged: Record<string, unknown> = {};
+    const keys = new Set([
+      ...Object.keys(baseValue),
+      ...Object.keys(localValue),
+      ...Object.keys(remoteValue),
+    ]);
+
+    for (const key of keys) {
+      merged[key] = mergeValueWithBase(
+        baseValue[key],
+        localValue[key],
+        remoteValue[key],
+      );
+    }
+
+    return merged;
+  }
+
+  return cloneJson(localValue);
+};
+
+const mergeCollectionWithBase = <T>(
+  baseItems: T[],
+  localItems: T[],
+  remoteItems: T[],
+  getKey: (item: T) => string,
+): T[] => {
+  const baseMap = new Map(baseItems.map((item) => [getKey(item), item] as const));
+  const localMap = new Map(localItems.map((item) => [getKey(item), item] as const));
+  const remoteMap = new Map(remoteItems.map((item) => [getKey(item), item] as const));
+  const orderedKeys: string[] = [];
+  const seen = new Set<string>();
+
+  for (const key of [...localItems, ...remoteItems].map(getKey)) {
+    if (seen.has(key)) continue;
+    seen.add(key);
+    orderedKeys.push(key);
+  }
+
+  const merged: T[] = [];
+
+  for (const key of orderedKeys) {
+    const baseItem = baseMap.get(key);
+    const localItem = localMap.get(key);
+    const remoteItem = remoteMap.get(key);
+
+    if (!localItem) {
+      if (!remoteItem) continue;
+      if (!baseItem || !deepEqual(remoteItem, baseItem)) {
+        merged.push(cloneJson(remoteItem));
+      }
+      continue;
+    }
+
+    if (!remoteItem) {
+      merged.push(cloneJson(localItem));
+      continue;
+    }
+
+    if (!baseItem) {
+      merged.push(cloneJson(remoteItem));
+      if (!deepEqual(localItem, remoteItem)) {
+        merged[merged.length - 1] = cloneJson(
+          mergeValueWithBase({}, localItem, remoteItem),
+        ) as T;
+      }
+      continue;
+    }
+
+    merged.push(
+      cloneJson(mergeValueWithBase(baseItem, localItem, remoteItem)) as T,
+    );
+  }
+
+  return merged;
+};
+
+const mergeAppDataWithBase = (
+  baseData: AppData,
+  localData: AppData,
+  remoteData: AppData,
+): AppData =>
+  mergeAppData({
+    companyProfile: mergeValueWithBase(
+      baseData.companyProfile,
+      localData.companyProfile,
+      remoteData.companyProfile,
+    ) as CompanyProfileRecord,
+    momPersonnel: mergeCollectionWithBase(
+      baseData.momPersonnel,
+      localData.momPersonnel,
+      remoteData.momPersonnel,
+      (item) => String(item.id),
+    ),
+    testimonials: mergeCollectionWithBase(
+      baseData.testimonials,
+      localData.testimonials,
+      remoteData.testimonials,
+      (item) => String(item.id),
+    ),
+    maids: mergeCollectionWithBase(
+      baseData.maids,
+      localData.maids,
+      remoteData.maids,
+      (item) => `${item.agencyId}:${item.referenceCode || item.id}`,
+    ),
+    enquiries: mergeCollectionWithBase(
+      baseData.enquiries,
+      localData.enquiries,
+      remoteData.enquiries,
+      (item) => String(item.id),
+    ),
+    clients: mergeCollectionWithBase(
+      baseData.clients,
+      localData.clients,
+      remoteData.clients,
+      (item) => String(item.id),
+    ),
+    clientSessions: mergeCollectionWithBase(
+      baseData.clientSessions,
+      localData.clientSessions,
+      remoteData.clientSessions,
+      (item) => item.token,
+    ),
+    agencyAdmins: mergeCollectionWithBase(
+      baseData.agencyAdmins,
+      localData.agencyAdmins,
+      remoteData.agencyAdmins,
+      (item) => String(item.id),
+    ),
+    agencyAdminSessions: mergeCollectionWithBase(
+      baseData.agencyAdminSessions,
+      localData.agencyAdminSessions,
+      remoteData.agencyAdminSessions,
+      (item) => item.token,
+    ),
+    directSales: mergeCollectionWithBase(
+      baseData.directSales,
+      localData.directSales,
+      remoteData.directSales,
+      (item) => String(item.id),
+    ),
+    chatMessages: mergeCollectionWithBase(
+      baseData.chatMessages,
+      localData.chatMessages,
+      remoteData.chatMessages,
+      (item) => String(item.id),
+    ),
+    employers: mergeCollectionWithBase(
+      baseData.employers,
+      localData.employers,
+      remoteData.employers,
+      (item) => `${item.id}:${item.refCode}`,
+    ),
+    employmentContracts: mergeCollectionWithBase(
+      baseData.employmentContracts,
+      localData.employmentContracts,
+      remoteData.employmentContracts,
+      (item) => `${item.id}:${item.refCode}:${item.employerRefCode}`,
+    ),
+    counters: {
+      momPersonnel: Math.max(
+        baseData.counters.momPersonnel,
+        localData.counters.momPersonnel,
+        remoteData.counters.momPersonnel,
+      ),
+      testimonials: Math.max(
+        baseData.counters.testimonials,
+        localData.counters.testimonials,
+        remoteData.counters.testimonials,
+      ),
+      maids: Math.max(
+        baseData.counters.maids,
+        localData.counters.maids,
+        remoteData.counters.maids,
+      ),
+      enquiries: Math.max(
+        baseData.counters.enquiries,
+        localData.counters.enquiries,
+        remoteData.counters.enquiries,
+      ),
+      clients: Math.max(
+        baseData.counters.clients,
+        localData.counters.clients,
+        remoteData.counters.clients,
+      ),
+      agencyAdmins: Math.max(
+        baseData.counters.agencyAdmins,
+        localData.counters.agencyAdmins,
+        remoteData.counters.agencyAdmins,
+      ),
+      directSales: Math.max(
+        baseData.counters.directSales,
+        localData.counters.directSales,
+        remoteData.counters.directSales,
+      ),
+      chatMessages: Math.max(
+        baseData.counters.chatMessages,
+        localData.counters.chatMessages,
+        remoteData.counters.chatMessages,
+      ),
+      employers: Math.max(
+        baseData.counters.employers,
+        localData.counters.employers,
+        remoteData.counters.employers,
+      ),
+      employmentContracts: Math.max(
+        baseData.counters.employmentContracts,
+        localData.counters.employmentContracts,
+        remoteData.counters.employmentContracts,
+      ),
+    },
+  });
+
+const fetchSupabaseAppDataRow = async (
   config: SupabaseAppDataConfig,
-): Promise<AppData> => {
+): Promise<SupabaseAppDataRow | null> => {
   const table = encodeURIComponent(config.table);
   const rowId = encodeURIComponent(config.rowId);
-  const url = `${config.baseUrl}/rest/v1/${table}?id=eq.${rowId}&select=data&limit=1`;
+  const url = `${config.baseUrl}/rest/v1/${table}?id=eq.${rowId}&select=data,updated_at&limit=1`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -963,15 +1245,62 @@ const loadDataFromSupabase = async (
     throw new Error(`Supabase read failed (${response.status}): ${details}`);
   }
 
-  const rows = (await response.json()) as Array<{ data?: Partial<AppData> }>;
-  const raw = rows[0]?.data;
-  if (!raw) {
-    const initial = defaultData();
-    await saveDataToSupabase(config, initial);
-    return initial;
+  const rows = (await response.json()) as Array<{
+    data?: Partial<AppData>;
+    updated_at?: string;
+  }>;
+  const row = rows[0];
+
+  if (!row?.data || !row.updated_at) {
+    return null;
   }
 
-  return mergeAppData(raw);
+  return {
+    data: mergeAppData(row.data),
+    updatedAt: row.updated_at,
+  };
+};
+
+const ensureSupabaseAppDataRow = async (config: SupabaseAppDataConfig) => {
+  const table = encodeURIComponent(config.table);
+  const url = `${config.baseUrl}/rest/v1/${table}?on_conflict=id`;
+  const initial = defaultData();
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: supabaseHeaders(config, {
+      "content-type": "application/json",
+      prefer: "resolution=ignore-duplicates,return=minimal",
+    }),
+    body: JSON.stringify([
+      {
+        id: config.rowId,
+        data: initial,
+      },
+    ]),
+  });
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase row bootstrap failed (${response.status}): ${details}`);
+  }
+};
+
+const loadDataFromSupabase = async (
+  config: SupabaseAppDataConfig,
+): Promise<AppData> => {
+  let row = await fetchSupabaseAppDataRow(config);
+
+  if (!row) {
+    await ensureSupabaseAppDataRow(config);
+    row = await fetchSupabaseAppDataRow(config);
+  }
+
+  if (!row) {
+    throw new Error("Supabase app_data row is missing after bootstrap");
+  }
+
+  return attachSupabaseTracking(row.data, row.data, row.updatedAt);
 };
 
 const saveDataToSupabase = async (
@@ -979,43 +1308,90 @@ const saveDataToSupabase = async (
   data: AppData,
 ) => {
   const table = encodeURIComponent(config.table);
-  const url = `${config.baseUrl}/rest/v1/${table}?on_conflict=id`;
-  const payload = [
-    {
-      id: config.rowId,
-      data,
-      updated_at: now(),
-    },
-  ];
-  const retryDelaysMs = [200, 800, 1600];
+  const retryDelaysMs = [100, 300, 700, 1400];
+  let candidate = mergeAppData(cloneJson(data));
+  let baseData = getSupabaseTrackedBase(data);
+  let baseUpdatedAt = getSupabaseTrackedUpdatedAt(data);
 
   for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+    if (!baseUpdatedAt) {
+      const latest = await loadDataFromSupabase(config);
+      baseData = getSupabaseTrackedBase(latest) ?? cloneJson(latest);
+      baseUpdatedAt = getSupabaseTrackedUpdatedAt(latest);
+      candidate = mergeAppDataWithBase(
+        baseData,
+        candidate,
+        latest,
+      );
+    }
+
+    if (!baseUpdatedAt) {
+      throw new Error("Supabase app_data row is missing an updated_at version");
+    }
+
+    const updatedAtFilter = encodeURIComponent(baseUpdatedAt);
+    const url = `${config.baseUrl}/rest/v1/${table}?id=eq.${encodeURIComponent(config.rowId)}&updated_at=eq.${updatedAtFilter}&select=updated_at`;
     const response = await fetch(url, {
-      method: "POST",
+      method: "PATCH",
       headers: supabaseHeaders(config, {
         "content-type": "application/json",
-        prefer: "resolution=merge-duplicates,return=minimal",
+        prefer: "return=representation",
       }),
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        data: candidate,
+      }),
     });
 
     if (response.ok) {
-      return;
+      const rows = (await response.json()) as Array<{ updated_at?: string }>;
+      const savedUpdatedAt = rows[0]?.updated_at;
+
+      if (savedUpdatedAt) {
+        syncAppDataInPlace(data, candidate);
+        attachSupabaseTracking(data, candidate, savedUpdatedAt);
+        return;
+      }
+    } else {
+      const details = await readSupabaseError(response);
+      const isRetryableTimeout =
+        response.status >= 500 &&
+        (details.includes('"code":"57014"') ||
+          details.toLowerCase().includes("statement timeout") ||
+          details.toLowerCase().includes("canceling statement"));
+
+      if (!isRetryableTimeout || attempt === retryDelaysMs.length) {
+        throw new Error(`Supabase write failed (${response.status}): ${details}`);
+      }
+
+      await sleep(retryDelaysMs[attempt]);
+      continue;
     }
 
-    const details = await readSupabaseError(response);
-    const isRetryableTimeout =
-      response.status >= 500 &&
-      (details.includes('"code":"57014"') ||
-        details.toLowerCase().includes("statement timeout") ||
-        details.toLowerCase().includes("canceling statement"));
+    const latest = await fetchSupabaseAppDataRow(config);
 
-    if (!isRetryableTimeout || attempt === retryDelaysMs.length) {
-      throw new Error(`Supabase write failed (${response.status}): ${details}`);
+    if (!latest) {
+      await ensureSupabaseAppDataRow(config);
+      baseData = undefined;
+      baseUpdatedAt = undefined;
+    } else {
+      const resolvedBase = baseData ?? latest.data;
+      candidate = mergeAppDataWithBase(resolvedBase, candidate, latest.data);
+      baseData = latest.data;
+      baseUpdatedAt = latest.updatedAt;
     }
 
-    await sleep(retryDelaysMs[attempt]);
+    if (attempt === retryDelaysMs.length) {
+      throw new Error(
+        "Supabase write conflict: failed to merge concurrent updates after retries",
+      );
+    }
+
+    if (retryDelaysMs[attempt] > 0) {
+      await sleep(retryDelaysMs[attempt]);
+    }
   }
+
+  throw new Error("Supabase write failed unexpectedly");
 };
 
 const loadData = async (env: Bindings): Promise<AppData> => {

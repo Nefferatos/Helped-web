@@ -72,13 +72,7 @@ app.use(
 )
 
 // ─── Body parsers ─────────────────────────────────────────────────────────────
-// Raw body MUST be applied before global json() for file upload routes.
-app.use(
-  ['/api/employer-files', '/api/employer-contract-files'],
-  express.raw({ type: '*/*', limit: '120mb' })
-)
-
-// Global JSON + urlencoded for all other routes.
+// Global JSON + urlencoded for JSON-based routes.
 app.use(express.json({ limit: '120mb' }))
 app.use(express.urlencoded({ extended: true, limit: '120mb' }))
 app.use(

@@ -1,6 +1,9 @@
 import { Request, Response } from 'express'
-import { readFile } from 'fs/promises'
+import { createWriteStream } from 'fs'
+import { mkdir, readFile, rm } from 'fs/promises'
 import path from 'path'
+import { randomUUID } from 'crypto'
+import { Readable } from 'stream'
 import { getRequestAgencyId } from '../auth'
 import {
   addEmployerContractFilesStore,
@@ -14,11 +17,157 @@ const MAX_BYTES_PER_FILE = 100 * 1024 * 1024
 const PDF_ONLY_MESSAGE = 'Only PDF files are allowed'
 const FILE_SIZE_LIMIT_MESSAGE = 'File exceeds 100MB limit'
 const uploadsRoot = path.resolve(__dirname, '../../data/uploads')
+const PDF_HEADER = Buffer.from('%PDF-', 'ascii')
 
 const normalizeBase64 = (value: string) => value.replace(/\s+/g, '')
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const sanitizePathSegment = (value: string, fallback: string) => {
+  const normalized = value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+  return normalized || fallback
+}
+
+const buildUploadTarget = (
+  agencyId: number,
+  refCode: string,
+  fileName: string
+) => {
+  const safeRef = sanitizePathSegment(refCode, 'general')
+  const sanitizedName = sanitizePathSegment(fileName, 'document.pdf')
+  const extension = path.extname(sanitizedName).toLowerCase() || '.pdf'
+  const baseName = path.basename(sanitizedName, path.extname(sanitizedName)) || 'document'
+  const uniqueFileName = `${baseName}-${randomUUID()}${extension}`
+  const relativePath = path
+    .posix
+    .join('employer-contract-files', `agency-${agencyId}`, safeRef, uniqueFileName)
+  return {
+    absolutePath: path.join(uploadsRoot, relativePath),
+    relativePath,
+  }
+}
+
+const writeChunk = async (stream: ReturnType<typeof createWriteStream>, chunk: Buffer) => {
+  if (stream.write(chunk)) {
+    return
+  }
+  await new Promise<void>((resolve, reject) => {
+    stream.once('drain', resolve)
+    stream.once('error', reject)
+  })
+}
+
+const streamMultipartPdfToDisk = async (
+  file: {
+    name: string
+    type: string
+    size?: number
+    stream: () => unknown
+  },
+  agencyId: number,
+  refCode: string
+) => {
+  if (file.type.trim().toLowerCase() !== 'application/pdf') {
+    throw new Error(PDF_ONLY_MESSAGE)
+  }
+
+  const target = buildUploadTarget(agencyId, refCode, file.name)
+  await mkdir(path.dirname(target.absolutePath), { recursive: true })
+
+  const fileStream = file.stream()
+  const nodeStream = Readable.fromWeb(fileStream as globalThis.ReadableStream)
+  const output = createWriteStream(target.absolutePath, { flags: 'wx' })
+
+  let totalBytes = 0
+  let header = Buffer.alloc(0)
+
+  try {
+    for await (const chunk of nodeStream) {
+      const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      totalBytes += bufferChunk.length
+
+      if (totalBytes > MAX_BYTES_PER_FILE) {
+        throw new Error(FILE_SIZE_LIMIT_MESSAGE)
+      }
+
+      if (header.length < PDF_HEADER.length) {
+        header = Buffer.concat([header, bufferChunk]).subarray(0, PDF_HEADER.length)
+        if (
+          header.length === PDF_HEADER.length &&
+          !header.equals(PDF_HEADER)
+        ) {
+          throw new Error(PDF_ONLY_MESSAGE)
+        }
+      }
+
+      await writeChunk(output, bufferChunk)
+    }
+
+    if (header.length < PDF_HEADER.length || !header.equals(PDF_HEADER)) {
+      throw new Error(PDF_ONLY_MESSAGE)
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      output.end((error?: Error | null) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve()
+      })
+    })
+
+    return {
+      size: totalBytes,
+      storagePath: target.relativePath.replace(/\\/g, '/'),
+    }
+  } catch (error) {
+    output.destroy()
+    await rm(target.absolutePath, { force: true }).catch(() => undefined)
+    throw error
+  }
+}
+
+const parseMultipartRequest = async (req: Request) => {
+  const requestUrl = `${req.protocol}://${req.get('host') || 'localhost'}${req.originalUrl || req.url}`
+  const requestCtor = (globalThis as typeof globalThis & {
+    Request: new (
+      input: string,
+      init: {
+        method: string
+        headers: Record<string, string>
+        body: unknown
+        duplex: 'half'
+      }
+    ) => {
+      formData: () => Promise<{
+        get: (name: string) => unknown
+      }>
+    }
+  }).Request
+
+  const webRequest = new requestCtor(requestUrl, {
+    method: req.method,
+    headers: Object.fromEntries(
+      Object.entries(req.headers).flatMap(([key, value]) =>
+        typeof value === 'string'
+          ? [[key, value]]
+          : Array.isArray(value)
+          ? [[key, value.join(', ')]]
+          : []
+      )
+    ),
+    body: req,
+    duplex: 'half',
+  })
+
+  return await webRequest.formData()
+}
 
 const isPdfFile = (type: string, fileName: string, buffer: Buffer) => {
   const normalizedType = type.trim().toLowerCase()
@@ -26,66 +175,6 @@ const isPdfFile = (type: string, fileName: string, buffer: Buffer) => {
   const isPdfHeader = buffer.subarray(0, 5).toString('ascii') === '%PDF-'
   const isPdfExtension = fileName.trim().toLowerCase().endsWith('.pdf')
   return isMimePdf && isPdfHeader && isPdfExtension
-}
-
-const parseMultipartFormData = (req: Request) => {
-  const contentType = String(req.headers['content-type'] ?? '')
-  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i)
-  const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2]
-  if (!boundary) {
-    throw new Error('Missing multipart boundary')
-  }
-
-  const bodyBuffer = Buffer.isBuffer(req.body)
-    ? req.body
-    : Buffer.from([])
-  if (!bodyBuffer.length) {
-    throw new Error('Empty upload body')
-  }
-
-  const body = bodyBuffer.toString('latin1')
-  const boundaryText = `--${boundary}`
-  const parts = body.split(boundaryText).slice(1, -1)
-
-  const fields: Record<string, string> = {}
-  const files: Array<{
-    fieldName: string
-    fileName: string
-    type: string
-    buffer: Buffer
-  }> = []
-
-  for (const rawPart of parts) {
-    const trimmed = rawPart.replace(/^\r\n/, '').replace(/\r\n$/, '')
-    if (!trimmed) continue
-
-    const headerEnd = trimmed.indexOf('\r\n\r\n')
-    if (headerEnd === -1) continue
-
-    const headerText = trimmed.slice(0, headerEnd)
-    const contentText = trimmed.slice(headerEnd + 4)
-    const dispositionMatch = headerText.match(/Content-Disposition:\s*form-data;\s*name="([^"]+)"(?:;\s*filename="([^"]*)")?/i)
-    if (!dispositionMatch) continue
-
-    const fieldName = dispositionMatch[1]
-    const fileName = dispositionMatch[2]
-    const typeMatch = headerText.match(/Content-Type:\s*([^\r\n]+)/i)
-
-    if (typeof fileName === 'string') {
-      const contentBuffer = Buffer.from(contentText, 'latin1')
-      files.push({
-        fieldName,
-        fileName,
-        type: String(typeMatch?.[1] ?? 'application/octet-stream').trim(),
-        buffer: contentBuffer,
-      })
-      continue
-    }
-
-    fields[fieldName] = contentText
-  }
-
-  return { fields, files }
 }
 
 export const listEmployerContractFiles = async (_req: Request, res: Response) => {
@@ -114,12 +203,17 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
     const agencyId = await getRequestAgencyId(req)
     const contentType = String(req.headers['content-type'] ?? '')
     if (/multipart\/form-data/i.test(contentType)) {
-      const { fields, files } = parseMultipartFormData(req)
-      const file = files.find((item) => item.fieldName === 'file') ?? files[0]
-      const category = String(fields.category ?? '').trim()
-      const refCode = String(fields.refCode ?? '').trim()
+      const formData = await parseMultipartRequest(req)
+      const uploadedFile = formData.get('file')
+      const category = String(formData.get('category') ?? '').trim()
+      const refCode = String(formData.get('refCode') ?? '').trim()
 
-      if (!file) {
+      if (
+        !uploadedFile ||
+        typeof uploadedFile !== 'object' ||
+        typeof (uploadedFile as { name?: unknown }).name !== 'string' ||
+        typeof (uploadedFile as { stream?: unknown }).stream !== 'function'
+      ) {
         return res.status(400).json({ error: 'file is required' })
       }
       if (!category) {
@@ -128,25 +222,31 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
       if (!refCode) {
         return res.status(400).json({ error: 'refCode is required' })
       }
-      if (!file.fileName || !file.buffer.length) {
+
+      const file = uploadedFile as {
+        name: string
+        type: string
+        size?: number
+        stream: () => unknown
+      }
+
+      if (!file.name.trim()) {
         return res.status(400).json({ error: 'Invalid file payload' })
-      }
-      if (!isPdfFile(file.type, file.fileName, file.buffer)) {
-        return res.status(400).json({ error: PDF_ONLY_MESSAGE })
-      }
-      if (file.buffer.length > MAX_BYTES_PER_FILE) {
-        return res.status(400).json({ error: FILE_SIZE_LIMIT_MESSAGE })
       }
 
       const [saved] = await addEmployerContractFilesStore([
-        {
-          name: file.fileName,
-          size: file.buffer.length,
-          type: file.type,
-          dataBase64: file.buffer.toString('base64'),
-          category,
-          refCode,
-        },
+        await (async () => {
+          const persisted = await streamMultipartPdfToDisk(file, agencyId, refCode)
+          return {
+            name: file.name,
+            size: persisted.size,
+            type: file.type || 'application/pdf',
+            dataBase64: '',
+            storagePath: persisted.storagePath,
+            category,
+            refCode,
+          }
+        })(),
       ], agencyId)
 
       return res.status(200).json({
@@ -227,6 +327,13 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
     })
   } catch (error) {
     console.error('Error uploading contract files:', error)
+    const message = error instanceof Error ? error.message : ''
+    if (message === PDF_ONLY_MESSAGE) {
+      return res.status(400).json({ error: PDF_ONLY_MESSAGE })
+    }
+    if (message === FILE_SIZE_LIMIT_MESSAGE) {
+      return res.status(413).json({ error: FILE_SIZE_LIMIT_MESSAGE })
+    }
     res.status(500).json({ error: 'Failed to upload contract files' })
   }
 }
