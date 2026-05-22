@@ -1,6 +1,17 @@
 import { copyFile, mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
+import {
+  createMaidSql,
+  deleteMaidSql,
+  getMaidByReferenceCodeSql,
+  listMaidRecordsSql,
+  type SqlMaidPayload,
+  updateMaidMediaSql,
+  updateMaidSql,
+  updateMaidVisibilitySql,
+  upsertMaidRecordsSql,
+} from './repositories/maidRepository'
 
 const DEFAULT_AGENCY_ID = 1
 
@@ -564,6 +575,38 @@ const persistMaidMediaFields = async (
     hasPhoto: persistedPhotos.length > 0,
   }
 }
+
+const toSqlMaidPayload = (
+  maid: Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>
+): SqlMaidPayload => ({
+  fullName: maid.fullName,
+  referenceCode: maid.referenceCode,
+  status: maid.status ?? 'available',
+  type: maid.type,
+  nationality: maid.nationality,
+  dateOfBirth: maid.dateOfBirth,
+  placeOfBirth: maid.placeOfBirth,
+  height: maid.height,
+  weight: maid.weight,
+  religion: maid.religion,
+  maritalStatus: maid.maritalStatus,
+  numberOfChildren: maid.numberOfChildren,
+  numberOfSiblings: maid.numberOfSiblings,
+  homeAddress: maid.homeAddress,
+  airportRepatriation: maid.airportRepatriation,
+  educationLevel: maid.educationLevel,
+  languageSkills: maid.languageSkills,
+  skillsPreferences: maid.skillsPreferences,
+  workAreas: maid.workAreas,
+  employmentHistory: maid.employmentHistory,
+  introduction: maid.introduction,
+  agencyContact: maid.agencyContact,
+  photoDataUrls: maid.photoDataUrls,
+  photoDataUrl: maid.photoDataUrl,
+  videoDataUrl: maid.videoDataUrl,
+  isPublic: maid.isPublic,
+  hasPhoto: maid.hasPhoto,
+})
 
 const persistEmployerContractFilePayload = async (
   file: {
@@ -1928,6 +1971,12 @@ export const getMaidsStore = async (
   visibility?: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    return await listMaidRecordsSql({ search, visibility, agencyId })
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   let maids = data.maids.filter((maid) => maid.agencyId === agencyId)
 
@@ -1955,6 +2004,12 @@ export const getAllMaidsStore = async (
   search?: string,
   visibility?: string
 ) => {
+  try {
+    return await listMaidRecordsSql({ search, visibility })
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   let maids = [...data.maids]
 
@@ -1982,6 +2037,15 @@ export const getMaidByReferenceCodeStore = async (
   referenceCode: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const maid = await getMaidByReferenceCodeSql(referenceCode, { agencyId })
+    if (maid) {
+      return maid
+    }
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   return (
     data.maids.find(
@@ -1991,6 +2055,15 @@ export const getMaidByReferenceCodeStore = async (
 }
 
 export const getPublicMaidByReferenceCodeStore = async (referenceCode: string) => {
+  try {
+    const maid = await getMaidByReferenceCodeSql(referenceCode, { publicOnly: true })
+    if (maid) {
+      return maid
+    }
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   return (
     data.maids.find(
@@ -2005,6 +2078,15 @@ export const bulkUpsertMaidRecordsStore = async (
   records: MaidStorePayload[],
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const persistedRecords = await Promise.all(
+      records.map(async (record) => toSqlMaidPayload(await persistMaidMediaFields(record, agencyId)))
+    )
+    return await upsertMaidRecordsSql(persistedRecords, agencyId)
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   let created = 0
   let updated = 0
@@ -2045,6 +2127,16 @@ export const createMaidStore = async (
   maid: Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const persistedMaid = await persistMaidMediaFields(maid, agencyId)
+    return await createMaidSql(toSqlMaidPayload(persistedMaid), agencyId)
+  } catch (error) {
+    if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {
+      throw error
+    }
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   const existing = data.maids.find(
     (item) => item.referenceCode === maid.referenceCode && item.agencyId === agencyId
@@ -2072,6 +2164,23 @@ export const updateMaidStore = async (
   updates: Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const persistedUpdates = await persistMaidMediaFields(updates, agencyId)
+    const updated = await updateMaidSql(
+      referenceCode,
+      toSqlMaidPayload(persistedUpdates),
+      agencyId
+    )
+    if (updated) {
+      return updated
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {
+      throw error
+    }
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   const index = data.maids.findIndex(
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
@@ -2104,6 +2213,15 @@ export const updateMaidVisibilityStore = async (
   isPublic: boolean,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const updated = await updateMaidVisibilitySql(referenceCode, isPublic, agencyId)
+    if (updated) {
+      return updated
+    }
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   const index = data.maids.findIndex(
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
@@ -2123,6 +2241,30 @@ export const updateMaidPhotoStore = async (
   photoDataUrl: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const persistedPhoto = await persistMaidMediaValue(
+      photoDataUrl,
+      agencyId,
+      referenceCode,
+      'photos',
+      0
+    )
+    const updated = await updateMaidMediaSql(
+      referenceCode,
+      {
+        photoDataUrls: persistedPhoto ? [persistedPhoto] : [],
+        photoDataUrl: persistedPhoto,
+        hasPhoto: Boolean(persistedPhoto),
+      },
+      agencyId
+    )
+    if (updated) {
+      return updated
+    }
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   const index = data.maids.findIndex(
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
@@ -2151,6 +2293,43 @@ export const addMaidPhotoStore = async (
   photoDataUrl: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const existing = await getMaidByReferenceCodeSql(referenceCode, { agencyId })
+    if (existing) {
+      const currentPhotos = Array.isArray(existing.photoDataUrls)
+        ? existing.photoDataUrls
+        : existing.photoDataUrl
+        ? [existing.photoDataUrl]
+        : []
+      const nextPhotos = [...currentPhotos]
+      if (photoDataUrl) {
+        if (nextPhotos.length >= 5) {
+          throw new Error('PHOTO_LIMIT_REACHED')
+        }
+        nextPhotos.push(
+          await persistMaidMediaValue(photoDataUrl, agencyId, referenceCode, 'photos', nextPhotos.length)
+        )
+      }
+      const updated = await updateMaidMediaSql(
+        referenceCode,
+        {
+          photoDataUrls: nextPhotos,
+          photoDataUrl: nextPhotos[0] ?? '',
+          hasPhoto: nextPhotos.length > 0,
+        },
+        agencyId
+      )
+      if (updated) {
+        return updated
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === 'PHOTO_LIMIT_REACHED') {
+      throw error
+    }
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   const index = data.maids.findIndex(
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
@@ -2186,6 +2365,33 @@ export const replaceMaidPhotosStore = async (
   photoDataUrls: string[],
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const normalizedPhotos = photoDataUrls
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .slice(0, 5)
+
+    const persistedPhotos = await Promise.all(
+      normalizedPhotos.map((photo, photoIndex) =>
+        persistMaidMediaValue(photo, agencyId, referenceCode, 'photos', photoIndex)
+      )
+    )
+
+    const updated = await updateMaidMediaSql(
+      referenceCode,
+      {
+        photoDataUrls: persistedPhotos,
+        photoDataUrl: persistedPhotos[0] ?? '',
+        hasPhoto: persistedPhotos.length > 0,
+      },
+      agencyId
+    )
+    if (updated) {
+      return updated
+    }
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   const index = data.maids.findIndex(
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
@@ -2218,6 +2424,25 @@ export const updateMaidVideoStore = async (
   videoDataUrl: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const persistedVideo =
+      typeof videoDataUrl === 'string' && videoDataUrl.trim().startsWith('data:')
+        ? await persistMaidMediaValue(videoDataUrl, agencyId, referenceCode, 'videos', 0)
+        : videoDataUrl
+    const updated = await updateMaidMediaSql(
+      referenceCode,
+      {
+        videoDataUrl: persistedVideo,
+      },
+      agencyId
+    )
+    if (updated) {
+      return updated
+    }
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   const index = data.maids.findIndex(
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
@@ -2240,6 +2465,15 @@ export const deleteMaidStore = async (
   referenceCode: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  try {
+    const deleted = await deleteMaidSql(referenceCode, agencyId)
+    if (deleted) {
+      return deleted
+    }
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
   const data = await loadData()
   const existing = data.maids.find(
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
@@ -2250,6 +2484,67 @@ export const deleteMaidStore = async (
   )
   await saveData(data)
   return existing
+}
+
+export const getLegacyMaidSnapshotStore = async () => {
+  const data = await loadData()
+  return [...data.maids]
+}
+
+export const syncMaidsToSqlStore = async () => {
+  const data = await loadData()
+  if (data.maids.length === 0) {
+    return { created: 0, updated: 0 }
+  }
+
+  const grouped = new Map<number, MaidStorePayload[]>()
+  for (const maid of data.maids) {
+    const group = grouped.get(maid.agencyId) ?? []
+    group.push({
+      fullName: maid.fullName,
+      referenceCode: maid.referenceCode,
+      status: maid.status ?? 'available',
+      type: maid.type,
+      nationality: maid.nationality,
+      dateOfBirth: maid.dateOfBirth,
+      placeOfBirth: maid.placeOfBirth,
+      height: maid.height,
+      weight: maid.weight,
+      religion: maid.religion,
+      maritalStatus: maid.maritalStatus,
+      numberOfChildren: maid.numberOfChildren,
+      numberOfSiblings: maid.numberOfSiblings,
+      homeAddress: maid.homeAddress,
+      airportRepatriation: maid.airportRepatriation,
+      educationLevel: maid.educationLevel,
+      languageSkills: maid.languageSkills,
+      skillsPreferences: maid.skillsPreferences,
+      workAreas: maid.workAreas,
+      employmentHistory: maid.employmentHistory,
+      introduction: maid.introduction,
+      agencyContact: maid.agencyContact,
+      photoDataUrls: maid.photoDataUrls,
+      photoDataUrl: maid.photoDataUrl,
+      videoDataUrl: maid.videoDataUrl,
+      isPublic: maid.isPublic,
+      hasPhoto: maid.hasPhoto,
+    })
+    grouped.set(maid.agencyId, group)
+  }
+
+  let created = 0
+  let updated = 0
+
+  for (const [agencyId, maids] of grouped) {
+    const result = await upsertMaidRecordsSql(
+      maids.map((maid) => toSqlMaidPayload(maid)),
+      agencyId
+    )
+    created += result.created
+    updated += result.updated
+  }
+
+  return { created, updated }
 }
 
 export const getEnquiriesStore = async (

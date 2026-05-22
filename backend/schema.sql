@@ -115,6 +115,18 @@ CREATE INDEX IF NOT EXISTS idx_agency_admin_sessions_admin_id ON agency_admin_se
 ALTER TABLE maids
   ADD COLUMN IF NOT EXISTS agency_id INTEGER NOT NULL DEFAULT 1;
 
+ALTER TABLE maids
+  ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'available';
+
+ALTER TABLE maids
+  ADD COLUMN IF NOT EXISTS photo_data_url TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE maids
+  ADD COLUMN IF NOT EXISTS photo_data_urls JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE maids
+  ADD COLUMN IF NOT EXISTS video_data_url TEXT NOT NULL DEFAULT '';
+
 ALTER TABLE agency_admins
   ADD COLUMN IF NOT EXISTS username VARCHAR(255);
 

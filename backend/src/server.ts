@@ -29,6 +29,7 @@ import shareRoutes from './routes/shareRoutes'
 import { initializeDatabase } from './db'
 import {
   getAgencyAdminsStore,
+  syncMaidsToSqlStore,
   getMaidsStore,
   getStoreDiagnostics,
   initializeStore,
@@ -209,6 +210,7 @@ const startServer = async () => {
     try {
       await initializeDatabase()
       await syncAgencyAdminsFromStoreRecords(await getAgencyAdminsStore())
+      await syncMaidsToSqlStore()
     } catch (error) {
       console.warn(
         '[server] Database initialization unavailable; continuing in degraded local-store mode:',
