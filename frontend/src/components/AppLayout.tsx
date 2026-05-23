@@ -873,13 +873,16 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     let active = true;
 
     const loadAll = async (silent = false) => {
+      const authHeaders = getAgencyAdminAuthHeaders();
+      if (!authHeaders.Authorization) return;
+
       try {
         const [summaryRes, compRes] = await Promise.all([
           fetch("/api/company/summary", {
-            headers: { ...getAgencyAdminAuthHeaders() },
+            headers: authHeaders,
           }),
           fetch("/api/company", {
-            headers: { ...getAgencyAdminAuthHeaders() },
+            headers: authHeaders,
           }),
         ]);
 
@@ -930,10 +933,10 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             setAgencyLogoUrl(compData.companyProfile?.logo_data_url || "");
         }
       } catch (err) {
-        if (!silent)
-          toast.error(
-            err instanceof Error ? err.message : "Failed to load notifications"
-          );
+        console.warn("[AppLayout] Failed to refresh admin notifications", err);
+        if (!silent) {
+          setChatNotifications([]);
+        }
       }
     };
 

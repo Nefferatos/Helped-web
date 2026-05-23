@@ -1101,7 +1101,10 @@ export function PdfAutofillBanner({
   }, [setFormData, startTicker, stopTicker]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (f) void process(f);
+    const input = e.currentTarget;
+    const f = input.files?.[0];
+    input.value = "";
+    if (f) void process(f);
   }, [process]);
 
   const handleButtonClick = useCallback(() => {

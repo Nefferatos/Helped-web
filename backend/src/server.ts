@@ -116,6 +116,7 @@ app.get('/api/data', (_req: Request, res: Response) => {
 app.use('/api/company', companyRoutes)
 app.use('/api/maids', maidRoutes)
 app.use('/api/enquiries', enquiryRoutes)
+app.use('/api/enquiry', enquiryRoutes)
 app.use('/api/direct-sales', directSaleRoutes)
 app.use('/api/direct-sell', directSaleRoutes)
 app.use('/api/requests', requestRoutes)

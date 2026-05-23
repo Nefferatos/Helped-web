@@ -3735,6 +3735,22 @@ app.get("/api/enquiries", async (c) => {
   return c.json({ enquiries });
 });
 
+app.get("/api/enquiries/unread-count", async (c) => {
+  const data = await loadData(c.env);
+  return c.json({
+    unreadCount: data.enquiries.length,
+    count: data.enquiries.length,
+  });
+});
+
+app.get("/api/enquiry/unread-count", async (c) => {
+  const data = await loadData(c.env);
+  return c.json({
+    unreadCount: data.enquiries.length,
+    count: data.enquiries.length,
+  });
+});
+
 app.get("/api/enquiries/last-id", async (c) => {
   const data = await loadData(c.env);
   const lastId = data.enquiries.reduce(
@@ -3848,6 +3864,18 @@ app.delete("/api/enquiries/:id", async (c) => {
   data.enquiries = data.enquiries.filter((item) => item.id !== id);
   await saveData(c.env, data);
   return c.json({ message: "Enquiry deleted successfully" });
+});
+
+app.get("/api/requests/unread-count", async (c) => {
+  const data = await loadData(c.env);
+  const pendingRequests = data.directSales.filter(
+    (item) => item.status === "pending",
+  ).length;
+
+  return c.json({
+    unreadCount: pendingRequests,
+    count: pendingRequests,
+  });
 });
 
 const WORKFLOW_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

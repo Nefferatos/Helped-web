@@ -23,6 +23,21 @@ export const getEnquiries = async (req: Request, res: Response) => {
   }
 }
 
+export const getUnreadEnquiryCount = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const enquiries = await getEnquiriesStore(undefined, agencyId)
+
+    res.status(200).json({
+      unreadCount: enquiries.length,
+      count: enquiries.length,
+    })
+  } catch (error) {
+    console.error('Error fetching unread enquiry count:', error)
+    res.status(500).json({ error: 'Failed to fetch unread enquiry count' })
+  }
+}
+
 export const createEnquiry = async (req: Request, res: Response) => {
   try {
     const body = req.body as {

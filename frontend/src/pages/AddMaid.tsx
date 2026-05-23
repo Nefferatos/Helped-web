@@ -353,6 +353,19 @@ const AddMaid = () => {
     setIsManagePhotosOpen(true);
   }, []);
 
+  const handleSingleFileSelection = useCallback(
+    async (
+      event: React.ChangeEvent<HTMLInputElement>,
+      handler: (file?: File) => Promise<void> | void,
+    ) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+      input.value = "";
+      await handler(file);
+    },
+    [],
+  );
+
   const handleImportExcel = useCallback(async (file?: File) => {
     if (!file) return;
     try {
@@ -752,7 +765,7 @@ const AddMaid = () => {
                       accept="image/*"
                       className="sr-only"
                       disabled={isUploadingPhoto}
-                      onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])}
+                      onChange={(e) => void handleSingleFileSelection(e, (file) => replacePhotoAt(0, file))}
                     />
                   </label>
 
@@ -817,7 +830,7 @@ const AddMaid = () => {
                       accept="image/*"
                       className="sr-only"
                       disabled={isUploadingPhoto}
-                      onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])}
+                      onChange={(e) => void handleSingleFileSelection(e, (file) => replacePhotoAt(1, file))}
                     />
                   </label>
 
@@ -872,7 +885,7 @@ const AddMaid = () => {
                           accept="image/*"
                           className="sr-only"
                           disabled={isUploadingPhoto || photos.length >= 5}
-                          onChange={(e) => void addExtraPhoto(e.target.files?.[0])}
+                          onChange={(e) => void handleSingleFileSelection(e, addExtraPhoto)}
                         />
                       </label>
                     )}
