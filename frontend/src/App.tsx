@@ -73,6 +73,9 @@ const EmploymentContractView = lazyRoute(() => import("@/pages/EmploymentContrac
 const EditEmployer = lazyRoute(() => import("@/pages/EditEmployer"));
 const AdminSupportChat = lazyRoute(() => import("@/pages/AdminSupportChat"));
 const RequestsPage = lazyRoute(() => import("@/pages/RequestsPage"));
+const AtsRecruitmentPage = lazyRoute(() => import("@/pages/AtsRecruitmentPage"));
+const PublicMaidApplicationPage = lazyRoute(() => import("@/pages/PublicMaidApplicationPage"));
+const PublicMaidApplicationStatusPage = lazyRoute(() => import("@/pages/PublicMaidApplicationStatusPage"));
 const NotFound = lazyRoute(() => import("@/pages/NotFound"));
 const AuthCallback = lazyRoute(() => import("@/pages/AuthCallback"));
 const PrivacyPolicy = lazyRoute(() => import("@/pages/PrivacyPolicy"));
@@ -308,6 +311,7 @@ const App = () => {
             <Route path="/agencyadmin/change-password" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/enquiry" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminEnquiry /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/requests" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/recruitment" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AtsRecruitmentPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/chat-support" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/new" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>)} />
@@ -346,6 +350,8 @@ const App = () => {
             <Route path="/userportal" element={withRouteLoader(<ClientHomeRedirect />)} />
             <Route path="/search-maids" element={withRouteLoader(<ClientMaidsPage resultsPath="/search-maids/results" />)} />
             <Route path="/search-maids/results" element={withRouteLoader(<MaidSearchPage basePath="/search-maids" />)} />
+            <Route path="/apply-as-maid" element={withRouteLoader(<PublicMaidApplicationPage />)} />
+            <Route path="/apply-as-maid/status/:applicationId" element={withRouteLoader(<PublicMaidApplicationStatusPage />)} />
             <Route path="/privacy-policy" element={withRouteLoader(<PrivacyPolicy />)} />
             <Route path="/data-deletion" element={withRouteLoader(<DataDeletion />)} />
             <Route path="/ai-workflows" element={withRouteLoader(<AiAutomationPage />)} />

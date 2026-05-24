@@ -17,6 +17,7 @@ import {
 import { adminPath } from "@/lib/routes";
 import { exportMaidProfileToPdf } from "@/lib/maidExport";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
+import WhatsAppConversationPanel from "@/components/whatsapp/WhatsAppConversationPanel";
 
 type LocationState = { fromView?: "public" | "hidden" };
 
@@ -914,6 +915,9 @@ const MaidProfilePage = () => {
         </div>
 
         {/* ── Footer ── */}
+        <div className="mb-4">
+          <WhatsAppConversationPanel referenceCode={maid.referenceCode} candidateName={maid.fullName} />
+        </div>
         <div className="flex items-center justify-between border-t pt-3 text-sm text-black">
           <span>Last updated: {formatDate(maid.updatedAt)}</span>
           <span>Hits: 1</span>

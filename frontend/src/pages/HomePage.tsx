@@ -15,6 +15,10 @@ interface DashboardSummary {
   maidsWithPhotos: number; enquiries: number; requests: number;
   pendingRequests: number; unreadAgencyChats: number;
   momPersonnel: number; testimonials: number; galleryImages: number;
+  whatsappMessagesSent: number; whatsappMessagesDelivered: number; whatsappMessagesRead: number;
+  whatsappResponseRate: number; whatsappAverageResponseTimeMinutes: number;
+  whatsappActiveConversations: number; whatsappPendingReplies: number;
+  whatsappInterviewConfirmations: number; whatsappDocumentSubmissionRate: number;
 }
 
 const useWindowWidth = () => {
@@ -414,6 +418,15 @@ const HomePage = () => {
           pendingRequests: data.pendingRequests ?? 0, unreadAgencyChats: data.unreadAgencyChats ?? 0,
           momPersonnel: data.momPersonnel ?? 0, testimonials: data.testimonials ?? 0,
           galleryImages: data.galleryImages ?? 0,
+          whatsappMessagesSent: data.whatsappMessagesSent ?? 0,
+          whatsappMessagesDelivered: data.whatsappMessagesDelivered ?? 0,
+          whatsappMessagesRead: data.whatsappMessagesRead ?? 0,
+          whatsappResponseRate: data.whatsappResponseRate ?? 0,
+          whatsappAverageResponseTimeMinutes: data.whatsappAverageResponseTimeMinutes ?? 0,
+          whatsappActiveConversations: data.whatsappActiveConversations ?? 0,
+          whatsappPendingReplies: data.whatsappPendingReplies ?? 0,
+          whatsappInterviewConfirmations: data.whatsappInterviewConfirmations ?? 0,
+          whatsappDocumentSubmissionRate: data.whatsappDocumentSubmissionRate ?? 0,
         });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to load dashboard summary");
@@ -503,6 +516,39 @@ const HomePage = () => {
       </div>
 
       {/* ── Bottom panels ── */}
+      <div style={{ background: "#fff", border: "1.5px solid #E2E8F0", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.05)", padding: compact ? "10px 12px" : "12px 14px", flexShrink: 0 }}>
+        <SectionHeader
+          icon={<MessageCircle size={12} color="#fff" />}
+          label="WhatsApp Recruitment"
+          iconGradient="linear-gradient(135deg, #0F766E, #10B981)"
+          badge={!loading && s ? (
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#065F46", background: "#ECFDF5", border: "1.5px solid #6EE7B7", padding: "2px 9px", borderRadius: 99 }}>
+              {s.whatsappActiveConversations} active
+            </span>
+          ) : undefined}
+        />
+        <div style={{ display: "grid", gridTemplateColumns: isSm ? "repeat(2, minmax(0,1fr))" : "repeat(5, minmax(0,1fr))", gap: compact ? 6 : 8 }}>
+          {[
+            { label: "Sent", value: s?.whatsappMessagesSent ?? 0, sub: "Messages sent" },
+            { label: "Read", value: s?.whatsappMessagesRead ?? 0, sub: `${s?.whatsappMessagesDelivered ?? 0} delivered` },
+            { label: "Response", value: s?.whatsappResponseRate ?? 0, sub: "Response rate %" },
+            { label: "Pending", value: s?.whatsappPendingReplies ?? 0, sub: "Replies waiting" },
+            { label: "Docs / Interviews", value: s?.whatsappDocumentSubmissionRate ?? 0, sub: `${s?.whatsappInterviewConfirmations ?? 0} confirmations` },
+          ].map((item) => (
+            <div key={item.label} style={{ borderRadius: 12, border: "1px solid #E2E8F0", background: "#F8FAFC", padding: "10px 12px" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#0F766E", letterSpacing: "0.06em", textTransform: "uppercase" }}>{item.label}</div>
+              <div style={{ marginTop: 4, fontSize: 24, fontWeight: 900, color: "#0F172A", lineHeight: 1 }}>{item.value}</div>
+              <div style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: "#64748B" }}>{item.sub}</div>
+            </div>
+          ))}
+        </div>
+        {!loading && s && (
+          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "#475569" }}>
+            Average response time: {s.whatsappAverageResponseTimeMinutes} min
+          </div>
+        )}
+      </div>
+
       <div style={{
         display: "grid",
         gridTemplateColumns: isSm ? "1fr" : "1fr 1fr",

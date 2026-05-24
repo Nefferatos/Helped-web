@@ -1,0 +1,161 @@
+{
+  "conversations": [],
+  "messages": [],
+  "templates": [
+    {
+      "id": "2c405811-aad0-4a1b-b2a5-741f4b95e015",
+      "agencyId": 1,
+      "key": "application_received",
+      "name": "Application Received",
+      "category": "application",
+      "language": "en",
+      "body": "Thank you for applying with our agency. We have received your application and will review your profile shortly.",
+      "variables": [],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "205d1070-18d6-4607-ab8a-9970cfe1845a",
+      "agencyId": 1,
+      "key": "missing_documents",
+      "name": "Missing Documents",
+      "category": "documents",
+      "language": "en",
+      "body": "We noticed some required documents are missing. Please upload your passport and training certificates using the provided link.",
+      "variables": [],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "2c39eefa-65c2-450c-8a80-a143cd675d26",
+      "agencyId": 1,
+      "key": "interview_scheduling",
+      "name": "Interview Scheduling",
+      "category": "interview",
+      "language": "en",
+      "body": "Your interview has been scheduled for {{date}} at {{time}}. Please confirm your availability.",
+      "variables": [
+        "date",
+        "time"
+      ],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "26afacb1-96e5-41f9-9ca1-b786774c0009",
+      "agencyId": 1,
+      "key": "interview_reminder_24h",
+      "name": "Interview Reminder 24h",
+      "category": "interview",
+      "language": "en",
+      "body": "Reminder: your interview is in 24 hours on {{date}} at {{time}}.",
+      "variables": [
+        "date",
+        "time"
+      ],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "16bdd6af-db2d-4e98-8684-e07964076a7f",
+      "agencyId": 1,
+      "key": "interview_reminder_1h",
+      "name": "Interview Reminder 1h",
+      "category": "interview",
+      "language": "en",
+      "body": "Reminder: your interview starts in 1 hour at {{time}}.",
+      "variables": [
+        "time"
+      ],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "2f2361f2-3d90-4f20-802e-e3be2380f9d4",
+      "agencyId": 1,
+      "key": "background_check_update",
+      "name": "Background Check Update",
+      "category": "background",
+      "language": "en",
+      "body": "Your application is currently undergoing verification. We will update you once the process is complete.",
+      "variables": [],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "a98cc87e-d2d7-4aa2-84ce-81e21890fb4c",
+      "agencyId": 1,
+      "key": "approval_notice",
+      "name": "Approval Notice",
+      "category": "approval",
+      "language": "en",
+      "body": "Congratulations! Your application has been approved and you are now available for employer matching.",
+      "variables": [],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "6ffdda8b-e694-42c6-9138-621f7b917333",
+      "agencyId": 1,
+      "key": "rejection_notice",
+      "name": "Rejection Notice",
+      "category": "approval",
+      "language": "en",
+      "body": "Thank you for your application. Unfortunately, we will not proceed further at this time.",
+      "variables": [],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "abb42df5-d378-47a7-8c1b-c1d8d10efbbd",
+      "agencyId": 1,
+      "key": "client_match_notification",
+      "name": "Client Match Notification",
+      "category": "matching",
+      "language": "en",
+      "body": "We found a potential employer match for your profile. Please review the details and confirm your interest.",
+      "variables": [],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "ec93dcca-3f79-4035-bea1-4e68a265e287",
+      "agencyId": 1,
+      "key": "deployment_preparation",
+      "name": "Deployment Preparation",
+      "category": "deployment",
+      "language": "en",
+      "body": "Your deployment process has started. Our team will guide you through the remaining steps.",
+      "variables": [],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    },
+    {
+      "id": "6db897f6-cbb7-49bc-bb4b-cf07fbead49d",
+      "agencyId": 1,
+      "key": "job_offer",
+      "name": "Job Offer",
+      "category": "matching",
+      "language": "en",
+      "body": "We are pleased to share a job offer with you. Please review the attached details and reply if you would like to proceed.",
+      "variables": [],
+      "active": true,
+      "createdAt": "2026-05-24T04:13:49.858Z",
+      "updatedAt": "2026-05-24T04:13:49.858Z"
+    }
+  ],
+  "attachments": [],
+  "events": [],
+  "broadcasts": [],
+  "messageLogs": []
+}

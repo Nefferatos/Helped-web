@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Hand,
   Sparkles,
+  Brain,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -94,6 +95,16 @@ const navItems = [
     iconBg: "linear-gradient(145deg, #FDE68A, #D97706)",
     iconShadow: "0 4px 0 #B45309, 0 6px 12px rgba(217,119,6,0.45)",
     iconShadowActive: "0 2px 0 #B45309, 0 3px 8px rgba(217,119,6,0.4)",
+    iconColor: "#fff",
+    badgeKey: null,
+  },
+  {
+    label: "Recruitment ATS",
+    path: adminPath("/recruitment"),
+    icon: Brain,
+    iconBg: "linear-gradient(145deg, #A7F3D0, #10B981)",
+    iconShadow: "0 4px 0 #059669, 0 6px 12px rgba(16,185,129,0.45)",
+    iconShadowActive: "0 2px 0 #059669, 0 3px 8px rgba(16,185,129,0.4)",
     iconColor: "#fff",
     badgeKey: null,
   },

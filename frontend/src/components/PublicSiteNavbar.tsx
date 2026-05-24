@@ -84,6 +84,23 @@ const PublicSiteNavbar = () => {
     </Link>
   );
 
+  const ApplyButton = () => (
+    <Link
+      to="/apply-as-maid"
+      className={cn(
+        "inline-flex items-center gap-2",
+        "rounded-[10px] border-b-[3px] border-amber-900",
+        "bg-[#f59e0b] px-4 py-[9px] text-white",
+        "text-[13.5px] font-bold tracking-wide",
+        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
+        "select-none"
+      )}
+    >
+      <span className="h-2 w-2 rounded-full bg-white/90" />
+      <span>Apply as a Maid</span>
+    </Link>
+  );
+
   const LoginButtonFull = () => (
     <Link
       to={loginPath}
@@ -110,6 +127,40 @@ const PublicSiteNavbar = () => {
       <span className="flex flex-1 items-center justify-center">
         Employer Login
       </span>
+    </Link>
+  );
+
+  const ApplyButtonFull = () => (
+    <Link
+      to="/apply-as-maid"
+      onClick={() => setIsMobileMenuOpen(false)}
+      className={cn(
+        "flex h-11 w-full items-center justify-center gap-2",
+        "rounded-[10px] border-b-[3px] border-amber-900",
+        "bg-[#f59e0b] px-4 text-[14px] font-bold tracking-wide text-white",
+        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
+        "select-none"
+      )}
+    >
+      <span className="h-2 w-2 rounded-full bg-white/90" />
+      <span>Apply as a Maid</span>
+    </Link>
+  );
+
+  const ApplyButtonCompact = () => (
+    <Link
+      to="/apply-as-maid"
+      className={cn(
+        "inline-flex h-[38px] items-center gap-2",
+        "rounded-[10px] border-b-[3px] border-amber-900",
+        "bg-[#f59e0b] px-3 text-[12px] font-bold tracking-wide text-white",
+        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
+        "select-none"
+      )}
+    >
+      <span className="h-2 w-2 rounded-full bg-white/90" />
+      <span className="hidden sm:inline">Apply as a Maid</span>
+      <span className="sm:hidden">Apply</span>
     </Link>
   );
 
@@ -149,7 +200,8 @@ const PublicSiteNavbar = () => {
         </nav>
 
         {/* Desktop: login or avatar — always visible on all pages */}
-        <div className="ml-auto hidden shrink-0 lg:flex">
+        <div className="ml-auto hidden shrink-0 items-center gap-3 lg:flex">
+          <ApplyButton />
           {clientUser ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -188,6 +240,9 @@ const PublicSiteNavbar = () => {
 
         {/* Tablet + Mobile: hamburger */}
         <div className="ml-auto flex items-center lg:hidden">
+          <div className="mr-2">
+            <ApplyButtonCompact />
+          </div>
           {clientUser && (
             <button className="mr-2 hidden items-center gap-2 rounded-full border-2 border-green-200 bg-green-50 py-1 pl-1 pr-2.5 sm:flex">
               <Avatar className="h-7 w-7">
@@ -256,7 +311,8 @@ const PublicSiteNavbar = () => {
             </nav>
 
             {/* Mobile login section — always visible on all pages */}
-            <div className="border-t border-green-100 p-4">
+            <div className="space-y-3 border-t border-green-100 p-4">
+              <ApplyButtonFull />
               {clientUser ? (
                 <div className="space-y-2.5">
                   <div className="flex items-center gap-3 px-1 py-1">

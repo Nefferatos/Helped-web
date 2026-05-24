@@ -1048,6 +1048,48 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
+      {!isLoggedIn && (
+        <section
+          style={{
+            background: "linear-gradient(90deg, #FFE000 0%, #F5C800 100%)",
+            borderTop: "1px solid rgba(6,24,0,0.08)",
+            borderBottom: "1px solid rgba(6,24,0,0.08)",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 1280,
+              margin: "0 auto",
+              padding: "14px 24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <p
+                className="hero-headline"
+                style={{ margin: 0, fontSize: 18, fontWeight: 900, color: "#061800" }}
+              >
+                Looking for maid work?
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: "#3F4C00" }}>
+                Apply directly through our recruitment portal and send your documents online.
+              </p>
+            </div>
+            <Link
+              to="/apply-as-maid"
+              className="btn-yellow"
+              style={{ flexShrink: 0 }}
+            >
+              Apply as a Maid <ArrowRight size={15} />
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* ── HERO ── */}
       <section style={{ background: "linear-gradient(135deg, #061800 0%, #0B2E00 40%, #145200 100%)", position: "relative", overflow: "hidden" }}>
         <div className="hero-noise" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }} />

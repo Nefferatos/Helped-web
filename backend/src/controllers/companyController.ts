@@ -16,6 +16,7 @@ import {
   updateMomPersonnelStore,
 } from '../store'
 import { getRequestMetricsByAgencyId } from '../repositories/requestRepository'
+import { getWhatsAppDashboardMetrics } from '../whatsappStore'
 
 interface CompanyProfile {
   id?: number
@@ -61,12 +62,13 @@ export const getCompanyProfile = async (req: Request, res: Response) => {
 export const getCompanySummary = async (req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(req)
-    const [companyBundle, maids, enquiries, requestMetrics, unreadAgencyChats] = await Promise.all([
+    const [companyBundle, maids, enquiries, requestMetrics, unreadAgencyChats, whatsappMetrics] = await Promise.all([
       getCompanyBundle(),
       getMaidsStore(undefined, undefined, agencyId),
       getEnquiriesStore(undefined, agencyId),
       getRequestMetricsByAgencyId(agencyId),
       getUnreadAgencyChatCountStore(agencyId),
+      getWhatsAppDashboardMetrics(agencyId),
     ])
 
     const publicMaids = maids.filter((maid) => maid.isPublic).length
@@ -89,6 +91,15 @@ export const getCompanySummary = async (req: Request, res: Response) => {
       requests: requestMetrics.total,
       pendingRequests: requestMetrics.pending,
       unreadAgencyChats,
+      whatsappMessagesSent: whatsappMetrics.messagesSent,
+      whatsappMessagesDelivered: whatsappMetrics.messagesDelivered,
+      whatsappMessagesRead: whatsappMetrics.messagesRead,
+      whatsappResponseRate: whatsappMetrics.responseRate,
+      whatsappAverageResponseTimeMinutes: whatsappMetrics.averageResponseTimeMinutes,
+      whatsappActiveConversations: whatsappMetrics.activeConversations,
+      whatsappPendingReplies: whatsappMetrics.pendingReplies,
+      whatsappInterviewConfirmations: whatsappMetrics.interviewConfirmations,
+      whatsappDocumentSubmissionRate: whatsappMetrics.documentSubmissionRate,
       momPersonnel: companyBundle.momPersonnel.length,
       testimonials: companyBundle.testimonials.length,
       galleryImages: companyBundle.companyProfile.gallery_image_data_urls?.length ?? 0,

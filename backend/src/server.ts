@@ -26,6 +26,8 @@ import matchingWorkflowRoutes from './routes/matchingWorkflowRoutes'
 import automationRoutes from './routes/automationRoutes'
 import aiRoutes from './routes/aiRoutes'
 import shareRoutes from './routes/shareRoutes'
+import whatsappRoutes from './routes/whatsappRoutes'
+import atsRoutes from './routes/atsRoutes'
 import { initializeDatabase } from './db'
 import {
   getAgencyAdminsStore,
@@ -36,6 +38,8 @@ import {
 } from './store'
 import { syncAgencyAdminsFromStoreRecords } from './repositories/agencyAdminRepository'
 import { initializeWorkflowStore } from './store/workflowStore'
+import { initializeWhatsAppStore } from './whatsappStore'
+import { initializeAtsStore } from './atsStore'
 import { saveEmployerContract } from './controllers/employerController'
 
 const app: Express = express()
@@ -131,6 +135,8 @@ app.use('/api/chats', chatRoutes)
 app.use('/api/leads', leadWorkflowRoutes)
 app.use('/api/inquiry', inquiryWorkflowRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/whatsapp', whatsappRoutes)
+app.use('/api/ats', atsRoutes)
 
 // ─── Share route ──────────────────────────────────────────────────────────────
 // IMPORTANT: Must be mounted BEFORE the generic /api catch-all routers below.
@@ -201,6 +207,8 @@ const startServer = async () => {
   try {
     await initializeStore()
     await initializeWorkflowStore()
+    await initializeWhatsAppStore()
+    await initializeAtsStore()
 
     try {
       await initializeDatabase()
