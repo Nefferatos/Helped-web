@@ -117,6 +117,7 @@ export interface MaidProfileRecord {
   maidReferenceCode?: string
   fullName: string
   email: string
+  whatsappNumber?: string
   nationality: string
   dateOfBirth: string
   age: number | null
@@ -144,6 +145,7 @@ export interface MaidProfileRecord {
   certificationStatus: 'missing' | 'submitted' | 'verified'
   introductionVideoUrl?: string
   workHistory: Array<Record<string, unknown>>
+  fdwFormData?: Record<string, unknown>
   strengthsTags: string[]
   weaknessesTags: string[]
   clientMatchScore?: number
@@ -265,6 +267,8 @@ export interface PublicApplicantSubmissionInput {
   expectedSalary: number | null
   employmentPreference: string
   coverNote: string
+  workHistory: Array<Record<string, unknown>>
+  fdwFormData: Record<string, unknown>
   files: PublicApplicantFileInput[]
 }
 
@@ -425,6 +429,7 @@ const profileFromMaid = (maid: MaidRecord, applicationId: string): MaidProfileRe
     maidReferenceCode: maid.referenceCode,
     fullName: maid.fullName,
     email: '',
+    whatsappNumber: String(agencyContact.phone || agencyContact.homeCountryContactNumber || ''),
     nationality: maid.nationality,
     dateOfBirth: maid.dateOfBirth,
     age: calculateAge(maid.dateOfBirth),
@@ -456,6 +461,7 @@ const profileFromMaid = (maid: MaidRecord, applicationId: string): MaidProfileRe
     certificationStatus: certifications.length > 0 ? 'submitted' : 'missing',
     introductionVideoUrl: maid.videoDataUrl || '',
     workHistory: Array.isArray(maid.employmentHistory) ? maid.employmentHistory : [],
+    fdwFormData: {},
     strengthsTags: [],
     weaknessesTags: [],
     createdAt: now(),
@@ -825,6 +831,7 @@ export const createPublicAtsApplication = async (payload: PublicApplicantSubmiss
     applicationId,
     fullName: payload.fullName,
     email: payload.email,
+    whatsappNumber: payload.contactNumber,
     nationality: payload.nationality,
     dateOfBirth: payload.dateOfBirth,
     age: calculateAge(payload.dateOfBirth),
@@ -851,9 +858,22 @@ export const createPublicAtsApplication = async (payload: PublicApplicantSubmiss
     passportStatus: uploadedDocs.some((item) => item.type === 'passport') ? 'submitted' : 'missing',
     certificationStatus: uploadedDocs.some((item) => item.type === 'certificate') ? 'submitted' : 'missing',
     introductionVideoUrl: uploadedDocs.find((item) => item.type === 'video')?.url,
-    workHistory: [],
-    strengthsTags: payload.languageSkills.slice(0, 3),
-    weaknessesTags: [],
+    workHistory: payload.workHistory,
+    fdwFormData: payload.fdwFormData,
+    strengthsTags: normalizeStringArray([
+      ...payload.languageSkills.slice(0, 2),
+      payload.childcareExperience > 0 ? 'Childcare' : '',
+      payload.newbornCareExperience > 0 ? 'Newborn care' : '',
+      payload.elderlyCareExperience > 0 ? 'Elderly care' : '',
+      payload.disabledCareExperience > 0 ? 'Disabled care' : '',
+      payload.housekeepingExperience > 0 ? 'Housekeeping' : '',
+      payload.cookingSkills[0] ?? '',
+    ]).slice(0, 6),
+    weaknessesTags: normalizeStringArray([
+      payload.files.some((item) => item.kind === 'passport') ? '' : 'Passport missing',
+      payload.files.some((item) => item.kind === 'certificate') ? '' : 'Certificates missing',
+      payload.yearsOfExperience < 2 ? 'Limited experience' : '',
+    ]),
     createdAt,
     updatedAt: createdAt,
   }
@@ -1023,7 +1043,9 @@ export const listAtsApplications = async (
     if (match.compatibilityScore > current) matchesByApplication.set(match.applicationId, match.compatibilityScore)
   })
 
-  let items = data.applications.filter((application) => application.agencyId === agencyId)
+  let items = data.applications.filter(
+    (application) => application.agencyId === agencyId && application.source === 'resume_upload'
+  )
 
   items = items.filter((application) => {
     const profile = profilesByApplication.get(application.id)
@@ -1031,10 +1053,14 @@ export const listAtsApplications = async (
 
     const text = [
       profile.fullName,
+      profile.email,
+      profile.contactNumber,
       profile.nationality,
       profile.languageSkills.join(' '),
       profile.cookingSkills.join(' '),
       profile.certifications.join(' '),
+      profile.employmentPreference,
+      profile.strengthsTags.join(' '),
       application.status,
       profile.maidReferenceCode ?? '',
     ]
@@ -1065,6 +1091,12 @@ export const listAtsApplications = async (
 
     const salaryMax = Number(filters.salaryMax ?? NaN)
     if (Number.isFinite(salaryMax) && (profile.expectedSalary ?? 0) > salaryMax) return false
+
+    const hasEmail = Boolean(filters.hasEmail)
+    if (hasEmail && !profile.email.trim()) return false
+
+    const hasWhatsApp = Boolean(filters.hasWhatsApp)
+    if (hasWhatsApp && !profile.contactNumber.trim()) return false
 
     const availableOnly = Boolean(filters.availableImmediately)
     if (availableOnly && !profile.availableDate) return false
@@ -1112,6 +1144,8 @@ export const listAtsApplications = async (
         return String(leftProfile.availableDate).localeCompare(String(rightProfile.availableDate))
       case 'applicationDate:desc':
         return new Date(right.appliedAt).getTime() - new Date(left.appliedAt).getTime()
+      case 'applicationDate:asc':
+        return new Date(left.appliedAt).getTime() - new Date(right.appliedAt).getTime()
       case 'interviewRating:desc':
         return rightInterview - leftInterview
       case 'referenceRating:desc':
@@ -1123,6 +1157,10 @@ export const listAtsApplications = async (
         return rightProfile.languageSkills.length - leftProfile.languageSkills.length
       case 'clientMatchScore:desc':
         return rightMatch - leftMatch
+      case 'expectedSalary:asc':
+        return (leftProfile.expectedSalary ?? Number.MAX_SAFE_INTEGER) - (rightProfile.expectedSalary ?? Number.MAX_SAFE_INTEGER)
+      case 'name:asc':
+        return leftProfile.fullName.localeCompare(rightProfile.fullName)
       default:
         return rightScore - leftScore
     }
@@ -1459,7 +1497,9 @@ export const matchApplicationsToRequirement = async (
 
 export const getAtsDashboard = async (agencyId: number) => {
   const data = await readData()
-  const items = data.applications.filter((item) => item.agencyId === agencyId)
+  const items = data.applications.filter(
+    (item) => item.agencyId === agencyId && item.source === 'resume_upload'
+  )
   const scores = data.scores.filter((item) =>
     items.some((application) => application.id === item.applicationId)
   )

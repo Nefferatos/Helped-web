@@ -15,7 +15,6 @@ import {
   fetchAtsPresets,
   matchAtsCandidates,
   saveAtsPreset,
-  syncAtsFromMaids,
   updateAtsStage,
   type AtsApplicationListItem,
 } from "@/lib/ats";
@@ -26,10 +25,10 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Filter,
-  LayoutGrid,
-  List,
-  RefreshCw,
+  Mail,
+  MessageCircle,
   Search,
+  SlidersHorizontal,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -61,17 +60,28 @@ const formatDate = (value?: string) => {
   return date.toLocaleDateString();
 };
 
+const makeWhatsAppHref = (value?: string) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits ? `https://wa.me/${digits}` : "";
+};
+
+const filterChipClassName =
+  "rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700";
+
 const AtsRecruitmentPage = () => {
   const queryClient = useQueryClient();
-  const [view, setView] = useState<"kanban" | "table" | "cards">("kanban");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [matchingPrompt, setMatchingPrompt] = useState(
     "Need Indonesian maid. Can care for newborn. Can cook Chinese food. Budget SGD 700.",
   );
-  const [filters, setFilters] = useState<Record<string, unknown>>({});
   const [presetName, setPresetName] = useState("");
+  const [filters, setFilters] = useState<Record<string, unknown>>({
+    hasWhatsApp: true,
+    status: ["New Applicant", "Documents Submitted", "Resume Parsed", "Screening Interview", "Approved", "Ready For Client Matching"],
+  });
+  const [sort, setSort] = useState("qualificationScore:desc");
 
   const dashboardQuery = useQuery({
     queryKey: ["ats-dashboard"],
@@ -79,12 +89,12 @@ const AtsRecruitmentPage = () => {
   });
 
   const applicationsQuery = useQuery({
-    queryKey: ["ats-applications", search, JSON.stringify(filters)],
+    queryKey: ["ats-applications", search, sort, JSON.stringify(filters)],
     queryFn: () =>
       fetchAtsApplications({
         q: search,
         filters,
-        sort: "qualificationScore:desc",
+        sort,
         page: 1,
         pageSize: 120,
       }),
@@ -99,16 +109,6 @@ const AtsRecruitmentPage = () => {
     queryKey: ["ats-application", selectedId],
     enabled: Boolean(selectedId),
     queryFn: () => fetchAtsApplication(selectedId!),
-  });
-
-  const syncMutation = useMutation({
-    mutationFn: syncAtsFromMaids,
-    onSuccess: (data) => {
-      toast.success(`ATS synchronized from ${data.synced} maid records`);
-      void queryClient.invalidateQueries({ queryKey: ["ats-dashboard"] });
-      void queryClient.invalidateQueries({ queryKey: ["ats-applications"] });
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to sync ATS"),
   });
 
   const stageMutation = useMutation({
@@ -153,6 +153,15 @@ const AtsRecruitmentPage = () => {
   const applications = applicationsQuery.data?.data ?? [];
   const detail = detailQuery.data;
 
+  const selectedCount = selectedIds.length;
+  const activeFilterCount = useMemo(
+    () =>
+      Object.entries(filters).filter(([, value]) =>
+        Array.isArray(value) ? value.length > 0 : Boolean(value),
+      ).length,
+    [filters],
+  );
+
   const grouped = useMemo(() => {
     const map = new Map<string, AtsApplicationListItem[]>();
     pipelineStages.forEach((stage) => map.set(stage, []));
@@ -167,42 +176,27 @@ const AtsRecruitmentPage = () => {
   const toggleSelect = (id: string) =>
     setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
 
-  const cardGrid = (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {applications.map((item) => (
-        <Card key={item.id} className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <button className="text-left text-base font-semibold hover:underline" onClick={() => setSelectedId(item.id)}>
-                {item.profile.fullName}
-              </button>
-              <p className="text-sm text-muted-foreground">
-                {item.maidReferenceCode || "Applicant"} · {item.profile.nationality}
-              </p>
-            </div>
-            <Badge className={scoreTone(item.score?.score)}>{item.score?.score ?? 0}</Badge>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <Badge variant="outline">{item.status}</Badge>
-            <Badge variant="outline">{item.profile.yearsOfExperience} yrs</Badge>
-            <Badge variant="outline">{item.profile.languageSkills.length} langs</Badge>
-            <Badge variant="outline">{item.clientMatchScore ?? 0} match</Badge>
-          </div>
-          <p className="mt-3 text-sm text-muted-foreground">
-            {item.score?.explanation || "Qualification score pending"}
-          </p>
-          <div className="mt-4 flex items-center justify-between">
-            <Button variant="outline" size="sm" onClick={() => setSelectedId(item.id)}>
-              Profile
-            </Button>
-            <Button size="sm" onClick={() => stageMutation.mutate({ applicationId: item.id, stage: "Approved" })}>
-              Approve
-            </Button>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
+  const toggleStageFilter = (stage: string) =>
+    setFilters((current) => {
+      const currentStages = Array.isArray(current.status) ? (current.status as string[]) : [];
+      const nextStages = currentStages.includes(stage)
+        ? currentStages.filter((item) => item !== stage)
+        : [...currentStages, stage];
+      return { ...current, status: nextStages };
+    });
+
+  const setQuickFilter = (next: Record<string, unknown>) => setFilters(next);
+
+  const scoreFactors = detail?.score?.factors
+    ? [
+        ["Experience", detail.score.factors.experience],
+        ["Skill Match", detail.score.factors.skillMatch],
+        ["Certifications", detail.score.factors.certifications],
+        ["References", detail.score.factors.references],
+        ["Languages", detail.score.factors.languageSkills],
+        ["Interview", detail.score.factors.interviewRating],
+      ]
+    : [];
 
   return (
     <div className="space-y-6">
@@ -211,24 +205,28 @@ const AtsRecruitmentPage = () => {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Recruitment ATS</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-              Maid Recruitment, Qualification, and Hiring
+              Maid Applicant Shortlisting and Recruiter Follow-up
             </h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              Automated intake, AI-style parsing, scoring, background verification, interview tracking,
-              workflow automation, client matching, and bulk candidate management in one recruiter workspace.
+              Review only new maid applicants from the public application portal, use automated qualification scores
+              to sort them, and contact each candidate quickly by WhatsApp or email from one screen.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline">
               <Link to="/apply-as-maid">Open Recruitment Portal</Link>
             </Button>
-            <Button variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Sync Existing Maids
-            </Button>
-            <Button onClick={() => stageMutation.mutate({ applicationId: selectedId || applications[0]?.id || "", stage: "Ready For Client Matching" })} disabled={!selectedId && !applications.length}>
+            <Button
+              onClick={() =>
+                stageMutation.mutate({
+                  applicationId: selectedId || applications[0]?.id || "",
+                  stage: "Ready For Client Matching",
+                })
+              }
+              disabled={!selectedId && !applications.length}
+            >
               <CheckCircle2 className="mr-2 h-4 w-4" />
-              Auto-Queue Ready Candidate
+              Queue Ready Candidate
             </Button>
           </div>
         </div>
@@ -256,137 +254,327 @@ const AtsRecruitmentPage = () => {
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <Card className="p-5">
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2">
-              <Button variant={view === "kanban" ? "default" : "outline"} size="sm" onClick={() => setView("kanban")}>
-                <LayoutGrid className="mr-2 h-4 w-4" />
-                Kanban
-              </Button>
-              <Button variant={view === "cards" ? "default" : "outline"} size="sm" onClick={() => setView("cards")}>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Cards
-              </Button>
-              <Button variant={view === "table" ? "default" : "outline"} size="sm" onClick={() => setView("table")}>
-                <List className="mr-2 h-4 w-4" />
-                Table
-              </Button>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[240px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, nationality, skill, certification..." />
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setFilters({ minExperience: 3, childcareExperience: true, availableImmediately: true })}>
-                <Filter className="mr-2 h-4 w-4" />
-                Childcare Filter
-              </Button>
-            </div>
-          </div>
-
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            {presetsQuery.data?.presets.map((preset) => (
-              <Button key={preset.id} variant="ghost" size="sm" onClick={() => setFilters(preset.filters)}>
-                {preset.name}
-              </Button>
-            ))}
-          </div>
-
-          {view === "kanban" && (
-            <div className="grid gap-4 xl:grid-cols-4">
-              {pipelineStages.map((stage) => (
-                <div key={stage} className="rounded-2xl border bg-slate-50 p-3">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-800">{stage}</h3>
-                    <Badge variant="outline">{grouped.get(stage)?.length ?? 0}</Badge>
-                  </div>
-                  <div className="space-y-3">
-                    {(grouped.get(stage) ?? []).map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setSelectedId(item.id)}
-                        className="w-full rounded-xl border bg-white p-3 text-left shadow-sm transition hover:border-emerald-300"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold text-slate-900">{item.profile.fullName}</p>
-                          <Badge className={scoreTone(item.score?.score)}>{item.score?.score ?? 0}</Badge>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-500">{item.profile.nationality} · {item.profile.yearsOfExperience} yrs</p>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {item.profile.languageSkills.slice(0, 2).map((language) => (
-                            <Badge key={language} variant="outline">{language}</Badge>
-                          ))}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+      <section className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
+        <div className="space-y-6">
+          <Card className="p-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative min-w-[240px] flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    className="pl-9"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search name, nationality, language, cooking, email, or WhatsApp..."
+                  />
                 </div>
-              ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center gap-2 rounded-xl border bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    <SlidersHorizontal className="h-4 w-4 text-emerald-600" />
+                    {activeFilterCount} active filters
+                  </div>
+                  <select
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                    value={sort}
+                    onChange={(event) => setSort(event.target.value)}
+                  >
+                    <option value="qualificationScore:desc">Sort: Best score</option>
+                    <option value="applicationDate:desc">Sort: Newest first</option>
+                    <option value="applicationDate:asc">Sort: Oldest first</option>
+                    <option value="experience:desc">Sort: Most experience</option>
+                    <option value="clientMatchScore:desc">Sort: Best client match</option>
+                    <option value="expectedSalary:asc">Sort: Lowest salary</option>
+                    <option value="name:asc">Sort: Name A-Z</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={filterChipClassName}
+                  onClick={() => setQuickFilter({ hasWhatsApp: true, minScore: 70 })}
+                >
+                  WhatsApp + score 70+
+                </button>
+                <button
+                  type="button"
+                  className={filterChipClassName}
+                  onClick={() => setQuickFilter({ minExperience: 3, childcareExperience: true, hasWhatsApp: true })}
+                >
+                  Childcare shortlist
+                </button>
+                <button
+                  type="button"
+                  className={filterChipClassName}
+                  onClick={() => setQuickFilter({ elderlyCareExperience: true, hasWhatsApp: true })}
+                >
+                  Elderly care
+                </button>
+                <button
+                  type="button"
+                  className={filterChipClassName}
+                  onClick={() => setQuickFilter({ availableImmediately: true, hasWhatsApp: true })}
+                >
+                  Available now
+                </button>
+                <button
+                  type="button"
+                  className={filterChipClassName}
+                  onClick={() => setQuickFilter({ status: ["Approved", "Ready For Client Matching"], hasWhatsApp: true })}
+                >
+                  Ready to market
+                </button>
+                <button type="button" className={filterChipClassName} onClick={() => setFilters({})}>
+                  Clear all
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-emerald-600" />
+                  <p className="text-sm font-semibold text-slate-900">Pipeline filter</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {pipelineStages.map((stage) => {
+                    const active = Array.isArray(filters.status) && (filters.status as string[]).includes(stage);
+                    return (
+                      <button
+                        key={stage}
+                        type="button"
+                        onClick={() => toggleStageFilter(stage)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          active ? "bg-emerald-600 text-white" : "bg-white text-slate-700 ring-1 ring-slate-200"
+                        }`}
+                      >
+                        {stage} ({grouped.get(stage)?.length ?? 0})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {presetsQuery.data?.presets.map((preset) => (
+                  <Button key={preset.id} variant="ghost" size="sm" onClick={() => setFilters(preset.filters)}>
+                    {preset.name}
+                  </Button>
+                ))}
+              </div>
             </div>
-          )}
+          </Card>
 
-          {view === "cards" && cardGrid}
-
-          {view === "table" && (
-            <div className="overflow-x-auto rounded-2xl border">
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-950">Applicant List</h2>
+                <p className="text-sm text-slate-500">
+                  {applicationsQuery.data?.pageInfo.total ?? 0} applicants matched
+                </p>
+              </div>
+              <Badge variant="outline">{selectedCount} selected</Badge>
+            </div>
+            <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left">
+                <thead className="bg-slate-50 text-left text-slate-600">
                   <tr>
-                    <th className="px-3 py-2">Pick</th>
-                    <th className="px-3 py-2">Candidate</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Score</th>
-                    <th className="px-3 py-2">Experience</th>
-                    <th className="px-3 py-2">Languages</th>
-                    <th className="px-3 py-2">Match</th>
+                    <th className="px-4 py-3">Pick</th>
+                    <th className="px-4 py-3">Applicant</th>
+                    <th className="px-4 py-3">Contact</th>
+                    <th className="px-4 py-3">Score</th>
+                    <th className="px-4 py-3">Skills</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {applications.map((item) => (
-                    <tr key={item.id} className="border-t">
-                      <td className="px-3 py-2">
+                    <tr
+                      key={item.id}
+                      className={`border-t transition hover:bg-emerald-50/40 ${
+                        selectedId === item.id ? "bg-emerald-50/60" : "bg-white"
+                      }`}
+                    >
+                      <td className="px-4 py-3 align-top">
                         <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelect(item.id)} />
                       </td>
-                      <td className="px-3 py-2">
-                        <button className="font-semibold hover:underline" onClick={() => setSelectedId(item.id)}>
-                          {item.profile.fullName}
+                      <td className="px-4 py-3 align-top">
+                        <button className="text-left" onClick={() => setSelectedId(item.id)}>
+                          <div className="font-semibold text-slate-900 hover:underline">{item.profile.fullName}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {item.maidReferenceCode || item.applicationCode} · {item.profile.nationality} · {item.profile.yearsOfExperience} yrs
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {item.profile.strengthsTags.slice(0, 3).map((tag) => (
+                              <Badge key={tag} variant="outline">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
                         </button>
-                        <div className="text-xs text-slate-500">{item.maidReferenceCode || "Applicant"} · {item.profile.nationality}</div>
                       </td>
-                      <td className="px-3 py-2">{item.status}</td>
-                      <td className="px-3 py-2"><Badge className={scoreTone(item.score?.score)}>{item.score?.score ?? 0}</Badge></td>
-                      <td className="px-3 py-2">{item.profile.yearsOfExperience} yrs</td>
-                      <td className="px-3 py-2">{item.profile.languageSkills.join(", ") || "N/A"}</td>
-                      <td className="px-3 py-2">{item.clientMatchScore ?? 0}</td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="space-y-2">
+                          <div className="text-xs text-slate-600">{item.profile.contactNumber || "No WhatsApp"}</div>
+                          <div className="text-xs text-slate-600">{item.profile.email || "No email"}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <Badge className={scoreTone(item.score?.score)}>{item.score?.score ?? 0}</Badge>
+                        <p className="mt-2 max-w-[220px] text-xs text-slate-500">
+                          {item.score?.explanation || "Qualification score pending"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="space-y-2">
+                          <div className="text-xs text-slate-600">{item.profile.languageSkills.join(", ") || "No languages listed"}</div>
+                          <div className="text-xs text-slate-600">{item.profile.cookingSkills.join(", ") || "No cooking notes"}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <Badge variant="outline">{item.status}</Badge>
+                        <div className="mt-2 text-xs text-slate-500">
+                          Match {item.clientMatchScore ?? 0} · Salary {item.profile.expectedSalary ?? "N/A"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setSelectedId(item.id)}>
+                            Profile
+                          </Button>
+                          {makeWhatsAppHref(item.profile.contactNumber) ? (
+                            <Button asChild size="sm" variant="outline">
+                              <a href={makeWhatsAppHref(item.profile.contactNumber)} target="_blank" rel="noreferrer">
+                                <MessageCircle className="mr-2 h-4 w-4" />
+                                WhatsApp
+                              </a>
+                            </Button>
+                          ) : null}
+                          {item.profile.email ? (
+                            <Button asChild size="sm" variant="outline">
+                              <a href={`mailto:${item.profile.email}`}>
+                                <Mail className="mr-2 h-4 w-4" />
+                                Email
+                              </a>
+                            </Button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </Card>
+          </Card>
+        </div>
 
         <div className="space-y-6">
           <Card className="p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-950">Bulk Actions</h2>
-              <Badge variant="outline">{selectedIds.length} selected</Badge>
+              <Badge variant="outline">{selectedCount} selected</Badge>
             </div>
             <div className="grid gap-2">
-              <Button variant="outline" onClick={() => bulkMutation.mutate({ applicationIds: selectedIds, action: "approve" })} disabled={selectedIds.length === 0}>
-                Approve Multiple Candidates
+              <Button variant="outline" onClick={() => bulkMutation.mutate({ applicationIds: selectedIds, action: "approve" })} disabled={selectedCount === 0}>
+                Approve Selected
               </Button>
-              <Button variant="outline" onClick={() => bulkMutation.mutate({ applicationIds: selectedIds, action: "reject" })} disabled={selectedIds.length === 0}>
-                Reject Multiple Candidates
-              </Button>
-              <Button variant="outline" onClick={() => bulkMutation.mutate({ applicationIds: selectedIds, action: "request_documents" })} disabled={selectedIds.length === 0}>
-                Request Documents
-              </Button>
-              <Button variant="outline" onClick={() => bulkMutation.mutate({ applicationIds: selectedIds, action: "assign_interview" })} disabled={selectedIds.length === 0}>
+              <Button variant="outline" onClick={() => bulkMutation.mutate({ applicationIds: selectedIds, action: "assign_interview" })} disabled={selectedCount === 0}>
                 Assign Interview
               </Button>
+              <Button variant="outline" onClick={() => bulkMutation.mutate({ applicationIds: selectedIds, action: "request_documents" })} disabled={selectedCount === 0}>
+                Request Documents
+              </Button>
+              <Button variant="outline" onClick={() => bulkMutation.mutate({ applicationIds: selectedIds, action: "reject" })} disabled={selectedCount === 0}>
+                Reject Selected
+              </Button>
             </div>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-lg font-bold text-slate-950">Selected Applicant</h2>
+            {!selectedId && <p className="mt-3 text-sm text-slate-600">Choose an applicant from the list to inspect contact details, score factors, work history, and documents.</p>}
+            {detail && (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-2xl border bg-slate-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-bold text-slate-950">{String(detail.profile?.fullName || detail.application.profile.fullName)}</p>
+                      <p className="text-sm text-slate-500">
+                        {String(detail.profile?.nationality || detail.application.profile.nationality)} · {String(detail.application.status)}
+                      </p>
+                    </div>
+                    <Badge className={scoreTone(detail.score?.score)}>{detail.score?.score ?? 0}</Badge>
+                  </div>
+                  <p className="mt-3 text-sm text-slate-600">{detail.score?.explanation || detail.application.aiParseSummary}</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <a
+                      href={makeWhatsAppHref(String(detail.profile?.contactNumber || detail.application.profile.contactNumber || "")) || undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-2xl border bg-white p-3 text-sm"
+                    >
+                      <p className="font-semibold text-slate-900">WhatsApp</p>
+                      <p className="mt-1 text-slate-600">{String(detail.profile?.contactNumber || detail.application.profile.contactNumber || "Not provided")}</p>
+                    </a>
+                    <a
+                      href={detail.profile?.email ? `mailto:${String(detail.profile.email)}` : undefined}
+                      className="rounded-2xl border bg-white p-3 text-sm"
+                    >
+                      <p className="font-semibold text-slate-900">Email</p>
+                      <p className="mt-1 text-slate-600">{String(detail.profile?.email || "Not provided")}</p>
+                    </a>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border p-4">
+                  <h3 className="font-semibold text-slate-900">Score Breakdown</h3>
+                  <div className="mt-3 space-y-3">
+                    {scoreFactors.map(([label, value]) => (
+                      <div key={label}>
+                        <div className="mb-1 flex items-center justify-between text-xs text-slate-600">
+                          <span>{label}</span>
+                          <span>{value}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100">
+                          <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${value}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {(detail.score?.strengths ?? []).map((item) => <Badge key={item} variant="outline">{item}</Badge>)}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(detail.score?.weaknesses ?? []).map((item) => <Badge key={item} variant="outline">{item}</Badge>)}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border p-4">
+                  <h3 className="font-semibold text-slate-900">Documents</h3>
+                  <div className="mt-2 space-y-2">
+                    {detail.documents.map((document) => (
+                      <div key={document.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                        <span>{document.name}</span>
+                        <Badge variant="outline">{document.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border p-4">
+                  <h3 className="font-semibold text-slate-900">Status History</h3>
+                  <div className="mt-3 space-y-3">
+                    {detail.history.map((item) => (
+                      <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                        <div className="font-medium text-slate-900">{item.fromStage ? `${item.fromStage} -> ${item.toStage}` : item.toStage}</div>
+                        <div className="text-xs text-slate-500">{item.actor} · {formatDate(item.createdAt)}</div>
+                        <div className="mt-1 text-slate-600">{item.reason}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </Card>
 
           <Card className="p-5">
@@ -424,77 +612,6 @@ const AtsRecruitmentPage = () => {
             </div>
           </Card>
         </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-        <Card className="p-5">
-          <h2 className="text-lg font-bold text-slate-950">Hiring Funnel</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-4">
-            {dashboard?.funnel.map((stage) => (
-              <div key={stage.stage} className="rounded-2xl border bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{stage.stage}</p>
-                <p className="mt-2 text-3xl font-black text-slate-950">{stage.count}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="text-lg font-bold text-slate-950">Candidate Profile & Timeline</h2>
-          {!selectedId && <p className="mt-3 text-sm text-slate-600">Select any candidate from the pipeline to inspect the full ATS profile, score explanation, timeline, interviews, and background checks.</p>}
-          {detail && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-2xl border bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-bold text-slate-950">{String(detail.profile?.fullName || detail.application.profile.fullName)}</p>
-                    <p className="text-sm text-slate-500">
-                      {String(detail.profile?.nationality || detail.application.profile.nationality)} · {String(detail.application.status)}
-                    </p>
-                  </div>
-                  <Badge className={scoreTone(detail.score?.score)}>{detail.score?.score ?? 0}</Badge>
-                </div>
-                <p className="mt-3 text-sm text-slate-600">{detail.score?.explanation || detail.application.aiParseSummary}</p>
-              </div>
-
-              <div className="rounded-2xl border p-4">
-                <h3 className="font-semibold text-slate-900">Strengths</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(detail.score?.strengths ?? []).map((item) => <Badge key={item} variant="outline">{item}</Badge>)}
-                </div>
-                <h3 className="mt-4 font-semibold text-slate-900">Weaknesses</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(detail.score?.weaknesses ?? []).map((item) => <Badge key={item} variant="outline">{item}</Badge>)}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border p-4">
-                <h3 className="font-semibold text-slate-900">Documents</h3>
-                <div className="mt-2 space-y-2">
-                  {detail.documents.map((document) => (
-                    <div key={document.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                      <span>{document.name}</span>
-                      <Badge variant="outline">{document.status}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border p-4">
-                <h3 className="font-semibold text-slate-900">Status History</h3>
-                <div className="mt-3 space-y-3">
-                  {detail.history.map((item) => (
-                    <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                      <div className="font-medium text-slate-900">{item.fromStage ? `${item.fromStage} → ${item.toStage}` : item.toStage}</div>
-                      <div className="text-xs text-slate-500">{item.actor} · {formatDate(item.createdAt)}</div>
-                      <div className="mt-1 text-slate-600">{item.reason}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </Card>
       </section>
     </div>
   );

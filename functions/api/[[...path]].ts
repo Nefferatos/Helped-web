@@ -6213,9 +6213,29 @@ export default {
       url.pathname.startsWith("/maid_agency_logo_81.jpg") ||
       /\.[a-zA-Z0-9]+$/.test(url.pathname);
 
+    const withFreshHtmlCacheHeaders = (response: Response) => {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("text/html")) {
+        return response;
+      }
+
+      const headers = new Headers(response.headers);
+      headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      headers.set("Pragma", "no-cache");
+      headers.set("Expires", "0");
+      headers.set("CDN-Cache-Control", "no-store");
+
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    };
+
     if (!isAssetRequest) {
       const spaRequest = new Request(new URL("/", url).toString(), request);
-      return env.ASSETS.fetch(spaRequest);
+      const spaResponse = await env.ASSETS.fetch(spaRequest);
+      return withFreshHtmlCacheHeaders(spaResponse);
     }
 
     const assetResponse = await env.ASSETS.fetch(request);
@@ -6224,6 +6244,7 @@ export default {
     }
 
     const spaRequest = new Request(new URL("/", url).toString(), request);
-    return env.ASSETS.fetch(spaRequest);
+    const spaResponse = await env.ASSETS.fetch(spaRequest);
+    return withFreshHtmlCacheHeaders(spaResponse);
   },
 };

@@ -64,6 +64,24 @@ const splitList = (value: unknown) =>
     )
   )
 
+const toTrimmedString = (value: unknown) => String(value ?? '').trim()
+
+const toBoolean = (value: unknown) => ['true', '1', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase())
+
+const buildEmploymentHistoryRows = (formData: FormData) =>
+  [1, 2, 3].flatMap((row) => {
+    const record = {
+      from: toTrimmedString(formData.get(`employmentHistory${row}From`)),
+      to: toTrimmedString(formData.get(`employmentHistory${row}To`)),
+      country: toTrimmedString(formData.get(`employmentHistory${row}Country`)),
+      employer: toTrimmedString(formData.get(`employmentHistory${row}Employer`)),
+      duties: toTrimmedString(formData.get(`employmentHistory${row}Duties`)),
+      remarks: toTrimmedString(formData.get(`employmentHistory${row}Remarks`)),
+    }
+
+    return Object.values(record).some(Boolean) ? [record] : []
+  })
+
 const toFileInput = async (
   entry: unknown,
   kind: PublicApplicantFileInput['kind']
@@ -291,6 +309,66 @@ export const createPublicAtsApplicationController = async (req: Request, res: Re
       }
     }
 
+    const fdwFieldNames = [
+      'placeOfBirth',
+      'heightCm',
+      'weightKg',
+      'residentialAddressLine1',
+      'residentialAddressLine2',
+      'repatriationPort',
+      'homeCountryContactNumber',
+      'religion',
+      'educationLevel',
+      'numberOfSiblings',
+      'numberOfChildren',
+      'childrenAges',
+      'allergies',
+      'physicalDisabilities',
+      'dietaryRestrictions',
+      'foodPreference',
+      'foodPreferenceOther',
+      'restDayPreference',
+      'otherRemarksA3',
+      'sgInfantsChildrenAssessment',
+      'sgElderlyAssessment',
+      'sgDisabledAssessment',
+      'sgHouseworkAssessment',
+      'sgCookingAssessment',
+      'sgLanguageAssessment',
+      'sgOtherSkills',
+      'sgOtherSkillsAssessment',
+      'foreignTrainingCentreName',
+      'thirdPartyCertificationDetails',
+      'overseasInfantsChildrenAssessment',
+      'overseasElderlyAssessment',
+      'overseasDisabledAssessment',
+      'overseasHouseworkAssessment',
+      'overseasCookingAssessment',
+      'overseasLanguageAssessment',
+      'overseasOtherSkills',
+      'overseasOtherSkillsAssessment',
+      'feedbackEmployer1',
+      'feedbackEmployer2',
+      'otherRemarksE',
+      'medicalConditions',
+    ] as const
+
+    const fdwBooleanFieldNames = [
+      'workedInSingapore',
+      'willingToHandleInfants',
+      'willingToHandleElderly',
+      'willingToHandleDisabled',
+      'willingToDoHousework',
+      'willingToCook',
+    ] as const
+
+    const fdwFormData = Object.fromEntries([
+      ...fdwFieldNames.map((field) => [field, toTrimmedString(formData.get(field))]),
+      ...fdwBooleanFieldNames.map((field) => [field, toBoolean(formData.get(field))]),
+    ])
+
+    const workHistory = buildEmploymentHistoryRows(formData)
+
     const created = await createPublicAtsApplication({
       agencyId,
       fullName,
@@ -319,6 +397,8 @@ export const createPublicAtsApplicationController = async (req: Request, res: Re
         : null,
       employmentPreference: String(formData.get('employmentPreference') ?? '').trim(),
       coverNote: String(formData.get('coverNote') ?? '').trim(),
+      workHistory,
+      fdwFormData,
       files,
     })
 

@@ -736,10 +736,10 @@
       "maidReferenceCode": "FIL-GIN-9637",
       "profileId": "0c614614-95de-4330-b675-d123e056e6b8",
       "applicationCode": "APP-822096BE",
-      "status": "New Applicant",
+      "status": "Ready For Client Matching",
       "source": "synced_from_maid",
       "appliedAt": "2026-05-19T03:36:09.178Z",
-      "updatedAt": "2026-05-24T04:13:53.111Z",
+      "updatedAt": "2026-05-25T01:23:48.346Z",
       "aiParseSummary": "Profile seeded from maid record FIL-GIN-9637.",
       "aiParseReviewRequired": false,
       "notificationLogIds": []
@@ -9576,8 +9576,33 @@
       "updatedAt": "2026-05-24T04:13:52.964Z"
     }
   ],
-  "matches": [],
+  "matches": [
+    {
+      "id": "4c5164e1-93a4-4335-a0b6-87a23e03d18b",
+      "applicationId": "81f3fc16-8616-4192-92b8-4d1475b03899",
+      "compatibilityScore": 29,
+      "skillsMatched": [
+        "Salary within budget (0)"
+      ],
+      "missingRequirements": [
+        "Preferred nationality mismatch",
+        "No newborn care experience",
+        "Chinese cooking not confirmed"
+      ],
+      "recommendation": "Low confidence match",
+      "createdAt": "2026-05-25T01:28:02.614Z"
+    }
+  ],
   "history": [
+    {
+      "id": "824d94fa-be1c-4e7d-abdb-0b43964401dc",
+      "applicationId": "81f3fc16-8616-4192-92b8-4d1475b03899",
+      "fromStage": "New Applicant",
+      "toStage": "Ready For Client Matching",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready For Client Matching",
+      "createdAt": "2026-05-25T01:23:48.346Z"
+    },
     {
       "id": "38122e82-b4b8-43b6-ba22-991b1df4aa0d",
       "applicationId": "ca1ffba4-c59f-41e6-8c8a-1b38591aa6b8",
@@ -10928,7 +10953,18 @@
       "createdAt": "2026-05-24T04:13:52.964Z"
     }
   ],
-  "notifications": [],
+  "notifications": [
+    {
+      "id": "22c74f45-2c1e-4493-82ba-64e50d27b5bd",
+      "applicationId": "81f3fc16-8616-4192-92b8-4d1475b03899",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Anna Marie Ladeza Panganoron moved to Ready For Client Matching",
+      "createdAt": "2026-05-25T01:23:48.346Z"
+    }
+  ],
   "documents": {
     "c9183ef1-eada-4c6c-a9ea-ad196c9a8a6f": [
       {

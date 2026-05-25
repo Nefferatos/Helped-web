@@ -30,16 +30,22 @@ export interface AtsApplicationListItem {
   appliedAt: string;
   profile: {
     fullName: string;
+    email: string;
+    contactNumber: string;
+    whatsappNumber?: string;
     nationality: string;
     age: number | null;
     yearsOfExperience: number;
     expectedSalary: number | null;
+    employmentPreference: string;
     languageSkills: string[];
     cookingSkills: string[];
     childcareExperience: number;
     newbornCareExperience: number;
     elderlyCareExperience: number;
     availableDate: string;
+    strengthsTags: string[];
+    weaknessesTags: string[];
   };
   score?: {
     score: number;
