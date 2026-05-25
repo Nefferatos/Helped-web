@@ -748,7 +748,7 @@ const PublicMaidApplicationPage = () => {
                     icon={BriefcaseBusiness}
                   />
                   <div className="grid gap-4 md:grid-cols-2">
-                    <SubSection title="Core Experience" description="These fields are used by the recruitment ATS for automated scoring and shortlist ranking." />
+                    <SubSection title="Core Experience" description="These fields are used by the applicants list for automated scoring and shortlist ranking." />
                     <label className="space-y-2">
                       <span className="text-sm font-medium text-slate-700">Years of Experience</span>
                       <Input className={fieldClassName} type="number" min="0" value={form.yearsOfExperience} onChange={(event) => updateField("yearsOfExperience", event.target.value)} />
@@ -1020,7 +1020,7 @@ const PublicMaidApplicationPage = () => {
                 </div>
               </div>
               <div className="mt-5 space-y-3 text-sm leading-6 text-slate-300">
-                <p>The agency ATS will score your application automatically based on your experience, skills, language coverage, and supporting documents.</p>
+                <p>The agency applicants list will score your application automatically based on your experience, skills, language coverage, and supporting documents.</p>
                 <p>Your WhatsApp number and email will appear in the recruiter list so support can contact you quickly.</p>
                 <p>Using the FDW biodata structure helps the recruiter compare your profile with existing maid records more easily.</p>
               </div>
@@ -1049,7 +1049,7 @@ const PublicMaidApplicationPage = () => {
             <Card className="rounded-[2rem] border-slate-200 bg-white/95 p-6 shadow-sm shadow-slate-200/60">
               <h3 className="text-lg font-black text-slate-950">What happens next</h3>
               <div className="mt-4 space-y-3 text-sm text-slate-600">
-                <p>1. Your application is created in the agency recruitment ATS as a new applicant.</p>
+                <p>1. Your application is created in the agency applicants list as a new applicant.</p>
                 <p>2. Recruiters can sort you by automated qualification score, filter by skills, and contact you from the list view.</p>
                 <p>3. You may receive follow-ups for missing documents, interviews, or approval updates.</p>
               </div>

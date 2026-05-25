@@ -99,7 +99,7 @@ const navItems = [
     badgeKey: null,
   },
   {
-    label: "Recruitment ATS",
+    label: "Applicants List",
     path: adminPath("/recruitment"),
     icon: Brain,
     iconBg: "linear-gradient(145deg, #A7F3D0, #10B981)",

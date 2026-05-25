@@ -224,6 +224,145 @@ interface EmploymentContractRecord {
   updatedAt: string;
 }
 
+type RecruitmentStage =
+  | "New Applicant"
+  | "Documents Submitted"
+  | "Resume Parsed"
+  | "Screening Interview"
+  | "Background Check"
+  | "Approved"
+  | "Ready For Client Matching"
+  | "Placed"
+  | "Rejected";
+
+type AtsDocumentKind =
+  | "resume"
+  | "passport"
+  | "work_permit"
+  | "medical"
+  | "certificate"
+  | "reference"
+  | "video"
+  | "other";
+
+interface AtsDocumentRecord {
+  id: string;
+  type: AtsDocumentKind;
+  name: string;
+  fileType: string;
+  size: number;
+  url: string;
+  storagePath?: string;
+  required: boolean;
+  uploadedAt: string;
+  status: "missing" | "submitted" | "verified" | "rejected";
+}
+
+interface AtsScoreRecord {
+  score: number;
+  category: string;
+  explanation: string;
+  strengths: string[];
+  weaknesses: string[];
+  factors: {
+    experience: number;
+    skillMatch: number;
+    certifications: number;
+    references: number;
+    languageSkills: number;
+    interviewRating: number;
+  };
+}
+
+interface AtsHistoryRecord {
+  id: string;
+  fromStage?: RecruitmentStage;
+  toStage: RecruitmentStage;
+  actor: string;
+  reason: string;
+  createdAt: string;
+}
+
+interface AtsApplicationProfileRecord {
+  id: string;
+  applicationId: string;
+  maidReferenceCode?: string;
+  fullName: string;
+  email: string;
+  whatsappNumber?: string;
+  nationality: string;
+  dateOfBirth: string;
+  age: number | null;
+  gender: string;
+  maritalStatus: string;
+  contactNumber: string;
+  address: string;
+  yearsOfExperience: number;
+  previousCountriesWorkedIn: string[];
+  childcareExperience: number;
+  newbornCareExperience: number;
+  elderlyCareExperience: number;
+  disabledCareExperience: number;
+  housekeepingExperience: number;
+  cookingSkills: string[];
+  petCareExperience: number;
+  languageSkills: string[];
+  certifications: string[];
+  trainingRecords: string[];
+  availableDate: string;
+  expectedSalary: number | null;
+  employmentPreference: string;
+  coverNote: string;
+  workHistory: Array<Record<string, unknown>>;
+  fdwFormData: Record<string, unknown>;
+  strengthsTags: string[];
+  weaknessesTags: string[];
+  clientMatchScore: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AtsApplicationRecord {
+  id: string;
+  agencyId: number;
+  profileId: string;
+  applicationCode: string;
+  applicantAccessToken: string;
+  status: RecruitmentStage;
+  source: "resume_upload";
+  appliedAt: string;
+  updatedAt: string;
+  aiParseSummary: string;
+  notificationLogIds: string[];
+}
+
+interface AtsNotificationRecord {
+  id: string;
+  applicationId: string;
+  event: string;
+  channel: "email" | "whatsapp" | "internal";
+  message: string;
+  createdAt: string;
+}
+
+interface AtsFilterPresetRecord {
+  id: string;
+  agencyId: number;
+  name: string;
+  filters: Record<string, unknown>;
+  createdAt: string;
+}
+
+interface AtsData {
+  applications: AtsApplicationRecord[];
+  profiles: AtsApplicationProfileRecord[];
+  scores: Record<string, AtsScoreRecord>;
+  history: Record<string, AtsHistoryRecord[]>;
+  documents: Record<string, AtsDocumentRecord[]>;
+  notifications: Record<string, AtsNotificationRecord[]>;
+  presets: AtsFilterPresetRecord[];
+}
+
 interface AppData {
   companyProfile: CompanyProfileRecord;
   momPersonnel: MOMPersonnelRecord[];
@@ -238,6 +377,7 @@ interface AppData {
   chatMessages: ChatMessageRecord[];
   employers: EmployerContractRecord[];
   employmentContracts: EmploymentContractRecord[];
+  ats: AtsData;
   counters: {
     momPersonnel: number;
     testimonials: number;
@@ -260,6 +400,7 @@ type Bindings = {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_APP_DATA_TABLE?: string;
   SUPABASE_APP_DATA_ID?: string;
+  SUPABASE_STORAGE_BUCKET?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
@@ -390,6 +531,15 @@ const defaultData = (): AppData => ({
   chatMessages: [],
   employers: [],
   employmentContracts: [],
+  ats: {
+    applications: [],
+    profiles: [],
+    scores: {},
+    history: {},
+    documents: {},
+    notifications: {},
+    presets: [],
+  },
   counters: {
     momPersonnel: 1,
     testimonials: 1,
@@ -753,6 +903,7 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       toTrimmedString((record as { refCode?: unknown }).refCode),
     ),
   );
+  const rawAts = raw.ats ?? defaults.ats;
 
   return {
     companyProfile: {
@@ -781,6 +932,42 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     })),
     employers,
     employmentContracts,
+    ats: {
+      applications: Array.isArray(rawAts.applications)
+        ? rawAts.applications.filter(
+            (item): item is AtsApplicationRecord =>
+              Boolean(item && typeof item === "object" && item.id),
+          )
+        : defaults.ats.applications,
+      profiles: Array.isArray(rawAts.profiles)
+        ? rawAts.profiles.filter(
+            (item): item is AtsApplicationProfileRecord =>
+              Boolean(item && typeof item === "object" && item.id),
+          )
+        : defaults.ats.profiles,
+      scores:
+        rawAts.scores && typeof rawAts.scores === "object"
+          ? rawAts.scores
+          : defaults.ats.scores,
+      history:
+        rawAts.history && typeof rawAts.history === "object"
+          ? rawAts.history
+          : defaults.ats.history,
+      documents:
+        rawAts.documents && typeof rawAts.documents === "object"
+          ? rawAts.documents
+          : defaults.ats.documents,
+      notifications:
+        rawAts.notifications && typeof rawAts.notifications === "object"
+          ? rawAts.notifications
+          : defaults.ats.notifications,
+      presets: Array.isArray(rawAts.presets)
+        ? rawAts.presets.filter(
+            (item): item is AtsFilterPresetRecord =>
+              Boolean(item && typeof item === "object" && item.id),
+          )
+        : defaults.ats.presets,
+    },
     counters: {
       momPersonnel: nextCounter(
         raw.counters?.momPersonnel,
@@ -858,6 +1045,12 @@ type SupabaseAppDataConfig = {
   serviceRoleKey: string;
   table: string;
   rowId: string;
+};
+
+type SupabaseStorageConfig = {
+  baseUrl: string;
+  serviceRoleKey: string;
+  bucket: string;
 };
 
 const SUPABASE_APP_DATA_BASE = Symbol("supabaseAppDataBase");
@@ -940,6 +1133,15 @@ const getSupabaseAppDataConfig = (
 
 const supabaseHeaders = (
   config: SupabaseAppDataConfig,
+  extra?: HeadersInit,
+): HeadersInit => ({
+  apikey: config.serviceRoleKey,
+  authorization: `Bearer ${config.serviceRoleKey}`,
+  ...extra,
+});
+
+const supabaseStorageHeaders = (
+  config: SupabaseStorageConfig,
   extra?: HeadersInit,
 ): HeadersInit => ({
   apikey: config.serviceRoleKey,
@@ -1258,6 +1460,20 @@ const fetchSupabaseAppDataRow = async (
   return {
     data: mergeAppData(row.data),
     updatedAt: row.updated_at,
+  };
+};
+
+const getSupabaseStorageConfig = (
+  env: Bindings,
+): SupabaseStorageConfig | null => {
+  const baseUrl = env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!baseUrl || !serviceRoleKey) return null;
+
+  return {
+    baseUrl,
+    serviceRoleKey,
+    bucket: env.SUPABASE_STORAGE_BUCKET?.trim() || "ats-applications",
   };
 };
 
@@ -1920,6 +2136,800 @@ const parseBody = async <T>(request: Request): Promise<T | null> => {
   } catch {
     return null;
   }
+};
+
+const atsStageOrder: RecruitmentStage[] = [
+  "New Applicant",
+  "Documents Submitted",
+  "Resume Parsed",
+  "Screening Interview",
+  "Background Check",
+  "Approved",
+  "Ready For Client Matching",
+  "Placed",
+  "Rejected",
+];
+
+const publicAtsFileKinds: Array<[string, AtsDocumentKind]> = [
+  ["resume", "resume"],
+  ["passport", "passport"],
+  ["workPermit", "work_permit"],
+  ["medical", "medical"],
+  ["introVideo", "video"],
+  ["references", "reference"],
+  ["otherDocuments", "other"],
+  ["certificates", "certificate"],
+];
+
+const listFromDelimitedString = (value: unknown) =>
+  Array.from(
+    new Set(
+      String(value ?? "")
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+
+const toNumericValue = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toOptionalNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toBooleanFlag = (value: unknown) =>
+  ["true", "1", "yes", "on"].includes(
+    String(value ?? "")
+      .trim()
+      .toLowerCase(),
+  );
+
+const calculateAgeFromDate = (dateOfBirth?: string) => {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  if (Number.isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < dob.getDate())
+  ) {
+    age -= 1;
+  }
+  return age;
+};
+
+const randomId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+
+const buildApplicationCode = () =>
+  `APP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+};
+
+const fileToDataUrl = async (file: File) => {
+  const buffer = await file.arrayBuffer();
+  return `data:${file.type || "application/octet-stream"};base64,${arrayBufferToBase64(buffer)}`;
+};
+
+const sanitizeStoragePathSegment = (value: string, fallback: string) => {
+  const normalized = value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return normalized || fallback;
+};
+
+const ensureSupabaseStorageBucket = async (config: SupabaseStorageConfig) => {
+  const response = await fetch(`${config.baseUrl}/storage/v1/bucket`, {
+    method: "POST",
+    headers: supabaseStorageHeaders(config, {
+      "content-type": "application/json",
+    }),
+    body: JSON.stringify({
+      id: config.bucket,
+      name: config.bucket,
+      public: true,
+      file_size_limit: "52428800",
+    }),
+  });
+
+  if (response.ok || response.status === 409) return;
+
+  const message = await readSupabaseError(response);
+  if (message.toLowerCase().includes("duplicate")) return;
+  throw new Error(`Supabase storage bucket error: ${message}`);
+};
+
+const buildSupabasePublicFileUrl = (
+  config: SupabaseStorageConfig,
+  storagePath: string,
+) =>
+  `${config.baseUrl}/storage/v1/object/public/${encodeURIComponent(config.bucket)}/${storagePath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/")}`;
+
+const uploadFileToSupabaseStorage = async (
+  env: Bindings,
+  applicationId: string,
+  file: File,
+  kind: AtsDocumentKind,
+) => {
+  const config = getSupabaseStorageConfig(env);
+  if (!config) return null;
+
+  await ensureSupabaseStorageBucket(config);
+
+  const safeName = sanitizeStoragePathSegment(file.name || `${kind}.bin`, kind);
+  const storagePath = [
+    "public-ats",
+    applicationId,
+    `${Date.now()}-${crypto.randomUUID()}-${safeName}`,
+  ].join("/");
+
+  const uploadResponse = await fetch(
+    `${config.baseUrl}/storage/v1/object/${encodeURIComponent(config.bucket)}/${storagePath
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/")}`,
+    {
+      method: "POST",
+      headers: supabaseStorageHeaders(config, {
+        "content-type": file.type || "application/octet-stream",
+        "x-upsert": "true",
+      }),
+      body: await file.arrayBuffer(),
+    },
+  );
+
+  if (!uploadResponse.ok) {
+    throw new Error(
+      `Supabase storage upload failed: ${await readSupabaseError(uploadResponse)}`,
+    );
+  }
+
+  return {
+    storagePath,
+    url: buildSupabasePublicFileUrl(config, storagePath),
+  };
+};
+
+const buildEmploymentHistoryRowsFromFormData = (formData: FormData) =>
+  [1, 2, 3].flatMap((row) => {
+    const record = {
+      from: toTrimmedString(formData.get(`employmentHistory${row}From`)),
+      to: toTrimmedString(formData.get(`employmentHistory${row}To`)),
+      country: toTrimmedString(formData.get(`employmentHistory${row}Country`)),
+      employer: toTrimmedString(
+        formData.get(`employmentHistory${row}Employer`),
+      ),
+      duties: toTrimmedString(formData.get(`employmentHistory${row}Duties`)),
+      remarks: toTrimmedString(formData.get(`employmentHistory${row}Remarks`)),
+    };
+    return Object.values(record).some(Boolean) ? [record] : [];
+  });
+
+const getAtsProfileByApplicationId = (
+  data: AppData,
+  applicationId: string,
+) =>
+  data.ats.profiles.find((profile) => profile.applicationId === applicationId) ??
+  null;
+
+const toQualificationCategory = (score: number) => {
+  if (score >= 90) return "Excellent";
+  if (score >= 75) return "Highly Recommended";
+  if (score >= 60) return "Qualified";
+  if (score >= 40) return "Needs Review";
+  return "Not Qualified";
+};
+
+const buildAtsScore = (
+  profile: AtsApplicationProfileRecord,
+  documents: AtsDocumentRecord[],
+): AtsScoreRecord => {
+  const experience = Math.min(profile.yearsOfExperience * 12, 100);
+  const skillMatch = Math.min(
+    profile.childcareExperience * 12 +
+      profile.newbornCareExperience * 12 +
+      profile.elderlyCareExperience * 12 +
+      profile.disabledCareExperience * 12 +
+      profile.housekeepingExperience * 12 +
+      profile.petCareExperience * 10,
+    100,
+  );
+  const certifications = Math.min(
+    (profile.certifications.length + profile.trainingRecords.length) * 20,
+    100,
+  );
+  const references = Math.min(
+    documents.filter((item) => item.type === "reference").length * 50,
+    100,
+  );
+  const languageSkills = Math.min(profile.languageSkills.length * 25, 100);
+  const interviewRating = profile.coverNote.trim() ? 65 : 40;
+  const weightedScore = Math.round(
+    experience * 0.24 +
+      skillMatch * 0.28 +
+      certifications * 0.14 +
+      references * 0.1 +
+      languageSkills * 0.14 +
+      interviewRating * 0.1,
+  );
+  const strengths: string[] = [];
+  const weaknesses: string[] = [];
+
+  if (profile.yearsOfExperience >= 3) strengths.push("Experienced applicant");
+  if (profile.languageSkills.length >= 2) strengths.push("Speaks multiple languages");
+  if (
+    profile.childcareExperience >= 4 ||
+    profile.newbornCareExperience >= 4
+  ) {
+    strengths.push("Strong childcare background");
+  }
+  if (profile.elderlyCareExperience >= 4) {
+    strengths.push("Elderly care ready");
+  }
+  if (profile.cookingSkills.length >= 2) {
+    strengths.push("Cooking skills listed");
+  }
+  if (documents.length >= 3) strengths.push("Documents mostly complete");
+
+  if (profile.yearsOfExperience <= 1) weaknesses.push("Limited experience");
+  if (profile.languageSkills.length === 0) weaknesses.push("No languages listed");
+  if (!profile.availableDate) weaknesses.push("Availability not declared");
+  if (documents.length === 0) weaknesses.push("No supporting documents uploaded");
+
+  return {
+    score: weightedScore,
+    category: toQualificationCategory(weightedScore),
+    explanation:
+      weightedScore >= 75
+        ? "Good fit for recruiter shortlist based on experience, skills, and submitted documents."
+        : weightedScore >= 50
+          ? "Promising application, but needs recruiter review before moving forward."
+          : "Application needs closer review before shortlist action.",
+    strengths,
+    weaknesses,
+    factors: {
+      experience,
+      skillMatch,
+      certifications,
+      references,
+      languageSkills,
+      interviewRating,
+    },
+  };
+};
+
+const buildAtsProfileTags = (
+  profile: AtsApplicationProfileRecord,
+  score: AtsScoreRecord,
+) => ({
+  strengthsTags: score.strengths.slice(0, 5),
+  weaknessesTags: score.weaknesses.slice(0, 5),
+  clientMatchScore: Math.min(
+    100,
+    Math.round(
+      score.score * 0.7 +
+        profile.childcareExperience * 4 +
+        profile.elderlyCareExperience * 3 +
+        profile.languageSkills.length * 3,
+    ),
+  ),
+});
+
+const createAtsListItem = (data: AppData, application: AtsApplicationRecord) => {
+  const profile = getAtsProfileByApplicationId(data, application.id);
+  if (!profile) return null;
+  const score = data.ats.scores[application.id] ?? null;
+  return {
+    id: application.id,
+    applicationCode: application.applicationCode,
+    maidReferenceCode: profile.maidReferenceCode,
+    status: application.status,
+    appliedAt: application.appliedAt,
+    profile: {
+      fullName: profile.fullName,
+      email: profile.email,
+      contactNumber: profile.contactNumber,
+      whatsappNumber: profile.whatsappNumber,
+      nationality: profile.nationality,
+      age: profile.age,
+      yearsOfExperience: profile.yearsOfExperience,
+      expectedSalary: profile.expectedSalary,
+      employmentPreference: profile.employmentPreference,
+      languageSkills: profile.languageSkills,
+      cookingSkills: profile.cookingSkills,
+      childcareExperience: profile.childcareExperience,
+      newbornCareExperience: profile.newbornCareExperience,
+      elderlyCareExperience: profile.elderlyCareExperience,
+      availableDate: profile.availableDate,
+      strengthsTags: profile.strengthsTags,
+      weaknessesTags: profile.weaknessesTags,
+    },
+    score: score
+      ? {
+          score: score.score,
+          category: score.category,
+          explanation: score.explanation,
+        }
+      : null,
+    interview: null,
+    clientMatchScore: profile.clientMatchScore,
+  };
+};
+
+const filterAtsApplications = (
+  items: Array<ReturnType<typeof createAtsListItem>>,
+  query: string,
+  filters: Record<string, unknown>,
+) =>
+  items.filter((item) => {
+    if (!item) return false;
+
+    const haystack = [
+      item.applicationCode,
+      item.maidReferenceCode ?? "",
+      item.profile.fullName,
+      item.profile.email,
+      item.profile.contactNumber,
+      item.profile.whatsappNumber ?? "",
+      item.profile.nationality,
+      item.profile.languageSkills.join(" "),
+      item.profile.cookingSkills.join(" "),
+      item.status,
+    ]
+      .join(" ")
+      .toLowerCase();
+    if (query && !haystack.includes(query)) return false;
+
+    const statusFilters = Array.isArray(filters.status)
+      ? filters.status.map((value) => String(value))
+      : [];
+    if (statusFilters.length > 0 && !statusFilters.includes(item.status)) {
+      return false;
+    }
+
+    if (filters.hasWhatsApp && !toTrimmedString(item.profile.contactNumber)) {
+      return false;
+    }
+
+    if (
+      filters.minScore !== undefined &&
+      (item.score?.score ?? 0) < toNumericValue(filters.minScore)
+    ) {
+      return false;
+    }
+
+    if (
+      filters.minExperience !== undefined &&
+      item.profile.yearsOfExperience < toNumericValue(filters.minExperience)
+    ) {
+      return false;
+    }
+
+    if (filters.childcareExperience && item.profile.childcareExperience <= 0) {
+      return false;
+    }
+
+    if (
+      filters.elderlyCareExperience &&
+      item.profile.elderlyCareExperience <= 0
+    ) {
+      return false;
+    }
+
+    if (filters.availableImmediately) {
+      if (!item.profile.availableDate) return false;
+      const availableDate = new Date(item.profile.availableDate);
+      const boundary = new Date();
+      boundary.setDate(boundary.getDate() + 14);
+      if (
+        Number.isNaN(availableDate.getTime()) ||
+        availableDate.getTime() > boundary.getTime()
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }) as Array<Exclude<ReturnType<typeof createAtsListItem>, null>>;
+
+const sortAtsApplications = (
+  items: Array<Exclude<ReturnType<typeof createAtsListItem>, null>>,
+  sort: string,
+) => {
+  const [field, direction = "desc"] = sort.split(":");
+  const factor = direction === "asc" ? 1 : -1;
+  return [...items].sort((left, right) => {
+    switch (field) {
+      case "applicationDate":
+        return (
+          (new Date(left.appliedAt).getTime() - new Date(right.appliedAt).getTime()) *
+          factor
+        );
+      case "experience":
+        return (
+          (left.profile.yearsOfExperience - right.profile.yearsOfExperience) *
+          factor
+        );
+      case "clientMatchScore":
+        return ((left.clientMatchScore ?? 0) - (right.clientMatchScore ?? 0)) * factor;
+      case "expectedSalary":
+        return (
+          ((left.profile.expectedSalary ?? Number.MAX_SAFE_INTEGER) -
+            (right.profile.expectedSalary ?? Number.MAX_SAFE_INTEGER)) * factor
+        );
+      case "name":
+        return left.profile.fullName.localeCompare(right.profile.fullName) * factor;
+      case "qualificationScore":
+      default:
+        return ((left.score?.score ?? 0) - (right.score?.score ?? 0)) * factor;
+    }
+  });
+};
+
+const buildAtsDashboard = (data: AppData, agencyId: number) => {
+  const applications = data.ats.applications.filter(
+    (item) => item.agencyId === agencyId && item.source === "resume_upload",
+  );
+  const scores = applications
+    .map((item) => data.ats.scores[item.id]?.score ?? 0)
+    .filter((value) => Number.isFinite(value));
+  const averageQualificationScore =
+    scores.length > 0
+      ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length)
+      : 0;
+
+  const approvedWithDuration = applications
+    .filter((item) => item.status === "Approved")
+    .map((item) => {
+      const approvedHistory = (data.ats.history[item.id] ?? []).find(
+        (entry) => entry.toStage === "Approved",
+      );
+      if (!approvedHistory) return null;
+      const ms =
+        new Date(approvedHistory.createdAt).getTime() -
+        new Date(item.appliedAt).getTime();
+      return ms > 0 ? ms / (1000 * 60 * 60 * 24) : null;
+    })
+    .filter((value): value is number => typeof value === "number");
+
+  return {
+    totalApplicants: applications.length,
+    newApplicants: applications.filter((item) => item.status === "New Applicant").length,
+    interviewedCandidates: applications.filter(
+      (item) => item.status === "Screening Interview",
+    ).length,
+    approvedCandidates: applications.filter((item) => item.status === "Approved").length,
+    rejectedCandidates: applications.filter((item) => item.status === "Rejected").length,
+    readyForMatching: applications.filter(
+      (item) => item.status === "Ready For Client Matching",
+    ).length,
+    placedHelpers: applications.filter((item) => item.status === "Placed").length,
+    averageQualificationScore,
+    averageTimeToApprovalDays:
+      approvedWithDuration.length > 0
+        ? Math.round(
+            approvedWithDuration.reduce((sum, value) => sum + value, 0) /
+              approvedWithDuration.length,
+          )
+        : 0,
+    placementSuccessRate:
+      applications.length > 0
+        ? Math.round(
+            (applications.filter((item) => item.status === "Placed").length /
+              applications.length) *
+              100,
+          )
+        : 0,
+    funnel: atsStageOrder.map((stage) => ({
+      stage,
+      count: applications.filter((item) => item.status === stage).length,
+    })),
+  };
+};
+
+const buildAtsBundle = (data: AppData, applicationId: string) => {
+  const application = data.ats.applications.find((item) => item.id === applicationId);
+  const profile = getAtsProfileByApplicationId(data, applicationId);
+  if (!application || !profile) return null;
+  const score = data.ats.scores[applicationId] ?? null;
+  return {
+    application: {
+      id: application.id,
+      agencyId: application.agencyId,
+      applicationCode: application.applicationCode,
+      maidReferenceCode: profile.maidReferenceCode,
+      status: application.status,
+      appliedAt: application.appliedAt,
+      aiParseSummary: application.aiParseSummary,
+      profile: {
+        fullName: profile.fullName,
+        email: profile.email,
+        contactNumber: profile.contactNumber,
+        whatsappNumber: profile.whatsappNumber,
+        nationality: profile.nationality,
+        age: profile.age,
+        yearsOfExperience: profile.yearsOfExperience,
+        expectedSalary: profile.expectedSalary,
+        employmentPreference: profile.employmentPreference,
+        languageSkills: profile.languageSkills,
+        cookingSkills: profile.cookingSkills,
+        childcareExperience: profile.childcareExperience,
+        newbornCareExperience: profile.newbornCareExperience,
+        elderlyCareExperience: profile.elderlyCareExperience,
+        availableDate: profile.availableDate,
+        strengthsTags: profile.strengthsTags,
+        weaknessesTags: profile.weaknessesTags,
+      },
+    },
+    profile,
+    score,
+    interview: null,
+    backgroundCheck: null,
+    history: data.ats.history[applicationId] ?? [],
+    documents: (data.ats.documents[applicationId] ?? []).map((document) => ({
+      id: document.id,
+      type: document.type,
+      name: document.name,
+      url: document.url,
+      status: document.status,
+      required: document.required,
+    })),
+    matches: [],
+    notifications: data.ats.notifications[applicationId] ?? [],
+    references: [],
+  };
+};
+
+const buildPublicAtsSummary = (
+  data: AppData,
+  applicationId: string,
+  accessToken: string,
+) => {
+  const application = data.ats.applications.find(
+    (item) =>
+      item.id === applicationId && item.applicantAccessToken === accessToken,
+  );
+  const profile = application
+    ? getAtsProfileByApplicationId(data, application.id)
+    : null;
+  if (!application || !profile) return null;
+  return {
+    application: {
+      id: application.id,
+      applicationCode: application.applicationCode,
+      status: application.status,
+      appliedAt: application.appliedAt,
+      aiParseSummary: application.aiParseSummary,
+    },
+    profile: {
+      fullName: profile.fullName,
+      email: profile.email,
+      contactNumber: profile.contactNumber,
+      nationality: profile.nationality,
+      availableDate: profile.availableDate,
+      expectedSalary: profile.expectedSalary,
+    },
+    documents: data.ats.documents[applicationId] ?? [],
+    history: (data.ats.history[applicationId] ?? []).map((item) => ({
+      id: item.id,
+      toStage: item.toStage,
+      reason: item.reason,
+      createdAt: item.createdAt,
+    })),
+    notifications: data.ats.notifications[applicationId] ?? [],
+  };
+};
+
+const parseAtsFormData = async (env: Bindings, formData: FormData) => {
+  const agencyId = toNumericValue(formData.get("agencyId"), 1) || 1;
+  const fullName = toTrimmedString(formData.get("fullName"));
+  const email = toTrimmedString(formData.get("email"));
+  const contactNumber = toTrimmedString(formData.get("contactNumber"));
+
+  if (!fullName) throw new Error("fullName is required");
+  if (!contactNumber) throw new Error("contactNumber is required");
+  if (!email) throw new Error("email is required");
+
+  const fdwFieldNames = [
+    "placeOfBirth",
+    "heightCm",
+    "weightKg",
+    "residentialAddressLine1",
+    "residentialAddressLine2",
+    "repatriationPort",
+    "homeCountryContactNumber",
+    "religion",
+    "educationLevel",
+    "numberOfSiblings",
+    "numberOfChildren",
+    "childrenAges",
+    "allergies",
+    "physicalDisabilities",
+    "dietaryRestrictions",
+    "foodPreference",
+    "foodPreferenceOther",
+    "restDayPreference",
+    "otherRemarksA3",
+    "sgInfantsChildrenAssessment",
+    "sgElderlyAssessment",
+    "sgDisabledAssessment",
+    "sgHouseworkAssessment",
+    "sgCookingAssessment",
+    "sgLanguageAssessment",
+    "sgOtherSkills",
+    "sgOtherSkillsAssessment",
+    "foreignTrainingCentreName",
+    "thirdPartyCertificationDetails",
+    "overseasInfantsChildrenAssessment",
+    "overseasElderlyAssessment",
+    "overseasDisabledAssessment",
+    "overseasHouseworkAssessment",
+    "overseasCookingAssessment",
+    "overseasLanguageAssessment",
+    "overseasOtherSkills",
+    "overseasOtherSkillsAssessment",
+    "feedbackEmployer1",
+    "feedbackEmployer2",
+    "otherRemarksE",
+    "medicalConditions",
+  ] as const;
+
+  const fdwBooleanFieldNames = [
+    "workedInSingapore",
+    "willingToHandleInfants",
+    "willingToHandleElderly",
+    "willingToHandleDisabled",
+    "willingToDoHousework",
+    "willingToCook",
+  ] as const;
+
+  const fdwFormData = Object.fromEntries([
+    ...fdwFieldNames.map((field) => [field, toTrimmedString(formData.get(field))]),
+    ...fdwBooleanFieldNames.map((field) => [field, toBooleanFlag(formData.get(field))]),
+  ]);
+
+  const applicationId = randomId("ats-app");
+  const profileId = randomId("ats-profile");
+  const appliedAt = now();
+  const documents: AtsDocumentRecord[] = [];
+  for (const [field, kind] of publicAtsFileKinds) {
+    for (const entry of formData.getAll(field)) {
+      if (!(entry instanceof File) || entry.size <= 0) continue;
+      let uploadedAsset: { storagePath: string; url: string } | null = null;
+      try {
+        uploadedAsset = await uploadFileToSupabaseStorage(
+          env,
+          applicationId,
+          entry,
+          kind,
+        );
+      } catch (error) {
+        console.error("ATS file upload fallback triggered", error);
+      }
+      documents.push({
+        id: randomId("doc"),
+        type: kind,
+        name: entry.name || `${kind}-${documents.length + 1}`,
+        fileType: entry.type || "application/octet-stream",
+        size: entry.size,
+        url: uploadedAsset?.url ?? (await fileToDataUrl(entry)),
+        storagePath: uploadedAsset?.storagePath,
+        required: kind === "resume" || kind === "passport",
+        uploadedAt: now(),
+        status: "submitted",
+      });
+    }
+  }
+  const profile: AtsApplicationProfileRecord = {
+    id: profileId,
+    applicationId,
+    fullName,
+    email,
+    contactNumber,
+    whatsappNumber: contactNumber,
+    nationality: toTrimmedString(formData.get("nationality")),
+    dateOfBirth: toTrimmedString(formData.get("dateOfBirth")),
+    age: calculateAgeFromDate(toTrimmedString(formData.get("dateOfBirth"))),
+    gender: toTrimmedString(formData.get("gender")) || "Female",
+    maritalStatus: toTrimmedString(formData.get("maritalStatus")),
+    address: toTrimmedString(formData.get("address")),
+    yearsOfExperience: toNumericValue(formData.get("yearsOfExperience")),
+    previousCountriesWorkedIn: listFromDelimitedString(
+      formData.get("previousCountriesWorkedIn"),
+    ),
+    childcareExperience: toNumericValue(formData.get("childcareExperience")),
+    newbornCareExperience: toNumericValue(formData.get("newbornCareExperience")),
+    elderlyCareExperience: toNumericValue(formData.get("elderlyCareExperience")),
+    disabledCareExperience: toNumericValue(formData.get("disabledCareExperience")),
+    housekeepingExperience: toNumericValue(formData.get("housekeepingExperience")),
+    cookingSkills: listFromDelimitedString(formData.get("cookingSkills")),
+    petCareExperience: toNumericValue(formData.get("petCareExperience")),
+    languageSkills: listFromDelimitedString(formData.get("languageSkills")),
+    certifications: listFromDelimitedString(formData.get("certifications")),
+    trainingRecords: listFromDelimitedString(formData.get("trainingRecords")),
+    availableDate: toTrimmedString(formData.get("availableDate")),
+    expectedSalary: toOptionalNumber(formData.get("expectedSalary")),
+    employmentPreference: toTrimmedString(formData.get("employmentPreference")),
+    coverNote: toTrimmedString(formData.get("coverNote")),
+    workHistory: buildEmploymentHistoryRowsFromFormData(formData),
+    fdwFormData,
+    strengthsTags: [],
+    weaknessesTags: [],
+    clientMatchScore: 0,
+    createdAt: appliedAt,
+    updatedAt: appliedAt,
+  };
+  const score = buildAtsScore(profile, documents);
+  const tags = buildAtsProfileTags(profile, score);
+  profile.strengthsTags = tags.strengthsTags;
+  profile.weaknessesTags = tags.weaknessesTags;
+  profile.clientMatchScore = tags.clientMatchScore;
+
+  const application: AtsApplicationRecord = {
+    id: applicationId,
+    agencyId,
+    profileId,
+    applicationCode: buildApplicationCode(),
+    applicantAccessToken: crypto.randomUUID(),
+    status: documents.length > 0 ? "Documents Submitted" : "New Applicant",
+    source: "resume_upload",
+    appliedAt,
+    updatedAt: appliedAt,
+    aiParseSummary: `Public maid application received from ${fullName}.`,
+    notificationLogIds: [],
+  };
+
+  const history: AtsHistoryRecord[] = [
+    {
+      id: randomId("history"),
+      toStage: "New Applicant",
+      actor: "Applicant",
+      reason: "Application submitted from public maid application form",
+      createdAt: appliedAt,
+    },
+  ];
+  if (application.status !== "New Applicant") {
+    history.push({
+      id: randomId("history"),
+      fromStage: "New Applicant",
+      toStage: application.status,
+      actor: "System",
+      reason: "Supporting documents uploaded during submission",
+      createdAt: appliedAt,
+    });
+  }
+
+  const notifications: AtsNotificationRecord[] = [
+    {
+      id: randomId("notify"),
+      applicationId,
+      event: "Application Received",
+      channel: "internal",
+      message: `${fullName} submitted a maid application.`,
+      createdAt: appliedAt,
+    },
+  ];
+
+  return { application, profile, score, documents, history, notifications };
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -6158,6 +7168,301 @@ app.post(
     return c.json({ message: "Email sent successfully" })
   }),
 )
+
+app.post(
+  "/api/ats/public/apply",
+  safeApi(async (c) => {
+    const formData = await c.req.raw.formData();
+    const parsed = await parseAtsFormData(c.env, formData);
+    const data = await loadData(c.env);
+
+    data.ats.applications.unshift(parsed.application);
+    data.ats.profiles.unshift(parsed.profile);
+    data.ats.scores[parsed.application.id] = parsed.score;
+    data.ats.history[parsed.application.id] = parsed.history;
+    data.ats.documents[parsed.application.id] = parsed.documents;
+    data.ats.notifications[parsed.application.id] = parsed.notifications;
+
+    await saveData(c.env, data);
+
+    return c.json(
+      {
+        applicationId: parsed.application.id,
+        applicationCode: parsed.application.applicationCode,
+        applicantAccessToken: parsed.application.applicantAccessToken,
+        submittedAt: parsed.application.appliedAt,
+      },
+      201,
+    );
+  }),
+);
+
+app.get(
+  "/api/ats/public/applications/:applicationId",
+  safeApi(async (c) => {
+    const applicationId = c.req.param("applicationId");
+    const token = toTrimmedString(new URL(c.req.url).searchParams.get("token"));
+    if (!token) {
+      return c.json({ error: "token is required" }, 400);
+    }
+
+    const data = await loadData(c.env);
+    const summary = buildPublicAtsSummary(data, applicationId, token);
+    if (!summary) {
+      return c.json({ error: "Application not found" }, 404);
+    }
+    return c.json(summary);
+  }),
+);
+
+app.get("/api/ats/dashboard", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const data = await loadData(c.env);
+  return c.json(buildAtsDashboard(data, admin.agencyId));
+});
+
+app.get("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const data = await loadData(c.env);
+  const url = new URL(c.req.url);
+  const query = toTrimmedString(url.searchParams.get("q")).toLowerCase();
+  const sort = toTrimmedString(url.searchParams.get("sort")) || "qualificationScore:desc";
+  const page = Math.max(1, toNumericValue(url.searchParams.get("page"), 1));
+  const pageSize = Math.max(1, toNumericValue(url.searchParams.get("pageSize"), 20));
+  const filtersRaw = toTrimmedString(url.searchParams.get("filters"));
+  let filters: Record<string, unknown> = {};
+
+  if (filtersRaw) {
+    try {
+      const parsed = JSON.parse(filtersRaw) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object") {
+        filters = parsed;
+      }
+    } catch {
+      filters = {};
+    }
+  }
+
+  const listItems = data.ats.applications
+    .filter(
+      (item) => item.agencyId === admin.agencyId && item.source === "resume_upload",
+    )
+    .map((item) => createAtsListItem(data, item))
+    .filter((item): item is Exclude<typeof item, null> => Boolean(item));
+
+  const filtered = filterAtsApplications(listItems, query, filters);
+  const sorted = sortAtsApplications(filtered, sort);
+  const total = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = (page - 1) * pageSize;
+  const paged = sorted.slice(start, start + pageSize);
+
+  return c.json({
+    data: paged,
+    pageInfo: {
+      page,
+      pageSize,
+      total,
+      totalPages,
+    },
+  });
+});
+
+app.get("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, async (c) => {
+  return c.json({ error: "Method not allowed" }, 405);
+});
+
+app.patch("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const applicationId = c.req.param("applicationId");
+  const body = await parseBody<{ stage?: RecruitmentStage; reason?: string }>(c.req.raw);
+  const stage = body?.stage;
+
+  if (!stage || !atsStageOrder.includes(stage)) {
+    return c.json({ error: "stage is required" }, 400);
+  }
+
+  const data = await loadData(c.env);
+  const application = data.ats.applications.find(
+    (item) => item.id === applicationId && item.agencyId === admin.agencyId,
+  );
+  if (!application) {
+    return c.json({ error: "Application not found" }, 404);
+  }
+
+  const previousStage = application.status;
+  application.status = stage;
+  application.updatedAt = now();
+  data.ats.history[applicationId] = [
+    {
+      id: randomId("history"),
+      fromStage: previousStage,
+      toStage: stage,
+      actor: admin.username || admin.email || "Agency Staff",
+      reason:
+        toTrimmedString(body?.reason) || `Stage changed to ${stage}`,
+      createdAt: now(),
+    },
+    ...(data.ats.history[applicationId] ?? []),
+  ];
+
+  await saveData(c.env, data);
+  return c.json(buildAtsBundle(data, applicationId));
+});
+
+app.get("/api/ats/applications/:applicationId", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const applicationId = c.req.param("applicationId");
+  const data = await loadData(c.env);
+  const bundle = buildAtsBundle(data, applicationId);
+  if (!bundle || bundle.application.agencyId !== admin.agencyId) {
+    return c.json({ error: "Application not found" }, 404);
+  }
+  return c.json(bundle);
+});
+
+app.post("/api/ats/bulk-actions", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{
+    applicationIds?: string[];
+    action?: "approve" | "reject" | "request_documents" | "assign_interview";
+  }>(c.req.raw);
+
+  if (!Array.isArray(body?.applicationIds) || body.applicationIds.length === 0 || !body.action) {
+    return c.json({ error: "applicationIds and action are required" }, 400);
+  }
+
+  const actionStageMap = {
+    approve: "Approved",
+    reject: "Rejected",
+    request_documents: "Documents Submitted",
+    assign_interview: "Screening Interview",
+  } satisfies Record<NonNullable<typeof body.action>, RecruitmentStage>;
+
+  const data = await loadData(c.env);
+  const updatedIds: string[] = [];
+
+  for (const applicationId of body.applicationIds) {
+    const application = data.ats.applications.find(
+      (item) => item.id === applicationId && item.agencyId === admin.agencyId,
+    );
+    if (!application) continue;
+    const nextStage = actionStageMap[body.action];
+    const previousStage = application.status;
+    application.status = nextStage;
+    application.updatedAt = now();
+    data.ats.history[applicationId] = [
+      {
+        id: randomId("history"),
+        fromStage: previousStage,
+        toStage: nextStage,
+        actor: admin.username || admin.email || "Agency Staff",
+        reason: `Bulk action: ${body.action}`,
+        createdAt: now(),
+      },
+      ...(data.ats.history[applicationId] ?? []),
+    ];
+    updatedIds.push(applicationId);
+  }
+
+  await saveData(c.env, data);
+  return c.json({
+    updated: updatedIds.length,
+    data: updatedIds
+      .map((applicationId) => buildAtsBundle(data, applicationId))
+      .filter(Boolean),
+  });
+});
+
+app.post("/api/ats/match", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{ requirementText?: string; top?: number }>(c.req.raw);
+  const requirementText = toTrimmedString(body?.requirementText).toLowerCase();
+  if (!requirementText) {
+    return c.json({ error: "requirementText is required" }, 400);
+  }
+
+  const top = Math.max(1, Math.min(20, toNumericValue(body?.top, 10)));
+  const data = await loadData(c.env);
+  const matches = data.ats.applications
+    .filter(
+      (item) => item.agencyId === admin.agencyId && item.source === "resume_upload",
+    )
+    .map((application) => {
+      const profile = getAtsProfileByApplicationId(data, application.id);
+      const score = data.ats.scores[application.id];
+      if (!profile || !score) return null;
+      const matchedSkills = [
+        ...profile.languageSkills.filter((item) =>
+          requirementText.includes(item.toLowerCase()),
+        ),
+        ...profile.cookingSkills.filter((item) =>
+          requirementText.includes(item.toLowerCase()),
+        ),
+      ];
+      if (
+        requirementText.includes("newborn") &&
+        profile.newbornCareExperience > 0
+      ) {
+        matchedSkills.push("Newborn care");
+      }
+      if (
+        requirementText.includes("elderly") &&
+        profile.elderlyCareExperience > 0
+      ) {
+        matchedSkills.push("Elderly care");
+      }
+      const matchScore = Math.min(
+        100,
+        Math.round(score.score * 0.7 + matchedSkills.length * 10),
+      );
+      return {
+        applicationId: application.id,
+        candidateName: profile.fullName,
+        maidReferenceCode: profile.maidReferenceCode ?? application.applicationCode,
+        matchScore,
+        recommendation:
+          matchedSkills.length > 0
+            ? `Matched on ${matchedSkills.join(", ")}.`
+            : "General shortlist candidate, but needs recruiter review against requirement.",
+      };
+    })
+    .filter((item): item is Exclude<typeof item, null> => Boolean(item))
+    .sort((left, right) => right.matchScore - left.matchScore)
+    .slice(0, top);
+
+  return c.json({ matches });
+});
+
+app.get("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const data = await loadData(c.env);
+  return c.json({
+    presets: data.ats.presets.filter((item) => item.agencyId === admin.agencyId),
+  });
+});
+
+app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{ name?: string; filters?: Record<string, unknown> }>(c.req.raw);
+  const name = toTrimmedString(body?.name);
+  if (!name) {
+    return c.json({ error: "name is required" }, 400);
+  }
+
+  const data = await loadData(c.env);
+  const preset = {
+    id: randomId("preset"),
+    agencyId: admin.agencyId,
+    name,
+    filters:
+      body?.filters && typeof body.filters === "object" ? body.filters : {},
+    createdAt: now(),
+  };
+  data.ats.presets.unshift(preset);
+  await saveData(c.env, data);
+  return c.json({ preset }, 201);
+});
 
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 

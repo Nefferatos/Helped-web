@@ -248,7 +248,7 @@ const AtsRecruitmentPage = () => {
       <section className="rounded-3xl border bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Recruitment ATS</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Applicants List</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
               Maid Applicant Shortlisting and Recruiter Follow-up
             </h1>
