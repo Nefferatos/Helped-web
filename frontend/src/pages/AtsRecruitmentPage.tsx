@@ -53,6 +53,40 @@ const pipelineStages = [
   "Rejected",
 ] as const;
 
+const applicantFlowGuide = [
+  {
+    title: "1. Intake and first review",
+    description: "New applicants land here from the public portal. Check profile completeness, WhatsApp access, and the qualification score first.",
+    stage: "New Applicant -> Documents Submitted",
+    icon: MonitorUp,
+  },
+  {
+    title: "2. Validate profile quality",
+    description: "Open the profile, review work history, languages, salary expectations, and attached files before spending time on outreach.",
+    stage: "Resume Parsed",
+    icon: FileText,
+  },
+  {
+    title: "3. Contact and screen",
+    description: "Reach out by WhatsApp or email, confirm availability, and move serious candidates into interview and verification stages quickly.",
+    stage: "Screening Interview -> Background Check",
+    icon: MessageCircle,
+  },
+  {
+    title: "4. Approve and market",
+    description: "Approve only candidates with verified details, then queue them for client matching so the sales side can present them confidently.",
+    stage: "Approved -> Ready For Client Matching",
+    icon: Sparkles,
+  },
+] as const;
+
+const processChecklist = [
+  "Use search and quick filters to build a shortlist by score, experience, and care type.",
+  "Open each profile before outreach so recruiters speak with full context.",
+  "Update the pipeline immediately after each action to keep the team aligned.",
+  "Use bulk actions only for clear batch work like document requests or approvals.",
+] as const;
+
 const scoreTone = (score?: number | null) => {
   if ((score ?? 0) >= 90) return "bg-emerald-100 text-emerald-800";
   if ((score ?? 0) >= 75) return "bg-sky-100 text-sky-800";
@@ -83,6 +117,161 @@ const getDocumentKind = (name?: string, url?: string) => {
   if (/\.(mp4|mov|webm|ogg)(\?|$)/.test(target)) return "video";
   if (/\.(doc|docx)(\?|$)/.test(target)) return "document";
   return "file";
+};
+
+const getNextApplicantAction = (item: AtsApplicationListItem) => {
+  const hasDirectContact = Boolean(item.profile.contactNumber || item.profile.email);
+
+  switch (item.status) {
+    case "New Applicant":
+      return {
+        title: "Review intake",
+        detail: "Confirm profile completeness, contact access, and submission quality before moving forward.",
+        cta: "Mark documents received",
+        nextStage: "Documents Submitted",
+      };
+    case "Documents Submitted":
+      return {
+        title: "Validate documents",
+        detail: "Check biodata, file uploads, and work history so the profile is ready for recruiter review.",
+        cta: "Send to resume parsing",
+        nextStage: "Resume Parsed",
+      };
+    case "Resume Parsed":
+      return {
+        title: hasDirectContact ? "Start outreach" : "Fix contact details",
+        detail: hasDirectContact
+          ? "Use the score and profile notes to decide whether this candidate should enter screening."
+          : "This profile needs a working WhatsApp number or email before follow-up can begin.",
+        cta: hasDirectContact ? "Move to screening" : "Open profile",
+        nextStage: hasDirectContact ? "Screening Interview" : undefined,
+      };
+    case "Screening Interview":
+      return {
+        title: "Complete screening",
+        detail: "Capture fit, availability, and salary alignment immediately after the first contact.",
+        cta: "Move to background check",
+        nextStage: "Background Check",
+      };
+    case "Background Check":
+      return {
+        title: "Finish verification",
+        detail: "Approve only after references, prior employment, and key claims have been reviewed.",
+        cta: "Approve candidate",
+        nextStage: "Approved",
+      };
+    case "Approved":
+      return {
+        title: "Prepare for matching",
+        detail: "This candidate is qualified. Queue the profile so the team can start client presentation.",
+        cta: "Queue for matching",
+        nextStage: "Ready For Client Matching",
+      };
+    case "Ready For Client Matching":
+      return {
+        title: "Present to clients",
+        detail: "The profile is market-ready. Use matching tools and outreach to convert to placement.",
+        cta: "Open profile",
+      };
+    case "Placed":
+      return {
+        title: "Placement complete",
+        detail: "No new shortlist action is needed unless there is a follow-up admin task to finish.",
+        cta: "Open profile",
+      };
+    case "Rejected":
+      return {
+        title: "Closed out",
+        detail: "Keep the record for history and reopen only when there is a valid business reason.",
+        cta: "Open profile",
+      };
+    default:
+      return {
+        title: "Review applicant",
+        detail: "Open the profile and decide the next recruiter action.",
+        cta: "Open profile",
+      };
+  }
+};
+
+const statusTone = (status: AtsApplicationListItem["status"]) => {
+  switch (status) {
+    case "New Applicant":
+      return "border-sky-200 bg-sky-50 text-sky-800";
+    case "Documents Submitted":
+      return "border-cyan-200 bg-cyan-50 text-cyan-800";
+    case "Resume Parsed":
+      return "border-violet-200 bg-violet-50 text-violet-800";
+    case "Screening Interview":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    case "Background Check":
+      return "border-orange-200 bg-orange-50 text-orange-800";
+    case "Approved":
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    case "Ready For Client Matching":
+      return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800";
+    case "Placed":
+      return "border-teal-200 bg-teal-50 text-teal-800";
+    case "Rejected":
+      return "border-rose-200 bg-rose-50 text-rose-800";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+};
+
+const nextActionTone = (status: AtsApplicationListItem["status"]) => {
+  switch (status) {
+    case "New Applicant":
+      return {
+        card: "border-sky-100 bg-sky-50/70",
+        icon: "bg-sky-100 text-sky-700",
+      };
+    case "Documents Submitted":
+      return {
+        card: "border-cyan-100 bg-cyan-50/70",
+        icon: "bg-cyan-100 text-cyan-700",
+      };
+    case "Resume Parsed":
+      return {
+        card: "border-violet-100 bg-violet-50/70",
+        icon: "bg-violet-100 text-violet-700",
+      };
+    case "Screening Interview":
+      return {
+        card: "border-amber-100 bg-amber-50/70",
+        icon: "bg-amber-100 text-amber-700",
+      };
+    case "Background Check":
+      return {
+        card: "border-orange-100 bg-orange-50/70",
+        icon: "bg-orange-100 text-orange-700",
+      };
+    case "Approved":
+      return {
+        card: "border-emerald-100 bg-emerald-50/70",
+        icon: "bg-emerald-100 text-emerald-700",
+      };
+    case "Ready For Client Matching":
+      return {
+        card: "border-fuchsia-100 bg-fuchsia-50/70",
+        icon: "bg-fuchsia-100 text-fuchsia-700",
+      };
+    case "Placed":
+      return {
+        card: "border-teal-100 bg-teal-50/70",
+        icon: "bg-teal-100 text-teal-700",
+      };
+    case "Rejected":
+      return {
+        card: "border-rose-100 bg-rose-50/70",
+        icon: "bg-rose-100 text-rose-700",
+      };
+    default:
+      return {
+        card: "border-slate-100 bg-slate-50/70",
+        icon: "bg-slate-100 text-slate-700",
+      };
+  }
 };
 
 const AtsRecruitmentPage = () => {
@@ -277,6 +466,79 @@ const AtsRecruitmentPage = () => {
         </div>
       </section>
 
+      <section className="rounded-[28px] border border-emerald-100 bg-[linear-gradient(135deg,#f7fff9_0%,#ffffff_52%,#eefaf4_100%)] p-6 shadow-sm">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Guide</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">How the applicant list should be used</h2>
+              <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                This page is the recruiter control room. Review incoming applicants, validate profile quality, contact serious candidates, and move them through the pipeline without losing momentum.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-white/90 px-4 py-3 text-sm text-slate-700 shadow-sm">
+              Best practice: move every applicant to the next stage on the same day you review or contact them.
+            </div>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-4">
+            {applicantFlowGuide.map((step) => (
+              <Card key={step.title} className="border-emerald-100 bg-white/90 p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+                    <step.icon className="h-5 w-5" />
+                  </div>
+                  <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">
+                    {step.stage}
+                  </Badge>
+                </div>
+                <h3 className="mt-4 text-base font-bold text-slate-950">{step.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+            <Card className="border-slate-200 p-5">
+              <div className="flex items-center gap-2">
+                <ArrowRightLeft className="h-4 w-4 text-emerald-600" />
+                <h3 className="text-base font-bold text-slate-950">Recommended recruiter flow</h3>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold text-slate-700">
+                {[
+                  "Search or filter",
+                  "Open profile",
+                  "Check score and documents",
+                  "Contact candidate",
+                  "Update status",
+                  "Queue for matching",
+                ].map((label, index, items) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className="rounded-full bg-slate-100 px-3 py-2">{label}</span>
+                    {index < items.length - 1 ? <MoveRight className="h-4 w-4 text-slate-300" /> : null}
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="border-slate-200 p-5">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4 text-emerald-600" />
+                <h3 className="text-base font-bold text-slate-950">Daily checklist</h3>
+              </div>
+              <div className="mt-4 space-y-3">
+                {processChecklist.map((item) => (
+                  <div key={item} className="flex items-start gap-3 text-sm text-slate-600">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-emerald-600" />
+                    <p>{item}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {[
           { label: "Total Applicants", value: dashboard?.totalApplicants ?? 0, icon: Users },
@@ -429,17 +691,22 @@ const AtsRecruitmentPage = () => {
                     <th className="px-4 py-3">Score</th>
                     <th className="px-4 py-3">Skills</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Next Best Action</th>
                     <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {applications.map((item) => (
-                    <tr
-                      key={item.id}
-                      className={`border-t transition hover:bg-emerald-50/40 ${
-                        selectedId === item.id ? "bg-emerald-50/60" : "bg-white"
-                      }`}
-                    >
+                  {applications.map((item) => {
+                    const nextAction = getNextApplicantAction(item);
+                    const nextActionColors = nextActionTone(item.status);
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`border-t transition hover:bg-emerald-50/40 ${
+                          selectedId === item.id ? "bg-emerald-50/60" : "bg-white"
+                        }`}
+                      >
                       <td className="px-4 py-3 align-top">
                         <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelect(item.id)} />
                       </td>
@@ -477,9 +744,38 @@ const AtsRecruitmentPage = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <Badge variant="outline">{item.status}</Badge>
+                        <Badge variant="outline" className={statusTone(item.status)}>
+                          {item.status}
+                        </Badge>
                         <div className="mt-2 text-xs text-slate-500">
                           Match {item.clientMatchScore ?? 0} · Salary {item.profile.expectedSalary ?? "N/A"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className={`min-w-[250px] rounded-2xl border p-3 ${nextActionColors.card}`}>
+                          <div className="flex items-center gap-2">
+                            <div className={`rounded-xl p-1.5 ${nextActionColors.icon}`}>
+                              <Sparkles className="h-4 w-4" />
+                            </div>
+                            <p className="text-sm font-semibold text-slate-900">{nextAction.title}</p>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-slate-600">{nextAction.detail}</p>
+                          <div className="mt-3">
+                            {nextAction.nextStage ? (
+                              <Button
+                                size="sm"
+                                className="w-full"
+                                onClick={() => stageMutation.mutate({ applicationId: item.id, stage: nextAction.nextStage })}
+                                disabled={stageMutation.isPending}
+                              >
+                                {nextAction.cta}
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="outline" className="w-full" onClick={() => openProfileModal(item.id)}>
+                                {nextAction.cta}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3 align-top">
@@ -506,7 +802,8 @@ const AtsRecruitmentPage = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

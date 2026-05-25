@@ -781,20 +781,20 @@ const PublicMaidApplicationPage = () => {
                 <div className="space-y-5">
                   <SectionHeader
                     step="Start"
-                    title="Apply with FDW biodata format"
-                    description="This application follows the same structure recruiters expect from the FDW biodata form, so your profile is easier to review and shortlist."
+                    title="Professional FDW application"
+                    description="Complete your profile in a recruiter-friendly format so agencies can review, verify, and shortlist you quickly."
                     icon={Sparkles}
                   />
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-xl bg-emerald-50 p-5 border border-emerald-100">
-                      <p className="mb-3 text-sm font-bold text-emerald-900">How this works</p>
+                      <p className="mb-3 text-sm font-bold text-emerald-900">Application process</p>
                       <ol className="space-y-3 text-sm leading-relaxed text-emerald-800">
                         {[
-                          "Fill in your biodata using the same format as the FDW form.",
-                          "Add health notes, food preferences, and work arrangement details.",
-                          "Complete your care skills, employment history, and documents.",
-                          "Submit once and receive a private status page with your reference.",
+                          "Complete your biodata in the standard FDW screening format.",
+                          "Add your health notes, preferences, and work arrangement details.",
+                          "Provide care skills, employment history, and supporting documents.",
+                          "Submit once and receive a private status page with your reference number.",
                         ].map((step, i) => (
                           <li key={i} className="flex gap-3">
                             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-[10px] font-bold text-white mt-0.5">{i + 1}</span>
@@ -804,10 +804,10 @@ const PublicMaidApplicationPage = () => {
                       </ol>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                      <p className="mb-3 text-sm font-bold text-slate-800">Prepare before you start</p>
+                      <p className="mb-3 text-sm font-bold text-slate-800">Prepare before you begin</p>
                       <ul className="space-y-3 text-sm leading-relaxed text-slate-600">
                         {[
-                          "Use your active WhatsApp number and email so support can reach you quickly.",
+                          "Use an active WhatsApp number and email so recruiters can contact you quickly.",
                           "Keep your passport, resume, and certificates ready if available.",
                           "Use truthful details — agencies may compare this with your official biodata.",
                         ].map((item, i) => (
@@ -826,7 +826,7 @@ const PublicMaidApplicationPage = () => {
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
                         <ShieldCheck className="h-4 w-4" />
                       </div>
-                      <p className="text-sm font-bold text-slate-900">Terms and conditions</p>
+                      <p className="text-sm font-bold text-slate-900">Applicant declaration and consent</p>
                     </div>
                     <ul className="space-y-1.5 text-sm leading-relaxed text-slate-700">
                       {applicationTerms.map((t, i) => (
@@ -858,7 +858,7 @@ const PublicMaidApplicationPage = () => {
                         className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 shrink-0"
                       />
                       <span className="text-sm font-semibold text-slate-900 leading-relaxed">
-                        I have read and agree to the terms and conditions before starting this application.
+                        I confirm that I have read and accept the applicant declaration and consent terms before proceeding.
                       </span>
                       {termsAccepted && (
                         <CheckCircle2 className="ml-auto mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
@@ -1433,11 +1433,11 @@ const PublicMaidApplicationPage = () => {
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Before you submit</p>
-                  <p className="text-sm font-bold text-white leading-snug">Make your profile easy to shortlist</p>
+                  <p className="text-sm font-bold text-white leading-snug">Present a review-ready profile</p>
                 </div>
               </div>
               <p className="text-xs leading-relaxed text-slate-400">
-                The agency list scores your application automatically based on your experience, skills, language coverage, and supporting documents. Your WhatsApp and email appear in the recruiter list for fast contact.
+                Your application is easier to shortlist when your experience, language coverage, and supporting documents are complete. Recruiters will use your contact details for follow-up and interview coordination.
               </p>
               <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4">
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-emerald-400">Application checklist</p>
@@ -1478,9 +1478,9 @@ const PublicMaidApplicationPage = () => {
               <p className="mb-4 text-sm font-bold text-slate-900">What happens next</p>
               <ol className="space-y-3 text-xs leading-relaxed text-slate-600">
                 {[
-                  "Your application is created in the agency applicants list as a new applicant.",
-                  "Recruiters sort by qualification score, filter by skills, and contact you from the list view.",
-                  "You may receive follow-ups for missing documents, interviews, or approval updates.",
+                  "Your profile is added to the agency applicant pipeline for screening and review.",
+                  "Recruiters assess experience, skills, and documents before contacting shortlisted candidates.",
+                  "You may receive follow-ups for missing documents, interview scheduling, or status updates.",
                 ].map((item, i) => (
                   <li key={i} className="flex gap-3">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-800">{i + 1}</span>

@@ -97,7 +97,7 @@ const PublicSiteNavbar = () => {
       )}
     >
       <span className="h-2 w-2 rounded-full bg-white/90" />
-      <span>Apply as a Maid</span>
+      <span>Apply as FDW</span>
     </Link>
   );
 
@@ -143,7 +143,7 @@ const PublicSiteNavbar = () => {
       )}
     >
       <span className="h-2 w-2 rounded-full bg-white/90" />
-      <span>Apply as a Maid</span>
+      <span>Apply as FDW</span>
     </Link>
   );
 
@@ -159,8 +159,8 @@ const PublicSiteNavbar = () => {
       )}
     >
       <span className="h-2 w-2 rounded-full bg-white/90" />
-      <span className="hidden sm:inline">Apply as a Maid</span>
-      <span className="sm:hidden">Apply</span>
+      <span className="hidden sm:inline">Apply as FDW</span>
+      <span className="sm:hidden">FDW Apply</span>
     </Link>
   );
 

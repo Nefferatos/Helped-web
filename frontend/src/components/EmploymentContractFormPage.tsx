@@ -743,7 +743,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
               </div>
               <div>
                 <h2 className="text-[19px] font-bold text-gray-900 leading-tight">
-                  {isCreateMode ? "Add New Employment Contract" : "Employment Contract Form"}
+                  {isCreateMode ? "Create Employment Contract" : "Employment Contract Workspace"}
                 </h2>
                 <p className="text-[12px] text-gray-500 font-medium">
                   Reference: <span className="font-bold text-emerald-700">{displayReferenceNumber || "—"}</span>
@@ -1234,13 +1234,13 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
             <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-[14px] font-bold text-amber-800 mb-2">4 Steps For Uploading Employer PDF Documents</p>
+                  <p className="text-[14px] font-bold text-amber-800 mb-2">Document preparation checklist</p>
                   <div className="grid gap-1.5 text-[12px] text-amber-700 sm:grid-cols-2">
                     {[
-                      "Save the employer form first so the contract gets a reference number.",
-                      "Search the maid and confirm the preview before uploading files.",
-                      "Use bulk upload and choose the required PDF documents only.",
-                      "Review the uploaded forms, then select files for download or print.",
+                      "Save the contract first so the record receives a reference number.",
+                      "Confirm the maid profile and employer details before uploading signed documents.",
+                      "Use bulk upload for completed PDFs and keep categories organized.",
+                      "Review uploaded files before downloading, printing, or sharing the contract set.",
                     ].map((step, i) => (
                       <div key={i} className="flex items-start gap-1.5">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-black text-white">{i + 1}</span>
@@ -1251,7 +1251,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
                 </div>
                 <button type="button" onClick={() => setBulkUploadOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-amber-700 shadow-sm transition-colors">
-                  <Upload className="h-3.5 w-3.5" /> Bulk Upload PDF
+                  <Upload className="h-3.5 w-3.5" /> Bulk Upload PDFs
                 </button>
               </div>
             </div>

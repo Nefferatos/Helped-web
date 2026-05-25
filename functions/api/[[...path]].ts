@@ -3705,6 +3705,35 @@ app.get("/api/diagnostics", (c) => {
 app.get("/api", (c) => c.json({ message: "Welcome to Helped Cloudflare API" }));
 
 app.get(
+  "/api/agencies",
+  safeApi(async (c) => {
+    const data = await loadData(c.env);
+    const agencies = data.agencyAdmins.map((admin) => {
+      const agencyId = Number.isInteger(Number(admin.agencyId))
+        ? Number(admin.agencyId)
+        : 1;
+      const agencyMaids = data.maids.filter((maid) => maid.agencyId === agencyId);
+      const publicMaids = agencyMaids.filter((maid) => maid.isPublic).length;
+
+      return {
+        id: agencyId,
+        name: toTrimmedString(admin.agencyName) || toTrimmedString(admin.username) || "Agency",
+        email: toTrimmedString(admin.email),
+        createdAt: admin.createdAt ?? now(),
+        totalMaids: agencyMaids.length,
+        publicMaids,
+      };
+    });
+
+    const uniqueAgencies = Array.from(
+      new Map(agencies.map((agency) => [agency.id, agency])).values(),
+    ).sort((left, right) => left.name.localeCompare(right.name));
+
+    return c.json({ agencies: uniqueAgencies });
+  }),
+);
+
+app.get(
   "/api/company",
   safeApi(async (c) => {
     const data = await loadData(c.env);
@@ -3948,6 +3977,11 @@ app.get(
 
     const search = c.req.query("search")?.trim().toLowerCase()
     const visibility = c.req.query("visibility")
+    const agencyIdQuery = c.req.query("agencyId")
+    const agencyId =
+      agencyIdQuery && Number.isInteger(Number(agencyIdQuery))
+        ? Number(agencyIdQuery)
+        : undefined
     const page = parsePositiveInt(c.req.query("page"))
     const pageSize = parsePositiveInt(c.req.query("pageSize"))
     const offset = parsePositiveInt(c.req.query("offset")) ?? 0
@@ -3966,6 +4000,10 @@ app.get(
     if (visibility === "public" || visibility === "hidden") {
       const isPublic = visibility === "public"
       maids = maids.filter((maid) => maid.isPublic === isPublic)
+    }
+
+    if (agencyId != null) {
+      maids = maids.filter((maid) => maid.agencyId === agencyId)
     }
 
     maids.sort(
@@ -7473,7 +7511,7 @@ export default {
     executionContext: ExecutionContext,
   ) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) {
+    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
       try {
         return await app.fetch(request, env, executionContext);
       } catch (error) {
