@@ -1,5 +1,49 @@
 {
-  "conversations": [],
+  "conversations": [
+    {
+      "id": "ebdbadee-e0c0-4f71-b086-a6ea9a022f16",
+      "agencyId": 1,
+      "candidateReferenceCode": "IND-DAR-SAR-9732",
+      "candidateId": 88,
+      "candidateName": "Amrita Rai Uphadaya",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-05-22T03:52:41.363Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-05-25T06:30:56.235Z",
+      "updatedAt": "2026-05-25T06:30:56.235Z"
+    }
+  ],
   "messages": [],
   "templates": [
     {
