@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
@@ -24,13 +25,20 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   ClipboardCheck,
+  ExternalLink,
   Filter,
+  FileText,
+  Image as ImageIcon,
   Mail,
   MessageCircle,
+  MonitorUp,
+  MoveLeft,
+  MoveRight,
   Search,
   SlidersHorizontal,
   Sparkles,
   Users,
+  Video,
 } from "lucide-react";
 
 const pipelineStages = [
@@ -68,11 +76,22 @@ const makeWhatsAppHref = (value?: string) => {
 const filterChipClassName =
   "rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700";
 
+const getDocumentKind = (name?: string, url?: string) => {
+  const target = `${name ?? ""} ${url ?? ""}`.toLowerCase();
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(target)) return "image";
+  if (/\.pdf(\?|$)/.test(target)) return "pdf";
+  if (/\.(mp4|mov|webm|ogg)(\?|$)/.test(target)) return "video";
+  if (/\.(doc|docx)(\?|$)/.test(target)) return "document";
+  return "file";
+};
+
 const AtsRecruitmentPage = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [activeDocumentIndex, setActiveDocumentIndex] = useState(0);
   const [matchingPrompt, setMatchingPrompt] = useState(
     "Need Indonesian maid. Can care for newborn. Can cook Chinese food. Budget SGD 700.",
   );
@@ -190,6 +209,12 @@ const AtsRecruitmentPage = () => {
 
   const setQuickFilter = (next: Record<string, unknown>) => setFilters(next);
 
+  const openProfileModal = (applicationId: string) => {
+    setSelectedId(applicationId);
+    setActiveDocumentIndex(0);
+    setProfileModalOpen(true);
+  };
+
   const scoreFactors = detail?.score?.factors
     ? [
         ["Experience", detail.score.factors.experience],
@@ -200,6 +225,23 @@ const AtsRecruitmentPage = () => {
         ["Interview", detail.score.factors.interviewRating],
       ]
     : [];
+
+  const documents = detail?.documents ?? [];
+  const activeDocument = documents[activeDocumentIndex] ?? null;
+  const activeDocumentKind = getDocumentKind(activeDocument?.name, activeDocument?.url);
+  const canPreviewActiveDocument = Boolean(
+    activeDocument?.url && ["image", "pdf", "video"].includes(activeDocumentKind),
+  );
+
+  useEffect(() => {
+    setActiveDocumentIndex(0);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (activeDocumentIndex >= documents.length && documents.length > 0) {
+      setActiveDocumentIndex(documents.length - 1);
+    }
+  }, [activeDocumentIndex, documents.length]);
 
   return (
     <div className="space-y-6">
@@ -402,7 +444,7 @@ const AtsRecruitmentPage = () => {
                         <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelect(item.id)} />
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <button className="text-left" onClick={() => setSelectedId(item.id)}>
+                        <button className="text-left" onClick={() => openProfileModal(item.id)}>
                           <div className="font-semibold text-slate-900 hover:underline">{item.profile.fullName}</div>
                           <div className="mt-1 text-xs text-slate-500">
                             {item.maidReferenceCode || item.applicationCode} · {item.profile.nationality} · {item.profile.yearsOfExperience} yrs
@@ -442,7 +484,7 @@ const AtsRecruitmentPage = () => {
                       </td>
                       <td className="px-4 py-3 align-top">
                         <div className="flex flex-wrap gap-2">
-                          <Button variant="outline" size="sm" onClick={() => setSelectedId(item.id)}>
+                          <Button variant="outline" size="sm" onClick={() => openProfileModal(item.id)}>
                             Profile
                           </Button>
                           {makeWhatsAppHref(item.profile.contactNumber) ? (
@@ -509,6 +551,9 @@ const AtsRecruitmentPage = () => {
                     <Badge className={scoreTone(detail.score?.score)}>{detail.score?.score ?? 0}</Badge>
                   </div>
                   <p className="mt-3 text-sm text-slate-600">{detail.score?.explanation || detail.application.aiParseSummary}</p>
+                  <Button className="mt-4" variant="outline" onClick={() => setProfileModalOpen(true)}>
+                    Open Profile Modal
+                  </Button>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <a
                       href={makeWhatsAppHref(String(detail.profile?.contactNumber || detail.application.profile.contactNumber || "")) || undefined}
@@ -616,6 +661,218 @@ const AtsRecruitmentPage = () => {
           </Card>
         </div>
       </section>
+
+      <Dialog open={profileModalOpen} onOpenChange={setProfileModalOpen}>
+        <DialogContent className="max-h-[92vh] max-w-6xl overflow-hidden rounded-3xl p-0">
+          <div className="grid h-full min-h-[75vh] grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="border-b bg-slate-50 p-6 xl:border-b-0 xl:border-r">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-black text-slate-950">
+                  {String(detail?.profile?.fullName || detail?.application.profile.fullName || "Applicant Profile")}
+                </DialogTitle>
+                <DialogDescription className="text-sm text-slate-600">
+                  Full recruiter review with uploaded documents, scoring, and quick contact actions.
+                </DialogDescription>
+              </DialogHeader>
+
+              {detail && (
+                <div className="mt-6 space-y-4">
+                  <div className="rounded-2xl border bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{String(detail.application.applicationCode)}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {String(detail.profile?.nationality || detail.application.profile.nationality)} · {String(detail.application.status)}
+                        </p>
+                      </div>
+                      <Badge className={scoreTone(detail.score?.score)}>{detail.score?.score ?? 0}</Badge>
+                    </div>
+                    <p className="mt-3 text-sm text-slate-600">{detail.score?.explanation || detail.application.aiParseSummary}</p>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <a
+                      href={makeWhatsAppHref(String(detail.profile?.contactNumber || detail.application.profile.contactNumber || "")) || undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-2xl border bg-white p-3 text-sm"
+                    >
+                      <p className="font-semibold text-slate-900">WhatsApp</p>
+                      <p className="mt-1 text-slate-600">{String(detail.profile?.contactNumber || detail.application.profile.contactNumber || "Not provided")}</p>
+                    </a>
+                    <a
+                      href={detail.profile?.email ? `mailto:${String(detail.profile.email)}` : undefined}
+                      className="rounded-2xl border bg-white p-3 text-sm"
+                    >
+                      <p className="font-semibold text-slate-900">Email</p>
+                      <p className="mt-1 text-slate-600">{String(detail.profile?.email || "Not provided")}</p>
+                    </a>
+                  </div>
+
+                  <div className="rounded-2xl border bg-white p-4">
+                    <h3 className="font-semibold text-slate-900">Documents</h3>
+                    <div className="mt-3 space-y-2">
+                      {documents.length === 0 ? (
+                        <p className="text-sm text-slate-500">No uploaded documents yet.</p>
+                      ) : (
+                        documents.map((document, index) => {
+                          const kind = getDocumentKind(document.name, document.url);
+                          return (
+                            <button
+                              key={document.id}
+                              type="button"
+                              onClick={() => setActiveDocumentIndex(index)}
+                              className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                                activeDocumentIndex === index ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white hover:border-emerald-300"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="rounded-xl bg-slate-100 p-2 text-slate-600">
+                                  {kind === "image" ? <ImageIcon className="h-4 w-4" /> : kind === "video" ? <Video className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-slate-900">{document.name}</p>
+                                  <p className="text-xs text-slate-500">{document.type} · {document.status}</p>
+                                </div>
+                              </div>
+                              <Badge variant="outline">{index + 1}</Badge>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex min-h-0 flex-col">
+              <div className="border-b px-6 py-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-950">Document Viewer</h3>
+                    <p className="text-sm text-slate-500">
+                      {activeDocument ? `${activeDocumentIndex + 1} of ${documents.length}` : "Select a document to preview"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveDocumentIndex((current) => Math.max(current - 1, 0))}
+                      disabled={activeDocumentIndex <= 0}
+                    >
+                      <MoveLeft className="mr-2 h-4 w-4" />
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveDocumentIndex((current) => Math.min(current + 1, documents.length - 1))}
+                      disabled={documents.length === 0 || activeDocumentIndex >= documents.length - 1}
+                    >
+                      Next
+                      <MoveRight className="ml-2 h-4 w-4" />
+                    </Button>
+                    {activeDocument?.url ? (
+                      <Button asChild variant="outline" size="sm">
+                        <a href={activeDocument.url} target="_blank" rel="noreferrer">
+                          <MonitorUp className="mr-2 h-4 w-4" />
+                          Full Screen
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="min-h-0 border-b xl:border-b-0 xl:border-r">
+                  <div className="flex h-full items-center justify-center bg-slate-950/95 p-4">
+                    {!activeDocument ? (
+                      <div className="text-center text-slate-300">
+                        <FileText className="mx-auto h-10 w-10 opacity-70" />
+                        <p className="mt-3 text-sm">No document selected.</p>
+                      </div>
+                    ) : canPreviewActiveDocument ? (
+                      activeDocumentKind === "image" ? (
+                        <img src={activeDocument.url} alt={activeDocument.name} className="max-h-full max-w-full rounded-2xl object-contain" />
+                      ) : activeDocumentKind === "video" ? (
+                        <video src={activeDocument.url} controls className="max-h-full max-w-full rounded-2xl" />
+                      ) : (
+                        <iframe title={activeDocument.name} src={activeDocument.url} className="h-full min-h-[60vh] w-full rounded-2xl bg-white" />
+                      )
+                    ) : (
+                      <div className="max-w-md rounded-3xl bg-white p-6 text-center shadow-sm">
+                        <FileText className="mx-auto h-10 w-10 text-slate-500" />
+                        <h4 className="mt-4 text-lg font-bold text-slate-950">{activeDocument.name}</h4>
+                        <p className="mt-2 text-sm text-slate-600">
+                          This file type is displayed as an uploaded document record. Open it in fullscreen to review the original file.
+                        </p>
+                        <Button asChild className="mt-4">
+                          <a href={activeDocument.url} target="_blank" rel="noreferrer">
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Open File
+                          </a>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-h-0 overflow-y-auto bg-white p-6">
+                  {detail ? (
+                    <div className="space-y-5">
+                      <div className="rounded-2xl border p-4">
+                        <h3 className="font-semibold text-slate-900">Score Breakdown</h3>
+                        <div className="mt-3 space-y-3">
+                          {scoreFactors.map(([label, value]) => (
+                            <div key={label}>
+                              <div className="mb-1 flex items-center justify-between text-xs text-slate-600">
+                                <span>{label}</span>
+                                <span>{value}</span>
+                              </div>
+                              <div className="h-2 rounded-full bg-slate-100">
+                                <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${value}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border p-4">
+                        <h3 className="font-semibold text-slate-900">Strengths</h3>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(detail.score?.strengths ?? []).map((item) => <Badge key={item} variant="outline">{item}</Badge>)}
+                        </div>
+                        <h3 className="mt-4 font-semibold text-slate-900">Weaknesses</h3>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(detail.score?.weaknesses ?? []).map((item) => <Badge key={item} variant="outline">{item}</Badge>)}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border p-4">
+                        <h3 className="font-semibold text-slate-900">Status History</h3>
+                        <div className="mt-3 space-y-3">
+                          {detail.history.map((item) => (
+                            <div key={item.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                              <div className="font-medium text-slate-900">{item.fromStage ? `${item.fromStage} -> ${item.toStage}` : item.toStage}</div>
+                              <div className="text-xs text-slate-500">{item.actor} · {formatDate(item.createdAt)}</div>
+                              <div className="mt-1 text-slate-600">{item.reason}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">Loading applicant profile…</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
