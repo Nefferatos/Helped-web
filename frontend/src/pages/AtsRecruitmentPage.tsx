@@ -150,7 +150,10 @@ const AtsRecruitmentPage = () => {
   });
 
   const dashboard = dashboardQuery.data;
-  const applications = applicationsQuery.data?.data ?? [];
+  const applications = useMemo(
+    () => applicationsQuery.data?.data ?? [],
+    [applicationsQuery.data?.data],
+  );
   const detail = detailQuery.data;
 
   const selectedCount = selectedIds.length;

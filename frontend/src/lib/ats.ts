@@ -25,6 +25,7 @@ export interface AtsDashboard {
 
 export interface AtsApplicationListItem {
   id: string;
+  applicationCode: string;
   maidReferenceCode?: string;
   status: string;
   appliedAt: string;
