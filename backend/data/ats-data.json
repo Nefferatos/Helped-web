@@ -1,6 +1,25 @@
 {
   "applications": [
     {
+      "id": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "agencyId": 1,
+      "profileId": "df26ce69-430f-42d2-89c1-51e112243ebb",
+      "applicationCode": "APP-3F6BF642",
+      "applicantAccessToken": "a5413fa0-cfb1-401a-bafe-5a9d2c76df8f",
+      "status": "Ready For Client Matching",
+      "source": "resume_upload",
+      "appliedAt": "2026-05-26T02:15:15.673Z",
+      "updatedAt": "2026-05-26T02:23:12.100Z",
+      "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
+      "aiParseReviewRequired": true,
+      "notificationLogIds": [
+        "e7001ba1-52d7-48fd-9b3c-0f50146f8b0c",
+        "8123d7dd-7000-4376-9008-083294e212d2",
+        "8daf0576-3909-4eed-9ccd-1a13c2cc1707"
+      ],
+      "approvedAt": "2026-05-26T02:23:08.307Z"
+    },
+    {
       "id": "ca1ffba4-c59f-41e6-8c8a-1b38591aa6b8",
       "agencyId": 1,
       "maidReferenceCode": "IND-DAR-SAB-00001",
@@ -1304,6 +1323,96 @@
     }
   ],
   "profiles": [
+    {
+      "id": "df26ce69-430f-42d2-89c1-51e112243ebb",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fullName": "test",
+      "email": "test@gmail.com",
+      "whatsappNumber": "090909009",
+      "nationality": "Filipino maid",
+      "dateOfBirth": "",
+      "age": null,
+      "gender": "Female",
+      "maritalStatus": "",
+      "contactNumber": "090909009",
+      "address": "",
+      "yearsOfExperience": 0,
+      "previousCountriesWorkedIn": [],
+      "childcareExperience": 0,
+      "newbornCareExperience": 0,
+      "elderlyCareExperience": 0,
+      "disabledCareExperience": 0,
+      "housekeepingExperience": 0,
+      "cookingSkills": [],
+      "petCareExperience": 0,
+      "languageSkills": [],
+      "certifications": [],
+      "trainingRecords": [],
+      "availableDate": "",
+      "expectedSalary": 0,
+      "employmentPreference": "",
+      "medicalStatus": "pending",
+      "passportStatus": "missing",
+      "certificationStatus": "missing",
+      "workHistory": [],
+      "fdwFormData": {
+        "placeOfBirth": "",
+        "heightCm": "",
+        "weightKg": "",
+        "residentialAddressLine1": "",
+        "residentialAddressLine2": "",
+        "repatriationPort": "",
+        "homeCountryContactNumber": "",
+        "religion": "",
+        "educationLevel": "",
+        "numberOfSiblings": "",
+        "numberOfChildren": "",
+        "childrenAges": "",
+        "allergies": "",
+        "physicalDisabilities": "",
+        "dietaryRestrictions": "",
+        "foodPreference": "",
+        "foodPreferenceOther": "",
+        "restDayPreference": "",
+        "otherRemarksA3": "",
+        "sgInfantsChildrenAssessment": "",
+        "sgElderlyAssessment": "",
+        "sgDisabledAssessment": "",
+        "sgHouseworkAssessment": "",
+        "sgCookingAssessment": "",
+        "sgLanguageAssessment": "",
+        "sgOtherSkills": "",
+        "sgOtherSkillsAssessment": "",
+        "foreignTrainingCentreName": "",
+        "thirdPartyCertificationDetails": "",
+        "overseasInfantsChildrenAssessment": "",
+        "overseasElderlyAssessment": "",
+        "overseasDisabledAssessment": "",
+        "overseasHouseworkAssessment": "",
+        "overseasCookingAssessment": "",
+        "overseasLanguageAssessment": "",
+        "overseasOtherSkills": "",
+        "overseasOtherSkillsAssessment": "",
+        "feedbackEmployer1": "",
+        "feedbackEmployer2": "",
+        "otherRemarksE": "",
+        "medicalConditions": "",
+        "workedInSingapore": false,
+        "willingToHandleInfants": false,
+        "willingToHandleElderly": false,
+        "willingToHandleDisabled": false,
+        "willingToDoHousework": false,
+        "willingToCook": false
+      },
+      "strengthsTags": [],
+      "weaknessesTags": [
+        "Passport missing",
+        "Certificates missing",
+        "Limited experience"
+      ],
+      "createdAt": "2026-05-26T02:15:15.673Z",
+      "updatedAt": "2026-05-26T02:15:15.673Z"
+    },
     {
       "id": "892acebf-8b49-4395-baf9-80004a3f065f",
       "applicationId": "ca1ffba4-c59f-41e6-8c8a-1b38591aa6b8",
@@ -6507,6 +6616,19 @@
   "interviews": [],
   "backgroundChecks": [
     {
+      "id": "76457ac3-c46d-42bf-987c-801d2baba576",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "passportVerified": false,
+      "identityVerified": false,
+      "employmentHistoryVerified": false,
+      "referenceVerified": false,
+      "medicalClearanceVerified": false,
+      "completionPercentage": 0,
+      "result": "Pending",
+      "notes": "",
+      "updatedAt": "2026-05-26T02:15:15.674Z"
+    },
+    {
       "id": "2752e03f-fd4f-4424-8bc7-6025d9e55dfa",
       "applicationId": "ca1ffba4-c59f-41e6-8c8a-1b38591aa6b8",
       "passportVerified": false,
@@ -7574,6 +7696,28 @@
     }
   ],
   "scores": [
+    {
+      "id": "511b2071-578b-4b89-a2ef-6741ec113680",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "score": 3,
+      "category": "Not Qualified",
+      "explanation": "test is not qualified based on experience, skills, language coverage, references, and interview performance.",
+      "strengths": [],
+      "weaknesses": [
+        "Passport not submitted",
+        "Certificates missing",
+        "Limited verified work experience"
+      ],
+      "factors": {
+        "experience": 0,
+        "skillMatch": 0,
+        "certifications": 0,
+        "references": 20,
+        "languageSkills": 0,
+        "interviewRating": 0
+      },
+      "updatedAt": "2026-05-26T02:15:15.674Z"
+    },
     {
       "id": "e8a90389-f908-41aa-bde7-a2139fb85e40",
       "applicationId": "ca1ffba4-c59f-41e6-8c8a-1b38591aa6b8",
@@ -9578,7 +9722,22 @@
   ],
   "matches": [
     {
-      "id": "4c5164e1-93a4-4335-a0b6-87a23e03d18b",
+      "id": "2ae5a308-43d2-4b97-9937-09b2335daaef",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "compatibilityScore": 10,
+      "skillsMatched": [
+        "Salary within budget (0)"
+      ],
+      "missingRequirements": [
+        "Preferred nationality mismatch",
+        "No newborn care experience",
+        "Chinese cooking not confirmed"
+      ],
+      "recommendation": "Low confidence match",
+      "createdAt": "2026-05-26T02:25:46.206Z"
+    },
+    {
+      "id": "2b781dc3-e3f2-4aaf-9baf-b210d60e596a",
       "applicationId": "81f3fc16-8616-4192-92b8-4d1475b03899",
       "compatibilityScore": 29,
       "skillsMatched": [
@@ -9590,10 +9749,72 @@
         "Chinese cooking not confirmed"
       ],
       "recommendation": "Low confidence match",
-      "createdAt": "2026-05-25T01:28:02.614Z"
+      "createdAt": "2026-05-26T02:25:46.206Z"
     }
   ],
   "history": [
+    {
+      "id": "bc42c1d7-cf07-40a4-b11b-39d627e2fa54",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Approved",
+      "toStage": "Ready For Client Matching",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready For Client Matching",
+      "createdAt": "2026-05-26T02:23:12.100Z"
+    },
+    {
+      "id": "ae9598bb-1e63-4d6d-b919-5f1cab960913",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Background Check",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Stage changed to Approved",
+      "createdAt": "2026-05-26T02:23:08.307Z"
+    },
+    {
+      "id": "e7046ec6-5615-45bd-ba39-ae0f60a403c2",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Screening Interview",
+      "toStage": "Background Check",
+      "actor": "attheagency",
+      "reason": "Stage changed to Background Check",
+      "createdAt": "2026-05-26T02:22:09.570Z"
+    },
+    {
+      "id": "b1e76612-5141-4325-8a39-afa1ffed0fcb",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Resume Parsed",
+      "toStage": "Screening Interview",
+      "actor": "attheagency",
+      "reason": "Stage changed to Screening Interview",
+      "createdAt": "2026-05-26T02:22:08.904Z"
+    },
+    {
+      "id": "89aa5342-e12c-4351-a0b2-03356058749b",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Documents Submitted",
+      "toStage": "Resume Parsed",
+      "actor": "attheagency",
+      "reason": "Stage changed to Resume Parsed",
+      "createdAt": "2026-05-26T02:22:08.202Z"
+    },
+    {
+      "id": "d6fe563e-01c2-4baa-b6da-88180748a44c",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "New Applicant",
+      "toStage": "Documents Submitted",
+      "actor": "attheagency",
+      "reason": "Stage changed to Documents Submitted",
+      "createdAt": "2026-05-26T02:22:06.774Z"
+    },
+    {
+      "id": "88ba06d7-1ac0-4002-be67-a88e7c21275a",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "toStage": "New Applicant",
+      "actor": "applicant",
+      "reason": "Application submitted through the public maid applicant portal",
+      "createdAt": "2026-05-26T02:15:15.673Z"
+    },
     {
       "id": "824d94fa-be1c-4e7d-abdb-0b43964401dc",
       "applicationId": "81f3fc16-8616-4192-92b8-4d1475b03899",
@@ -10954,6 +11175,96 @@
     }
   ],
   "notifications": [
+    {
+      "id": "46290562-1dcd-4f97-9999-4259e678572d",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "test moved to Ready For Client Matching",
+      "createdAt": "2026-05-26T02:23:12.100Z"
+    },
+    {
+      "id": "9a90a0e5-5f54-483f-8b61-43295eddfabb",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "approved",
+      "message": "test moved to Approved",
+      "createdAt": "2026-05-26T02:23:08.307Z"
+    },
+    {
+      "id": "63ea23ff-7b44-4bfa-a162-b8b377e6dd70",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "test moved to Background Check",
+      "createdAt": "2026-05-26T02:22:09.570Z"
+    },
+    {
+      "id": "f4b8e086-66f8-4d50-b67f-0746ed264eff",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "test moved to Screening Interview",
+      "createdAt": "2026-05-26T02:22:08.905Z"
+    },
+    {
+      "id": "a6d94771-ab22-4ee9-bd2c-9dd254431077",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "test moved to Resume Parsed",
+      "createdAt": "2026-05-26T02:22:08.202Z"
+    },
+    {
+      "id": "95b1ced9-43a3-448b-978e-69f66b30aea3",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "test moved to Documents Submitted",
+      "createdAt": "2026-05-26T02:22:06.775Z"
+    },
+    {
+      "id": "8daf0576-3909-4eed-9ccd-1a13c2cc1707",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "agency-1",
+      "templateKey": "application_received",
+      "message": "test submitted a new applicant portal form.",
+      "createdAt": "2026-05-26T02:15:15.674Z"
+    },
+    {
+      "id": "8123d7dd-7000-4376-9008-083294e212d2",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "email",
+      "recipient": "test@gmail.com",
+      "templateKey": "application_received",
+      "message": "Thank you test. Your application has been received with reference APP-3F6BF642. Our recruitment team will review your profile shortly.",
+      "createdAt": "2026-05-26T02:15:15.674Z"
+    },
+    {
+      "id": "e7001ba1-52d7-48fd-9b3c-0f50146f8b0c",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "whatsapp",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "Thank you test. Your application has been received with reference APP-3F6BF642. Our recruitment team will review your profile shortly.",
+      "createdAt": "2026-05-26T02:15:15.674Z"
+    },
     {
       "id": "22c74f45-2c1e-4493-82ba-64e50d27b5bd",
       "applicationId": "81f3fc16-8616-4192-92b8-4d1475b03899",
@@ -14079,6 +14390,71 @@
         "url": "",
         "required": false,
         "uploadedAt": "2026-05-24T04:13:53.513Z",
+        "status": "missing"
+      }
+    ],
+    "3174a055-dd34-432a-9fcd-7a244264f5c9": [
+      {
+        "id": "8b62dd39-90ce-41b0-8160-c0d107941515",
+        "type": "resume",
+        "name": "Resume/CV",
+        "url": "",
+        "required": true,
+        "uploadedAt": "2026-05-26T02:15:15.674Z",
+        "status": "missing"
+      },
+      {
+        "id": "ea9eba07-eff3-4b69-bf53-4d880bcb5c54",
+        "type": "passport",
+        "name": "Passport",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-05-26T02:15:15.674Z",
+        "status": "missing"
+      },
+      {
+        "id": "cd49a29f-c68f-464a-9a78-6f2bf575e421",
+        "type": "work_permit",
+        "name": "Work Permit Documents",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-05-26T02:15:15.674Z",
+        "status": "missing"
+      },
+      {
+        "id": "51a6a406-02f8-45ff-8187-905f8aa8ad00",
+        "type": "medical",
+        "name": "Medical Records",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-05-26T02:15:15.674Z",
+        "status": "missing"
+      },
+      {
+        "id": "8d84e920-bae2-4ef6-93a9-77b549ec0084",
+        "type": "certificate",
+        "name": "Certificates",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-05-26T02:15:15.674Z",
+        "status": "missing"
+      },
+      {
+        "id": "50a229bc-84ed-4b54-a276-7fb23d6aef97",
+        "type": "reference",
+        "name": "References",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-05-26T02:15:15.674Z",
+        "status": "missing"
+      },
+      {
+        "id": "fb57a2e0-daad-4d9f-a05c-2107d5d0bbce",
+        "type": "video",
+        "name": "Introduction Video",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-05-26T02:15:15.674Z",
         "status": "missing"
       }
     ]

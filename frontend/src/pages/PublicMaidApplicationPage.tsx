@@ -205,6 +205,38 @@ const fileConfig = [
   { key: "otherDocuments", label: "Other supporting documents", icon: Paperclip, hint: "PDF, DOC, DOCX, JPG, PNG" },
 ] as const;
 
+const nationalityOptions = [
+  "Filipino maid",
+  "Indonesian maid",
+  "Indian maid",
+  "Myanmar maid",
+  "Sri Lankan maid",
+  "Bangladeshi maid",
+  "Nepali maid",
+  "Cambodian maid",
+  "Others",
+] as const;
+
+const religionOptions = [
+  "Catholic",
+  "Christian",
+  "Muslim",
+  "Hindu",
+  "Buddhist",
+  "Sikh",
+  "Free Thinker",
+  "Others",
+] as const;
+
+const maritalStatusOptions = [
+  "Single",
+  "Single Parent",
+  "Married",
+  "Divorced",
+  "Widowed",
+  "Separated",
+] as const;
+
 const educationLevelOptions = [
   "Primary Level (≤6 yrs)",
   "Secondary Level (7–9 yrs)",
@@ -270,9 +302,6 @@ const selectCls =
 const textareaCls =
   "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-100";
 
-// Date input styled to match fieldCls — browser renders dd/mm/yyyy based on locale,
-// but the underlying value stays as yyyy-mm-dd (HTML spec). The placeholder text
-// "dd/mm/yyyy" is shown via the class below when the field is empty.
 const dateCls =
   "h-11 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-calendar-picker-indicator]:cursor-pointer";
 
@@ -429,7 +458,6 @@ const EmploymentRow = ({
       )}
     </div>
     <div className="grid gap-4 p-4 sm:grid-cols-2">
-      {/* From / To — year dropdowns */}
       <YearSelect
         label="From (year)"
         value={entry.from}
@@ -461,7 +489,7 @@ const EmploymentRow = ({
   </div>
 );
 
-// ─── Height options: 100–220 cm with ft/in label ─────────────────────────────
+// ─── Height / Weight options ──────────────────────────────────────────────────
 
 const cmToFtIn = (cm: number): string => {
   const totalInches = cm / 2.54;
@@ -474,8 +502,6 @@ const heightOptions = Array.from({ length: 121 }, (_, i) => {
   const cm = 100 + i;
   return { value: String(cm), label: `${cm} cm (${cmToFtIn(cm)})` };
 });
-
-// ─── Weight options: 30–150 kg with lbs label ────────────────────────────────
 
 const weightOptions = Array.from({ length: 121 }, (_, i) => {
   const kg = 30 + i;
@@ -509,9 +535,6 @@ const PublicMaidApplicationPage = () => {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [languageDraft, setLanguageDraft] = useState("");
   const [employmentHistory, setEmploymentHistory] = useState<EmploymentEntry[]>([createEmptyEntry()]);
-
-  // ── NEW: tracks whether the user explicitly clicked "Continue" on step 0.
-  // Only after introCompleted === true are steps 1–4 accessible.
   const [introCompleted, setIntroCompleted] = useState(false);
 
   const agenciesQuery = useQuery({
@@ -649,30 +672,25 @@ const PublicMaidApplicationPage = () => {
   const isLastStep = activeStep === stepItems.length - 1;
   const isFirstStep = activeStep === 0;
 
-  // ── Scroll helper ─────────────────────────────────────────────────────────
   const scrollToTerms = () => {
     setTimeout(() => {
       document.getElementById("terms-checkbox")?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 50);
   };
 
-  // ── Show terms alert and return to step 0 ─────────────────────────────────
   const requireTerms = () => {
     setActiveStep(0);
     setShowTermsAlert(true);
     scrollToTerms();
   };
 
-  // ── "Continue" / "Submit" handler ─────────────────────────────────────────
   const goNext = () => {
     if (activeStep === 0) {
-      // Must have accepted terms before leaving step 0
       if (!termsAccepted) {
         setShowTermsAlert(true);
         scrollToTerms();
         return;
       }
-      // Mark intro as completed so other tabs unlock
       setIntroCompleted(true);
       setShowTermsAlert(false);
       setActiveStep(1);
@@ -683,18 +701,9 @@ const PublicMaidApplicationPage = () => {
 
   const goPrev = () => setActiveStep((c) => Math.max(c - 1, 0));
 
-  // ── Tab click handler ─────────────────────────────────────────────────────
-  // Step 0 is always accessible.
-  // Steps 1–4 require introCompleted (i.e. user clicked Continue on step 0).
   const handleStepClick = (i: number) => {
-    if (i === 0) {
-      setActiveStep(0);
-      return;
-    }
-    if (!introCompleted) {
-      requireTerms();
-      return;
-    }
+    if (i === 0) { setActiveStep(0); return; }
+    if (!introCompleted) { requireTerms(); return; }
     setActiveStep(i);
   };
 
@@ -711,7 +720,7 @@ const PublicMaidApplicationPage = () => {
             submitMutation.mutate();
           }}
         >
-          {/* ── Main card ─────────────────────────────────────────────── */}
+          {/* ── Main card ── */}
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
 
             {/* Step nav */}
@@ -721,7 +730,6 @@ const PublicMaidApplicationPage = () => {
                   const Icon = s.icon;
                   const isActive = i === activeStep;
                   const isDone = s.isComplete;
-                  // Steps 1–4 are locked until user explicitly continues from step 0
                   const isLocked = i > 0 && !introCompleted;
                   return (
                     <button
@@ -776,7 +784,7 @@ const PublicMaidApplicationPage = () => {
             {/* Panel content */}
             <div className="p-4 sm:p-6 lg:p-8">
 
-              {/* ── Step 0: Intro ─────────────────────────────────────── */}
+              {/* ── Step 0: Intro ── */}
               {activeStep === 0 && (
                 <div className="space-y-5">
                   <SectionHeader
@@ -886,7 +894,7 @@ const PublicMaidApplicationPage = () => {
                 </div>
               )}
 
-              {/* ── Step 1: Biodata ───────────────────────────────────── */}
+              {/* ── Step 1: Biodata ── */}
               {activeStep === 1 && (
                 <>
                   <SectionHeader
@@ -908,24 +916,38 @@ const PublicMaidApplicationPage = () => {
                         ))}
                       </select>
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel required>Full name</FieldLabel>
                       <Input className={fieldCls} value={form.fullName} onChange={(e) => updateField("fullName", e.target.value)} required placeholder="As per passport" />
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel required>Email</FieldLabel>
                       <Input className={fieldCls} type="email" value={form.email} onChange={(e) => updateField("email", e.target.value)} required placeholder="active@email.com" />
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel required>WhatsApp / contact number</FieldLabel>
                       <Input className={fieldCls} value={form.contactNumber} onChange={(e) => updateField("contactNumber", e.target.value)} required placeholder="+63 912 345 6789" />
                     </label>
+
+                    {/* ── Nationality dropdown ── */}
                     <label className="space-y-1.5">
                       <FieldLabel required>Nationality</FieldLabel>
-                      <Input className={fieldCls} value={form.nationality} onChange={(e) => updateField("nationality", e.target.value)} required />
+                      <select
+                        className={selectCls}
+                        value={form.nationality}
+                        onChange={(e) => updateField("nationality", e.target.value)}
+                        required
+                      >
+                        <option value="">Select Nationality</option>
+                        {nationalityOptions.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
                     </label>
 
-                    {/* Date of birth — native date picker, displays dd/mm/yyyy */}
                     <label className="space-y-1.5">
                       <FieldLabel>Date of birth</FieldLabel>
                       <input
@@ -942,14 +964,37 @@ const PublicMaidApplicationPage = () => {
                       <FieldLabel>Place of birth</FieldLabel>
                       <Input className={fieldCls} value={form.placeOfBirth} onChange={(e) => updateField("placeOfBirth", e.target.value)} />
                     </label>
+
+                    {/* ── Marital status dropdown ── */}
                     <label className="space-y-1.5">
                       <FieldLabel>Marital status</FieldLabel>
-                      <Input className={fieldCls} value={form.maritalStatus} onChange={(e) => updateField("maritalStatus", e.target.value)} />
+                      <select
+                        className={selectCls}
+                        value={form.maritalStatus}
+                        onChange={(e) => updateField("maritalStatus", e.target.value)}
+                      >
+                        <option value="">Select Status</option>
+                        {maritalStatusOptions.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
                     </label>
+
+                    {/* ── Religion dropdown ── */}
                     <label className="space-y-1.5">
                       <FieldLabel>Religion</FieldLabel>
-                      <Input className={fieldCls} value={form.religion} onChange={(e) => updateField("religion", e.target.value)} />
+                      <select
+                        className={selectCls}
+                        value={form.religion}
+                        onChange={(e) => updateField("religion", e.target.value)}
+                      >
+                        <option value="">Select Religion</option>
+                        {religionOptions.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Height</FieldLabel>
                       <select
@@ -963,6 +1008,7 @@ const PublicMaidApplicationPage = () => {
                         ))}
                       </select>
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Weight</FieldLabel>
                       <select
@@ -976,6 +1022,7 @@ const PublicMaidApplicationPage = () => {
                         ))}
                       </select>
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Education level</FieldLabel>
                       <select className={selectCls} value={form.educationLevel} onChange={(e) => updateField("educationLevel", e.target.value)}>
@@ -983,34 +1030,42 @@ const PublicMaidApplicationPage = () => {
                         {educationLevelOptions.map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Number of siblings</FieldLabel>
                       <Input className={fieldCls} type="number" min="0" value={form.numberOfSiblings} onChange={(e) => updateField("numberOfSiblings", e.target.value)} />
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Number of children</FieldLabel>
                       <Input className={fieldCls} type="number" min="0" value={form.numberOfChildren} onChange={(e) => updateField("numberOfChildren", e.target.value)} />
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Children ages</FieldLabel>
                       <Input className={fieldCls} value={form.childrenAges} onChange={(e) => updateField("childrenAges", e.target.value)} placeholder="e.g. 3, 6, 10" />
                     </label>
+
                     <label className="space-y-1.5 sm:col-span-2">
                       <FieldLabel>Residential address</FieldLabel>
                       <Textarea className={textareaCls} rows={2} value={form.address} onChange={(e) => updateField("address", e.target.value)} />
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Home address line 1</FieldLabel>
                       <Input className={fieldCls} value={form.residentialAddressLine1} onChange={(e) => updateField("residentialAddressLine1", e.target.value)} />
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Home address line 2</FieldLabel>
                       <Input className={fieldCls} value={form.residentialAddressLine2} onChange={(e) => updateField("residentialAddressLine2", e.target.value)} />
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Repatriation port / airport</FieldLabel>
                       <Input className={fieldCls} value={form.repatriationPort} onChange={(e) => updateField("repatriationPort", e.target.value)} />
                     </label>
+
                     <label className="space-y-1.5">
                       <FieldLabel>Home country contact number</FieldLabel>
                       <Input className={fieldCls} value={form.homeCountryContactNumber} onChange={(e) => updateField("homeCountryContactNumber", e.target.value)} />
@@ -1019,7 +1074,7 @@ const PublicMaidApplicationPage = () => {
                 </>
               )}
 
-              {/* ── Step 2: Health ─────────────────────────────────────── */}
+              {/* ── Step 2: Health ── */}
               {activeStep === 2 && (
                 <>
                   <SectionHeader
@@ -1077,6 +1132,7 @@ const PublicMaidApplicationPage = () => {
                 </>
               )}
 
+              {/* ── Step 3: Skills ── */}
               {activeStep === 3 && (
                 <>
                   <SectionHeader
@@ -1287,7 +1343,7 @@ const PublicMaidApplicationPage = () => {
                 </>
               )}
 
-              {/* ── Step 4: Attachments ───────────────────────────────── */}
+              {/* ── Step 4: Attachments ── */}
               {activeStep === 4 && (
                 <>
                   <SectionHeader
@@ -1390,6 +1446,7 @@ const PublicMaidApplicationPage = () => {
                 </>
               )}
 
+              {/* ── Navigation footer ── */}
               <div className="mt-8 flex items-center justify-between gap-3 border-t border-slate-100 pt-6">
                 <span className="text-xs font-semibold text-slate-400 tabular-nums">
                   {activeStep + 1} / {stepItems.length}
@@ -1424,6 +1481,7 @@ const PublicMaidApplicationPage = () => {
             </div>
           </div>
 
+          {/* ── Sidebar ── */}
           <div className="grid gap-4 xl:sticky xl:top-6 xl:self-start md:grid-cols-2 xl:grid-cols-1">
 
             <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-md">
@@ -1490,11 +1548,6 @@ const PublicMaidApplicationPage = () => {
               </ol>
               <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-3.5 text-xs leading-relaxed text-amber-800">
                 Keep your phone nearby after submitting. Support may contact you on WhatsApp or email for clarifications.
-              </div>
-              <div className="mt-5 border-t border-slate-100 pt-4">
-                <Link to="/" className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition-colors">
-                  ← Return to homepage
-                </Link>
               </div>
             </div>
 
