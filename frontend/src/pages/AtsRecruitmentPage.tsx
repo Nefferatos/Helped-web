@@ -1037,12 +1037,7 @@ const AtsRecruitmentPage = () => {
 
       {/* ── Profile modal ── */}
       <Dialog open={profileModalOpen} onOpenChange={setProfileModalOpen}>
-        {/*
-          Key fix: give DialogContent an explicit h-[88vh] so children can use
-          flex/overflow to constrain themselves. Without a concrete height the
-          inner panels have nothing to measure against and content overflows.
-        */}
-        {/* [&>button]:hidden suppresses the default shadcn close button */}
+ 
         <DialogContent className="h-[88vh] max-w-5xl overflow-hidden rounded-2xl p-0 flex flex-col [&>button]:hidden">
 
           {/* Top bar — fixed height, with custom close button */}
@@ -1074,10 +1069,8 @@ const AtsRecruitmentPage = () => {
             </div>
           </div>
 
-          {/* Body — fills remaining height, three columns, each scrolls independently */}
           <div className="flex min-h-0 flex-1 overflow-hidden">
 
-            {/* LEFT: contact summary + scrollable document list */}
             <div className="flex w-[280px] shrink-0 flex-col overflow-hidden border-r bg-slate-50">
               {detail && (
                 <div className="shrink-0 border-b bg-white p-4 space-y-3">
