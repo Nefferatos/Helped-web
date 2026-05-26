@@ -11,18 +11,20 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorker;
 const GROQ_API_KEY  = import.meta.env.VITE_GROQ_API_KEY as string;
 const GROQ_BASE     = "https://api.groq.com/openai/v1/chat/completions";
 
+// Models ordered by preference — remove json_object mode so we handle parsing ourselves
 const GROQ_MODELS = [
   "meta-llama/llama-4-maverick-17b-128e-instruct",
   "meta-llama/llama-4-scout-17b-16e-instruct",
+  "llama-3.3-70b-versatile",
 ] as const;
 
-const RETRYABLE_CODES = new Set([429, 500, 503]);
-const MAX_RETRIES     = 3;
-const BASE_DELAY_MS   = 1500;
+const RETRYABLE_CODES    = new Set([429, 500, 503]);
+const MAX_RETRIES        = 3;
+const BASE_DELAY_MS      = 1500;
 const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
-const MAX_PDF_PAGES = 25;
-const MAX_PDF_TEXT_CHARS = 120000;
-const GROQ_TIMEOUT_MS = 45000;
+const MAX_PDF_PAGES      = 25;
+const MAX_PDF_TEXT_CHARS = 120_000;
+const GROQ_TIMEOUT_MS    = 60_000;
 
 // ─── Usage tracking ────────────────────────────────────────────────────────────
 const DAILY_LIMIT = 50;
@@ -68,7 +70,7 @@ function formatCountdown(ms: number): string {
   return `${s}s`;
 }
 
-// ─── Evaluation method constants (must match AddMaid.tsx exactly) ─────────────
+// ─── Evaluation method constants ──────────────────────────────────────────────
 const EVAL_PARENT_DECLARATION =
   "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA";
 const EVAL_PARENT_INTERVIEWED = "Interviewed by Singapore EA";
@@ -157,7 +159,6 @@ interface ExtractedData {
   referredBy?:                string | null;
   evalByDeclaration?:         boolean | null;
   evalInterviewedBySgEA?:     boolean | null;
-  // FIX: replaced single evalInterviewSubOption with an array to capture ALL checked sub-options
   evalInterviewSubOptions?:   string[] | null;
   maidType?:                  string | null;
 }
@@ -167,7 +168,6 @@ async function extractPdfText(file: File): Promise<string> {
   if (file.size > MAX_PDF_SIZE_BYTES) {
     throw new Error("PDF is too large. Please upload a PDF smaller than 10MB.");
   }
-
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf         = await loadingTask.promise;
@@ -175,7 +175,6 @@ async function extractPdfText(file: File): Promise<string> {
     throw new Error(`PDF has too many pages. Please keep it to ${MAX_PDF_PAGES} pages or fewer.`);
   }
   const pageTexts: string[] = [];
-
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page        = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
@@ -190,16 +189,16 @@ async function extractPdfText(file: File): Promise<string> {
       .sort(([a], [b]) => b - a)
       .map(([, parts]) => parts.join(" ").trim())
       .filter(Boolean);
-    pageTexts.push(sortedLines.join("\n"));
+    pageTexts.push(`=== PAGE ${pageNum} ===\n` + sortedLines.join("\n"));
   }
-  const combinedText = pageTexts.join("\n\n--- PAGE BREAK ---\n\n");
+  const combinedText = pageTexts.join("\n\n");
   if (combinedText.length > MAX_PDF_TEXT_CHARS) {
     throw new Error("PDF text is too long to process safely. Please upload a shorter biodata PDF.");
   }
   return combinedText;
 }
 
-// ─── JSON repair ──────────────────────────────────────────────────────────────
+// ─── JSON repair & extraction ─────────────────────────────────────────────────
 function fixUnescapedControlChars(s: string): string {
   let out = ""; let inStr = false; let i = 0;
   while (i < s.length) {
@@ -218,36 +217,58 @@ function fixUnescapedControlChars(s: string): string {
   return out;
 }
 
-function repairJson(raw: string): string {
+function extractJsonFromText(raw: string): string {
+  // Strip markdown fences
   let s = raw.replace(/^```(?:json)?\s*/im, "").replace(/\s*```\s*$/im, "").trim();
-  const start = s.indexOf("{"); const end = s.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start)
-    throw new Error("No JSON object found in Groq response");
+  // Find outermost braces
+  const start = s.indexOf("{");
+  const end   = s.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("No JSON object found in response");
+  }
   s = s.slice(start, end + 1);
+  // Remove JS comments
   s = s.replace(/\/\/[^\n\r]*/g, "");
+  s = s.replace(/\/\*[\s\S]*?\*\//g, "");
+  // Fix control chars inside strings
   s = fixUnescapedControlChars(s);
+  // Remove trailing commas
   s = s.replace(/,(\s*[}\]])/g, "$1");
   return s;
 }
 
 function parseGroqJson(raw: string): ExtractedData {
-  const attempts: Array<() => string> = [
-    () => repairJson(raw),
-    () => { const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/i); if (!m?.[1]) throw new Error("No code fence"); return repairJson(m[1]); },
-    () => { const start = raw.indexOf("{"); const end = raw.lastIndexOf("}"); if (start === -1 || end === -1 || end <= start) throw new Error("No braces"); return repairJson(raw.slice(start, end + 1)); },
+  const strategies: Array<() => string> = [
+    () => extractJsonFromText(raw),
+    () => {
+      const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (!m?.[1]) throw new Error("No code fence");
+      return extractJsonFromText(m[1]);
+    },
+    () => {
+      // Try to find JSON even if surrounded by prose
+      const start = raw.indexOf("{");
+      const end   = raw.lastIndexOf("}");
+      if (start === -1 || end === -1 || end <= start) throw new Error("No braces");
+      return extractJsonFromText(raw.slice(start, end + 1));
+    },
   ];
+
   const errors: string[] = [];
-  for (const attempt of attempts) {
+  for (const strategy of strategies) {
     try {
-      const repaired = attempt();
+      const repaired = strategy();
       const parsed   = JSON.parse(repaired) as ExtractedData;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return normalizeExtractedData(parsed);
+      }
       errors.push("Not a plain object");
-    } catch (e) { errors.push((e as Error).message); }
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
   }
-  console.error("[PdfAutofill] All parse strategies failed:", errors, raw.slice(0, 1000));
-  throw new Error(`Could not extract JSON from Groq response: ${errors.join(" | ")}`);
+  console.error("[PdfAutofill] All parse strategies failed:", errors, "\nRaw (first 2000):", raw.slice(0, 2000));
+  throw new Error(`Could not parse JSON from AI response. Errors: ${errors.join(" | ")}`);
 }
 
 // ─── Sibling value parser ─────────────────────────────────────────────────────
@@ -257,7 +278,7 @@ function parseSiblingValue(value: unknown): number | string | null {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return null;
-    if (trimmed.match(/^(\d+)\s*\/\s*\d+$/)) return trimmed; // preserve "6/7"
+    if (trimmed.match(/^\d+\s*\/\s*\d+$/)) return trimmed; // preserve "6/7"
     const parsed = parseFloat(trimmed);
     if (Number.isFinite(parsed)) return Math.floor(parsed);
   }
@@ -266,23 +287,28 @@ function parseSiblingValue(value: unknown): number | string | null {
 
 function normalizeExtractedData(input: ExtractedData): ExtractedData {
   const raw = input as ExtractedData & Record<string, unknown>;
+
   const toNullableString = (...values: unknown[]) => {
-    for (const value of values) if (typeof value === "string" && value.trim()) return value.trim();
+    for (const v of values) if (typeof v === "string" && v.trim()) return v.trim();
     return null;
   };
   const toNullableNumber = (...values: unknown[]) => {
-    for (const value of values) {
-      if (typeof value === "number" && Number.isFinite(value)) return value;
-      if (typeof value === "string" && value.trim()) { const p = Number(value.trim()); if (Number.isFinite(p)) return p; }
+    for (const v of values) {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v === "string" && v.trim()) { const p = Number(v.trim()); if (Number.isFinite(p)) return p; }
     }
     return null;
   };
-  const resolvedSiblings =
-    parseSiblingValue(input.numberOfSiblings) ?? parseSiblingValue(input.numberOfSibling) ??
-    parseSiblingValue(input.siblingCount)     ?? parseSiblingValue(raw.number_of_siblings) ??
-    parseSiblingValue(raw.siblings)           ?? null;
 
-  // FIX: normalise legacy single-string evalInterviewSubOption → evalInterviewSubOptions array
+  const resolvedSiblings =
+    parseSiblingValue(input.numberOfSiblings) ??
+    parseSiblingValue(input.numberOfSibling)  ??
+    parseSiblingValue(input.siblingCount)      ??
+    parseSiblingValue(raw.number_of_siblings)  ??
+    parseSiblingValue(raw.siblings)            ??
+    null;
+
+  // Normalise legacy single-string evalInterviewSubOption → array
   let subOptions = input.evalInterviewSubOptions;
   if (!Array.isArray(subOptions) || subOptions.length === 0) {
     const legacy = (raw.evalInterviewSubOption as string | null | undefined);
@@ -292,31 +318,113 @@ function normalizeExtractedData(input: ExtractedData): ExtractedData {
 
   return {
     ...input,
-    referenceCode:          toNullableString(input.referenceCode, raw.refCode, raw.reference_code, raw.reference, raw.code),
-    type:                   toNullableString(input.type, input.maidType, raw.maid_type, raw.typeOfMaid),
-    height:                 toNullableNumber(input.height, raw.heightCm, raw.height_cm),
-    educationLevel:         toNullableString(input.educationLevel, input.education, raw.education_level, raw.educationLevelName),
-    numberOfSiblings:       resolvedSiblings,
+    referenceCode:           toNullableString(input.referenceCode, raw.refCode, raw.reference_code, raw.reference, raw.code),
+    type:                    toNullableString(input.type, input.maidType, raw.maid_type, raw.typeOfMaid),
+    height:                  toNullableNumber(input.height, raw.heightCm, raw.height_cm),
+    educationLevel:          toNullableString(input.educationLevel, input.education, raw.education_level, raw.educationLevelName),
+    numberOfSiblings:        resolvedSiblings,
     evalInterviewSubOptions: subOptions,
   };
 }
 
-// ─── Prompt ───────────────────────────────────────────────────────────────────
-function buildPrompt(pdfText: string): string {
-  return `You are a data extraction assistant for FDW (Foreign Domestic Worker) bio-data forms.
+// ─── System prompt ────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are a precise data-extraction assistant for Singapore FDW (Foreign Domestic Worker) biodata forms.
 
-Below is the full text extracted from a PDF biodata form. Extract ALL information and return ONLY a valid JSON object.
-
-MANDATORY OUTPUT RULES:
-1. Output ONLY the raw JSON object. No markdown, no code fences, no explanation.
-2. Start your response with { and end it with }. Nothing else.
-3. All string values MUST be on a single line. Replace any line breaks inside strings with \\n.
+CRITICAL OUTPUT RULES — follow exactly or the response is unusable:
+1. Output ONLY a raw JSON object. Start with { and end with }. No other text before or after.
+2. No markdown code fences, no backticks, no explanation, no preamble.
+3. All string values must be on ONE line — replace real newlines inside strings with the two-character sequence \\n.
 4. No trailing commas after the last item in any object or array.
-5. No JavaScript comments.
-6. Use null for any missing field.
-7. For boolean fields: use true or false (not strings). If explicitly marked Yes/Willing/checked use true. If No/Unwilling/unchecked use false. Use null only if the field is entirely absent from the form.
+5. No JavaScript // comments or /* */ comments.
+6. Use null for any missing or unknown field (not "N/A", not "None", not "").
+7. Boolean fields: true or false only. Never strings "true"/"false".`;
 
-Return this exact JSON structure:
+// ─── Extraction prompt ────────────────────────────────────────────────────────
+function buildPrompt(pdfText: string): string {
+  return `Extract ALL information from this FDW biodata PDF text and return ONLY valid JSON.
+
+=== FIELD RULES ===
+
+REFERENCE CODE: The "Ref. Code:" value (e.g. "IND-MP-PIP-9554"). null if absent.
+
+TYPE: Map to exactly one of these strings:
+  "New maid" | "Transfer maid" | "APS maid" | "Ex-Singapore maid" | "Ex-Hong Kong maid" |
+  "Ex-Taiwan maid" | "Ex-Malaysia maid" | "Ex-Middle East maid" |
+  "Applying to work in Hong Kong" | "Applying to work in Canada" | "Applying to work in Taiwan"
+  - "Transfer Helper" or "Transfer" in subtitle → "Transfer maid"
+  - No prior overseas employer → "New maid"
+
+DATE OF BIRTH: Read dd/mm/yy boxes. Convert to YYYY-MM-DD.
+  Year: if last 2 digits ≥ 30 → prepend "19", else prepend "20".
+  Example: 01/01/93 → "1993-01-01"
+
+HEIGHT: integer cm (e.g. boxes "1 5 6" → 156)
+WEIGHT: integer kg (e.g. boxes "6 0" → 60)
+
+NATIONALITY: append " maid" (e.g. "Indian" → "Indian maid")
+
+EDUCATION LEVEL — must be exactly one of:
+  "Primary Level (≤6 yrs)" | "Secondary Level (7–9 yrs)" | "High School (10–12 yrs)" |
+  "Vocational Course" | "College / Degree (≥13 yrs)"
+
+MARITAL STATUS — must be exactly one of:
+  "Single" | "Single Parent" | "Married" | "Divorced" | "Widowed" | "Separated"
+
+NUMBER OF SIBLINGS: plain number → integer. Fraction like "6/7" → string "6/7". Blank → null.
+
+ILLNESSES: each has YES and NO checkbox columns. Tick in Yes → true. Tick in No → false. Both blank → false.
+Do NOT set true unless you clearly see a tick (☑) in the Yes column.
+
+FOOD HANDLING PREFERENCES: only include items whose checkbox is ticked (☑).
+  Output comma-separated string of ticked items: "No pork", "No beef", or text from "Others:".
+  All unticked → null.
+
+REST DAYS: integer (e.g. "02" → 2)
+
+EVALUATION METHOD (B1 section):
+  evalByDeclaration: true if "Based on FDW's declaration…" checkbox ☑, false if ☐, null if section absent.
+  evalInterviewedBySgEA: true if "Interviewed by Singapore EA" checkbox ☑, false if ☐, null if absent.
+  evalInterviewSubOptions: array of TICKED sub-options from these exact strings:
+    "Interviewed via telephone/teleconference"
+    "Interviewed via videoconference"
+    "Interviewed in person"
+    "Interviewed in person and also made observation of FDW in the areas of work listed in table"
+  Empty array [] if none ticked.
+
+SKILLS TABLE — for each row:
+  willing: true="Yes", false="No", null=X mark across cell or blank with no Yes/No
+  experience: true="Yes", false="No", null=blank
+  rating: integer from "Rate: N" pattern (1–5), null if absent
+  note: text after the rating number. "" if blank.
+  subNote: cuisines for Cooking, languages for Language row, skill desc for Other skills. "" if N/A.
+  yearsOfExperience: string from years column, "" if blank.
+
+LANGUAGE SKILLS — proficiency from Language abilities assessment note:
+  Exactly one of: "Zero" | "Poor" | "Little" | "Fair" | "Good"
+  "communicate well" / "communicates well" → "Good"
+  "basic knowledge of [language]" or "basic [language]" → "Little"
+  Not mentioned → null
+  Languages: "English", "Hindi", "Mandarin/Chinese-Dialect", "Tamil", "Bahasa Indonesia/Malaysia"
+
+EMPLOYMENT HISTORY — all rows from C1 table:
+  from/to: 4-digit year string or ""
+  duties/remarks: full text or "". NEVER null.
+
+INTERVIEW AVAILABILITY (Section D) — array of ONLY ticked checkboxes:
+  "FDW is not available for interview"
+  "FDW can be interviewed by phone"
+  "FDW can be interviewed by video-conference"
+  "FDW can be interviewed in person"
+  Empty array [] if all unticked.
+
+availabilityRemark: text from Section E about HOW the FDW can be interviewed (e.g. "available for interview anytime via WhatsApp video call"). null if not mentioned.
+
+SECTION E (Other Remarks):
+  intro / publicIntro: full text of the agency-written description. Replace real newlines with \\n.
+  presentSalary: salary string if mentioned (e.g. "$510 + $50"). null if absent.
+  otherRemarks: short remarks from field 20 only, not the long Section E text.
+
+=== RETURN THIS EXACT JSON STRUCTURE ===
 
 {
   "referenceCode": null,
@@ -396,82 +504,11 @@ Return this exact JSON structure:
   "evalInterviewSubOptions": []
 }
 
-=== CRITICAL FIELD RULES ===
-
-EVALUATION METHOD (B1 section):
-- evalByDeclaration: true ONLY if the checkbox "Based on FDW's declaration, no evaluation/observation by Singapore EA or overseas training centre/EA" has a tick/check mark (☑). false if the checkbox is present but empty (☐). null only if the entire B1 section is absent.
-- evalInterviewedBySgEA: true ONLY if the checkbox "Interviewed by Singapore EA" has a tick/check mark (☑). false if present but unchecked. null if absent.
-- evalInterviewSubOptions: an ARRAY of ALL sub-options under "Interviewed by Singapore EA" that are ticked. Each element must be EXACTLY one of:
-    "Interviewed via telephone/teleconference"
-    "Interviewed via videoconference"
-    "Interviewed in person"
-    "Interviewed in person and also made observation of FDW in the areas of work listed in table"
-  Include EVERY sub-option that has a tick. Empty array [] if none are ticked or if evalInterviewedBySgEA is false.
-  EXAMPLE: if both telephone and videoconference are ticked → ["Interviewed via telephone/teleconference", "Interviewed via videoconference"]
-
-SKILLS TABLE (B section):
-- skills[].willing: true if "Yes", false if "No". IMPORTANT: for "Language abilities (spoken)" row, the Willingness column is typically N/A or blank/crossed-out — output null in that case, NOT true or false.
-- skills[].experience: true if "Yes", false if "No", null if blank.
-- skills[].rating: extract the NUMBER from "Rate: N" or "N/5" patterns (1–5). null if not present.
-- skills[].note: the assessment/observation text (e.g. "She has experience taking care of children within her family."). "" if blank.
-- skills[].subNote: for Cooking → list of cuisines; for Language abilities → list of languages; for Care of infants → age range; for Other skills → skill description. "" if blank.
-
-LANGUAGE SKILLS:
-- Infer proficiency ONLY from explicit assessment notes. Use EXACTLY one of: "Zero", "Poor", "Little", "Fair", "Good".
-- "communicates well" or "communicate well" → "Good"
-- "basic knowledge" → "Little"
-- "fair" → "Fair"
-- "poor" → "Poor"
-- If not mentioned at all → null (do NOT guess).
-
-FOOD HANDLING PREFERENCES (field 18 — checkboxes "No pork", "No beef", "Others"):
-- This field is about what food the FDW prefers NOT to handle/prepare for the employer.
-- Output a string listing only the checked options (e.g. "No pork", "No beef", "No pork, No beef").
-- If ALL checkboxes are empty/unchecked, output null. Do NOT output "None" or false.
-- Do NOT confuse this with dietary restrictions (what the FDW herself does not eat).
-
-DIETARY RESTRICTIONS (field 17):
-- What the FDW herself does not eat. null if the field is blank/empty.
-
-INTERVIEW AVAILABILITY (Section D checkboxes):
-- interviewAvailability: array of checked options from:
-    "FDW is not available for interview"
-    "FDW can be interviewed by phone"
-    "FDW can be interviewed by video-conference"
-    "FDW can be interviewed in person"
-- Check ONLY the actual checkboxes in Section D. Empty array [] if all are unchecked.
-- availabilityRemark: if the remarks/introduction text mentions how the FDW can be interviewed (e.g. "available via WhatsApp video call"), capture that here as a string. null if not mentioned.
-
-ILLNESSES (field 15):
-- Set true ONLY if the checkbox in the "Yes" column is ticked (☑).
-- Set false if the checkbox in the "No" column is ticked, OR if both columns are blank.
-- Do NOT infer illness from text. Only trust explicit checkbox state.
-
-PHYSICAL DISABILITIES (field 16): Any stated physical disability or "None". null only if field is entirely absent/blank.
-ALLERGIES (field 14): Any stated allergies or "None". null only if field is entirely absent/blank.
-
-OTHER FIELD RULES:
-- referenceCode: agency/FDW reference code shown on the form (e.g. "IND-MP-PIP-9554"). null if absent.
-- dateOfBirth: YYYY-MM-DD format.
-- type: MUST be exactly one of: "New maid", "Transfer maid", "APS maid", "Ex-Singapore maid", "Ex-Hong Kong maid", "Ex-Taiwan maid", "Ex-Malaysia maid", "Ex-Middle East maid", "Applying to work in Hong Kong", "Applying to work in Canada", "Applying to work in Taiwan"
-- height: number in cm only.
-- weight: number in kg only.
-- nationality: append " maid" e.g. "Indian maid", "Filipino maid".
-- educationLevel: MUST be exactly one of: "Primary Level (≤6 yrs)", "Secondary Level (7–9 yrs)", "High School (10–12 yrs)", "Vocational Course", "College / Degree (≥13 yrs)"
-- maritalStatus: MUST be exactly one of: "Single", "Single Parent", "Married", "Divorced", "Widowed", "Separated"
-- numberOfSiblings: extract raw value as written — plain integer or fraction string like "6/7". Do NOT convert fractions.
-- employmentHistory[].from / .to: 4-digit year string or "".
-- employmentHistory[].duties / .remarks: full text or "". NEVER null.
-- intro: maid's personal self-introduction paragraph (from "Other Remarks" or similar section).
-- publicIntro: public-facing summary for employer viewing.
-- presentSalary: current salary if stated (e.g. "$510 + $50").
-- expectedSalary: expected salary if stated.
-- phone: agency or maid contact number.
-- privateInfo: internal agency notes or confidential remarks.
-
---- PDF TEXT BEGINS ---
+=== PDF TEXT ===
 ${pdfText}
---- PDF TEXT ENDS ---`;
+=== END OF PDF TEXT ===
+
+Remember: output ONLY the JSON object. Start with { end with }. Nothing else.`;
 }
 
 // ─── Groq API call ────────────────────────────────────────────────────────────
@@ -481,18 +518,23 @@ async function callGroq(pdfText: string, model: string): Promise<ExtractedData> 
   }
 
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
+  const timeoutId  = window.setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
+
   const res = await fetch(GROQ_BASE, {
     method:  "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_API_KEY}` },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_API_KEY}`,
+    },
     signal: controller.signal,
     body: JSON.stringify({
       model,
-      temperature:     0,
-      max_tokens:      8192,
-      response_format: { type: "json_object" },
+      temperature: 0,
+      max_tokens:  8192,
+      // NOTE: No response_format here — some Groq models fail with json_object mode
+      // We handle JSON extraction ourselves via parseGroqJson
       messages: [
-        { role: "system", content: "You are a precise data extraction assistant. Always respond with valid JSON only." },
+        { role: "system", content: SYSTEM_PROMPT },
         { role: "user",   content: buildPrompt(pdfText) },
       ],
     }),
@@ -506,24 +548,32 @@ async function callGroq(pdfText: string, model: string): Promise<ExtractedData> 
   });
 
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    const msg = err.error?.message ?? `Groq error ${res.status}`;
-    const e   = new Error(msg) as Error & { status: number };
-    e.status  = res.status;
+    const err    = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    const msg    = err.error?.message ?? `Groq error ${res.status}`;
+    const e      = new Error(msg) as Error & { status: number };
+    e.status     = res.status;
     throw e;
   }
 
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-    error?: { message?: string };
+    error?:   { message?: string };
   };
+
   if (data.error?.message) throw new Error(data.error.message);
 
-  const raw = data.choices?.[0]?.message?.content ?? "";
+  const raw    = data.choices?.[0]?.message?.content ?? "";
+  const reason = data.choices?.[0]?.finish_reason ?? "unknown";
+
   if (!raw.trim()) {
-    const reason = data.choices?.[0]?.finish_reason ?? "unknown";
-    throw new Error(`Groq returned an empty response (finish_reason: ${reason})`);
+    throw new Error(`AI returned an empty response (finish_reason: ${reason})`);
   }
+
+  // Warn if truncated but still try to parse
+  if (reason === "length") {
+    console.warn("[PdfAutofill] Response truncated (finish_reason=length) — attempting partial parse");
+  }
+
   return parseGroqJson(raw);
 }
 
@@ -533,8 +583,11 @@ async function extractFromPdf(
   onRetry?: (attempt: number, model: string, delayMs: number) => void,
 ): Promise<ExtractedData> {
   const pdfText = await extractPdfText(file);
-  if (!pdfText.trim())
-    throw new Error("Could not extract any text from this PDF. It may be a scanned image — please use a text-based biodata PDF.");
+  if (!pdfText.trim()) {
+    throw new Error(
+      "Could not extract any text from this PDF. It may be a scanned image — please use a text-based biodata PDF.",
+    );
+  }
 
   for (let modelIdx = 0; modelIdx < GROQ_MODELS.length; modelIdx++) {
     const model = GROQ_MODELS[modelIdx];
@@ -542,24 +595,29 @@ async function extractFromPdf(
       try {
         return await callGroq(pdfText, model);
       } catch (err) {
-        const e           = err as Error & { status?: number };
-        const retryable   = (e.status !== undefined && RETRYABLE_CODES.has(e.status)) || isOverloaded(e.message);
+        const e             = err as Error & { status?: number };
+        const retryable     = (e.status !== undefined && RETRYABLE_CODES.has(e.status)) || isOverloaded(e.message);
         const isLastAttempt = attempt  === MAX_RETRIES;
         const isLastModel   = modelIdx === GROQ_MODELS.length - 1;
+
         if (!retryable) {
           if (isLastModel) throw new Error(e.message);
-          console.warn(`[PdfAutofill] Model ${model} non-retryable: ${e.message}. Trying next…`);
+          console.warn(`[PdfAutofill] Model ${model} non-retryable error: ${e.message}. Trying next model…`);
           break;
         }
         if (isLastAttempt && isLastModel) throw new Error(e.message);
-        if (isLastAttempt) { console.warn(`[PdfAutofill] Model ${model} exhausted, trying fallback…`); break; }
+        if (isLastAttempt) {
+          console.warn(`[PdfAutofill] Model ${model} exhausted retries, trying fallback model…`);
+          break;
+        }
+
         const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
         onRetry?.(attempt, model, delay);
         await sleep(delay);
       }
     }
   }
-  throw new Error("All Groq models unavailable. Please try again later.");
+  throw new Error("All AI models unavailable. Please try again later.");
 }
 
 // ─── Map extracted data → MaidProfile ────────────────────────────────────────
@@ -570,32 +628,40 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
     if (!raw) return prev.nationality ?? "";
     const lower = raw.toLowerCase();
     const map: Record<string, string> = {
-      indian: "Indian maid", filipino: "Filipino maid", indonesian: "Indonesian maid",
-      myanmar: "Myanmar maid", burmese: "Myanmar maid", "sri lankan": "Sri Lankan maid",
-      bangladeshi: "Bangladeshi maid", nepali: "Nepali maid", cambodian: "Cambodian maid",
+      "indian":      "Indian maid",
+      "filipino":    "Filipino maid",
+      "indonesian":  "Indonesian maid",
+      "myanmar":     "Myanmar maid",
+      "burmese":     "Myanmar maid",
+      "sri lankan":  "Sri Lankan maid",
+      "bangladeshi": "Bangladeshi maid",
+      "nepali":      "Nepali maid",
+      "cambodian":   "Cambodian maid",
     };
     for (const [k, v] of Object.entries(map)) if (lower.includes(k)) return v;
-    return raw;
+    if (lower.endsWith(" maid")) return raw.trim();
+    return raw.trim();
   };
 
   const resolveType = (raw?: string | null): string => {
     if (!raw) return prev.type ?? "";
     const n = raw.toLowerCase().trim();
     const typeMap: Array<[string[], string]> = [
-      [["new maid", "new"],                         "New maid"],
-      [["transfer maid", "transfer"],               "Transfer maid"],
-      [["aps maid", "aps"],                         "APS maid"],
-      [["ex-singapore maid", "ex singapore"],       "Ex-Singapore maid"],
-      [["ex-hong kong maid", "hong kong"],          "Ex-Hong Kong maid"],
-      [["ex-taiwan maid", "ex taiwan"],             "Ex-Taiwan maid"],
-      [["ex-malaysia maid", "ex malaysia"],         "Ex-Malaysia maid"],
-      [["ex-middle east maid", "middle east"],      "Ex-Middle East maid"],
-      [["applying to work in hong kong"],           "Applying to work in Hong Kong"],
-      [["applying to work in canada"],              "Applying to work in Canada"],
-      [["applying to work in taiwan"],              "Applying to work in Taiwan"],
+      [["new maid", "new helper"],                       "New maid"],
+      [["transfer maid", "transfer helper", "transfer"], "Transfer maid"],
+      [["aps maid", "aps"],                              "APS maid"],
+      [["ex-singapore maid", "ex singapore"],            "Ex-Singapore maid"],
+      [["ex-hong kong maid", "hong kong"],               "Ex-Hong Kong maid"],
+      [["ex-taiwan maid", "ex taiwan"],                  "Ex-Taiwan maid"],
+      [["ex-malaysia maid", "ex malaysia"],              "Ex-Malaysia maid"],
+      [["ex-middle east maid", "middle east"],           "Ex-Middle East maid"],
+      [["applying to work in hong kong"],                "Applying to work in Hong Kong"],
+      [["applying to work in canada"],                   "Applying to work in Canada"],
+      [["applying to work in taiwan"],                   "Applying to work in Taiwan"],
     ];
-    for (const [needles, value] of typeMap)
+    for (const [needles, value] of typeMap) {
       if (needles.some((needle) => n.includes(needle))) return value;
+    }
     return raw.trim();
   };
 
@@ -611,20 +677,20 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
   };
 
   const areaMap: Record<string, string> = {
-    "care of infants":              "Care of infants/children",
-    "care of infants/children":     "Care of infants/children",
-    "infants":                      "Care of infants/children",
-    "care of elderly":              "Care of elderly",
-    "elderly":                      "Care of elderly",
-    "care of disabled":             "Care of disabled",
-    "disabled":                     "Care of disabled",
-    "general housework":            "General housework",
-    "housework":                    "General housework",
-    "cooking":                      "Cooking",
-    "language abilities":           "Language abilities (spoken)",
-    "language abilities (spoken)":  "Language abilities (spoken)",
-    "other skills":                 "Other skills, if any",
-    "other skills, if any":         "Other skills, if any",
+    "care of infants":             "Care of infants/children",
+    "care of infants/children":    "Care of infants/children",
+    "infants":                     "Care of infants/children",
+    "care of elderly":             "Care of elderly",
+    "elderly":                     "Care of elderly",
+    "care of disabled":            "Care of disabled",
+    "disabled":                    "Care of disabled",
+    "general housework":           "General housework",
+    "housework":                   "General housework",
+    "cooking":                     "Cooking",
+    "language abilities":          "Language abilities (spoken)",
+    "language abilities (spoken)": "Language abilities (spoken)",
+    "other skills":                "Other skills, if any",
+    "other skills, if any":        "Other skills, if any",
   };
   const resolveArea = (raw: string) => areaMap[raw.toLowerCase().trim()] ?? raw;
 
@@ -647,9 +713,14 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
         typeof s.yearsOfExperience === "number" ? String(s.yearsOfExperience) : String(s.yearsOfExperience);
 
       workAreas[area] = {
-        willing, experience, yearsOfExperience, rating, note,
+        willing,
+        experience,
+        yearsOfExperience,
+        rating,
+        note,
         evaluation: rating !== null ? `${rating}/5${note ? ` - ${note}` : ""}` : note || "N.A.",
       };
+
       if (typeof s.subNote === "string" && s.subNote.trim()) {
         const subKey = area === "Other skills, if any" ? "Other Skill" : area;
         workAreaNotes[subKey] = s.subNote.trim();
@@ -660,15 +731,20 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
   const empHistory: Record<string, unknown>[] =
     Array.isArray(e.employmentHistory) && e.employmentHistory.length > 0
       ? e.employmentHistory.map((h) => ({
-          from: h.from ?? "", to: h.to ?? "", country: h.country ?? "",
-          employer: h.employer ?? "", duties: h.duties ?? "", remarks: h.remarks ?? "",
+          from:     h.from     ?? "",
+          to:       h.to       ?? "",
+          country:  h.country  ?? "",
+          employer: h.employer ?? "",
+          duties:   h.duties   ?? "",
+          remarks:  h.remarks  ?? "",
         }))
       : ((prev.employmentHistory ?? [{}]) as Record<string, unknown>[]);
 
   const prevLangs  = (prev.languageSkills as Record<string, string>) ?? {};
   const langSkills: Record<string, string> = { ...prevLangs };
-  if (e.languageSkills && typeof e.languageSkills === "object")
+  if (e.languageSkills && typeof e.languageSkills === "object") {
     for (const [k, v] of Object.entries(e.languageSkills)) if (v) langSkills[k] = v;
+  }
 
   const prevOI    = (prevSP.otherInformation as Record<string, boolean>) ?? {};
   const otherInfo: Record<string, boolean> = { ...prevOI };
@@ -687,20 +763,20 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
   const prevIntro     = (prev.introduction as Record<string, unknown>) ?? {};
   const prevIllnesses = (prevIntro.pastIllnesses as Record<string, boolean>) ?? {};
   const mergedIllnesses: Record<string, boolean> = { ...prevIllnesses };
-  if (e.illnesses && typeof e.illnesses === "object")
+  if (e.illnesses && typeof e.illnesses === "object") {
     for (const [k, v] of Object.entries(e.illnesses)) if (v != null) mergedIllnesses[k] = v;
+  }
 
-  // ── FIX: handle evalInterviewSubOptions array (multiple sub-options) ──────
+  // Handle evalInterviewSubOptions
   const prevEvalMethods = Array.isArray(prevSP.evaluationMethods)
     ? (prevSP.evaluationMethods as string[]) : [];
   const evalSet = new Set<string>(prevEvalMethods);
 
-  if (e.evalByDeclaration === true)  evalSet.add(EVAL_PARENT_DECLARATION);
+  if (e.evalByDeclaration === true)      evalSet.add(EVAL_PARENT_DECLARATION);
   else if (e.evalByDeclaration === false) evalSet.delete(EVAL_PARENT_DECLARATION);
 
   if (e.evalInterviewedBySgEA === true) {
     evalSet.add(EVAL_PARENT_INTERVIEWED);
-    // Add ALL checked sub-options (array), filter to only valid strings
     const subOpts = Array.isArray(e.evalInterviewSubOptions) ? e.evalInterviewSubOptions : [];
     for (const sub of subOpts) {
       if (typeof sub === "string" && EVAL_SUB_OPTIONS.includes(sub)) evalSet.add(sub);
@@ -714,29 +790,29 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
 
   return {
     ...prev,
-    referenceCode:       e.referenceCode    != null ? e.referenceCode    : prev.referenceCode,
+    referenceCode:       e.referenceCode       != null ? e.referenceCode       : prev.referenceCode,
     type:                resolveType(e.type),
-    fullName:            e.fullName         != null ? e.fullName         : prev.fullName,
-    dateOfBirth:         e.dateOfBirth      != null ? e.dateOfBirth      : prev.dateOfBirth,
-    placeOfBirth:        e.placeOfBirth     != null ? e.placeOfBirth     : prev.placeOfBirth,
-    height:              e.height           != null ? e.height           : prev.height,
-    weight:              e.weight           != null ? e.weight           : prev.weight,
+    fullName:            e.fullName             != null ? e.fullName             : prev.fullName,
+    dateOfBirth:         e.dateOfBirth          != null ? e.dateOfBirth          : prev.dateOfBirth,
+    placeOfBirth:        e.placeOfBirth         != null ? e.placeOfBirth         : prev.placeOfBirth,
+    height:              e.height               != null ? e.height               : prev.height,
+    weight:              e.weight               != null ? e.weight               : prev.weight,
     nationality:         resolveNationality(e.nationality),
-    homeAddress:         e.homeAddress      != null ? e.homeAddress      : prev.homeAddress,
-    airportRepatriation: e.airportRepatriation != null ? e.airportRepatriation : prev.airportRepatriation,
-    religion:            e.religion         != null ? e.religion         : prev.religion,
+    homeAddress:         e.homeAddress          != null ? e.homeAddress          : prev.homeAddress,
+    airportRepatriation: e.airportRepatriation  != null ? e.airportRepatriation  : prev.airportRepatriation,
+    religion:            e.religion             != null ? e.religion             : prev.religion,
     educationLevel:      resolveEducationLevel(e.educationLevel),
     numberOfSiblings:    resolvedSiblings != null ? (resolvedSiblings as unknown as number) : prev.numberOfSiblings,
-    maritalStatus:       e.maritalStatus    != null ? e.maritalStatus    : prev.maritalStatus,
-    numberOfChildren:    e.numberOfChildren != null ? e.numberOfChildren : prev.numberOfChildren,
+    maritalStatus:       e.maritalStatus         != null ? e.maritalStatus         : prev.maritalStatus,
+    numberOfChildren:    e.numberOfChildren      != null ? e.numberOfChildren      : prev.numberOfChildren,
     languageSkills:      langSkills,
     workAreas,
     employmentHistory:   empHistory,
     agencyContact: {
       ...((prev.agencyContact as Record<string, unknown>) ?? {}),
       ...(e.homeCountryContact != null ? { homeCountryContactNumber: e.homeCountryContact } : {}),
-      ...(e.passportNo != null ? { passportNo: e.passportNo } : {}),
-      ...(e.phone      != null ? { phone: e.phone }           : {}),
+      ...(e.passportNo         != null ? { passportNo: e.passportNo }                       : {}),
+      ...(e.phone              != null ? { phone: e.phone }                                 : {}),
     },
     skillsPreferences: {
       ...prevSP,
@@ -787,7 +863,7 @@ function countFields(e: ExtractedData): number {
 const STAGE_LABELS: Record<Status, { label: string; sublabel: string }> = {
   idle:       { label: "AI PDF Upload",  sublabel: "Auto-fill from biodata PDF" },
   reading:    { label: "Reading PDF…",   sublabel: "Extracting text from PDF"   },
-  extracting: { label: "Extracting…",    sublabel: "Groq AI analysing fields"   },
+  extracting: { label: "Extracting…",    sublabel: "AI analysing fields"        },
   done:       { label: "Done!",          sublabel: "Form auto-filled"           },
   error:      { label: "Failed",         sublabel: "Click to retry"             },
   limit:      { label: "Limit reached",  sublabel: "Resets at midnight PT"      },
@@ -798,8 +874,10 @@ const AiBrainIcon = ({ className = "" }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
     <path d="M9.5 2a2.5 2.5 0 0 1 2.45 2H12a2.5 2.5 0 0 1 2.45-2 2.5 2.5 0 0 1 2.5 2.5c0 .28-.05.55-.13.8A4 4 0 0 1 20 9a4 4 0 0 1-1.22 2.88A3.5 3.5 0 0 1 15.5 17H8.5a3.5 3.5 0 0 1-3.28-4.12A4 4 0 0 1 4 9a4 4 0 0 1 3.18-3.7 2.5 2.5 0 0 1-.18-.8A2.5 2.5 0 0 1 9.5 2z" />
-    <line x1="12" y1="4" x2="12" y2="17" /><line x1="8" y1="9" x2="16" y2="9" />
-    <line x1="8" y1="13" x2="16" y2="13" /><path d="M10 17v2a2 2 0 0 0 4 0v-2" />
+    <line x1="12" y1="4" x2="12" y2="17" />
+    <line x1="8"  y1="9"  x2="16" y2="9"  />
+    <line x1="8"  y1="13" x2="16" y2="13" />
+    <path d="M10 17v2a2 2 0 0 0 4 0v-2" />
   </svg>
 );
 
@@ -822,11 +900,15 @@ const UsageDots = ({ used, total }: { used: number; total: number }) => {
   return (
     <div className="flex items-center gap-0.5 flex-wrap" style={{ maxWidth: 120 }}>
       {Array.from({ length: visible }, (_, i) => (
-        <div key={i} style={{ width: 6, height: 6, borderRadius: "50%",
+        <div key={i} style={{
+          width: 6, height: 6, borderRadius: "50%",
           background: i < used ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.2)",
-          transition: "background 0.3s ease" }} />
+          transition: "background 0.3s ease",
+        }} />
       ))}
-      {total > maxVisible && <span style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", marginLeft: 2 }}>+{total - maxVisible}</span>}
+      {total > maxVisible && (
+        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", marginLeft: 2 }}>+{total - maxVisible}</span>
+      )}
     </div>
   );
 };
@@ -863,28 +945,29 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
       <div role="dialog" aria-label="PDF upload progress"
         className="fixed bottom-5 right-5 z-50 w-[320px] overflow-hidden rounded-2xl"
         style={{
-          background: "linear-gradient(148deg,#1e293b 0%,#0f172a 100%)",
-          border: `1px solid ${borderColor}`,
-          boxShadow: `0 0 0 1px ${borderColor},0 20px 60px ${glowColor},0 6px 20px rgba(0,0,0,0.55)`,
-          animation: "fdwPopIn .28s cubic-bezier(.34,1.56,.64,1)",
+          background:  "linear-gradient(148deg,#1e293b 0%,#0f172a 100%)",
+          border:      `1px solid ${borderColor}`,
+          boxShadow:   `0 0 0 1px ${borderColor},0 20px 60px ${glowColor},0 6px 20px rgba(0,0,0,0.55)`,
+          animation:   "fdwPopIn .28s cubic-bezier(.34,1.56,.64,1)",
         }}>
         <style>{`
-          @keyframes fdwPopIn{from{opacity:0;transform:translateY(12px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}
-          @keyframes fdwShimmer{0%{transform:translateX(-100%)}100%{transform:translateX(220%)}}
-          @keyframes fdwPulse{0%,100%{opacity:1}50%{opacity:.5}}
-          .fdw-shimmer{position:relative;overflow:hidden}
-          .fdw-shimmer::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent);animation:fdwShimmer 1.5s ease infinite}
-          .fdw-pulse{animation:fdwPulse 1.8s ease infinite}
+          @keyframes fdwPopIn   { from { opacity:0; transform:translateY(12px) scale(.94) } to { opacity:1; transform:translateY(0) scale(1) } }
+          @keyframes fdwShimmer { 0%   { transform:translateX(-100%) } 100% { transform:translateX(220%) } }
+          @keyframes fdwPulse   { 0%,100% { opacity:1 } 50% { opacity:.5 } }
+          .fdw-shimmer { position:relative; overflow:hidden }
+          .fdw-shimmer::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent); animation:fdwShimmer 1.5s ease infinite }
+          .fdw-pulse { animation:fdwPulse 1.8s ease infinite }
         `}</style>
 
+        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07]">
           <div className="flex items-center gap-2.5">
             <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
               style={{ background: isDone ? "rgba(16,185,129,.18)" : isError || isLimit ? "rgba(244,63,94,.18)" : "rgba(251,191,36,.15)" }}>
-              {isDone ? <CheckCircle className="h-4 w-4 text-emerald-400" />
+              {isDone   ? <CheckCircle className="h-4 w-4 text-emerald-400" />
                : isError ? <AlertCircle className="h-4 w-4 text-rose-400" />
-               : isLimit ? <Zap className="h-4 w-4 text-rose-400" />
-               : <AiBrainIcon className="h-4 w-4 text-amber-400" />}
+               : isLimit ? <Zap         className="h-4 w-4 text-rose-400" />
+               :           <AiBrainIcon className="h-4 w-4 text-amber-400" />}
             </div>
             <span className="text-[13px] font-bold text-white tracking-tight">AI PDF Upload</span>
             {isActive && (
@@ -901,6 +984,7 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
           )}
         </div>
 
+        {/* Body */}
         <div className="px-4 py-4 space-y-3.5">
           {fileName && !isLimit && (
             <div className="flex items-center gap-2.5 rounded-xl px-3 py-2 bg-white/[0.05] border border-white/[0.07]">
@@ -933,10 +1017,14 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
                 <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
                   <ArcProgress pct={pct} size={64} />
                   <div className="relative z-10 flex flex-col items-center leading-none">
-                    {isDone ? <CheckCircle className="h-6 w-6 text-emerald-400" />
+                    {isDone   ? <CheckCircle className="h-6 w-6 text-emerald-400" />
                      : isError ? <AlertCircle className="h-6 w-6 text-rose-400" />
-                     : (<><span className="text-[15px] font-black text-white tabular-nums">{pct}</span>
-                           <span className="text-[9px] font-bold text-slate-400 -mt-0.5">%</span></>)}
+                     : (
+                      <>
+                        <span className="text-[15px] font-black text-white tabular-nums">{pct}</span>
+                        <span className="text-[9px] font-bold text-slate-400 -mt-0.5">%</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="min-w-0">
@@ -954,8 +1042,10 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
 
               {!isError && (
                 <div className="h-[5px] w-full rounded-full bg-white/[0.07] overflow-hidden">
-                  <div className={`h-full rounded-full ${isDone ? "bg-emerald-500" : "bg-amber-400"} ${isActive ? "fdw-shimmer" : ""}`}
-                    style={{ width: `${pct}%`, transition: "width 0.18s linear" }} />
+                  <div
+                    className={`h-full rounded-full ${isDone ? "bg-emerald-500" : "bg-amber-400"} ${isActive ? "fdw-shimmer" : ""}`}
+                    style={{ width: `${pct}%`, transition: "width 0.18s linear" }}
+                  />
                 </div>
               )}
 
@@ -963,7 +1053,7 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
                 <div className="flex items-start justify-between px-0.5">
                   {(["reading", "extracting", "done"] as Status[]).map((s) => {
                     const mine  = STATUS_ORDER.indexOf(s);
-                    const isNow = status === s;
+                    const isNow  = status === s;
                     const isPast = curIdx > mine && !isError;
                     const labels: Record<string, string> = { reading: "Read", extracting: "Extract", done: "Fill" };
                     return (
@@ -971,9 +1061,11 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
                         <div className={`h-2 w-2 rounded-full transition-all duration-300 ${
                           isPast ? "bg-emerald-500 scale-110"
                           : isNow ? "bg-amber-400 scale-125 shadow-[0_0_0_3px_rgba(251,191,36,0.22)]"
-                          : "bg-slate-700"}`} />
+                          : "bg-slate-700"
+                        }`} />
                         <span className={`text-[9px] font-semibold uppercase tracking-wide ${
-                          isPast ? "text-emerald-400" : isNow ? "text-amber-400" : "text-slate-600"}`}>
+                          isPast ? "text-emerald-400" : isNow ? "text-amber-400" : "text-slate-600"
+                        }`}>
                           {labels[s]}
                         </span>
                       </div>
@@ -995,7 +1087,9 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
                     <span className="text-[10px] text-slate-500">Today's usage</span>
                     <span className={`text-[10px] font-bold ${
                       DAILY_LIMIT - usedToday <= 5  ? "text-rose-400"
-                      : DAILY_LIMIT - usedToday <= 15 ? "text-amber-400" : "text-slate-400"}`}>
+                      : DAILY_LIMIT - usedToday <= 15 ? "text-amber-400"
+                      : "text-slate-400"
+                    }`}>
                       {Math.max(0, DAILY_LIMIT - usedToday)} left of {DAILY_LIMIT}
                     </span>
                   </div>
@@ -1018,9 +1112,10 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
 
 // ─── Main exported component ──────────────────────────────────────────────────
 export function PdfAutofillBanner({
-  formData, setFormData,
+  formData,
+  setFormData,
 }: {
-  formData: MaidProfile;
+  formData:    MaidProfile;
   setFormData: React.Dispatch<React.SetStateAction<MaidProfile>>;
 }) {
   const [status,       setStatus]       = useState<Status>("idle");
@@ -1049,9 +1144,9 @@ export function PdfAutofillBanner({
 
   const startTicker = useCallback((from: number, target: number, durationMs: number) => {
     if (tickerRef.current) clearInterval(tickerRef.current);
-    const steps = Math.max(1, Math.round(durationMs / 80));
-    const delta = (target - from) / steps;
-    let current = from; let step = 0;
+    const steps   = Math.max(1, Math.round(durationMs / 80));
+    const delta   = (target - from) / steps;
+    let current   = from; let step = 0;
     tickerRef.current = setInterval(() => {
       step++;
       current = Math.min(target, from + delta * step);
@@ -1076,33 +1171,61 @@ export function PdfAutofillBanner({
   const process = useCallback(async (file: File) => {
     if (!file.type.includes("pdf")) { toast.error("Please upload a PDF file"); return; }
     if (processingRef.current) return;
+
     const currentUsage = loadUsage();
     if (currentUsage.count >= DAILY_LIMIT) {
-      setUsedToday(currentUsage.count); setStatus("limit"); setShowPopup(true); return;
+      setUsedToday(currentUsage.count);
+      setStatus("limit");
+      setShowPopup(true);
+      return;
     }
+
     processingRef.current = true;
-    setFileName(file.name); setErrMsg(""); setShowPopup(true);
-    setStatus("reading"); setLiveProgress(1); startTicker(1, 25, 1200);
+    setFileName(file.name);
+    setErrMsg("");
+    setShowPopup(true);
+    setStatus("reading");
+    setLiveProgress(1);
+    startTicker(1, 25, 1200);
+
     try {
-      setStatus("extracting"); startTicker(25, 92, 12000);
-      const extracted = await extractFromPdf(file);
-      const updated   = incrementUsage(); setUsedToday(updated.count);
-      stopTicker(); startTicker(92, 99, 400); await sleep(420);
+      setStatus("extracting");
+      startTicker(25, 92, 14000);
+
+      const extracted = await extractFromPdf(file, (attempt, model, delayMs) => {
+        console.info(`[PdfAutofill] Retry ${attempt} on ${model} in ${delayMs}ms`);
+      });
+
+      const updated = incrementUsage();
+      setUsedToday(updated.count);
+
+      stopTicker();
+      startTicker(92, 99, 400);
+      await sleep(420);
+
       const count = countFields(extracted);
       setFieldCount(count);
       setFormData((prev) => applyToProfile(extracted, prev));
-      stopTicker(); setLiveProgress(100); setStatus("done");
+
+      stopTicker();
+      setLiveProgress(100);
+      setStatus("done");
       toast.success(`Auto-filled ${count} fields from biodata PDF`);
     } catch (err) {
       stopTicker();
       const msg = err instanceof Error ? err.message : "Extraction failed";
-      setErrMsg(msg); setLiveProgress(0); setStatus("error"); toast.error(msg);
-    } finally { processingRef.current = false; }
+      setErrMsg(msg);
+      setLiveProgress(0);
+      setStatus("error");
+      toast.error(msg);
+    } finally {
+      processingRef.current = false;
+    }
   }, [setFormData, startTicker, stopTicker]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
-    const f = input.files?.[0];
+    const f     = input.files?.[0];
     input.value = "";
     if (f) void process(f);
   }, [process]);
@@ -1110,14 +1233,18 @@ export function PdfAutofillBanner({
   const handleButtonClick = useCallback(() => {
     const currentUsage = loadUsage();
     if (currentUsage.count >= DAILY_LIMIT) {
-      setUsedToday(currentUsage.count); setStatus("limit"); setShowPopup(true); return;
+      setUsedToday(currentUsage.count);
+      setStatus("limit");
+      setShowPopup(true);
+      return;
     }
     if (status === "idle") inputRef.current?.click();
     else setShowPopup(true);
   }, [status]);
 
   const handleRetry = useCallback(() => {
-    reset(); setTimeout(() => inputRef.current?.click(), 80);
+    reset();
+    setTimeout(() => inputRef.current?.click(), 80);
   }, [reset]);
 
   const isProcessing = status === "reading" || status === "extracting";
@@ -1127,86 +1254,116 @@ export function PdfAutofillBanner({
   const remaining    = Math.max(0, DAILY_LIMIT - usedToday);
   const pct          = liveProgress;
 
-  const BTN_SIZE = 44; const BTN_R = (BTN_SIZE - 6) / 2;
-  const BTN_CIRC = 2 * Math.PI * BTN_R; const BTN_OFF = BTN_CIRC - (pct / 100) * BTN_CIRC;
+  const BTN_SIZE = 44;
+  const BTN_R    = (BTN_SIZE - 6) / 2;
+  const BTN_CIRC = 2 * Math.PI * BTN_R;
+  const BTN_OFF  = BTN_CIRC - (pct / 100) * BTN_CIRC;
 
-  const buttonBg = isDone
-    ? "linear-gradient(135deg,#059669,#10b981)"
-    : isError ? "linear-gradient(135deg,#e11d48,#f43f5e)"
-    : isLimit ? "linear-gradient(135deg,#7f1d1d,#991b1b)"
+  const buttonBg =
+    isDone      ? "linear-gradient(135deg,#059669,#10b981)"
+    : isError   ? "linear-gradient(135deg,#e11d48,#f43f5e)"
+    : isLimit   ? "linear-gradient(135deg,#7f1d1d,#991b1b)"
     : isProcessing ? "linear-gradient(135deg,#d97706,#f59e0b)"
     : remaining <= 5  ? "linear-gradient(135deg,#b91c1c,#dc2626)"
     : remaining <= 15 ? "linear-gradient(135deg,#92400e,#d97706)"
     : "linear-gradient(135deg,#b45309,#f59e0b)";
 
-  const buttonShadow = isDone
-    ? "0 2px 12px rgba(16,185,129,0.45), 0 1px 3px rgba(0,0,0,0.2)"
+  const buttonShadow =
+    isDone              ? "0 2px 12px rgba(16,185,129,0.45), 0 1px 3px rgba(0,0,0,0.2)"
     : isError || isLimit ? "0 2px 12px rgba(244,63,94,0.45), 0 1px 3px rgba(0,0,0,0.2)"
     : "0 2px 16px rgba(245,158,11,0.55), 0 1px 4px rgba(0,0,0,0.2)";
 
   return (
     <>
-      <input ref={inputRef} type="file" accept="application/pdf" className="sr-only"
-        onChange={handleFileChange} disabled={isProcessing || isLimit} />
+      <input
+        ref={inputRef} type="file" accept="application/pdf"
+        className="sr-only" onChange={handleFileChange}
+        disabled={isProcessing || isLimit}
+      />
 
-      <button type="button" onClick={handleButtonClick}
+      <button
+        type="button" onClick={handleButtonClick}
         className="relative inline-flex items-center gap-0 overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-500"
-        style={{ height: 44, borderRadius: 14, padding: 0, border: "none", background: buttonBg,
-          boxShadow: buttonShadow, cursor: isProcessing ? "default" : "pointer", transition: "all 0.2s ease" }}>
-
+        style={{
+          height: 44, borderRadius: 14, padding: 0, border: "none",
+          background: buttonBg, boxShadow: buttonShadow,
+          cursor: isProcessing ? "default" : "pointer",
+          transition: "all 0.2s ease",
+        }}
+      >
+        {/* Icon area */}
         <span className="relative flex items-center justify-center shrink-0" style={{ width: BTN_SIZE, height: BTN_SIZE }}>
           {isProcessing && (
             <svg width={BTN_SIZE} height={BTN_SIZE} className="absolute inset-0 -rotate-90"
               style={{ pointerEvents: "none" }} aria-hidden>
-              <circle cx={BTN_SIZE/2} cy={BTN_SIZE/2} r={BTN_R} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5" />
-              <circle cx={BTN_SIZE/2} cy={BTN_SIZE/2} r={BTN_R} fill="none" stroke="rgba(255,255,255,0.95)"
-                strokeWidth="2.5" strokeLinecap="round" strokeDasharray={BTN_CIRC} strokeDashoffset={BTN_OFF}
+              <circle cx={BTN_SIZE / 2} cy={BTN_SIZE / 2} r={BTN_R} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5" />
+              <circle cx={BTN_SIZE / 2} cy={BTN_SIZE / 2} r={BTN_R} fill="none" stroke="rgba(255,255,255,0.95)"
+                strokeWidth="2.5" strokeLinecap="round"
+                strokeDasharray={BTN_CIRC} strokeDashoffset={BTN_OFF}
                 style={{ transition: "stroke-dashoffset 0.5s cubic-bezier(0.4,0,0.2,1)" }} />
             </svg>
           )}
           <span className="relative z-10 flex flex-col items-center leading-none">
-            {isProcessing ? (<><span className="text-[12px] font-black text-white tabular-nums leading-none">{pct}</span>
-                               <span className="text-[8px] font-bold text-white/70 leading-none">%</span></>)
-             : isDone  ? <CheckCircle className="h-5 w-5 text-white" />
-             : isError ? <AlertCircle className="h-5 w-5 text-white" />
-             : isLimit ? <Zap className="h-5 w-5 text-white" />
-             : <AiBrainIcon className="h-5 w-5 text-white" />}
+            {isProcessing
+              ? (<><span className="text-[12px] font-black text-white tabular-nums leading-none">{pct}</span>
+                    <span className="text-[8px] font-bold text-white/70 leading-none">%</span></>)
+              : isDone    ? <CheckCircle className="h-5 w-5 text-white" />
+              : isError   ? <AlertCircle className="h-5 w-5 text-white" />
+              : isLimit   ? <Zap         className="h-5 w-5 text-white" />
+              :              <AiBrainIcon className="h-5 w-5 text-white" />}
           </span>
         </span>
 
+        {/* Divider */}
         <span className="shrink-0 self-stretch"
           style={{ width: 1, background: "rgba(255,255,255,0.25)", margin: "8px 0" }} aria-hidden />
 
+        {/* Label */}
         <span className="flex flex-col items-start justify-center px-3 leading-tight">
           <span className="text-[13px] font-bold text-white whitespace-nowrap">
-            {isProcessing ? "Analysing PDF…" : isDone ? `Filled · ${fieldCount} fields`
-             : isError ? "Upload Failed" : isLimit ? "Daily limit reached" : "AI PDF Upload"}
+            {isProcessing   ? "Analysing PDF…"
+             : isDone        ? `Filled · ${fieldCount} fields`
+             : isError       ? "Upload Failed"
+             : isLimit       ? "Daily limit reached"
+             :                 "AI PDF Upload"}
           </span>
           <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "rgba(255,255,255,0.72)" }}>
-            {isProcessing ? STAGE_LABELS[status].sublabel : isDone ? "Click to view details"
-             : isError ? "Click to retry" : isLimit ? `Resets in ${countdown}`
-             : remaining <= 5 ? `Only ${remaining} left today` : `${remaining} of ${DAILY_LIMIT} remaining today`}
+            {isProcessing   ? STAGE_LABELS[status].sublabel
+             : isDone        ? "Click to view details"
+             : isError       ? "Click to retry"
+             : isLimit       ? `Resets in ${countdown}`
+             : remaining <= 5 ? `Only ${remaining} left today`
+             :                  `${remaining} of ${DAILY_LIMIT} remaining today`}
           </span>
         </span>
 
+        {/* Usage dots on idle/error */}
         {!isProcessing && !isDone && !isLimit && (
           <span className="pr-3 pl-1 self-center flex flex-col items-end gap-1" aria-hidden>
             <div className="flex gap-[3px]">
               {Array.from({ length: Math.min(DAILY_LIMIT, 10) }, (_, i) => (
-                <div key={i} style={{ width: 4, height: 4, borderRadius: "50%",
-                  background: i < usedToday ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.2)" }} />
+                <div key={i} style={{
+                  width: 4, height: 4, borderRadius: "50%",
+                  background: i < usedToday ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.2)",
+                }} />
               ))}
             </div>
           </span>
         )}
 
-        <span className="pointer-events-none absolute inset-0 rounded-[14px] opacity-0 hover:opacity-100 transition-opacity duration-200"
-          style={{ background: "rgba(255,255,255,0.08)" }} aria-hidden />
+        {/* Hover overlay */}
+        <span
+          className="pointer-events-none absolute inset-0 rounded-[14px] opacity-0 hover:opacity-100 transition-opacity duration-200"
+          style={{ background: "rgba(255,255,255,0.08)" }} aria-hidden
+        />
       </button>
 
       {showPopup && (
-        <UploadPopup status={status} fileName={fileName} fieldCount={fieldCount} errMsg={errMsg}
-          pct={pct} usedToday={usedToday} countdown={countdown} onClose={reset} onRetry={handleRetry} />
+        <UploadPopup
+          status={status} fileName={fileName} fieldCount={fieldCount}
+          errMsg={errMsg} pct={pct} usedToday={usedToday} countdown={countdown}
+          onClose={reset} onRetry={handleRetry}
+        />
       )}
     </>
   );
