@@ -1,10 +1,8 @@
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
-
-const readJson = async <T>(response: Response) =>
-  (await response.json().catch(() => ({}))) as T;
+import { readSafeJson } from "@/lib/safeJson";
 
 const ensureOk = async <T extends { error?: string }>(response: Response) => {
-  const data = await readJson<T>(response);
+  const data = await readSafeJson<T>(response);
   if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data;
 };

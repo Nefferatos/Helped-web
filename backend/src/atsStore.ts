@@ -1102,9 +1102,7 @@ export const listAtsApplications = async (
     if (match.compatibilityScore > current) matchesByApplication.set(match.applicationId, match.compatibilityScore)
   })
 
-  let items = data.applications.filter(
-    (application) => application.agencyId === agencyId && application.source === 'resume_upload'
-  )
+  let items = data.applications.filter((application) => application.agencyId === agencyId)
 
   items = items.filter((application) => {
     const profile = profilesByApplication.get(application.id)

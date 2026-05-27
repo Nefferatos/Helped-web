@@ -25,6 +25,7 @@ import {
 import { toast } from "@/components/ui/sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { adminPath } from "@/lib/routes";
+import { readSafeJson } from "@/lib/safeJson";
 import {
   clearAgencyAdminAuth,
   getAgencyAdminAuthHeaders,
@@ -647,6 +648,7 @@ const AdminSupportChat = () => {
   const lastMessageSignatureRef = useRef("");
   const lastLoadedConversationKeyRef = useRef<string | null>(null);
   const lastUnreadTotalRef = useRef(0);
+  const conversationRefreshTimeoutRef = useRef<number | null>(null);
   const admin = getStoredAgencyAdmin();
 
   const activeConversation = useMemo(
@@ -696,7 +698,7 @@ const AdminSupportChat = () => {
     try {
       setErrorMessage("");
       const response = await fetch("/api/chats/admin", { headers: { ...getAgencyAdminAuthHeaders() } });
-      const data = (await response.json().catch(() => ({}))) as { conversations?: AdminConversation[]; error?: string };
+      const data = await readSafeJson<{ conversations?: AdminConversation[]; error?: string }>(response);
       if (!response.ok || !data.conversations) {
         if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
         throw new Error(data.error || "Failed to load conversations");
@@ -751,6 +753,16 @@ const AdminSupportChat = () => {
     }
   }, [navigate, queryAgencyId, queryClientId, queryClientName, queryConversationType, queryEnquiryEmail, queryEnquiryMessage]);
 
+  const scheduleConversationRefresh = useCallback(() => {
+    if (conversationRefreshTimeoutRef.current !== null) {
+      window.clearTimeout(conversationRefreshTimeoutRef.current);
+    }
+    conversationRefreshTimeoutRef.current = window.setTimeout(() => {
+      conversationRefreshTimeoutRef.current = null;
+      void loadConversations(true);
+    }, 350);
+  }, [loadConversations]);
+
   const loadMessages = useCallback(async (conversation: AdminConversation, silent = false) => {
     try {
       if (!silent) setIsLoadingMessages(true);
@@ -759,7 +771,7 @@ const AdminSupportChat = () => {
         `/api/chats/admin/${conversation.clientId}?${buildQueryString(conversation)}`,
         { headers: { ...getAgencyAdminAuthHeaders() } },
       );
-      const data = (await response.json().catch(() => ({}))) as { messages?: ChatMessage[]; error?: string };
+      const data = await readSafeJson<{ messages?: ChatMessage[]; error?: string }>(response);
       if (!response.ok || !data.messages) {
         if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
         throw new Error(data.error || "Failed to load messages");
@@ -790,7 +802,7 @@ const AdminSupportChat = () => {
     const run = async () => {
       try {
         const response = await fetch("/api/chats/admin/last-id", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
-        const data = (await response.json().catch(() => ({}))) as { lastId?: number };
+        const data = await readSafeJson<{ lastId?: number }>(response);
         if (response.ok && typeof data.lastId === "number") lastId = data.lastId;
       } catch { /* no-op */ }
       while (!controller.signal.aborted) {
@@ -827,7 +839,7 @@ const AdminSupportChat = () => {
                   description: next.message.length > 90 ? `${next.message.slice(0, 90)}...` : next.message,
                 });
               }
-              void loadConversations(true);
+              scheduleConversationRefresh();
             },
           });
         } catch {
@@ -837,8 +849,13 @@ const AdminSupportChat = () => {
       }
     };
     void run();
-    return () => controller.abort();
-  }, [loadConversations, loadMessages, navigate]);
+    return () => {
+      if (conversationRefreshTimeoutRef.current !== null) {
+        window.clearTimeout(conversationRefreshTimeoutRef.current);
+      }
+      controller.abort();
+    };
+  }, [loadConversations, loadMessages, navigate, scheduleConversationRefresh]);
 
   useEffect(() => { void loadConversations(false); }, [loadConversations]);
 
@@ -933,10 +950,10 @@ const AdminSupportChat = () => {
           body: JSON.stringify(payload),
         },
       );
-      const data = (await response.json().catch(() => ({}))) as {
+      const data = await readSafeJson<{
         conversation?: Partial<AdminConversation>;
         error?: string;
-      };
+      }>(response);
       if (!response.ok || !data.conversation) {
         throw new Error(data.error || "Failed to update conversation");
       }
@@ -975,7 +992,7 @@ const AdminSupportChat = () => {
           body: JSON.stringify({ message: messageText }),
         },
       );
-      const data = (await response.json().catch(() => ({}))) as { message?: ChatMessage; error?: string };
+      const data = await readSafeJson<{ message?: ChatMessage; error?: string }>(response);
       if (!response.ok || !data.message) {
         if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
         throw new Error(data.error || "Failed to send message");
@@ -994,7 +1011,7 @@ const AdminSupportChat = () => {
       );
       setDraft((prev) => (prev.trim() === messageText ? "" : prev));
       if (textareaRef.current) textareaRef.current.style.height = "auto";
-      await loadConversations(true);
+      scheduleConversationRefresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send message";
       setErrorMessage(message);
@@ -1002,7 +1019,7 @@ const AdminSupportChat = () => {
     } finally {
       setIsSending(false);
     }
-  }, [activeConversation, loadConversations, navigate]);
+  }, [activeConversation, navigate, scheduleConversationRefresh]);
 
   const sendMessage = useCallback(async () => {
     await sendText(draft);

@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
+import { readSafeJson } from "@/lib/safeJson";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
@@ -1001,8 +1002,8 @@ const ClientMaidsPage = ({
       const response = await fetch(`/api/maids?${params.toString()}`, {
         headers: { ...(getClientToken() ? { Authorization: `Bearer ${getClientToken()}` } : {}) },
       });
-      if (!response.ok) throw new Error("Search failed");
-      const data = (await response.json()) as { maids?: MaidProfile[]; data?: MaidProfile[] };
+      const data = await readSafeJson<{ maids?: MaidProfile[]; data?: MaidProfile[]; error?: string }>(response);
+      if (!response.ok) throw new Error(data.error || "Search failed");
       setSearchResults(data.maids ?? data.data ?? []);
     } catch {
       toast.error("Failed to load profiles. Please try again.");

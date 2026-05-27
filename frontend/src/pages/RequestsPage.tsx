@@ -32,6 +32,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { readSafeJson } from "@/lib/safeJson";
 import {
   createRequestMessage,
   fetchRequestConversation,
@@ -275,7 +276,7 @@ const RequestsPageContent = () => {
         status: statusFilter,
         query: deferredSearch,
       }),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
     placeholderData: (previous) => previous,
   });
 
@@ -284,7 +285,7 @@ const RequestsPageContent = () => {
     enabled: typeof agencyFilter === "number" || isMainAdmin,
     queryFn: () =>
       fetchRequests({ agencyId: agencyFilter, page: 1, pageSize: 100, status: "all" }),
-    refetchInterval: 5000,
+    refetchInterval: 20000,
     placeholderData: (previous) => previous,
   });
 
@@ -294,10 +295,10 @@ const RequestsPageContent = () => {
     staleTime: 60_000,
     queryFn: async () => {
       const response = await fetch("/api/maids", { headers: { ...getAgencyAdminAuthHeaders() } });
-      const data = (await response.json().catch(() => ({}))) as {
+      const data = await readSafeJson<{
         maids?: MaidOption[];
         error?: string;
-      };
+      }>(response);
       if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
       return data.maids;
     },
@@ -307,14 +308,14 @@ const RequestsPageContent = () => {
     queryKey: ["admin-request-conversation", selectedRequest?.id],
     enabled: sheetOpen && drawerMode === "details" && Boolean(selectedRequest?.id),
     queryFn: () => fetchRequestConversation(selectedRequest!.id),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 
   const messagesQuery = useQuery({
     queryKey: ["admin-request-messages", conversationQuery.data?.id],
     enabled: sheetOpen && drawerMode === "details" && Boolean(conversationQuery.data?.id),
     queryFn: () => fetchRequestMessages(conversationQuery.data!.id),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 
   const requests = requestsQuery.data?.data ?? [];

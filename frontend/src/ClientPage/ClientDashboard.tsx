@@ -36,6 +36,7 @@ import {
   type ClientUser,
 } from "@/lib/clientAuth";
 import { clientFetch, hasActiveClientSession, logoutClientPortal } from "@/lib/supabaseAuth";
+import { readSafeJson } from "@/lib/safeJson";
 import { useToast } from "@/hooks/use-toast";
 import "./ClientTheme.css";
 
@@ -250,19 +251,19 @@ const ClientDashboard = () => {
               .catch(() => 0),
           ]);
 
-        const meData = (await meResponse.json().catch(() => ({}))) as {
+        const meData = await readSafeJson<{
           error?: string;
           client?: ClientUser;
-        };
-        const maidData = (await maidsResponse.json().catch(() => ({}))) as {
+        }>(meResponse);
+        const maidData = await readSafeJson<{
           error?: string;
           assignments?: Assignment[];
-        };
-        const publicData = (await publicMaidsResponse.json().catch(() => ({}))) as {
+        }>(maidsResponse);
+        const publicData = await readSafeJson<{
           error?: string;
           maids?: MaidProfile[];
-        };
-        const companyData = (await companyResponse.json().catch(() => ({}))) as CompanyResponse;
+        }>(publicMaidsResponse);
+        const companyData = await readSafeJson<CompanyResponse & { error?: string }>(companyResponse);
 
         if (!meResponse.ok || !meData.client) throw new Error(meData.error || "Failed to load client session");
         if (!maidsResponse.ok || !maidData.assignments) throw new Error(maidData.error || "Failed to load assigned maids");

@@ -18,7 +18,9 @@ import {
   CheckSquare,
   Square,
 } from "lucide-react";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
+import { readSafeJson } from "@/lib/safeJson";
 
 const mockEmployers = [
   {
@@ -261,8 +263,8 @@ const EmploymentContracts = () => {
     try {
       setIsLoading(true);
       setLoadError(null);
-      const response = await fetch("/api/employers");
-      const data = (await response.json().catch(() => ({}))) as {
+      const response = await fetch("/api/employers", { headers: { ...getAgencyAdminAuthHeaders() } });
+      const data = await readSafeJson<{
         employers?: Array<{
           refCode?: string;
           createdAt?: string;
@@ -273,7 +275,7 @@ const EmploymentContracts = () => {
           spouse?: Record<string, unknown>;
         }>;
         error?: string;
-      };
+      }>(response);
       if (!response.ok) throw new Error(data.error || "Failed to load employers");
       if (!Array.isArray(data.employers)) return;
 
@@ -321,7 +323,7 @@ const EmploymentContracts = () => {
         // ── 1. Fetch the existing record ──────────────────────────────────
         let getJson: Record<string, unknown>;
         try {
-          const getRes = await fetch(`/api/employers/${encodeURIComponent(ref)}`);
+          const getRes = await fetch(`/api/employers/${encodeURIComponent(ref)}`, { headers: { ...getAgencyAdminAuthHeaders() } });
           const text = await getRes.text();
           try {
             getJson = JSON.parse(text) as Record<string, unknown>;
@@ -365,7 +367,7 @@ const EmploymentContracts = () => {
         try {
           const postRes = await fetch("/api/employers", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
             body: JSON.stringify(payload),
           });
           const text = await postRes.text();
@@ -409,11 +411,9 @@ const EmploymentContracts = () => {
       for (const ref of refs) {
         const response = await fetch(
           `/api/employers/${encodeURIComponent(ref)}`,
-          { method: "DELETE" },
+          { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } },
         );
-        const data = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
+        const data = await readSafeJson<{ error?: string }>(response);
         if (!response.ok)
           throw new Error(data.error || `Failed to delete ${ref}`);
       }

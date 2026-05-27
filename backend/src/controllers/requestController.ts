@@ -7,6 +7,7 @@ import {
 import {
   getAllMaidsStore,
   getClientsStore,
+  getMaidsStore,
   getPublicMaidByReferenceCodeStore,
   type ClientRecord,
   type MaidRecord,
@@ -165,8 +166,6 @@ export const listRequests = async (req: Request, res: Response) => {
     const isGlobalAdmin = admin?.role === 'admin'
     const requestedClientId = Number(req.query.clientId ?? '')
     const requestedAgencyId = Number(req.query.agencyId ?? '')
-    const [clients, maids] = await Promise.all([getClientsStore(), getAllMaidsStore()])
-
     const page = Math.max(1, Number(req.query.page ?? '1') || 1)
     const pageSize = Math.min(24, Math.max(1, Number(req.query.pageSize ?? '12') || 12))
 const clientId =
@@ -184,6 +183,10 @@ const clientId =
         : admin && !isGlobalAdmin
         ? admin.agencyId
         : undefined
+    const [clients, maids] = await Promise.all([
+      getClientsStore(),
+      typeof agencyId === 'number' ? getMaidsStore(undefined, undefined, agencyId) : getMaidsStore(),
+    ])
     const result = await listRequestRecords({
       ...(typeof agencyId === 'number' ? { agencyId } : {}),
       ...(typeof clientId === 'number' && Number.isInteger(clientId) && clientId > 0 ? { clientId } : {}),
@@ -204,14 +207,17 @@ const clientId =
       status: status || null,
     })
 
-    const pagedItems = await Promise.all(
-      result.items.map(async (request) =>
-        buildRequestResponse(
-          request,
-          clients,
-          maids,
-          await getAgencyNameByIdRecord(request.agencyId)
-        )
+    const agencyIds = Array.from(new Set(result.items.map((request) => request.agencyId)))
+    const agencyNameEntries = await Promise.all(
+      agencyIds.map(async (id) => [id, await getAgencyNameByIdRecord(id)] as const)
+    )
+    const agencyNameMap = new Map<number, string>(agencyNameEntries)
+    const pagedItems = result.items.map((request) =>
+      buildRequestResponse(
+        request,
+        clients,
+        maids,
+        agencyNameMap.get(request.agencyId) ?? ''
       )
     )
 

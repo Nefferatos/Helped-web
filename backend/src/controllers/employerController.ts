@@ -11,7 +11,17 @@ export const listEmployerContracts = async (_req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(_req)
     const employers = await getEmployerContractsStore(agencyId)
-    res.status(200).json({ employers })
+    res.status(200).json({
+      employers: employers.map((record) => ({
+        refCode: record.refCode,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        maid: record.maid,
+        agency: record.agency,
+        employer: record.employer,
+        spouse: record.spouse,
+      })),
+    })
   } catch (error) {
     console.error('Error fetching employer contracts:', error)
     res.status(500).json({ error: 'Failed to fetch employer contracts' })

@@ -1,5 +1,6 @@
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { getClientAuthHeaders } from "@/lib/clientAuth";
+import { readSafeJson } from "@/lib/safeJson";
 
 export type RequestType = "general" | "direct";
 export type RequestStatus = "pending" | "interested" | "direct_hire" | "rejected";
@@ -111,14 +112,11 @@ export const requestStatusMeta: Record<
   },
 };
 
-const readJson = async <T>(response: Response): Promise<T> =>
-  (await response.json().catch(() => ({}))) as T;
-
 const REQUESTS_REFRESH_EVENT = "requests:changed";
 const REQUESTS_REFRESH_STORAGE_KEY = "requests:last-change";
 
 const ensureOk = async <T extends { error?: string }>(response: Response) => {
-  const data = await readJson<T>(response);
+  const data = await readSafeJson<T>(response);
   if (!response.ok) {
     throw new Error(data.error || `Request failed (${response.status})`);
   }
@@ -198,11 +196,9 @@ export const fetchRequests = async ({
   if (typeof agencyId === "number") params.set("agencyId", String(agencyId));
 
   const headers =
-    typeof agencyId === "number"
-      ? getAgencyAdminAuthHeaders()
-      : typeof clientId === "number"
-        ? getClientAuthHeaders()
-        : {};
+    typeof clientId === "number"
+      ? getClientAuthHeaders()
+      : getAgencyAdminAuthHeaders();
 
   console.log("[requests] fetchRequests request", {
     agencyId: agencyId ?? null,

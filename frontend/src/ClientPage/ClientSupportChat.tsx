@@ -27,6 +27,7 @@ import {
   primeClientAuth,
   syncClientProfileFromSession,
 } from "@/lib/supabaseAuth";
+import { readSafeJson } from "@/lib/safeJson";
 import "./ClientTheme.css";
 
 type TopicOption = AgencyChatbotTopicOption;
@@ -672,10 +673,10 @@ const ClientSupportChat = () => {
   const loadConversations = useCallback(async (silent = false) => {
     try {
       const response = await clientFetch("/api/chats/client/conversations");
-      const data = (await response.json().catch(() => ({}))) as {
+      const data = await readSafeJson<{
         conversations?: ClientConversation[];
         error?: string;
-      };
+      }>(response);
       if (!response.ok || !data.conversations) {
         throw new Error(data.error || "Failed to load conversations");
       }
@@ -707,10 +708,10 @@ const ClientSupportChat = () => {
       if (!silent) setIsLoading(true);
       setErrorMessage("");
       const response = await clientFetch(`/api/chats/client?${qs}`);
-      const data = (await response.json().catch(() => ({}))) as {
+      const data = await readSafeJson<{
         messages?: ChatMessage[];
         error?: string;
-      };
+      }>(response);
       if (!response.ok || !data.messages) {
         throw new Error(data.error || "Failed to load chat");
       }
@@ -768,7 +769,7 @@ const ClientSupportChat = () => {
           return;
         }
         const response = await clientFetch("/api/chats/client/last-id", { signal: controller.signal });
-        const data = (await response.json().catch(() => ({}))) as { lastId?: number };
+        const data = await readSafeJson<{ lastId?: number }>(response);
         if (response.ok && typeof data.lastId === "number") lastId = data.lastId;
       } catch {
         // ignore cursor bootstrap failures
@@ -870,10 +871,10 @@ const ClientSupportChat = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
       });
-      const data = (await response.json().catch(() => ({}))) as {
+      const data = await readSafeJson<{
         message?: ChatMessage;
         error?: string;
-      };
+      }>(response);
       if (!response.ok || !data.message) {
         throw new Error(data.error || "Failed to send");
       }

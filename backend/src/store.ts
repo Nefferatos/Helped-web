@@ -2584,16 +2584,17 @@ export const getEnquiriesStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
+  const clientsById = new Map(data.clients.map((client) => [client.id, client] as const))
+  const clientsByEmail = new Map(
+    data.clients.map((client) => [client.email.trim().toLowerCase(), client] as const)
+  )
   let enquiries = data.enquiries
     .filter((enquiry) => enquiry.agencyId === agencyId)
     .map((enquiry) => {
       const matchedClient =
         typeof enquiry.clientId === 'number' && enquiry.clientId > 0
-          ? data.clients.find((client) => client.id === enquiry.clientId) ?? null
-          : data.clients.find(
-              (client) =>
-                client.email.trim().toLowerCase() === enquiry.email.trim().toLowerCase()
-            ) ?? null
+          ? clientsById.get(enquiry.clientId) ?? null
+          : clientsByEmail.get(enquiry.email.trim().toLowerCase()) ?? null
 
       return matchedClient
         ? {
@@ -3267,11 +3268,12 @@ export const getChatMessagesAfterIdForAgencyStore = async (
   const data = await loadData()
   const resolvedAgencyId = normalizeAgencyId(agencyId)
   const agencyProfileImageUrl = getAgencyAvatarForSupport(data, resolvedAgencyId)
+  const clientsById = new Map(data.clients.map((client) => [client.id, client] as const))
   return data.supportMessages
     .filter((message) => message.agencyId === resolvedAgencyId && message.id > afterId)
     .sort((a, b) => a.id - b.id)
     .map((message) => {
-      const client = data.clients.find((item) => item.id === message.clientId)
+      const client = clientsById.get(message.clientId)
       return {
         ...message,
         clientProfileImageUrl: client?.profileImageUrl ?? '',
@@ -3329,10 +3331,11 @@ export const getChatConversationsStore = async (
   const data = await loadData()
   const resolvedAgencyId = normalizeAgencyId(agencyId)
   const agencyProfileImageUrl = getAgencyAvatarForSupport(data, resolvedAgencyId)
+  const clientsById = new Map(data.clients.map((client) => [client.id, client] as const))
   return data.supportConversations
     .filter((conversation) => conversation.agencyId === resolvedAgencyId)
     .map((conversation) => {
-      const client = data.clients.find((item) => item.id === conversation.clientId)
+      const client = clientsById.get(conversation.clientId)
       if (!client) return null
       return {
         key: buildSupportConversationKey(
@@ -4118,11 +4121,33 @@ export const getEmployerContractsStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
+  const summaries = data.employmentContracts
+    .filter((item) => normalizeAgencyId(item.agencyId) === agencyId)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .map((item) => ({
+      refCode: item.refCode,
+      agencyId,
+      maid: item.maidSnapshot ?? {},
+      agency: {
+        contractDate: item.contractDate,
+        caseReferenceNumber: item.caseReferenceNumber,
+        serviceFee: item.serviceFee,
+        placementFee: item.placementFee,
+        agencyWitness: item.agencyWitness,
+      },
+      employer: item.employerSnapshot ?? {},
+      spouse: {},
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }))
+
+  if (summaries.length > 0) {
+    return summaries
+  }
+
   return data.employers
     .filter((item) => item.agencyId === agencyId)
-    .sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  )
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 }
 
 export const getEmployerContractStore = async (

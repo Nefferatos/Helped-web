@@ -26,9 +26,13 @@ import {
   ChevronDown,
   User,
   Tag,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { streamSse } from "@/lib/sse";
 import { adminPath } from "@/lib/routes";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
+import { readSafeJson } from "@/lib/safeJson";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 type Status = "new" | "in_progress" | "replied" | "resolved";
@@ -531,6 +535,7 @@ const AdminEnquiry = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const [enquiries, setEnquiries] = useState<EnquiryRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -552,9 +557,9 @@ const AdminEnquiry = () => {
         if (search.trim()) params.set("search", search.trim());
         const response = await fetch(
           `/api/enquiries${params.toString() ? `?${params.toString()}` : ""}`,
-          { signal: controller.signal },
+          { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal },
         );
-        const data = (await response.json()) as { error?: string; enquiries?: EnquiryRecord[] };
+        const data = await readSafeJson<{ error?: string; enquiries?: EnquiryRecord[] }>(response);
         if (!response.ok || !data.enquiries)
           throw new Error(data.error || "Failed to load enquiries");
         const sorted = [...data.enquiries].sort((a, b) => b.id - a.id);
@@ -583,8 +588,8 @@ const AdminEnquiry = () => {
 
     const loadLastId = async () => {
       try {
-        const res = await fetch("/api/enquiries/last-id", { signal: controller.signal });
-        const d = (await res.json().catch(() => ({}))) as { lastId?: number };
+        const res = await fetch("/api/enquiries/last-id", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
+        const d = await readSafeJson<{ lastId?: number }>(res);
         if (res.ok && typeof d.lastId === "number") lastId = Math.max(lastId, d.lastId);
       } catch { /* ignore */ } finally {
         lastId = Math.max(lastId, computeLocalLastId());
@@ -618,8 +623,8 @@ const AdminEnquiry = () => {
             pollTimer = window.setInterval(async () => {
               if (controller.signal.aborted || searchRef.current.trim()) return;
               try {
-                const res = await fetch("/api/enquiries", { signal: controller.signal });
-                const d = (await res.json().catch(() => ({}))) as { enquiries?: EnquiryRecord[] };
+                const res = await fetch("/api/enquiries", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
+                const d = await readSafeJson<{ enquiries?: EnquiryRecord[] }>(res);
                 if (res.ok && d.enquiries) {
                   setEnquiries(enrichWithMeta([...d.enquiries].sort((a, b) => b.id - a.id)));
                   setPage(1);
@@ -645,8 +650,8 @@ const AdminEnquiry = () => {
   const handleDelete = async (id: number) => {
     try {
       setBusyId(id);
-      const response = await fetch(`/api/enquiries/${id}`, { method: "DELETE" });
-      const data = (await response.json()) as { error?: string };
+      const response = await fetch(`/api/enquiries/${id}`, { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } });
+      const data = await readSafeJson<{ error?: string }>(response);
       if (!response.ok) throw new Error(data.error || "Failed to delete enquiry");
       bulkDeleteMeta([id]);
       setEnquiries((prev) => prev.filter((e) => e.id !== id));
@@ -665,7 +670,7 @@ const AdminEnquiry = () => {
     try {
       setBulkDeleting(true);
       const ids = Array.from(selectedIds);
-      await Promise.all(ids.map((id) => fetch(`/api/enquiries/${id}`, { method: "DELETE" })));
+      await Promise.all(ids.map((id) => fetch(`/api/enquiries/${id}`, { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } })));
       bulkDeleteMeta(ids);
       setEnquiries((prev) => prev.filter((e) => !selectedIds.has(e.id)));
       toast.success(`${ids.length} enqu${ids.length !== 1 ? "iries" : "iry"} deleted`);
@@ -901,6 +906,32 @@ const AdminEnquiry = () => {
                   )}
                 </button>
               ))}
+              <div className="ml-auto inline-flex items-center rounded-2xl border-2 border-gray-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("cards")}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-bold transition-all ${
+                    viewMode === "cards"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-gray-600 hover:text-indigo-700"
+                  }`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-bold transition-all ${
+                    viewMode === "list"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-gray-600 hover:text-indigo-700"
+                  }`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  List
+                </button>
+              </div>
             </div>
           </div>
 
@@ -992,7 +1023,7 @@ const AdminEnquiry = () => {
                   </button>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2">
+                <div className={viewMode === "list" ? "grid gap-3 grid-cols-1" : "grid gap-3 sm:grid-cols-1 lg:grid-cols-2"}>
                   {visibleEnquiries.map((enq, i) => (
                     <EnquiryCard
                       key={enq.id}
