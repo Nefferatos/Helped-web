@@ -9,7 +9,7 @@
       "status": "Ready For Client Matching",
       "source": "resume_upload",
       "appliedAt": "2026-05-26T02:15:15.673Z",
-      "updatedAt": "2026-05-26T02:23:12.100Z",
+      "updatedAt": "2026-05-26T11:28:41.700Z",
       "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
       "aiParseReviewRequired": true,
       "notificationLogIds": [
@@ -9754,6 +9754,15 @@
   ],
   "history": [
     {
+      "id": "3c375f9e-a9a0-4d5c-a0e6-6b949203bce7",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Ready For Client Matching",
+      "toStage": "Ready For Client Matching",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready For Client Matching",
+      "createdAt": "2026-05-26T11:28:41.700Z"
+    },
+    {
       "id": "bc42c1d7-cf07-40a4-b11b-39d627e2fa54",
       "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
       "fromStage": "Approved",
@@ -11175,6 +11184,16 @@
     }
   ],
   "notifications": [
+    {
+      "id": "7c9df08d-1454-4dc5-a1a0-24d95ef6d2cd",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "test moved to Ready For Client Matching",
+      "createdAt": "2026-05-26T11:28:41.700Z"
+    },
     {
       "id": "46290562-1dcd-4f97-9999-4259e678572d",
       "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",

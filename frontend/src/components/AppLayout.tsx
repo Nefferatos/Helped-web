@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LogOut,
@@ -36,6 +36,8 @@ import {
   clearAgencyAdminAuth,
   getAgencyAdminAuthHeaders,
   getStoredAgencyAdmin,
+  markAgencyAdminWelcomeShown,
+  shouldShowAgencyAdminWelcome,
   type AgencyAdminUser,
 } from "@/lib/agencyAdminAuth";
 import { fetchAdminUnreadChatCount, type SupportNotification } from "@/lib/chat";
@@ -848,7 +850,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop(1024);
-  const hasWelcomed = useRef(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -867,10 +868,10 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   );
   const [agencyLogoUrl, setAgencyLogoUrl] = useState("");
 
-  // One-time welcome modal on mount
+  // Show the welcome modal once for each successful login session.
   useEffect(() => {
-    if (hasWelcomed.current) return;
-    hasWelcomed.current = true;
+    if (!shouldShowAgencyAdminWelcome()) return;
+    markAgencyAdminWelcomeShown();
     setShowWelcomeModal(true);
   }, []);
 

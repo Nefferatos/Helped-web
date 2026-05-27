@@ -148,7 +148,7 @@ const ProtectedAdminRoute = ({ children }: { children: ReactNode }) => {
         }
 
         if (!cancelled) {
-          saveAgencyAdminAuth(token, data.admin);
+          saveAgencyAdminAuth(token, data.admin, { refreshLoginSession: false });
           setStatus("allowed");
         }
       } catch {

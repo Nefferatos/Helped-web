@@ -13,8 +13,23 @@ export interface AgencyAdminUser {
 
 const TOKEN_KEY = "agency_admin_token";
 const ADMIN_KEY = "agency_admin_user";
+const LOGIN_SESSION_KEY = "agency_admin_login_session";
+const WELCOME_SHOWN_SESSION_KEY = "agency_admin_welcome_shown_session";
 
-export const saveAgencyAdminAuth = (token: string, admin: AgencyAdminUser) => {
+const createLoginSessionId = () =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+type SaveAgencyAdminAuthOptions = {
+  refreshLoginSession?: boolean;
+};
+
+export const saveAgencyAdminAuth = (
+  token: string,
+  admin: AgencyAdminUser,
+  options?: SaveAgencyAdminAuthOptions,
+) => {
+  const refreshLoginSession = options?.refreshLoginSession ?? true;
+
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(
     ADMIN_KEY,
@@ -34,11 +49,17 @@ export const saveAgencyAdminAuth = (token: string, admin: AgencyAdminUser) => {
             : 1,
     }),
   );
+
+  if (refreshLoginSession || !localStorage.getItem(LOGIN_SESSION_KEY)) {
+    localStorage.setItem(LOGIN_SESSION_KEY, createLoginSessionId());
+  }
 };
 
 export const clearAgencyAdminAuth = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ADMIN_KEY);
+  localStorage.removeItem(LOGIN_SESSION_KEY);
+  localStorage.removeItem(WELCOME_SHOWN_SESSION_KEY);
 };
 
 export const getAgencyAdminToken = () => localStorage.getItem(TOKEN_KEY);
@@ -69,4 +90,16 @@ export const getStoredAgencyAdmin = (): AgencyAdminUser | null => {
 export const getAgencyAdminAuthHeaders = () => {
   const token = getAgencyAdminToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+export const shouldShowAgencyAdminWelcome = () => {
+  const loginSession = localStorage.getItem(LOGIN_SESSION_KEY);
+  if (!loginSession || !getAgencyAdminToken()) return false;
+  return localStorage.getItem(WELCOME_SHOWN_SESSION_KEY) !== loginSession;
+};
+
+export const markAgencyAdminWelcomeShown = () => {
+  const loginSession = localStorage.getItem(LOGIN_SESSION_KEY);
+  if (!loginSession) return;
+  localStorage.setItem(WELCOME_SHOWN_SESSION_KEY, loginSession);
 };
