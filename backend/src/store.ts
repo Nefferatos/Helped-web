@@ -2,9 +2,11 @@ import { copyFile, mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
 import {
+  countMaidRecordsSql,
   createMaidSql,
   deleteMaidSql,
   getMaidByReferenceCodeSql,
+  listMaidRecordsPageSql,
   listMaidRecordsSql,
   type SqlMaidPayload,
   updateMaidMediaSql,
@@ -2048,6 +2050,41 @@ export const getAllMaidsStore = async (
   )
 }
 
+export const getMaidsPageStore = async (options: {
+  search?: string
+  visibility?: string
+  agencyId?: number
+  offset?: number
+  limit?: number
+}) => {
+  try {
+    const [maids, total] = await Promise.all([
+      listMaidRecordsPageSql(options),
+      countMaidRecordsSql(options),
+    ])
+    return { maids, total }
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+
+  const allMaids =
+    typeof options.agencyId === 'number'
+      ? await getMaidsStore(options.search, options.visibility, options.agencyId)
+      : await getAllMaidsStore(options.search, options.visibility)
+
+  const offset = Math.max(0, options.offset ?? 0)
+  const limit = options.limit
+  const maids =
+    typeof limit === 'number' && limit > 0
+      ? allMaids.slice(offset, offset + limit)
+      : allMaids.slice(offset)
+
+  return {
+    maids,
+    total: allMaids.length,
+  }
+}
+
 export const getMaidByReferenceCodeStore = async (
   referenceCode: string,
   agencyId: number = DEFAULT_AGENCY_ID
@@ -2142,8 +2179,9 @@ export const createMaidStore = async (
   maid: Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  const persistedMaid = await persistMaidMediaFields(maid, agencyId)
+
   try {
-    const persistedMaid = await persistMaidMediaFields(maid, agencyId)
     return await createMaidSql(toSqlMaidPayload(persistedMaid), agencyId)
   } catch (error) {
     if (error instanceof Error && error.message === 'REFERENCE_CODE_EXISTS') {
@@ -2160,7 +2198,6 @@ export const createMaidStore = async (
     throw new Error('REFERENCE_CODE_EXISTS')
   }
 
-  const persistedMaid = await persistMaidMediaFields(maid, agencyId)
   const record: MaidRecord = {
     ...persistedMaid,
     agencyId,
@@ -2179,8 +2216,9 @@ export const updateMaidStore = async (
   updates: Omit<MaidRecord, 'id' | 'agencyId' | 'createdAt' | 'updatedAt'>,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  const persistedUpdates = await persistMaidMediaFields(updates, agencyId)
+
   try {
-    const persistedUpdates = await persistMaidMediaFields(updates, agencyId)
     const updated = await updateMaidSql(
       referenceCode,
       toSqlMaidPayload(persistedUpdates),
@@ -2212,7 +2250,6 @@ export const updateMaidStore = async (
     throw new Error('REFERENCE_CODE_EXISTS')
   }
 
-  const persistedUpdates = await persistMaidMediaFields(updates, agencyId)
   data.maids[index] = {
     ...data.maids[index],
     ...persistedUpdates,
@@ -2233,8 +2270,10 @@ export const updateMaidVisibilityStore = async (
     if (updated) {
       return updated
     }
-  } catch {
-    // Fall back to the legacy local store when the database is unavailable.
+  } catch (error) {
+    // Visibility changes must stay in sync with the primary store or the maid can
+    // disappear from one list and never show up in the other.
+    throw error
   }
 
   const data = await loadData()
@@ -2256,14 +2295,15 @@ export const updateMaidPhotoStore = async (
   photoDataUrl: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  const persistedPhoto = await persistMaidMediaValue(
+    photoDataUrl,
+    agencyId,
+    referenceCode,
+    'photos',
+    0
+  )
+
   try {
-    const persistedPhoto = await persistMaidMediaValue(
-      photoDataUrl,
-      agencyId,
-      referenceCode,
-      'photos',
-      0
-    )
     const updated = await updateMaidMediaSql(
       referenceCode,
       {
@@ -2285,13 +2325,6 @@ export const updateMaidPhotoStore = async (
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
   )
   if (index === -1) return null
-  const persistedPhoto = await persistMaidMediaValue(
-    photoDataUrl,
-    agencyId,
-    referenceCode,
-    'photos',
-    0
-  )
   data.maids[index] = {
     ...data.maids[index],
     photoDataUrls: persistedPhoto ? [persistedPhoto] : [],
@@ -2308,6 +2341,19 @@ export const addMaidPhotoStore = async (
   photoDataUrl: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  const persistNextPhotos = async (currentPhotos: string[]) => {
+    const nextPhotos = [...currentPhotos]
+    if (photoDataUrl) {
+      if (nextPhotos.length >= 5) {
+        throw new Error('PHOTO_LIMIT_REACHED')
+      }
+      nextPhotos.push(
+        await persistMaidMediaValue(photoDataUrl, agencyId, referenceCode, 'photos', nextPhotos.length)
+      )
+    }
+    return nextPhotos
+  }
+
   try {
     const existing = await getMaidByReferenceCodeSql(referenceCode, { agencyId })
     if (existing) {
@@ -2316,15 +2362,7 @@ export const addMaidPhotoStore = async (
         : existing.photoDataUrl
         ? [existing.photoDataUrl]
         : []
-      const nextPhotos = [...currentPhotos]
-      if (photoDataUrl) {
-        if (nextPhotos.length >= 5) {
-          throw new Error('PHOTO_LIMIT_REACHED')
-        }
-        nextPhotos.push(
-          await persistMaidMediaValue(photoDataUrl, agencyId, referenceCode, 'photos', nextPhotos.length)
-        )
-      }
+      const nextPhotos = await persistNextPhotos(currentPhotos)
       const updated = await updateMaidMediaSql(
         referenceCode,
         {
@@ -2355,15 +2393,7 @@ export const addMaidPhotoStore = async (
     : data.maids[index].photoDataUrl
     ? [data.maids[index].photoDataUrl]
     : []
-  const nextPhotos = [...currentPhotos]
-  if (photoDataUrl) {
-    if (nextPhotos.length >= 5) {
-      throw new Error('PHOTO_LIMIT_REACHED')
-    }
-    nextPhotos.push(
-      await persistMaidMediaValue(photoDataUrl, agencyId, referenceCode, 'photos', nextPhotos.length)
-    )
-  }
+  const nextPhotos = await persistNextPhotos(currentPhotos)
   data.maids[index] = {
     ...data.maids[index],
     photoDataUrls: nextPhotos,
@@ -2380,17 +2410,17 @@ export const replaceMaidPhotosStore = async (
   photoDataUrls: string[],
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
-  try {
-    const normalizedPhotos = photoDataUrls
-      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-      .slice(0, 5)
+  const normalizedPhotos = photoDataUrls
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .slice(0, 5)
 
-    const persistedPhotos = await Promise.all(
-      normalizedPhotos.map((photo, photoIndex) =>
-        persistMaidMediaValue(photo, agencyId, referenceCode, 'photos', photoIndex)
-      )
+  const persistedPhotos = await Promise.all(
+    normalizedPhotos.map((photo, photoIndex) =>
+      persistMaidMediaValue(photo, agencyId, referenceCode, 'photos', photoIndex)
     )
+  )
 
+  try {
     const updated = await updateMaidMediaSql(
       referenceCode,
       {
@@ -2413,16 +2443,6 @@ export const replaceMaidPhotosStore = async (
   )
   if (index === -1) return null
 
-  const normalizedPhotos = photoDataUrls
-    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    .slice(0, 5)
-
-  const persistedPhotos = await Promise.all(
-    normalizedPhotos.map((photo, photoIndex) =>
-      persistMaidMediaValue(photo, agencyId, referenceCode, 'photos', photoIndex)
-    )
-  )
-
   data.maids[index] = {
     ...data.maids[index],
     photoDataUrls: persistedPhotos,
@@ -2439,11 +2459,12 @@ export const updateMaidVideoStore = async (
   videoDataUrl: string,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
+  const persistedVideo =
+    typeof videoDataUrl === 'string' && videoDataUrl.trim().startsWith('data:')
+      ? await persistMaidMediaValue(videoDataUrl, agencyId, referenceCode, 'videos', 0)
+      : videoDataUrl
+
   try {
-    const persistedVideo =
-      typeof videoDataUrl === 'string' && videoDataUrl.trim().startsWith('data:')
-        ? await persistMaidMediaValue(videoDataUrl, agencyId, referenceCode, 'videos', 0)
-        : videoDataUrl
     const updated = await updateMaidMediaSql(
       referenceCode,
       {
@@ -2463,10 +2484,6 @@ export const updateMaidVideoStore = async (
     (maid) => maid.referenceCode === referenceCode && maid.agencyId === agencyId
   )
   if (index === -1) return null
-  const persistedVideo =
-    typeof videoDataUrl === 'string' && videoDataUrl.trim().startsWith('data:')
-      ? await persistMaidMediaValue(videoDataUrl, agencyId, referenceCode, 'videos', 0)
-      : videoDataUrl
   data.maids[index] = {
     ...data.maids[index],
     videoDataUrl: persistedVideo,

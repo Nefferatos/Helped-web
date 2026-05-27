@@ -850,6 +850,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop(1024);
+  const isAddMaidRoute = location.pathname === adminPath("/add-maid");
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -889,60 +890,66 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       if (!authHeaders.Authorization) return;
 
       try {
-        const [summaryRes, compRes] = await Promise.all([
-          fetch("/api/company/summary", {
-            headers: authHeaders,
-          }),
-          fetch("/api/company", {
-            headers: authHeaders,
-          }),
-        ]);
-
-        const summaryData = (await summaryRes.json().catch(() => ({}))) as {
+        let summaryData: {
           unreadAgencyChats?: number;
           enquiries?: number;
           pendingRequests?: number;
           error?: string;
-        };
-
-        if (!summaryRes.ok)
-          throw new Error(summaryData.error || "Failed to load notifications");
-
-        if (!active) return;
-
-        // Chat count from summary
-        const unreadChats = summaryData.unreadAgencyChats ?? 0;
-
-        // Also get chat count from dedicated endpoint (whichever is higher wins)
-        let dedicatedChatCount = 0;
+        } | null = null;
+        let companyLogo = "";
+        let unreadChats = 0;
         let dedicatedNotifications: SupportNotification[] = [];
+
         try {
           const chatSummary = await fetchAdminUnreadChatCount();
-          dedicatedChatCount = chatSummary.unreadCount;
+          unreadChats = chatSummary.unreadCount;
           dedicatedNotifications = chatSummary.notifications;
         } catch {
-          /* ignore */
+          unreadChats = 0;
+          dedicatedNotifications = [];
         }
 
-        const unreadEnquiries = summaryData.enquiries ?? 0;
-        const unreadRequests = summaryData.pendingRequests ?? 0;
+        if (!isAddMaidRoute) {
+          const [summaryResult, companyResult] = await Promise.allSettled([
+            fetch("/api/company/summary", {
+              headers: authHeaders,
+            }),
+            fetch("/api/company", {
+              headers: authHeaders,
+            }),
+          ]);
+
+          if (summaryResult.status === "fulfilled") {
+            summaryData = (await summaryResult.value.json().catch(() => ({}))) as {
+              unreadAgencyChats?: number;
+              enquiries?: number;
+              pendingRequests?: number;
+              error?: string;
+            };
+          }
+
+          if (
+            companyResult.status === "fulfilled" &&
+            companyResult.value.ok
+          ) {
+            const compData = (await companyResult.value.json().catch(() => ({}))) as {
+              companyProfile?: { logo_data_url?: string };
+            };
+            companyLogo = compData.companyProfile?.logo_data_url || "";
+          }
+        }
 
         if (!active) return;
 
         setBadgeCounts({
-          unreadChats: Math.max(unreadChats, dedicatedChatCount),
-          unreadEnquiries,
-          unreadRequests,
+          unreadChats,
+          unreadEnquiries: summaryData?.enquiries ?? 0,
+          unreadRequests: summaryData?.pendingRequests ?? 0,
         });
         setChatNotifications(dedicatedNotifications);
 
-        // Company logo
-        if (compRes.ok) {
-          const compData = (await compRes.json().catch(() => ({}))) as {
-            companyProfile?: { logo_data_url?: string };
-          };
-          if (active)
-            setAgencyLogoUrl(compData.companyProfile?.logo_data_url || "");
+        if (companyLogo) {
+          setAgencyLogoUrl(companyLogo);
         }
       } catch (err) {
         console.warn("[AppLayout] Failed to refresh admin notifications", err);
@@ -959,7 +966,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       active = false;
       window.clearInterval(iv);
     };
-  }, [location.pathname]);
+  }, [isAddMaidRoute, location.pathname]);
 
   useEffect(() => {
     setAgencyAdmin(getStoredAgencyAdmin());

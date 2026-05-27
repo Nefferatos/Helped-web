@@ -8,6 +8,7 @@ import {
   getAgencyNameByIdStore,
   getAllMaidsStore,
   getMaidByReferenceCodeStore,
+  getMaidsPageStore,
   getMaidsStore,
   getPublicMaidByReferenceCodeStore,
   MaidRecord,
@@ -522,21 +523,32 @@ export const getMaidList = async (req: Request, res: Response) => {
       })
     }
 
-    const maids = shouldUseAllPublic
-      ? await getAllMaidsStore(
-          typeof search === 'string' ? search : undefined,
-          typeof visibility === 'string' ? visibility : undefined
-        )
-      : await getMaidsStore(
-          typeof search === 'string' ? search : undefined,
-          typeof visibility === 'string' ? visibility : undefined,
-          resolvedAgencyId
-        )
-
-    const total = maids.length
     const effectiveOffset = page != null && pageSize != null ? (page - 1) * pageSize : offset
-    const pagedMaids = limit != null ? maids.slice(effectiveOffset, effectiveOffset + limit) : maids
-    const payload = await withAgencyNames(pagedMaids)
+    const shouldPageInStore = limit != null || effectiveOffset > 0
+    const listResult = shouldPageInStore
+      ? await getMaidsPageStore({
+          search: typeof search === 'string' ? search : undefined,
+          visibility: typeof visibility === 'string' ? visibility : undefined,
+          ...(shouldUseAllPublic ? {} : { agencyId: resolvedAgencyId }),
+          offset: effectiveOffset,
+          limit: limit ?? undefined,
+        })
+      : {
+          maids: shouldUseAllPublic
+            ? await getAllMaidsStore(
+                typeof search === 'string' ? search : undefined,
+                typeof visibility === 'string' ? visibility : undefined
+              )
+            : await getMaidsStore(
+                typeof search === 'string' ? search : undefined,
+                typeof visibility === 'string' ? visibility : undefined,
+                resolvedAgencyId
+              ),
+          total: 0,
+        }
+
+    const total = shouldPageInStore ? listResult.total : listResult.maids.length
+    const payload = await withAgencyNames(listResult.maids)
     const responsePayload = {
       maids: payload,
       total,

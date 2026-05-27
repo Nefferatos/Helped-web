@@ -8,11 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
-import { fetchAtsApplication, type AtsApplicationBundle, type AtsApplicationListItem } from "@/lib/ats";
+import type { AtsApplicationListItem } from "@/lib/ats";
 import { defaultMaidProfile, type MaidProfile } from "@/lib/maids";
 import { startMaidSaveTask } from "@/lib/maidSaveProgress";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { compressImage, getImageSizeInMB } from "@/lib/imageCompression";
+import { compressImage, compressImageFile, getImageSizeInMB } from "@/lib/imageCompression";
 
 import { PdfAutofillBanner } from "./PdfAutofill";
 
@@ -263,6 +263,13 @@ const mergeMissingStringMap = (current: Record<string, string>, incoming: Record
   });
   return next;
 };
+
+const PHOTO_UPLOAD_OPTIONS = {
+  maxWidth: 1200,
+  maxHeight: 1200,
+  quality: 0.68,
+  maxSizeMB: 0.32,
+} as const;
 
 const mergeMissingUnknownMap = (current: Record<string, unknown>, incoming: Record<string, unknown>) => {
   const next = { ...current };
@@ -652,33 +659,9 @@ const AddMaid = () => {
 
     const seedPrefill = buildAtsPrefill({ query: searchParams });
     setFormData((prev) => mergeAtsPrefillIntoMaid(prev, seedPrefill));
-
-    const applicationId = asTrimmedString(searchParams.get("applicationId"));
-    if (!applicationId) return;
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const bundle: AtsApplicationBundle = await fetchAtsApplication(applicationId);
-        if (cancelled) return;
-        const fetchedPrefill = buildAtsPrefill({
-          query: searchParams,
-          applicationProfile: bundle.application.profile,
-          detailedProfile: bundle.profile,
-        });
-        setFormData((prev) => mergeAtsPrefillIntoMaid(prev, fetchedPrefill));
-      } catch (error) {
-        console.error("[AddMaid] ATS prefill failed:", error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [searchParams]);
 
-  const fileToDataUrl = useCallback(
+  const fileToDataUrlLegacy = useCallback(
     (file: File) =>
       new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -687,10 +670,10 @@ const AddMaid = () => {
             const dataUrl = String(reader.result || "");
             const originalSize = getImageSizeInMB(dataUrl);
             const compressed = await compressImage(dataUrl, {
-              maxWidth: 2000,
-              maxHeight: 2000,
-              quality: 0.85,
-              maxSizeMB: 1.5,
+              maxWidth: 1400,
+              maxHeight: 1400,
+              quality: 0.72,
+              maxSizeMB: 0.45,
             });
             const compressedSize = getImageSizeInMB(compressed);
             if (originalSize > 0.5) {
@@ -708,6 +691,18 @@ const AddMaid = () => {
       }),
     [],
   );
+
+  const fileToDataUrl = useCallback(async (file: File) => {
+    const originalSize = file.size / 1024 / 1024;
+    const compressed = await compressImageFile(file, PHOTO_UPLOAD_OPTIONS);
+    const compressedSize = getImageSizeInMB(compressed);
+    if (originalSize > 0.35 || compressedSize > 0.35) {
+      console.log(
+        `[Image Compression] Original: ${originalSize.toFixed(2)}MB -> Compressed: ${compressedSize.toFixed(2)}MB`
+      );
+    }
+    return compressed;
+  }, []);
 
   const handleUploadPhoto = useCallback(() => {
     setIsManagePhotosOpen(true);

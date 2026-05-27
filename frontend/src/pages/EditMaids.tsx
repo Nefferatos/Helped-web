@@ -21,6 +21,7 @@ import {
 import { Search, Eye, EyeOff, Trash2, Download, Upload, ArrowLeft, AlertTriangle, CheckSquare, Square, Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 import { scanUploadedFile } from "@/lib/fileScan";
 import { exportMaidProfilesToPdf } from "@/lib/maidExport";
@@ -479,9 +480,11 @@ const EditMaids = () => {
   const [deleteTarget, setDeleteTarget] = useState<"selected" | MaidProfile | null>(null);
   const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
   const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
+  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [manualImportOpen, setManualImportOpen] = useState(false);
   const [manualImportFields, setManualImportFields] = useState({ name: "", nationality: "", referenceCode: "" });
   const [menuSearch, setMenuSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [menuSearchResults, setMenuSearchResults] = useState<(MaidProfile & { _vis?: string })[]>([]);
   const [menuSearchLoading, setMenuSearchLoading] = useState(false);
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
@@ -500,11 +503,20 @@ const EditMaids = () => {
     const timer = setTimeout(async () => {
       try {
         setMenuSearchLoading(true);
-        const params = new URLSearchParams({ search: menuSearch.trim() });
+        const params = new URLSearchParams({ search: menuSearch.trim(), limit: "4" });
         const [pubRes, hidRes] = await Promise.all([
-          fetch(`/api/maids?visibility=public&${params}`, { signal: controller.signal }),
-          fetch(`/api/maids?visibility=hidden&${params}`, { signal: controller.signal }),
+          fetch(`/api/maids?visibility=public&${params.toString()}`, {
+            signal: controller.signal,
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }),
+          fetch(`/api/maids?visibility=hidden&${params.toString()}`, {
+            signal: controller.signal,
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }),
         ]);
+        if (!pubRes.ok || !hidRes.ok) {
+          throw new Error("Failed to search maids");
+        }
         const [pubData, hidData] = await Promise.all([
           pubRes.json() as Promise<{ maids?: MaidProfile[] }>,
           hidRes.json() as Promise<{ maids?: MaidProfile[] }>,
@@ -521,6 +533,14 @@ const EditMaids = () => {
     }, 220);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [menuSearch]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -562,7 +582,7 @@ const EditMaids = () => {
     const unsubscribe = subscribeToMaidSaveTask(taskId, (nextSnapshot) => {
       setSaveProgressTask(nextSnapshot);
       setSaveProgressDialogOpen(true);
-      if (nextSnapshot.status === "success") {
+      if (nextSnapshot.status === "success" || nextSnapshot.persisted) {
         setListRefreshKey((value) => value + 1);
       }
     });
@@ -588,8 +608,11 @@ const EditMaids = () => {
       try {
         setIsLoading(true);
         const params = new URLSearchParams({ visibility, page: String(page), pageSize: String(PAGE_SIZE) });
-        if (search.trim()) params.set("search", search.trim());
-        const response = await fetch(`/api/maids?${params.toString()}`, { signal: controller.signal });
+        if (debouncedSearch) params.set("search", debouncedSearch);
+        const response = await fetch(`/api/maids?${params.toString()}`, {
+          signal: controller.signal,
+          headers: { ...getAgencyAdminAuthHeaders() },
+        });
         const data = (await response.json()) as { error?: string; maids?: MaidProfile[]; total?: number };
         if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
         setMaids(data.maids);
@@ -601,7 +624,7 @@ const EditMaids = () => {
     };
     void load();
     return () => controller.abort();
-  }, [search, visibility, page, listRefreshKey]);
+  }, [debouncedSearch, visibility, page, listRefreshKey]);
 
   useEffect(() => { setPage(1); setSelected(new Set()); }, [search, view]);
 
@@ -632,21 +655,23 @@ const EditMaids = () => {
   };
 
   const deleteMaid = async (referenceCode: string) => {
-    const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, { method: "DELETE" });
+    const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
+      method: "DELETE",
+      headers: { ...getAgencyAdminAuthHeaders() },
+    });
     const data = (await response.json()) as { error?: string };
     if (!response.ok) throw new Error(data.error || "Failed to delete maid");
     removeLocal(referenceCode);
   };
 
-  const toggleVisibility = async (maid: MaidProfile, isPublic: boolean) => {
+  const updateMaidVisibility = async (maid: MaidProfile, isPublic: boolean) => {
     const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/visibility`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ isPublic }),
     });
     const data = (await response.json()) as { error?: string };
     if (!response.ok) throw new Error(data.error || "Failed to update visibility");
-    removeLocal(maid.referenceCode);
   };
 
   const openDeleteDialog = (target: "selected" | MaidProfile) => { setDeleteTarget(target); setDeleteDialogOpen(true); };
@@ -675,17 +700,44 @@ const EditMaids = () => {
   const confirmVisibilityChange = async () => {
     if (!pendingVisibilityTarget) return;
     setVisibilityDialogOpen(false);
+    setIsUpdatingVisibility(true);
+
+    const selectedMaids = maids.filter((m) => selected.has(m.referenceCode));
+    const doRemoveLocal = (referenceCodes: Set<string>) => {
+      setMaids((prev) => prev.filter((m) => !referenceCodes.has(m.referenceCode)));
+      setTotalMaids((prev) => Math.max(0, prev - referenceCodes.size));
+      setSelected(new Set());
+    };
+
     try {
       if ("bulk" in pendingVisibilityTarget) {
-        for (const maid of maids.filter((m) => selected.has(m.referenceCode)))
-          await toggleVisibility(maid, pendingVisibilityTarget.makePublic);
+        const selectedRefs = new Set(selectedMaids.map((m) => m.referenceCode));
+        if (selectedMaids.length > 0) doRemoveLocal(selectedRefs);
+
+        const results = await Promise.allSettled(
+          selectedMaids.map((maid) => updateMaidVisibility(maid, pendingVisibilityTarget.makePublic))
+        );
+
+        const failed = results.filter((result) => result.status === "rejected");
+        if (failed.length > 0) {
+          setListRefreshKey((value) => value + 1);
+          throw new Error(`Failed to update visibility for ${failed.length} maid${failed.length !== 1 ? "s" : ""}`);
+        }
+
         toast.success(pendingVisibilityTarget.makePublic ? "Selected maids made public" : "Selected maids hidden");
       } else {
-        await toggleVisibility(pendingVisibilityTarget.maid, pendingVisibilityTarget.makePublic);
+        removeLocal(pendingVisibilityTarget.maid.referenceCode);
+        await updateMaidVisibility(pendingVisibilityTarget.maid, pendingVisibilityTarget.makePublic);
         toast.success(pendingVisibilityTarget.makePublic ? "Maid published" : "Maid hidden");
       }
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to update visibility"); }
-    finally { setPendingVisibilityTarget(null); }
+
+      setListRefreshKey((value) => value + 1);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update visibility");
+    } finally {
+      setPendingVisibilityTarget(null);
+      setIsUpdatingVisibility(false);
+    }
   };
 
   const handleExportPdf = async () => {
@@ -694,7 +746,9 @@ const EditMaids = () => {
       const params = new URLSearchParams();
       if (visibility) params.set("visibility", visibility);
       if (search.trim()) params.set("search", search.trim());
-      const response = await fetch(`/api/maids${params.toString() ? `?${params.toString()}` : ""}`);
+      const response = await fetch(`/api/maids${params.toString() ? `?${params.toString()}` : ""}`, {
+        headers: { ...getAgencyAdminAuthHeaders() },
+      });
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || "Failed to load maids for PDF export");
@@ -758,7 +812,9 @@ const EditMaids = () => {
     const reloadVisibility = preferredVisibility ?? visibility ?? "public";
     const params = new URLSearchParams({ visibility: reloadVisibility, page: String(page), pageSize: String(PAGE_SIZE) });
     if (search.trim()) params.set("search", search.trim());
-    const reload = await fetch(`/api/maids?${params.toString()}`);
+    const reload = await fetch(`/api/maids?${params.toString()}`, {
+      headers: { ...getAgencyAdminAuthHeaders() },
+    });
     const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[]; total?: number };
     if (reload.ok && reloadData.maids) {
       setMaids(reloadData.maids);
@@ -773,7 +829,7 @@ const EditMaids = () => {
       setIsImporting(true);
       const response = await fetch("/api/maids/import.csv", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify({ csv: normalizedCsv }),
       });
       const data = (await response.json()) as { error?: string; created?: number; updated?: number; failed?: number; errors?: string[] };
@@ -795,13 +851,17 @@ const EditMaids = () => {
     try {
       setIsImporting(true);
       let response = await fetch("/api/maids", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+        body: JSON.stringify(payload),
       });
       let existed = false;
       if (response.status === 409) {
         existed = true;
         response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+          body: JSON.stringify(payload),
         });
       }
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
@@ -897,7 +957,8 @@ const EditMaids = () => {
 
   const uploadPreparedImportBatch = async (operations: PreparedImportOperation[], signal: AbortSignal) => {
     const response = await fetch("/api/maids/import.batch", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ operations }), signal,
     });
     const data = (await response.json().catch(() => ({}))) as { error?: string; results?: ImportBatchResult[] };
@@ -1052,6 +1113,12 @@ const EditMaids = () => {
               />
             </div>
 
+            {saveProgressTask?.persisted && saveProgressTask.status !== "success" && (
+              <div className="rounded-lg border border-[#C0DD97] bg-[#F6FAEE] px-4 py-3 text-sm text-[#27500A]">
+                Maid details are already saved. Remaining photos or video are uploading in the background one-by-one.
+              </div>
+            )}
+
             {saveProgressTask?.status === "error" && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {saveProgressTask.error || "Failed to save maid profile."}
@@ -1060,7 +1127,7 @@ const EditMaids = () => {
 
             {saveProgressTask?.status === "success" && (
               <div className="rounded-lg border border-[#97C459]/40 bg-[#EAF3DE] px-4 py-3 text-sm text-[#27500A]">
-                The maid profile is ready and the public maids list has been refreshed.
+                The maid profile and media are ready, and the maids list has been refreshed.
               </div>
             )}
           </div>
@@ -1179,9 +1246,10 @@ const EditMaids = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }} disabled={isUpdatingVisibility}>Cancel</Button>
             <Button
               onClick={() => void confirmVisibilityChange()}
+              disabled={isUpdatingVisibility}
               className={pendingVisibilityTarget?.makePublic
                 ? "bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
                 : "bg-[#EF9F27] hover:bg-[#BA7517] text-[#412402] border-[#BA7517]"}

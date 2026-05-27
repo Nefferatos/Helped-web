@@ -2,6 +2,7 @@
 -- Run this SQL script to create all required tables
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- Create company_profile table
 CREATE TABLE IF NOT EXISTS company_profile (
@@ -137,6 +138,11 @@ ALTER TABLE agency_admins
   ADD COLUMN IF NOT EXISTS profile_image_url TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_maids_agency_id ON maids(agency_id);
+CREATE INDEX IF NOT EXISTS idx_maids_agency_updated_at ON maids(agency_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_maids_public_updated_at ON maids(is_public, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_maids_agency_public_updated_at ON maids(agency_id, is_public, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_maids_full_name_trgm ON maids USING gin (full_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_maids_reference_code_trgm ON maids USING gin (reference_code gin_trgm_ops);
 
 -- Production-ready support inbox tables
 DO $$

@@ -18,6 +18,34 @@ const localDbUser = process.env.DB_USER?.trim() || 'postgres'
 const localDbPassword = process.env.DB_PASSWORD ?? 'postgres'
 const localDbName = process.env.DB_NAME?.trim() || 'maid_agency_db'
 const localDbSslEnabled = process.env.DB_SSL === 'true'
+const dbPoolMax = parseInt(process.env.DB_POOL_MAX || '10', 10)
+const dbIdleTimeoutMs = parseInt(process.env.DB_IDLE_TIMEOUT_MS || '30000', 10)
+const dbConnectionTimeoutMs = parseInt(process.env.DB_CONNECTION_TIMEOUT_MS || '3500', 10)
+const dbQueryTimeoutMs = parseInt(process.env.DB_QUERY_TIMEOUT_MS || '12000', 10)
+const dbStatementTimeoutMs = parseInt(process.env.DB_STATEMENT_TIMEOUT_MS || '12000', 10)
+const dbReconnectCooldownMs = parseInt(process.env.DB_RECONNECT_COOLDOWN_MS || '30000', 10)
+
+const isTransientDbConnectionError = (error: unknown) => {
+  if (!error || typeof error !== 'object') return false
+
+  const code = 'code' in error ? String((error as { code?: unknown }).code ?? '') : ''
+  const message =
+    'message' in error ? String((error as { message?: unknown }).message ?? '').toLowerCase() : ''
+
+  return (
+    code.startsWith('08') ||
+    code === '57P01' ||
+    code === '57P02' ||
+    code === '57P03' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNRESET' ||
+    code === 'ECONNREFUSED' ||
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('connection terminated') ||
+    message.includes('connection refused')
+  )
+}
 
 const attachPoolErrorHandler = (pool: InstanceType<typeof Pool>) => {
   pool.on('error', (err) => {
@@ -26,7 +54,15 @@ const attachPoolErrorHandler = (pool: InstanceType<typeof Pool>) => {
 }
 
 const createPool = (config: ConstructorParameters<typeof Pool>[0]) => {
-  const pool = new Pool(config)
+  const pool = new Pool({
+    max: dbPoolMax,
+    idleTimeoutMillis: dbIdleTimeoutMs,
+    connectionTimeoutMillis: dbConnectionTimeoutMs,
+    query_timeout: dbQueryTimeoutMs,
+    statement_timeout: dbStatementTimeoutMs,
+    keepAlive: true,
+    ...config,
+  })
   attachPoolErrorHandler(pool)
   return pool
 }
@@ -66,10 +102,18 @@ const buildPoolCandidates = () => {
 }
 
 let pool: InstanceType<typeof Pool> | null = null
+let poolReconnectAfter = 0
+let lastPoolFailure: unknown = null
 
 const ensurePool = async () => {
   if (pool) {
     return pool
+  }
+
+  if (poolReconnectAfter > Date.now()) {
+    throw lastPoolFailure instanceof Error
+      ? lastPoolFailure
+      : new Error('Database temporarily unavailable')
   }
 
   let lastError: unknown = null
@@ -81,6 +125,8 @@ const ensurePool = async () => {
       const client = await candidatePool.connect()
       client.release()
       pool = candidatePool
+      poolReconnectAfter = 0
+      lastPoolFailure = null
       console.info(`[db] Connected using ${candidate.label}`)
       return pool
     } catch (error) {
@@ -92,6 +138,8 @@ const ensurePool = async () => {
     }
   }
 
+  lastPoolFailure = lastError
+  poolReconnectAfter = Date.now() + dbReconnectCooldownMs
   throw lastError
 }
 
@@ -105,8 +153,18 @@ export const query = async (text: string, params: unknown[] = []) => {
   try {
     const activePool = await ensurePool()
     const result = await activePool.query(text, params)
+    poolReconnectAfter = 0
+    lastPoolFailure = null
     return result
   } catch (error) {
+    if (isTransientDbConnectionError(error)) {
+      if (pool) {
+        await pool.end().catch(() => undefined)
+        pool = null
+      }
+      lastPoolFailure = error
+      poolReconnectAfter = Date.now() + dbReconnectCooldownMs
+    }
     console.error('Database query error:', error)
     throw error
   }
