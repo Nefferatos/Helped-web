@@ -2309,8 +2309,28 @@ const uploadFileToSupabaseStorage = async (
   };
 };
 
+const MAX_INLINE_ATS_DOCUMENT_BYTES = 256 * 1024;
+
+const buildAtsUploadConfigError = () =>
+  new Error(
+    "Document upload is not configured on the server. Set SUPABASE_SERVICE_ROLE_KEY in the Cloudflare Worker so ATS files can be stored.",
+  );
+
+const buildAtsUploadFailure = (fileName: string) =>
+  new Error(
+    `Failed to upload document "${fileName}". Check Cloudflare Worker storage configuration and Supabase storage access.`,
+  );
+
+const shouldInlineAtsDocumentFallback = (file: File) =>
+  file.size > 0 && file.size <= MAX_INLINE_ATS_DOCUMENT_BYTES;
+
 const buildEmploymentHistoryRowsFromFormData = (formData: FormData) =>
-  [1, 2, 3].flatMap((row) => {
+  Array.from(
+    {
+      length: Math.max(3, toNumericValue(formData.get("employmentHistoryCount"), 0)),
+    },
+    (_, index) => index + 1,
+  ).flatMap((row) => {
     const record = {
       from: toTrimmedString(formData.get(`employmentHistory${row}From`)),
       to: toTrimmedString(formData.get(`employmentHistory${row}To`)),
@@ -2811,19 +2831,31 @@ const parseAtsFormData = async (env: Bindings, formData: FormData) => {
   const profileId = randomId("ats-profile");
   const appliedAt = now();
   const documents: AtsDocumentRecord[] = [];
+  const storageConfig = getSupabaseStorageConfig(env);
   for (const [field, kind] of publicAtsFileKinds) {
     for (const entry of formData.getAll(field)) {
       if (!(entry instanceof File) || entry.size <= 0) continue;
       let uploadedAsset: { storagePath: string; url: string } | null = null;
-      try {
-        uploadedAsset = await uploadFileToSupabaseStorage(
-          env,
-          applicationId,
-          entry,
-          kind,
-        );
-      } catch (error) {
-        console.error("ATS file upload fallback triggered", error);
+      if (!storageConfig) {
+        if (!shouldInlineAtsDocumentFallback(entry)) {
+          throw buildAtsUploadConfigError();
+        }
+      } else {
+        try {
+          uploadedAsset = await uploadFileToSupabaseStorage(
+            env,
+            applicationId,
+            entry,
+            kind,
+          );
+        } catch (error) {
+          console.error("ATS file upload fallback triggered", error);
+          if (!shouldInlineAtsDocumentFallback(entry)) {
+            throw buildAtsUploadFailure(
+              entry.name || `${kind}-${documents.length + 1}`,
+            );
+          }
+        }
       }
       documents.push({
         id: randomId("doc"),
