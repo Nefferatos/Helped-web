@@ -22,6 +22,7 @@ import { Search, Eye, EyeOff, Trash2, Download, Upload, ArrowLeft, AlertTriangle
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
+import { readSafeJson } from "@/lib/safeJson";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 import { scanUploadedFile } from "@/lib/fileScan";
 import { exportMaidProfilesToPdf } from "@/lib/maidExport";
@@ -518,8 +519,8 @@ const EditMaids = () => {
           throw new Error("Failed to search maids");
         }
         const [pubData, hidData] = await Promise.all([
-          pubRes.json() as Promise<{ maids?: MaidProfile[] }>,
-          hidRes.json() as Promise<{ maids?: MaidProfile[] }>,
+          readSafeJson<{ error?: string; maids?: MaidProfile[] }>(pubRes),
+          readSafeJson<{ error?: string; maids?: MaidProfile[] }>(hidRes),
         ]);
         const combined = [
           ...(pubData.maids ?? []).map((m) => ({ ...m, _vis: "public" as const })),
@@ -613,7 +614,7 @@ const EditMaids = () => {
           signal: controller.signal,
           headers: { ...getAgencyAdminAuthHeaders() },
         });
-        const data = (await response.json()) as { error?: string; maids?: MaidProfile[]; total?: number };
+        const data = await readSafeJson<{ error?: string; maids?: MaidProfile[]; total?: number }>(response);
         if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
         setMaids(data.maids);
         setTotalMaids(data.total ?? data.maids.length);
@@ -659,7 +660,7 @@ const EditMaids = () => {
       method: "DELETE",
       headers: { ...getAgencyAdminAuthHeaders() },
     });
-    const data = (await response.json()) as { error?: string };
+    const data = await readSafeJson<{ error?: string }>(response);
     if (!response.ok) throw new Error(data.error || "Failed to delete maid");
     removeLocal(referenceCode);
   };
@@ -670,7 +671,7 @@ const EditMaids = () => {
       headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ isPublic }),
     });
-    const data = (await response.json()) as { error?: string };
+    const data = await readSafeJson<{ error?: string }>(response);
     if (!response.ok) throw new Error(data.error || "Failed to update visibility");
   };
 
@@ -749,11 +750,8 @@ const EditMaids = () => {
       const response = await fetch(`/api/maids${params.toString() ? `?${params.toString()}` : ""}`, {
         headers: { ...getAgencyAdminAuthHeaders() },
       });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || "Failed to load maids for PDF export");
-      }
-      const data = (await response.json().catch(() => ({}))) as { error?: string; maids?: MaidProfile[] };
+      const data = await readSafeJson<{ error?: string; maids?: MaidProfile[] }>(response);
+      if (!response.ok) throw new Error(data.error || "Failed to load maids for PDF export");
       if (!data.maids) throw new Error(data.error || "Failed to prepare PDF export");
       await exportMaidProfilesToPdf(data.maids);
       toast.success("PDF exported");
@@ -815,7 +813,7 @@ const EditMaids = () => {
     const reload = await fetch(`/api/maids?${params.toString()}`, {
       headers: { ...getAgencyAdminAuthHeaders() },
     });
-    const reloadData = (await reload.json().catch(() => ({}))) as { maids?: MaidProfile[]; total?: number };
+    const reloadData = await readSafeJson<{ error?: string; maids?: MaidProfile[]; total?: number }>(reload);
     if (reload.ok && reloadData.maids) {
       setMaids(reloadData.maids);
       setTotalMaids(reloadData.total ?? reloadData.maids.length);
@@ -832,7 +830,7 @@ const EditMaids = () => {
         headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify({ csv: normalizedCsv }),
       });
-      const data = (await response.json()) as { error?: string; created?: number; updated?: number; failed?: number; errors?: string[] };
+      const data = await readSafeJson<{ error?: string; created?: number; updated?: number; failed?: number; errors?: string[] }>(response);
       if (!response.ok && response.status !== 207) throw new Error(data.error || "Failed to import CSV");
       const created = data.created ?? 0;
       const updated = data.updated ?? 0;
@@ -864,7 +862,7 @@ const EditMaids = () => {
           body: JSON.stringify(payload),
         });
       }
-      const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
+      const data = await readSafeJson<{ error?: string; maid?: MaidProfile }>(response);
       if (!response.ok || !data.maid) throw new Error(data.error || "Failed to import maid profile");
       if (!options?.suppressSuccessToast) toast.success(existed ? "Maid profile updated" : "Maid profile created");
       const importedVisibility = data.maid.isPublic ? "public" : "hidden";
@@ -961,7 +959,7 @@ const EditMaids = () => {
       headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ operations }), signal,
     });
-    const data = (await response.json().catch(() => ({}))) as { error?: string; results?: ImportBatchResult[] };
+    const data = await readSafeJson<{ error?: string; results?: ImportBatchResult[] }>(response);
     if (!response.ok && response.status !== 207) throw new Error(data.error || "Failed to import batch");
     return data.results ?? [];
   };
