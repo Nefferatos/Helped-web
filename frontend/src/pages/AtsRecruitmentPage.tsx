@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
+import { adminPath } from "@/lib/routes";
 import {
   bulkAtsAction,
   fetchAtsApplication,
@@ -98,6 +99,88 @@ const processChecklist = [
   "Update the pipeline immediately after each action to keep the team aligned.",
   "Use bulk actions only for clear batch work like document requests or approvals.",
 ] as const;
+
+const applicantListSop = [
+  {
+    stage: "New Applicant",
+    action: "Check the basic profile, contact details, and whether the application looks complete enough to review.",
+  },
+  {
+    stage: "Documents Submitted",
+    action: "Review biodata, resume, and uploads so incomplete or low-quality records are filtered early.",
+  },
+  {
+    stage: "Resume Parsed",
+    action: "Use score, skills, languages, salary, and work history to decide if this candidate is worth contacting.",
+  },
+  {
+    stage: "Screening Interview",
+    action: "Contact the candidate and confirm availability, salary fit, and real experience before moving forward.",
+  },
+  {
+    stage: "Background Check",
+    action: "Verify references and key claims before approving the candidate for profile setup.",
+  },
+  {
+    stage: "Approved",
+    action: "Mark the candidate as internally qualified and ready for the maid profile handoff.",
+  },
+  {
+    stage: READY_TO_POST_PUBLIC_STAGE,
+    action: "Open AddMaid, complete the profile, and prepare it before anything goes live to employers or clients.",
+  },
+  {
+    stage: "Placed",
+    action: "Keep as a completed placement record. No active recruiting action is usually needed.",
+  },
+  {
+    stage: "Rejected",
+    action: "Keep the record closed unless there is a clear reason to revisit the application later.",
+  },
+] as const;
+
+const stageHoverGuide: Record<string, { title: string; description: string }> = {
+  "All Applicants": {
+    title: "All Applicants",
+    description: "See the full pipeline in one list, then narrow it down by stage, score, or shortlist filters.",
+  },
+  "New Applicant": {
+    title: "New Applicant",
+    description: "Fresh submission from the public application form. Check completeness and contactability first.",
+  },
+  "Documents Submitted": {
+    title: "Documents Submitted",
+    description: "Files are in. Review biodata, resume, and attachments before deeper recruiter effort.",
+  },
+  "Resume Parsed": {
+    title: "Resume Parsed",
+    description: "Use the parsed profile, score, and skills to decide whether the candidate should be contacted.",
+  },
+  "Screening Interview": {
+    title: "Screening Interview",
+    description: "Contact the candidate and confirm salary, availability, and fit before moving them ahead.",
+  },
+  "Background Check": {
+    title: "Background Check",
+    description: "Verify references, past experience, and important claims before internal approval.",
+  },
+  Approved: {
+    title: "Approved",
+    description: "The candidate is internally qualified and ready for maid-profile handoff.",
+  },
+  [READY_TO_POST_PUBLIC_STAGE]: {
+    title: "Ready to Configure Public Profile",
+    description: "Open AddMaid, complete the maid profile, and prepare it before anything goes live.",
+  },
+  Placed: {
+    title: "Placed",
+    description: "Recruitment is completed. Keep this as a final placement record rather than an active candidate.",
+  },
+  Rejected: {
+    title: "Rejected",
+    description: "The application is closed out and kept mainly for record history unless reopened intentionally.",
+  },
+};
 
 const walkthroughSteps = [
   {
@@ -208,6 +291,60 @@ const getApplicantDisplayName = (item: AtsApplicationListItem) =>
 
 const getStageDisplayLabel = (stage: string) => stage;
 
+const buildPublicProfileSetupPath = (item: {
+  id: string;
+  applicationCode?: string;
+  maidReferenceCode?: string;
+  profile?: {
+    fullName?: string;
+    email?: string;
+    contactNumber?: string;
+    whatsappNumber?: string;
+    nationality?: string;
+    yearsOfExperience?: number;
+    expectedSalary?: number | null;
+    employmentPreference?: string;
+    languageSkills?: string[];
+    childcareExperience?: number;
+    newbornCareExperience?: number;
+    elderlyCareExperience?: number;
+    availableDate?: string;
+  };
+}) => {
+  const params = new URLSearchParams({
+    source: "ats",
+    applicationId: item.id,
+  });
+
+  if (item.applicationCode) params.set("applicationCode", item.applicationCode);
+  if (item.maidReferenceCode) params.set("maidReferenceCode", item.maidReferenceCode);
+  if (item.profile?.fullName) params.set("candidateName", item.profile.fullName);
+  if (item.profile?.email) params.set("email", item.profile.email);
+  if (item.profile?.contactNumber) params.set("contactNumber", item.profile.contactNumber);
+  if (item.profile?.whatsappNumber) params.set("whatsappNumber", item.profile.whatsappNumber);
+  if (item.profile?.nationality) params.set("nationality", item.profile.nationality);
+  if (typeof item.profile?.yearsOfExperience === "number") {
+    params.set("yearsOfExperience", String(item.profile.yearsOfExperience));
+  }
+  if (typeof item.profile?.expectedSalary === "number") {
+    params.set("expectedSalary", String(item.profile.expectedSalary));
+  }
+  if (item.profile?.employmentPreference) params.set("employmentPreference", item.profile.employmentPreference);
+  if (item.profile?.languageSkills?.length) params.set("languageSkills", item.profile.languageSkills.join(", "));
+  if (typeof item.profile?.childcareExperience === "number") {
+    params.set("childcareExperience", String(item.profile.childcareExperience));
+  }
+  if (typeof item.profile?.newbornCareExperience === "number") {
+    params.set("newbornCareExperience", String(item.profile.newbornCareExperience));
+  }
+  if (typeof item.profile?.elderlyCareExperience === "number") {
+    params.set("elderlyCareExperience", String(item.profile.elderlyCareExperience));
+  }
+  if (item.profile?.availableDate) params.set("availableDate", item.profile.availableDate);
+
+  return `${adminPath("/add-maid")}?${params.toString()}`;
+};
+
 const getNextApplicantAction = (item: AtsApplicationListItem) => {
   const hasDirectContact = Boolean(item.profile.contactNumber || item.profile.email);
 
@@ -303,6 +440,7 @@ const AtsRecruitmentPage = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [sopModalOpen, setSopModalOpen] = useState(false);
   const [activeDocumentIndex, setActiveDocumentIndex] = useState(0);
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
   const [activeStageTab, setActiveStageTab] = useState<string>(ALL_STAGE_TAB);
@@ -727,6 +865,53 @@ const AtsRecruitmentPage = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={sopModalOpen} onOpenChange={setSopModalOpen}>
+        <DialogContent className="max-h-[88vh] max-w-4xl overflow-hidden rounded-[28px] border border-emerald-100 bg-white p-0 shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+          <div className="border-b border-emerald-100 bg-[linear-gradient(135deg,_rgba(236,253,245,0.96),_rgba(248,250,252,0.98))] px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl font-black text-slate-900">
+                <Lightbulb className="h-5 w-5 text-emerald-600" />
+                Applicants List Workflow
+              </DialogTitle>
+              <DialogDescription className="max-w-2xl text-slate-600">
+                Simple recruiter SOP for moving an applicant from submission to placement or closure.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
+              Apply, review, contact, verify, approve, configure profile, then either place or close.
+            </div>
+          </div>
+
+          <div className="overflow-y-auto p-6">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {applicantListSop.map((item, index) => (
+                <div
+                  key={item.stage}
+                  className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,_#ffffff,_#f8fafc)] p-4 shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
+                      {index + 1}
+                    </span>
+                    <p className="text-sm font-bold text-slate-900">{item.stage}</p>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{item.action}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button variant="outline" className="bg-white" onClick={openGuide}>
+                Open full walkthrough
+              </Button>
+              <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setSopModalOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <section className="rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_42%),linear-gradient(135deg,_#ffffff,_#f8fafc)] p-5 shadow-sm">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="space-y-4">
@@ -962,6 +1147,32 @@ const AtsRecruitmentPage = () => {
                 <p className="text-xs text-slate-500">Table view for faster scanning, bulk selection, and quick recruiter actions.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <HoverCard openDelay={100}>
+                  <HoverCardTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 bg-white/80" onClick={() => setSopModalOpen(true)}>
+                      <Lightbulb className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                      Workflow SOP
+                    </Button>
+                  </HoverCardTrigger>
+                  <HoverCardContent align="end" className="w-80 rounded-2xl border-emerald-100 bg-white p-4 shadow-xl">
+                    <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Quick preview</p>
+                    <p className="mt-2 text-sm font-bold text-slate-900">Applicants list in one line</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                      Apply, review, contact, verify, approve, configure profile, then place or close.
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {applicantListSop.slice(0, 4).map((item) => (
+                        <div key={item.stage} className="flex items-start gap-2 text-xs leading-5 text-slate-600">
+                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 flex-none text-emerald-500" />
+                          <span>
+                            <span className="font-semibold text-slate-800">{item.stage}:</span> {item.action}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-[11px] text-slate-500">Click to open the full stage-by-stage SOP.</p>
+                  </HoverCardContent>
+                </HoverCard>
                 <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
                   {displayedApplications.length} visible
                 </Badge>
@@ -975,23 +1186,37 @@ const AtsRecruitmentPage = () => {
               {[ALL_STAGE_TAB, ...pipelineStages].map((stage) => {
                 const isActive = activeStageTab === stage;
                 const count = stage === ALL_STAGE_TAB ? applications.length : grouped.get(stage)?.length ?? 0;
+                const guide = stageHoverGuide[stage] ?? {
+                  title: getStageDisplayLabel(stage),
+                  description: "Open this stage to review the matching applicants and decide the next recruiter action.",
+                };
 
                 return (
-                  <button
-                    key={stage}
-                    type="button"
-                    onClick={() => setActiveStageTab(stage)}
-                    className={`inline-flex flex-none items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold transition-all ${
-                      isActive
-                        ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
-                    }`}
-                  >
-                    <span>{getStageDisplayLabel(stage)}</span>
-                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${isActive ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"}`}>
-                      {count}
-                    </span>
-                  </button>
+                  <HoverCard key={stage} openDelay={120}>
+                    <HoverCardTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setActiveStageTab(stage)}
+                        className={`inline-flex flex-none items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold transition-all ${
+                          isActive
+                            ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+                        }`}
+                      >
+                        <span>{getStageDisplayLabel(stage)}</span>
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${isActive ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"}`}>
+                          {count}
+                        </span>
+                      </button>
+                    </HoverCardTrigger>
+                    <HoverCardContent align="start" className="w-72 rounded-2xl border-slate-200 bg-white p-4 shadow-xl">
+                      <p className="text-sm font-bold text-slate-900">{guide.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">{guide.description}</p>
+                      <p className="mt-3 text-[11px] text-slate-500">
+                        {count} applicant{count === 1 ? "" : "s"} currently in this stage.
+                      </p>
+                    </HoverCardContent>
+                  </HoverCard>
                 );
               })}
             </div>
@@ -1208,6 +1433,13 @@ const AtsRecruitmentPage = () => {
                                     {nextAction.cta}
                                   </Button>
                                 )}
+                                {item.status === READY_TO_POST_PUBLIC_STAGE && (
+                                  <Button asChild size="sm" className="h-8 text-xs">
+                                    <Link to={buildPublicProfileSetupPath(item)}>
+                                      Public Maid
+                                    </Link>
+                                  </Button>
+                                )}
                                 {makeWhatsAppHref(item.profile.contactNumber) && (
                                   <Button asChild size="sm" variant="outline" className="h-8 text-xs">
                                     <a href={makeWhatsAppHref(item.profile.contactNumber)} target="_blank" rel="noreferrer">
@@ -1296,6 +1528,13 @@ const AtsRecruitmentPage = () => {
                 <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-sm font-black tabular-nums ${scoreTone(detail.score?.score)}`}>
                   {detail.score?.score ?? 0}
                 </span>
+              )}
+              {detail?.application.status === READY_TO_POST_PUBLIC_STAGE && (
+                <Button asChild size="sm" className="h-8 text-xs">
+                  <Link to={buildPublicProfileSetupPath(detail.application)}>
+                    Configure Public Profile
+                  </Link>
+                </Button>
               )}
               <button
                 type="button"

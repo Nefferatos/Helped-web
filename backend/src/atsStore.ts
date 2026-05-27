@@ -856,6 +856,7 @@ export const ensureApplicationForMaid = async (maid: MaidRecord) => {
   data.history.unshift({
     id: randomUUID(),
     applicationId,
+    fromStage: undefined,
     toStage: 'New Applicant',
     actor: 'system',
     reason: 'Seeded from maid profile',
@@ -963,6 +964,7 @@ export const createPublicAtsApplication = async (payload: PublicApplicantSubmiss
   data.history.unshift({
     id: randomUUID(),
     applicationId,
+    fromStage: undefined,
     toStage: 'New Applicant',
     actor: 'applicant',
     reason: 'Application submitted through the public maid applicant portal',

@@ -715,14 +715,14 @@ const defaultData = (): AppData => ({
     postal_code: '000000',
     country: 'Singapore',
     contact_person: 'Bala',
-    contact_phone: '80730757',
+    contact_phone: '+65 80730757',
     contact_email: 'info@theagency.sg',
     contact_fax: '',
     contact_website: '',
     office_hours_regular: 'Mon-Sat: 9:00am to 7:30pm',
     office_hours_other: '',
     social_facebook: '',
-    social_whatsapp_number: '80730757',
+    social_whatsapp_number: '+65 80730757',
     social_whatsapp_message: 'Hello, I am interested in your agency profile.',
     branding_theme_color: '',
     branding_button_color: '',
@@ -1055,9 +1055,9 @@ const buildDefaultAgencyChatbotConfig = (
   welcomeMessage:
     'Hi {{name}}, welcome to {{agencyName}}. How can I help you today?',
   fallbackShortResponse:
-    'Hi {{name}}, thanks for your message. Could you share a little more detail so I can help you with the next step?',
+    'Hi {{name}}, thanks for your message. Could you share a little more detail so I can help you with the next step? For further assistance, contact us on WhatsApp at +65 80730757.',
   fallbackLongResponse:
-    "Hi {{name}}, thanks for reaching out. I've noted your message. If you can share the main details here, I'll help make sure it is clear for the team to follow up. If it is urgent, please mention that as well.",
+    "Hi {{name}}, thanks for reaching out. I've noted your message. If you can share the main details here, I'll help make sure it is clear for the team to follow up. If it is urgent, please mention that as well. For further assistance, contact us on WhatsApp at +65 80730757.",
   suggestionChips: [
     "What's my placement status?",
     'I need to reschedule',
@@ -1068,6 +1068,19 @@ const buildDefaultAgencyChatbotConfig = (
   responseRules: defaultAgencyChatbotRules(),
   updatedAt: now(),
 })
+
+const WHATSAPP_ASSISTANCE_LINE =
+  'For further assistance, contact us on WhatsApp at +65 80730757.'
+
+const ensureAssistanceLine = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) return trimmed
+  if (trimmed.toLowerCase().includes(WHATSAPP_ASSISTANCE_LINE.toLowerCase())) {
+    return trimmed
+  }
+  return `${trimmed} ${WHATSAPP_ASSISTANCE_LINE}`.trim()
+}
+
 const normalizeAgencyChatbotTopic = (
   topic: Partial<AgencyChatbotTopicRecord>,
   fallback: AgencyChatbotTopicRecord,
@@ -1111,12 +1124,14 @@ const normalizeAgencyChatbotConfig = (
     welcomeMessage:
       String(input?.welcomeMessage ?? defaults.welcomeMessage).trim() ||
       defaults.welcomeMessage,
-    fallbackShortResponse:
+    fallbackShortResponse: ensureAssistanceLine(
       String(input?.fallbackShortResponse ?? defaults.fallbackShortResponse).trim() ||
-      defaults.fallbackShortResponse,
-    fallbackLongResponse:
+        defaults.fallbackShortResponse
+    ),
+    fallbackLongResponse: ensureAssistanceLine(
       String(input?.fallbackLongResponse ?? defaults.fallbackLongResponse).trim() ||
-      defaults.fallbackLongResponse,
+        defaults.fallbackLongResponse
+    ),
     suggestionChips: normalizeTextList(input?.suggestionChips ?? defaults.suggestionChips).slice(
       0,
       8

@@ -94,9 +94,9 @@ const DEFAULT_CONFIG: AgencyChatbotConfig = {
   botName: "Support Bot",
   welcomeMessage: "Hi {{name}}, welcome to {{agencyName}}. How can I help you today?",
   fallbackShortResponse:
-    "Hi {{name}}, thanks for your message. Could you share a little more detail so I can help you with the next step?",
+    "Hi {{name}}, thanks for your message. Could you share a little more detail so I can help you with the next step? For further assistance, contact us on WhatsApp at +65 80730757.",
   fallbackLongResponse:
-    "Hi {{name}}, thanks for reaching out. I've noted your message. If you can share the main details here, I'll help make sure it is clear for the team to follow up.",
+    "Hi {{name}}, thanks for reaching out. I've noted your message. If you can share the main details here, I'll help make sure it is clear for the team to follow up. For further assistance, contact us on WhatsApp at +65 80730757.",
   suggestionChips: [
     "What's my placement status?",
     "I need to reschedule",

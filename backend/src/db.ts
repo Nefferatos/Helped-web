@@ -174,10 +174,10 @@ export const initializeDatabase = async () => {
         '000000',
         'Singapore',
         'Bala',
-        '80730757',
+        '+65 80730757',
         'info@theagency.sg',
         'Mon-Sat: 9:00am to 7:30pm',
-        '80730757',
+        '+65 80730757',
         'Hello, I am interested in your agency profile.',
         new Date(),
       ]

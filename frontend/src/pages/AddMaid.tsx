@@ -8,15 +8,342 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
+import { fetchAtsApplication, type AtsApplicationBundle, type AtsApplicationListItem } from "@/lib/ats";
 import { defaultMaidProfile, type MaidProfile } from "@/lib/maids";
 import { startMaidSaveTask } from "@/lib/maidSaveProgress";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { compressImage, getImageSizeInMB } from "@/lib/imageCompression";
 
 import { PdfAutofillBanner } from "./PdfAutofill";
 
 const stripInlineMedia = (value?: string) =>
   typeof value === "string" && value.trim().startsWith("data:") ? "" : value || "";
+
+const asTrimmedString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+const firstNonEmptyString = (...values: unknown[]) => {
+  for (const value of values) {
+    const text = asTrimmedString(value);
+    if (text) return text;
+  }
+  return "";
+};
+
+const asPositiveNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 0;
+};
+
+const parseNumberString = (value: unknown) => {
+  const parsed = asPositiveNumber(value);
+  return parsed > 0 ? String(parsed) : "";
+};
+
+const parseList = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => asTrimmedString(item)).filter(Boolean);
+  }
+  const text = asTrimmedString(value);
+  if (!text) return [];
+  return text.split(",").map((item) => item.trim()).filter(Boolean);
+};
+
+const normalizeLanguageKey = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "mandarin / chinese dialect" || normalized === "mandarin/chinese-dialect") {
+    return "Mandarin/Chinese-Dialect";
+  }
+  if (normalized === "bahasa indonesia / malaysia" || normalized === "bahasa indonesia/malaysia") {
+    return "Bahasa Indonesia/Malaysia";
+  }
+  if (normalized === "tagalog") return "Tagalog";
+  return value.trim();
+};
+
+const mapEmploymentPreferenceToType = (value: unknown, workedInSingapore?: unknown) => {
+  const preference = asTrimmedString(value).toLowerCase();
+  if (!preference) {
+    return asTrimmedString(workedInSingapore).toLowerCase() === "yes" ? "Ex-Singapore maid" : "";
+  }
+  if (preference.includes("transfer")) return "Transfer maid";
+  if (preference.includes("singapore")) return "Ex-Singapore maid";
+  if (preference.includes("hong kong")) return "Ex-Hong Kong maid";
+  if (preference.includes("taiwan")) return "Ex-Taiwan maid";
+  if (preference.includes("malaysia")) return "Ex-Malaysia maid";
+  if (preference.includes("middle east") || preference.includes("dubai") || preference.includes("uae")) {
+    return "Ex-Middle East maid";
+  }
+  if (preference.includes("new")) return "New maid";
+  return "";
+};
+
+const buildPastIllnessesFromText = (value: unknown) => {
+  const text = asTrimmedString(value).toLowerCase();
+  if (!text || /^(none|n\/a|nil|no)$/i.test(text)) return undefined;
+
+  const entries: Array<[string, RegExp]> = [
+    ["(I) Mental illness", /mental/],
+    ["(II) Epilepsy", /epilepsy/],
+    ["(III) Asthma", /asthma/],
+    ["(IV) Diabetes", /diabet/],
+    ["(V) Hypertension", /hypertension|high blood pressure/],
+    ["(VI) Tuberculosis", /tuberculosis|tb\b/],
+    ["(VII) Heart disease", /heart/],
+    ["(VIII) Malaria", /malaria/],
+    ["(IX) Operations", /operation|surgery/],
+  ];
+
+  const mapped = Object.fromEntries(entries.map(([label, pattern]) => [label, pattern.test(text)]));
+  return Object.values(mapped).some(Boolean) ? mapped : undefined;
+};
+
+const buildWorkAreaConfig = (years: unknown, note?: unknown) => {
+  const yearsText = parseNumberString(years);
+  const noteText = asTrimmedString(note);
+  if (!yearsText && !noteText) return undefined;
+  return {
+    willing: true,
+    experience: Boolean(yearsText || noteText),
+    yearsOfExperience: yearsText,
+    note: noteText,
+    evaluation: noteText || "N.A.",
+  };
+};
+
+const buildAtsPrefill = ({
+  query,
+  applicationProfile,
+  detailedProfile,
+}: {
+  query?: URLSearchParams;
+  applicationProfile?: AtsApplicationListItem["profile"];
+  detailedProfile?: Record<string, unknown> | null;
+}): Partial<MaidProfile> => {
+  const profile = detailedProfile || {};
+  const queryValue = (key: string) => asTrimmedString(query?.get(key));
+
+  const languageNames = [
+    ...parseList(queryValue("languageSkills")),
+    ...parseList(profile.languageSkills),
+    ...(applicationProfile?.languageSkills ?? []),
+  ];
+
+  const languageSkills = languageNames.reduce<Record<string, string>>((acc, language) => {
+    const key = normalizeLanguageKey(language);
+    if (key && !acc[key]) acc[key] = "Yes";
+    return acc;
+  }, {});
+
+  const workAreaNotes: Record<string, string> = {};
+  const childcareYears =
+    asPositiveNumber(queryValue("newbornCareExperience")) ||
+    asPositiveNumber(queryValue("childcareExperience")) ||
+    asPositiveNumber(profile.newbornCareExperience) ||
+    asPositiveNumber(profile.childcareExperience) ||
+    applicationProfile?.newbornCareExperience ||
+    applicationProfile?.childcareExperience ||
+    0;
+  const elderlyYears =
+    asPositiveNumber(queryValue("elderlyCareExperience")) ||
+    asPositiveNumber(profile.elderlyCareExperience) ||
+    applicationProfile?.elderlyCareExperience ||
+    0;
+  const disabledYears = asPositiveNumber(profile.disabledCareExperience) || asPositiveNumber(queryValue("disabledCareExperience"));
+  const housekeepingYears = asPositiveNumber(profile.housekeepingExperience) || asPositiveNumber(queryValue("housekeepingExperience"));
+  const cookingSkills = firstNonEmptyString(queryValue("cookingSkills"), profile.cookingSkills);
+  const coverNote = firstNonEmptyString(queryValue("coverNote"), profile.coverNote);
+  const foodPreference = firstNonEmptyString(profile.foodPreferenceOther, profile.foodPreference);
+
+  if (firstNonEmptyString(profile.childrenAges)) workAreaNotes["Care of infants/children"] = firstNonEmptyString(profile.childrenAges);
+  if (cookingSkills) workAreaNotes.Cooking = cookingSkills;
+  if (languageNames.length > 0) workAreaNotes["Language abilities (spoken)"] = languageNames.join(", ");
+  if (asTrimmedString(profile.petCareExperience)) workAreaNotes["Other Skill"] = `Pet care: ${asTrimmedString(profile.petCareExperience)}`;
+
+  const workAreas = {
+    ...(buildWorkAreaConfig(childcareYears) ? { "Care of infants/children": buildWorkAreaConfig(childcareYears) } : {}),
+    ...(buildWorkAreaConfig(elderlyYears) ? { "Care of elderly": buildWorkAreaConfig(elderlyYears) } : {}),
+    ...(buildWorkAreaConfig(disabledYears) ? { "Care of disabled": buildWorkAreaConfig(disabledYears) } : {}),
+    ...(buildWorkAreaConfig(housekeepingYears) ? { "General housework": buildWorkAreaConfig(housekeepingYears) } : {}),
+    ...(buildWorkAreaConfig("", cookingSkills) ? { Cooking: buildWorkAreaConfig("", cookingSkills) } : {}),
+    ...(buildWorkAreaConfig("", languageNames.join(", ")) ? { "Language abilities (spoken)": buildWorkAreaConfig("", languageNames.join(", ")) } : {}),
+  };
+
+  const combinedRemarks = [
+    firstNonEmptyString(profile.otherRemarksA3),
+    firstNonEmptyString(profile.otherRemarksE),
+  ].filter(Boolean).join("\n\n");
+
+  const expectedSalary = firstNonEmptyString(
+    queryValue("expectedSalary"),
+    profile.expectedSalary,
+    applicationProfile?.expectedSalary != null ? String(applicationProfile.expectedSalary) : "",
+  );
+
+  const availability = firstNonEmptyString(
+    queryValue("availableDate"),
+    profile.availableDate,
+    applicationProfile?.availableDate,
+  );
+
+  const privateInfoLines = [
+    firstNonEmptyString(queryValue("applicationCode"), queryValue("maidReferenceCode"))
+      ? `ATS reference: ${firstNonEmptyString(queryValue("maidReferenceCode"), queryValue("applicationCode"))}`
+      : "",
+    firstNonEmptyString(queryValue("email"), profile.email, applicationProfile?.email)
+      ? `ATS email: ${firstNonEmptyString(queryValue("email"), profile.email, applicationProfile?.email)}`
+      : "",
+  ].filter(Boolean);
+
+  return {
+    fullName: firstNonEmptyString(queryValue("candidateName"), profile.fullName, applicationProfile?.fullName),
+    referenceCode: firstNonEmptyString(queryValue("maidReferenceCode"), queryValue("applicationCode")),
+    type: mapEmploymentPreferenceToType(
+      firstNonEmptyString(queryValue("employmentPreference"), profile.employmentPreference, applicationProfile?.employmentPreference),
+      profile.workedInSingapore,
+    ),
+    nationality: firstNonEmptyString(queryValue("nationality"), profile.nationality, applicationProfile?.nationality),
+    dateOfBirth: firstNonEmptyString(queryValue("dateOfBirth"), profile.dateOfBirth),
+    placeOfBirth: firstNonEmptyString(queryValue("placeOfBirth"), profile.placeOfBirth),
+    height: asPositiveNumber(queryValue("heightCm")) || asPositiveNumber(profile.heightCm),
+    weight: asPositiveNumber(queryValue("weightKg")) || asPositiveNumber(profile.weightKg),
+    religion: firstNonEmptyString(queryValue("religion"), profile.religion),
+    maritalStatus: firstNonEmptyString(queryValue("maritalStatus"), profile.maritalStatus),
+    numberOfChildren: asPositiveNumber(queryValue("numberOfChildren")) || asPositiveNumber(profile.numberOfChildren),
+    numberOfSiblings: asPositiveNumber(queryValue("numberOfSiblings")) || asPositiveNumber(profile.numberOfSiblings),
+    homeAddress: firstNonEmptyString(
+      queryValue("address"),
+      profile.address,
+      [asTrimmedString(profile.residentialAddressLine1), asTrimmedString(profile.residentialAddressLine2)].filter(Boolean).join(", "),
+    ),
+    airportRepatriation: firstNonEmptyString(queryValue("repatriationPort"), profile.repatriationPort),
+    educationLevel: firstNonEmptyString(queryValue("educationLevel"), profile.educationLevel),
+    languageSkills,
+    workAreas,
+    introduction: {
+      agesOfChildren: firstNonEmptyString(queryValue("childrenAges"), profile.childrenAges),
+      expectedSalary,
+      availability,
+      intro: coverNote,
+      publicIntro: coverNote,
+      allergies: firstNonEmptyString(queryValue("allergies"), profile.allergies),
+      physicalDisabilities: firstNonEmptyString(queryValue("physicalDisabilities"), profile.physicalDisabilities),
+      dietaryRestrictions: firstNonEmptyString(queryValue("dietaryRestrictions"), profile.dietaryRestrictions),
+      foodHandlingPreferences: foodPreference,
+      otherRemarks: firstNonEmptyString(combinedRemarks, asTrimmedString(profile.medicalConditions)),
+      pastIllnesses: buildPastIllnessesFromText(profile.medicalConditions),
+    },
+    skillsPreferences: {
+      offDaysPerMonth: firstNonEmptyString(queryValue("restDayPreference"), profile.restDayPreference),
+      sgExperience: asTrimmedString(profile.workedInSingapore).toLowerCase() === "yes",
+      workAreaNotes,
+      privateInfo: privateInfoLines.join("\n"),
+    },
+    agencyContact: {
+      phone: firstNonEmptyString(
+        queryValue("whatsappNumber"),
+        queryValue("contactNumber"),
+        profile.contactNumber,
+        applicationProfile?.whatsappNumber,
+        applicationProfile?.contactNumber,
+      ),
+      homeCountryContactNumber: firstNonEmptyString(queryValue("homeCountryContactNumber"), profile.homeCountryContactNumber),
+    },
+  };
+};
+
+const mergeMissingStringMap = (current: Record<string, string>, incoming: Record<string, string>) => {
+  const next = { ...current };
+  Object.entries(incoming).forEach(([key, value]) => {
+    if (!asTrimmedString(next[key]) && asTrimmedString(value)) next[key] = value;
+  });
+  return next;
+};
+
+const mergeMissingUnknownMap = (current: Record<string, unknown>, incoming: Record<string, unknown>) => {
+  const next = { ...current };
+  Object.entries(incoming).forEach(([key, value]) => {
+    const existing = next[key];
+    if (
+      existing &&
+      value &&
+      typeof existing === "object" &&
+      typeof value === "object" &&
+      !Array.isArray(existing) &&
+      !Array.isArray(value)
+    ) {
+      next[key] = mergeMissingUnknownMap(
+        existing as Record<string, unknown>,
+        value as Record<string, unknown>,
+      );
+      return;
+    }
+    const existingText = typeof existing === "string" ? existing.trim() : "";
+    const incomingText = typeof value === "string" ? value.trim() : "";
+    const existingEmpty =
+      existing === undefined ||
+      existing === null ||
+      existingText === "" ||
+      (typeof existing === "number" && existing === 0) ||
+      (Array.isArray(existing) && existing.length === 0) ||
+      (typeof existing === "object" && !Array.isArray(existing) && Object.keys(existing as Record<string, unknown>).length === 0);
+    const incomingEmpty =
+      value === undefined ||
+      value === null ||
+      incomingText === "" ||
+      (typeof value === "number" && value === 0) ||
+      (Array.isArray(value) && value.length === 0) ||
+      (typeof value === "object" && !Array.isArray(value) && Object.keys(value as Record<string, unknown>).length === 0);
+    if (existingEmpty && !incomingEmpty) next[key] = value;
+  });
+  return next;
+};
+
+const mergeAtsPrefillIntoMaid = (current: MaidProfile, prefill: Partial<MaidProfile>): MaidProfile => ({
+  ...current,
+  fullName: current.fullName || prefill.fullName || "",
+  referenceCode: current.referenceCode || prefill.referenceCode || "",
+  type: current.type || prefill.type || "",
+  nationality: current.nationality || prefill.nationality || "",
+  dateOfBirth: current.dateOfBirth || prefill.dateOfBirth || "",
+  placeOfBirth: current.placeOfBirth || prefill.placeOfBirth || "",
+  height: current.height || prefill.height || 0,
+  weight: current.weight || prefill.weight || 0,
+  religion: current.religion || prefill.religion || "",
+  maritalStatus: current.maritalStatus || prefill.maritalStatus || "",
+  numberOfChildren: current.numberOfChildren || prefill.numberOfChildren || 0,
+  numberOfSiblings: current.numberOfSiblings || prefill.numberOfSiblings || 0,
+  homeAddress: current.homeAddress || prefill.homeAddress || "",
+  airportRepatriation: current.airportRepatriation || prefill.airportRepatriation || "",
+  educationLevel: current.educationLevel || prefill.educationLevel || "",
+  languageSkills: mergeMissingStringMap(current.languageSkills || {}, (prefill.languageSkills as Record<string, string>) || {}),
+  workAreas: mergeMissingUnknownMap(
+    (current.workAreas as Record<string, unknown>) || {},
+    (prefill.workAreas as Record<string, unknown>) || {},
+  ),
+  employmentHistory:
+    Array.isArray(current.employmentHistory) && current.employmentHistory.length > 0
+      ? current.employmentHistory
+      : Array.isArray(prefill.employmentHistory)
+      ? prefill.employmentHistory
+      : current.employmentHistory,
+  introduction: mergeMissingUnknownMap(
+    (current.introduction as Record<string, unknown>) || {},
+    (prefill.introduction as Record<string, unknown>) || {},
+  ),
+  skillsPreferences: mergeMissingUnknownMap(
+    (current.skillsPreferences as Record<string, unknown>) || {},
+    (prefill.skillsPreferences as Record<string, unknown>) || {},
+  ),
+  agencyContact: mergeMissingUnknownMap(
+    (current.agencyContact as Record<string, unknown>) || {},
+    (prefill.agencyContact as Record<string, unknown>) || {},
+  ),
+});
 
 // ─── Evaluation method constants ──────────────────────────────────────────────
 const EVAL_PARENT_DECLARATION =
@@ -305,7 +632,9 @@ const buildImportedMaidProfile = (rowsBySheet: Record<string, unknown[][]>): Mai
 
 const AddMaid = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const atsPrefillStartedRef = useRef(false);
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState<MaidProfile>(defaultMaidProfile);
   const [isSaving, setIsSaving] = useState(false);
@@ -316,6 +645,38 @@ const AddMaid = () => {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [maxUnlockedTab, setMaxUnlockedTab] = useState(0);
   const [isCreated, setIsCreated] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("source") !== "ats" || atsPrefillStartedRef.current) return;
+    atsPrefillStartedRef.current = true;
+
+    const seedPrefill = buildAtsPrefill({ query: searchParams });
+    setFormData((prev) => mergeAtsPrefillIntoMaid(prev, seedPrefill));
+
+    const applicationId = asTrimmedString(searchParams.get("applicationId"));
+    if (!applicationId) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const bundle: AtsApplicationBundle = await fetchAtsApplication(applicationId);
+        if (cancelled) return;
+        const fetchedPrefill = buildAtsPrefill({
+          query: searchParams,
+          applicationProfile: bundle.application.profile,
+          detailedProfile: bundle.profile,
+        });
+        setFormData((prev) => mergeAtsPrefillIntoMaid(prev, fetchedPrefill));
+      } catch (error) {
+        console.error("[AddMaid] ATS prefill failed:", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
 
   const fileToDataUrl = useCallback(
     (file: File) =>
