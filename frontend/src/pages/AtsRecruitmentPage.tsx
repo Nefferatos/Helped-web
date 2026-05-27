@@ -51,6 +51,8 @@ type AtsDocument = {
   url?: string;
 };
 
+const READY_TO_POST_PUBLIC_STAGE = "Ready to Configure Public Profile";
+
 const pipelineStages = [
   "New Applicant",
   "Documents Submitted",
@@ -58,7 +60,7 @@ const pipelineStages = [
   "Screening Interview",
   "Background Check",
   "Approved",
-  "Ready For Client Matching",
+  READY_TO_POST_PUBLIC_STAGE,
   "Placed",
   "Rejected",
 ] as const;
@@ -84,8 +86,8 @@ const applicantFlowGuide = [
   },
   {
     title: "4. Approve & Market",
-    description: "Approve only candidates with verified details, then queue them for client matching so the sales side can present them confidently.",
-    stage: "Approved -> Ready For Client Matching",
+    description: "Approve only candidates with verified details, then move them into public profile setup before anything is posted for employers or clients.",
+    stage: "Approved -> Ready to Configure Public Profile",
     icon: Sparkles,
   },
 ] as const;
@@ -147,16 +149,16 @@ const walkthroughSteps = [
     id: "market",
     label: "Market",
     eyebrow: "Step 4",
-    title: "Approve and queue for client matching",
+    title: "Approve and prepare public profile setup",
     summary:
-      "Verified candidates should move quickly into matching so the sales team can present them while interest is still high.",
-    helper: "Finish verification and push strong profiles to matching.",
+      "Verified candidates should move into public profile setup first, so the agency can configure the final profile before it goes live for employers and clients.",
+    helper: "Finish verification and prepare the profile configuration step.",
     points: [
       "Approve only after references and important claims are checked.",
-      "Queue strong candidates for matching as soon as they are ready.",
+      "Move strong candidates into the public profile configuration stage as soon as they are ready.",
       "Use bulk actions only for repetitive admin work, not judgment calls.",
     ],
-    chips: ["Approved", "Ready For Client Matching", "Bulk actions"],
+    chips: ["Approved", READY_TO_POST_PUBLIC_STAGE, "Bulk actions"],
   },
 ] as const;
 
@@ -165,7 +167,7 @@ const quickFilters = [
   { label: "Childcare Shortlist", key: "childcare", filter: { minExperience: 3, childcareExperience: true, hasWhatsApp: true } },
   { label: "Elderly Care", key: "elderly", filter: { elderlyCareExperience: true, hasWhatsApp: true } },
   { label: "Available Now", key: "available", filter: { availableImmediately: true, hasWhatsApp: true } },
-  { label: "Ready to Market", key: "market", filter: { status: ["Approved", "Ready For Client Matching"], hasWhatsApp: true } },
+  { label: "Ready to Configure", key: "market", filter: { status: ["Approved", READY_TO_POST_PUBLIC_STAGE], hasWhatsApp: true } },
 ] as const;
 
 const ALL_STAGE_TAB = "All Applicants";
@@ -203,6 +205,8 @@ const getDocumentKind = (name?: string, url?: string) => {
 
 const getApplicantDisplayName = (item: AtsApplicationListItem) =>
   item.profile.fullName?.trim() || item.maidReferenceCode || item.applicationCode || "Unnamed applicant";
+
+const getStageDisplayLabel = (stage: string) => stage;
 
 const getNextApplicantAction = (item: AtsApplicationListItem) => {
   const hasDirectContact = Boolean(item.profile.contactNumber || item.profile.email);
@@ -247,13 +251,13 @@ const getNextApplicantAction = (item: AtsApplicationListItem) => {
       };
     case "Approved":
       return {
-        title: "Prepare for matching",
-        detail: "This candidate is qualified. Queue the profile so the team can start client presentation.",
-        cta: "Queue for matching",
-        nextStage: "Ready For Client Matching",
+        title: "Configure public profile",
+        detail: "This candidate is qualified. Move the profile into the public-profile setup stage so the agency can configure it before publishing.",
+        cta: "Move to Profile Setup",
+        nextStage: READY_TO_POST_PUBLIC_STAGE,
       };
-    case "Ready For Client Matching":
-      return { title: "Present to clients", detail: "The profile is market-ready. Use matching tools and outreach to convert to placement.", cta: "Open profile" };
+    case READY_TO_POST_PUBLIC_STAGE:
+      return { title: "Awaiting public profile setup", detail: "This candidate is ready for the agency to configure the public profile before it is posted live.", cta: "Open profile" };
     case "Placed":
       return { title: "Placement complete", detail: "No new shortlist action is needed unless there is a follow-up admin task to finish.", cta: "Open profile" };
     case "Rejected":
@@ -271,7 +275,7 @@ const statusTone = (status: AtsApplicationListItem["status"]) => {
     case "Screening Interview": return "border-amber-200 bg-amber-50 text-amber-800";
     case "Background Check": return "border-orange-200 bg-orange-50 text-orange-800";
     case "Approved": return "border-emerald-200 bg-emerald-50 text-emerald-800";
-    case "Ready For Client Matching": return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800";
+    case READY_TO_POST_PUBLIC_STAGE: return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800";
     case "Placed": return "border-teal-200 bg-teal-50 text-teal-800";
     case "Rejected": return "border-rose-200 bg-rose-50 text-rose-800";
     default: return "border-slate-200 bg-slate-50 text-slate-700";
@@ -391,7 +395,7 @@ const AtsRecruitmentPage = () => {
         key: "auto-ready",
         label: "High Score Ready",
         detail: `${applications.filter((item) => (item.score?.score ?? 0) >= 80 && item.status !== "Placed" && item.status !== "Rejected").length} active applicants scoring 80+`,
-        filter: { minScore: 80, status: ["Resume Parsed", "Screening Interview", "Background Check", "Approved", "Ready For Client Matching"] },
+        filter: { minScore: 80, status: ["Resume Parsed", "Screening Interview", "Background Check", "Approved", READY_TO_POST_PUBLIC_STAGE] },
       },
       {
         key: "auto-screen",
@@ -401,9 +405,9 @@ const AtsRecruitmentPage = () => {
       },
       {
         key: "auto-market",
-        label: "Matching Queue",
-        detail: `${applications.filter((item) => item.status === "Approved" || item.status === "Ready For Client Matching").length} applicants ready for presentation`,
-        filter: { status: ["Approved", "Ready For Client Matching"] },
+        label: "Public Posting Queue",
+        detail: `${applications.filter((item) => item.status === "Approved" || item.status === READY_TO_POST_PUBLIC_STAGE).length} applicants waiting for public profile setup before posting`,
+        filter: { status: ["Approved", READY_TO_POST_PUBLIC_STAGE] },
       },
     ],
     [applications],
@@ -525,7 +529,7 @@ const AtsRecruitmentPage = () => {
                 Recruiter Walkthrough
               </DialogTitle>
               <DialogDescription className="max-w-2xl text-slate-400">
-                A quick guided tour for how recruiters should move applicants from intake to matching. You can reopen this any time from the tutorial button.
+                A quick guided tour for how recruiters should move applicants from intake to public profile setup. You can reopen this any time from the tutorial button.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-6 space-y-3">
@@ -632,7 +636,7 @@ const AtsRecruitmentPage = () => {
                 <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-5">
                   <p className="text-sm font-bold text-white">What you'll learn</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    {["Search", "Filter", "Open profile", "Check docs", "Contact", "Update stage", "Queue match"].map((label) => (
+                    {["Search", "Filter", "Open profile", "Check docs", "Contact", "Update stage", "Configure profile"].map((label) => (
                       <div key={label} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
                         <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-300">
                           <Sparkles className="h-4 w-4" />
@@ -645,7 +649,7 @@ const AtsRecruitmentPage = () => {
                           {label === "Check docs" && "Verify documents and profile quality in one pass."}
                           {label === "Contact" && "Reach out quickly using built-in recruiter shortcuts."}
                           {label === "Update stage" && "Keep the pipeline current after every action."}
-                          {label === "Queue match" && "Send approved candidates into client matching."}
+                          {label === "Configure profile" && "Move approved candidates into public profile setup before posting anything live."}
                         </p>
                       </div>
                     ))}
@@ -768,13 +772,13 @@ const AtsRecruitmentPage = () => {
               onClick={() =>
                 stageMutation.mutate({
                   applicationId: selectedId || applications[0]?.id || "",
-                  stage: "Ready For Client Matching",
+                  stage: READY_TO_POST_PUBLIC_STAGE,
                 })
               }
               disabled={!selectedId && !applications.length}
             >
               <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-              Queue Ready Candidate
+              Move to Profile Setup
             </Button>
           </div>
         </div>
@@ -983,7 +987,7 @@ const AtsRecruitmentPage = () => {
                         : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
                     }`}
                   >
-                    <span>{stage}</span>
+                    <span>{getStageDisplayLabel(stage)}</span>
                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${isActive ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"}`}>
                       {count}
                     </span>
@@ -1001,7 +1005,7 @@ const AtsRecruitmentPage = () => {
                 checked={visibleSelectedCount === displayedApplications.length && displayedApplications.length > 0}
                 onChange={() => (visibleSelectedCount === displayedApplications.length ? clearSelection() : selectAllVisible())}
               />
-              <span>{activeStageTab}</span>
+              <span>{getStageDisplayLabel(activeStageTab)}</span>
               <span className="text-xs font-normal text-slate-500">
                 {displayedApplications.length} applicants in this view · Page {currentPage} of {totalPages}
               </span>
@@ -1144,7 +1148,7 @@ const AtsRecruitmentPage = () => {
                             </td>
                             <td className="px-4 py-4">
                               <Badge variant="outline" className={`text-[11px] ${statusTone(item.status)}`}>
-                                {item.status}
+                                {getStageDisplayLabel(item.status)}
                               </Badge>
                             </td>
                             <td className="px-4 py-4">

@@ -10,7 +10,7 @@ export type RecruitmentStage =
   | 'Screening Interview'
   | 'Background Check'
   | 'Approved'
-  | 'Ready For Client Matching'
+  | 'Ready to Configure Public Profile'
   | 'Placed'
   | 'Rejected'
 
@@ -276,6 +276,9 @@ const dataDir = path.resolve(__dirname, '../data')
 const dataFile = path.join(dataDir, 'ats-data.json')
 const uploadsRoot = path.resolve(__dirname, '../data/uploads')
 const now = () => new Date().toISOString()
+const LEGACY_READY_STAGE = 'Ready For Client Matching'
+const LEGACY_READY_TO_POST_STAGE = 'Ready to Post Public Maid Profile'
+const READY_TO_POST_STAGE: RecruitmentStage = 'Ready to Configure Public Profile'
 
 const stageOrder: RecruitmentStage[] = [
   'New Applicant',
@@ -284,7 +287,7 @@ const stageOrder: RecruitmentStage[] = [
   'Screening Interview',
   'Background Check',
   'Approved',
-  'Ready For Client Matching',
+  READY_TO_POST_STAGE,
   'Placed',
   'Rejected',
 ]
@@ -304,24 +307,78 @@ const defaultData = (): AtsData => ({
 
 const ensureDataDir = async () => mkdir(dataDir, { recursive: true })
 
+const normalizeRecruitmentStage = (value: unknown): RecruitmentStage | undefined => {
+  if (
+    value === LEGACY_READY_STAGE ||
+    value === LEGACY_READY_TO_POST_STAGE ||
+    value === READY_TO_POST_STAGE
+  ) {
+    return READY_TO_POST_STAGE
+  }
+  if (
+    value === 'New Applicant' ||
+    value === 'Documents Submitted' ||
+    value === 'Resume Parsed' ||
+    value === 'Screening Interview' ||
+    value === 'Background Check' ||
+    value === 'Approved' ||
+    value === 'Placed' ||
+    value === 'Rejected'
+  ) {
+    return value
+  }
+  return undefined
+}
+
+const normalizeFilters = (filters: Record<string, unknown>) => {
+  const normalized = { ...filters }
+  if (Array.isArray(normalized.status)) {
+    normalized.status = normalized.status.map((stage) =>
+      stage === LEGACY_READY_STAGE ? READY_TO_POST_STAGE : stage
+    )
+  }
+  return normalized
+}
+
 const readData = async () => {
   try {
     const raw = await readFile(dataFile, 'utf8')
     const parsed = JSON.parse(raw) as Partial<AtsData>
-    return {
+    const normalized = {
       ...defaultData(),
       ...parsed,
-      applications: parsed.applications ?? [],
+      applications: (parsed.applications ?? []).map((application) => ({
+        ...application,
+        status: normalizeRecruitmentStage(application.status) ?? 'New Applicant',
+      })),
       profiles: parsed.profiles ?? [],
       interviews: parsed.interviews ?? [],
       backgroundChecks: parsed.backgroundChecks ?? [],
       scores: parsed.scores ?? [],
       matches: parsed.matches ?? [],
-      history: parsed.history ?? [],
-      notifications: parsed.notifications ?? [],
+      history: (parsed.history ?? []).map((record) => ({
+        ...record,
+        fromStage: record.fromStage ? normalizeRecruitmentStage(record.fromStage) : undefined,
+        toStage: normalizeRecruitmentStage(record.toStage) ?? 'New Applicant',
+        reason:
+          typeof record.reason === 'string'
+            ? record.reason.replaceAll(LEGACY_READY_STAGE, READY_TO_POST_STAGE)
+            : record.reason,
+      })),
+      notifications: (parsed.notifications ?? []).map((record) => ({
+        ...record,
+        message:
+          typeof record.message === 'string'
+            ? record.message.replaceAll(LEGACY_READY_STAGE, READY_TO_POST_STAGE)
+            : record.message,
+      })),
       documents: parsed.documents ?? {},
-      savedFilters: parsed.savedFilters ?? [],
+      savedFilters: (parsed.savedFilters ?? []).map((preset) => ({
+        ...preset,
+        filters: normalizeFilters(preset.filters),
+      })),
     }
+    return normalized
   } catch {
     const seed = defaultData()
     await writeData(seed)
@@ -749,8 +806,8 @@ const applyAutomationRules = (
     interview?.interviewResult === 'Passed' &&
     backgroundCheck.result === 'Passed' &&
     meetsDocumentsRequirement(docs)
-  if (readyForMatching && application.status !== 'Ready For Client Matching') {
-    transition(data, application, 'Ready For Client Matching', actor, 'Auto approval queue')
+  if (readyForMatching && application.status !== READY_TO_POST_STAGE) {
+    transition(data, application, READY_TO_POST_STAGE, actor, 'Auto approval queue')
   }
 }
 
@@ -1364,7 +1421,7 @@ export const matchApplicationsToRequirement = async (
   const applications = data.applications.filter(
     (item) =>
       item.agencyId === agencyId &&
-      ['Approved', 'Ready For Client Matching', 'Placed'].includes(item.status)
+      ['Approved', READY_TO_POST_STAGE, 'Placed'].includes(item.status)
   )
   const profilesByApplication = new Map(data.profiles.map((profile) => [profile.applicationId, profile]))
   const scoresByApplication = new Map(data.scores.map((score) => [score.applicationId, score]))
@@ -1516,7 +1573,7 @@ export const getAtsDashboard = async (agencyId: number) => {
     interviewedCandidates: items.filter((item) => stageOrder.indexOf(item.status) >= stageOrder.indexOf('Screening Interview')).length,
     approvedCandidates: approved,
     rejectedCandidates: items.filter((item) => item.status === 'Rejected').length,
-    readyForMatching: items.filter((item) => item.status === 'Ready For Client Matching').length,
+    readyForMatching: items.filter((item) => item.status === READY_TO_POST_STAGE).length,
     placedHelpers: placed,
     averageQualificationScore: avgScore,
     averageTimeToApprovalDays:
@@ -1556,7 +1613,7 @@ export const getAtsFilterPresets = async (agencyId: number) => {
     { id: 'preset-newborn', agencyId, name: 'Newborn Specialists', filters: { newbornCareExperience: true }, createdAt: now() },
     { id: 'preset-elderly', agencyId, name: 'Elderly Care Specialists', filters: { elderlyCareExperience: true }, createdAt: now() },
     { id: 'preset-cooking', agencyId, name: 'Cooking Experts', filters: { cookingSkills: ['Chinese food'] }, createdAt: now() },
-    { id: 'preset-ready', agencyId, name: 'Ready For Deployment', filters: { status: ['Ready For Client Matching', 'Approved'] }, createdAt: now() },
+    { id: 'preset-ready', agencyId, name: 'Ready For Deployment', filters: { status: [READY_TO_POST_STAGE, 'Approved'] }, createdAt: now() },
     { id: 'preset-approved', agencyId, name: 'Approved Helpers', filters: { status: ['Approved'] }, createdAt: now() },
   ]
   return [...defaults, ...data.savedFilters.filter((item) => item.agencyId === agencyId)]

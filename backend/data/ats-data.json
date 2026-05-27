@@ -6,10 +6,10 @@
       "profileId": "df26ce69-430f-42d2-89c1-51e112243ebb",
       "applicationCode": "APP-3F6BF642",
       "applicantAccessToken": "a5413fa0-cfb1-401a-bafe-5a9d2c76df8f",
-      "status": "Ready For Client Matching",
+      "status": "Ready to Configure Public Profile",
       "source": "resume_upload",
       "appliedAt": "2026-05-26T02:15:15.673Z",
-      "updatedAt": "2026-05-26T11:28:41.700Z",
+      "updatedAt": "2026-05-27T02:01:43.687Z",
       "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
       "aiParseReviewRequired": true,
       "notificationLogIds": [
@@ -755,7 +755,7 @@
       "maidReferenceCode": "FIL-GIN-9637",
       "profileId": "0c614614-95de-4330-b675-d123e056e6b8",
       "applicationCode": "APP-822096BE",
-      "status": "Ready For Client Matching",
+      "status": "Ready to Configure Public Profile",
       "source": "synced_from_maid",
       "appliedAt": "2026-05-19T03:36:09.178Z",
       "updatedAt": "2026-05-25T01:23:48.346Z",
@@ -9754,21 +9754,39 @@
   ],
   "history": [
     {
+      "id": "43246d4a-a2af-45b0-a8c2-f6b64d39ca58",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-27T02:01:43.687Z"
+    },
+    {
+      "id": "ce415a07-0022-4a84-a092-aa913c696b4e",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-27T02:01:28.622Z"
+    },
+    {
       "id": "3c375f9e-a9a0-4d5c-a0e6-6b949203bce7",
       "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
-      "fromStage": "Ready For Client Matching",
-      "toStage": "Ready For Client Matching",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
       "actor": "attheagency",
-      "reason": "Stage changed to Ready For Client Matching",
+      "reason": "Stage changed to Ready to Configure Public Profile",
       "createdAt": "2026-05-26T11:28:41.700Z"
     },
     {
       "id": "bc42c1d7-cf07-40a4-b11b-39d627e2fa54",
       "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
       "fromStage": "Approved",
-      "toStage": "Ready For Client Matching",
+      "toStage": "Ready to Configure Public Profile",
       "actor": "attheagency",
-      "reason": "Stage changed to Ready For Client Matching",
+      "reason": "Stage changed to Ready to Configure Public Profile",
       "createdAt": "2026-05-26T02:23:12.100Z"
     },
     {
@@ -9828,9 +9846,9 @@
       "id": "824d94fa-be1c-4e7d-abdb-0b43964401dc",
       "applicationId": "81f3fc16-8616-4192-92b8-4d1475b03899",
       "fromStage": "New Applicant",
-      "toStage": "Ready For Client Matching",
+      "toStage": "Ready to Configure Public Profile",
       "actor": "attheagency",
-      "reason": "Stage changed to Ready For Client Matching",
+      "reason": "Stage changed to Ready to Configure Public Profile",
       "createdAt": "2026-05-25T01:23:48.346Z"
     },
     {
@@ -11185,13 +11203,33 @@
   ],
   "notifications": [
     {
+      "id": "89af696b-5c3e-49ca-b97e-8a7b48822959",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "test moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-27T02:01:43.687Z"
+    },
+    {
+      "id": "d0533b88-ddf9-4d4c-8a08-4d8e6dac04d5",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "application_received",
+      "message": "test moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-27T02:01:28.622Z"
+    },
+    {
       "id": "7c9df08d-1454-4dc5-a1a0-24d95ef6d2cd",
       "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
       "event": "Application Received",
       "channel": "internal",
       "recipient": "090909009",
       "templateKey": "application_received",
-      "message": "test moved to Ready For Client Matching",
+      "message": "test moved to Ready to Configure Public Profile",
       "createdAt": "2026-05-26T11:28:41.700Z"
     },
     {
@@ -11201,7 +11239,7 @@
       "channel": "internal",
       "recipient": "090909009",
       "templateKey": "application_received",
-      "message": "test moved to Ready For Client Matching",
+      "message": "test moved to Ready to Configure Public Profile",
       "createdAt": "2026-05-26T02:23:12.100Z"
     },
     {
@@ -11291,7 +11329,7 @@
       "channel": "internal",
       "recipient": "",
       "templateKey": "application_received",
-      "message": "Anna Marie Ladeza Panganoron moved to Ready For Client Matching",
+      "message": "Anna Marie Ladeza Panganoron moved to Ready to Configure Public Profile",
       "createdAt": "2026-05-25T01:23:48.346Z"
     }
   ],
