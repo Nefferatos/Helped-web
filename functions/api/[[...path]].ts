@@ -400,6 +400,7 @@ type Bindings = {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_APP_DATA_TABLE?: string;
   SUPABASE_APP_DATA_ID?: string;
+  SUPABASE_USE_NORMALIZED?: string;
   SUPABASE_STORAGE_BUCKET?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
@@ -1023,7 +1024,14 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
   };
 };
 
-const loadDataFromKv = async (kv: KVNamespace): Promise<AppData> => {
+type LoadDataOptions = {
+  readOnly?: boolean;
+};
+
+const loadDataFromKv = async (
+  kv: KVNamespace,
+  options: LoadDataOptions = {},
+): Promise<AppData> => {
   const raw = await kv.get("app-data.json");
   if (!raw) {
     const initial = defaultData();
@@ -1032,7 +1040,9 @@ const loadDataFromKv = async (kv: KVNamespace): Promise<AppData> => {
   }
 
   const merged = mergeAppData(JSON.parse(stripBom(raw)) as Partial<AppData>);
-  await kv.put("app-data.json", JSON.stringify(merged));
+  if (!options.readOnly) {
+    await kv.put("app-data.json", JSON.stringify(merged));
+  }
   return merged;
 };
 
@@ -1463,6 +1473,166 @@ const fetchSupabaseAppDataRow = async (
   };
 };
 
+const loadDataFromSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+): Promise<AppData> => {
+  const payload = await callSupabaseRpc<Partial<AppData>>(
+    config,
+    "load_helped_app_data",
+    { p_app_id: config.rowId },
+  );
+  return mergeAppData((payload ?? {}) as Partial<AppData>);
+};
+
+const saveDataToSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  data: AppData,
+) => {
+  await callSupabaseRpc(
+    config,
+    "save_helped_app_data",
+    {
+      p_app_id: config.rowId,
+      p_payload: mergeAppData(cloneJson(data)),
+    },
+  );
+};
+
+const isNormalizedSupabaseEnabled = (
+  envOrConfig: Bindings | SupabaseAppDataConfig,
+) => {
+  if ("SUPABASE_USE_NORMALIZED" in envOrConfig) {
+    return envOrConfig.SUPABASE_USE_NORMALIZED?.trim().toLowerCase() === "true";
+  }
+  return false;
+};
+
+const buildSupabaseFilterQuery = (
+  filters?: Record<string, string | number | boolean>,
+) => {
+  if (!filters) return "";
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    params.set(key, `eq.${String(value)}`);
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+};
+
+const fetchSupabaseTableRows = async <T>(
+  config: SupabaseAppDataConfig,
+  tableName: string,
+  {
+    select = "*",
+    filters,
+    orderBy,
+    limit,
+  }: {
+    select?: string;
+    filters?: Record<string, string | number | boolean>;
+    orderBy?: string;
+    limit?: number;
+  } = {},
+): Promise<T[]> => {
+  const table = encodeURIComponent(tableName);
+  const params = new URLSearchParams();
+  params.set("select", select);
+  if (filters) {
+    for (const [key, value] of Object.entries(filters)) {
+      params.set(key, `eq.${String(value)}`);
+    }
+  }
+  if (orderBy) {
+    params.set("order", orderBy);
+  }
+  if (typeof limit === "number") {
+    params.set("limit", String(limit));
+  }
+  const url = `${config.baseUrl}/rest/v1/${table}?${params.toString()}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: supabaseHeaders(config, { accept: "application/json" }),
+  });
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase table read failed for ${tableName} (${response.status}): ${details}`);
+  }
+
+  return (await response.json()) as T[];
+};
+
+const upsertSupabaseTableRows = async (
+  config: SupabaseAppDataConfig,
+  tableName: string,
+  rows: unknown[],
+  onConflict: string,
+) => {
+  const table = encodeURIComponent(tableName);
+  const url = `${config.baseUrl}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: supabaseHeaders(config, {
+      "content-type": "application/json",
+      prefer: "resolution=merge-duplicates,return=minimal",
+    }),
+    body: JSON.stringify(rows),
+  });
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase table write failed for ${tableName} (${response.status}): ${details}`);
+  }
+};
+
+const deleteSupabaseTableRows = async (
+  config: SupabaseAppDataConfig,
+  tableName: string,
+  filters: Record<string, string | number | boolean>,
+) => {
+  const table = encodeURIComponent(tableName);
+  const query = buildSupabaseFilterQuery(filters);
+  const url = `${config.baseUrl}/rest/v1/${table}${query}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: supabaseHeaders(config, {
+      prefer: "return=minimal",
+    }),
+  });
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase table delete failed for ${tableName} (${response.status}): ${details}`);
+  }
+};
+
+const callSupabaseRpc = async <T>(
+  config: SupabaseAppDataConfig,
+  fnName: string,
+  payload: Record<string, unknown>,
+): Promise<T> => {
+  const url = `${config.baseUrl}/rest/v1/rpc/${encodeURIComponent(fnName)}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: supabaseHeaders(config, {
+      "content-type": "application/json",
+      accept: "application/json",
+    }),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase RPC failed for ${fnName} (${response.status}): ${details}`);
+  }
+
+  if (response.status === 204) {
+    return null as T;
+  }
+
+  return (await response.json()) as T;
+};
+
 const getSupabaseStorageConfig = (
   env: Bindings,
 ): SupabaseStorageConfig | null => {
@@ -1504,6 +1674,7 @@ const ensureSupabaseAppDataRow = async (config: SupabaseAppDataConfig) => {
 
 const loadDataFromSupabase = async (
   config: SupabaseAppDataConfig,
+  options: LoadDataOptions = {},
 ): Promise<AppData> => {
   let row = await fetchSupabaseAppDataRow(config);
 
@@ -1514,6 +1685,10 @@ const loadDataFromSupabase = async (
 
   if (!row) {
     throw new Error("Supabase app_data row is missing after bootstrap");
+  }
+
+  if (options.readOnly) {
+    return row.data;
   }
 
   return attachSupabaseTracking(row.data, row.data, row.updatedAt);
@@ -1610,10 +1785,16 @@ const saveDataToSupabase = async (
   throw new Error("Supabase write failed unexpectedly");
 };
 
-const loadData = async (env: Bindings): Promise<AppData> => {
+const loadData = async (
+  env: Bindings,
+  options: LoadDataOptions = {},
+): Promise<AppData> => {
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
-    return await loadDataFromSupabase(supabase);
+    if (isNormalizedSupabaseEnabled(env)) {
+      return await loadDataFromSupabaseNormalized(supabase);
+    }
+    return await loadDataFromSupabase(supabase, options);
   }
 
   if (!env.APP_DATA) {
@@ -1622,12 +1803,16 @@ const loadData = async (env: Bindings): Promise<AppData> => {
     );
   }
 
-  return await loadDataFromKv(env.APP_DATA);
+  return await loadDataFromKv(env.APP_DATA, options);
 };
 
 const saveData = async (env: Bindings, data: AppData) => {
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
+    if (isNormalizedSupabaseEnabled(env)) {
+      await saveDataToSupabaseNormalized(supabase, data);
+      return;
+    }
     await saveDataToSupabase(supabase, data);
     return;
   }
@@ -1669,6 +1854,101 @@ const getAgencyAdminSessionStoreRowId = (config: SupabaseAppDataConfig) =>
 
 const getAgencyAdminAuthStoreRowId = (config: SupabaseAppDataConfig) =>
   `${config.rowId}:agency-admin-auth`;
+
+const loadAgencyAdminSessionsFromSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+) => {
+  const rows = await fetchSupabaseTableRows<{
+    payload?: AgencyAdminSessionRecord;
+  }>(config, "helped_agency_admin_sessions", {
+    select: "payload",
+    filters: { app_id: config.rowId },
+    orderBy: "created_at.desc",
+  });
+  return mergeAgencyAdminSessions(
+    rows
+      .map((row) => row.payload)
+      .filter((session): session is AgencyAdminSessionRecord => Boolean(session)),
+  );
+};
+
+const loadAgencyAdminAuthFromSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+) => {
+  const rows = await fetchSupabaseTableRows<{
+    payload?: AgencyAdminRecord;
+  }>(config, "helped_agency_admins", {
+    select: "payload",
+    filters: { app_id: config.rowId },
+    orderBy: "record_id.asc",
+  });
+  return rows
+    .map((row) => row.payload)
+    .filter((admin): admin is AgencyAdminRecord => Boolean(admin))
+    .map((admin) => ({
+      ...admin,
+      agencyId: Number.isInteger(Number(admin.agencyId))
+        ? Number(admin.agencyId)
+        : 1,
+    }));
+};
+
+const saveAgencyAdminSessionsToSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  sessions: AgencyAdminSessionRecord[],
+) => {
+  await deleteSupabaseTableRows(config, "helped_agency_admin_sessions", {
+    app_id: config.rowId,
+  });
+
+  const normalizedSessions = mergeAgencyAdminSessions(sessions);
+  if (normalizedSessions.length === 0) {
+    return;
+  }
+
+  await upsertSupabaseTableRows(
+    config,
+    "helped_agency_admin_sessions",
+    normalizedSessions.map((session) => ({
+      app_id: config.rowId,
+      token: session.token,
+      admin_id: session.adminId,
+      created_at: session.createdAt,
+      payload: session,
+    })),
+    "app_id,token",
+  );
+};
+
+const saveAgencyAdminAuthToSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  agencyAdmins: AgencyAdminRecord[],
+) => {
+  await deleteSupabaseTableRows(config, "helped_agency_admins", {
+    app_id: config.rowId,
+  });
+
+  if (agencyAdmins.length === 0) {
+    return;
+  }
+
+  await upsertSupabaseTableRows(
+    config,
+    "helped_agency_admins",
+    agencyAdmins.map((admin) => ({
+      app_id: config.rowId,
+      record_id: admin.id,
+      agency_id: admin.agencyId,
+      username: admin.username,
+      email: admin.email ?? null,
+      supabase_user_id: admin.supabaseUserId ?? null,
+      agency_name: admin.agencyName,
+      created_at: admin.createdAt,
+      payload: admin,
+    })),
+    "app_id,record_id",
+  );
+};
 
 const loadAgencyAdminSessionsFromSupabase = async (
   config: SupabaseAppDataConfig,
@@ -1790,6 +2070,10 @@ const saveAgencyAdminAuthToSupabase = async (
 const loadAgencyAdminAuthData = async (env: Bindings) => {
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
+    if (isNormalizedSupabaseEnabled(env)) {
+      return await loadAgencyAdminAuthFromSupabaseNormalized(supabase);
+    }
+
     const cached = loadAgencyAdminAuthFromSupabase(supabase);
     const timeout = sleep(1500).then(() => null as AgencyAdminRecord[] | null);
     const cachedAdmins = await Promise.race([cached, timeout]);
@@ -1816,6 +2100,9 @@ const loadAgencyAdminSessions = async (
 ) => {
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
+    if (isNormalizedSupabaseEnabled(env)) {
+      return await loadAgencyAdminSessionsFromSupabaseNormalized(supabase);
+    }
     const sessions = await loadAgencyAdminSessionsFromSupabase(supabase);
     if (sessions.length > 0) {
       return sessions;
@@ -1839,6 +2126,10 @@ const saveAgencyAdminSessions = async (
 ) => {
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
+    if (isNormalizedSupabaseEnabled(env)) {
+      await saveAgencyAdminSessionsToSupabaseNormalized(supabase, sessions);
+      return;
+    }
     await saveAgencyAdminSessionsToSupabase(supabase, sessions);
     return;
   }
@@ -1875,11 +2166,19 @@ const saveAgencyAdminChangesWithSession = async (
   latest.counters = data.counters;
   await saveData(env, latest);
   if (supabase) {
-    void saveAgencyAdminAuthToSupabase(supabase, latest.agencyAdmins).catch(
-      (error) => {
-        console.error("Failed to refresh agency admin auth cache:", error);
-      },
-    );
+    if (isNormalizedSupabaseEnabled(env)) {
+      void saveAgencyAdminAuthToSupabaseNormalized(supabase, latest.agencyAdmins).catch(
+        (error) => {
+          console.error("Failed to refresh normalized agency admin cache:", error);
+        },
+      );
+    } else {
+      void saveAgencyAdminAuthToSupabase(supabase, latest.agencyAdmins).catch(
+        (error) => {
+          console.error("Failed to refresh agency admin auth cache:", error);
+        },
+      );
+    }
   }
   const existingSessions = await loadAgencyAdminSessions(env, latest);
   await saveAgencyAdminSessions(env, [session, ...existingSessions]);
@@ -2454,10 +2753,12 @@ const buildAtsProfileTags = (
   ),
 });
 
-const createAtsListItem = (data: AppData, application: AtsApplicationRecord) => {
-  const profile = getAtsProfileByApplicationId(data, application.id);
+const createAtsListItem = (
+  application: AtsApplicationRecord,
+  profile: AtsApplicationProfileRecord | null,
+  score: AtsScoreRecord | null,
+) => {
   if (!profile) return null;
-  const score = data.ats.scores[application.id] ?? null;
   return {
     id: application.id,
     applicationCode: application.applicationCode,
@@ -2849,12 +3150,10 @@ const parseAtsFormData = async (env: Bindings, formData: FormData) => {
             kind,
           );
         } catch (error) {
-          console.error("ATS file upload fallback triggered", error);
-          if (!shouldInlineAtsDocumentFallback(entry)) {
-            throw buildAtsUploadFailure(
-              entry.name || `${kind}-${documents.length + 1}`,
-            );
-          }
+          console.error("ATS file upload failed", error);
+          throw buildAtsUploadFailure(
+            entry.name || `${kind}-${documents.length + 1}`,
+          );
         }
       }
       documents.push({
@@ -3709,7 +4008,9 @@ const getConversationContext = (url: URL) => {
 
 const getStorageMode = (env: Bindings) => {
   const hasSupabase = Boolean(getSupabaseAppDataConfig(env));
-  if (hasSupabase) return "supabase";
+  if (hasSupabase) {
+    return isNormalizedSupabaseEnabled(env) ? "supabase-normalized" : "supabase";
+  }
   if (env.APP_DATA) return "kv";
   return "none";
 };
@@ -3727,6 +4028,7 @@ app.get("/api/diagnostics", (c) => {
       urlHost: config ? new URL(config.baseUrl).host : null,
       table: config?.table ?? null,
       rowId: config?.rowId ?? null,
+      normalized: isNormalizedSupabaseEnabled(c.env),
       hasServiceRoleKey: Boolean(c.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
     },
     kv: {
@@ -4018,7 +4320,7 @@ app.get(
     const pageSize = parsePositiveInt(c.req.query("pageSize"))
     const offset = parsePositiveInt(c.req.query("offset")) ?? 0
     const limit = pageSize ?? parsePositiveInt(c.req.query("limit"))
-    const data = await loadData(c.env)
+    const data = await loadData(c.env, { readOnly: true })
 
     let maids = [...data.maids]
     if (search) {
@@ -7287,13 +7589,13 @@ app.get(
 
 app.get("/api/ats/dashboard", requireAgencyAdminAuth, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
-  const data = await loadData(c.env);
+  const data = await loadData(c.env, { readOnly: true });
   return c.json(buildAtsDashboard(data, admin.agencyId));
 });
 
 app.get("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
-  const data = await loadData(c.env);
+  const data = await loadData(c.env, { readOnly: true });
   const url = new URL(c.req.url);
   const query = toTrimmedString(url.searchParams.get("q")).toLowerCase();
   const sort = toTrimmedString(url.searchParams.get("sort")) || "qualificationScore:desc";
@@ -7313,11 +7615,21 @@ app.get("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
     }
   }
 
+  const profilesByApplicationId = new Map(
+    data.ats.profiles.map((profile) => [profile.applicationId, profile] as const),
+  );
+
   const listItems = data.ats.applications
     .filter(
       (item) => item.agencyId === admin.agencyId && item.source === "resume_upload",
     )
-    .map((item) => createAtsListItem(data, item))
+    .map((item) =>
+      createAtsListItem(
+        item,
+        profilesByApplicationId.get(item.id) ?? null,
+        data.ats.scores[item.id] ?? null,
+      ),
+    )
     .filter((item): item is Exclude<typeof item, null> => Boolean(item));
 
   const filtered = filterAtsApplications(listItems, query, filters);
@@ -7383,7 +7695,7 @@ app.patch("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, 
 app.get("/api/ats/applications/:applicationId", requireAgencyAdminAuth, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const applicationId = c.req.param("applicationId");
-  const data = await loadData(c.env);
+  const data = await loadData(c.env, { readOnly: true });
   const bundle = buildAtsBundle(data, applicationId);
   if (!bundle || bundle.application.agencyId !== admin.agencyId) {
     return c.json({ error: "Application not found" }, 404);

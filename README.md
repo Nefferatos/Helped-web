@@ -271,6 +271,39 @@ npm run deploy:cf
 
 After deploy, the SPA is served from `frontend/dist` and the backend runs inside the same Worker.
 
+## Normalized Supabase Storage
+
+The default Worker storage path uses one `public.app_data` jsonb row. That is still supported.
+
+If you want the normalized Supabase design instead, use:
+
+- SQL setup: `supabase/normalized_project_setup.sql`
+- Worker env flag: `SUPABASE_USE_NORMALIZED=true`
+
+Recommended rollout:
+
+1. Run `supabase/normalized_project_setup.sql` in Supabase SQL editor.
+2. Migrate the existing blob into normalized tables:
+
+```sql
+select public.migrate_helped_blob_to_normalized('default');
+```
+
+3. Set `SUPABASE_USE_NORMALIZED=true` in Cloudflare Worker vars.
+4. Deploy:
+
+```bash
+npm run deploy:cf
+```
+
+5. Verify:
+
+```text
+/api/diagnostics
+```
+
+You should see `storage: "supabase-normalized"` and `supabase.normalized: true`.
+
 ## Updating The Live Server
 
 After you change the website locally, update the live Cloudflare site with:

@@ -10,6 +10,7 @@
     "test:ai": "node scripts/ai-integration-tests.mjs --target=both",
     "test:ai:local": "node scripts/ai-integration-tests.mjs --target=local",
     "test:ai:prod": "node scripts/ai-integration-tests.mjs --target=prod",
+    "cleanup:ats-inline-docs": "node scripts/cleanup-inline-ats-docs.mjs",
     "frontend:build": "npm run build --prefix frontend",
     "frontend:build:dev": "npm run build:dev --prefix frontend",
     "start": "npm start --prefix backend",
