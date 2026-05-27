@@ -650,6 +650,11 @@ const AddMaid = () => {
   const [isImportingExcel, setIsImportingExcel] = useState(false);
   const [isManagePhotosOpen, setIsManagePhotosOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [duplicateRefDialogOpen, setDuplicateRefDialogOpen] = useState(false);
+  const [duplicateRefOriginal, setDuplicateRefOriginal] = useState("");
+  const [duplicateRefSuggestion, setDuplicateRefSuggestion] = useState("");
+  const [pendingDuplicatePayload, setPendingDuplicatePayload] = useState<MaidProfile | null>(null);
+  const [isResolvingDuplicateRef, setIsResolvingDuplicateRef] = useState(false);
   const [maxUnlockedTab, setMaxUnlockedTab] = useState(0);
   const [isCreated, setIsCreated] = useState(false);
 
@@ -858,6 +863,71 @@ const AddMaid = () => {
     videoDataUrl: stripInlineMedia(formData.videoDataUrl),
   }), [formData]);
 
+  const doesReferenceCodeExist = useCallback(async (referenceCode: string) => {
+    const trimmedReferenceCode = String(referenceCode || "").trim();
+    if (!trimmedReferenceCode) return false;
+
+    const response = await fetch(`/api/maids/${encodeURIComponent(trimmedReferenceCode)}`, {
+      headers: { ...getAgencyAdminAuthHeaders() },
+    });
+
+    if (response.status === 404) return false;
+    if (response.ok) return true;
+
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Failed to verify reference code");
+  }, []);
+
+  const buildUniqueReferenceCode = useCallback(async (baseReferenceCode: string) => {
+    const trimmedBase = String(baseReferenceCode || "").trim();
+    const normalizedBase = trimmedBase.replace(/-\d+$/, "");
+
+    for (let attempt = 2; attempt <= 50; attempt += 1) {
+      const candidate = `${normalizedBase}-${attempt}`;
+      const exists = await doesReferenceCodeExist(candidate);
+      if (!exists) return candidate;
+    }
+
+    const fallback = `${normalizedBase}-${Date.now().toString().slice(-6)}`;
+    return fallback;
+  }, [doesReferenceCodeExist]);
+
+  const saveWithPayload = useCallback(async (
+    payload: MaidProfile,
+    options?: { skipDuplicateCheck?: boolean },
+  ) => {
+    const shouldCreate = !isCreated;
+
+    if (shouldCreate && !options?.skipDuplicateCheck) {
+      const exists = await doesReferenceCodeExist(payload.referenceCode);
+      if (exists) {
+        const suggestion = await buildUniqueReferenceCode(payload.referenceCode);
+        setDuplicateRefOriginal(payload.referenceCode);
+        setDuplicateRefSuggestion(suggestion);
+        setPendingDuplicatePayload(payload);
+        setDuplicateRefDialogOpen(true);
+        return false;
+      }
+    }
+
+    const { taskId, promise } = startMaidSaveTask({
+      payload,
+      shouldCreate,
+      authHeaders: getAgencyAdminAuthHeaders(),
+    });
+
+    void promise.catch(() => undefined);
+
+    navigate("/agencyadmin/edit-maids", {
+      state: {
+        fromView: "public",
+        saveTaskId: taskId,
+      },
+    });
+
+    return true;
+  }, [buildUniqueReferenceCode, doesReferenceCodeExist, isCreated, navigate]);
+
   const performSave = useCallback(async () => {
     if (isSaving) return;
     const payload = buildPayload();
@@ -872,24 +942,10 @@ const AddMaid = () => {
       return;
     }
 
-    const shouldCreate = !isCreated;
     setIsSaving(true);
     setSaveError(null);
     try {
-      const { taskId, promise } = startMaidSaveTask({
-        payload,
-        shouldCreate,
-        authHeaders: getAgencyAdminAuthHeaders(),
-      });
-
-      void promise.catch(() => undefined);
-
-      navigate("/agencyadmin/edit-maids", {
-        state: {
-          fromView: "public",
-          saveTaskId: taskId,
-        },
-      });
+      await saveWithPayload(payload);
     } catch (error) {
       console.error("[AddMaid] Save failed:", error);
       setSaveError("Failed to save maid. Please try again.");
@@ -897,7 +953,44 @@ const AddMaid = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [buildPayload, activeTab, isCreated, isSaving, navigate]);
+  }, [buildPayload, activeTab, isSaving, saveWithPayload]);
+
+  const handleDuplicateReferenceSkip = useCallback(() => {
+    setDuplicateRefDialogOpen(false);
+    setPendingDuplicatePayload(null);
+    setDuplicateRefOriginal("");
+    setDuplicateRefSuggestion("");
+    toast.error("Save skipped. Please update the reference code to continue.");
+  }, []);
+
+  const handleDuplicateReferenceAutoConfigure = useCallback(async () => {
+    if (!pendingDuplicatePayload || !duplicateRefSuggestion) return;
+
+    setIsResolvingDuplicateRef(true);
+    const nextPayload: MaidProfile = {
+      ...pendingDuplicatePayload,
+      referenceCode: duplicateRefSuggestion,
+    };
+
+    try {
+      setFormData((prev) => ({
+        ...prev,
+        referenceCode: duplicateRefSuggestion,
+      }));
+      setDuplicateRefDialogOpen(false);
+      setPendingDuplicatePayload(null);
+      setDuplicateRefOriginal("");
+      setDuplicateRefSuggestion("");
+      await saveWithPayload(nextPayload, { skipDuplicateCheck: true });
+      toast.success(`Reference code updated to ${duplicateRefSuggestion}`);
+    } catch (error) {
+      console.error("[AddMaid] Auto-configure reference code failed:", error);
+      setSaveError("Failed to save maid. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Failed to save maid");
+    } finally {
+      setIsResolvingDuplicateRef(false);
+    }
+  }, [duplicateRefSuggestion, pendingDuplicatePayload, saveWithPayload]);
 
   const handleSubmit = useCallback(() => {
     if (activeTab === tabs.length - 1) {
@@ -1037,6 +1130,37 @@ const AddMaid = () => {
                 className="rounded-xl bg-amber-400 text-slate-900 hover:bg-amber-500 font-semibold"
               >
                 {isSaving ? "Saving..." : "Save & Submit"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={duplicateRefDialogOpen} onOpenChange={setDuplicateRefDialogOpen}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold">Reference Code Already Exists</DialogTitle>
+              <DialogDescription className="text-slate-500">
+                <span className="font-semibold text-slate-700">{duplicateRefOriginal}</span> is already in use.
+                You can skip this save or let us configure a new reference code automatically.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Suggested new reference code: <span className="font-bold">{duplicateRefSuggestion}</span>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={handleDuplicateReferenceSkip}
+                disabled={isResolvingDuplicateRef}
+              >
+                Skip Save
+              </Button>
+              <Button
+                onClick={() => void handleDuplicateReferenceAutoConfigure()}
+                disabled={isResolvingDuplicateRef || !duplicateRefSuggestion}
+                className="bg-amber-500 text-slate-950 hover:bg-amber-400"
+              >
+                {isResolvingDuplicateRef ? "Configuring..." : "Auto Configure"}
               </Button>
             </DialogFooter>
           </DialogContent>

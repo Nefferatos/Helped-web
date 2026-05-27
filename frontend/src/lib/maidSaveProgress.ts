@@ -26,6 +26,30 @@ const inflightRequests = new Map<string, XMLHttpRequest>();
 const isInlineMediaUrl = (value: unknown) =>
   typeof value === "string" && value.trim().startsWith("data:");
 
+const parseXhrJsonResponse = <TResponse extends { error?: string }>(
+  request: XMLHttpRequest,
+): TResponse => {
+  if (request.response && typeof request.response === "object") {
+    return request.response as TResponse;
+  }
+
+  const rawText = String(request.responseText || "").trim();
+  if (!rawText) {
+    return {} as TResponse;
+  }
+
+  try {
+    return JSON.parse(rawText) as TResponse;
+  } catch {
+    const looksLikeHtml = rawText.startsWith("<!DOCTYPE") || rawText.startsWith("<html") || rawText.startsWith("<");
+    return {
+      error: looksLikeHtml
+        ? `Server error (${request.status || 503}). Please try again in a moment.`
+        : "Server returned an invalid response.",
+    } as TResponse;
+  }
+};
+
 const toStorageKey = (taskId: string) => `${STORAGE_KEY_PREFIX}${taskId}`;
 
 const emitSnapshot = (snapshot: MaidSaveTaskSnapshot) => {
@@ -173,10 +197,7 @@ export const startMaidSaveTask = ({
 
         request.onload = () => {
           inflightRequests.delete(taskId);
-          const response =
-            request.response && typeof request.response === "object"
-              ? (request.response as TResponse)
-              : (JSON.parse(String(request.responseText || "{}")) as TResponse);
+          const response = parseXhrJsonResponse<TResponse>(request);
 
           if (request.status >= 200 && request.status < 300) {
             innerResolve(response);
