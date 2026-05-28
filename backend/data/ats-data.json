@@ -201,10 +201,10 @@
       "maidReferenceCode": "IND-MP-KIM-8755",
       "profileId": "6d6d1a38-03c9-4549-a7da-8f9d062d2fd6",
       "applicationCode": "APP-CFC10FCD",
-      "status": "New Applicant",
+      "status": "Documents Submitted",
       "source": "synced_from_maid",
       "appliedAt": "2026-04-24T05:43:15.870Z",
-      "updatedAt": "2026-05-24T04:13:53.380Z",
+      "updatedAt": "2026-05-28T00:03:31.853Z",
       "aiParseSummary": "Profile seeded from maid record IND-MP-KIM-8755.",
       "aiParseReviewRequired": false,
       "notificationLogIds": []
@@ -1199,10 +1199,10 @@
       "maidReferenceCode": "MYR-ALL-9695",
       "profileId": "19bcede8-a849-41b4-a102-843419dd35ec",
       "applicationCode": "APP-E223DEA3",
-      "status": "Rejected",
+      "status": "Ready to Configure Public Profile",
       "source": "synced_from_maid",
       "appliedAt": "2026-05-21T00:09:06.536Z",
-      "updatedAt": "2026-05-24T04:13:52.979Z",
+      "updatedAt": "2026-05-28T03:53:15.011Z",
       "aiParseSummary": "Profile seeded from maid record MYR-ALL-9695.",
       "aiParseReviewRequired": false,
       "notificationLogIds": [],
@@ -1263,15 +1263,16 @@
       "maidReferenceCode": "FIL-FB1-PHK-9707",
       "profileId": "325c73e2-8305-447b-84cf-502ecbb6c4d5",
       "applicationCode": "APP-D0EE888B",
-      "status": "Rejected",
+      "status": "Background Check",
       "source": "synced_from_maid",
       "appliedAt": "2026-05-21T16:36:22.400Z",
-      "updatedAt": "2026-05-24T04:13:52.971Z",
+      "updatedAt": "2026-05-28T00:02:17.044Z",
       "aiParseSummary": "Profile seeded from maid record FIL-FB1-PHK-9707.",
       "aiParseReviewRequired": false,
       "notificationLogIds": [],
       "autoRejectedReason": "Missing required documents",
-      "rejectedAt": "2026-05-24T04:13:52.971Z"
+      "rejectedAt": "2026-05-24T04:13:52.971Z",
+      "approvedAt": "2026-05-28T00:01:42.781Z"
     },
     {
       "id": "fa186ed9-b3a6-49e2-8a07-adbc8ac128ac",
@@ -1295,10 +1296,10 @@
       "maidReferenceCode": "INA-JEN-9724",
       "profileId": "c8c29e6a-2a19-4dc7-97f9-10d28958e2d0",
       "applicationCode": "APP-23E67B87",
-      "status": "Rejected",
+      "status": "Documents Submitted",
       "source": "synced_from_maid",
       "appliedAt": "2026-05-21T21:08:09.650Z",
-      "updatedAt": "2026-05-24T04:13:52.967Z",
+      "updatedAt": "2026-05-28T03:45:25.131Z",
       "aiParseSummary": "Profile seeded from maid record INA-JEN-9724.",
       "aiParseReviewRequired": false,
       "notificationLogIds": [],
@@ -9754,6 +9755,222 @@
   ],
   "history": [
     {
+      "id": "e1cd4db3-3df4-417e-91fb-754f9753b846",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:53:15.011Z"
+    },
+    {
+      "id": "af3f88c5-bf50-474d-9301-41d52f0749ca",
+      "applicationId": "9ccba7ec-d363-4a87-a9fc-f5e880656919",
+      "fromStage": "Rejected",
+      "toStage": "Documents Submitted",
+      "actor": "attheagency",
+      "reason": "Bulk document request",
+      "createdAt": "2026-05-28T03:45:25.131Z"
+    },
+    {
+      "id": "40c716bd-40c4-4e62-8ae8-fb6c873178e4",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:23.394Z"
+    },
+    {
+      "id": "e9965ac0-eb67-43b3-a063-880833052981",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:15.167Z"
+    },
+    {
+      "id": "1958c5cf-5503-4f49-9399-4406d3dbb2d7",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:14.470Z"
+    },
+    {
+      "id": "dea8c83d-c172-4a64-8db8-1c5615f444c0",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:14.280Z"
+    },
+    {
+      "id": "8b52f47f-401b-483c-8809-5580ab769b96",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:14.096Z"
+    },
+    {
+      "id": "68950837-9942-4e90-aab2-7b0d0a7f6ffc",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:13.913Z"
+    },
+    {
+      "id": "46841115-8b44-47e3-8853-fb0be4ba5db2",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:13.696Z"
+    },
+    {
+      "id": "dfe0f3ee-85ba-4bd1-9645-ca2d7e0ad78e",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:13.463Z"
+    },
+    {
+      "id": "629e3d2c-8ea8-48d2-b80e-d19cba0ab43e",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:12.111Z"
+    },
+    {
+      "id": "83e10c75-adba-47f0-9360-3f443ef8f883",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:11.871Z"
+    },
+    {
+      "id": "f28c8f32-487a-4c59-a63d-fcaf687ecd7f",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:11.666Z"
+    },
+    {
+      "id": "8ac4c8ec-7deb-4fac-a87f-257ea08d0fd3",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:11.304Z"
+    },
+    {
+      "id": "ed5096f2-e2cf-43c3-aa59-c2a32d67a882",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:10.714Z"
+    },
+    {
+      "id": "7e8cdd9a-c18a-4dbf-94e2-2c4a8d18d65d",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:07.805Z"
+    },
+    {
+      "id": "137e7183-4c6b-4f3a-bb28-df52046ef0b0",
+      "applicationId": "9fdeabcc-51fc-4441-af1a-76c01084978a",
+      "fromStage": "New Applicant",
+      "toStage": "Documents Submitted",
+      "actor": "attheagency",
+      "reason": "Stage changed to Documents Submitted",
+      "createdAt": "2026-05-28T00:03:31.853Z"
+    },
+    {
+      "id": "2a07b8a7-ceec-48c9-b966-70d3b6b391c9",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "fromStage": "Screening Interview",
+      "toStage": "Background Check",
+      "actor": "attheagency",
+      "reason": "Stage changed to Background Check",
+      "createdAt": "2026-05-28T00:02:17.044Z"
+    },
+    {
+      "id": "d03f3c17-bb30-4bb9-a8c6-eaee969d496c",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Screening Interview",
+      "actor": "attheagency",
+      "reason": "Bulk interview assignment",
+      "createdAt": "2026-05-28T00:02:14.875Z"
+    },
+    {
+      "id": "9e9b1584-72af-4173-9e2c-d36c86c3fecf",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "fromStage": "Approved",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T00:01:44.619Z"
+    },
+    {
+      "id": "62a4f2e6-c140-4257-a645-1314be5be998",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "fromStage": "Rejected",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Bulk approval",
+      "createdAt": "2026-05-28T00:01:42.781Z"
+    },
+    {
+      "id": "72c1228d-0e60-4e77-a286-80a97cad5178",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T00:01:17.003Z"
+    },
+    {
+      "id": "08de46d1-b278-4e86-87d0-af9b98d1fc5d",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T00:01:16.106Z"
+    },
+    {
+      "id": "37946990-b06f-4478-b043-956773b12b70",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "fromStage": "Rejected",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T00:01:15.108Z"
+    },
+    {
       "id": "43246d4a-a2af-45b0-a8c2-f6b64d39ca58",
       "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
       "fromStage": "Ready to Configure Public Profile",
@@ -11202,6 +11419,246 @@
     }
   ],
   "notifications": [
+    {
+      "id": "f8383c1f-d025-4f81-a1bb-e4416fdf9018",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:53:15.011Z"
+    },
+    {
+      "id": "1784c93d-3ee1-49fb-9981-731dd8e21592",
+      "applicationId": "9ccba7ec-d363-4a87-a9fc-f5e880656919",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Dewi moved to Documents Submitted",
+      "createdAt": "2026-05-28T03:45:25.131Z"
+    },
+    {
+      "id": "4d1a1c18-b41d-44a3-8e8d-514b6aeea3a7",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:23.394Z"
+    },
+    {
+      "id": "15f753e5-30a7-4153-b960-8ed12697c787",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:15.167Z"
+    },
+    {
+      "id": "999e3f76-2b42-4b2f-b74b-e8daf148dc1f",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:14.470Z"
+    },
+    {
+      "id": "4a8a7a79-e182-40db-98e7-989f90109369",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:14.280Z"
+    },
+    {
+      "id": "11077c9d-989d-4d06-af90-d7c9c43c75b8",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:14.096Z"
+    },
+    {
+      "id": "f9dc7fad-1907-45f2-add2-8726f1b5e3b4",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:13.913Z"
+    },
+    {
+      "id": "c79e94ba-3812-49c7-9a71-a61e4b28e2b5",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:13.696Z"
+    },
+    {
+      "id": "85e30ef1-2a20-4fb7-9735-a046d91f9f65",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:13.463Z"
+    },
+    {
+      "id": "79f8b867-f6e3-49c8-8ab2-6a7116f3a93c",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:12.111Z"
+    },
+    {
+      "id": "1a17afe5-ab4a-4511-89bc-e2ed4040869d",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:11.871Z"
+    },
+    {
+      "id": "25482393-0fbe-4065-aa8d-b4226b4834e2",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:11.666Z"
+    },
+    {
+      "id": "85710c15-f19b-48b5-8ecd-34da50bfa40b",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:11.304Z"
+    },
+    {
+      "id": "3948a692-7b7a-42b6-bf72-d739550e62ca",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:10.714Z"
+    },
+    {
+      "id": "b594c6a4-797d-4d62-a1a3-3316830d5b9e",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T03:45:07.805Z"
+    },
+    {
+      "id": "b3d7be65-e399-4cdd-8c0c-813ff3c8f33f",
+      "applicationId": "9fdeabcc-51fc-4441-af1a-76c01084978a",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+91 93663 18206",
+      "templateKey": "application_received",
+      "message": "LianNeiChing moved to Documents Submitted",
+      "createdAt": "2026-05-28T00:03:31.853Z"
+    },
+    {
+      "id": "9a71b4b8-2fbb-4433-96bc-c0acc9e2acbd",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Pao Catherine Lapina moved to Background Check",
+      "createdAt": "2026-05-28T00:02:17.044Z"
+    },
+    {
+      "id": "25c7f172-6fbd-4839-88bb-8b67dd941388",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Pao Catherine Lapina moved to Screening Interview",
+      "createdAt": "2026-05-28T00:02:14.875Z"
+    },
+    {
+      "id": "a55f9dcd-ddd9-47c2-a130-e920010db595",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Pao Catherine Lapina moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T00:01:44.619Z"
+    },
+    {
+      "id": "78d20a15-e1cd-4e99-a0a0-081679be84de",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "approved",
+      "message": "Pao Catherine Lapina moved to Approved",
+      "createdAt": "2026-05-28T00:01:42.781Z"
+    },
+    {
+      "id": "6a84e7d1-c3fd-419b-8315-e917d923dbba",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T00:01:17.003Z"
+    },
+    {
+      "id": "18f02776-ace5-4459-b9b9-0d929cfaa021",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T00:01:16.106Z"
+    },
+    {
+      "id": "95d2ca43-18fc-4bb1-98de-4dee3e76b543",
+      "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Tin Tin Than moved to Ready to Configure Public Profile",
+      "createdAt": "2026-05-28T00:01:15.108Z"
+    },
     {
       "id": "89af696b-5c3e-49ca-b97e-8a7b48822959",
       "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
