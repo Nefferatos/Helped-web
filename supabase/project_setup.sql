@@ -267,6 +267,208 @@ as $$
   limit greatest(limit_rows, 1);
 $$;
 
+create or replace function public.update_app_maid_visibility(
+  p_app_id text,
+  p_reference_code text,
+  p_is_public boolean
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_data jsonb;
+  v_maids jsonb;
+  v_next_maids jsonb := '[]'::jsonb;
+  v_item jsonb;
+  v_updated_item jsonb := null;
+  v_updated_at text := now()::text;
+begin
+  select data into v_data
+  from public.app_data
+  where id = p_app_id
+  for update;
+
+  if v_data is null then
+    return null;
+  end if;
+
+  v_maids := coalesce(v_data->'maids', '[]'::jsonb);
+
+  for v_item in select value from jsonb_array_elements(v_maids)
+  loop
+    if v_item->>'referenceCode' = p_reference_code then
+      v_updated_item :=
+        jsonb_set(
+          jsonb_set(v_item, '{isPublic}', to_jsonb(p_is_public), true),
+          '{updatedAt}',
+          to_jsonb(v_updated_at),
+          true
+        );
+      v_next_maids := v_next_maids || jsonb_build_array(v_updated_item);
+    else
+      v_next_maids := v_next_maids || jsonb_build_array(v_item);
+    end if;
+  end loop;
+
+  if v_updated_item is null then
+    return null;
+  end if;
+
+  update public.app_data
+  set data = jsonb_set(v_data, '{maids}', v_next_maids, true)
+  where id = p_app_id;
+
+  return v_updated_item;
+end;
+$$;
+
+grant execute on function public.update_app_maid_visibility(text, text, boolean) to service_role;
+
+create or replace function public.create_app_maid(
+  p_app_id text,
+  p_payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_data jsonb;
+  v_maids jsonb;
+  v_counters jsonb;
+  v_next_id integer;
+  v_now text := now()::text;
+  v_record jsonb;
+begin
+  select data into v_data
+  from public.app_data
+  where id = p_app_id
+  for update;
+
+  if v_data is null then
+    insert into public.app_data (id, data)
+    values (p_app_id, '{}'::jsonb)
+    returning data into v_data;
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(v_data->'maids', '[]'::jsonb)) maid(value)
+    where maid.value->>'referenceCode' = p_payload->>'referenceCode'
+  ) then
+    raise exception 'REFERENCE_CODE_EXISTS' using errcode = '23505';
+  end if;
+
+  v_maids := coalesce(v_data->'maids', '[]'::jsonb);
+  v_counters := coalesce(v_data->'counters', '{}'::jsonb);
+  v_next_id := greatest(
+    coalesce(nullif(v_counters->>'maids', '')::integer, 1),
+    coalesce(
+      (
+        select max(nullif(value->>'id', '')::integer) + 1
+        from jsonb_array_elements(v_maids)
+      ),
+      1
+    )
+  );
+
+  v_record :=
+    jsonb_set(
+      jsonb_set(
+        jsonb_set(p_payload, '{id}', to_jsonb(v_next_id), true),
+        '{createdAt}',
+        to_jsonb(v_now),
+        true
+      ),
+      '{updatedAt}',
+      to_jsonb(v_now),
+      true
+    );
+
+  v_data := jsonb_set(v_data, '{maids}', jsonb_build_array(v_record) || v_maids, true);
+  v_data := jsonb_set(v_data, '{counters,maids}', to_jsonb(v_next_id + 1), true);
+
+  update public.app_data
+  set data = v_data
+  where id = p_app_id;
+
+  return v_record;
+end;
+$$;
+
+create or replace function public.update_app_maid(
+  p_app_id text,
+  p_reference_code text,
+  p_payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_data jsonb;
+  v_maids jsonb;
+  v_next_maids jsonb := '[]'::jsonb;
+  v_item jsonb;
+  v_updated_item jsonb := null;
+  v_now text := now()::text;
+  v_next_reference text := p_payload->>'referenceCode';
+begin
+  select data into v_data
+  from public.app_data
+  where id = p_app_id
+  for update;
+
+  if v_data is null then
+    return null;
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(v_data->'maids', '[]'::jsonb)) maid(value)
+    where maid.value->>'referenceCode' = v_next_reference
+      and maid.value->>'referenceCode' <> p_reference_code
+  ) then
+    raise exception 'REFERENCE_CODE_EXISTS' using errcode = '23505';
+  end if;
+
+  v_maids := coalesce(v_data->'maids', '[]'::jsonb);
+
+  for v_item in select value from jsonb_array_elements(v_maids)
+  loop
+    if v_item->>'referenceCode' = p_reference_code then
+      v_updated_item :=
+        jsonb_set(
+          (v_item || p_payload),
+          '{updatedAt}',
+          to_jsonb(v_now),
+          true
+        );
+      v_next_maids := v_next_maids || jsonb_build_array(v_updated_item);
+    else
+      v_next_maids := v_next_maids || jsonb_build_array(v_item);
+    end if;
+  end loop;
+
+  if v_updated_item is null then
+    return null;
+  end if;
+
+  update public.app_data
+  set data = jsonb_set(v_data, '{maids}', v_next_maids, true)
+  where id = p_app_id;
+
+  return v_updated_item;
+end;
+$$;
+
+grant execute on function public.create_app_maid(text, jsonb) to service_role;
+grant execute on function public.update_app_maid(text, text, jsonb) to service_role;
+
 commit;
 
 -- Helpful SQL editor queries after setup:

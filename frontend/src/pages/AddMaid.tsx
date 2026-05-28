@@ -874,8 +874,10 @@ const AddMaid = () => {
     if (response.status === 404) return false;
     if (response.ok) return true;
 
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || "Failed to verify reference code");
+    console.warn("[AddMaid] Reference code verification failed; continuing to save", {
+      status: response.status,
+    });
+    return false;
   }, []);
 
   const buildUniqueReferenceCode = useCallback(async (baseReferenceCode: string) => {

@@ -1633,6 +1633,356 @@ const callSupabaseRpc = async <T>(
   return (await response.json()) as T;
 };
 
+type SupabaseMaidRow = {
+  record_id?: number;
+  payload?: MaidRecord;
+};
+
+type SupabaseAppMaidViewRow = {
+  raw_record?: MaidRecord;
+};
+
+const parseContentRangeTotal = (value: string | null) => {
+  if (!value) return null;
+  const total = value.split("/")[1];
+  if (!total || total === "*") return null;
+  const parsed = Number(total);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const listMaidsFromSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  {
+    search,
+    visibility,
+    agencyId,
+    offset,
+    limit,
+  }: {
+    search?: string;
+    visibility?: string;
+    agencyId?: number;
+    offset: number;
+    limit?: number;
+  },
+) => {
+  const table = encodeURIComponent("helped_maids");
+  const params = new URLSearchParams();
+  params.set("select", "record_id,payload");
+  params.set("app_id", `eq.${config.rowId}`);
+  params.set("order", "updated_at.desc.nullslast,record_id.desc");
+
+  if (visibility === "public" || visibility === "hidden") {
+    params.set("is_public", `eq.${visibility === "public"}`);
+  }
+  if (typeof agencyId === "number") {
+    params.set("agency_id", `eq.${agencyId}`);
+  }
+  if (search?.trim()) {
+    const term = search.trim().replace(/[%*,()]/g, " ");
+    params.set("or", `(full_name.ilike.*${term}*,reference_code.ilike.*${term}*)`);
+  }
+
+  const headers = new Headers(supabaseHeaders(config, {
+    accept: "application/json",
+    prefer: "count=exact",
+  }));
+  if (typeof limit === "number" && limit > 0) {
+    headers.set("range-unit", "items");
+    headers.set("range", `${offset}-${offset + limit - 1}`);
+  }
+
+  const response = await fetch(
+    `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
+    { method: "GET", headers },
+  );
+
+  if (!response.ok && response.status !== 206) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase maid list failed (${response.status}): ${details}`);
+  }
+
+  const rows = (await response.json()) as SupabaseMaidRow[];
+  const total = parseContentRangeTotal(response.headers.get("content-range")) ?? rows.length;
+  return {
+    maids: rows
+      .map((row) => row.payload)
+      .filter((maid): maid is MaidRecord => Boolean(maid))
+      .map(normalizeMaid),
+    total,
+  };
+};
+
+const listMaidsFromSupabaseAppView = async (
+  config: SupabaseAppDataConfig,
+  {
+    search,
+    visibility,
+    agencyId,
+    offset,
+    limit,
+  }: {
+    search?: string;
+    visibility?: string;
+    agencyId?: number;
+    offset: number;
+    limit?: number;
+  },
+) => {
+  const table = encodeURIComponent("app_maids");
+  const params = new URLSearchParams();
+  params.set("select", "raw_record");
+  params.set("order", "updated_at.desc.nullslast,view_row_id.desc");
+
+  if (visibility === "public" || visibility === "hidden") {
+    params.set("is_public", `eq.${visibility === "public"}`);
+  }
+  if (typeof agencyId === "number") {
+    params.set("agency_id", `eq.${agencyId}`);
+  }
+  if (search?.trim()) {
+    const term = search.trim().replace(/[%*,()]/g, " ");
+    params.set("or", `(full_name.ilike.*${term}*,reference_code.ilike.*${term}*)`);
+  }
+
+  const headers = new Headers(supabaseHeaders(config, {
+    accept: "application/json",
+    prefer: "count=exact",
+  }));
+  if (typeof limit === "number" && limit > 0) {
+    headers.set("range-unit", "items");
+    headers.set("range", `${offset}-${offset + limit - 1}`);
+  }
+
+  const response = await fetch(
+    `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
+    { method: "GET", headers },
+  );
+
+  if (!response.ok && response.status !== 206) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase maid view list failed (${response.status}): ${details}`);
+  }
+
+  const rows = (await response.json()) as SupabaseAppMaidViewRow[];
+  const total = parseContentRangeTotal(response.headers.get("content-range")) ?? rows.length;
+  return {
+    maids: rows
+      .map((row) => row.raw_record)
+      .filter((maid): maid is MaidRecord => Boolean(maid))
+      .map(normalizeMaid),
+    total,
+  };
+};
+
+const getMaidFromSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  referenceCode: string,
+) => {
+  const rows = await fetchSupabaseTableRows<SupabaseMaidRow>(
+    config,
+    "helped_maids",
+    {
+      select: "record_id,payload",
+      filters: {
+        app_id: config.rowId,
+        reference_code: normalizeReferenceCode(referenceCode),
+      },
+      limit: 1,
+    },
+  );
+  return rows[0]?.payload ? normalizeMaid(rows[0].payload) : null;
+};
+
+const getMaidFromSupabaseAppView = async (
+  config: SupabaseAppDataConfig,
+  referenceCode: string,
+) => {
+  const rows = await fetchSupabaseTableRows<SupabaseAppMaidViewRow>(
+    config,
+    "app_maids",
+    {
+      select: "raw_record",
+      filters: {
+        reference_code: normalizeReferenceCode(referenceCode),
+      },
+      limit: 1,
+    },
+  );
+  return rows[0]?.raw_record ? normalizeMaid(rows[0].raw_record) : null;
+};
+
+const updateMaidVisibilityInSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  referenceCode: string,
+  isPublic: boolean,
+) => {
+  const existing = await getMaidFromSupabaseNormalized(config, referenceCode);
+  if (!existing) return null;
+
+  const updatedAt = now();
+  const payload: MaidRecord = {
+    ...existing,
+    isPublic,
+    updatedAt,
+  };
+  const table = encodeURIComponent("helped_maids");
+  const params = new URLSearchParams();
+  params.set("app_id", `eq.${config.rowId}`);
+  params.set("reference_code", `eq.${normalizeReferenceCode(referenceCode)}`);
+  params.set("select", "payload");
+
+  const response = await fetch(
+    `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
+    {
+      method: "PATCH",
+      headers: supabaseHeaders(config, {
+        "content-type": "application/json",
+        prefer: "return=representation",
+      }),
+      body: JSON.stringify({
+        is_public: isPublic,
+        updated_at: updatedAt,
+        payload,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase maid visibility update failed (${response.status}): ${details}`);
+  }
+
+  const rows = (await response.json()) as SupabaseMaidRow[];
+  return rows[0]?.payload ? normalizeMaid(rows[0].payload) : payload;
+};
+
+const updateMaidVisibilityInSupabaseAppData = async (
+  config: SupabaseAppDataConfig,
+  referenceCode: string,
+  isPublic: boolean,
+) => {
+  const payload = await callSupabaseRpc<MaidRecord | null>(
+    config,
+    "update_app_maid_visibility",
+    {
+      p_app_id: config.rowId,
+      p_reference_code: normalizeReferenceCode(referenceCode),
+      p_is_public: isPublic,
+    },
+  );
+  return payload ? normalizeMaid(payload) : null;
+};
+
+const createMaidInSupabaseAppData = async (
+  config: SupabaseAppDataConfig,
+  payload: Omit<MaidRecord, "id" | "createdAt" | "updatedAt">,
+) => {
+  const maid = await callSupabaseRpc<MaidRecord>(
+    config,
+    "create_app_maid",
+    {
+      p_app_id: config.rowId,
+      p_payload: payload,
+    },
+  );
+  return normalizeMaid(maid);
+};
+
+const updateMaidInSupabaseAppData = async (
+  config: SupabaseAppDataConfig,
+  referenceCode: string,
+  payload: Omit<MaidRecord, "id" | "createdAt" | "updatedAt">,
+) => {
+  const maid = await callSupabaseRpc<MaidRecord | null>(
+    config,
+    "update_app_maid",
+    {
+      p_app_id: config.rowId,
+      p_reference_code: normalizeReferenceCode(referenceCode),
+      p_payload: payload,
+    },
+  );
+  return maid ? normalizeMaid(maid) : null;
+};
+
+const getNextNormalizedMaidRecordId = async (config: SupabaseAppDataConfig) => {
+  const rows = await fetchSupabaseTableRows<{ record_id?: number }>(
+    config,
+    "helped_maids",
+    {
+      select: "record_id",
+      filters: { app_id: config.rowId },
+      orderBy: "record_id.desc",
+      limit: 1,
+    },
+  );
+  return Number(rows[0]?.record_id ?? 0) + 1;
+};
+
+const upsertMaidInSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  payload: Omit<MaidRecord, "id" | "createdAt" | "updatedAt">,
+  options: { create: boolean; referenceCode?: string },
+) => {
+  const referenceCode = normalizeReferenceCode(options.referenceCode ?? payload.referenceCode);
+  const existing = options.create ? null : await getMaidFromSupabaseNormalized(config, referenceCode);
+  if (!options.create && !existing) return null;
+
+  if (options.create) {
+    const duplicate = await getMaidFromSupabaseNormalized(config, payload.referenceCode);
+    if (duplicate) throw new Error("REFERENCE_CODE_EXISTS");
+  } else if (normalizeReferenceCode(payload.referenceCode) !== referenceCode) {
+    const duplicate = await getMaidFromSupabaseNormalized(config, payload.referenceCode);
+    if (duplicate) throw new Error("REFERENCE_CODE_EXISTS");
+  }
+
+  const timestamp = now();
+  const maid: MaidRecord = {
+    ...payload,
+    id: existing?.id ?? (await getNextNormalizedMaidRecordId(config)),
+    createdAt: existing?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  };
+  const table = encodeURIComponent("helped_maids");
+  const response = await fetch(
+    `${config.baseUrl}/rest/v1/${table}?on_conflict=app_id,record_id&select=payload`,
+    {
+      method: "POST",
+      headers: supabaseHeaders(config, {
+        "content-type": "application/json",
+        prefer: "resolution=merge-duplicates,return=representation",
+      }),
+      body: JSON.stringify([{
+        app_id: config.rowId,
+        record_id: maid.id,
+        agency_id: maid.agencyId,
+        reference_code: maid.referenceCode,
+        full_name: maid.fullName,
+        status: maid.status,
+        nationality: maid.nationality,
+        maid_type: maid.type,
+        is_public: maid.isPublic,
+        has_photo: maid.hasPhoto,
+        created_at: maid.createdAt,
+        updated_at: maid.updatedAt,
+        payload: maid,
+      }]),
+    },
+  );
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    if (details.includes("duplicate") || details.includes("helped_maids_reference_code_idx")) {
+      throw new Error("REFERENCE_CODE_EXISTS");
+    }
+    throw new Error(`Supabase maid write failed (${response.status}): ${details}`);
+  }
+
+  const rows = (await response.json()) as SupabaseMaidRow[];
+  return rows[0]?.payload ? normalizeMaid(rows[0].payload) : maid;
+};
+
 const getSupabaseStorageConfig = (
   env: Bindings,
 ): SupabaseStorageConfig | null => {
@@ -2605,6 +2955,156 @@ const uploadFileToSupabaseStorage = async (
   return {
     storagePath,
     url: buildSupabasePublicFileUrl(config, storagePath),
+  };
+};
+
+const maidMediaDataUrlPattern = /^data:([^;,]+)?(?:;charset=[^;,]+)?;base64,(.+)$/i;
+const MAX_MAID_MEDIA_BYTES = 5 * 1024 * 1024;
+
+const extensionForMimeType = (mimeType: string) => {
+  switch (mimeType.toLowerCase()) {
+    case "image/jpeg":
+      return ".jpg";
+    case "image/png":
+      return ".png";
+    case "image/webp":
+      return ".webp";
+    case "image/gif":
+      return ".gif";
+    case "video/mp4":
+      return ".mp4";
+    case "video/webm":
+      return ".webm";
+    case "video/ogg":
+      return ".ogv";
+    default:
+      return "";
+  }
+};
+
+const decodeMaidMediaDataUrl = (value: string) => {
+  const match = value.trim().match(maidMediaDataUrlPattern);
+  if (!match) return null;
+
+  const mimeType = match[1] || "application/octet-stream";
+  const base64 = match[2] || "";
+  const estimatedBytes = Math.floor((base64.length * 3) / 4);
+  if (estimatedBytes > MAX_MAID_MEDIA_BYTES) {
+    throw new Error("MAID_MEDIA_TOO_LARGE");
+  }
+
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  if (bytes.byteLength === 0) return null;
+  return { mimeType, bytes };
+};
+
+const uploadMaidMediaToSupabaseStorage = async (
+  env: Bindings,
+  value: string,
+  agencyId: number,
+  referenceCode: string,
+  kind: "photos" | "videos",
+  index: number,
+) => {
+  const trimmed = value.trim();
+  if (!trimmed || !trimmed.startsWith("data:")) return trimmed;
+
+  const decoded = decodeMaidMediaDataUrl(trimmed);
+  if (!decoded) return trimmed;
+
+  const config = getSupabaseStorageConfig(env);
+  if (!config) {
+    console.warn("Maid media upload skipped: Supabase Storage is not configured");
+    return "";
+  }
+
+  await ensureSupabaseStorageBucket(config);
+
+  const safeRef = sanitizeStoragePathSegment(referenceCode, "maid");
+  const extension = extensionForMimeType(decoded.mimeType);
+  const fileName = `${kind.slice(0, -1)}-${index + 1}-${Date.now()}-${crypto.randomUUID()}${extension}`;
+  const storagePath = [
+    "maids",
+    `agency-${agencyId}`,
+    safeRef,
+    kind,
+    fileName,
+  ].join("/");
+
+  const uploadResponse = await fetch(
+    `${config.baseUrl}/storage/v1/object/${encodeURIComponent(config.bucket)}/${storagePath
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/")}`,
+    {
+      method: "POST",
+      headers: supabaseStorageHeaders(config, {
+        "content-type": decoded.mimeType,
+        "x-upsert": "true",
+      }),
+      body: decoded.bytes,
+    },
+  );
+
+  if (!uploadResponse.ok) {
+    throw new Error(
+      `Supabase storage upload failed: ${await readSupabaseError(uploadResponse)}`,
+    );
+  }
+
+  return buildSupabasePublicFileUrl(config, storagePath);
+};
+
+const persistMaidMediaFields = async (
+  env: Bindings,
+  maid: Omit<MaidRecord, "id" | "createdAt" | "updatedAt">,
+) => {
+  const normalizedPhotos = (
+    Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
+      ? maid.photoDataUrls
+      : maid.photoDataUrl
+        ? [maid.photoDataUrl]
+        : []
+  )
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .slice(0, 5);
+
+  const photoDataUrls = await Promise.all(
+    normalizedPhotos.map((photo, index) =>
+      uploadMaidMediaToSupabaseStorage(
+        env,
+        photo,
+        maid.agencyId,
+        maid.referenceCode,
+        "photos",
+        index,
+      ),
+    ),
+  );
+
+  const videoDataUrl =
+    typeof maid.videoDataUrl === "string" && maid.videoDataUrl.trim().startsWith("data:")
+      ? await uploadMaidMediaToSupabaseStorage(
+          env,
+          maid.videoDataUrl,
+          maid.agencyId,
+          maid.referenceCode,
+          "videos",
+          0,
+        )
+      : maid.videoDataUrl?.trim() || "";
+
+  return {
+    ...maid,
+    photoDataUrls,
+    photoDataUrl: photoDataUrls[0] ?? "",
+    videoDataUrl,
+    hasPhoto: photoDataUrls.length > 0,
   };
 };
 
@@ -4320,6 +4820,36 @@ app.get(
     const pageSize = parsePositiveInt(c.req.query("pageSize"))
     const offset = parsePositiveInt(c.req.query("offset")) ?? 0
     const limit = pageSize ?? parsePositiveInt(c.req.query("limit"))
+    const supabase = getSupabaseAppDataConfig(c.env)
+    if (supabase) {
+      const effectiveOffset = page != null && pageSize != null ? (page - 1) * pageSize : offset
+      try {
+        const result = isNormalizedSupabaseEnabled(c.env)
+          ? await listMaidsFromSupabaseNormalized(supabase, {
+              search,
+              visibility,
+              agencyId,
+              offset: effectiveOffset,
+              limit,
+            })
+          : await listMaidsFromSupabaseAppView(supabase, {
+              search,
+              visibility,
+              agencyId,
+              offset: effectiveOffset,
+              limit,
+            })
+        return c.json({
+          maids: result.maids,
+          total: result.total,
+          page: page ?? 1,
+          pageSize: limit ?? result.total,
+        })
+      } catch (error) {
+        console.warn("Fast maid list path failed; falling back to app data", error)
+      }
+    }
+
     const data = await loadData(c.env, { readOnly: true })
 
     let maids = [...data.maids]
@@ -4580,6 +5110,21 @@ app.post(
 app.get(
   "/api/maids/:referenceCode",
   safeApi(async (c) => {
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config) {
+      try {
+        const maid = isNormalizedSupabaseEnabled(c.env)
+          ? await getMaidFromSupabaseNormalized(config, c.req.param("referenceCode"))
+          : await getMaidFromSupabaseAppView(config, c.req.param("referenceCode"));
+        if (!maid) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+        return c.json({ maid });
+      } catch (error) {
+        console.warn("Fast maid lookup path failed; falling back to app data", error);
+      }
+    }
+
     const data = await loadData(c.env);
     const maid = data.maids.find(
       (item) =>
@@ -4606,13 +5151,27 @@ app.post(
       return c.json({ error: validationError }, 400);
     }
 
+    const recordPayload = await persistMaidMediaFields(
+      c.env,
+      toMaidRecordPayload(body),
+    );
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config) {
+      try {
+        const maid = isNormalizedSupabaseEnabled(c.env)
+          ? await upsertMaidInSupabaseNormalized(config, recordPayload, { create: true })
+          : await createMaidInSupabaseAppData(config, recordPayload);
+        return c.json({ maid }, 201);
+      } catch (error) {
+        if (error instanceof Error && error.message === "REFERENCE_CODE_EXISTS") {
+          return c.json({ error: "Reference code already exists" }, 409);
+        }
+        console.warn("Fast maid create path failed; falling back to app data", error);
+      }
+    }
+
     const data = await loadData(c.env);
-    const recordPayload = toMaidRecordPayload(body);
-    if (
-      data.maids.some(
-        (maid) => maid.referenceCode === recordPayload.referenceCode,
-      )
-    ) {
+    if (data.maids.some((maid) => maid.referenceCode === recordPayload.referenceCode)) {
       return c.json({ error: "Reference code already exists" }, 409);
     }
 
@@ -4624,14 +5183,7 @@ app.post(
     };
     data.maids.unshift(maid);
     await saveData(c.env, data);
-
-    // Reliability: verify record exists after save (guards against rare concurrent blob overwrites).
-    const ensured = await ensureMaidPresent(
-      c.env,
-      maid.referenceCode,
-      recordPayload,
-    );
-    return c.json({ maid: ensured ?? maid }, 201);
+    return c.json({ maid }, 201);
   }),
 );
 
@@ -4648,8 +5200,44 @@ app.put(
       return c.json({ error: validationError }, 400);
     }
 
-    const data = await loadData(c.env);
     const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config) {
+      try {
+        const existing = isNormalizedSupabaseEnabled(c.env)
+          ? await getMaidFromSupabaseNormalized(config, referenceCode)
+          : null;
+        const payload = await persistMaidMediaFields(
+          c.env,
+          toMaidRecordPayload({
+            ...(existing ?? {}),
+            ...body,
+            status: body.status !== undefined ? body.status : existing?.status,
+            photoDataUrl:
+              body.photoDataUrl !== undefined ? body.photoDataUrl : existing?.photoDataUrl,
+            photoDataUrls: Array.isArray(body.photoDataUrls)
+              ? body.photoDataUrls
+              : existing?.photoDataUrls,
+            videoDataUrl:
+              body.videoDataUrl !== undefined ? body.videoDataUrl : existing?.videoDataUrl,
+          }),
+        );
+        const maid = isNormalizedSupabaseEnabled(c.env)
+          ? await upsertMaidInSupabaseNormalized(config, payload, { create: false, referenceCode })
+          : await updateMaidInSupabaseAppData(config, referenceCode, payload);
+        if (!maid) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+        return c.json({ maid });
+      } catch (error) {
+        if (error instanceof Error && error.message === "REFERENCE_CODE_EXISTS") {
+          return c.json({ error: "Reference code already exists" }, 409);
+        }
+        console.warn("Fast maid update path failed; falling back to app data", error);
+      }
+    }
+
+    const data = await loadData(c.env);
     const index = data.maids.findIndex(
       (maid) => maid.referenceCode === referenceCode,
     );
@@ -4657,23 +5245,26 @@ app.put(
       return c.json({ error: "Maid not found" }, 404);
     }
 
-    const payload = toMaidRecordPayload({
-      ...data.maids[index],
-      ...body,
-      status:
-        body.status !== undefined ? body.status : data.maids[index].status,
-      photoDataUrl:
-        body.photoDataUrl !== undefined
-          ? body.photoDataUrl
-          : data.maids[index].photoDataUrl,
-      photoDataUrls: Array.isArray(body.photoDataUrls)
-        ? body.photoDataUrls
-        : data.maids[index].photoDataUrls,
-      videoDataUrl:
-        body.videoDataUrl !== undefined
-          ? body.videoDataUrl
-          : data.maids[index].videoDataUrl,
-    });
+    const payload = await persistMaidMediaFields(
+      c.env,
+      toMaidRecordPayload({
+        ...data.maids[index],
+        ...body,
+        status:
+          body.status !== undefined ? body.status : data.maids[index].status,
+        photoDataUrl:
+          body.photoDataUrl !== undefined
+            ? body.photoDataUrl
+            : data.maids[index].photoDataUrl,
+        photoDataUrls: Array.isArray(body.photoDataUrls)
+          ? body.photoDataUrls
+          : data.maids[index].photoDataUrls,
+        videoDataUrl:
+          body.videoDataUrl !== undefined
+            ? body.videoDataUrl
+            : data.maids[index].videoDataUrl,
+      }),
+    );
 
     const duplicate = data.maids.find(
       (maid) =>
@@ -4690,8 +5281,7 @@ app.put(
       updatedAt: now(),
     };
     await saveData(c.env, data);
-    const ensured = await ensureMaidPresent(c.env, referenceCode, payload);
-    return c.json({ maid: ensured ?? data.maids[index] });
+    return c.json({ maid: data.maids[index] });
   }),
 );
 
@@ -4701,6 +5291,29 @@ app.patch(
     const body = await parseBody<{ isPublic?: boolean }>(c.req.raw);
     if (typeof body?.isPublic !== "boolean") {
       return c.json({ error: "isPublic boolean is required" }, 400);
+    }
+
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config) {
+      try {
+        const maid = isNormalizedSupabaseEnabled(c.env)
+          ? await updateMaidVisibilityInSupabaseNormalized(
+              config,
+              c.req.param("referenceCode"),
+              body.isPublic,
+            )
+          : await updateMaidVisibilityInSupabaseAppData(
+              config,
+              c.req.param("referenceCode"),
+              body.isPublic,
+            );
+        if (!maid) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+        return c.json({ maid });
+      } catch (error) {
+        console.warn("Fast maid visibility path failed; falling back to app data", error);
+      }
     }
 
     const data = await loadData(c.env);
@@ -4741,11 +5354,20 @@ app.patch(
       return c.json({ error: "Maid not found" }, 404);
     }
 
+    const photoDataUrl = await uploadMaidMediaToSupabaseStorage(
+      c.env,
+      body.photoDataUrl,
+      data.maids[index].agencyId,
+      data.maids[index].referenceCode,
+      "photos",
+      0,
+    );
+
     data.maids[index] = {
       ...data.maids[index],
-      photoDataUrl: body.photoDataUrl,
-      photoDataUrls: body.photoDataUrl ? [body.photoDataUrl] : [],
-      hasPhoto: Boolean(body.photoDataUrl),
+      photoDataUrl,
+      photoDataUrls: photoDataUrl ? [photoDataUrl] : [],
+      hasPhoto: Boolean(photoDataUrl),
       updatedAt: now(),
     };
     await saveData(c.env, data);
@@ -4781,12 +5403,67 @@ app.patch(
       return c.json({ error: "Maximum 5 photos allowed per maid" }, 400);
     }
 
-    photos.push(body.photoDataUrl);
+    photos.push(
+      await uploadMaidMediaToSupabaseStorage(
+        c.env,
+        body.photoDataUrl,
+        data.maids[index].agencyId,
+        data.maids[index].referenceCode,
+        "photos",
+        photos.length,
+      ),
+    );
     data.maids[index] = {
       ...data.maids[index],
       photoDataUrls: photos,
       photoDataUrl: photos[0] ?? "",
       hasPhoto: photos.length > 0,
+      updatedAt: now(),
+    };
+    await saveData(c.env, data);
+    return c.json({ maid: data.maids[index] });
+  }),
+);
+
+app.put(
+  "/api/maids/:referenceCode/photo-gallery",
+  safeApi(async (c) => {
+    const body = await parseBody<{ photoDataUrls?: string[] }>(c.req.raw);
+    if (!Array.isArray(body?.photoDataUrls)) {
+      return c.json({ error: "photoDataUrls array is required" }, 400);
+    }
+
+    const data = await loadData(c.env);
+    const index = data.maids.findIndex(
+      (maid) =>
+        maid.referenceCode ===
+        normalizeReferenceCode(c.req.param("referenceCode")),
+    );
+    if (index === -1) {
+      return c.json({ error: "Maid not found" }, 404);
+    }
+
+    const incomingPhotos = body.photoDataUrls
+      .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      .slice(0, 5);
+    const photoDataUrls = await Promise.all(
+      incomingPhotos.map((photo, photoIndex) =>
+        uploadMaidMediaToSupabaseStorage(
+          c.env,
+          photo,
+          data.maids[index].agencyId,
+          data.maids[index].referenceCode,
+          "photos",
+          photoIndex,
+        ),
+      ),
+    );
+
+    data.maids[index] = {
+      ...data.maids[index],
+      photoDataUrls,
+      photoDataUrl: photoDataUrls[0] ?? "",
+      hasPhoto: photoDataUrls.length > 0,
       updatedAt: now(),
     };
     await saveData(c.env, data);
@@ -4812,9 +5489,18 @@ app.patch(
       return c.json({ error: "Maid not found" }, 404);
     }
 
+    const videoDataUrl = await uploadMaidMediaToSupabaseStorage(
+      c.env,
+      body.videoDataUrl,
+      data.maids[index].agencyId,
+      data.maids[index].referenceCode,
+      "videos",
+      0,
+    );
+
     data.maids[index] = {
       ...data.maids[index],
-      videoDataUrl: body.videoDataUrl,
+      videoDataUrl,
       updatedAt: now(),
     };
     await saveData(c.env, data);

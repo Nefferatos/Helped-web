@@ -23,6 +23,8 @@ const MEDIA_REQUEST_TIMEOUT_MS = 120_000;
 const listeners = new Map<string, Set<SaveTaskListener>>();
 const inflightRequests = new Map<string, XMLHttpRequest>();
 
+const clampProgress = (value: number) => Math.max(1, Math.min(100, Math.round(value)));
+
 const isInlineMediaUrl = (value: unknown) =>
   typeof value === "string" && value.trim().startsWith("data:");
 
@@ -125,7 +127,7 @@ export const startMaidSaveTask = ({
     maidName: String(payload.fullName || "").trim() || "New maid",
     referenceCode: String(payload.referenceCode || "").trim(),
     status: "uploading",
-    percent: 5,
+    percent: 1,
     stage: "Preparing maid profile upload...",
     startedAt: Date.now(),
   };
@@ -188,7 +190,7 @@ export const startMaidSaveTask = ({
               emitSnapshot({
                 ...current,
                 status: "processing",
-                percent: Math.max(current.percent, 94),
+                percent: clampProgress(Math.max(current.percent, 88)),
                 stage: uploadStage,
               });
             }
@@ -235,13 +237,13 @@ export const startMaidSaveTask = ({
               emitSnapshot({
                 ...current,
                 status: "uploading",
-                percent: 28,
+                percent: clampProgress(12),
                 stage: "Saving maid details...",
               });
               return;
             }
 
-            const uploadPercent = Math.max(8, Math.min(75, Math.round((loaded / total) * 75)));
+            const uploadPercent = clampProgress(1 + (loaded / total) * 69);
             const current = readMaidSaveTask(taskId) ?? initialSnapshot;
             emitSnapshot({
               ...current,
@@ -266,8 +268,8 @@ export const startMaidSaveTask = ({
               ? `/api/maids/${encodeURIComponent(persistedMaid.referenceCode)}/photo`
               : `/api/maids/${encodeURIComponent(persistedMaid.referenceCode)}/photos`;
             const requestBody = isFirstPhoto ? { photoDataUrl } : { photoDataUrl };
-            const basePercent = 82 + Math.round((index / normalizedPhotos.length) * 10);
-            const progressRange = Math.max(2, Math.round(12 / normalizedPhotos.length));
+            const basePercent = clampProgress(72 + (index / normalizedPhotos.length) * 20);
+            const progressRange = Math.max(2, Math.round(20 / normalizedPhotos.length));
             const photoLabel = normalizedPhotos.length > 1
               ? `Uploading photo ${index + 1} of ${normalizedPhotos.length}...`
               : "Uploading maid photo...";
@@ -275,7 +277,7 @@ export const startMaidSaveTask = ({
             emitSnapshot({
               ...(readMaidSaveTask(taskId) ?? initialSnapshot),
               status: "processing",
-              percent: basePercent,
+              percent: clampProgress(basePercent),
               persisted: true,
               stage: photoLabel,
             });
@@ -289,11 +291,11 @@ export const startMaidSaveTask = ({
               onUploadProgress: (loaded, total, lengthComputable) => {
                 const current = readMaidSaveTask(taskId) ?? initialSnapshot;
                 const nextPercent = !lengthComputable || total <= 0
-                  ? Math.min(96, basePercent + progressRange)
-                  : Math.min(
+                  ? clampProgress(Math.min(96, basePercent + progressRange))
+                  : clampProgress(Math.min(
                       96,
                       basePercent + Math.round((loaded / total) * progressRange)
-                    );
+                    ));
                 emitSnapshot({
                   ...current,
                   status: "uploading",
@@ -355,7 +357,7 @@ export const startMaidSaveTask = ({
         emitSnapshot({
           ...current,
           status: "error",
-          percent: Math.min(current.percent || 90, 100),
+          percent: clampProgress(current.percent || 90),
           persisted: Boolean(persistedMaid),
           stage: persistedMaid ? "Maid profile saved with media upload issue." : "Maid profile upload failed.",
           error: errorMessage,

@@ -655,6 +655,12 @@ const EditMaids = () => {
     setSelected((prev) => { const next = new Set(prev); next.delete(referenceCode); return next; });
   };
 
+  const removeManyLocal = (referenceCodes: Set<string>) => {
+    setMaids((prev) => prev.filter((m) => !referenceCodes.has(m.referenceCode)));
+    setTotalMaids((prev) => Math.max(0, prev - referenceCodes.size));
+    setSelected(new Set());
+  };
+
   const deleteMaid = async (referenceCode: string) => {
     const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
       method: "DELETE",
@@ -665,14 +671,16 @@ const EditMaids = () => {
     removeLocal(referenceCode);
   };
 
-  const updateMaidVisibility = async (maid: MaidProfile, isPublic: boolean) => {
-    const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/visibility`, {
+  // ── FIX: fire-and-forget PATCH; caller handles optimistic UI ──────────────
+  const updateMaidVisibility = (maid: MaidProfile, isPublic: boolean): Promise<void> => {
+    return fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/visibility`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ isPublic }),
+    }).then(async (response) => {
+      const data = await readSafeJson<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data.error || "Failed to update visibility");
     });
-    const data = await readSafeJson<{ error?: string }>(response);
-    if (!response.ok) throw new Error(data.error || "Failed to update visibility");
   };
 
   const openDeleteDialog = (target: "selected" | MaidProfile) => { setDeleteTarget(target); setDeleteDialogOpen(true); };
@@ -698,45 +706,55 @@ const EditMaids = () => {
 
   const openVisibilityDialog = (target: VisibilityTarget) => { setPendingVisibilityTarget(target); setVisibilityDialogOpen(true); };
 
+  // ── FIX: optimistic-first visibility update — instant UI, background PATCH ─
   const confirmVisibilityChange = async () => {
     if (!pendingVisibilityTarget) return;
+
+    // 1. Close dialog immediately so there's zero perceived lag
     setVisibilityDialogOpen(false);
     setIsUpdatingVisibility(true);
 
-    const selectedMaids = maids.filter((m) => selected.has(m.referenceCode));
-    const doRemoveLocal = (referenceCodes: Set<string>) => {
-      setMaids((prev) => prev.filter((m) => !referenceCodes.has(m.referenceCode)));
-      setTotalMaids((prev) => Math.max(0, prev - referenceCodes.size));
-      setSelected(new Set());
-    };
+    const isBulk = "bulk" in pendingVisibilityTarget;
+    const makePublic = pendingVisibilityTarget.makePublic;
+
+    // 2. Collect the maids that will be affected BEFORE touching state
+    const affectedMaids = isBulk
+      ? maids.filter((m) => selected.has(m.referenceCode))
+      : [pendingVisibilityTarget.maid];
+
+    const affectedRefs = new Set(affectedMaids.map((m) => m.referenceCode));
+
+    // 3. Optimistic remove — instant, zero network wait
+    removeManyLocal(affectedRefs);
+
+    const capturedTarget = pendingVisibilityTarget;
+    setPendingVisibilityTarget(null);
 
     try {
-      if ("bulk" in pendingVisibilityTarget) {
-        const selectedRefs = new Set(selectedMaids.map((m) => m.referenceCode));
-        if (selectedMaids.length > 0) doRemoveLocal(selectedRefs);
+      // 4. Fire all PATCHes in parallel (no await chain)
+      const results = await Promise.allSettled(
+        affectedMaids.map((maid) => updateMaidVisibility(maid, makePublic))
+      );
 
-        const results = await Promise.allSettled(
-          selectedMaids.map((maid) => updateMaidVisibility(maid, pendingVisibilityTarget.makePublic))
+      const failedCount = results.filter((r) => r.status === "rejected").length;
+
+      if (failedCount > 0) {
+        // 5a. Rollback: reload the list so the server state is reflected
+        setListRefreshKey((v) => v + 1);
+        throw new Error(
+          `Failed to update ${failedCount} maid${failedCount !== 1 ? "s" : ""}. Changes have been reverted.`
         );
-
-        const failed = results.filter((result) => result.status === "rejected");
-        if (failed.length > 0) {
-          setListRefreshKey((value) => value + 1);
-          throw new Error(`Failed to update visibility for ${failed.length} maid${failed.length !== 1 ? "s" : ""}`);
-        }
-
-        toast.success(pendingVisibilityTarget.makePublic ? "Selected maids made public" : "Selected maids hidden");
-      } else {
-        removeLocal(pendingVisibilityTarget.maid.referenceCode);
-        await updateMaidVisibility(pendingVisibilityTarget.maid, pendingVisibilityTarget.makePublic);
-        toast.success(pendingVisibilityTarget.makePublic ? "Maid published" : "Maid hidden");
       }
 
-      setListRefreshKey((value) => value + 1);
+      // 5b. Success toast only — NO extra reload, the optimistic remove is already correct
+      if (isBulk) {
+        toast.success(makePublic ? "Selected maids made public" : "Selected maids hidden");
+      } else {
+        toast.success(makePublic ? "Maid published" : "Maid hidden");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update visibility");
     } finally {
-      setPendingVisibilityTarget(null);
       setIsUpdatingVisibility(false);
     }
   };
