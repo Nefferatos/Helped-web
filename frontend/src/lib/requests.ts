@@ -74,6 +74,8 @@ export interface RequestListResponse {
   pageInfo: RequestPageInfo;
 }
 
+export type RequestStatusCounts = Record<RequestStatus, number>;
+
 export interface CreateRequestInput {
   clientId: number;
   type: RequestType;
@@ -200,25 +202,33 @@ export const fetchRequests = async ({
       ? getClientAuthHeaders()
       : getAgencyAdminAuthHeaders();
 
-  console.log("[requests] fetchRequests request", {
-    agencyId: agencyId ?? null,
-    clientId: clientId ?? null,
-    headers,
-    url: `/api/requests?${params.toString()}`,
-  });
-
   const response = await fetch(`/api/requests?${params.toString()}`, {
     headers,
   });
   const data = await ensureOk<RequestListResponse & { error?: string }>(response);
-  console.log("[requests] fetchRequests response", {
-    agencyId: agencyId ?? null,
-    clientId: clientId ?? null,
-    count: data.data.length,
-    pageInfo: data.pageInfo,
-    ids: data.data.map((item) => item.id),
-  });
   return data;
+};
+
+export const fetchRequestStatusCounts = async ({
+  clientId,
+  agencyId,
+}: {
+  clientId?: number;
+  agencyId?: number;
+}): Promise<RequestStatusCounts> => {
+  const params = new URLSearchParams();
+  if (typeof clientId === "number") params.set("clientId", String(clientId));
+  if (typeof agencyId === "number") params.set("agencyId", String(agencyId));
+
+  const headers =
+    typeof clientId === "number"
+      ? getClientAuthHeaders()
+      : getAgencyAdminAuthHeaders();
+
+  const response = await fetch(`/api/requests/status-counts?${params.toString()}`, {
+    headers,
+  });
+  return ensureOk<RequestStatusCounts & { error?: string }>(response);
 };
 
 export const fetchRequest = async (id: string): Promise<RequestRecord> => {
@@ -233,7 +243,6 @@ export const fetchRequest = async (id: string): Promise<RequestRecord> => {
 };
 
 export const createRequest = async (input: CreateRequestInput): Promise<RequestRecord> => {
-  console.log("[requests] createRequest payload", input);
   const response = await fetch("/api/requests", {
     method: "POST",
     headers: {

@@ -37,6 +37,7 @@ import {
   createRequestMessage,
   fetchRequestConversation,
   fetchRequestMessages,
+  fetchRequestStatusCounts,
   type RequestRecord,
   type RequestMessageRecord,
   type RequestStatus,
@@ -283,8 +284,7 @@ const RequestsPageContent = () => {
   const countsQuery = useQuery({
     queryKey: ["agency-requests-counts", agencyFilter ?? "all"],
     enabled: typeof agencyFilter === "number" || isMainAdmin,
-    queryFn: () =>
-      fetchRequests({ agencyId: agencyFilter, page: 1, pageSize: 100, status: "all" }),
+    queryFn: () => fetchRequestStatusCounts({ agencyId: agencyFilter }),
     refetchInterval: 20000,
     placeholderData: (previous) => previous,
   });
@@ -412,12 +412,11 @@ const RequestsPageContent = () => {
   });
 
   const statusCounts = useMemo(() => {
-    const all = countsQuery.data?.data ?? [];
     return {
-      pending: all.filter((r) => r.status === "pending").length,
-      interested: all.filter((r) => r.status === "interested").length,
-      direct_hire: all.filter((r) => r.status === "direct_hire").length,
-      rejected: all.filter((r) => r.status === "rejected").length,
+      pending: countsQuery.data?.pending ?? 0,
+      interested: countsQuery.data?.interested ?? 0,
+      direct_hire: countsQuery.data?.direct_hire ?? 0,
+      rejected: countsQuery.data?.rejected ?? 0,
     };
   }, [countsQuery.data]);
 

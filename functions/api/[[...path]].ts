@@ -172,6 +172,41 @@ interface DirectSaleRecord {
   createdAt: string;
 }
 
+type RequestStatus = "pending" | "interested" | "direct_hire" | "rejected";
+type RequestType = "general" | "direct";
+type RequestSenderType = "client" | "admin" | "staff" | "system";
+
+interface RequestRecord {
+  id: string;
+  clientId: number;
+  agencyId: number;
+  type: RequestType;
+  status: RequestStatus;
+  details: Record<string, unknown>;
+  maidReferences: string[];
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface RequestConversationRecord {
+  id: string;
+  requestId: string;
+  agencyId: number;
+  clientId: number;
+  createdAt: string;
+}
+
+interface RequestMessageRecord {
+  id: string;
+  conversationId: string;
+  senderType: RequestSenderType;
+  senderId: number;
+  message: string;
+  attachments?: unknown;
+  createdAt: string;
+}
+
 interface ChatMessageRecord {
   id: number;
   clientId: number;
@@ -374,6 +409,9 @@ interface AppData {
   agencyAdmins: AgencyAdminRecord[];
   agencyAdminSessions: AgencyAdminSessionRecord[];
   directSales: DirectSaleRecord[];
+  requests: RequestRecord[];
+  requestConversations: RequestConversationRecord[];
+  requestMessages: RequestMessageRecord[];
   chatMessages: ChatMessageRecord[];
   employers: EmployerContractRecord[];
   employmentContracts: EmploymentContractRecord[];
@@ -529,6 +567,9 @@ const defaultData = (): AppData => ({
   ],
   agencyAdminSessions: [],
   directSales: [],
+  requests: [],
+  requestConversations: [],
+  requestMessages: [],
   chatMessages: [],
   employers: [],
   employmentContracts: [],
@@ -849,6 +890,53 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
       : admin,
   );
   const directSales = raw.directSales ?? defaults.directSales;
+  const requests = Array.isArray(raw.requests)
+    ? raw.requests
+        .filter(
+          (item): item is RequestRecord =>
+            Boolean(item && typeof item === "object" && item.id),
+        )
+        .map((request) => ({
+          ...request,
+          clientId: Number.isInteger(Number(request.clientId))
+            ? Number(request.clientId)
+            : 0,
+          agencyId: Number.isInteger(Number(request.agencyId))
+            ? Number(request.agencyId)
+            : 1,
+          type: (request.type === "direct" ? "direct" : "general") as RequestType,
+          status:
+            request.status === "interested" ||
+            request.status === "direct_hire" ||
+            request.status === "rejected"
+              ? (request.status as RequestStatus)
+              : ("pending" as RequestStatus),
+          details:
+            request.details && typeof request.details === "object"
+              ? request.details
+              : {},
+          maidReferences: Array.isArray(request.maidReferences)
+            ? request.maidReferences
+                .map((item) => String(item ?? "").trim())
+                .filter(Boolean)
+            : [],
+          updatedBy: request.updatedBy ?? "system",
+          createdAt: request.createdAt ?? now(),
+          updatedAt: request.updatedAt ?? request.createdAt ?? now(),
+        }))
+    : defaults.requests;
+  const requestConversations = Array.isArray(raw.requestConversations)
+    ? raw.requestConversations.filter(
+        (item): item is RequestConversationRecord =>
+          Boolean(item && typeof item === "object" && item.id && item.requestId),
+      )
+    : defaults.requestConversations;
+  const requestMessages = Array.isArray(raw.requestMessages)
+    ? raw.requestMessages.filter(
+        (item): item is RequestMessageRecord =>
+          Boolean(item && typeof item === "object" && item.id && item.conversationId),
+      )
+    : defaults.requestMessages;
   const chatMessages = raw.chatMessages ?? defaults.chatMessages;
   const employers = (raw.employers ?? defaults.employers)
     .map((record) => normalizeEmployerContractRecord(record))
@@ -926,6 +1014,9 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     agencyAdminSessions:
       raw.agencyAdminSessions ?? defaults.agencyAdminSessions,
     directSales,
+    requests,
+    requestConversations,
+    requestMessages,
     chatMessages: chatMessages.map((message) => ({
       ...message,
       conversationType: message.conversationType ?? "support",
@@ -1368,6 +1459,24 @@ const mergeAppDataWithBase = (
       remoteData.directSales,
       (item) => String(item.id),
     ),
+    requests: mergeCollectionWithBase(
+      baseData.requests,
+      localData.requests,
+      remoteData.requests,
+      (item) => item.id,
+    ),
+    requestConversations: mergeCollectionWithBase(
+      baseData.requestConversations,
+      localData.requestConversations,
+      remoteData.requestConversations,
+      (item) => item.id,
+    ),
+    requestMessages: mergeCollectionWithBase(
+      baseData.requestMessages,
+      localData.requestMessages,
+      remoteData.requestMessages,
+      (item) => item.id,
+    ),
     chatMessages: mergeCollectionWithBase(
       baseData.chatMessages,
       localData.chatMessages,
@@ -1631,6 +1740,19 @@ const callSupabaseRpc = async <T>(
   }
 
   return (await response.json()) as T;
+};
+
+const tryCallSupabaseRpc = async <T>(
+  config: SupabaseAppDataConfig,
+  fnName: string,
+  payload: Record<string, unknown>,
+): Promise<T | null> => {
+  try {
+    return await callSupabaseRpc<T>(config, fnName, payload);
+  } catch (error) {
+    console.warn(`Fast Supabase RPC path failed for ${fnName}; falling back`, error);
+    return null;
+  }
 };
 
 type SupabaseMaidRow = {
@@ -4506,6 +4628,489 @@ const getConversationContext = (url: URL) => {
   } as const;
 };
 
+type RequestActor =
+  | { type: "admin"; admin: AgencyAdminRecord }
+  | { type: "client"; client: ClientRecord };
+
+const requestStatusSet = new Set<RequestStatus>([
+  "pending",
+  "interested",
+  "direct_hire",
+  "rejected",
+]);
+
+const isRequestStatus = (value: unknown): value is RequestStatus =>
+  requestStatusSet.has(String(value ?? "") as RequestStatus);
+
+const resolveRequestActor = async (
+  env: Bindings,
+  request: Request,
+  data: AppData,
+): Promise<{ actor: RequestActor | null; dataChanged: boolean }> => {
+  const token = parseAuthorizationToken(request);
+  if (!token) return { actor: null, dataChanged: false };
+
+  const sessions = await loadAgencyAdminSessions(env, data);
+  const session = sessions.find((item) => item.token === token);
+  if (session) {
+    const admin =
+      session.admin
+        ? ({
+            id: session.admin.id,
+            agencyId: session.admin.agencyId,
+            username: session.admin.username,
+            email: session.admin.email ?? "",
+            password: "",
+            agencyName: session.admin.agencyName,
+            emailVerified: session.admin.emailVerified,
+            profileImageUrl: session.admin.profileImageUrl ?? "",
+            createdAt: session.admin.createdAt,
+          } satisfies AgencyAdminRecord)
+        : data.agencyAdmins.find((item) => item.id === session.adminId) ?? null;
+    if (admin) return { actor: { type: "admin", admin }, dataChanged: false };
+  }
+
+  const clientSession = data.clientSessions.find((item) => item.token === token);
+  if (clientSession) {
+    const client = data.clients.find((item) => item.id === clientSession.clientId);
+    if (client) return { actor: { type: "client", client }, dataChanged: false };
+  }
+
+  const supabaseUser = await getSupabaseAuthUser(env, token);
+  if (!supabaseUser) return { actor: null, dataChanged: false };
+
+  const normalizedEmail = supabaseUser.email ? normalizeEmail(supabaseUser.email) : "";
+  const admin =
+    data.agencyAdmins.find(
+      (item) => item.supabaseUserId && item.supabaseUserId === supabaseUser.id,
+    ) ??
+    (normalizedEmail
+      ? data.agencyAdmins.find((item) => normalizeEmail(item.email ?? "") === normalizedEmail)
+      : null);
+  if (admin) {
+    if (!admin.supabaseUserId) {
+      admin.supabaseUserId = supabaseUser.id;
+      return { actor: { type: "admin", admin }, dataChanged: true };
+    }
+    return { actor: { type: "admin", admin }, dataChanged: false };
+  }
+
+  let client =
+    data.clients.find(
+      (item) => item.supabaseUserId && item.supabaseUserId === supabaseUser.id,
+    ) ??
+    (normalizedEmail
+      ? data.clients.find((item) => normalizeEmail(item.email) === normalizedEmail)
+      : null) ??
+    (supabaseUser.phone
+      ? data.clients.find((item) => (item.phone ?? "").trim() === supabaseUser.phone!.trim())
+      : null);
+
+  if (client) {
+    if (!client.supabaseUserId) {
+      client.supabaseUserId = supabaseUser.id;
+      return { actor: { type: "client", client }, dataChanged: true };
+    }
+    return { actor: { type: "client", client }, dataChanged: false };
+  }
+
+  const nameFromMeta =
+    (supabaseUser.user_metadata?.full_name as string | undefined) ??
+    (supabaseUser.user_metadata?.name as string | undefined) ??
+    "";
+  client = {
+    id: data.counters.clients++,
+    supabaseUserId: supabaseUser.id,
+    name:
+      nameFromMeta ||
+      (supabaseUser.email ? supabaseUser.email.split("@")[0] : "Client"),
+    company: "",
+    phone: supabaseUser.phone ?? "",
+    email: supabaseUser.email ?? "",
+    password: "",
+    profileImageUrl: "",
+    createdAt: now(),
+    emailVerified: true,
+  };
+  data.clients.unshift(client);
+  return { actor: { type: "client", client }, dataChanged: true };
+};
+
+const getRequestAgencyName = (data: AppData, agencyId: number) =>
+  data.agencyAdmins.find((admin) => admin.agencyId === agencyId)?.agencyName ||
+  data.companyProfile.short_name ||
+  data.companyProfile.company_name ||
+  "";
+
+const requestBudget = (details: Record<string, unknown>) => {
+  const budget = details.budget;
+  return typeof budget === "string" && budget.trim() ? budget.trim() : null;
+};
+
+const requestSummary = (request: RequestRecord, maids: MaidRecord[]) => {
+  if (request.type === "direct") {
+    const firstReference = request.maidReferences[0];
+    const matchedMaid = firstReference
+      ? maids.find((maid) => maid.referenceCode === firstReference)
+      : null;
+    const label = matchedMaid?.fullName || firstReference || "Maid request";
+    return `Direct request for ${label}`;
+  }
+
+  const primaryDuty =
+    typeof request.details.primaryDuty === "string" && request.details.primaryDuty.trim()
+      ? request.details.primaryDuty.trim()
+      : null;
+  const nationality =
+    typeof request.details.nationality === "string" && request.details.nationality.trim()
+      ? request.details.nationality.trim()
+      : null;
+
+  if (primaryDuty && nationality) return `${primaryDuty} request (${nationality})`;
+  if (primaryDuty) return `${primaryDuty} request`;
+  if (nationality) return `${nationality} maid request`;
+  return "General maid request";
+};
+
+const buildRequestResponse = (data: AppData, request: RequestRecord) => {
+  const client =
+    request.clientId > 0
+      ? data.clients.find((item) => item.id === request.clientId) ?? null
+      : null;
+  const details = request.details ?? {};
+  const fallbackClientName = toTrimmedString(
+    (details as { clientName?: unknown }).clientName,
+  );
+  const fallbackClientEmail = toTrimmedString(
+    (details as { clientEmail?: unknown }).clientEmail,
+  );
+  const fallbackClientPhone = toTrimmedString(
+    (details as { clientPhone?: unknown }).clientPhone,
+  );
+
+  return {
+    id: request.id,
+    clientId: request.clientId > 0 ? request.clientId : null,
+    type: request.type,
+    agencyId: request.agencyId,
+    agencyName: getRequestAgencyName(data, request.agencyId),
+    status: request.status,
+    summary: requestSummary(request, data.maids),
+    budget: requestBudget(details),
+    details,
+    maidReferences: request.maidReferences,
+    createdAt: request.createdAt,
+    updatedAt: request.updatedAt,
+    updatedBy: request.updatedBy,
+    client: client
+      ? {
+          id: client.id,
+          name: client.name,
+          company: client.company ?? "",
+          phone: client.phone ?? "",
+          email: client.email,
+          createdAt: client.createdAt,
+          profileImageUrl: client.profileImageUrl ?? "",
+        }
+      : fallbackClientName || fallbackClientEmail || fallbackClientPhone
+        ? {
+            id: 0,
+            name: fallbackClientName || "Client request",
+            company: "",
+            phone: fallbackClientPhone,
+            email: fallbackClientEmail || "No email",
+            createdAt: request.createdAt,
+            profileImageUrl: "",
+          }
+        : null,
+    maids: request.maidReferences
+      .map(
+        (referenceCode) =>
+          data.maids.find(
+            (maid) =>
+              maid.referenceCode === referenceCode &&
+              (!request.agencyId || maid.agencyId === request.agencyId),
+          ) ?? data.maids.find((maid) => maid.referenceCode === referenceCode) ?? null,
+      )
+      .filter((maid): maid is MaidRecord => Boolean(maid))
+      .map((maid) => ({
+        referenceCode: maid.referenceCode,
+        fullName: maid.fullName,
+        nationality: maid.nationality,
+        status: maid.status ?? "available",
+        type: maid.type,
+        photoDataUrl: maid.photoDataUrl,
+      })),
+  };
+};
+
+const canAccessRequest = (actor: RequestActor, request: RequestRecord) => {
+  if (actor.type === "client") return request.clientId === actor.client.id;
+  return request.agencyId === actor.admin.agencyId;
+};
+
+type SupabaseRequestQueryRow = {
+  request_id?: string;
+  payload?: RequestRecord;
+  created_at?: string;
+};
+
+type SupabaseRequestConversationQueryRow = {
+  conversation_id?: string;
+  payload?: RequestConversationRecord;
+};
+
+type SupabaseRequestMessageQueryRow = {
+  message_id?: string;
+  payload?: RequestMessageRecord;
+};
+
+const requestToQueryRow = (
+  config: SupabaseAppDataConfig,
+  request: RequestRecord,
+) => ({
+  app_id: config.rowId,
+  request_id: request.id,
+  client_id: request.clientId,
+  agency_id: request.agencyId,
+  request_type: request.type,
+  status: request.status,
+  maid_references: request.maidReferences,
+  summary: requestSummary(request, []),
+  updated_by: request.updatedBy,
+  created_at: request.createdAt,
+  updated_at: request.updatedAt,
+  payload: request,
+});
+
+const conversationToQueryRow = (
+  config: SupabaseAppDataConfig,
+  conversation: RequestConversationRecord,
+) => ({
+  app_id: config.rowId,
+  conversation_id: conversation.id,
+  request_id: conversation.requestId,
+  agency_id: conversation.agencyId,
+  client_id: conversation.clientId,
+  created_at: conversation.createdAt,
+  payload: conversation,
+});
+
+const messageToQueryRow = (
+  config: SupabaseAppDataConfig,
+  message: RequestMessageRecord,
+) => ({
+  app_id: config.rowId,
+  message_id: message.id,
+  conversation_id: message.conversationId,
+  sender_type: message.senderType,
+  sender_id: message.senderId,
+  message: message.message,
+  created_at: message.createdAt,
+  payload: message,
+});
+
+const upsertRequestQueryRows = async (
+  config: SupabaseAppDataConfig,
+  {
+    requests = [],
+    conversations = [],
+    messages = [],
+  }: {
+    requests?: RequestRecord[];
+    conversations?: RequestConversationRecord[];
+    messages?: RequestMessageRecord[];
+  },
+) => {
+  if (requests.length > 0) {
+    await upsertSupabaseTableRows(
+      config,
+      "helped_query_requests",
+      requests.map((request) => requestToQueryRow(config, request)),
+      "app_id,request_id",
+    );
+  }
+  if (conversations.length > 0) {
+    await upsertSupabaseTableRows(
+      config,
+      "helped_query_request_conversations",
+      conversations.map((conversation) => conversationToQueryRow(config, conversation)),
+      "app_id,conversation_id",
+    );
+  }
+  if (messages.length > 0) {
+    await upsertSupabaseTableRows(
+      config,
+      "helped_query_request_messages",
+      messages.map((message) => messageToQueryRow(config, message)),
+      "app_id,message_id",
+    );
+  }
+};
+
+const fetchRequestFromQueryTable = async (
+  config: SupabaseAppDataConfig,
+  requestId: string,
+) => {
+  const rows = await fetchSupabaseTableRows<SupabaseRequestQueryRow>(
+    config,
+    "helped_query_requests",
+    {
+      select: "payload",
+      filters: { app_id: config.rowId, request_id: requestId },
+      limit: 1,
+    },
+  );
+  return rows[0]?.payload ?? null;
+};
+
+const fetchConversationFromQueryTable = async (
+  config: SupabaseAppDataConfig,
+  filters: { requestId?: string; conversationId?: string },
+) => {
+  const rows = await fetchSupabaseTableRows<SupabaseRequestConversationQueryRow>(
+    config,
+    "helped_query_request_conversations",
+    {
+      select: "payload",
+      filters: {
+        app_id: config.rowId,
+        ...(filters.requestId ? { request_id: filters.requestId } : {}),
+        ...(filters.conversationId ? { conversation_id: filters.conversationId } : {}),
+      },
+      limit: 1,
+    },
+  );
+  return rows[0]?.payload ?? null;
+};
+
+const listRequestsFromQueryTable = async (
+  config: SupabaseAppDataConfig,
+  data: AppData,
+  actor: RequestActor,
+  {
+    page,
+    pageSize,
+    status,
+    query,
+    clientId,
+    agencyId,
+  }: {
+    page: number;
+    pageSize: number;
+    status?: string;
+    query?: string;
+    clientId?: number | null;
+    agencyId?: number;
+  },
+) => {
+  const table = encodeURIComponent("helped_query_requests");
+  const params = new URLSearchParams();
+  params.set("select", "payload");
+  params.set("app_id", `eq.${config.rowId}`);
+  params.set("order", "created_at.desc.nullslast,request_id.desc");
+  if (actor.type === "admin") {
+    params.set("agency_id", `eq.${actor.admin.agencyId}`);
+  } else {
+    params.set("client_id", `eq.${actor.client.id}`);
+  }
+  if (typeof clientId === "number") params.set("client_id", `eq.${clientId}`);
+  if (typeof agencyId === "number") params.set("agency_id", `eq.${agencyId}`);
+  if (status && isRequestStatus(status)) params.set("status", `eq.${status}`);
+
+  const offset = (page - 1) * pageSize;
+  const headers = new Headers(
+    supabaseHeaders(config, {
+      accept: "application/json",
+      prefer: "count=exact",
+    }),
+  );
+  headers.set("range-unit", "items");
+  headers.set("range", `${offset}-${offset + pageSize - 1}`);
+
+  const response = await fetch(
+    `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
+    { method: "GET", headers },
+  );
+  if (!response.ok && response.status !== 206) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase request list failed (${response.status}): ${details}`);
+  }
+
+  const rows = (await response.json()) as SupabaseRequestQueryRow[];
+  const normalizedQuery = toTrimmedString(query).toLowerCase();
+  const items = rows
+    .map((row) => row.payload)
+    .filter((request): request is RequestRecord => Boolean(request))
+    .filter((request) => {
+      if (!normalizedQuery) return true;
+      const client = data.clients.find((item) => item.id === request.clientId);
+      return [
+        request.type,
+        request.status,
+        request.updatedBy,
+        JSON.stringify(request.details ?? {}),
+        request.maidReferences.join(" "),
+        client?.name ?? "",
+        client?.email ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedQuery);
+    });
+  const total = parseContentRangeTotal(response.headers.get("content-range")) ?? items.length;
+
+  return {
+    data: items.map((request) => buildRequestResponse(data, request)),
+    pageInfo: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+  };
+};
+
+const listRequestMessagesFromQueryTable = async (
+  config: SupabaseAppDataConfig,
+  conversationId: string,
+) => {
+  const rows = await fetchSupabaseTableRows<SupabaseRequestMessageQueryRow>(
+    config,
+    "helped_query_request_messages",
+    {
+      select: "payload",
+      filters: { app_id: config.rowId, conversation_id: conversationId },
+      orderBy: "created_at.asc",
+    },
+  );
+  return rows
+    .map((row) => row.payload)
+    .filter((message): message is RequestMessageRecord => Boolean(message));
+};
+
+const ensureRequestConversation = (
+  data: AppData,
+  request: RequestRecord,
+): { conversation: RequestConversationRecord; created: boolean } => {
+  const existing = data.requestConversations.find(
+    (item) => item.requestId === request.id,
+  );
+  if (existing) {
+    return { conversation: existing, created: false };
+  }
+
+  const conversation: RequestConversationRecord = {
+    id: crypto.randomUUID(),
+    requestId: request.id,
+    agencyId: request.agencyId,
+    clientId: request.clientId,
+    createdAt: now(),
+  };
+  data.requestConversations.unshift(conversation);
+  return { conversation, created: true };
+};
+
 const getStorageMode = (env: Bindings) => {
   const hasSupabase = Boolean(getSupabaseAppDataConfig(env));
   if (hasSupabase) {
@@ -4570,6 +5175,18 @@ app.get(
 app.get(
   "/api/company",
   safeApi(async (c) => {
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config) {
+      const fastCompany = await tryCallSupabaseRpc<{
+        companyProfile: CompanyProfileRecord;
+        momPersonnel: MOMPersonnelRecord[];
+        testimonials: TestimonialRecord[];
+      }>(config, "get_helped_company_payload", { p_app_id: config.rowId });
+      if (fastCompany) {
+        return c.json(fastCompany);
+      }
+    }
+
     const data = await loadData(c.env);
     return c.json({
       companyProfile: data.companyProfile,
@@ -4582,6 +5199,18 @@ app.get(
 app.get(
   "/api/company/summary",
   safeApi(async (c) => {
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config) {
+      const fastSummary = await tryCallSupabaseRpc<Record<string, unknown>>(
+        config,
+        "get_helped_company_summary",
+        { p_app_id: config.rowId },
+      );
+      if (fastSummary) {
+        return c.json(fastSummary);
+      }
+    }
+
     const data = await loadData(c.env);
     const publicMaids = data.maids.filter((maid) => maid.isPublic).length;
     const hiddenMaids = data.maids.length - publicMaids;
@@ -5934,17 +6563,541 @@ app.delete("/api/enquiries/:id", async (c) => {
   return c.json({ message: "Enquiry deleted successfully" });
 });
 
+app.get(
+  "/api/requests",
+  safeApi(async (c) => {
+    const fastConfig = getSupabaseAppDataConfig(c.env);
+    if (fastConfig) {
+      const fastPage = Math.max(1, Number(c.req.query("page") ?? "1") || 1);
+      const fastPageSize = Math.min(
+        24,
+        Math.max(1, Number(c.req.query("pageSize") ?? "12") || 12),
+      );
+      const fastStatus = c.req.query("status");
+      const fastQuery = toTrimmedString(c.req.query("q")).toLowerCase();
+      const fastRequestedClientId = Number(c.req.query("clientId") ?? "");
+      const token = parseAuthorizationToken(c.req.raw);
+
+      if (!token) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+
+      const sessions = await loadAgencyAdminSessions(c.env);
+      const session = sessions.find((item) => item.token === token);
+      const admin =
+        session?.admin
+          ? ({
+              id: session.admin.id,
+              agencyId: session.admin.agencyId,
+              username: session.admin.username,
+              email: session.admin.email ?? "",
+              password: "",
+              agencyName: session.admin.agencyName,
+              emailVerified: session.admin.emailVerified,
+              profileImageUrl: session.admin.profileImageUrl ?? "",
+              createdAt: session.admin.createdAt,
+            } satisfies AgencyAdminRecord)
+          : null;
+
+      if (admin) {
+        const fastResult = await tryCallSupabaseRpc<{
+          data: unknown[];
+          pageInfo: Record<string, unknown>;
+        }>(fastConfig, "list_helped_requests", {
+          p_app_id: fastConfig.rowId,
+          p_agency_id: admin.agencyId,
+          p_client_id:
+            Number.isInteger(fastRequestedClientId) && fastRequestedClientId > 0
+              ? fastRequestedClientId
+              : null,
+          p_status: fastStatus && isRequestStatus(fastStatus) ? fastStatus : null,
+          p_query: fastQuery || null,
+          p_page: fastPage,
+          p_page_size: fastPageSize,
+        });
+        if (fastResult) {
+          return c.json(fastResult);
+        }
+      }
+    } else if (!parseAuthorizationToken(c.req.raw)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const data = await loadData(c.env);
+    const { actor, dataChanged } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (dataChanged) {
+      await saveData(c.env, data);
+    }
+
+    const page = Math.max(1, Number(c.req.query("page") ?? "1") || 1);
+    const pageSize = Math.min(
+      24,
+      Math.max(1, Number(c.req.query("pageSize") ?? "12") || 12),
+    );
+    const status = c.req.query("status");
+    const query = toTrimmedString(c.req.query("q")).toLowerCase();
+    const requestedClientId = Number(c.req.query("clientId") ?? "");
+    const requestedAgencyId = Number(c.req.query("agencyId") ?? "");
+    const clientId =
+      actor.type === "client"
+        ? actor.client.id
+        : Number.isInteger(requestedClientId) && requestedClientId > 0
+          ? requestedClientId
+          : null;
+    const agencyId =
+      actor.type === "admin"
+        ? actor.admin.agencyId
+        : Number.isInteger(requestedAgencyId) && requestedAgencyId > 0
+          ? requestedAgencyId
+          : undefined;
+
+    const filtered = data.requests
+      .filter((request) => {
+        if (actor.type === "admin" && request.agencyId !== actor.admin.agencyId) {
+          return false;
+        }
+        if (actor.type === "client" && request.clientId !== actor.client.id) {
+          return false;
+        }
+        if (typeof clientId === "number" && request.clientId !== clientId) {
+          return false;
+        }
+        if (typeof agencyId === "number" && request.agencyId !== agencyId) {
+          return false;
+        }
+        if (status && isRequestStatus(status) && request.status !== status) {
+          return false;
+        }
+        if (!query) return true;
+        const haystack = [
+          request.type,
+          request.status,
+          request.updatedBy,
+          JSON.stringify(request.details ?? {}),
+          request.maidReferences.join(" "),
+          data.clients.find((client) => client.id === request.clientId)?.name ?? "",
+          data.clients.find((client) => client.id === request.clientId)?.email ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(query);
+      })
+      .sort(
+        (left, right) =>
+          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+      );
+
+    const total = filtered.length;
+    const start = (page - 1) * pageSize;
+    const paged = filtered.slice(start, start + pageSize);
+
+    return c.json({
+      data: paged.map((request) => buildRequestResponse(data, request)),
+      pageInfo: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
+    });
+  }),
+);
+
+app.get(
+  "/api/requests/status-counts",
+  safeApi(async (c) => {
+    const requestedAgencyId = Number(c.req.query("agencyId") ?? "");
+    const requestedClientId = Number(c.req.query("clientId") ?? "");
+    const token = parseAuthorizationToken(c.req.raw);
+    if (!token) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config) {
+      const sessions = await loadAgencyAdminSessions(c.env);
+      const session = sessions.find((item) => item.token === token);
+      const adminAgencyId = session?.admin?.agencyId;
+      if (typeof adminAgencyId === "number") {
+        const fastCounts = await tryCallSupabaseRpc<Record<RequestStatus, number>>(
+          config,
+          "get_helped_request_status_counts",
+          {
+            p_app_id: config.rowId,
+            p_agency_id: adminAgencyId,
+            p_client_id:
+              Number.isInteger(requestedClientId) && requestedClientId > 0
+                ? requestedClientId
+                : null,
+          },
+        );
+        if (fastCounts) {
+          return c.json(fastCounts);
+        }
+      }
+    }
+
+    const data = await loadData(c.env, { readOnly: true });
+    const { actor } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const agencyId =
+      actor.type === "admin"
+        ? actor.admin.agencyId
+        : Number.isInteger(requestedAgencyId) && requestedAgencyId > 0
+          ? requestedAgencyId
+          : undefined;
+    const clientId =
+      actor.type === "client"
+        ? actor.client.id
+        : Number.isInteger(requestedClientId) && requestedClientId > 0
+          ? requestedClientId
+          : undefined;
+
+    const visible = data.requests.filter((request) => {
+      if (typeof agencyId === "number" && request.agencyId !== agencyId) return false;
+      if (typeof clientId === "number" && request.clientId !== clientId) return false;
+      return true;
+    });
+
+    return c.json({
+      pending: visible.filter((request) => request.status === "pending").length,
+      interested: visible.filter((request) => request.status === "interested").length,
+      direct_hire: visible.filter((request) => request.status === "direct_hire").length,
+      rejected: visible.filter((request) => request.status === "rejected").length,
+    });
+  }),
+);
+
+app.post(
+  "/api/requests",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      clientId?: number;
+      agencyId?: number;
+      type?: RequestType;
+      details?: Record<string, unknown>;
+      maidReferences?: string[];
+    }>(c.req.raw);
+    if (!body || typeof body !== "object") {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+    if (!parseAuthorizationToken(c.req.raw)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const data = await loadData(c.env);
+    const { actor } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const requestedClientId = Number(body.clientId);
+    const clientId =
+      actor.type === "client"
+        ? actor.client.id
+        : Number.isInteger(requestedClientId) && requestedClientId > 0
+          ? requestedClientId
+          : 0;
+    if (clientId <= 0 || !data.clients.some((client) => client.id === clientId)) {
+      return c.json({ error: "clientId is required" }, 400);
+    }
+    if (body.type !== "general" && body.type !== "direct") {
+      return c.json({ error: "type is required" }, 400);
+    }
+    if (!body.details || typeof body.details !== "object" || Array.isArray(body.details)) {
+      return c.json({ error: "details is required" }, 400);
+    }
+
+    const maidReferences = Array.isArray(body.maidReferences)
+      ? body.maidReferences.map((item) => String(item).trim()).filter(Boolean)
+      : [];
+    const invalidReference = maidReferences.find(
+      (referenceCode) => !data.maids.some((maid) => maid.referenceCode === referenceCode),
+    );
+    if (invalidReference) {
+      return c.json({ error: `Maid not found: ${invalidReference}` }, 404);
+    }
+
+    const firstReference = maidReferences[0] ?? "";
+    const directMaid = firstReference
+      ? data.maids.find((maid) => maid.referenceCode === firstReference)
+      : null;
+    const requestedAgencyId = Number(body.agencyId ?? "");
+    const agencyId =
+      actor.type === "admin"
+        ? actor.admin.agencyId
+        : directMaid?.agencyId ??
+          (Number.isInteger(requestedAgencyId) && requestedAgencyId > 0
+            ? requestedAgencyId
+            : 1);
+    const createdAt = now();
+    const requestRecord: RequestRecord = {
+      id: crypto.randomUUID(),
+      clientId,
+      agencyId,
+      type: body.type === "direct" || maidReferences.length > 0 ? "direct" : "general",
+      status: "pending",
+      details: body.details,
+      maidReferences,
+      updatedBy: actor.type === "admin" ? `agency:${actor.admin.id}` : `client:${clientId}`,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    const conversation: RequestConversationRecord = {
+      id: crypto.randomUUID(),
+      requestId: requestRecord.id,
+      agencyId,
+      clientId,
+      createdAt,
+    };
+    const message: RequestMessageRecord = {
+      id: crypto.randomUUID(),
+      conversationId: conversation.id,
+      senderType: "system",
+      senderId: 0,
+      message: "New request created",
+      createdAt,
+    };
+
+    data.requests.unshift(requestRecord);
+    data.requestConversations.unshift(conversation);
+    data.requestMessages.push(message);
+    await saveData(c.env, data);
+
+    return c.json({ data: buildRequestResponse(data, requestRecord) }, 201);
+  }),
+);
+
 app.get("/api/requests/unread-count", async (c) => {
   const data = await loadData(c.env);
-  const pendingRequests = data.directSales.filter(
-    (item) => item.status === "pending",
-  ).length;
+  const pendingRequests =
+    data.requests.filter((item) => item.status === "pending").length +
+    data.directSales.filter((item) => item.status === "pending").length;
 
   return c.json({
     unreadCount: pendingRequests,
     count: pendingRequests,
   });
 });
+
+app.get(
+  "/api/requests/:id",
+  safeApi(async (c) => {
+    if (!parseAuthorizationToken(c.req.raw)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    const data = await loadData(c.env, { readOnly: true });
+    const { actor } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const request = data.requests.find((item) => item.id === c.req.param("id"));
+    if (!request || !canAccessRequest(actor, request)) {
+      return c.json({ error: "Request not found" }, 404);
+    }
+    return c.json({ data: buildRequestResponse(data, request) });
+  }),
+);
+
+app.patch(
+  "/api/requests/:id/status",
+  safeApi(async (c) => {
+    const body = await parseBody<{ status?: RequestStatus }>(c.req.raw);
+    if (!isRequestStatus(body?.status)) {
+      return c.json({ error: "status is required" }, 400);
+    }
+    if (!parseAuthorizationToken(c.req.raw)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const data = await loadData(c.env);
+    const { actor } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor || actor.type !== "admin") {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const index = data.requests.findIndex((item) => item.id === c.req.param("id"));
+    if (index === -1 || data.requests[index].agencyId !== actor.admin.agencyId) {
+      return c.json({ error: "Request not found" }, 404);
+    }
+
+    data.requests[index] = {
+      ...data.requests[index],
+      status: body.status,
+      updatedBy: `agency:${actor.admin.id}`,
+      updatedAt: now(),
+    };
+    await saveData(c.env, data);
+    return c.json({ data: buildRequestResponse(data, data.requests[index]) });
+  }),
+);
+
+app.patch(
+  "/api/requests/:id/maids",
+  safeApi(async (c) => {
+    const body = await parseBody<{ maidReferences?: string[] }>(c.req.raw);
+    const maidReferences = Array.isArray(body?.maidReferences)
+      ? body.maidReferences.map((item) => String(item).trim()).filter(Boolean)
+      : [];
+    if (!parseAuthorizationToken(c.req.raw)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const data = await loadData(c.env);
+    const { actor } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor || actor.type !== "admin") {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const invalidReference = maidReferences.find(
+      (referenceCode) => !data.maids.some((maid) => maid.referenceCode === referenceCode),
+    );
+    if (invalidReference) {
+      return c.json({ error: `Maid not found: ${invalidReference}` }, 404);
+    }
+
+    const index = data.requests.findIndex((item) => item.id === c.req.param("id"));
+    if (index === -1 || data.requests[index].agencyId !== actor.admin.agencyId) {
+      return c.json({ error: "Request not found" }, 404);
+    }
+
+    data.requests[index] = {
+      ...data.requests[index],
+      maidReferences,
+      type: maidReferences.length > 0 ? "direct" : "general",
+      updatedBy: `agency:${actor.admin.id}`,
+      updatedAt: now(),
+    };
+    await saveData(c.env, data);
+    return c.json({ data: buildRequestResponse(data, data.requests[index]) });
+  }),
+);
+
+app.get(
+  "/api/conversations/:requestId",
+  safeApi(async (c) => {
+    if (!parseAuthorizationToken(c.req.raw)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    const data = await loadData(c.env);
+    const { actor, dataChanged } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const request = data.requests.find((item) => item.id === c.req.param("requestId"));
+    if (!request || !canAccessRequest(actor, request)) {
+      return c.json({ error: "Request not found" }, 404);
+    }
+
+    const { conversation, created } = ensureRequestConversation(data, request);
+    if (created || dataChanged) {
+      await saveData(c.env, data);
+    }
+
+    return c.json({ data: conversation });
+  }),
+);
+
+app.get(
+  "/api/messages/:conversationId",
+  safeApi(async (c) => {
+    if (!parseAuthorizationToken(c.req.raw)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    const data = await loadData(c.env, { readOnly: true });
+    const { actor } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const conversation = data.requestConversations.find(
+      (item) => item.id === c.req.param("conversationId"),
+    );
+    const request = conversation
+      ? data.requests.find((item) => item.id === conversation.requestId)
+      : null;
+    if (!conversation || !request || !canAccessRequest(actor, request)) {
+      return c.json({ error: "Conversation not found" }, 404);
+    }
+
+    return c.json({
+      data: data.requestMessages
+        .filter((message) => message.conversationId === conversation.id)
+        .sort(
+          (left, right) =>
+            new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+        ),
+    });
+  }),
+);
+
+app.post(
+  "/api/messages",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      conversationId?: string;
+      message?: string;
+      attachments?: unknown;
+    }>(c.req.raw);
+    const messageText = toTrimmedString(body?.message);
+    if (!body?.conversationId || !messageText) {
+      return c.json({ error: "conversationId and message are required" }, 400);
+    }
+    if (!parseAuthorizationToken(c.req.raw)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const data = await loadData(c.env);
+    const { actor } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const conversation = data.requestConversations.find(
+      (item) => item.id === body.conversationId,
+    );
+    const request = conversation
+      ? data.requests.find((item) => item.id === conversation.requestId)
+      : null;
+    if (!conversation || !request || !canAccessRequest(actor, request)) {
+      return c.json({ error: "Conversation not found" }, 404);
+    }
+
+    const record: RequestMessageRecord = {
+      id: crypto.randomUUID(),
+      conversationId: conversation.id,
+      senderType: actor.type === "admin" ? "admin" : "client",
+      senderId: actor.type === "admin" ? actor.admin.id : actor.client.id,
+      message: messageText,
+      ...(body.attachments !== undefined ? { attachments: body.attachments } : {}),
+      createdAt: now(),
+    };
+    data.requestMessages.push(record);
+    data.requests = data.requests.map((item) =>
+      item.id === request.id
+        ? {
+            ...item,
+            updatedAt: record.createdAt,
+            updatedBy:
+              actor.type === "admin"
+                ? `agency:${actor.admin.id}`
+                : `client:${actor.client.id}`,
+          }
+        : item,
+    );
+    await saveData(c.env, data);
+
+    return c.json({ data: record }, 201);
+  }),
+);
 
 const WORKFLOW_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -7873,6 +9026,18 @@ app.get("/api/chats/admin", requireAgencyAdminAuth, async (c) => {
 });
 
 app.get("/api/chats/admin/summary", requireAgencyAdminAuth, async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (config) {
+    const fastSummary = await tryCallSupabaseRpc<{ unreadCount: number }>(
+      config,
+      "get_helped_chat_admin_summary",
+      { p_app_id: config.rowId },
+    );
+    if (fastSummary) {
+      return c.json(fastSummary);
+    }
+  }
+
   const data = await loadData(c.env);
   const unreadCount = data.chatMessages.filter(
     (message) => message.senderRole === "client" && !message.readByAgency,
