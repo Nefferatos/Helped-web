@@ -9,6 +9,12 @@ SUPABASE_APP_DATA_ID=default
 # Supabase Auth (JWT verification for social/phone login)
 SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 
+# AI agents (server-side only; do not expose this as a Vite/browser env var)
+GROQ_API_KEY=YOUR_GROQ_API_KEY
+
+# Runs the AI autopilot from the Worker cron trigger.
+AI_AUTOPILOT_ENABLED=true
+
 # Email delivery (optional, recommended for signup confirmations)
 # Uses Resend (https://resend.com). In production set RESEND_API_KEY with:
 #   npx wrangler secret put RESEND_API_KEY

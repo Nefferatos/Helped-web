@@ -22,6 +22,7 @@ const allTabs = [
   { label: "Home",        to: "/client/home" },
   { label: "Search Maid", to: "/client/maids" },
   { label: "My Requests", to: "/client/requests" },
+  { label: "AI Assistant", to: "/client/ai-assistant" },
   { label: "Messages",    to: "/client/support-chat" },
   { label: "FAQ",         to: "/client/faq" },
   { label: "Enquiry",     to: "/client/enquiry" },

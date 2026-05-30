@@ -401,6 +401,108 @@ create index if not exists helped_query_ats_applications_lookup_idx
 create index if not exists helped_query_ats_profiles_lookup_idx
   on public.helped_query_ats_profiles (app_id, application_id, full_name);
 
+create table if not exists public.ai_conversations (
+  id uuid primary key default gen_random_uuid(),
+  agent_id text not null,
+  actor_role text not null,
+  actor_id text,
+  agency_id integer,
+  title text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint ai_conversations_agent_id_not_blank check (length(btrim(agent_id)) > 0),
+  constraint ai_conversations_actor_role_valid check (
+    actor_role in ('public', 'employer', 'agency', 'admin', 'applicant')
+  ),
+  constraint ai_conversations_metadata_object check (jsonb_typeof(metadata) = 'object')
+);
+
+drop trigger if exists ai_conversations_set_updated_at on public.ai_conversations;
+create trigger ai_conversations_set_updated_at
+before update on public.ai_conversations
+for each row execute function public.set_updated_at();
+
+create table if not exists public.ai_messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.ai_conversations(id) on delete cascade,
+  agent_id text not null,
+  role text not null,
+  content text not null,
+  actor_role text,
+  actor_id text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  constraint ai_messages_role_valid check (role in ('user', 'assistant', 'system', 'tool')),
+  constraint ai_messages_content_not_blank check (length(btrim(content)) > 0),
+  constraint ai_messages_metadata_object check (jsonb_typeof(metadata) = 'object')
+);
+
+create table if not exists public.ai_agent_logs (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid references public.ai_conversations(id) on delete set null,
+  agent_id text not null,
+  actor_role text not null,
+  actor_id text,
+  agency_id integer,
+  status text not null,
+  latency_ms integer,
+  input jsonb not null default '{}'::jsonb,
+  output text,
+  error text,
+  created_at timestamptz not null default now(),
+  constraint ai_agent_logs_status_valid check (status in ('success', 'error', 'blocked')),
+  constraint ai_agent_logs_input_object check (jsonb_typeof(input) = 'object')
+);
+
+create table if not exists public.ai_agent_actions (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid references public.ai_conversations(id) on delete set null,
+  agent_id text not null,
+  action_type text not null,
+  status text not null default 'proposed',
+  payload jsonb not null default '{}'::jsonb,
+  created_by_role text,
+  created_by_id text,
+  approved_by text,
+  executed_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint ai_agent_actions_status_valid check (
+    status in ('proposed', 'approved', 'rejected', 'executed', 'failed')
+  ),
+  constraint ai_agent_actions_payload_object check (jsonb_typeof(payload) = 'object')
+);
+
+create table if not exists public.ai_agent_feedback (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid references public.ai_conversations(id) on delete cascade,
+  message_id uuid references public.ai_messages(id) on delete set null,
+  agent_id text not null,
+  actor_role text not null,
+  actor_id text,
+  rating integer,
+  feedback text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  constraint ai_agent_feedback_rating_range check (rating is null or rating between 1 and 5),
+  constraint ai_agent_feedback_metadata_object check (jsonb_typeof(metadata) = 'object')
+);
+
+create index if not exists ai_conversations_actor_idx
+  on public.ai_conversations (actor_role, actor_id, updated_at desc);
+create index if not exists ai_conversations_agency_idx
+  on public.ai_conversations (agency_id, updated_at desc);
+create index if not exists ai_messages_conversation_idx
+  on public.ai_messages (conversation_id, created_at asc);
+create index if not exists ai_agent_logs_agent_created_idx
+  on public.ai_agent_logs (agent_id, created_at desc);
+create index if not exists ai_agent_logs_agency_created_idx
+  on public.ai_agent_logs (agency_id, created_at desc);
+create index if not exists ai_agent_actions_conversation_idx
+  on public.ai_agent_actions (conversation_id, created_at desc);
+create index if not exists ai_agent_feedback_agent_idx
+  on public.ai_agent_feedback (agent_id, created_at desc);
+
 do $$
 declare
   tbl text;
@@ -419,7 +521,12 @@ begin
     'helped_query_employers',
     'helped_query_employment_contracts',
     'helped_query_ats_applications',
-    'helped_query_ats_profiles'
+    'helped_query_ats_profiles',
+    'ai_conversations',
+    'ai_messages',
+    'ai_agent_logs',
+    'ai_agent_actions',
+    'ai_agent_feedback'
   ]
   loop
     execute format('alter table public.%I enable row level security', tbl);

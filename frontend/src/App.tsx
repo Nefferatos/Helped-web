@@ -21,6 +21,7 @@ import {
   syncClientProfileFromSession,
 } from "@/lib/supabaseAuth";
 import { adminPath } from "@/lib/routes";
+import PublicAiReceptionist from "@/components/ai/PublicAiReceptionist";
 import ProtectedClientRoute from "@/components/ProtectedClientRoute";
 
 // FIX: Import ClientPortalLayout eagerly so it doesn't cause a second
@@ -81,7 +82,9 @@ const AuthCallback = lazyRoute(() => import("@/pages/AuthCallback"));
 const PrivacyPolicy = lazyRoute(() => import("@/pages/PrivacyPolicy"));
 const DataDeletion = lazyRoute(() => import("@/pages/DataDeletion"));
 const AiAutomationPage = lazyRoute(() => import("@/pages/AiAutomationPage"));
+const AiAgentsPage = lazyRoute(() => import("@/pages/AiAgentsPage"));
 const ClientEmployerLogin = lazyRoute(() => import("@/ClientPage/ClientEmployerLogin"));
+const ClientAiAgentsPage = lazyRoute(() => import("@/ClientPage/ClientAiAgentsPage"));
 const ClientSupportChat = lazyRoute(() => import("@/ClientPage/ClientSupportChat"));
 const ClientDashboard = lazyRoute(() => import("@/ClientPage/ClientDashboard"));
 const ClientHistoryPage = lazyRoute(() => import("@/ClientPage/ClientHistoryPage"));
@@ -311,6 +314,7 @@ const App = () => {
             <Route path="/agencyadmin/change-password" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/enquiry" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminEnquiry /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/requests" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/ai-agents" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiAgentsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/recruitment" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AtsRecruitmentPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/chat-support" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>)} />
@@ -331,6 +335,7 @@ const App = () => {
               <Route path="maids/search" element={withRouteLoader(<MaidSearchPage embedded />)} />
               <Route path="faq" element={withRouteLoader(<FaqPage />)} />
               <Route path="requests" element={withRouteLoader(<ClientRequestsPage />)} />
+              <Route path="ai-assistant" element={withRouteLoader(<ClientAiAgentsPage />)} />
               <Route path="messages" element={<Navigate to="../support-chat" replace />} />
               <Route path="support-chat" element={withRouteLoader(<ClientSupportChat />)} />
               <Route path="profile" element={withRouteLoader(<ClientProfilePage />)} />
@@ -366,6 +371,7 @@ const App = () => {
             <Route path="/faq" element={withRouteLoader(<FaqPage />)} />
             <Route path="/agency" element={withRouteLoader(<AgencyPortal />)} />
           </Routes>
+          <PublicAiReceptionist />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

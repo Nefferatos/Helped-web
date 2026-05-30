@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { ExecutionContext, KVNamespace } from "@cloudflare/workers-types";
 import { classifyFallback } from "./fallbackClassifier";
+import { runAiAutopilot } from "./services/ai/autopilot";
+import { runAIAgent, streamAIAgent } from "./services/ai/agents";
+import type { AiAgentId } from "./services/ai/prompts";
 
 type AssetsBinding = {
   fetch: (request: Request) => Promise<Response>;
@@ -440,6 +443,8 @@ type Bindings = {
   SUPABASE_APP_DATA_ID?: string;
   SUPABASE_USE_NORMALIZED?: string;
   SUPABASE_STORAGE_BUCKET?: string;
+  GROQ_API_KEY?: string;
+  AI_AUTOPILOT_ENABLED?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
@@ -7561,6 +7566,347 @@ app.post(
   }),
 );
 
+const getAiSupabaseConfig = (env: Bindings) => {
+  const config = getSupabaseAppDataConfig(env);
+  return config
+    ? { baseUrl: config.baseUrl, serviceRoleKey: config.serviceRoleKey }
+    : null;
+};
+
+const isAiAutopilotEnabled = (env: Bindings) =>
+  env.AI_AUTOPILOT_ENABLED?.trim().toLowerCase() === "true";
+
+const parseAiBody = async (request: Request) =>
+  (await parseBody<{
+    message?: string;
+    prompt?: string;
+    task?: string;
+    conversationId?: string;
+    stream?: boolean;
+    structured?: boolean;
+    [key: string]: unknown;
+  }>(request)) ?? {};
+
+const runAiEndpoint = async (
+  c: any,
+  agentId: AiAgentId,
+  actor: {
+    role: "public" | "employer" | "agency" | "admin" | "applicant";
+    userId?: string | number;
+    clientId?: number;
+    agencyId?: number;
+    agencyName?: string;
+  },
+  data: AppData,
+  body: Record<string, unknown>,
+) => {
+  const input = {
+    ...body,
+    message:
+      toTrimmedString(body.message) ||
+      toTrimmedString(body.prompt) ||
+      toTrimmedString(body.task),
+  };
+
+  if (!input.message && agentId !== "maid_recommendation" && agentId !== "admin_analytics") {
+    return c.json({ error: "message, prompt, or task is required" }, 400);
+  }
+
+  const aiActor = {
+    ...actor,
+    ip:
+      c.req.header("cf-connecting-ip") ||
+      c.req.header("x-forwarded-for") ||
+      "unknown",
+  };
+
+  if (body.stream === true) {
+    const streamed = await streamAIAgent({
+      agentId,
+      input,
+      actor: aiActor,
+      appData: data as unknown as Record<string, unknown>,
+      groqApiKey: c.env.GROQ_API_KEY,
+      supabase: getAiSupabaseConfig(c.env),
+      conversationId: toTrimmedString(body.conversationId) || undefined,
+      request: c.req.raw,
+    });
+    return new Response(streamed.body, {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        "x-ai-conversation-id": streamed.conversationId,
+      },
+    });
+  }
+
+  const result = await runAIAgent({
+    agentId,
+    input,
+    actor: aiActor,
+    appData: data as unknown as Record<string, unknown>,
+    groqApiKey: c.env.GROQ_API_KEY,
+    supabase: getAiSupabaseConfig(c.env),
+    conversationId: toTrimmedString(body.conversationId) || undefined,
+    request: c.req.raw,
+  });
+  return c.json(result);
+};
+
+app.post(
+  "/api/ai/receptionist",
+  safeApi(async (c) => {
+    const body = await parseAiBody(c.req.raw);
+    const data = await loadData(c.env);
+    const name = toTrimmedString(body.name);
+    const contact = toTrimmedString(body.contact);
+    const message = toTrimmedString(body.message || body.prompt || body.task);
+
+    if (name && contact && message) {
+      const exists = data.enquiries.some(
+        (item) => item.message === message && (item.email === contact || item.phone === contact),
+      );
+      if (!exists) {
+        const enquiry: EnquiryRecord = {
+          id: data.counters.enquiries++,
+          username: name,
+          date: buildFallbackDate(),
+          email: WORKFLOW_EMAIL_PATTERN.test(contact) ? contact : "",
+          phone: WORKFLOW_EMAIL_PATTERN.test(contact) ? "" : contact,
+          message,
+          createdAt: now(),
+        };
+        data.enquiries.unshift(enquiry);
+        await saveData(c.env, data);
+      }
+    }
+
+    return runAiEndpoint(c, "receptionist", { role: "public" }, data, body);
+  }),
+);
+
+app.post(
+  "/api/ai/recommend-maid",
+  requireClientAuth,
+  safeApi(async (c) => {
+    const client = c.get("client") as ClientRecord;
+    const body = await parseAiBody(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    return runAiEndpoint(
+      c,
+      "maid_recommendation",
+      { role: "employer", userId: client.id, clientId: client.id },
+      data,
+      body,
+    );
+  }),
+);
+
+app.post(
+  "/api/ai/employer-support",
+  requireClientAuth,
+  safeApi(async (c) => {
+    const client = c.get("client") as ClientRecord;
+    const body = await parseAiBody(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    return runAiEndpoint(
+      c,
+      "employer_support",
+      { role: "employer", userId: client.id, clientId: client.id },
+      data,
+      body,
+    );
+  }),
+);
+
+app.post(
+  "/api/ai/agency-assistant",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const body = await parseAiBody(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    return runAiEndpoint(
+      c,
+      "agency_assistant",
+      {
+        role: "agency",
+        userId: admin.id,
+        agencyId: admin.agencyId,
+        agencyName: admin.agencyName,
+      },
+      data,
+      body,
+    );
+  }),
+);
+
+app.post(
+  "/api/ai/screen-applicant",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const body = await parseAiBody(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    return runAiEndpoint(
+      c,
+      "applicant_screening",
+      {
+        role: "agency",
+        userId: admin.id,
+        agencyId: admin.agencyId,
+        agencyName: admin.agencyName,
+      },
+      data,
+      body,
+    );
+  }),
+);
+
+app.post(
+  "/api/ai/screen-applicant-public",
+  safeApi(async (c) => {
+    const body = await parseAiBody(c.req.raw);
+    const applicationId = toTrimmedString(body.applicationId);
+    const applicantAccessToken = toTrimmedString(body.applicantAccessToken);
+    if (!applicationId || !applicantAccessToken) {
+      return c.json({ error: "applicationId and applicantAccessToken are required" }, 400);
+    }
+
+    const data = await loadData(c.env, { readOnly: true });
+    const application = data.ats.applications.find(
+      (item) =>
+        item.id === applicationId &&
+        item.applicantAccessToken === applicantAccessToken,
+    );
+    if (!application) {
+      return c.json({ error: "Application not found" }, 404);
+    }
+
+    const profile = data.ats.profiles.find((item) => item.applicationId === application.id);
+    const scopedData = {
+      ...defaultData(),
+      ats: {
+        ...defaultData().ats,
+        applications: [application],
+        profiles: profile ? [profile] : [],
+        documents: {
+          [application.id]: data.ats.documents[application.id] ?? [],
+        },
+        scores: data.ats.scores[application.id]
+          ? { [application.id]: data.ats.scores[application.id] }
+          : {},
+        history: {
+          [application.id]: data.ats.history[application.id] ?? [],
+        },
+      },
+    };
+
+    return runAiEndpoint(
+      c,
+      "applicant_screening",
+      {
+        role: "applicant",
+        userId: application.id,
+        agencyId: application.agencyId,
+      },
+      scopedData,
+      {
+        ...body,
+        message:
+          toTrimmedString(body.message) ||
+          "Review my application readiness and explain missing requirements.",
+      },
+    );
+  }),
+);
+
+app.post(
+  "/api/ai/admin-analytics",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const body = await parseAiBody(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    return runAiEndpoint(
+      c,
+      "admin_analytics",
+      {
+        role: "admin",
+        userId: admin.id,
+        agencyId: admin.agencyId,
+        agencyName: admin.agencyName,
+      },
+      data,
+      body,
+    );
+  }),
+);
+
+app.post(
+  "/api/ai/content-generator",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const body = await parseAiBody(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    return runAiEndpoint(
+      c,
+      "content_generator",
+      {
+        role: "agency",
+        userId: admin.id,
+        agencyId: admin.agencyId,
+        agencyName: admin.agencyName,
+      },
+      data,
+      body,
+    );
+  }),
+);
+
+app.post(
+  "/api/ai/autopilot/run",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const body = (await parseBody<{
+      dryRun?: boolean;
+      force?: boolean;
+      maxActions?: number;
+    }>(c.req.raw)) ?? {};
+    const data = await loadData(c.env, { readOnly: true });
+    const result = await runAiAutopilot({
+      appData: data as any,
+      groqApiKey: c.env.GROQ_API_KEY,
+      supabase: getAiSupabaseConfig(c.env),
+      agencyId: admin.agencyId,
+      agencyName: admin.agencyName,
+      maxActions: typeof body.maxActions === "number" ? body.maxActions : 6,
+      dryRun: body.dryRun === true,
+      force: body.force === true,
+      request: c.req.raw,
+    });
+    return c.json(result);
+  }),
+);
+
+const runScheduledAiAutopilot = async (env: Bindings) => {
+  if (!isAiAutopilotEnabled(env)) {
+    return {
+      skipped: true,
+      reason: "AI_AUTOPILOT_ENABLED is not true",
+    };
+  }
+  const data = await loadData(env, { readOnly: true });
+  return await runAiAutopilot({
+    appData: data as any,
+    groqApiKey: env.GROQ_API_KEY,
+    supabase: getAiSupabaseConfig(env),
+    maxActions: 8,
+  });
+};
+
 app.post(
   "/api/leads/raw",
   safeApi(async (c) => {
@@ -8945,7 +9291,11 @@ app.get("/api/chats/client", requireClientAuth, async (c) => {
       ? { ...message, readByClient: true }
       : message,
   );
-  await saveData(c.env, data);
+  try {
+    await saveData(c.env, data);
+  } catch (error) {
+    console.warn("Unable to mark client chat messages as read:", error);
+  }
   return c.json({ client: toSafeClient(client), messages });
 });
 
@@ -9121,7 +9471,11 @@ app.get("/api/chats/admin/:clientId", requireAgencyAdminAuth, async (c) => {
       ? { ...message, readByAgency: true }
       : message,
   );
-  await saveData(c.env, data);
+  try {
+    await saveData(c.env, data);
+  } catch (error) {
+    console.warn("Unable to mark admin chat messages as read:", error);
+  }
   return c.json({ messages });
 });
 
@@ -9700,6 +10054,18 @@ app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
 export default {
+  async scheduled(
+    _controller: unknown,
+    env: Bindings,
+    executionContext: ExecutionContext,
+  ) {
+    executionContext.waitUntil(
+      runScheduledAiAutopilot(env).catch((error) => {
+        console.error("AI autopilot scheduled run failed", error);
+      }),
+    );
+  },
+
   async fetch(
     request: Request,
     env: Bindings,

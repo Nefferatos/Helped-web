@@ -249,11 +249,15 @@ Run `supabase/app_data.sql` in the Supabase SQL editor.
 ### 2. Configure Wrangler secrets/vars
 
 - Set `SUPABASE_URL` in `wrangler.toml` under `[vars]`.
-- Set the secret (do not commit it):
+- Set the secrets (do not commit them):
 
 ```bash
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+npx wrangler secret put GROQ_API_KEY
 ```
+
+AI autopilot runs from the Worker cron trigger when `AI_AUTOPILOT_ENABLED=true`.
+It scans agency work, runs the relevant agent, and stores proposed actions for review instead of silently sending customer-facing messages.
 
 ### 3. Run locally with Wrangler
 
