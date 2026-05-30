@@ -31,6 +31,13 @@ type ViewMode = "menu" | "public" | "hidden";
 type VisibilityTarget =
   | { maid: MaidProfile; makePublic: boolean }
   | { bulk: true; makePublic: boolean };
+type VisibilityTransfer = {
+  id: string;
+  refs: string[];
+  count: number;
+  direction: "hide" | "publish";
+  status: "moving" | "done" | "failed";
+};
 
 const PAGE_SIZE = 14;
 
@@ -482,6 +489,7 @@ const EditMaids = () => {
   const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
   const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  const [visibilityTransfers, setVisibilityTransfers] = useState<VisibilityTransfer[]>([]);
   const [manualImportOpen, setManualImportOpen] = useState(false);
   const [manualImportFields, setManualImportFields] = useState({ name: "", nationality: "", referenceCode: "" });
   const [menuSearch, setMenuSearch] = useState("");
@@ -632,8 +640,27 @@ const EditMaids = () => {
   const totalPages = Math.max(1, Math.ceil(totalMaids / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginatedMaids = maids;
+  const movingVisibilityRefs = useMemo(
+    () =>
+      new Set(
+        visibilityTransfers
+          .filter((transfer) => transfer.status === "moving")
+          .flatMap((transfer) => transfer.refs)
+      ),
+    [visibilityTransfers]
+  );
+  const activeVisibilityTransfer = visibilityTransfers.find(
+    (transfer) => transfer.status === "moving"
+  );
 
   useEffect(() => { if (page !== currentPage) setPage(currentPage); }, [currentPage, page]);
+  useEffect(() => {
+    if (!visibilityTransfers.some((transfer) => transfer.status !== "moving")) return;
+    const timer = window.setTimeout(() => {
+      setVisibilityTransfers((prev) => prev.filter((transfer) => transfer.status === "moving"));
+    }, 3200);
+    return () => window.clearTimeout(timer);
+  }, [visibilityTransfers]);
 
   const toggle = (ref: string) => {
     setSelected((prev) => {
@@ -672,14 +699,15 @@ const EditMaids = () => {
   };
 
   // ── FIX: fire-and-forget PATCH; caller handles optimistic UI ──────────────
-  const updateMaidVisibility = (maid: MaidProfile, isPublic: boolean): Promise<void> => {
+  const updateMaidVisibility = (maid: MaidProfile, isPublic: boolean): Promise<MaidProfile> => {
     return fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/visibility`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ isPublic }),
     }).then(async (response) => {
-      const data = await readSafeJson<{ error?: string }>(response);
+      const data = await readSafeJson<{ error?: string; maid?: MaidProfile }>(response);
       if (!response.ok) throw new Error(data.error || "Failed to update visibility");
+      return data.maid ?? { ...maid, isPublic };
     });
   };
 
@@ -724,10 +752,21 @@ const EditMaids = () => {
 
     const affectedRefs = new Set(affectedMaids.map((m) => m.referenceCode));
 
+    const transferId = `${makePublic ? "publish" : "hide"}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setVisibilityTransfers((prev) => [
+      {
+        id: transferId,
+        refs: Array.from(affectedRefs),
+        count: affectedRefs.size,
+        direction: makePublic ? "publish" : "hide",
+        status: "moving",
+      },
+      ...prev.filter((transfer) => transfer.status === "moving"),
+    ]);
+
     // 3. Optimistic remove — instant, zero network wait
     removeManyLocal(affectedRefs);
 
-    const capturedTarget = pendingVisibilityTarget;
     setPendingVisibilityTarget(null);
 
     try {
@@ -740,11 +779,22 @@ const EditMaids = () => {
 
       if (failedCount > 0) {
         // 5a. Rollback: reload the list so the server state is reflected
+        setVisibilityTransfers((prev) =>
+          prev.map((transfer) =>
+            transfer.id === transferId ? { ...transfer, status: "failed" } : transfer
+          )
+        );
         setListRefreshKey((v) => v + 1);
         throw new Error(
           `Failed to update ${failedCount} maid${failedCount !== 1 ? "s" : ""}. Changes have been reverted.`
         );
       }
+
+      setVisibilityTransfers((prev) =>
+        prev.map((transfer) =>
+          transfer.id === transferId ? { ...transfer, status: "done" } : transfer
+        )
+      );
 
       // 5b. Success toast only — NO extra reload, the optimistic remove is already correct
       if (isBulk) {
@@ -1270,9 +1320,13 @@ const EditMaids = () => {
                 ? "bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
                 : "bg-[#EF9F27] hover:bg-[#BA7517] text-[#412402] border-[#BA7517]"}
             >
-              {pendingVisibilityTarget?.makePublic
-                ? <><Eye className="mr-2 h-4 w-4" /> Publish</>
-                : <><EyeOff className="mr-2 h-4 w-4" /> Hide</>}
+              {isUpdatingVisibility ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transferring...</>
+              ) : pendingVisibilityTarget?.makePublic ? (
+                <><Eye className="mr-2 h-4 w-4" /> Publish</>
+              ) : (
+                <><EyeOff className="mr-2 h-4 w-4" /> Hide</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1715,6 +1769,38 @@ const EditMaids = () => {
           </div>
         )}
 
+        {/* Visibility transfer progress */}
+        {activeVisibilityTransfer && (
+          <div className={`rounded-xl border px-4 py-3 ${
+            activeVisibilityTransfer.direction === "hide"
+              ? "border-[#FAC775]/70 bg-[#FAEEDA]"
+              : "border-[#97C459]/65 bg-[#EAF3DE]"
+          }`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/75 ${
+                  activeVisibilityTransfer.direction === "hide" ? "text-[#854F0B]" : "text-[#3B6D11]"
+                }`}>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </span>
+                <div className="min-w-0">
+                  <p className={`truncate text-sm font-extrabold ${
+                    activeVisibilityTransfer.direction === "hide" ? "text-[#633806]" : "text-[#27500A]"
+                  }`}>
+                    {activeVisibilityTransfer.direction === "hide" ? "Transferring to Hidden" : "Publishing to Public"}
+                  </p>
+                  <p className="text-xs font-medium text-foreground/60">
+                    {activeVisibilityTransfer.count} maid{activeVisibilityTransfer.count !== 1 ? "s" : ""} moved instantly here while deployment confirms the change.
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-foreground/55">
+                Syncing
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Bulk actions bar */}
         {maids.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#EAF3DE] border border-[#97C459]/45 rounded-xl">
@@ -1733,7 +1819,7 @@ const EditMaids = () => {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={selected.size === 0}
+                disabled={selected.size === 0 || Array.from(selected).some((ref) => movingVisibilityRefs.has(ref))}
                 onClick={() => openVisibilityDialog({ bulk: true, makePublic: view !== "public" })}
                 className={`h-8 text-xs ${selected.size > 0 ? "border-[#97C459]/60 text-[#3B6D11]" : ""}`}
               >
@@ -1781,6 +1867,7 @@ const EditMaids = () => {
               const photoPreview = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl;
               const isSelected = selected.has(maid.referenceCode);
               const flagCode = getNationalityCode(maid.nationality);
+              const isMovingVisibility = movingVisibilityRefs.has(maid.referenceCode);
 
               return (
                 <div
@@ -1854,11 +1941,16 @@ const EditMaids = () => {
                           ? "bg-[#EAF3DE] text-[#3B6D11] border-[#97C459]/50 hover:bg-[#C0DD97]/60"
                           : "bg-[#FAEEDA] text-[#854F0B] border-[#FAC775]/60 hover:bg-[#FAC775]/40"
                       }`}
+                      disabled={isMovingVisibility}
                       onClick={() => openVisibilityDialog({ maid, makePublic: view !== "public" })}
                     >
-                      {view === "public"
-                        ? <><Eye className="h-3 w-3" /> Public — Hide</>
-                        : <><EyeOff className="h-3 w-3" /> Hidden — Publish</>}
+                      {isMovingVisibility ? (
+                        <><Loader2 className="h-3 w-3 animate-spin" /> Moving...</>
+                      ) : view === "public" ? (
+                        <><Eye className="h-3 w-3" /> Public — Hide</>
+                      ) : (
+                        <><EyeOff className="h-3 w-3" /> Hidden — Publish</>
+                      )}
                     </button>
                   </div>
                 </div>
