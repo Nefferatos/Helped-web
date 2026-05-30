@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Bot, Loader2, MessageCircle, Send, Sparkles, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,15 @@ const PROMPTS = [
   "What are your agency fees?",
 ];
 
+const normalizePath = (path: string) => path.replace(/\/+$/, "") || "/";
+
+const matchesRoute = (path: string, route: string) => {
+  const normalizedPath = normalizePath(path);
+  return normalizedPath === route || normalizedPath.startsWith(`${route}/`);
+};
+
 export default function PublicAiReceptionist() {
+  const location = useLocation();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -32,10 +41,10 @@ export default function PublicAiReceptionist() {
     setMounted(true);
   }, []);
 
-  // Only render on public pages — not admin or client portals
+  // Hide inside agency login/admin areas.
   if (!mounted) return null;
-  const path = window.location.pathname;
-  if (path.startsWith("/agencyadmin") || path.startsWith("/client")) return null;
+  const path = location.pathname;
+  if (matchesRoute(path, "/agency") || matchesRoute(path, "/agencyadmin")) return null;
 
   const submit = async () => {
     const text = message.trim();

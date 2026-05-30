@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,12 +31,11 @@ type ViewMode = "menu" | "public" | "hidden";
 type VisibilityTarget =
   | { maid: MaidProfile; makePublic: boolean }
   | { bulk: true; makePublic: boolean };
+// Transfer is now a minimal internal tracker — no banner, no status polling.
+// We just optimistically remove cards and fire PATCHes in the background.
 type VisibilityTransfer = {
   id: string;
   refs: string[];
-  count: number;
-  direction: "hide" | "publish";
-  status: "moving" | "done" | "failed";
 };
 
 const PAGE_SIZE = 14;
@@ -447,10 +446,15 @@ const globalStyles = `
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+  @keyframes slide-out-left {
+    from { opacity: 1; transform: translateX(0) scale(1); }
+    to   { opacity: 0; transform: translateX(-18px) scale(0.96); }
+  }
   .animate-float-icon { animation: float-icon 2s ease-in-out infinite; }
   .animate-dropdown-in { animation: dropdown-in 0.15s cubic-bezier(0.16,1,0.3,1); }
   .animate-pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
   .animate-fade-in-up { animation: fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .animate-slide-out-left { animation: slide-out-left 0.18s cubic-bezier(0.4,0,1,1) forwards; }
 
   /* card hover arrow nudge */
   .card-arrow { transition: transform 0.2s ease; }
@@ -488,8 +492,15 @@ const EditMaids = () => {
   const [deleteTarget, setDeleteTarget] = useState<"selected" | MaidProfile | null>(null);
   const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
   const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
-  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
-  const [visibilityTransfers, setVisibilityTransfers] = useState<VisibilityTransfer[]>([]);
+
+  // ── NEW: track in-flight visibility transfers (ref-level, no banner needed) ──
+  // Keys are referenceCode strings that are currently being PATCHed.
+  // We only use this to disable the button on the card while it's in-flight,
+  // so the user can't double-click. The cards are already removed from the list
+  // the instant the user confirms — this is purely a safety guard for edge cases
+  // where a card stays visible (e.g., page hasn't reloaded yet).
+  const [inFlightRefs, setInFlightRefs] = useState<Set<string>>(new Set());
+
   const [manualImportOpen, setManualImportOpen] = useState(false);
   const [manualImportFields, setManualImportFields] = useState({ name: "", nationality: "", referenceCode: "" });
   const [menuSearch, setMenuSearch] = useState("");
@@ -505,6 +516,30 @@ const EditMaids = () => {
   const importInputRef = useRef<HTMLInputElement>(null);
   const cancelImportRef = useRef<boolean>(false);
   const activeImportControllerRef = useRef<AbortController | null>(null);
+
+  // ── Ref snapshot for use inside fire-and-forget closures ──────────────────
+  const maidsRef = useRef<MaidProfile[]>(maids);
+  useEffect(() => { maidsRef.current = maids; }, [maids]);
+
+  // ── Pending background reload: instead of triggering listRefreshKey
+  //    immediately after a visibility PATCH (which causes a loading flash),
+  //    we schedule a quiet background reload that only updates state if the
+  //    component is still mounted and the user hasn't navigated away. ──────────
+  const pendingReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleBackgroundReload = useCallback((delayMs = 1500) => {
+    if (pendingReloadRef.current) clearTimeout(pendingReloadRef.current);
+    pendingReloadRef.current = setTimeout(() => {
+      // Use startTransition so the reload doesn't interrupt any ongoing user
+      // interaction — React will batch this as a low-priority update.
+      startTransition(() => {
+        setListRefreshKey((v) => v + 1);
+      });
+    }, delayMs);
+  }, []);
+
+  useEffect(() => () => {
+    if (pendingReloadRef.current) clearTimeout(pendingReloadRef.current);
+  }, []);
 
   useEffect(() => {
     if (!menuSearch.trim()) { setMenuSearchResults([]); setMenuSearchOpen(false); return; }
@@ -547,7 +582,6 @@ const EditMaids = () => {
     const timer = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
     }, 250);
-
     return () => window.clearTimeout(timer);
   }, [search]);
 
@@ -640,27 +674,8 @@ const EditMaids = () => {
   const totalPages = Math.max(1, Math.ceil(totalMaids / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginatedMaids = maids;
-  const movingVisibilityRefs = useMemo(
-    () =>
-      new Set(
-        visibilityTransfers
-          .filter((transfer) => transfer.status === "moving")
-          .flatMap((transfer) => transfer.refs)
-      ),
-    [visibilityTransfers]
-  );
-  const activeVisibilityTransfer = visibilityTransfers.find(
-    (transfer) => transfer.status === "moving"
-  );
 
   useEffect(() => { if (page !== currentPage) setPage(currentPage); }, [currentPage, page]);
-  useEffect(() => {
-    if (!visibilityTransfers.some((transfer) => transfer.status !== "moving")) return;
-    const timer = window.setTimeout(() => {
-      setVisibilityTransfers((prev) => prev.filter((transfer) => transfer.status === "moving"));
-    }, 3200);
-    return () => window.clearTimeout(timer);
-  }, [visibilityTransfers]);
 
   const toggle = (ref: string) => {
     setSelected((prev) => {
@@ -698,7 +713,6 @@ const EditMaids = () => {
     removeLocal(referenceCode);
   };
 
-  // ── FIX: fire-and-forget PATCH; caller handles optimistic UI ──────────────
   const updateMaidVisibility = (maid: MaidProfile, isPublic: boolean): Promise<MaidProfile> => {
     return fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/visibility`, {
       method: "PATCH",
@@ -734,79 +748,101 @@ const EditMaids = () => {
 
   const openVisibilityDialog = (target: VisibilityTarget) => { setPendingVisibilityTarget(target); setVisibilityDialogOpen(true); };
 
-  // ── FIX: optimistic-first visibility update — instant UI, background PATCH ─
-  const confirmVisibilityChange = async () => {
+  // ── INSTANT optimistic visibility change — rewritten for zero perceived latency ──
+  //
+  // Key improvements over the original:
+  //
+  //  1. NO reloadVisibleMaids() call here at all. A background reload is
+  //     scheduled via scheduleBackgroundReload() with a 1.5 s delay so it
+  //     happens silently after the animation has settled and the user has
+  //     moved on. This removes the #1 source of perceived lag.
+  //
+  //  2. NO VisibilityTransfer banner with a spinner. The banner was causing
+  //     "Syncing" anxiety even though the card was already gone. We replaced
+  //     it with inFlightRefs — a lightweight Set that only disables the
+  //     button on the rare edge-case where a card stays visible.
+  //
+  //  3. All state mutations (dialog close, card removal, inFlightRefs) are
+  //     batched into a single synchronous block so React flushes them in one
+  //     paint — zero flicker, zero double-render.
+  //
+  //  4. PATCHes fire in parallel via Promise.allSettled — no sequential
+  //     waterfall even for bulk operations.
+  //
+  //  5. On failure, we roll back by clearing inFlightRefs and scheduling
+  //     an immediate listRefreshKey bump, which re-fetches from the server
+  //     to restore accurate state.
+  const confirmVisibilityChange = () => {
     if (!pendingVisibilityTarget) return;
-
-    // 1. Close dialog immediately so there's zero perceived lag
-    setVisibilityDialogOpen(false);
-    setIsUpdatingVisibility(true);
 
     const isBulk = "bulk" in pendingVisibilityTarget;
     const makePublic = pendingVisibilityTarget.makePublic;
 
-    // 2. Collect the maids that will be affected BEFORE touching state
+    // Snapshot affected maids synchronously — immune to stale closures
+    const currentMaids = maidsRef.current;
     const affectedMaids = isBulk
-      ? maids.filter((m) => selected.has(m.referenceCode))
+      ? currentMaids.filter((m) => selected.has(m.referenceCode))
       : [pendingVisibilityTarget.maid];
+
+    if (affectedMaids.length === 0) {
+      setVisibilityDialogOpen(false);
+      setPendingVisibilityTarget(null);
+      return;
+    }
 
     const affectedRefs = new Set(affectedMaids.map((m) => m.referenceCode));
 
-    const transferId = `${makePublic ? "publish" : "hide"}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setVisibilityTransfers((prev) => [
-      {
-        id: transferId,
-        refs: Array.from(affectedRefs),
-        count: affectedRefs.size,
-        direction: makePublic ? "publish" : "hide",
-        status: "moving",
-      },
-      ...prev.filter((transfer) => transfer.status === "moving"),
-    ]);
-
-    // 3. Optimistic remove — instant, zero network wait
-    removeManyLocal(affectedRefs);
-
+    // ── Single synchronous batch: React flushes ALL of these in one paint ──
+    // Dialog gone + cards gone + buttons disabled — the user sees the result
+    // the instant they click "Confirm", before any network call is even sent.
+    setVisibilityDialogOpen(false);
     setPendingVisibilityTarget(null);
+    removeManyLocal(affectedRefs);
+    setInFlightRefs((prev) => {
+      const next = new Set(prev);
+      affectedRefs.forEach((r) => next.add(r));
+      return next;
+    });
+    setSelected(new Set());
 
-    try {
-      // 4. Fire all PATCHes in parallel (no await chain)
-      const results = await Promise.allSettled(
-        affectedMaids.map((maid) => updateMaidVisibility(maid, makePublic))
-      );
+    // Schedule a quiet background reload after 1.5 s — by then the PATCHes
+    // will have completed and the list will silently reflect server state.
+    // We do NOT await this here; it runs entirely in the background.
+    scheduleBackgroundReload(1500);
+
+    // Fire all PATCHes in parallel — no sequential waterfall
+    void Promise.allSettled(
+      affectedMaids.map((maid) => updateMaidVisibility(maid, makePublic))
+    ).then((results) => {
+      // Clear in-flight markers regardless of outcome
+      setInFlightRefs((prev) => {
+        const next = new Set(prev);
+        affectedRefs.forEach((r) => next.delete(r));
+        return next;
+      });
 
       const failedCount = results.filter((r) => r.status === "rejected").length;
 
       if (failedCount > 0) {
-        // 5a. Rollback: reload the list so the server state is reflected
-        setVisibilityTransfers((prev) =>
-          prev.map((transfer) =>
-            transfer.id === transferId ? { ...transfer, status: "failed" } : transfer
-          )
-        );
-        setListRefreshKey((v) => v + 1);
-        throw new Error(
+        // Rollback: cancel the scheduled quiet reload and force an immediate
+        // one so the list accurately reflects what the server actually has.
+        if (pendingReloadRef.current) clearTimeout(pendingReloadRef.current);
+        startTransition(() => {
+          setListRefreshKey((v) => v + 1);
+        });
+        toast.error(
           `Failed to update ${failedCount} maid${failedCount !== 1 ? "s" : ""}. Changes have been reverted.`
         );
+        return;
       }
 
-      setVisibilityTransfers((prev) =>
-        prev.map((transfer) =>
-          transfer.id === transferId ? { ...transfer, status: "done" } : transfer
-        )
-      );
-
-      // 5b. Success toast only — NO extra reload, the optimistic remove is already correct
+      // All succeeded — show a brief success toast, no banner needed
       if (isBulk) {
         toast.success(makePublic ? "Selected maids made public" : "Selected maids hidden");
       } else {
         toast.success(makePublic ? "Maid published" : "Maid hidden");
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update visibility");
-    } finally {
-      setIsUpdatingVisibility(false);
-    }
+    });
   };
 
   const handleExportPdf = async () => {
@@ -1289,7 +1325,13 @@ const EditMaids = () => {
       </Dialog>
 
       {/* Visibility */}
-      <Dialog open={visibilityDialogOpen} onOpenChange={(open) => { setVisibilityDialogOpen(open); if (!open) setPendingVisibilityTarget(null); }}>
+      <Dialog
+        open={visibilityDialogOpen}
+        onOpenChange={(open) => {
+          setVisibilityDialogOpen(open);
+          if (!open) setPendingVisibilityTarget(null);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3">
@@ -1312,21 +1354,21 @@ const EditMaids = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }} disabled={isUpdatingVisibility}>Cancel</Button>
             <Button
-              onClick={() => void confirmVisibilityChange()}
-              disabled={isUpdatingVisibility}
+              variant="outline"
+              onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmVisibilityChange}
               className={pendingVisibilityTarget?.makePublic
                 ? "bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
                 : "bg-[#EF9F27] hover:bg-[#BA7517] text-[#412402] border-[#BA7517]"}
             >
-              {isUpdatingVisibility ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transferring...</>
-              ) : pendingVisibilityTarget?.makePublic ? (
-                <><Eye className="mr-2 h-4 w-4" /> Publish</>
-              ) : (
-                <><EyeOff className="mr-2 h-4 w-4" /> Hide</>
-              )}
+              {pendingVisibilityTarget?.makePublic
+                ? <><Eye className="mr-2 h-4 w-4" /> Publish</>
+                : <><EyeOff className="mr-2 h-4 w-4" /> Hide</>}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1472,7 +1514,7 @@ const EditMaids = () => {
           {/* Category cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
-            {/* Public Card — green */}
+            {/* Public Card */}
             <button
               onClick={() => setView("public")}
               className="group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center
@@ -1484,8 +1526,6 @@ const EditMaids = () => {
             >
               <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl bg-[#97C459]/20" />
               <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl bg-[#C0DD97]/18" />
-
-              {/* 3-D icon */}
               <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-gradient-to-br from-[#97C459] to-[#639922]
                 shadow-[0_4px_0_#3B6D11,0_8px_20px_rgba(99,153,34,0.35),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_0_rgba(0,0,0,0.12)]
                 transition-all duration-300
@@ -1493,7 +1533,6 @@ const EditMaids = () => {
                 <div className="absolute inset-0 rounded-[22px] rounded-b-none h-1/2 bg-gradient-to-b from-white/28 to-transparent pointer-events-none" />
                 <Eye className="h-8 w-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)]" />
               </div>
-
               <div className="space-y-1.5">
                 <div className="mb-2">
                   <span className="inline-flex items-center gap-[5px] bg-[#EAF3DE] border border-[#97C459]/60 text-[#3B6D11] rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]">
@@ -1504,7 +1543,6 @@ const EditMaids = () => {
                 <p className="text-lg font-bold tracking-tight text-[#3B6D11]">Maids in Public</p>
                 <p className="text-sm text-foreground/60 leading-relaxed">View, edit or remove<br />publicly visible maids</p>
               </div>
-
               <div className="flex items-center gap-1.5 text-xs font-semibold text-[#3B6D11]">
                 <span>Open list</span>
                 <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
@@ -1513,7 +1551,7 @@ const EditMaids = () => {
               </div>
             </button>
 
-            {/* Hidden Card — amber */}
+            {/* Hidden Card */}
             <button
               onClick={() => setView("hidden")}
               className="group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center
@@ -1525,8 +1563,6 @@ const EditMaids = () => {
             >
               <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl bg-[#EF9F27]/18" />
               <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl bg-[#FAC775]/16" />
-
-              {/* 3-D icon */}
               <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-gradient-to-br from-[#EF9F27] to-[#BA7517]
                 shadow-[0_4px_0_#854F0B,0_8px_20px_rgba(186,117,23,0.30),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_0_rgba(0,0,0,0.12)]
                 transition-all duration-300
@@ -1534,7 +1570,6 @@ const EditMaids = () => {
                 <div className="absolute inset-0 rounded-[22px] rounded-b-none h-1/2 bg-gradient-to-b from-white/28 to-transparent pointer-events-none" />
                 <EyeOff className="h-8 w-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.22)]" />
               </div>
-
               <div className="space-y-1.5">
                 <div className="mb-2">
                   <span className="inline-flex items-center gap-[5px] bg-[#FAEEDA] border border-[#FAC775]/70 text-[#854F0B] rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]">
@@ -1545,7 +1580,6 @@ const EditMaids = () => {
                 <p className="text-lg font-bold tracking-tight text-foreground">Maids Hidden</p>
                 <p className="text-sm text-foreground/60 leading-relaxed">Manage drafts &amp; maids<br />hidden from public view</p>
               </div>
-
               <div className="flex items-center gap-1.5 text-xs font-semibold text-[#854F0B]">
                 <span>Open list</span>
                 <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
@@ -1657,7 +1691,6 @@ const EditMaids = () => {
                 ? "bg-[#fef2f2]/85 border-[#fecaca]/60"
                 : "bg-[#EAF3DE] border-[#97C459]/65"
           }`}>
-            {/* Header */}
             <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
               <div className="flex items-center gap-2 min-w-0">
                 {importBatchProgress.active ? (
@@ -1729,7 +1762,6 @@ const EditMaids = () => {
               </div>
             </div>
 
-            {/* Stage + current file */}
             <div className="px-4 pb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
               {importBatchProgress.stage && (
                 <span className={`text-xs opacity-85 ${importBatchProgress.cancelled ? "text-[#BA7517]" : "text-[#3B6D11]"}`}>
@@ -1751,7 +1783,6 @@ const EditMaids = () => {
               )}
             </div>
 
-            {/* Progress bar */}
             <div className="mx-4 mb-3 h-2 overflow-hidden rounded-full bg-white/70">
               <div
                 className="h-full rounded-full transition-all duration-500 ease-out"
@@ -1765,38 +1796,6 @@ const EditMaids = () => {
                   boxShadow: importBatchProgress.active ? "0 0 8px rgba(99,153,34,0.5)" : "none",
                 }}
               />
-            </div>
-          </div>
-        )}
-
-        {/* Visibility transfer progress */}
-        {activeVisibilityTransfer && (
-          <div className={`rounded-xl border px-4 py-3 ${
-            activeVisibilityTransfer.direction === "hide"
-              ? "border-[#FAC775]/70 bg-[#FAEEDA]"
-              : "border-[#97C459]/65 bg-[#EAF3DE]"
-          }`}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/75 ${
-                  activeVisibilityTransfer.direction === "hide" ? "text-[#854F0B]" : "text-[#3B6D11]"
-                }`}>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                </span>
-                <div className="min-w-0">
-                  <p className={`truncate text-sm font-extrabold ${
-                    activeVisibilityTransfer.direction === "hide" ? "text-[#633806]" : "text-[#27500A]"
-                  }`}>
-                    {activeVisibilityTransfer.direction === "hide" ? "Transferring to Hidden" : "Publishing to Public"}
-                  </p>
-                  <p className="text-xs font-medium text-foreground/60">
-                    {activeVisibilityTransfer.count} maid{activeVisibilityTransfer.count !== 1 ? "s" : ""} moved instantly here while deployment confirms the change.
-                  </p>
-                </div>
-              </div>
-              <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-foreground/55">
-                Syncing
-              </span>
             </div>
           </div>
         )}
@@ -1819,7 +1818,7 @@ const EditMaids = () => {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={selected.size === 0 || Array.from(selected).some((ref) => movingVisibilityRefs.has(ref))}
+                disabled={selected.size === 0}
                 onClick={() => openVisibilityDialog({ bulk: true, makePublic: view !== "public" })}
                 className={`h-8 text-xs ${selected.size > 0 ? "border-[#97C459]/60 text-[#3B6D11]" : ""}`}
               >
@@ -1867,7 +1866,10 @@ const EditMaids = () => {
               const photoPreview = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl;
               const isSelected = selected.has(maid.referenceCode);
               const flagCode = getNationalityCode(maid.nationality);
-              const isMovingVisibility = movingVisibilityRefs.has(maid.referenceCode);
+              // inFlightRefs covers the rare edge-case where a card stays
+              // visible after a visibility change (e.g., stale render). In
+              // the normal path the card is already removed from the list.
+              const isInFlight = inFlightRefs.has(maid.referenceCode);
 
               return (
                 <div
@@ -1875,7 +1877,8 @@ const EditMaids = () => {
                   className={`group relative flex flex-col overflow-hidden border-[1.5px] transition-all duration-200 ease-in-out
                     hover:shadow-[0_6px_24px_rgba(99,153,34,0.14),0_2px_6px_rgba(0,0,0,0.06)]
                     hover:-translate-y-0.5 hover:border-[#97C459]/70
-                    ${isSelected ? "border-[#639922] shadow-[0_0_0_3px_rgba(99,153,34,0.20)]" : "border-border"}`}
+                    ${isSelected ? "border-[#639922] shadow-[0_0_0_3px_rgba(99,153,34,0.20)]" : "border-border"}
+                    ${isInFlight ? "opacity-40 pointer-events-none" : ""}`}
                   style={{ animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards", animationDelay: `${i * 0.04}s`, opacity: 0 }}
                 >
                   {/* Photo area */}
@@ -1941,10 +1944,10 @@ const EditMaids = () => {
                           ? "bg-[#EAF3DE] text-[#3B6D11] border-[#97C459]/50 hover:bg-[#C0DD97]/60"
                           : "bg-[#FAEEDA] text-[#854F0B] border-[#FAC775]/60 hover:bg-[#FAC775]/40"
                       }`}
-                      disabled={isMovingVisibility}
+                      disabled={isInFlight}
                       onClick={() => openVisibilityDialog({ maid, makePublic: view !== "public" })}
                     >
-                      {isMovingVisibility ? (
+                      {isInFlight ? (
                         <><Loader2 className="h-3 w-3 animate-spin" /> Moving...</>
                       ) : view === "public" ? (
                         <><Eye className="h-3 w-3" /> Public — Hide</>
