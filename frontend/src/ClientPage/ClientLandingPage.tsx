@@ -311,6 +311,15 @@ const GLOBAL_STYLES = `
     letter-spacing: 0.05em;
   }
 
+  /* ── Pagination ── */
+  .pagination-wrap {
+    margin-top: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
   .pagination-btn {
     min-width: 40px;
     height: 40px;
@@ -324,16 +333,31 @@ const GLOBAL_STYLES = `
     color: #2E6000;
     cursor: pointer;
     transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
   }
   .pagination-btn:hover:not(:disabled) { border-color: var(--yellow-dark); background: var(--yellow); color: var(--green-ink); }
   .pagination-btn.active { background: var(--green-mid); border-color: var(--green-mid); color: #fff; }
   .pagination-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
+  /* Hide icon chevrons by default (show text labels) */
+  .pag-icon { display: none; font-size: 22px; font-weight: 400; line-height: 1; }
+  .pag-label { display: inline; }
+
+  @media (max-width: 480px) {
+    /* Shrink nav buttons, show icon only */
+    .pagination-btn { min-width: 38px; height: 38px; padding: 0 8px; font-size: 12px; border-radius: 10px; }
+    .pag-icon  { display: inline; font-size: 26px; font-weight: 300; line-height: 1; }
+    .pag-label { display: none; }
+  }
+
   /* ── Back to Top Button ── */
   .back-to-top-btn {
     position: fixed;
     bottom: 32px;
-    right: 32px;
+    left: 32px;
     z-index: 9999;
     width: 48px;
     height: 48px;
@@ -397,7 +421,7 @@ const GLOBAL_STYLES = `
     .services-grid { grid-template-columns: 1fr !important; }
   }
   @media (max-width: 480px) {
-    .back-to-top-btn { bottom: 20px; right: 20px; width: 42px; height: 42px; }
+    .back-to-top-btn { bottom: 20px; left: 20px; width: 42px; height: 42px; }
   }
 
   /* ── Maid grid: 6 columns × 2 rows ── */
@@ -974,6 +998,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     currentPage * ITEMS_PER_PAGE,
   );
 
+  // ── Responsive page numbers: ±1 on mobile, ±2 on desktop
   const pageNumbers = useMemo(() => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: (number | "...")[] = [1];
@@ -1026,10 +1051,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   };
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    window.setTimeout(
-      () => document.getElementById("maid-results")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      0,
-    );
   };
   const clearFilters = () => {
     setKeyword(""); setMaidTypes([]); setNationality("No Preference");
@@ -1383,17 +1404,54 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 )}
               </div>
 
+              {/* ── PAGINATION (responsive) ── */}
               {totalPages > 1 && (
-                <div style={{ marginTop: 40, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
-                  <button className="pagination-btn" onClick={() => handlePageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>← Prev</button>
+                <div className="pagination-wrap">
+                  {/* Prev button */}
+                  <button
+                    className="pagination-btn"
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    aria-label="Previous page"
+                  >
+                    {/* Desktop: text label */}
+                    <span className="pag-label">← Prev</span>
+                    {/* Mobile: icon only */}
+                    <span className="pag-icon" aria-hidden="true">‹</span>
+                  </button>
+
+                  {/* Page numbers with ellipsis */}
                   {pageNumbers.map((page, idx) =>
                     page === "..." ? (
-                      <span key={`e-${idx}`} style={{ padding: "0 4px", fontSize: 13, color: "#aaa" }}>…</span>
+                      <span
+                        key={`e-${idx}`}
+                        style={{ padding: "0 2px", fontSize: 13, color: "#aaa", userSelect: "none" }}
+                      >
+                        …
+                      </span>
                     ) : (
-                      <button key={page} onClick={() => handlePageChange(page as number)} className={`pagination-btn${page === currentPage ? " active" : ""}`}>{page}</button>
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page as number)}
+                        className={`pagination-btn${page === currentPage ? " active" : ""}`}
+                        aria-label={`Page ${page}`}
+                        aria-current={page === currentPage ? "page" : undefined}
+                      >
+                        {page}
+                      </button>
                     )
                   )}
-                  <button className="pagination-btn" onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>Next →</button>
+
+                  {/* Next button */}
+                  <button
+                    className="pagination-btn"
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    aria-label="Next page"
+                  >
+                    <span className="pag-label">Next →</span>
+                    <span className="pag-icon" aria-hidden="true">›</span>
+                  </button>
                 </div>
               )}
             </>
