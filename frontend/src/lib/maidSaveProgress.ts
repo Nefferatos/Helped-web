@@ -141,11 +141,12 @@ export const startMaidSaveTask = ({
     ? payload.photoDataUrls.filter((item) => typeof item === "string" && item.trim().length > 0)
     : [];
   const normalizedVideo = String(payload.videoDataUrl || "").trim();
+  const inlineVideo = isInlineMediaUrl(normalizedVideo) ? normalizedVideo : "";
   const metadataPayload: Partial<MaidProfile> = {
     ...payload,
     photoDataUrl: undefined,
     photoDataUrls: undefined,
-    videoDataUrl: undefined,
+    videoDataUrl: inlineVideo ? undefined : normalizedVideo,
     hasPhoto: undefined,
   };
 
@@ -312,7 +313,7 @@ export const startMaidSaveTask = ({
           }
         }
 
-        if (normalizedVideo && isInlineMediaUrl(normalizedVideo)) {
+        if (inlineVideo) {
           emitSnapshot({
             ...(readMaidSaveTask(taskId) ?? initialSnapshot),
             status: "processing",
@@ -324,7 +325,7 @@ export const startMaidSaveTask = ({
           const videoResponse = await sendJsonRequest<{ error?: string; maid?: MaidProfile }>({
             requestUrl: `/api/maids/${encodeURIComponent(persistedMaid.referenceCode)}/video`,
             requestMethod: "PATCH",
-            requestBody: { videoDataUrl: normalizedVideo },
+            requestBody: { videoDataUrl: inlineVideo },
             timeoutMs: MEDIA_REQUEST_TIMEOUT_MS,
             uploadStage: "Finalizing maid video...",
           });

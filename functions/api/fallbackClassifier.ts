@@ -1,10 +1,24 @@
+// fallbackClassifier.ts
+// Deterministic keyword-based workflow classifier used as a fast-path fallback
+// before (or instead of) the AI classifier.
+//
+// FIXES applied:
+//  1. DeterministicWorkflow now includes all values present in CANONICAL_WORKFLOWS
+//     so normalizeWorkflow() in the server never throws INVALID_WORKFLOW for a
+//     fallback-produced value.
+//  2. Pattern priority reordered: inquiry_match (the most common intent) is
+//     checked FIRST so that a message like "hire contract" routes to inquiry_match
+//     rather than accidentally falling through to contract_creation.
+
 export type DeterministicWorkflow =
   | "inquiry_match"
   | "contract_creation"
   | "schedule_creation"
   | "notification_only"
   | "human_review"
-  | "inquiry_only";
+  | "inquiry_only"
+  | "lead_scoring"       // added - present in CANONICAL_WORKFLOWS
+  | "validation_error";  // added - present in CANONICAL_WORKFLOWS
 
 const INQUIRY_MATCH_PATTERN =
   /\b(hire|nanny|maid|housemaid|infant care|childcare|babysitter|recommend|shortlist|match)\b/i;
@@ -22,6 +36,17 @@ export const classifyFallback = (
 ): { workflow: DeterministicWorkflow } => {
   const text = message.trim();
 
+  // FIX: inquiry_match is checked FIRST.
+  // Previously it was the last check, so messages like "hire contract" would
+  // incorrectly route to contract_creation instead of inquiry_match.
+  if (INQUIRY_MATCH_PATTERN.test(text)) {
+    return { workflow: "inquiry_match" };
+  }
+
+  if (HUMAN_REVIEW_PATTERN.test(text)) {
+    return { workflow: "human_review" };
+  }
+
   if (CONTRACT_PATTERN.test(text)) {
     return { workflow: "contract_creation" };
   }
@@ -32,14 +57,6 @@ export const classifyFallback = (
 
   if (NOTIFICATION_PATTERN.test(text)) {
     return { workflow: "notification_only" };
-  }
-
-  if (HUMAN_REVIEW_PATTERN.test(text)) {
-    return { workflow: "human_review" };
-  }
-
-  if (INQUIRY_MATCH_PATTERN.test(text)) {
-    return { workflow: "inquiry_match" };
   }
 
   return { workflow: "inquiry_only" };

@@ -43,6 +43,11 @@ const parseNumberString = (value: unknown) => {
   return parsed > 0 ? String(parsed) : "";
 };
 
+const toNonNegativeNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+};
+
 const parseList = (value: unknown) => {
   if (Array.isArray(value)) {
     return value.map((item) => asTrimmedString(item)).filter(Boolean);
@@ -856,6 +861,10 @@ const AddMaid = () => {
     type: String(formData.type || "").trim(),
     nationality: String(formData.nationality || "").trim(),
     placeOfBirth: String(formData.placeOfBirth || "").trim(),
+    height: toNonNegativeNumber(formData.height),
+    weight: toNonNegativeNumber(formData.weight),
+    numberOfChildren: toNonNegativeNumber(formData.numberOfChildren),
+    numberOfSiblings: toNonNegativeNumber(formData.numberOfSiblings),
     photoDataUrl: String(formData.photoDataUrl || "").trim(),
     photoDataUrls: (Array.isArray(formData.photoDataUrls) ? formData.photoDataUrls : [])
       .map((item) => String(item || "").trim())
@@ -1989,8 +1998,8 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
                 <StyledInput
                   type="text"
                   value={String(formData.numberOfSiblings ?? "")}
-                  onChange={(e) => setFormData((p) => ({ ...p, numberOfSiblings: e.target.value as unknown as number }))}
-                  placeholder="e.g. 3 or 6/7"
+                  onChange={(e) => setFormData((p) => ({ ...p, numberOfSiblings: Number(e.target.value || 0) }))}
+                  placeholder="e.g. 3"
                 />
               </Field>
             }

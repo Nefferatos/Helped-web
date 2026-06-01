@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { adminPath } from "@/lib/routes";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import type { MaidProfile } from "@/lib/maids";
 
 /* ─── Constants ─── */
@@ -2195,7 +2196,9 @@ const EditMaid = () => {
     const load = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`/api/maids/${encodeURIComponent(refCode)}`);
+        const response = await fetch(`/api/maids/${encodeURIComponent(refCode)}`, {
+          headers: { ...getAgencyAdminAuthHeaders() },
+        });
         const data = (await response.json().catch(() => ({}))) as {
           error?: string;
           maid?: MaidProfile;
@@ -2228,6 +2231,7 @@ const EditMaid = () => {
     const height = Number(form.height);
     const weight = Number(form.weight);
     const numberOfChildren = Number(form.numberOfChildren);
+    const numberOfSiblings = Number(form.numberOfSiblings);
 
     if (!form.fullName.trim() || !form.referenceCode.trim()) {
       toast.error("Full name and reference code are required.");
@@ -2245,6 +2249,10 @@ const EditMaid = () => {
       toast.error("Number of children must be 0 or more.");
       return;
     }
+    if (!Number.isFinite(numberOfSiblings) || numberOfSiblings < 0) {
+      toast.error("Number of siblings must be 0 or more.");
+      return;
+    }
 
     const payload: MaidProfile = {
       ...maid,
@@ -2259,7 +2267,7 @@ const EditMaid = () => {
       religion: form.religion.trim(),
       maritalStatus: form.maritalStatus.trim(),
       numberOfChildren,
-      numberOfSiblings: form.numberOfSiblings as any,
+      numberOfSiblings,
       homeAddress: form.homeAddress.trim(),
       airportRepatriation: form.airportRepatriation.trim(),
       educationLevel: form.educationLevel.trim(),
@@ -2276,7 +2284,7 @@ const EditMaid = () => {
       setIsSaving(true);
       const response = await fetch(`/api/maids/${encodeURIComponent(refCode)}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify(payload),
       });
       const data = (await response.json().catch(() => ({}))) as {

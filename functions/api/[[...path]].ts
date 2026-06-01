@@ -448,6 +448,7 @@ type Bindings = {
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
+  MAKE_WEBHOOK_URL?: string;
 };
 
 type Variables = {
@@ -565,7 +566,7 @@ const defaultData = (): AppData => ({
       id: 1,
       agencyId: 1,
       username: "attheagency",
-      password: "@atagency2026",
+      password: "",
       agencyName: "Main Agency",
       createdAt: now(),
     },
@@ -885,15 +886,10 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
   if (!hasMainAgency) {
     agencyAdmins = agencyAdmins.map((admin) =>
       admin.username === "admin" && admin.password === "admin123"
-        ? { ...admin, username: "attheagency", password: "@atagency2026" }
+        ? { ...admin, username: "attheagency" }
         : admin,
     );
   }
-  agencyAdmins = agencyAdmins.map((admin) =>
-    admin.username === "attheagency"
-      ? { ...admin, password: "@atagency2026" }
-      : admin,
-  );
   const directSales = raw.directSales ?? defaults.directSales;
   const requests = Array.isArray(raw.requests)
     ? raw.requests
@@ -1126,7 +1122,7 @@ type LoadDataOptions = {
 
 const loadDataFromKv = async (
   kv: KVNamespace,
-  options: LoadDataOptions = {},
+  _options: LoadDataOptions = {},
 ): Promise<AppData> => {
   const raw = await kv.get("app-data.json");
   if (!raw) {
@@ -1135,11 +1131,7 @@ const loadDataFromKv = async (
     return initial;
   }
 
-  const merged = mergeAppData(JSON.parse(stripBom(raw)) as Partial<AppData>);
-  if (!options.readOnly) {
-    await kv.put("app-data.json", JSON.stringify(merged));
-  }
-  return merged;
+  return mergeAppData(JSON.parse(stripBom(raw)) as Partial<AppData>);
 };
 
 const saveDataToKv = async (kv: KVNamespace, data: AppData) => {
@@ -2708,8 +2700,6 @@ const parseAuthorizationToken = (request: Request) => {
 };
 
 const requireClientAuth = async (c: any, next: () => Promise<void>) => {
-  console.log("requireClientAuth: storage mode", getStorageMode(c.env));
-
   const token = parseAuthorizationToken(c.req.raw);
   if (!token) {
     console.log("requireClientAuth: no token");
@@ -3147,7 +3137,7 @@ const uploadMaidMediaToSupabaseStorage = async (
   const config = getSupabaseStorageConfig(env);
   if (!config) {
     console.warn("Maid media upload skipped: Supabase Storage is not configured");
-    return "";
+    return trimmed;
   }
 
   await ensureSupabaseStorageBucket(config);
@@ -3974,6 +3964,7 @@ type SupabaseAuthUser = {
   user_metadata?: Record<string, unknown>;
 };
 
+const SUPABASE_USER_CACHE_MAX = 500;
 const supabaseUserCache = new Map<
   string,
   { user: SupabaseAuthUser; expiresAt: number }
@@ -4019,6 +4010,15 @@ const getSupabaseAuthUser = async (env: Bindings, accessToken: string) => {
     }
 
     const user = (await response.json()) as SupabaseAuthUser;
+    // Evict expired entries before inserting.
+    const now = Date.now();
+    for (const [key, entry] of supabaseUserCache) {
+      if (entry.expiresAt <= now) supabaseUserCache.delete(key);
+    }
+    // Enforce size cap (LRU-lite: delete oldest insertion when full).
+    if (supabaseUserCache.size >= SUPABASE_USER_CACHE_MAX) {
+      supabaseUserCache.delete(supabaseUserCache.keys().next().value!);
+    }
     // Cache for 5 minutes to reduce Supabase Auth calls.
     supabaseUserCache.set(accessToken, {
       user,
@@ -7898,7 +7898,9 @@ const runScheduledAiAutopilot = async (env: Bindings) => {
       reason: "AI_AUTOPILOT_ENABLED is not true",
     };
   }
-  const data = await loadData(env, { readOnly: true });
+  // Load without readOnly so the merge normalisation is persisted and any
+  // changes made by the autopilot runner are not silently discarded.
+  const data = await loadData(env);
   return await runAiAutopilot({
     appData: data as any,
     groqApiKey: env.GROQ_API_KEY,
@@ -9579,49 +9581,9 @@ app.get("/api/chats/client/last-id", requireClientAuth, async (c) => {
   return c.json({ lastId });
 });
 
-app.get("/api/chats/admin/stream", requireAgencyAdminAuth, async (c) => {
-  const url = new URL(c.req.url);
-  const afterId = Number(url.searchParams.get("afterId") ?? 0);
-  if (!Number.isFinite(afterId) || afterId < 0) {
-    return c.json({ error: "afterId must be a non-negative number" }, 400);
-  }
-
-  const startedAt = Date.now();
-  return createSseResponse(c.req.raw, async (controller) => {
-    let lastId = afterId;
-    let lastHeartbeat = Date.now();
-    writeSseEvent(controller, "ready", { ok: true });
-
-    while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
-      const data = await loadData(c.env);
-      const nextMessages = data.chatMessages
-        .filter((message) => message.id > lastId)
-        .sort((left, right) => left.id - right.id);
-
-      for (const message of nextMessages) {
-        writeSseEvent(controller, "message", { message });
-        lastId = Math.max(lastId, message.id);
-      }
-
-      const nowTime = Date.now();
-      if (nowTime - lastHeartbeat > 15_000) {
-        writeSseComment(controller, "keep-alive");
-        lastHeartbeat = nowTime;
-      }
-
-      await sleep(1200);
-    }
-  });
-});
-
-app.get("/api/chats/admin/last-id", requireAgencyAdminAuth, async (c) => {
-  const data = await loadData(c.env);
-  const lastId = data.chatMessages.reduce(
-    (maxId, message) => Math.max(maxId, message.id),
-    0,
-  );
-  return c.json({ lastId });
-});
+// NOTE: The duplicate registrations of /api/chats/admin/stream and
+// /api/chats/admin/last-id that previously existed here have been removed.
+// Hono matches the first registered handler; the duplicates were dead code.
 
 app.get(
   "/api/chats/admin/stream/:clientId",
