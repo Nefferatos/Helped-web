@@ -587,6 +587,16 @@ const MaidCard = ({
   maid: MaidProfile; isShortlisted: boolean; onToggleShortlist: (ref: string) => void;
   onNavigate?: () => void; isLoggedIn: boolean; loginPath: string; showCategory?: boolean; disableHoverPopup?: boolean;
 }) => {
+  const [hovered, setHovered] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, []);
+
   if (!isLoggedIn) return <LockedMaidCard maid={maid} loginPath={loginPath} disableHoverModal={disableHoverPopup} />;
 
   const photo = getPrimaryPhoto(maid);
@@ -596,10 +606,6 @@ const MaidCard = ({
   const experienceBucket = getExperienceBucket(maid);
   const category = getMaidCategory(maid);
   const displayLabel = showCategory && category ? category : (maid.nationality || "");
-
-  const [hovered, setHovered] = useState(false);
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cardRef = useRef<HTMLElement>(null);
 
   const handleMouseEnter = () => {
     if (disableHoverPopup) return;

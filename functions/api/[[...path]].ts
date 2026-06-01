@@ -1259,6 +1259,12 @@ const readSupabaseError = async (response: Response) => {
   return await response.text();
 };
 
+const isSupabaseStatementTimeout = (status: number, details: string) =>
+  status >= 500 &&
+  (details.includes('"code":"57014"') ||
+    details.toLowerCase().includes("statement timeout") ||
+    details.toLowerCase().includes("canceling statement"));
+
 const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -1552,31 +1558,43 @@ const fetchSupabaseAppDataRow = async (
   const table = encodeURIComponent(config.table);
   const rowId = encodeURIComponent(config.rowId);
   const url = `${config.baseUrl}/rest/v1/${table}?id=eq.${rowId}&select=data,updated_at&limit=1`;
+  const retryDelaysMs = [150, 400, 900];
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers: supabaseHeaders(config, { accept: "application/json" }),
-  });
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: supabaseHeaders(config, { accept: "application/json" }),
+    });
 
-  if (!response.ok) {
-    const details = await readSupabaseError(response);
-    throw new Error(`Supabase read failed (${response.status}): ${details}`);
+    if (!response.ok) {
+      const details = await readSupabaseError(response);
+      if (
+        isSupabaseStatementTimeout(response.status, details) &&
+        attempt < retryDelaysMs.length
+      ) {
+        await sleep(retryDelaysMs[attempt]);
+        continue;
+      }
+      throw new Error(`Supabase read failed (${response.status}): ${details}`);
+    }
+
+    const rows = (await response.json()) as Array<{
+      data?: Partial<AppData>;
+      updated_at?: string;
+    }>;
+    const row = rows[0];
+
+    if (!row?.data || !row.updated_at) {
+      return null;
+    }
+
+    return {
+      data: mergeAppData(row.data),
+      updatedAt: row.updated_at,
+    };
   }
 
-  const rows = (await response.json()) as Array<{
-    data?: Partial<AppData>;
-    updated_at?: string;
-  }>;
-  const row = rows[0];
-
-  if (!row?.data || !row.updated_at) {
-    return null;
-  }
-
-  return {
-    data: mergeAppData(row.data),
-    updatedAt: row.updated_at,
-  };
+  throw new Error("Supabase read failed unexpectedly");
 };
 
 const loadDataFromSupabaseNormalized = async (
@@ -1976,6 +1994,51 @@ const updateMaidVisibilityInSupabaseNormalized = async (
   return rows[0]?.payload ? normalizeMaid(rows[0].payload) : payload;
 };
 
+const updateMaidMediaInSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  referenceCode: string,
+  media: Pick<MaidRecord, "photoDataUrl" | "photoDataUrls" | "hasPhoto" | "videoDataUrl">,
+) => {
+  const existing = await getMaidFromSupabaseNormalized(config, referenceCode);
+  if (!existing) return null;
+
+  const updatedAt = now();
+  const payload: MaidRecord = {
+    ...existing,
+    ...media,
+    updatedAt,
+  };
+  const table = encodeURIComponent("helped_maids");
+  const params = new URLSearchParams();
+  params.set("app_id", `eq.${config.rowId}`);
+  params.set("reference_code", `eq.${normalizeReferenceCode(referenceCode)}`);
+  params.set("select", "payload");
+
+  const response = await fetch(
+    `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
+    {
+      method: "PATCH",
+      headers: supabaseHeaders(config, {
+        "content-type": "application/json",
+        prefer: "return=representation",
+      }),
+      body: JSON.stringify({
+        has_photo: payload.hasPhoto,
+        updated_at: updatedAt,
+        payload,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    throw new Error(`Supabase maid media update failed (${response.status}): ${details}`);
+  }
+
+  const rows = (await response.json()) as SupabaseMaidRow[];
+  return rows[0]?.payload ? normalizeMaid(rows[0].payload) : payload;
+};
+
 const updateMaidVisibilityInSupabaseAppData = async (
   config: SupabaseAppDataConfig,
   referenceCode: string,
@@ -2102,6 +2165,122 @@ const upsertMaidInSupabaseNormalized = async (
   return rows[0]?.payload ? normalizeMaid(rows[0].payload) : maid;
 };
 
+const savePublicAtsApplicationToSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  parsed: {
+    application: AtsApplicationRecord;
+    profile: AtsApplicationProfileRecord;
+    score: AtsScoreRecord;
+    documents: AtsDocumentRecord[];
+    history: AtsHistoryRecord[];
+    notifications: AtsNotificationRecord[];
+  },
+) => {
+  const { application, profile, score, documents, history, notifications } = parsed;
+
+  await upsertSupabaseTableRows(
+    config,
+    "helped_ats_applications",
+    [{
+      app_id: config.rowId,
+      record_id: application.id,
+      agency_id: application.agencyId,
+      profile_id: application.profileId,
+      application_code: application.applicationCode,
+      status: application.status,
+      source: application.source,
+      applied_at: application.appliedAt,
+      updated_at: application.updatedAt,
+      payload: application,
+    }],
+    "app_id,record_id",
+  );
+
+  await upsertSupabaseTableRows(
+    config,
+    "helped_ats_profiles",
+    [{
+      app_id: config.rowId,
+      record_id: profile.id,
+      application_id: application.id,
+      full_name: profile.fullName,
+      email: profile.email,
+      contact_number: profile.contactNumber,
+      nationality: profile.nationality,
+      years_of_experience: profile.yearsOfExperience,
+      expected_salary: profile.expectedSalary,
+      created_at: profile.createdAt,
+      updated_at: profile.updatedAt,
+      payload: profile,
+    }],
+    "app_id,record_id",
+  );
+
+  await upsertSupabaseTableRows(
+    config,
+    "helped_ats_scores",
+    [{
+      app_id: config.rowId,
+      application_id: application.id,
+      score: score.score,
+      category: score.category,
+      payload: score,
+    }],
+    "app_id,application_id",
+  );
+
+  if (history.length > 0) {
+    await upsertSupabaseTableRows(
+      config,
+      "helped_ats_history",
+      history.map((item) => ({
+        app_id: config.rowId,
+        record_id: item.id,
+        application_id: application.id,
+        to_stage: item.toStage,
+        created_at: item.createdAt,
+        payload: item,
+      })),
+      "app_id,record_id",
+    );
+  }
+
+  if (documents.length > 0) {
+    await upsertSupabaseTableRows(
+      config,
+      "helped_ats_documents",
+      documents.map((item) => ({
+        app_id: config.rowId,
+        record_id: item.id,
+        application_id: application.id,
+        document_type: item.type,
+        file_name: item.name,
+        uploaded_at: item.uploadedAt,
+        file_size: item.size,
+        payload: item,
+      })),
+      "app_id,record_id",
+    );
+  }
+
+  if (notifications.length > 0) {
+    await upsertSupabaseTableRows(
+      config,
+      "helped_ats_notifications",
+      notifications.map((item) => ({
+        app_id: config.rowId,
+        record_id: item.id,
+        application_id: application.id,
+        event: item.event,
+        channel: item.channel,
+        created_at: item.createdAt,
+        payload: item,
+      })),
+      "app_id,record_id",
+    );
+  }
+};
+
 const getSupabaseStorageConfig = (
   env: Bindings,
 ): SupabaseStorageConfig | null => {
@@ -2213,11 +2392,10 @@ const saveDataToSupabase = async (
       }
     } else {
       const details = await readSupabaseError(response);
-      const isRetryableTimeout =
-        response.status >= 500 &&
-        (details.includes('"code":"57014"') ||
-          details.toLowerCase().includes("statement timeout") ||
-          details.toLowerCase().includes("canceling statement"));
+      const isRetryableTimeout = isSupabaseStatementTimeout(
+        response.status,
+        details,
+      );
 
       if (!isRetryableTimeout || attempt === retryDelaysMs.length) {
         throw new Error(`Supabase write failed (${response.status}): ${details}`);
@@ -2261,7 +2439,11 @@ const loadData = async (
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
-      return await loadDataFromSupabaseNormalized(supabase);
+      try {
+        return await loadDataFromSupabaseNormalized(supabase);
+      } catch (error) {
+        console.warn("Normalized Supabase load failed; falling back to app_data", error);
+      }
     }
     return await loadDataFromSupabase(supabase, options);
   }
@@ -2279,8 +2461,12 @@ const saveData = async (env: Bindings, data: AppData) => {
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
-      await saveDataToSupabaseNormalized(supabase, data);
-      return;
+      try {
+        await saveDataToSupabaseNormalized(supabase, data);
+        return;
+      } catch (error) {
+        console.warn("Normalized Supabase save failed; falling back to app_data", error);
+      }
     }
     await saveDataToSupabase(supabase, data);
     return;
@@ -5978,11 +6164,44 @@ app.patch(
       return c.json({ error: "photoDataUrl string is required" }, 400);
     }
 
+    const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config && isNormalizedSupabaseEnabled(c.env)) {
+      try {
+        const existing = await getMaidFromSupabaseNormalized(config, referenceCode);
+        if (!existing) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+
+        const photoDataUrl = await uploadMaidMediaToSupabaseStorage(
+          c.env,
+          body.photoDataUrl,
+          existing.agencyId,
+          existing.referenceCode,
+          "photos",
+          0,
+        );
+        const maid = await updateMaidMediaInSupabaseNormalized(
+          config,
+          referenceCode,
+          {
+            photoDataUrl,
+            photoDataUrls: photoDataUrl ? [photoDataUrl] : [],
+            hasPhoto: Boolean(photoDataUrl),
+            videoDataUrl: existing.videoDataUrl,
+          },
+        );
+        return c.json({ maid });
+      } catch (error) {
+        console.warn("Fast maid photo path failed; falling back to app data", error);
+      }
+    }
+
     const data = await loadData(c.env);
     const index = data.maids.findIndex(
       (maid) =>
         maid.referenceCode ===
-        normalizeReferenceCode(c.req.param("referenceCode")),
+        referenceCode,
     );
     if (index === -1) {
       return c.json({ error: "Maid not found" }, 404);
@@ -6017,11 +6236,55 @@ app.patch(
       return c.json({ error: "photoDataUrl string is required" }, 400);
     }
 
+    const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config && isNormalizedSupabaseEnabled(c.env)) {
+      try {
+        const existing = await getMaidFromSupabaseNormalized(config, referenceCode);
+        if (!existing) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+
+        const photos = Array.isArray(existing.photoDataUrls)
+          ? [...existing.photoDataUrls]
+          : existing.photoDataUrl
+            ? [existing.photoDataUrl]
+            : [];
+        if (photos.length >= 5) {
+          return c.json({ error: "Maximum 5 photos allowed per maid" }, 400);
+        }
+
+        photos.push(
+          await uploadMaidMediaToSupabaseStorage(
+            c.env,
+            body.photoDataUrl,
+            existing.agencyId,
+            existing.referenceCode,
+            "photos",
+            photos.length,
+          ),
+        );
+        const maid = await updateMaidMediaInSupabaseNormalized(
+          config,
+          referenceCode,
+          {
+            photoDataUrl: photos[0] ?? "",
+            photoDataUrls: photos,
+            hasPhoto: photos.length > 0,
+            videoDataUrl: existing.videoDataUrl,
+          },
+        );
+        return c.json({ maid });
+      } catch (error) {
+        console.warn("Fast maid photos path failed; falling back to app data", error);
+      }
+    }
+
     const data = await loadData(c.env);
     const index = data.maids.findIndex(
       (maid) =>
         maid.referenceCode ===
-        normalizeReferenceCode(c.req.param("referenceCode")),
+        referenceCode,
     );
     if (index === -1) {
       return c.json({ error: "Maid not found" }, 404);
@@ -6067,11 +6330,51 @@ app.put(
       return c.json({ error: "photoDataUrls array is required" }, 400);
     }
 
+    const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config && isNormalizedSupabaseEnabled(c.env)) {
+      try {
+        const existing = await getMaidFromSupabaseNormalized(config, referenceCode);
+        if (!existing) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+
+        const incomingPhotos = body.photoDataUrls
+          .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          .slice(0, 5);
+        const photoDataUrls = await Promise.all(
+          incomingPhotos.map((photo, photoIndex) =>
+            uploadMaidMediaToSupabaseStorage(
+              c.env,
+              photo,
+              existing.agencyId,
+              existing.referenceCode,
+              "photos",
+              photoIndex,
+            ),
+          ),
+        );
+        const maid = await updateMaidMediaInSupabaseNormalized(
+          config,
+          referenceCode,
+          {
+            photoDataUrl: photoDataUrls[0] ?? "",
+            photoDataUrls,
+            hasPhoto: photoDataUrls.length > 0,
+            videoDataUrl: existing.videoDataUrl,
+          },
+        );
+        return c.json({ maid });
+      } catch (error) {
+        console.warn("Fast maid photo gallery path failed; falling back to app data", error);
+      }
+    }
+
     const data = await loadData(c.env);
     const index = data.maids.findIndex(
       (maid) =>
         maid.referenceCode ===
-        normalizeReferenceCode(c.req.param("referenceCode")),
+        referenceCode,
     );
     if (index === -1) {
       return c.json({ error: "Maid not found" }, 404);
@@ -6113,11 +6416,44 @@ app.patch(
       return c.json({ error: "videoDataUrl string is required" }, 400);
     }
 
+    const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
+    const config = getSupabaseAppDataConfig(c.env);
+    if (config && isNormalizedSupabaseEnabled(c.env)) {
+      try {
+        const existing = await getMaidFromSupabaseNormalized(config, referenceCode);
+        if (!existing) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+
+        const videoDataUrl = await uploadMaidMediaToSupabaseStorage(
+          c.env,
+          body.videoDataUrl,
+          existing.agencyId,
+          existing.referenceCode,
+          "videos",
+          0,
+        );
+        const maid = await updateMaidMediaInSupabaseNormalized(
+          config,
+          referenceCode,
+          {
+            photoDataUrl: existing.photoDataUrl,
+            photoDataUrls: existing.photoDataUrls,
+            hasPhoto: existing.hasPhoto,
+            videoDataUrl,
+          },
+        );
+        return c.json({ maid });
+      } catch (error) {
+        console.warn("Fast maid video path failed; falling back to app data", error);
+      }
+    }
+
     const data = await loadData(c.env);
     const index = data.maids.findIndex(
       (maid) =>
         maid.referenceCode ===
-        normalizeReferenceCode(c.req.param("referenceCode")),
+        referenceCode,
     );
     if (index === -1) {
       return c.json({ error: "Maid not found" }, 404);
@@ -9713,6 +10049,21 @@ app.post(
   safeApi(async (c) => {
     const formData = await c.req.raw.formData();
     const parsed = await parseAtsFormData(c.env, formData);
+    const supabase = getSupabaseAppDataConfig(c.env);
+
+    if (supabase && isNormalizedSupabaseEnabled(c.env)) {
+      await savePublicAtsApplicationToSupabaseNormalized(supabase, parsed);
+      return c.json(
+        {
+          applicationId: parsed.application.id,
+          applicationCode: parsed.application.applicationCode,
+          applicantAccessToken: parsed.application.applicantAccessToken,
+          submittedAt: parsed.application.appliedAt,
+        },
+        201,
+      );
+    }
+
     const data = await loadData(c.env);
 
     data.ats.applications.unshift(parsed.application);

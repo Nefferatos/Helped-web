@@ -5,6 +5,9 @@ SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_APP_DATA_TABLE=app_data
 SUPABASE_APP_DATA_ID=default
+# Recommended for production: uses normalized Supabase tables and avoids loading/saving
+# the whole app_data JSON blob on high-traffic upload paths.
+SUPABASE_USE_NORMALIZED=true
 
 # Supabase Auth (JWT verification for social/phone login)
 SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
