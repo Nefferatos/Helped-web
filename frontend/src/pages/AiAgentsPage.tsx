@@ -1,3 +1,4 @@
+import { useState } from "react";
 import AiAgentPanel from "@/components/ai/AiAgentPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -183,8 +184,38 @@ const agentConsoles = [
 ];
 
 export default function AiAgentsPage() {
+  const [activeSection, setActiveSection] = useState("autopilot");
+
   return (
     <div className="mx-auto grid max-w-7xl gap-6">
+      <Tabs value={activeSection} onValueChange={setActiveSection} className="grid gap-5">
+        <div className="overflow-x-auto rounded-lg border bg-card p-2 shadow-sm">
+          <TabsList className="h-auto min-w-max justify-start bg-transparent p-0">
+            <TabsTrigger
+              value="autopilot"
+              className="min-h-10 gap-2 rounded-md px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <Sparkles className="h-4 w-4" />
+              AI Agent Autopilot
+            </TabsTrigger>
+            <TabsTrigger
+              value="reports"
+              className="min-h-10 gap-2 rounded-md px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <LineChart className="h-4 w-4" />
+              Agent Reports
+            </TabsTrigger>
+            <TabsTrigger
+              value="console"
+              className="min-h-10 gap-2 rounded-md px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <Bot className="h-4 w-4" />
+              Agent Console
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="autopilot" className="mt-0 grid gap-6">
       <section className="overflow-hidden rounded-lg border bg-card shadow-sm">
         <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:p-6">
           <div className="min-w-0">
@@ -208,23 +239,17 @@ export default function AiAgentsPage() {
               </p>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button asChild>
-                <a href="#agent-console">
-                  <Zap className="mr-2 h-4 w-4" />
-                  Start Autopilot
-                </a>
+              <Button type="button" onClick={() => setActiveSection("console")}>
+                <Zap className="mr-2 h-4 w-4" />
+                Start Autopilot
               </Button>
-              <Button variant="outline" asChild>
-                <a href="#agent-console">
-                  <ShieldCheck className="mr-2 h-4 w-4" />
-                  Review Queue
-                </a>
+              <Button type="button" variant="outline" onClick={() => setActiveSection("console")}>
+                <ShieldCheck className="mr-2 h-4 w-4" />
+                Review Queue
               </Button>
-              <Button variant="outline" asChild>
-                <a href="#agent-reports">
-                  <LineChart className="mr-2 h-4 w-4" />
-                  View Reports
-                </a>
+              <Button type="button" variant="outline" onClick={() => setActiveSection("reports")}>
+                <LineChart className="mr-2 h-4 w-4" />
+                View Reports
               </Button>
             </div>
           </div>
@@ -299,7 +324,9 @@ export default function AiAgentsPage() {
           </div>
         ))}
       </section>
+        </TabsContent>
 
+        <TabsContent value="reports" className="mt-0">
       <section className="grid gap-4" id="agent-reports">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -416,7 +443,9 @@ export default function AiAgentsPage() {
           </div>
         </div>
       </section>
+        </TabsContent>
 
+        <TabsContent value="console" className="mt-0 grid gap-4">
       <div id="agent-console">
         <h2 className="text-lg font-semibold tracking-tight">Agent Console</h2>
         <p className="text-sm text-muted-foreground">
@@ -467,6 +496,8 @@ export default function AiAgentsPage() {
             />
           </TabsContent>
         ))}
+      </Tabs>
+        </TabsContent>
       </Tabs>
     </div>
   );
