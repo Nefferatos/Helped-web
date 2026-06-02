@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Activity,
   ArrowUpRight,
@@ -113,6 +114,71 @@ const recentReports = [
     title: "Employer follow-up report",
     detail: "Urgent employers grouped by SLA age and next reply needed.",
     time: "Yesterday, 11:20 AM",
+  },
+];
+
+const agentConsoles = [
+  {
+    value: "agency-assistant",
+    title: "Agency Assistant",
+    shortLabel: "Assistant",
+    description: "Summarize enquiries, requests, messages, and recommend follow-ups.",
+    endpoint: "/api/ai/agency-assistant",
+    status: "live" as const,
+    runCount: "42",
+    impact: "6h saved",
+    confidence: 92,
+    automationSteps: ["Collect new enquiries", "Rank urgency and missing context", "Draft next best actions"],
+    quickPrompts: [
+      "Summarize today's urgent enquiries and recommend follow-ups.",
+      "Draft a polite response for employers waiting on agency updates.",
+    ],
+  },
+  {
+    value: "content-generator",
+    title: "Content Generator",
+    shortLabel: "Content",
+    description: "Draft maid descriptions, ads, FAQs, emails, notifications, and enquiry replies.",
+    endpoint: "/api/ai/content-generator",
+    status: "live" as const,
+    runCount: "31",
+    impact: "24 drafts",
+    confidence: 89,
+    automationSteps: ["Read selected agency records", "Generate compliant copy", "Hold drafts for approval"],
+    quickPrompts: [
+      "Create a professional maid profile description from available agency maid data.",
+      "Write three short advertisement variants for available maids.",
+    ],
+  },
+  {
+    value: "applicant-screening",
+    title: "Applicant Screening",
+    shortLabel: "Screening",
+    description: "Review FDW applications for missing documents, incomplete forms, and readiness.",
+    endpoint: "/api/ai/screen-applicant",
+    status: "review" as const,
+    runCount: "19",
+    impact: "5 blockers",
+    confidence: 81,
+    automationSteps: ["Check application fields", "Detect missing documents", "Prepare readiness summary"],
+    fields: [{ name: "applicationId", label: "Application ID", placeholder: "Optional" }],
+    quickPrompts: ["Screen this applicant and list missing requirements."],
+  },
+  {
+    value: "admin-analytics",
+    title: "Admin Analytics",
+    shortLabel: "Analytics",
+    description: "Summarize trends, bottlenecks, inactive maids, requests, contracts, and unanswered enquiries.",
+    endpoint: "/api/ai/admin-analytics",
+    status: "live" as const,
+    runCount: "12",
+    impact: "Daily brief",
+    confidence: 86,
+    automationSteps: ["Scan operational records", "Detect bottlenecks", "Recommend management actions"],
+    quickPrompts: [
+      "Generate an operational report with bottlenecks and next actions.",
+      "Identify inactive maids and unanswered enquiries.",
+    ],
   },
 ];
 
@@ -358,66 +424,50 @@ export default function AiAgentsPage() {
         </p>
       </div>
 
-      <div className="grid gap-5">
-        <AiAgentPanel
-          title="Agency Assistant"
-          description="Summarize enquiries, requests, messages, and recommend follow-ups."
-          endpoint="/api/ai/agency-assistant"
-          mode="agency"
-          status="live"
-          runCount="42"
-          impact="6h saved"
-          confidence={92}
-          automationSteps={["Collect new enquiries", "Rank urgency and missing context", "Draft next best actions"]}
-          quickPrompts={[
-            "Summarize today's urgent enquiries and recommend follow-ups.",
-            "Draft a polite response for employers waiting on agency updates.",
-          ]}
-        />
-        <AiAgentPanel
-          title="Content Generator"
-          description="Draft maid descriptions, ads, FAQs, emails, notifications, and enquiry replies."
-          endpoint="/api/ai/content-generator"
-          mode="agency"
-          status="live"
-          runCount="31"
-          impact="24 drafts"
-          confidence={89}
-          automationSteps={["Read selected agency records", "Generate compliant copy", "Hold drafts for approval"]}
-          quickPrompts={[
-            "Create a professional maid profile description from available agency maid data.",
-            "Write three short advertisement variants for available maids.",
-          ]}
-        />
-        <AiAgentPanel
-          title="Applicant Screening"
-          description="Review FDW applications for missing documents, incomplete forms, and readiness."
-          endpoint="/api/ai/screen-applicant"
-          mode="agency"
-          status="review"
-          runCount="19"
-          impact="5 blockers"
-          confidence={81}
-          automationSteps={["Check application fields", "Detect missing documents", "Prepare readiness summary"]}
-          fields={[{ name: "applicationId", label: "Application ID", placeholder: "Optional" }]}
-          quickPrompts={["Screen this applicant and list missing requirements."]}
-        />
-        <AiAgentPanel
-          title="Admin Analytics"
-          description="Summarize trends, bottlenecks, inactive maids, requests, contracts, and unanswered enquiries."
-          endpoint="/api/ai/admin-analytics"
-          mode="agency"
-          status="live"
-          runCount="12"
-          impact="Daily brief"
-          confidence={86}
-          automationSteps={["Scan operational records", "Detect bottlenecks", "Recommend management actions"]}
-          quickPrompts={[
-            "Generate an operational report with bottlenecks and next actions.",
-            "Identify inactive maids and unanswered enquiries.",
-          ]}
-        />
-      </div>
+      <Tabs defaultValue={agentConsoles[0].value} className="grid gap-4">
+        <div className="overflow-x-auto rounded-lg border bg-card p-2 shadow-sm">
+          <TabsList className="h-auto min-w-max justify-start bg-transparent p-0">
+            {agentConsoles.map((agent) => (
+              <TabsTrigger
+                key={agent.value}
+                value={agent.value}
+                className="min-h-10 gap-2 rounded-md px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <Bot className="h-4 w-4" />
+                <span>{agent.shortLabel}</span>
+                <Badge
+                  variant="outline"
+                  className={
+                    agent.status === "live"
+                      ? "hidden border-emerald-200 bg-emerald-50 text-emerald-700 sm:inline-flex"
+                      : "hidden border-amber-200 bg-amber-50 text-amber-700 sm:inline-flex"
+                  }
+                >
+                  {agent.status === "live" ? "Live" : "Review"}
+                </Badge>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+
+        {agentConsoles.map((agent) => (
+          <TabsContent key={agent.value} value={agent.value} className="mt-0">
+            <AiAgentPanel
+              title={agent.title}
+              description={agent.description}
+              endpoint={agent.endpoint}
+              mode="agency"
+              status={agent.status}
+              runCount={agent.runCount}
+              impact={agent.impact}
+              confidence={agent.confidence}
+              automationSteps={agent.automationSteps}
+              fields={agent.fields}
+              quickPrompts={agent.quickPrompts}
+            />
+          </TabsContent>
+        ))}
+      </Tabs>
     </div>
   );
 }
