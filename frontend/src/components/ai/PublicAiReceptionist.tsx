@@ -1,6 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Loader2, MessageCircle, Send, Sparkles, X, ChevronDown } from "lucide-react";
+import {
+  Bot,
+  Loader2,
+  MessageCircle,
+  Send,
+  Sparkles,
+  X,
+  ChevronDown,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +18,7 @@ import { callAiAgent } from "@/lib/aiAgents";
 type Message = {
   role: "user" | "assistant";
   text: string;
+  timestamp?: Date;
 };
 
 const PROMPTS = [
@@ -17,6 +27,9 @@ const PROMPTS = [
   "What are your agency fees?",
 ];
 
+const STORAGE_KEY = "ai_receptionist_messages";
+const CONV_ID_KEY = "ai_receptionist_conv_id";
+
 const normalizePath = (path: string) => path.replace(/\/+$/, "") || "/";
 
 const matchesRoute = (path: string, route: string) => {
@@ -24,11 +37,16 @@ const matchesRoute = (path: string, route: string) => {
   return normalizedPath === route || normalizedPath.startsWith(`${route}/`);
 };
 
+const formatTime = (date?: Date) => {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(date);
+};
+
 export default function PublicAiReceptionist() {
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
-  const [minimized, setMinimized] = useState(false);
+
   const [message, setMessage] = useState("");
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
@@ -36,12 +54,52 @@ export default function PublicAiReceptionist() {
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Load persisted messages on mount
   useEffect(() => {
     setMounted(true);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Array<{ role: "user" | "assistant"; text: string; timestamp?: string }>;
+        setMessages(
+          parsed.map((m) => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : undefined }))
+        );
+      }
+      const savedConvId = localStorage.getItem(CONV_ID_KEY);
+      if (savedConvId) setConversationId(savedConvId);
+    } catch {
+      // ignore storage errors
+    }
   }, []);
 
-  // Hide inside agency login/admin areas.
+  // Persist messages
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch {
+      // ignore
+    }
+  }, [messages, mounted]);
+
+  // Persist conversation ID
+  useEffect(() => {
+    if (!mounted || !conversationId) return;
+    try {
+      localStorage.setItem(CONV_ID_KEY, conversationId);
+    } catch {
+      // ignore
+    }
+  }, [conversationId, mounted]);
+
+ 
+
   if (!mounted) return null;
   const path = location.pathname;
   if (matchesRoute(path, "/agency") || matchesRoute(path, "/agencyadmin")) return null;
@@ -50,7 +108,7 @@ export default function PublicAiReceptionist() {
     const text = message.trim();
     if (!text) return;
 
-    const userMsg: Message = { role: "user", text };
+    const userMsg: Message = { role: "user", text, timestamp: new Date() };
     setMessages((prev) => [...prev, userMsg]);
     setMessage("");
     setLoading(true);
@@ -65,6 +123,7 @@ export default function PublicAiReceptionist() {
       const assistantMsg: Message = {
         role: "assistant",
         text: result.response || "I'm here to help — could you tell me more?",
+        timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMsg]);
       if (result.conversationId) setConversationId(result.conversationId);
@@ -73,7 +132,11 @@ export default function PublicAiReceptionist() {
         ...prev,
         {
           role: "assistant",
-          text: error instanceof Error ? error.message : "The receptionist is unavailable right now. Please try again shortly.",
+          text:
+            error instanceof Error
+              ? error.message
+              : "The receptionist is unavailable right now. Please try again shortly.",
+          timestamp: new Date(),
         },
       ]);
     } finally {
@@ -88,6 +151,18 @@ export default function PublicAiReceptionist() {
     }
   };
 
+  const clearChat = () => {
+    setMessages([]);
+    setConversationId(undefined);
+    setShowClearConfirm(false);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(CONV_ID_KEY);
+    } catch {
+      // ignore
+    }
+  };
+
   const hasConversation = messages.length > 0;
 
   return (
@@ -96,10 +171,10 @@ export default function PublicAiReceptionist() {
       {open && (
         <div
           className="flex flex-col overflow-hidden rounded-2xl border border-[#97C459]/30 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.18),0_4px_16px_rgba(15,23,42,0.08)]"
-          style={{ width: "min(380px, calc(100vw - 40px))", maxHeight: "calc(100vh - 100px)" }}
+          style={{ width: "min(380px, calc(100vw - 40px))", height: "min(560px, calc(100vh - 100px))" }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-3 bg-[#19330C] px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between gap-3 bg-[#19330C] px-4 py-3">
             <div className="flex items-center gap-2.5">
               <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#C0DD97]">
                 <Bot className="h-4.5 w-4.5 text-[#19330C]" />
@@ -111,15 +186,19 @@ export default function PublicAiReceptionist() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              {/* Clear chat button */}
+              {hasConversation && (
+                <button
+                  onClick={() => setShowClearConfirm((v) => !v)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white"
+                  aria-label="Clear conversation"
+                  title="Clear chat"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
               <button
-                onClick={() => setMinimized((v) => !v)}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white"
-                aria-label={minimized ? "Expand chat" : "Minimise chat"}
-              >
-                <ChevronDown className={`h-4 w-4 transition-transform ${minimized ? "rotate-180" : ""}`} />
-              </button>
-              <button
-                onClick={() => setOpen(false)}
+                onClick={() => { setOpen(false); setShowClearConfirm(false); setMessage(""); }}
                 className="flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white"
                 aria-label="Close chat"
               >
@@ -128,20 +207,47 @@ export default function PublicAiReceptionist() {
             </div>
           </div>
 
-          {!minimized && (
-            <>
-              {/* Messages / welcome area */}
-              <div className="flex-1 overflow-y-auto bg-[#F8FBF3]">
+          {/* Clear confirm banner */}
+          {showClearConfirm && (
+            <div className="shrink-0 flex items-center justify-between gap-3 border-b border-[#E5EDDB] bg-[#FEF3C7] px-4 py-2.5">
+              <p className="text-[12px] font-medium text-amber-800">Clear entire conversation?</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={clearChat}
+                  className="rounded-md bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-red-600"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-800 transition hover:bg-amber-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          <>
+              {/* Messages / welcome area — scrollable */}
+              <div
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto overscroll-contain scroll-smooth bg-[#F8FBF3]"
+                style={{ minHeight: 0 }}
+              >
                 {!hasConversation ? (
                   /* Welcome state */
                   <div className="p-4 space-y-3">
                     <div className="rounded-xl border border-[#97C459]/25 bg-white p-3.5 shadow-sm">
                       <div className="mb-2 flex items-center gap-1.5">
                         <Sparkles className="h-3.5 w-3.5 text-[#639922]" />
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#3B6D11]">How can I help?</span>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#3B6D11]">
+                          How can I help?
+                        </span>
                       </div>
                       <p className="text-[13px] leading-relaxed text-slate-600">
-                        Ask me anything about hiring a helper, our services, or fees. I'll get you the right information fast.
+                        Ask me anything about hiring a helper, our services, or fees. I'll get you the right
+                        information fast.
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -149,7 +255,10 @@ export default function PublicAiReceptionist() {
                         <button
                           key={prompt}
                           type="button"
-                          onClick={() => setMessage(prompt)}
+                          onClick={() => {
+                            setMessage(prompt);
+                            textareaRef.current?.focus();
+                          }}
                           className="rounded-full border border-[#97C459]/40 bg-white px-3 py-1.5 text-[12px] font-semibold text-[#3B6D11] shadow-sm transition hover:bg-[#EAF3DE] active:scale-95"
                         >
                           {prompt}
@@ -161,24 +270,28 @@ export default function PublicAiReceptionist() {
                   /* Conversation thread */
                   <div className="flex flex-col gap-2.5 p-4">
                     {messages.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        {msg.role === "assistant" && (
-                          <div className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#C0DD97] self-end mb-0.5">
-                            <Bot className="h-3.5 w-3.5 text-[#19330C]" />
+                      <div key={i} className={`flex flex-col gap-0.5 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                        <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                          {msg.role === "assistant" && (
+                            <div className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#C0DD97] self-end mb-0.5">
+                              <Bot className="h-3.5 w-3.5 text-[#19330C]" />
+                            </div>
+                          )}
+                          <div
+                            className={`max-w-[82%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm ${
+                              msg.role === "user"
+                                ? "rounded-br-sm bg-[#19330C] text-white"
+                                : "rounded-bl-sm border border-[#97C459]/20 bg-white text-slate-700"
+                            }`}
+                          >
+                            {msg.text}
                           </div>
-                        )}
-                        <div
-                          className={`max-w-[82%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm ${
-                            msg.role === "user"
-                              ? "rounded-br-sm bg-[#19330C] text-white"
-                              : "rounded-bl-sm border border-[#97C459]/20 bg-white text-slate-700"
-                          }`}
-                        >
-                          {msg.text}
                         </div>
+                        {msg.timestamp && (
+                          <p className={`text-[10px] text-slate-400 ${msg.role === "user" ? "pr-1" : "pl-8"}`}>
+                            {formatTime(msg.timestamp)}
+                          </p>
+                        )}
                       </div>
                     ))}
                     {loading && (
@@ -188,19 +301,30 @@ export default function PublicAiReceptionist() {
                         </div>
                         <div className="rounded-2xl rounded-bl-sm border border-[#97C459]/20 bg-white px-4 py-3 shadow-sm">
                           <div className="flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#97C459]" style={{ animationDelay: "0ms" }} />
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#97C459]" style={{ animationDelay: "120ms" }} />
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#97C459]" style={{ animationDelay: "240ms" }} />
+                            <span
+                              className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#97C459]"
+                              style={{ animationDelay: "0ms" }}
+                            />
+                            <span
+                              className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#97C459]"
+                              style={{ animationDelay: "120ms" }}
+                            />
+                            <span
+                              className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#97C459]"
+                              style={{ animationDelay: "240ms" }}
+                            />
                           </div>
                         </div>
                       </div>
                     )}
+                    {/* Scroll anchor */}
+                    <div ref={messagesEndRef} />
                   </div>
                 )}
               </div>
 
               {/* Contact fields toggle (optional) */}
-              <div className="border-t border-[#E5EDDB] bg-white">
+              <div className="shrink-0 border-t border-[#E5EDDB] bg-white">
                 {!hasConversation && (
                   <button
                     type="button"
@@ -232,6 +356,7 @@ export default function PublicAiReceptionist() {
                 {/* Input row */}
                 <div className="flex items-end gap-2 px-3 pb-3 pt-2">
                   <Textarea
+                    ref={textareaRef}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -252,16 +377,20 @@ export default function PublicAiReceptionist() {
                     )}
                   </Button>
                 </div>
-                <p className="pb-2 text-center text-[10px] text-slate-400">Press Enter to send · Shift+Enter for new line</p>
+                <p className="pb-2 text-center text-[10px] text-slate-400">
+                  Press Enter to send · Shift+Enter for new line
+                </p>
               </div>
             </>
-          )}
         </div>
       )}
 
       {/* FAB button */}
       <button
-        onClick={() => { setOpen((v) => !v); setMinimized(false); }}
+        onClick={() => {
+          setOpen((v) => !v);
+          setShowClearConfirm(false);
+        }}
         className={`group flex items-center gap-2.5 rounded-full border border-[#C0DD97]/50 bg-[#19330C] px-5 py-3 text-white shadow-[0_8px_28px_rgba(25,51,12,0.30)] transition-all hover:bg-[#27500A] active:scale-95 ${open ? "pr-4" : ""}`}
         aria-label="Open AI chat"
       >
@@ -272,6 +401,11 @@ export default function PublicAiReceptionist() {
         {!open && messages.length === 0 && (
           <span className="ml-0.5 rounded-full bg-[#97C459] px-2 py-0.5 text-[10px] font-bold text-[#19330C]">
             Online
+          </span>
+        )}
+        {!open && messages.length > 0 && (
+          <span className="ml-0.5 rounded-full bg-[#97C459] px-2 py-0.5 text-[10px] font-bold text-[#19330C]">
+            {messages.length}
           </span>
         )}
         {open && <X className="h-3.5 w-3.5 text-white/60" />}
