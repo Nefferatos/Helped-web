@@ -886,11 +886,43 @@ const EditMaids = () => {
     return match?.[1] ?? null;
   };
 
+  const normalizeImportHeaderKey = (value: unknown) =>
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/^\uFEFF/, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
   const CSV_FIELD_MAP: Record<string, string> = {
-    name: "fullName", full_name: "fullName", maid_name: "fullName", maidname: "fullName", fullname: "fullName",
-    age: "age", nationality: "nationality", country: "nationality", experience: "experience", years: "experience",
-    years_of_experience: "experience", photo: "photoDataUrl", photo_url: "photoDataUrl", image: "photoDataUrl",
-    image_url: "photoDataUrl", picture: "photoDataUrl",
+    reference_code: "referenceCode",
+    referencecode: "referenceCode",
+    ref_code: "referenceCode",
+    refcode: "referenceCode",
+    ref: "referenceCode",
+    ref_no: "referenceCode",
+    reference_no: "referenceCode",
+    maid_ref: "referenceCode",
+    maid_reference: "referenceCode",
+    maid_reference_code: "referenceCode",
+    name: "fullName",
+    full_name: "fullName",
+    full_name_of_fdw: "fullName",
+    maid_name: "fullName",
+    maidname: "fullName",
+    fullname: "fullName",
+    fdw_name: "fullName",
+    age: "age",
+    nationality: "nationality",
+    country: "nationality",
+    experience: "experience",
+    years: "experience",
+    years_of_experience: "experience",
+    photo: "photoDataUrl",
+    photo_url: "photoDataUrl",
+    image: "photoDataUrl",
+    image_url: "photoDataUrl",
+    picture: "photoDataUrl",
   };
 
   const normalizeCsv = (csvText: string): string => {
@@ -901,7 +933,7 @@ const EditMaids = () => {
     const headers = headerLine.split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
     let changed = false;
     const normalizedHeaders = headers.map((h) => {
-      const key = h.toLowerCase().replace(/[\s-]/g, "_");
+      const key = normalizeImportHeaderKey(h);
       const mapped = CSV_FIELD_MAP[key];
       if (mapped && mapped !== h) { changed = true; return mapped; }
       return h;
@@ -1040,7 +1072,11 @@ const EditMaids = () => {
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false }) as unknown[][];
       const header = Array.isArray(rows[0]) ? rows[0] : [];
       const headerIndexes = new Map<string, number>();
-      header.forEach((h, idx) => headerIndexes.set(String(h ?? "").trim().toLowerCase(), idx));
+      header.forEach((h, idx) => {
+        const key = normalizeImportHeaderKey(h);
+        const mapped = CSV_FIELD_MAP[key] ?? key;
+        headerIndexes.set(mapped.toLowerCase(), idx);
+      });
       if (!headerIndexes.has("referencecode") || !headerIndexes.has("fullname"))
         throw new Error("XLSX is missing required columns: referenceCode, fullName");
       return { type: "csv", csv: normalizeCsv(XLSX.utils.sheet_to_csv(sheet)), fileName: file.name };

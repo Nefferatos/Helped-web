@@ -4339,6 +4339,43 @@ const csvEscape = (value: unknown) => {
   return stringValue;
 };
 
+const normalizeCsvColumnKey = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\uFEFF/, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+const csvImportColumnAliases: Record<string, string> = {
+  reference_code: "referenceCode",
+  referencecode: "referenceCode",
+  ref_code: "referenceCode",
+  refcode: "referenceCode",
+  ref: "referenceCode",
+  ref_no: "referenceCode",
+  reference_no: "referenceCode",
+  maid_ref: "referenceCode",
+  maid_reference: "referenceCode",
+  maid_reference_code: "referenceCode",
+  name: "fullName",
+  full_name: "fullName",
+  full_name_of_fdw: "fullName",
+  fullname: "fullName",
+  maid_name: "fullName",
+  maidname: "fullName",
+  fdw_name: "fullName",
+  photo: "photoDataUrl",
+  photo_url: "photoDataUrl",
+  image: "photoDataUrl",
+  image_url: "photoDataUrl",
+  picture: "photoDataUrl",
+  country: "nationality",
+};
+
+const normalizeCsvImportHeader = (header: string) =>
+  csvImportColumnAliases[normalizeCsvColumnKey(header)] ?? header.trim().replace(/^\uFEFF/, "");
+
 const toBase64Utf8 = (value: string) => {
   const bytes = new TextEncoder().encode(value);
   let binary = "";
@@ -4598,7 +4635,7 @@ const applyCsvImportToData = (data: AppData, csv: string) => {
     };
   }
 
-  const headers = parseCsvRow(lines[0]);
+  const headers = parseCsvRow(lines[0]).map(normalizeCsvImportHeader);
   const headerSet = new Set(headers);
   if (!headerSet.has("referenceCode") || !headerSet.has("fullName")) {
     return {

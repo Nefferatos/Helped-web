@@ -16,9 +16,6 @@ import { compressImage, compressImageFile, getImageSizeInMB } from "@/lib/imageC
 
 import { PdfAutofillBanner } from "./PdfAutofill";
 
-const stripInlineMedia = (value?: string) =>
-  typeof value === "string" && value.trim().startsWith("data:") ? "" : value || "";
-
 const asTrimmedString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 const firstNonEmptyString = (...values: unknown[]) => {
@@ -869,7 +866,7 @@ const AddMaid = () => {
     photoDataUrls: (Array.isArray(formData.photoDataUrls) ? formData.photoDataUrls : [])
       .map((item) => String(item || "").trim())
       .filter(Boolean),
-    videoDataUrl: stripInlineMedia(formData.videoDataUrl),
+    videoDataUrl: String(formData.videoDataUrl || "").trim(),
   }), [formData]);
 
   const doesReferenceCodeExist = useCallback(async (referenceCode: string) => {
