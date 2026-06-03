@@ -180,6 +180,57 @@ type BadgeCounts = {
   unreadRequests: number;
 };
 
+const EMPTY_BADGE_COUNTS: BadgeCounts = {
+  unreadChats: 0,
+  unreadEnquiries: 0,
+  unreadRequests: 0,
+};
+
+const ADMIN_NOTIFICATION_CACHE_KEY = "helped-admin-notification-cache";
+
+type AdminNotificationCache = {
+  badgeCounts: BadgeCounts;
+  chatNotifications: SupportNotification[];
+  agencyLogoUrl: string;
+};
+
+const readAdminNotificationCache = (): AdminNotificationCache | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(ADMIN_NOTIFICATION_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<AdminNotificationCache>;
+    const badgeCounts = parsed.badgeCounts;
+    if (!badgeCounts) return null;
+
+    return {
+      badgeCounts: {
+        unreadChats: Number(badgeCounts.unreadChats) || 0,
+        unreadEnquiries: Number(badgeCounts.unreadEnquiries) || 0,
+        unreadRequests: Number(badgeCounts.unreadRequests) || 0,
+      },
+      chatNotifications: Array.isArray(parsed.chatNotifications)
+        ? parsed.chatNotifications
+        : [],
+      agencyLogoUrl: typeof parsed.agencyLogoUrl === "string" ? parsed.agencyLogoUrl : "",
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeAdminNotificationCache = (cache: AdminNotificationCache) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(ADMIN_NOTIFICATION_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Storage can be unavailable in private sessions; notifications still work in memory.
+  }
+};
+
 const formatNotificationTime = (iso: string) => {
   if (!iso) return "";
   const date = new Date(iso);
@@ -867,17 +918,19 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // ── All badge counts in one state object ──────────────────────────────────
-  const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({
-    unreadChats: 0,
-    unreadEnquiries: 0,
-    unreadRequests: 0,
-  });
-  const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>([]);
+  const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>(
+    () => readAdminNotificationCache()?.badgeCounts ?? EMPTY_BADGE_COUNTS
+  );
+  const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>(
+    () => readAdminNotificationCache()?.chatNotifications ?? []
+  );
 
   const [agencyAdmin, setAgencyAdmin] = useState<AgencyAdminUser | null>(
     getStoredAgencyAdmin()
   );
-  const [agencyLogoUrl, setAgencyLogoUrl] = useState("");
+  const [agencyLogoUrl, setAgencyLogoUrl] = useState(
+    () => readAdminNotificationCache()?.agencyLogoUrl ?? ""
+  );
 
   // Show the welcome modal once for each successful login session.
   useEffect(() => {
@@ -895,28 +948,28 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     let active = true;
 
-    const loadAll = async (silent = false) => {
+    const loadAll = async () => {
       const authHeaders = getAgencyAdminAuthHeaders();
       if (!authHeaders.Authorization) return;
 
       try {
+        const cached = readAdminNotificationCache();
         let summaryData: {
           unreadAgencyChats?: number;
           enquiries?: number;
           pendingRequests?: number;
           error?: string;
         } | null = null;
-        let companyLogo = "";
-        let unreadChats = 0;
-        let dedicatedNotifications: SupportNotification[] = [];
+        let companyLogo = cached?.agencyLogoUrl ?? "";
+        let unreadChats = cached?.badgeCounts.unreadChats ?? 0;
+        let dedicatedNotifications: SupportNotification[] = cached?.chatNotifications ?? [];
 
         try {
           const chatSummary = await fetchAdminUnreadChatCount();
           unreadChats = chatSummary.unreadCount;
           dedicatedNotifications = chatSummary.notifications;
         } catch {
-          unreadChats = 0;
-          dedicatedNotifications = [];
+          // Keep the previous notification state during navigation or transient network hiccups.
         }
 
         if (!isAddMaidRoute) {
@@ -951,26 +1004,28 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
         if (!active) return;
 
-        setBadgeCounts({
+        const nextBadgeCounts = {
           unreadChats,
-          unreadEnquiries: summaryData?.enquiries ?? 0,
-          unreadRequests: summaryData?.pendingRequests ?? 0,
-        });
+          unreadEnquiries: summaryData?.enquiries ?? cached?.badgeCounts.unreadEnquiries ?? 0,
+          unreadRequests: summaryData?.pendingRequests ?? cached?.badgeCounts.unreadRequests ?? 0,
+        };
+
+        setBadgeCounts(nextBadgeCounts);
         setChatNotifications(dedicatedNotifications);
 
-        if (companyLogo) {
-          setAgencyLogoUrl(companyLogo);
-        }
+        setAgencyLogoUrl(companyLogo);
+        writeAdminNotificationCache({
+          badgeCounts: nextBadgeCounts,
+          chatNotifications: dedicatedNotifications,
+          agencyLogoUrl: companyLogo,
+        });
       } catch (err) {
         console.warn("[AppLayout] Failed to refresh admin notifications", err);
-        if (!silent) {
-          setChatNotifications([]);
-        }
       }
     };
 
-    void loadAll(false);
-    const iv = window.setInterval(() => void loadAll(true), 5000);
+    void loadAll();
+    const iv = window.setInterval(() => void loadAll(), 5000);
 
     return () => {
       active = false;
@@ -991,6 +1046,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     } catch {
       // ignore error
     } finally {
+      window.localStorage.removeItem(ADMIN_NOTIFICATION_CACHE_KEY);
       clearAgencyAdminAuth();
       toast.success("Agency admin logged out");
       window.location.href = "/agency";

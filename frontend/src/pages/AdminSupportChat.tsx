@@ -649,6 +649,7 @@ const AdminSupportChat = () => {
   const lastLoadedConversationKeyRef = useRef<string | null>(null);
   const lastUnreadTotalRef = useRef(0);
   const conversationRefreshTimeoutRef = useRef<number | null>(null);
+  const messagePollInFlightRef = useRef(false);
   const admin = getStoredAgencyAdmin();
 
   const activeConversation = useMemo(
@@ -787,8 +788,10 @@ const AdminSupportChat = () => {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load messages";
-      setErrorMessage(message);
-      if (!silent) toast.error(message);
+      if (!silent) {
+        setErrorMessage(message);
+        toast.error(message);
+      }
     } finally {
       if (!silent) setIsLoadingMessages(false);
     }
@@ -802,7 +805,7 @@ const AdminSupportChat = () => {
     const run = async () => {
       try {
         const response = await fetch("/api/chats/admin/last-id", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
-        const data = await readSafeJson<{ lastId?: number }>(response);
+        const data = await readSafeJson<{ lastId?: number; error?: string }>(response);
         if (response.ok && typeof data.lastId === "number") lastId = data.lastId;
       } catch { /* no-op */ }
       while (!controller.signal.aborted) {
@@ -894,6 +897,50 @@ const AdminSupportChat = () => {
     activeConversationType,
     loadMessages,
   ]);
+
+  useEffect(() => {
+    if (!activeConversationKey) return;
+
+    let timeoutId: number | null = null;
+    let cancelled = false;
+
+    function queueNextPoll() {
+      if (cancelled) return;
+      const delay = document.visibilityState === "visible" ? 2500 : 8000;
+      timeoutId = window.setTimeout(() => {
+        void pollMessages();
+      }, delay);
+    }
+
+    async function pollMessages() {
+      const conversation = activeConversationRef.current;
+      if (
+        !conversation ||
+        conversation.key !== activeConversationKey ||
+        messagePollInFlightRef.current
+      ) {
+        queueNextPoll();
+        return;
+      }
+
+      messagePollInFlightRef.current = true;
+      try {
+        await loadMessages(conversation, true);
+      } finally {
+        messagePollInFlightRef.current = false;
+        queueNextPoll();
+      }
+    }
+
+    queueNextPoll();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [activeConversationKey, loadMessages]);
 
   useEffect(() => {
     if (!pendingConversation) return;
@@ -1054,11 +1101,8 @@ const AdminSupportChat = () => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        .asc-root * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-
         /* ── Messenger colour tokens ── */
-        :root {
+        .asc-root {
           --msn-blue: #0084ff;
           --msn-blue-dark: #006fd6;
           --msn-blue-light: #e7f3ff;

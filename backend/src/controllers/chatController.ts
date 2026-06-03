@@ -50,6 +50,7 @@ const sendSseHeaders = (res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache, no-transform')
   res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
   ;(res as Response & { flushHeaders?: () => void }).flushHeaders?.()
   res.write('retry: 1200\n\n')
 }
@@ -57,6 +58,10 @@ const sendSseHeaders = (res: Response) => {
 const writeSseEvent = (res: Response, event: string, data: unknown) => {
   res.write(`event: ${event}\n`)
   res.write(`data: ${JSON.stringify(data)}\n\n`)
+}
+
+const writeSseHeartbeat = (res: Response) => {
+  res.write(': heartbeat\n\n')
 }
 
 const toPositiveAfterId = (value: unknown) => {
@@ -262,11 +267,15 @@ export const streamMyChatMessages = async (req: Request, res: Response) => {
   const timer = setInterval(() => {
     void poll()
   }, 1200)
+  const heartbeatTimer = setInterval(() => {
+    writeSseHeartbeat(res)
+  }, 15000)
 
   void poll()
 
   req.on('close', () => {
     clearInterval(timer)
+    clearInterval(heartbeatTimer)
     res.end()
   })
 }
@@ -525,11 +534,15 @@ export const streamAdminChatMessages = async (req: Request, res: Response) => {
   const timer = setInterval(() => {
     void poll()
   }, 1200)
+  const heartbeatTimer = setInterval(() => {
+    writeSseHeartbeat(res)
+  }, 15000)
 
   void poll()
 
   req.on('close', () => {
     clearInterval(timer)
+    clearInterval(heartbeatTimer)
     res.end()
   })
 }

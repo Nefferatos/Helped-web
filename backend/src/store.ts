@@ -3200,9 +3200,12 @@ export const getChatMessagesForClientStore = async (
   )
   if (!conversation) return []
 
-  return data.supportMessages
+  const messages = data.supportMessages
     .filter((message) => message.conversationId === conversation.id)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+  return messages
+    .slice(-200)
     .map((message) => ({
       ...message,
       clientProfileImageUrl: client.profileImageUrl ?? '',
