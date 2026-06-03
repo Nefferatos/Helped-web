@@ -8,6 +8,7 @@ import {
   getAgencyNameByIdStore,
   getAllMaidsStore,
   getMaidByReferenceCodeStore,
+  getMaidPhotosBatchStore,
   getMaidsPageStore,
   getMaidsStore,
   getPublicMaidByReferenceCodeStore,
@@ -490,6 +491,7 @@ const buildMaidProfilesFromCsv = (
 export const getMaidList = async (req: Request, res: Response) => {
   try {
     const { search, visibility } = req.query
+    const noPhotos = req.query.noPhotos === '1' || req.query.noPhotos === 'true'
     const requestedAgencyId = parsePositiveInteger(req.query.agencyId)
     const page = parsePositiveInteger(req.query.page)
     const pageSize = parsePositiveInteger(req.query.pageSize)
@@ -549,19 +551,41 @@ export const getMaidList = async (req: Request, res: Response) => {
 
     const total = shouldPageInStore ? listResult.total : listResult.maids.length
     const payload = await withAgencyNames(listResult.maids)
+    const maids = noPhotos
+      ? payload.map((m) => ({ ...m, photoDataUrl: '', photoDataUrls: [] }))
+      : payload
     const responsePayload = {
-      maids: payload,
+      maids,
       total,
       page: page ?? 1,
       pageSize: limit ?? total,
     }
-    if (useCache) {
-      setCachedMaidList(cacheKey, responsePayload.maids)
+    if (useCache && !noPhotos) {
+      setCachedMaidList(cacheKey, payload)
     }
     res.status(200).json(responsePayload)
   } catch (error) {
     console.error('Error fetching maids:', error)
     res.status(500).json({ error: 'Failed to fetch maids' })
+  }
+}
+
+export const getMaidPhotosBatch = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const { refs } = req.body as { refs?: unknown }
+    if (!Array.isArray(refs) || refs.length === 0) {
+      return res.status(400).json({ error: 'refs array is required' })
+    }
+    if (refs.length > 100) {
+      return res.status(400).json({ error: 'Maximum 100 refs per batch' })
+    }
+    const safeRefs = refs.map(String)
+    const photos = await getMaidPhotosBatchStore(safeRefs, agencyId)
+    return res.status(200).json({ photos })
+  } catch (error) {
+    console.error('Error fetching maid photos batch:', error)
+    return res.status(500).json({ error: 'Failed to fetch photos' })
   }
 }
 

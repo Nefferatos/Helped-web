@@ -8,6 +8,7 @@ import {
   importMaidsBatch,
   getMaidByReferenceCode,
   getMaidList,
+  getMaidPhotosBatch,
   importMaidsCsv,
   replaceMaidPhotos,
   updateMaid,
@@ -23,6 +24,7 @@ router.get('/export.csv', exportMaidsCsv)
 router.get('/export.xls', exportMaidsXls)
 router.post('/import.batch', importMaidsBatch)
 router.post('/import.csv', importMaidsCsv)
+router.post('/photos-batch', getMaidPhotosBatch)
 router.get('/:referenceCode', getMaidByReferenceCode)
 router.post('/', createMaid)
 router.put('/:referenceCode', updateMaid)

@@ -510,6 +510,8 @@ const EditMaids = () => {
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
   const [menuActiveIndex, setMenuActiveIndex] = useState(-1);
   const [listRefreshKey, setListRefreshKey] = useState(0);
+  const [photoMap, setPhotoMap] = useState<Map<string, string>>(new Map());
+  const [photosLoading, setPhotosLoading] = useState(false);
   const [saveProgressTask, setSaveProgressTask] = useState<MaidSaveTaskSnapshot | null>(null);
   const [saveProgressDialogOpen, setSaveProgressDialogOpen] = useState(false);
   const menuSearchRef = useRef<HTMLDivElement>(null);
@@ -647,10 +649,11 @@ const EditMaids = () => {
   useEffect(() => {
     if (!visibility) return;
     const controller = new AbortController();
+    setPhotoMap(new Map());
     const load = async () => {
       try {
         setIsLoading(true);
-        const params = new URLSearchParams({ visibility, page: String(page), pageSize: String(PAGE_SIZE) });
+        const params = new URLSearchParams({ visibility, page: String(page), pageSize: String(PAGE_SIZE), noPhotos: "1" });
         if (debouncedSearch) params.set("search", debouncedSearch);
         const response = await fetch(`/api/maids?${params.toString()}`, {
           signal: controller.signal,
@@ -660,10 +663,34 @@ const EditMaids = () => {
         if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
         setMaids(data.maids);
         setTotalMaids(data.total ?? data.maids.length);
+
+        // Phase 2: fetch photos for all maids that have one, in a single batch request
+        const refsWithPhoto = data.maids.filter((m) => m.hasPhoto).map((m) => m.referenceCode);
+        if (refsWithPhoto.length > 0 && !controller.signal.aborted) {
+          setPhotosLoading(true);
+          try {
+            const photoRes = await fetch("/api/maids/photos-batch", {
+              method: "POST",
+              signal: controller.signal,
+              headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+              body: JSON.stringify({ refs: refsWithPhoto }),
+            });
+            if (photoRes.ok && !controller.signal.aborted) {
+              const photoData = await readSafeJson<{ photos?: Record<string, string> }>(photoRes);
+              if (photoData.photos) {
+                setPhotoMap(new Map(Object.entries(photoData.photos)));
+              }
+            }
+          } finally {
+            if (!controller.signal.aborted) setPhotosLoading(false);
+          }
+        }
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError"))
           toast.error(error instanceof Error ? error.message : "Failed to load maids");
-      } finally { setIsLoading(false); }
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false);
+      }
     };
     void load();
     return () => controller.abort();
@@ -1899,7 +1926,8 @@ const EditMaids = () => {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
             {paginatedMaids.map((maid, i) => {
               const age = calculateAge(maid.dateOfBirth);
-              const photoPreview = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl;
+              const photoPreview = photoMap.get(maid.referenceCode) ?? (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl) ?? "";
+              const photoLoaded = photoMap.has(maid.referenceCode);
               const isSelected = selected.has(maid.referenceCode);
               const flagCode = getNationalityCode(maid.nationality);
               // inFlightRefs covers the rare edge-case where a card stays
@@ -1923,7 +1951,9 @@ const EditMaids = () => {
                     onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
                   >
                     {photoPreview ? (
-                      <img src={photoPreview} alt={maid.fullName} className="w-full aspect-[3/4] object-contain object-top block min-h-[130px] bg-white align-top" />
+                      <img src={photoPreview} alt={maid.fullName} className="w-full aspect-[3/4] object-contain object-top block min-h-[130px] bg-white align-top" loading="lazy" decoding="async" />
+                    ) : !photoLoaded && maid.hasPhoto && photosLoading ? (
+                      <div className="w-full aspect-[3/4] min-h-[130px] animate-pulse bg-muted" />
                     ) : (
                       <div className="w-full aspect-[3/4] min-h-[130px] flex items-center justify-center bg-[#EAF3DE] text-[11px] text-[#27500A] font-medium">
                         No Photo

@@ -262,54 +262,41 @@ export const startMaidSaveTask = ({
         persistedMaid = metadataResponse.maid;
 
         if (normalizedPhotos.length > 0) {
-          for (let index = 0; index < normalizedPhotos.length; index += 1) {
-            const photoDataUrl = normalizedPhotos[index]!;
-            const isFirstPhoto = index === 0;
-            const requestUrl = isFirstPhoto
-              ? `/api/maids/${encodeURIComponent(persistedMaid.referenceCode)}/photo`
-              : `/api/maids/${encodeURIComponent(persistedMaid.referenceCode)}/photos`;
-            const requestBody = isFirstPhoto ? { photoDataUrl } : { photoDataUrl };
-            const basePercent = clampProgress(72 + (index / normalizedPhotos.length) * 20);
-            const progressRange = Math.max(2, Math.round(20 / normalizedPhotos.length));
-            const photoLabel = normalizedPhotos.length > 1
-              ? `Uploading photo ${index + 1} of ${normalizedPhotos.length}...`
-              : "Uploading maid photo...";
+          const photoLabel = normalizedPhotos.length > 1
+            ? `Uploading ${normalizedPhotos.length} photos...`
+            : "Uploading maid photo...";
 
-            emitSnapshot({
-              ...(readMaidSaveTask(taskId) ?? initialSnapshot),
-              status: "processing",
-              percent: clampProgress(basePercent),
-              persisted: true,
-              stage: photoLabel,
-            });
+          emitSnapshot({
+            ...(readMaidSaveTask(taskId) ?? initialSnapshot),
+            status: "uploading",
+            percent: 72,
+            persisted: true,
+            stage: photoLabel,
+          });
 
-            const photoResponse = await sendJsonRequest<{ error?: string; maid?: MaidProfile }>({
-              requestUrl,
-              requestMethod: "PATCH",
-              requestBody,
-              timeoutMs: MEDIA_REQUEST_TIMEOUT_MS,
-              uploadStage: `Finalizing photo ${index + 1}...`,
-              onUploadProgress: (loaded, total, lengthComputable) => {
-                const current = readMaidSaveTask(taskId) ?? initialSnapshot;
-                const nextPercent = !lengthComputable || total <= 0
-                  ? clampProgress(Math.min(96, basePercent + progressRange))
-                  : clampProgress(Math.min(
-                      96,
-                      basePercent + Math.round((loaded / total) * progressRange)
-                    ));
-                emitSnapshot({
-                  ...current,
-                  status: "uploading",
-                  percent: nextPercent,
-                  persisted: true,
-                  stage: photoLabel,
-                });
-              },
-            });
+          const galleryResponse = await sendJsonRequest<{ error?: string; maid?: MaidProfile }>({
+            requestUrl: `/api/maids/${encodeURIComponent(persistedMaid.referenceCode)}/photo-gallery`,
+            requestMethod: "PUT",
+            requestBody: { photoDataUrls: normalizedPhotos },
+            timeoutMs: MEDIA_REQUEST_TIMEOUT_MS,
+            uploadStage: "Finalizing photos...",
+            onUploadProgress: (loaded, total, lengthComputable) => {
+              const current = readMaidSaveTask(taskId) ?? initialSnapshot;
+              const nextPercent = !lengthComputable || total <= 0
+                ? clampProgress(90)
+                : clampProgress(72 + Math.round((loaded / total) * 24));
+              emitSnapshot({
+                ...current,
+                status: "uploading",
+                percent: nextPercent,
+                persisted: true,
+                stage: photoLabel,
+              });
+            },
+          });
 
-            if (photoResponse.maid) {
-              persistedMaid = photoResponse.maid;
-            }
+          if (galleryResponse.maid) {
+            persistedMaid = galleryResponse.maid;
           }
         }
 

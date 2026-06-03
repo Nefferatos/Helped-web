@@ -6,6 +6,7 @@ import {
   createMaidSql,
   deleteMaidSql,
   getMaidByReferenceCodeSql,
+  getMaidPhotosBatchSql,
   listMaidRecordsPageSql,
   listMaidRecordsSql,
   type SqlMaidPayload,
@@ -2083,6 +2084,30 @@ export const getMaidsPageStore = async (options: {
     maids,
     total: allMaids.length,
   }
+}
+
+export const getMaidPhotosBatchStore = async (
+  referenceCodes: string[],
+  agencyId: number = DEFAULT_AGENCY_ID
+): Promise<Record<string, string>> => {
+  if (referenceCodes.length === 0) return {}
+  try {
+    return await getMaidPhotosBatchSql(referenceCodes, agencyId)
+  } catch {
+    // Fall back to the legacy local store when the database is unavailable.
+  }
+  const data = await loadData()
+  const result: Record<string, string> = {}
+  for (const maid of data.maids) {
+    if (maid.agencyId === agencyId && referenceCodes.includes(maid.referenceCode)) {
+      const primaryPhoto =
+        (Array.isArray(maid.photoDataUrls) ? maid.photoDataUrls[0] : null) ||
+        maid.photoDataUrl ||
+        ''
+      result[maid.referenceCode] = primaryPhoto
+    }
+  }
+  return result
 }
 
 export const getMaidByReferenceCodeStore = async (

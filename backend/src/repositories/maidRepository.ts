@@ -1,5 +1,15 @@
 import { getClient, query } from '../db'
 
+const sanitizeInt = (value: unknown): number => {
+  if (value === null || value === undefined) return 0
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value)
+  if (typeof value === 'string') {
+    const nums = value.match(/\d+/g)?.map(Number) ?? []
+    return nums.reduce((a, b) => a + b, 0)
+  }
+  return 0
+}
+
 export interface SqlMaidRecord {
   id: number
   agencyId: number
@@ -221,12 +231,12 @@ const maidValues = (payload: SqlMaidPayload, agencyId: number) => [
   payload.nationality,
   payload.dateOfBirth,
   payload.placeOfBirth,
-  payload.height,
-  payload.weight,
+  sanitizeInt(payload.height),
+  sanitizeInt(payload.weight),
   payload.religion,
   payload.maritalStatus,
-  payload.numberOfChildren,
-  payload.numberOfSiblings,
+  sanitizeInt(payload.numberOfChildren),
+  sanitizeInt(payload.numberOfSiblings),
   payload.homeAddress,
   payload.airportRepatriation,
   payload.educationLevel,
@@ -608,4 +618,20 @@ export const upsertMaidRecordsSql = async (
   } finally {
     client.release()
   }
+}
+
+export const getMaidPhotosBatchSql = async (
+  referenceCodes: string[],
+  agencyId: number
+): Promise<Record<string, string>> => {
+  if (referenceCodes.length === 0) return {}
+  const result = (await query(
+    `SELECT reference_code, photo_data_url
+     FROM maids
+     WHERE agency_id = $1 AND reference_code = ANY($2::text[])`,
+    [agencyId, referenceCodes]
+  )) as { rows: Array<{ reference_code: string; photo_data_url: string | null }> }
+  return Object.fromEntries(
+    result.rows.map((row) => [row.reference_code, row.photo_data_url ?? ''])
+  )
 }
