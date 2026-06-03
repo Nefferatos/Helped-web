@@ -676,7 +676,7 @@ const EditMaids = () => {
               body: JSON.stringify({ refs: refsWithPhoto }),
             });
             if (photoRes.ok && !controller.signal.aborted) {
-              const photoData = await readSafeJson<{ photos?: Record<string, string> }>(photoRes);
+              const photoData = await readSafeJson<{ error?: string; photos?: Record<string, string> }>(photoRes);
               if (photoData.photos) {
                 setPhotoMap(new Map(Object.entries(photoData.photos)));
               }
