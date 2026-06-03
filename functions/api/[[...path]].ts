@@ -4529,6 +4529,16 @@ const validateMaidPayload = (maid: Record<string, unknown>) => {
 
 const normalizeReferenceCode = (value: unknown) => String(value ?? "").trim();
 
+const sanitizeInt = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === "string") {
+    const nums = value.match(/\d+/g)?.map(Number) ?? [];
+    return nums.reduce((a, b) => a + b, 0);
+  }
+  return 0;
+};
+
 const toMaidRecordPayload = (
   maid: Record<string, unknown>,
 ): Omit<MaidRecord, "id" | "createdAt" | "updatedAt"> => {
@@ -4556,12 +4566,12 @@ const toMaidRecordPayload = (
     nationality: String(maid.nationality),
     dateOfBirth: String(maid.dateOfBirth),
     placeOfBirth: String(maid.placeOfBirth),
-    height: Number(maid.height),
-    weight: Number(maid.weight),
+    height: sanitizeInt(maid.height),
+    weight: sanitizeInt(maid.weight),
     religion: String(maid.religion),
     maritalStatus: String(maid.maritalStatus),
-    numberOfChildren: Number(maid.numberOfChildren),
-    numberOfSiblings: Number(maid.numberOfSiblings),
+    numberOfChildren: sanitizeInt(maid.numberOfChildren),
+    numberOfSiblings: sanitizeInt(maid.numberOfSiblings),
     homeAddress: String(maid.homeAddress),
     airportRepatriation: String(maid.airportRepatriation),
     educationLevel: String(maid.educationLevel),
@@ -5668,6 +5678,7 @@ app.get(
 
     const search = c.req.query("search")?.trim().toLowerCase()
     const visibility = c.req.query("visibility")
+    const noPhotos = c.req.query("noPhotos") === "1" || c.req.query("noPhotos") === "true"
     const agencyIdQuery = c.req.query("agencyId")
     const agencyId =
       agencyIdQuery && Number.isInteger(Number(agencyIdQuery))
@@ -5677,6 +5688,8 @@ app.get(
     const pageSize = parsePositiveInt(c.req.query("pageSize"))
     const offset = parsePositiveInt(c.req.query("offset")) ?? 0
     const limit = pageSize ?? parsePositiveInt(c.req.query("limit"))
+    const stripPhotos = <T extends { photoDataUrl?: string; photoDataUrls?: string[] }>(list: T[]): T[] =>
+      noPhotos ? list.map((m) => ({ ...m, photoDataUrl: "", photoDataUrls: [] })) : list
     const supabase = getSupabaseAppDataConfig(c.env)
     if (supabase) {
       const effectiveOffset = page != null && pageSize != null ? (page - 1) * pageSize : offset
@@ -5697,7 +5710,7 @@ app.get(
               limit,
             })
         return c.json({
-          maids: result.maids,
+          maids: stripPhotos(result.maids),
           total: result.total,
           page: page ?? 1,
           pageSize: limit ?? result.total,
@@ -5738,7 +5751,7 @@ app.get(
     const pagedMaids = limit != null ? maids.slice(effectiveOffset, effectiveOffset + limit) : maids
 
     return c.json({
-      maids: pagedMaids,
+      maids: stripPhotos(pagedMaids),
       total,
       page: page ?? 1,
       pageSize: limit ?? total,
@@ -5961,6 +5974,92 @@ app.post(
       },
       failed > 0 ? 207 : 200,
     );
+  }),
+);
+
+const batchMaidPhotosFromSupabaseNormalized = async (
+  config: SupabaseAppDataConfig,
+  referenceCodes: string[],
+): Promise<Record<string, string>> => {
+  const table = encodeURIComponent("helped_maids");
+  const refsFilter = referenceCodes.map((r) => normalizeReferenceCode(r)).join(",");
+  const params = new URLSearchParams();
+  params.set("select", "reference_code,payload");
+  params.set("app_id", `eq.${config.rowId}`);
+  params.set("reference_code", `in.(${refsFilter})`);
+  const response = await fetch(`${config.baseUrl}/rest/v1/${table}?${params.toString()}`, {
+    method: "GET",
+    headers: supabaseHeaders(config, { accept: "application/json" }),
+  });
+  if (!response.ok) throw new Error(`Batch photo fetch failed (${response.status})`);
+  const rows = (await response.json()) as Array<{ reference_code: string; payload: MaidRecord | null }>;
+  const result: Record<string, string> = {};
+  for (const row of rows) {
+    if (row.reference_code) {
+      result[row.reference_code] = row.payload ? (normalizeMaid(row.payload).photoDataUrl ?? "") : "";
+    }
+  }
+  return result;
+};
+
+const batchMaidPhotosFromSupabaseAppView = async (
+  config: SupabaseAppDataConfig,
+  referenceCodes: string[],
+): Promise<Record<string, string>> => {
+  const table = encodeURIComponent("app_maids");
+  const refsFilter = referenceCodes.map((r) => normalizeReferenceCode(r)).join(",");
+  const params = new URLSearchParams();
+  params.set("select", "reference_code,raw_record");
+  params.set("reference_code", `in.(${refsFilter})`);
+  const response = await fetch(`${config.baseUrl}/rest/v1/${table}?${params.toString()}`, {
+    method: "GET",
+    headers: supabaseHeaders(config, { accept: "application/json" }),
+  });
+  if (!response.ok) throw new Error(`Batch photo fetch failed (${response.status})`);
+  const rows = (await response.json()) as Array<{ reference_code: string; raw_record: MaidRecord | null }>;
+  const result: Record<string, string> = {};
+  for (const row of rows) {
+    if (row.reference_code) {
+      result[row.reference_code] = row.raw_record ? (normalizeMaid(row.raw_record).photoDataUrl ?? "") : "";
+    }
+  }
+  return result;
+};
+
+app.post(
+  "/api/maids/photos-batch",
+  safeApi(async (c) => {
+    const body = await parseBody<{ refs?: unknown }>(c.req.raw);
+    if (!Array.isArray(body?.refs) || body.refs.length === 0) {
+      return c.json({ error: "refs array is required" }, 400);
+    }
+    if (body.refs.length > 100) {
+      return c.json({ error: "Maximum 100 refs per batch" }, 400);
+    }
+    const refs = (body.refs as unknown[]).map(String);
+    const supabase = getSupabaseAppDataConfig(c.env);
+    if (supabase) {
+      try {
+        const photos = isNormalizedSupabaseEnabled(c.env)
+          ? await batchMaidPhotosFromSupabaseNormalized(supabase, refs)
+          : await batchMaidPhotosFromSupabaseAppView(supabase, refs);
+        return c.json({ photos });
+      } catch (error) {
+        console.warn("Fast maid photos-batch failed; falling back to app data", error);
+      }
+    }
+    const data = await loadData(c.env, { readOnly: true });
+    const photos: Record<string, string> = {};
+    for (const maid of data.maids) {
+      if (refs.includes(maid.referenceCode)) {
+        const primary =
+          (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls[0]) ||
+          maid.photoDataUrl ||
+          "";
+        photos[maid.referenceCode] = primary;
+      }
+    }
+    return c.json({ photos });
   }),
 );
 
