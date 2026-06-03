@@ -1783,6 +1783,62 @@ type SupabaseAppMaidViewRow = {
   raw_record?: MaidRecord;
 };
 
+type MaidSlimRow = {
+  record_id?: number;
+  agency_id?: number;
+  reference_code?: string;
+  full_name?: string;
+  status?: string;
+  nationality?: string;
+  maid_type?: string;
+  is_public?: boolean;
+  has_photo?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  dateOfBirth?: string | null;
+  maritalStatus?: string | null;
+};
+
+const SLIM_MAID_SELECT = [
+  "record_id", "agency_id", "reference_code", "full_name", "status",
+  "nationality", "maid_type", "is_public", "has_photo", "created_at", "updated_at",
+  "payload->>dateOfBirth", "payload->>maritalStatus",
+].join(",");
+
+const slimRowToMaidRecord = (row: MaidSlimRow): MaidRecord => ({
+  id: Number(row.record_id ?? 0),
+  agencyId: Number(row.agency_id ?? 1) || 1,
+  fullName: row.full_name ?? "",
+  referenceCode: row.reference_code ?? "",
+  status: row.status ?? "available",
+  type: row.maid_type ?? "",
+  nationality: row.nationality ?? "",
+  dateOfBirth: row.dateOfBirth ?? "",
+  placeOfBirth: "",
+  height: 0,
+  weight: 0,
+  religion: "",
+  maritalStatus: row.maritalStatus ?? "",
+  numberOfChildren: 0,
+  numberOfSiblings: 0,
+  homeAddress: "",
+  airportRepatriation: "",
+  educationLevel: "",
+  languageSkills: {},
+  skillsPreferences: {},
+  workAreas: {},
+  employmentHistory: [],
+  introduction: {},
+  agencyContact: {},
+  photoDataUrl: "",
+  photoDataUrls: [],
+  videoDataUrl: "",
+  isPublic: Boolean(row.is_public),
+  hasPhoto: Boolean(row.has_photo),
+  createdAt: row.created_at ?? "",
+  updatedAt: row.updated_at ?? "",
+});
+
 const parseContentRangeTotal = (value: string | null) => {
   if (!value) return null;
   const total = value.split("/")[1];
@@ -1799,17 +1855,19 @@ const listMaidsFromSupabaseNormalized = async (
     agencyId,
     offset,
     limit,
+    noPhotos,
   }: {
     search?: string;
     visibility?: string;
     agencyId?: number;
     offset: number;
     limit?: number;
+    noPhotos?: boolean;
   },
 ) => {
   const table = encodeURIComponent("helped_maids");
   const params = new URLSearchParams();
-  params.set("select", "record_id,payload");
+  params.set("select", noPhotos ? SLIM_MAID_SELECT : "record_id,payload");
   params.set("app_id", `eq.${config.rowId}`);
   params.set("order", "updated_at.desc.nullslast,record_id.desc");
 
@@ -1826,7 +1884,7 @@ const listMaidsFromSupabaseNormalized = async (
 
   const headers = new Headers(supabaseHeaders(config, {
     accept: "application/json",
-    prefer: "count=exact",
+    prefer: "count=estimated",
   }));
   if (typeof limit === "number" && limit > 0) {
     headers.set("range-unit", "items");
@@ -1843,14 +1901,20 @@ const listMaidsFromSupabaseNormalized = async (
     throw new Error(`Supabase maid list failed (${response.status}): ${details}`);
   }
 
+  const total = parseContentRangeTotal(response.headers.get("content-range")) ?? 0;
+
+  if (noPhotos) {
+    const rows = (await response.json()) as MaidSlimRow[];
+    return { maids: rows.map(slimRowToMaidRecord), total: total || rows.length };
+  }
+
   const rows = (await response.json()) as SupabaseMaidRow[];
-  const total = parseContentRangeTotal(response.headers.get("content-range")) ?? rows.length;
   return {
     maids: rows
       .map((row) => row.payload)
       .filter((maid): maid is MaidRecord => Boolean(maid))
       .map(normalizeMaid),
-    total,
+    total: total || rows.length,
   };
 };
 
@@ -1862,12 +1926,14 @@ const listMaidsFromSupabaseAppView = async (
     agencyId,
     offset,
     limit,
+    noPhotos,
   }: {
     search?: string;
     visibility?: string;
     agencyId?: number;
     offset: number;
     limit?: number;
+    noPhotos?: boolean;
   },
 ) => {
   const table = encodeURIComponent("app_maids");
@@ -1888,7 +1954,7 @@ const listMaidsFromSupabaseAppView = async (
 
   const headers = new Headers(supabaseHeaders(config, {
     accept: "application/json",
-    prefer: "count=exact",
+    prefer: "count=estimated",
   }));
   if (typeof limit === "number" && limit > 0) {
     headers.set("range-unit", "items");
@@ -1907,13 +1973,11 @@ const listMaidsFromSupabaseAppView = async (
 
   const rows = (await response.json()) as SupabaseAppMaidViewRow[];
   const total = parseContentRangeTotal(response.headers.get("content-range")) ?? rows.length;
-  return {
-    maids: rows
-      .map((row) => row.raw_record)
-      .filter((maid): maid is MaidRecord => Boolean(maid))
-      .map(normalizeMaid),
-    total,
-  };
+  const maids = rows
+    .map((row) => row.raw_record)
+    .filter((maid): maid is MaidRecord => Boolean(maid))
+    .map((maid) => noPhotos ? { ...normalizeMaid(maid), photoDataUrl: "", photoDataUrls: [] } : normalizeMaid(maid));
+  return { maids, total };
 };
 
 const getMaidFromSupabaseNormalized = async (
@@ -5705,6 +5769,7 @@ app.get(
               agencyId,
               offset: effectiveOffset,
               limit,
+              noPhotos,
             })
           : await listMaidsFromSupabaseAppView(supabase, {
               search,
@@ -5712,6 +5777,7 @@ app.get(
               agencyId,
               offset: effectiveOffset,
               limit,
+              noPhotos,
             })
         return c.json({
           maids: stripPhotos(result.maids),
