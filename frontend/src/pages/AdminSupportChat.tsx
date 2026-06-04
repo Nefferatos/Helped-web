@@ -239,11 +239,21 @@ function UnreadBadge({ count }: { count: number }) {
   );
 }
 
-function LoadingDots() {
+function MessageSkeleton() {
+  const rows = [
+    { own: false, w: "58%", h: 40 },
+    { own: true,  w: "44%", h: 40 },
+    { own: false, w: "70%", h: 56 },
+    { own: true,  w: "52%", h: 40 },
+    { own: false, w: "38%", h: 40 },
+  ];
   return (
-    <div className="flex items-center justify-center gap-1.5 px-4 py-10">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--msn-blue)", animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+    <div className="flex flex-col gap-4 py-2">
+      {rows.map((row, i) => (
+        <div key={i} className={`flex items-end gap-2 ${row.own ? "ml-auto flex-row-reverse" : ""}`} style={{ maxWidth: "75%", animationDelay: `${i * 60}ms` }}>
+          <div className="h-8 w-8 flex-shrink-0 rounded-full asc-skeleton" />
+          <div style={{ width: row.w, height: row.h, borderRadius: 18, borderBottomRightRadius: row.own ? 4 : undefined, borderBottomLeftRadius: !row.own ? 4 : undefined }} className="asc-skeleton" />
+        </div>
       ))}
     </div>
   );
@@ -537,34 +547,56 @@ function ConversationItem({
 
 function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (text: string) => void }) {
   const isOwn = message.senderRole === "agency";
+  const isPending = Boolean(message._optimistic);
+  const isBot = Boolean(message.isBot);
   const tone: AvatarTone = isOwn ? "agency" : message.senderRole === "client" ? "client" : "support";
   const avatarName = isOwn ? message.agencyName || message.senderName : message.senderName;
   const avatarUrl = isOwn ? message.agencyProfileImageUrl : message.clientProfileImageUrl;
 
   return (
-    <div className={`asc-msg-row group flex items-end gap-2 ${isOwn ? "ml-auto flex-row-reverse" : ""}`} style={{ maxWidth: "75%" }}>
+    <div
+      className={`asc-msg-row group flex items-end gap-2 ${isOwn ? "ml-auto flex-row-reverse" : ""}`}
+      style={{ maxWidth: "75%", opacity: isPending ? 0.65 : 1, transition: "opacity 0.2s ease" }}
+    >
       <AvatarBubble name={avatarName} imageUrl={avatarUrl} tone={tone} size="sm" />
       <div className="min-w-0">
-        {!isOwn && <p className="mb-1 pl-1 text-[12px] font-semibold" style={{ color: "var(--msn-text-secondary)" }}>{message.senderName}</p>}
+        {!isOwn && (
+          <p className="mb-1 pl-1 text-[12px] font-semibold flex items-center gap-1.5" style={{ color: "var(--msn-text-secondary)" }}>
+            {message.senderName}
+            {isBot && (
+              <span className="rounded-full px-1.5 py-px text-[9px] font-bold tracking-wide" style={{ background: "rgba(0,132,255,0.12)", color: "var(--msn-blue)" }}>
+                AI
+              </span>
+            )}
+          </p>
+        )}
         <div
           className="asc-bubble-pop relative rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed"
           style={isOwn
-            ? { background: "var(--msn-bubble-out)", color: "var(--msn-bubble-out-text)", borderBottomRightRadius: 4 }
+            ? { background: isPending ? "rgba(0,132,255,0.6)" : "var(--msn-bubble-out)", color: "var(--msn-bubble-out-text)", borderBottomRightRadius: 4, transition: "background 0.25s ease" }
             : { background: "var(--msn-bubble-in)", color: "var(--msn-bubble-in-text)", borderBottomLeftRadius: 4 }
           }
         >
           {message.message}
-          <button
-            onClick={() => onCopy(message.message)}
-            className={`absolute -top-2 ${isOwn ? "-left-2" : "-right-2"} hidden group-hover:flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50`}
-            style={{ color: "var(--msn-text-secondary)" }}
-          >
-            <Copy className="h-3 w-3" />
-          </button>
+          {!isPending && (
+            <button
+              onClick={() => onCopy(message.message)}
+              className={`absolute -top-2 ${isOwn ? "-left-2" : "-right-2"} hidden group-hover:flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50`}
+              style={{ color: "var(--msn-text-secondary)" }}
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          )}
         </div>
         <div className={`mt-1 flex items-center gap-1 text-[11px] font-medium ${isOwn ? "justify-end pr-1" : "pl-1"}`} style={{ color: "var(--msn-text-muted)" }}>
-          {formatTime(message.createdAt)}
-          {isOwn && <CheckCheck className="h-3.5 w-3.5" style={{ color: "var(--msn-blue)" }} />}
+          {isPending ? (
+            <span style={{ fontStyle: "italic" }}>Sending…</span>
+          ) : (
+            <>
+              {formatTime(message.createdAt)}
+              {isOwn && <CheckCheck className="h-3.5 w-3.5" style={{ color: "var(--msn-blue)" }} />}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -647,6 +679,7 @@ const AdminSupportChat = () => {
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const isNearBottomRef = useRef(true);
   const justPrependedRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const activeConversationRef = useRef<AdminConversation | null>(null);
@@ -845,6 +878,7 @@ const AdminSupportChat = () => {
   const handleMessagesScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
     if (el.scrollTop < 80 && hasMoreOlder && !isLoadingOlder) {
       void loadOlderMessages();
     }
@@ -881,7 +915,12 @@ const AdminSupportChat = () => {
               if (isActive) {
                 setMessages((prev) => {
                   if (prev.some((item) => item.id === next.id)) return prev;
-                  const updated = [...prev, next].sort(
+                  // Remove any pending optimistic messages with the same text/role so the
+                  // confirmed message from SSE replaces them without a double-render.
+                  const filtered = prev.filter(
+                    (item) => !(item._optimistic && item.senderRole === next.senderRole && item.message === next.message),
+                  );
+                  const updated = [...filtered, next].sort(
                     (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
                   );
                   lastMessageSignatureRef.current = JSON.stringify(
@@ -989,14 +1028,14 @@ const AdminSupportChat = () => {
   }, [conversations, pendingConversation]);
 
   useEffect(() => {
-    if (!scrollRef.current) return;
-    // When older history is prepended we restore the scroll position manually,
-    // so skip the auto-scroll-to-bottom for that update only.
-    if (justPrependedRef.current) {
-      justPrependedRef.current = false;
-      return;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (justPrependedRef.current) { justPrependedRef.current = false; return; }
+    // Only auto-scroll when user is near the bottom, so reading history is undisturbed.
+    // Always scroll after own messages (they're added while at bottom).
+    if (isNearBottomRef.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
   // Presence heartbeat: marks this admin online while the tab is visible so
@@ -1103,6 +1142,30 @@ const AdminSupportChat = () => {
     if (!activeConversation) return;
     const messageText = rawText.trim();
     if (!messageText) return;
+
+    // Optimistic update — show the message instantly with a temp negative ID
+    const tempId = -Date.now();
+    const optimistic: ChatMessage = {
+      id: tempId,
+      clientId: activeConversation.clientId,
+      conversationType: activeConversation.conversationType,
+      agencyId: activeConversation.agencyId,
+      agencyName: activeConversation.agencyName,
+      senderRole: "agency",
+      senderName: admin?.username || admin?.agencyName || "Support",
+      message: messageText,
+      createdAt: new Date().toISOString(),
+      _optimistic: true,
+    };
+    setMessages((prev) => {
+      const next = [...prev, optimistic];
+      lastMessageSignatureRef.current = JSON.stringify(next.map((m) => [m.id, m.message, m.createdAt, m.senderRole]));
+      isNearBottomRef.current = true; // just sent — always scroll
+      return next;
+    });
+    setDraft("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+
     try {
       setIsSending(true);
       setErrorMessage("");
@@ -1119,8 +1182,13 @@ const AdminSupportChat = () => {
         if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
         throw new Error(data.error || "Failed to send message");
       }
+      // Replace the optimistic message with the confirmed one from the server
       setMessages((prev) => {
-        const next = [...prev, data.message!];
+        const without = prev.filter((m) => m.id !== tempId);
+        if (without.some((m) => m.id === data.message!.id)) return without;
+        const next = [...without, data.message!].sort(
+          (l, r) => new Date(l.createdAt).getTime() - new Date(r.createdAt).getTime(),
+        );
         lastMessageSignatureRef.current = JSON.stringify(next.map((m) => [m.id, m.message, m.createdAt, m.senderRole]));
         return next;
       });
@@ -1131,17 +1199,18 @@ const AdminSupportChat = () => {
             : item,
         ),
       );
-      setDraft((prev) => (prev.trim() === messageText ? "" : prev));
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
       scheduleConversationRefresh();
     } catch (error) {
+      // Revert: remove optimistic message and restore the draft
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setDraft(messageText);
       const message = error instanceof Error ? error.message : "Failed to send message";
       setErrorMessage(message);
       toast.error(message);
     } finally {
       setIsSending(false);
     }
-  }, [activeConversation, navigate, scheduleConversationRefresh]);
+  }, [activeConversation, admin, navigate, scheduleConversationRefresh]);
 
   const sendMessage = useCallback(async () => {
     await sendText(draft);
@@ -1198,9 +1267,13 @@ const AdminSupportChat = () => {
           --msn-unread: #0084ff;
         }
 
-        @keyframes dotPulse {
-          0%, 80%, 100% { opacity: 0.3; transform: scale(0.7); }
-          40% { opacity: 1; transform: scale(1); }
+        @keyframes shimmer {
+          0%,100% { opacity: 0.55; }
+          50%      { opacity: 0.28; }
+        }
+        .asc-skeleton {
+          background: rgba(0,0,0,0.09);
+          animation: shimmer 1.4s ease-in-out infinite;
         }
         @keyframes fadeSlideUp {
           from { opacity: 0; transform: translateY(5px); }
@@ -1472,7 +1545,7 @@ const AdminSupportChat = () => {
             {/* Messages area */}
             <div ref={scrollRef} onScroll={handleMessagesScroll} className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-4 overflow-y-auto p-5">
               {isLoadingMessages ? (
-                <LoadingDots />
+                <MessageSkeleton />
               ) : errorMessage ? (
                 <div className="mx-auto max-w-sm rounded-2xl px-5 py-4 text-center text-[14px] font-semibold" style={{ background: "#fff0f0", color: "#c0392b", border: "1px solid #ffd0d0" }}>
                   {errorMessage}
