@@ -1680,7 +1680,7 @@ const fetchSupabaseTableRows = async <T>(
   const url = `${config.baseUrl}/rest/v1/${table}?${params.toString()}`;
   const response = await fetch(url, {
     method: "GET",
-    headers: supabaseHeaders(config, { accept: "application/json" }),
+    headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }),
   });
 
   if (!response.ok) {
@@ -2865,17 +2865,37 @@ const loadAgencyAdminAuthData = async (env: Bindings) => {
   return data.agencyAdmins;
 };
 
+// ─── Module-level agency-admin session cache (30 s TTL) ──────────────────────
+// requireAgencyAdminAuth fires on every admin request. Without a cache each
+// call hits Supabase for the sessions table (+200-500 ms). With the cache,
+// subsequent requests within the same isolate pay ~1 ms.
+const SESSIONS_CACHE_TTL_MS = 30_000;
+let _sessionsCache: { sessions: AgencyAdminSessionRecord[]; ts: number } | null = null;
+const getSessionsCache = (): AgencyAdminSessionRecord[] | null => {
+  if (!_sessionsCache || Date.now() - _sessionsCache.ts > SESSIONS_CACHE_TTL_MS) { _sessionsCache = null; return null; }
+  return _sessionsCache.sessions;
+};
+const putSessionsCache = (sessions: AgencyAdminSessionRecord[]) => { _sessionsCache = { sessions, ts: Date.now() }; };
+const bustSessionsCache = () => { _sessionsCache = null; };
+
 const loadAgencyAdminSessions = async (
   env: Bindings,
   fallbackData?: AppData,
 ) => {
+  // Hot path: serve from module cache
+  const cached = getSessionsCache();
+  if (cached) return cached;
+
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
-      return await loadAgencyAdminSessionsFromSupabaseNormalized(supabase);
+      const sessions = await loadAgencyAdminSessionsFromSupabaseNormalized(supabase);
+      putSessionsCache(sessions);
+      return sessions;
     }
     const sessions = await loadAgencyAdminSessionsFromSupabase(supabase);
     if (sessions.length > 0) {
+      putSessionsCache(sessions);
       return sessions;
     }
     return mergeAgencyAdminSessions(fallbackData?.agencyAdminSessions ?? []);
@@ -2895,10 +2915,12 @@ const saveAgencyAdminSessions = async (
   env: Bindings,
   sessions: AgencyAdminSessionRecord[],
 ) => {
+  bustSessionsCache(); // invalidate before write
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
       await saveAgencyAdminSessionsToSupabaseNormalized(supabase, sessions);
+      putSessionsCache(mergeAgencyAdminSessions(sessions)); // re-prime with saved data
       return;
     }
     await saveAgencyAdminSessionsToSupabase(supabase, sessions);
