@@ -1,6 +1,49 @@
 {
   "conversations": [
     {
+      "id": "e173d30e-84a0-4cf0-834d-6a3bb54af1d0",
+      "agencyId": 1,
+      "candidateReferenceCode": "IND-DAR-NEP-7226",
+      "candidateId": 125,
+      "candidateName": "Mira Rai",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-05-31T04:40:57.534Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-06-04T16:13:53.037Z",
+      "updatedAt": "2026-06-04T16:13:53.037Z"
+    },
+    {
       "id": "49fedb3a-a35e-4af3-82c0-963330f04f3f",
       "agencyId": 1,
       "candidateReferenceCode": "MYR-ALL-9746",

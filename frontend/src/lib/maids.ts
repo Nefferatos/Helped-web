@@ -110,7 +110,15 @@ export const calculateAge = (dateOfBirth?: string) => {
     return null;
   }
 
-  const dob = new Date(dateOfBirth);
+  const text = String(dateOfBirth).trim();
+  const isoDateOnly = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  const slashOrDashDate = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  const dob = isoDateOnly
+    ? new Date(Number(isoDateOnly[1]), Number(isoDateOnly[2]) - 1, Number(isoDateOnly[3]))
+    : slashOrDashDate
+      ? new Date(Number(slashOrDashDate[3]), Number(slashOrDashDate[2]) - 1, Number(slashOrDashDate[1]))
+      : new Date(text);
+
   if (Number.isNaN(dob.getTime())) {
     return null;
   }

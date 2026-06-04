@@ -426,6 +426,31 @@ const FlagCircle = ({ code }: { code: string }) => {
   );
 };
 
+type LooseMaidProfile = MaidProfile & Record<string, unknown>;
+
+const getMaidString = (maid: MaidProfile, keys: string[]) => {
+  const record = maid as LooseMaidProfile;
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== null && value !== undefined && String(value).trim()) return String(value).trim();
+  }
+  return "";
+};
+
+const getMaidDateOfBirth = (maid: MaidProfile) =>
+  getMaidString(maid, ["dateOfBirth", "date_of_birth", "dob", "birthDate", "birth_date"]);
+
+const getMaidMaritalStatus = (maid: MaidProfile) =>
+  getMaidString(maid, ["maritalStatus", "marital_status", "marital", "civilStatus", "civil_status"]);
+
+const getMaidAge = (maid: MaidProfile) => {
+  const calculatedAge = calculateAge(getMaidDateOfBirth(maid));
+  if (calculatedAge !== null) return calculatedAge;
+
+  const age = Number.parseInt(getMaidString(maid, ["age"]), 10);
+  return Number.isFinite(age) && age > 0 && age < 100 ? age : null;
+};
+
 // ── Pagination component used in both top & bottom ─────────────────────────
 const PaginationBar = ({
   currentPage,
@@ -1518,7 +1543,7 @@ const EditMaids = () => {
               <div className="animate-dropdown-in absolute top-[calc(100%+6px)] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] z-50 overflow-hidden">
                 {menuSearchResults.map((maid, idx) => {
                   const photo = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl;
-                  const age = calculateAge(maid.dateOfBirth);
+                  const age = getMaidAge(maid);
                   const vis = (maid as MaidProfile & { _vis?: string })._vis;
                   const flagCode = getNationalityCode(maid.nationality);
                   return (
@@ -1884,7 +1909,8 @@ const EditMaids = () => {
         ) : (
           <div className="mx-auto grid max-w-[980px] grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {paginatedMaids.map((maid, i) => {
-              const age = calculateAge(maid.dateOfBirth);
+              const age = getMaidAge(maid);
+              const maritalStatus = getMaidMaritalStatus(maid);
               const photoPreview = photoMap.get(maid.referenceCode) ?? (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl) ?? "";
               const photoLoaded = photoMap.has(maid.referenceCode);
               const isSelected = selected.has(maid.referenceCode);
@@ -1971,7 +1997,7 @@ const EditMaids = () => {
                     </div>
                     <div className="w-full text-[10.5px] font-semibold leading-tight text-slate-900">
                       <p className="flex min-w-0 flex-wrap items-center justify-center gap-x-1">
-                        <span>{maid.maritalStatus}{age !== null ? ` · ${age} yrs` : ""}</span>
+                        <span>{maritalStatus}{age !== null ? `${maritalStatus ? " · " : ""}${age} yrs` : ""}</span>
                         {isNewMaid && (
                           <span className="animate-rainbow-new font-extrabold leading-none">NEW</span>
                         )}
