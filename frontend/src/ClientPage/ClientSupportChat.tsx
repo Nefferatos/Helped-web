@@ -2,11 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Bot,
+  ChevronDown,
   ChevronLeft,
   CheckCircle,
   HelpCircle,
   MessageCircle,
   Search,
+  Send,
+  Sparkles,
+  Tag,
   X,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -18,7 +22,6 @@ import type {
   ChatMessage,
   ClientConversation,
   ConversationType,
-  SupportConversationStatus,
 } from "@/lib/chat";
 import { streamSse } from "@/lib/sse";
 import {
@@ -27,19 +30,16 @@ import {
   primeClientAuth,
   syncClientProfileFromSession,
 } from "@/lib/supabaseAuth";
-import { readSafeJson } from "@/lib/safeJson";
 import "./ClientTheme.css";
 
 type TopicOption = AgencyChatbotTopicOption;
 const MAIN_MENU_TOPIC_ID = "__main_menu__";
 const GUIDE_STORAGE_KEY = "sc_guide_dismissed";
-const MESSAGE_PAGE_SIZE = 30;
 
 const defaultConversation: ClientConversation = {
-  key: "support:1",
+  key: "support:0",
   clientId: 0,
   conversationType: "support",
-  agencyId: 1,
   title: "Agency Support",
   description: "General help, follow-up, and request support",
   lastMessage: "",
@@ -96,9 +96,9 @@ const DEFAULT_CONFIG: AgencyChatbotConfig = {
   botName: "Support Bot",
   welcomeMessage: "Hi {{name}}, welcome to {{agencyName}}. How can I help you today?",
   fallbackShortResponse:
-    "Hi {{name}}, thanks for your message. Could you share a little more detail so I can help you with the next step? For further assistance, contact us on WhatsApp at +65 80730757.",
+    "Hi {{name}}, thanks for your message. Could you share a little more detail so I can help you with the next step?",
   fallbackLongResponse:
-    "Hi {{name}}, thanks for reaching out. I've noted your message. If you can share the main details here, I'll help make sure it is clear for the team to follow up. For further assistance, contact us on WhatsApp at +65 80730757.",
+    "Hi {{name}}, thanks for reaching out. I've noted your message. If you can share the main details here, I'll help make sure it is clear for the team to follow up.",
   suggestionChips: [
     "What's my placement status?",
     "I need to reschedule",
@@ -202,21 +202,6 @@ const sanitizeConversationPreview = (message: string) => {
 const getConversationBadgeLabel = (conversation: ClientConversation) =>
   conversation.conversationType === "agency" ? "Agency chat" : "Support";
 
-const getSupportStatusLabel = (status?: SupportConversationStatus) => {
-  switch (status) {
-    case "WAITING_CLIENT":
-      return "Waiting for you";
-    case "WAITING_SUPPORT":
-      return "Waiting for support";
-    case "RESOLVED":
-      return "Resolved";
-    case "CLOSED":
-      return "Closed";
-    default:
-      return "Open";
-  }
-};
-
 // ─── Guide steps ──────────────────────────────────────────────────────────────
 
 const GUIDE_STEPS = [
@@ -256,147 +241,119 @@ const GUIDE_STEPS = [
 
 const CSS = `
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-/* ── Root layout ── */
 .sc { display:flex; flex-direction:column; height:100dvh; background:#f7f8fa; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
-
-/* ── Top nav (conversations list page) ── */
-.sc-nav { height:56px; background:#fff; border-bottom:1px solid #e8eaed; display:flex; align-items:center; justify-content:space-between; padding:0 18px; flex-shrink:0; }
+.sc-nav { height:58px; background:#fff; border-bottom:1px solid #e8eaed; display:flex; align-items:center; justify-content:space-between; padding:0 20px; flex-shrink:0; }
 .sc-nav-brand { display:flex; align-items:center; gap:10px; }
-.sc-nav-icon { width:34px; height:34px; border-radius:10px; background:#1D9E75; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.sc-nav-title { font-size:15px; font-weight:700; color:#111; }
-.sc-nav-unread { font-size:11px; color:#1D9E75; font-weight:600; margin-top:1px; }
-.sc-nav-right { display:flex; align-items:center; gap:8px; }
-.sc-status-pill { display:inline-flex; align-items:center; gap:5px; border-radius:99px; padding:5px 11px; font-size:12px; font-weight:600; border:1px solid; }
+.sc-nav-icon { width:36px; height:36px; border-radius:10px; background:#1D9E75; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.sc-nav-title { font-size:16px; font-weight:700; color:#111; }
+.sc-nav-unread { font-size:12px; color:#1D9E75; font-weight:600; margin-top:1px; }
+.sc-nav-right { display:flex; align-items:center; gap:10px; }
+.sc-status-pill { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:6px 13px; font-size:12px; font-weight:600; border:1px solid; min-height:34px; }
 .sc-status-pill.online { background:#edfaf4; color:#0c6e4f; border-color:#a3e4c8; }
 .sc-status-pill.offline { background:#fff0f0; color:#c0392b; border-color:#f5b4b4; }
-.sc-status-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.sc-status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .sc-status-dot.online { background:#1D9E75; }
 .sc-status-dot.offline { background:#e74c3c; }
-.sc-help-btn { width:32px; height:32px; border-radius:50%; border:1.5px solid #e8eaed; background:#f9fafb; color:#6b7280; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s; }
-.sc-help-btn:hover { background:#e8eaed; }
-.sc-banner { display:flex; align-items:center; gap:10px; padding:10px 18px; font-size:13px; font-weight:500; border-bottom:1px solid #f5b4b4; background:#fff0f0; color:#c0392b; }
-
-/* ── Body split ── */
+.sc-help-btn { width:34px; height:34px; border-radius:50%; border:1.5px solid #a3e4c8; background:#edfaf4; color:#0c6e4f; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:background .15s; }
+.sc-help-btn:hover { background:#d7f5e8; }
+.sc-banner { display:flex; align-items:center; gap:10px; padding:11px 20px; font-size:13px; font-weight:500; border-bottom:1px solid #f5b4b4; background:#fff0f0; color:#c0392b; }
 .sc-body { display:flex; flex:1; overflow:hidden; min-height:0; position:relative; }
 .sc-overlay { display:none; position:absolute; inset:0; background:rgba(0,0,0,.45); z-index:24; }
 .sc-overlay.visible { display:block; }
-
-/* ── Sidebar (conversation list) ── */
-.sc-sidebar { width:272px; min-width:272px; background:#fff; border-right:1px solid #e8eaed; display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; z-index:25; transition:transform .24s cubic-bezier(.4,0,.2,1); }
-.sc-sidebar-hdr { padding:14px 12px 10px; border-bottom:1px solid #e8eaed; flex-shrink:0; }
-.sc-sidebar-label { font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
-.sc-searchbox { display:flex; align-items:center; gap:7px; background:#f3f4f6; border-radius:9px; padding:7px 11px; border:1px solid transparent; }
+.sc-sidebar { width:280px; min-width:280px; background:#fff; border-right:1px solid #e8eaed; display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; z-index:25; transition:transform .24s cubic-bezier(.4,0,.2,1); }
+.sc-sidebar-hdr { padding:14px 14px 10px; border-bottom:1px solid #e8eaed; flex-shrink:0; }
+.sc-sidebar-label { font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.06em; margin-bottom:9px; }
+.sc-searchbox { display:flex; align-items:center; gap:8px; background:#f3f4f6; border-radius:9px; padding:8px 12px; border:1px solid transparent; }
 .sc-searchbox:focus-within { background:#fff; border-color:#a3e4c8; }
-.sc-searchbox input { border:none; outline:none; background:transparent; font-size:13px; color:#111; flex:1; min-width:0; }
+.sc-searchbox input { border:none; outline:none; background:transparent; font-size:14px; color:#111; flex:1; min-width:0; }
 .sc-searchbox input::placeholder { color:#b0b7c3; }
-.sc-conv-list { flex:1; overflow-y:auto; padding:6px; }
-.sc-conv-item { display:flex; align-items:center; gap:10px; padding:10px 8px; border-radius:10px; cursor:pointer; margin-bottom:2px; transition:background .12s; }
+.sc-conv-list { flex:1; overflow-y:auto; padding:8px; }
+.sc-conv-item { display:flex; align-items:center; gap:10px; padding:11px 10px; border-radius:10px; cursor:pointer; margin-bottom:2px; transition:background .12s; min-height:56px; }
 .sc-conv-item:hover:not(.active) { background:#f7f8fa; }
 .sc-conv-item.active { background:#edfaf4; }
-.sc-conv-av { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; overflow:hidden; }
+.sc-conv-av { width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; overflow:hidden; }
 .sc-conv-av.support { background:#edfaf4; }
 .sc-conv-av.agency { background:#eff6ff; }
 .sc-conv-av img { width:100%; height:100%; object-fit:cover; }
 .sc-conv-info { flex:1; min-width:0; }
 .sc-conv-name { font-size:14px; font-weight:700; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sc-conv-meta { display:flex; align-items:center; gap:5px; margin-top:3px; }
-.sc-conv-badge { display:inline-flex; align-items:center; border-radius:999px; background:#edfaf4; color:#0c6e4f; border:1px solid #a3e4c8; padding:1px 7px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
-.sc-conv-preview { font-size:12px; color:#6b7280; line-height:1.4; margin-top:4px; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
-.sc-unread { min-width:20px; height:20px; background:#1D9E75; color:#fff; border-radius:99px; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; padding:0 5px; flex-shrink:0; }
+.sc-conv-meta { display:flex; align-items:center; gap:6px; margin-top:4px; }
+.sc-conv-badge { display:inline-flex; align-items:center; border-radius:999px; background:#edfaf4; color:#0c6e4f; border:1px solid #a3e4c8; padding:2px 8px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+.sc-conv-preview { font-size:12px; color:#6b7280; line-height:1.45; margin-top:5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.sc-unread { min-width:22px; height:22px; background:#1D9E75; color:#fff; border-radius:99px; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; padding:0 5px; flex-shrink:0; }
 .sc-stats { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid #e8eaed; flex-shrink:0; }
-.sc-stat { padding:9px 6px; text-align:center; border-right:1px solid #e8eaed; }
+.sc-stat { padding:10px 8px; text-align:center; border-right:1px solid #e8eaed; }
 .sc-stat:last-child { border-right:none; }
 .sc-stat-lbl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#b0b7c3; }
-.sc-stat-val { font-size:15px; font-weight:700; color:#111; margin-top:2px; }
+.sc-stat-val { font-size:16px; font-weight:700; color:#111; margin-top:2px; }
 .sc-stat-val.green { color:#1D9E75; }
-
-/* ── Main chat panel ── */
-.sc-main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; background:#fff; }
-
-/* ── Chat header — Messenger/Sendbird style ── */
-.sc-chat-hdr { background:#fff; border-bottom:1px solid #f0f0f0; padding:10px 14px; display:flex; align-items:center; gap:10px; flex-shrink:0; min-height:58px; }
-.sc-back-btn { display:none; width:34px; height:34px; border-radius:50%; background:#f5f5f5; border:none; cursor:pointer; align-items:center; justify-content:center; color:#555; flex-shrink:0; }
-.sc-chat-av { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; overflow:hidden; position:relative; }
+.sc-main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; background:#f7f8fa; }
+.sc-chat-hdr { background:#fff; border-bottom:1px solid #e8eaed; padding:12px 16px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.sc-back-btn { display:none; width:38px; height:38px; border-radius:10px; background:#f3f4f6; border:none; cursor:pointer; align-items:center; justify-content:center; color:#555; flex-shrink:0; }
+.sc-chat-av { width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; overflow:hidden; }
 .sc-chat-av.support { background:#edfaf4; }
 .sc-chat-av.agency { background:#eff6ff; }
 .sc-chat-av img { width:100%; height:100%; object-fit:cover; }
-.sc-chat-av-online { position:absolute; bottom:1px; right:1px; width:10px; height:10px; border-radius:50%; background:#1D9E75; border:2px solid #fff; }
 .sc-chat-info { flex:1; min-width:0; }
-.sc-chat-name { font-size:15px; font-weight:700; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.2; }
-.sc-chat-status { font-size:12px; color:#1D9E75; margin-top:2px; font-weight:500; }
-.sc-hdr-actions { display:flex; align-items:center; gap:4px; margin-left:auto; }
-.sc-hdr-btn { width:34px; height:34px; border-radius:50%; border:none; background:transparent; color:#6b7280; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s; }
-.sc-hdr-btn:hover { background:#f3f4f6; }
-
-/* ── Hidden elements from old design ── */
-.sc-topics { display:none; }
+.sc-chat-name { font-size:15px; font-weight:700; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sc-chat-desc { font-size:12px; color:#9ca3af; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sc-online-tag { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:#0c6e4f; flex-shrink:0; }
+.sc-topics { flex-shrink:0; border-bottom:1px solid #e8eaed; background:#fff; overflow:hidden; }
+.sc-topics-hdr { display:flex; align-items:center; justify-content:space-between; padding:11px 16px; cursor:pointer; user-select:none; }
+.sc-topics-hdr-left { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; flex-wrap:wrap; }
+.sc-topics-toggle { width:24px; height:24px; border-radius:7px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .22s ease; }
+.sc-topics-toggle.open { transform:rotate(180deg); }
+.sc-topics-body { padding:0 12px 12px; }
+.sc-topic-grid { display:flex; flex-wrap:wrap; gap:8px; }
+.sc-topic-btn { display:inline-flex; align-items:center; gap:7px; padding:9px 14px; border-radius:999px; border:1.5px solid #e8eaed; background:#fff; text-align:left; cursor:pointer; font-size:13px; font-weight:600; color:#374151; transition:all .15s; white-space:nowrap; }
+.sc-topic-btn:hover { border-color:#1D9E75; background:#f0faf6; color:#0c6e4f; }
+.sc-topic-btn.active { border-color:#1D9E75; background:#edfaf4; color:#0c6e4f; }
+.sc-topic-icon { font-size:16px; line-height:1; }
+.sc-topic-name { font-size:13px; font-weight:600; }
+.sc-topic-desc { display:none; }
+.sc-topic-selected-pill { display:inline-flex; align-items:center; gap:5px; background:#edfaf4; color:#0c6e4f; border:1px solid #a3e4c8; border-radius:99px; padding:2px 9px; font-size:11px; font-weight:600; }
 .sc-chips-wrap { display:none; }
-.sc-online-tag { display:none; }
-
-/* ── Date separator ── */
-.sc-date-sep { display:flex; align-items:center; gap:10px; padding:6px 0; }
-.sc-date-sep-line { flex:1; height:1px; background:#f0f0f0; }
-.sc-date-sep-lbl { font-size:11px; color:#b0b7c3; font-weight:500; white-space:nowrap; }
-
-/* ── Messages area ── */
-.sc-msgs { flex:1; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:6px; background:#fff; }
-.sc-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#b0b7c3; text-align:center; gap:10px; padding:40px 20px; }
-.sc-empty-icon { width:58px; height:58px; border-radius:18px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; font-size:24px; }
-.sc-empty-lbl { font-size:14px; font-weight:600; color:#6b7280; }
-.sc-empty-sub { font-size:12px; color:#b0b7c3; }
-.sc-error-banner { display:flex; align-items:center; gap:8px; background:#fff0f0; border:1px solid #f5b4b4; border-radius:10px; padding:12px 14px; font-size:13px; color:#c0392b; font-weight:500; }
-
-/* ── Message rows ── */
-.sc-msg-row { display:flex; gap:8px; align-items:flex-end; max-width:100%; }
-.sc-msg-row.own { flex-direction:row-reverse; }
-.sc-msg-avi { width:28px; height:28px; border-radius:50%; background:#e8eaed; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#555; flex-shrink:0; overflow:hidden; align-self:flex-end; }
-.sc-msg-avi img { width:100%; height:100%; object-fit:cover; }
-.sc-msg-row.own .sc-msg-avi { display:none; }
-.sc-msg-col { display:flex; flex-direction:column; max-width:72%; }
-.sc-msg-row.own .sc-msg-col { align-items:flex-end; max-width:72%; }
-.sc-msg-sender { font-size:11px; font-weight:600; color:#9ca3af; margin-bottom:2px; padding-left:4px; }
-
-/* Bubbles — Messenger style */
-.sc-bubble { padding:10px 14px; border-radius:20px; font-size:14px; line-height:1.55; word-break:break-word; }
-.sc-msg-row.own .sc-bubble { background:#1D9E75; color:#fff; border-bottom-right-radius:4px; }
-.sc-msg-row:not(.own) .sc-bubble { background:#f0f0f0; color:#111; border-bottom-left-radius:4px; }
-
-/* consecutive same-sender: flatten inner corners */
-.sc-msg-row.own + .sc-msg-row.own .sc-bubble { border-top-right-radius:4px; border-bottom-right-radius:4px; }
-.sc-msg-row:not(.own) + .sc-msg-row:not(.own) .sc-bubble { border-top-left-radius:4px; border-bottom-left-radius:4px; }
-
-.sc-msg-time { font-size:10px; color:#b0b7c3; margin-top:3px; padding:0 4px; }
-.sc-msg-row.own .sc-msg-time { text-align:right; }
-
-/* Typing bubble */
-.sc-typing-bubble { display:inline-flex; align-items:center; gap:4px; background:#f0f0f0; border-radius:20px; border-bottom-left-radius:4px; padding:12px 16px; }
-.sc-typing-dot { width:7px; height:7px; border-radius:50%; background:#aaa; animation:sc-typing 1.3s ease-in-out infinite; }
-.sc-typing-dot:nth-child(2) { animation-delay:.18s; }
-.sc-typing-dot:nth-child(3) { animation-delay:.36s; }
-@keyframes sc-typing { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-5px);opacity:1} }
-
-/* ── Messenger-style quick reply pills ── */
-.sc-quick-replies { display:flex; flex-wrap:wrap; gap:8px; padding:6px 0 4px 36px; align-self:flex-start; }
-.sc-quick-reply-btn { display:inline-flex; align-items:center; gap:6px; border:1.5px solid #1D9E75; background:#fff; color:#0c6e4f; border-radius:999px; padding:7px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap; }
+/* Messenger-style quick reply pills inline in chat */
+.sc-quick-replies { display:flex; flex-wrap:wrap; gap:8px; padding:4px 0 6px 40px; align-self:flex-start; max-width:90%; }
+.sc-quick-reply-btn { display:inline-flex; align-items:center; gap:6px; border:1.5px solid #1D9E75; background:#fff; color:#0c6e4f; border-radius:999px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap; }
 .sc-quick-reply-btn:hover { background:#edfaf4; }
-
-/* ── Compose bar — Messenger style ── */
-.sc-compose { background:#fff; border-top:1px solid #f0f0f0; padding:8px 12px; display:flex; align-items:flex-end; gap:8px; flex-shrink:0; }
-.sc-compose-left { display:flex; align-items:center; gap:4px; flex-shrink:0; padding-bottom:6px; }
-.sc-compose-icon-btn { width:32px; height:32px; border-radius:50%; border:none; background:transparent; color:#9ca3af; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:color .15s; }
-.sc-compose-icon-btn:hover { color:#1D9E75; }
-.sc-compose-box { flex:1; display:flex; align-items:flex-end; background:#f5f5f5; border-radius:22px; padding:8px 14px; border:1.5px solid transparent; transition:border-color .15s, background .15s; }
+.sc-choice-card { display:none; }
+.sc-choice-title { display:none; }
+.sc-choice-list { display:none; }
+.sc-choice-btn { display:none; }
+.sc-msgs { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.sc-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#b0b7c3; text-align:center; gap:10px; padding:40px 20px; }
+.sc-empty-icon { width:60px; height:60px; border-radius:18px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; font-size:26px; }
+.sc-empty-lbl { font-size:15px; font-weight:600; color:#6b7280; }
+.sc-empty-sub { font-size:13px; color:#b0b7c3; }
+.sc-error-banner { display:flex; align-items:center; gap:8px; background:#fff0f0; border:1px solid #f5b4b4; border-radius:10px; padding:13px 16px; font-size:13px; color:#c0392b; font-weight:500; }
+.sc-msg-row { display:flex; gap:8px; align-items:flex-end; }
+.sc-msg-row.own { flex-direction:row-reverse; }
+.sc-msg-avi { width:32px; height:32px; border-radius:10px; background:#e8eaed; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#555; flex-shrink:0; overflow:hidden; }
+.sc-msg-avi img { width:100%; height:100%; object-fit:cover; }
+.sc-msg-col { display:flex; flex-direction:column; max-width:75%; }
+.sc-msg-row.own .sc-msg-col { align-items:flex-end; }
+.sc-msg-sender { font-size:11px; font-weight:600; color:#9ca3af; margin-bottom:3px; padding-left:2px; }
+.sc-bubble { padding:11px 15px; border-radius:18px; font-size:14px; line-height:1.6; word-break:break-word; }
+.sc-msg-row.own .sc-bubble { background:#1D9E75; color:#fff; border-bottom-right-radius:5px; }
+.sc-msg-row:not(.own) .sc-bubble { background:#fff; color:#111; border:1px solid #e8eaed; border-bottom-left-radius:5px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+.sc-msg-time { font-size:10px; color:#b0b7c3; margin-top:4px; padding:0 3px; }
+.sc-typing-bubble { display:inline-flex; align-items:center; gap:4px; background:#fff; border:1px solid #e8eaed; border-radius:18px; border-bottom-left-radius:5px; padding:12px 16px; }
+.sc-typing-dot { width:7px; height:7px; border-radius:50%; background:#b0b7c3; animation:sc-typing 1.3s ease-in-out infinite; }
+.sc-typing-dot:nth-child(2) { animation-delay:.2s; }
+.sc-typing-dot:nth-child(3) { animation-delay:.4s; }
+@keyframes sc-typing { 0%,60%,100%{transform:translateY(0);opacity:.5} 30%{transform:translateY(-5px);opacity:1} }
+.sc-compose { background:#fff; border-top:1px solid #e8eaed; padding:10px 14px 12px; flex-shrink:0; }
+.sc-topic-tag { display:inline-flex; align-items:center; gap:6px; background:#edfaf4; color:#0c6e4f; border:1px solid #a3e4c8; border-radius:8px; padding:5px 11px; font-size:12px; font-weight:600; margin-bottom:8px; }
+.sc-topic-tag button { background:none; border:none; cursor:pointer; color:inherit; opacity:.6; padding:0; display:flex; align-items:center; min-width:20px; min-height:20px; justify-content:center; }
+.sc-compose-box { display:flex; align-items:flex-end; gap:8px; background:#f3f4f6; border-radius:16px; padding:9px 9px 9px 15px; border:1.5px solid transparent; }
 .sc-compose-box:focus-within { border-color:#a3e4c8; background:#fff; }
-.sc-compose-box textarea { flex:1; border:none; outline:none; background:transparent; resize:none; font-size:14px; color:#111; line-height:1.5; min-height:22px; max-height:120px; font-family:inherit; padding:0; }
-.sc-compose-box textarea::placeholder { color:#b0b7c3; }
-.sc-send-btn { width:36px; height:36px; border-radius:50%; background:#1D9E75; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; color:#fff; transition:background .15s, transform .1s; margin-bottom:1px; }
-.sc-send-btn:hover { background:#178a64; transform:scale(1.05); }
-.sc-send-btn:disabled { background:#d1d5db; cursor:not-allowed; transform:none; }
-.sc-topic-tag { display:none; }
-.sc-compose-hint { display:none; }
+.sc-compose-box textarea { flex:1; border:none; outline:none; background:transparent; resize:none; font-size:15px; color:#111; line-height:1.5; min-height:24px; max-height:130px; font-family:inherit; padding:0; }
+.sc-send-btn { width:38px; height:38px; border-radius:11px; background:#1D9E75; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; color:#fff; }
+.sc-send-btn:disabled { background:#d1d5db; cursor:not-allowed; }
+.sc-compose-hint { font-size:11px; color:#c9cdd6; margin-top:5px; padding-left:2px; }
 
-/* ── Guide modal ── */
+/* ── Guide modal ─────────────────────────────────────────────── */
 .sc-guide-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:200; display:flex; align-items:flex-end; justify-content:center; padding:0; animation:sc-guide-fade .22s ease; }
 @media (min-width:520px) { .sc-guide-backdrop { align-items:center; padding:20px; } }
 @keyframes sc-guide-fade { from{opacity:0} to{opacity:1} }
@@ -421,16 +378,17 @@ const CSS = `
 .sc-guide-btn-done:hover { background:#178a64; }
 .sc-guide-progress { font-size:12px; color:#b0b7c3; text-align:center; margin-top:14px; }
 
-/* ── Responsive ── */
 @media (max-width:768px) {
   .sc-sidebar { position:absolute; top:0; left:0; bottom:0; width:82%; max-width:300px; transform:translateX(-100%); z-index:25; }
   .sc-sidebar.open { transform:translateX(0); box-shadow:8px 0 40px rgba(0,0,0,.18); }
   .sc-back-btn { display:flex !important; }
-  .sc-nav { height:52px; padding:0 14px; }
-  .sc-msgs { padding:10px 12px; }
-  .sc-msg-col { max-width:80%; }
-  .sc-msg-row.own .sc-msg-col { max-width:80%; }
-  .sc-compose { padding:6px 10px; }
+  .sc-nav { height:54px; padding:0 14px; }
+  .sc-chat-hdr { padding:10px 12px; }
+  .sc-topics-body { padding:0 12px 12px; }
+  .sc-msgs { padding:12px 10px; }
+  .sc-msg-col { max-width:84%; }
+  .sc-compose { padding:10px 12px; }
+  .sc-compose-hint { display:none; }
 }
 `;
 
@@ -484,6 +442,80 @@ function GuideModal({ onDismiss }: { onDismiss: () => void }) {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+function TopicPicker({
+  topics,
+  selectedId,
+  onSelect,
+}: {
+  topics: TopicOption[];
+  selectedId: string | null;
+  onSelect: (topic: TopicOption) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedTopic = topics.find((topic) => topic.id === selectedId);
+
+  return (
+    <div className="sc-topics">
+      <div className="sc-topics-hdr" onClick={() => setOpen((value) => !value)}>
+        <div className="sc-topics-hdr-left">
+          <Tag size={12} />
+          What can we help you with?
+          {!open && selectedTopic && (
+            <span className="sc-topic-selected-pill">
+              {selectedTopic.icon} {selectedTopic.label}
+            </span>
+          )}
+        </div>
+        <div className={`sc-topics-toggle${open ? " open" : ""}`}>
+          <ChevronDown size={13} color="#6b7280" />
+        </div>
+      </div>
+
+      {open && (
+        <div className="sc-topics-body">
+          <div className="sc-topic-grid">
+            {topics.map((topic) => (
+              <button
+                key={topic.id}
+                className={`sc-topic-btn${selectedId === topic.id ? " active" : ""}`}
+                onClick={() => {
+                  onSelect(topic);
+                  setOpen(false);
+                }}
+              >
+                <span className="sc-topic-icon">{topic.icon}</span>
+                <span className="sc-topic-name">{topic.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SuggestionChips({
+  suggestions,
+  onSelect,
+}: {
+  suggestions: string[];
+  onSelect: (text: string) => void | Promise<void>;
+}) {
+  if (suggestions.length === 0) return null;
+  return (
+    <div className="sc-chips-wrap">
+      <p className="sc-chips-lbl">Suggested</p>
+      <div className="sc-chips">
+        {suggestions.map((suggestion) => (
+          <button key={suggestion} className="sc-chip" onClick={() => onSelect(suggestion)}>
+            <Sparkles size={11} /> {suggestion}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ChatAvatar({
   imageUrl,
@@ -562,12 +594,11 @@ const ClientSupportChat = () => {
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
-  const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<TopicOption | null>(null);
+  const [isBotTyping, setIsBotTyping] = useState(false);
   const [chatbotConfig, setChatbotConfig] = useState<AgencyChatbotConfig>(DEFAULT_CONFIG);
 
   // Guide: show on first visit, hide after dismiss, re-openable via ? button
@@ -587,9 +618,8 @@ const ClientSupportChat = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const lastSigRef = useRef("");
-  const justPrependedRef = useRef(false);
   const activeConvRef = useRef<ClientConversation>(defaultConversation);
-  const lastUnreadTotalRef = useRef(0);
+  const botReplyTimerRef = useRef<number | null>(null);
   // Track IDs of messages we've already added optimistically so SSE doesn't double-add them
   const optimisticIdsRef = useRef<Set<number>>(new Set());
 
@@ -641,9 +671,9 @@ const ClientSupportChat = () => {
       createQuickReplyTopic(MAIN_MENU_TOPIC_ID, "Main menu", "🏠", "", "Show all support topics"),
     ];
   }, [choiceTopics, selectedTopic]);
-  const isBotTyping = false;
   const shouldShowTopicChoices =
     menuTopics.length > 0 &&
+    !isBotTyping &&
     (messages.length === 0 || messages[messages.length - 1]?.senderRole === "agency");
 
   const filteredConversations = useMemo(() => {
@@ -677,10 +707,10 @@ const ClientSupportChat = () => {
   const loadConversations = useCallback(async (silent = false) => {
     try {
       const response = await clientFetch("/api/chats/client/conversations");
-      const data = await readSafeJson<{
+      const data = (await response.json().catch(() => ({}))) as {
         conversations?: ClientConversation[];
         error?: string;
-      }>(response);
+      };
       if (!response.ok || !data.conversations) {
         throw new Error(data.error || "Failed to load conversations");
       }
@@ -711,21 +741,19 @@ const ClientSupportChat = () => {
     try {
       if (!silent) setIsLoading(true);
       setErrorMessage("");
-      const response = await clientFetch(`/api/chats/client?${qs}&limit=${MESSAGE_PAGE_SIZE}`);
-      const data = await readSafeJson<{
+      const response = await clientFetch(`/api/chats/client?${qs}`);
+      const data = (await response.json().catch(() => ({}))) as {
         messages?: ChatMessage[];
         error?: string;
-      }>(response);
+      };
       if (!response.ok || !data.messages) {
         throw new Error(data.error || "Failed to load chat");
       }
-      setHasMoreOlder(data.messages.length >= MESSAGE_PAGE_SIZE);
       const sorted = [...data.messages].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
       const signature = JSON.stringify(sorted.map((message) => [message.id, message.message, message.createdAt, message.senderRole]));
       if (signature !== lastSigRef.current) {
-        justPrependedRef.current = false;
         lastSigRef.current = signature;
         setMessages(sorted);
       }
@@ -737,48 +765,6 @@ const ClientSupportChat = () => {
       if (!silent) setIsLoading(false);
     }
   }, [qs]);
-
-  const loadOlderMessages = useCallback(async () => {
-    if (isLoadingOlder || !hasMoreOlder || messages.length === 0) return;
-    const oldestId = messages.reduce((min, m) => Math.min(min, m.id), messages[0].id);
-    const container = scrollRef.current;
-    const previousHeight = container?.scrollHeight ?? 0;
-    setIsLoadingOlder(true);
-    try {
-      const response = await clientFetch(`/api/chats/client?${qs}&before=${oldestId}&limit=${MESSAGE_PAGE_SIZE}`);
-      const data = await readSafeJson<{ messages?: ChatMessage[]; error?: string }>(response);
-      if (!response.ok || !data.messages) return;
-      setHasMoreOlder(data.messages.length >= MESSAGE_PAGE_SIZE);
-      if (data.messages.length === 0) return;
-      justPrependedRef.current = true;
-      setMessages((prev) => {
-        const seen = new Set(prev.map((m) => m.id));
-        const older = data.messages!.filter((m) => !seen.has(m.id));
-        if (older.length === 0) return prev;
-        const merged = [...older, ...prev].sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-        );
-        lastSigRef.current = JSON.stringify(merged.map((message) => [message.id, message.message, message.createdAt, message.senderRole]));
-        return merged;
-      });
-      requestAnimationFrame(() => {
-        const el = scrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight - previousHeight;
-      });
-    } catch {
-      /* keep existing messages on failure */
-    } finally {
-      setIsLoadingOlder(false);
-    }
-  }, [qs, hasMoreOlder, isLoadingOlder, messages]);
-
-  const handleMessagesScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (el.scrollTop < 80 && hasMoreOlder && !isLoadingOlder) {
-      void loadOlderMessages();
-    }
-  }, [hasMoreOlder, isLoadingOlder, loadOlderMessages]);
 
   useEffect(() => {
     void loadChatbotConfig();
@@ -817,7 +803,7 @@ const ClientSupportChat = () => {
           return;
         }
         const response = await clientFetch("/api/chats/client/last-id", { signal: controller.signal });
-        const data = await readSafeJson<{ lastId?: number; error?: string }>(response);
+        const data = (await response.json().catch(() => ({}))) as { lastId?: number };
         if (response.ok && typeof data.lastId === "number") lastId = data.lastId;
       } catch {
         // ignore cursor bootstrap failures
@@ -852,24 +838,13 @@ const ClientSupportChat = () => {
                 } else {
                   setMessages((prev) => (prev.some((message) => message.id === next.id) ? prev : [...prev, next]));
                 }
-              }
-              if (next.senderRole === "agency" && (!isActive || document.visibilityState !== "visible")) {
-                toast.message(next.senderName, {
-                  description: next.message.length > 90 ? `${next.message.slice(0, 90)}...` : next.message,
-                });
-                try {
-                  const context = new (window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)();
-                  const oscillator = context.createOscillator();
-                  const gainNode = context.createGain();
-                  oscillator.type = "triangle";
-                  oscillator.frequency.value = 720;
-                  gainNode.gain.value = 0.03;
-                  oscillator.connect(gainNode);
-                  gainNode.connect(context.destination);
-                  oscillator.start();
-                  oscillator.stop(context.currentTime + 0.08);
-                } catch {
-                  // ignore sound errors
+                // AI reply arrived — hide typing indicator
+                if (next.senderRole === "agency") {
+                  setIsBotTyping(false);
+                  if (botReplyTimerRef.current !== null) {
+                    window.clearTimeout(botReplyTimerRef.current);
+                    botReplyTimerRef.current = null;
+                  }
                 }
               }
               void loadConversations(true);
@@ -892,48 +867,16 @@ const ClientSupportChat = () => {
   }, [loadMessages]);
 
   useEffect(() => {
-    if (!scrollRef.current) return;
-    // Older history is prepended with a manually restored scroll position.
-    if (justPrependedRef.current) {
-      justPrependedRef.current = false;
-      return;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages]);
+  }, [messages, isBotTyping]);
 
-  useEffect(() => {
-    lastUnreadTotalRef.current = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
-  }, [conversations]);
-
-  // Presence heartbeat: marks this client online while the tab is visible so
-  // the agency sees them online. Closing the tab fires an offline beacon;
-  // otherwise presence lapses to offline ~40s after the last heartbeat.
-  useEffect(() => {
-    const sendHeartbeat = () => {
-      if (document.visibilityState !== "visible") return;
-      void clientFetch(`/api/chats/client/heartbeat?${qs}`, {
-        method: "POST",
-        keepalive: true,
-      }).catch(() => {});
-    };
-    const goOffline = () => {
-      void clientFetch("/api/chats/client/offline", {
-        method: "POST",
-        keepalive: true,
-      }).catch(() => {});
-    };
-
-    sendHeartbeat();
-    const interval = window.setInterval(sendHeartbeat, 25_000);
-    document.addEventListener("visibilitychange", sendHeartbeat);
-    window.addEventListener("beforeunload", goOffline);
-
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", sendHeartbeat);
-      window.removeEventListener("beforeunload", goOffline);
-    };
-  }, [qs]);
+  useEffect(() => () => {
+    if (botReplyTimerRef.current !== null) {
+      window.clearTimeout(botReplyTimerRef.current);
+    }
+  }, []);
 
   const autoResize = () => {
     const element = textareaRef.current;
@@ -953,10 +896,10 @@ const ClientSupportChat = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
       });
-      const data = await readSafeJson<{
+      const data = (await response.json().catch(() => ({}))) as {
         message?: ChatMessage;
         error?: string;
-      }>(response);
+      };
       if (!response.ok || !data.message) {
         throw new Error(data.error || "Failed to send");
       }
@@ -988,6 +931,14 @@ const ClientSupportChat = () => {
         textareaRef.current.style.height = "auto";
       }
       void loadConversations(true);
+
+      // Show AI typing indicator — the real reply arrives via SSE from the backend
+      if (chatbotEnabled && activeConv.conversationType === "support") {
+        if (botReplyTimerRef.current !== null) window.clearTimeout(botReplyTimerRef.current);
+        setIsBotTyping(true);
+        // Safety: auto-hide after 30s if AI reply never arrives
+        botReplyTimerRef.current = window.setTimeout(() => setIsBotTyping(false), 30_000);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send");
     } finally {
@@ -1041,7 +992,7 @@ const ClientSupportChat = () => {
           <div className={`sc-status-pill ${chatbotEnabled ? "online" : "offline"}`}>
             <Bot size={13} />
             <div className={`sc-status-dot ${chatbotEnabled ? "online" : "offline"}`} />
-            {chatbotEnabled ? "Chatbot On" : "Chatbot Off"}
+            {chatbotEnabled ? "AI Support On" : "AI Support Off"}
           </div>
         </div>
       </nav>
@@ -1133,47 +1084,49 @@ const ClientSupportChat = () => {
             <button className="sc-back-btn" onClick={() => setSidebarOpen(true)} aria-label="Open conversations">
               <ChevronLeft size={18} />
             </button>
-            <div className={`sc-chat-av ${conversationType}`} style={{ position: "relative" }}>
-              {activeConv.agencyProfileImageUrl
-                ? <img src={activeConv.agencyProfileImageUrl} alt={activeConv.title} />
-                : conversationType === "agency" ? "🏢" : "🤖"}
-              {(activeConv.agencyOnline || chatbotEnabled) && <div className="sc-chat-av-online" />}
-            </div>
+            <ChatAvatar
+              imageUrl={activeConv.agencyProfileImageUrl}
+              alt={activeConv.title}
+              fallback={conversationType === "agency" ? "🏢" : "💬"}
+              className={`sc-chat-av ${conversationType}`}
+            />
             <div className="sc-chat-info">
               <div className="sc-chat-name">{activeConv.title}</div>
-              <div className="sc-chat-status">
-                {activeConv.agencyOnline
-                  ? "Online now"
-                  : chatbotEnabled
-                    ? "We typically reply quickly"
-                    : "Support team"}
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                <span className="sc-topic-selected-pill">{getSupportStatusLabel(activeConv.status)}</span>
-                {activeConv.category && <span className="sc-topic-selected-pill">{activeConv.category}</span>}
-                {activeConv.priority && <span className="sc-topic-selected-pill">{activeConv.priority}</span>}
-              </div>
+              <div className="sc-chat-desc">{`${getConversationBadgeLabel(activeConv)} · ${activeConv.description}`}</div>
             </div>
-            <div className="sc-hdr-actions">
-              <button className="sc-hdr-btn" onClick={() => { void loadMessages(false); }} aria-label="Refresh chat" title="Refresh">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-              </button>
-              <button className="sc-hdr-btn" onClick={() => setShowGuide(true)} aria-label="Help" title="Help">
-                <HelpCircle size={17} />
-              </button>
-            </div>
+            {chatbotEnabled && (
+              <div className="sc-online-tag">
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#1D9E75", flexShrink: 0 }} />
+                AI Receptionist
+              </div>
+            )}
           </div>
 
+          {topics.length > 0 && (
+            <TopicPicker
+              topics={topics}
+              selectedId={selectedTopic?.id ?? null}
+              onSelect={(topic) => {
+                if (topic.id === MAIN_MENU_TOPIC_ID) {
+                  setSelectedTopic(null);
+                  return;
+                }
+                setSelectedTopic(topic);
+                if (topic.suggestedMessage?.trim()) {
+                  void sendMessage(topic.suggestedMessage);
+                  return;
+                }
+                setDraft("");
+                window.setTimeout(() => textareaRef.current?.focus(), 60);
+              }}
+            />
+          )}
 
-          <div className="sc-msgs" ref={scrollRef} onScroll={handleMessagesScroll}>
-            {isLoadingOlder && (
-              <div className="sc-date-sep-lbl" style={{ alignSelf: "center", padding: "4px 0" }}>Loading earlier messages…</div>
-            )}
+          <div className="sc-msgs" ref={scrollRef}>
             {isLoading ? (
               <>
-                <div style={{ height: 42, width: "54%", borderRadius: 20, background: "#f0f0f0" }} />
-                <div style={{ height: 42, width: "60%", alignSelf: "flex-end", borderRadius: 20, background: "#f0f0f0" }} />
-                <div style={{ height: 42, width: "48%", borderRadius: 20, background: "#f0f0f0" }} />
+                <div style={{ height: 46, width: "52%", borderRadius: 14, background: "#f0f1f3" }} />
+                <div style={{ height: 46, width: "65%", alignSelf: "flex-end", borderRadius: 14, background: "#f0f1f3" }} />
               </>
             ) : errorMessage ? (
               <div className="sc-error-banner">
@@ -1182,23 +1135,16 @@ const ClientSupportChat = () => {
               </div>
             ) : messages.length === 0 ? (
               <div className="sc-empty">
-                <div className="sc-empty-icon">💬</div>
-                <div className="sc-empty-lbl">No messages yet</div>
-                <div className="sc-empty-sub">Tap a quick reply below or type your message.</div>
+                <div className="sc-empty-icon">{topics.length > 0 ? "📋" : "💬"}</div>
+                <div className="sc-empty-lbl">
+                  {topics.length > 0 ? "Select a topic above or type your message below." : "Start the conversation below."}
+                </div>
+                <div className="sc-empty-sub">Messages appear in real time.</div>
               </div>
             ) : (
-              <>
-                <div className="sc-date-sep">
-                  <div className="sc-date-sep-line" />
-                  <div className="sc-date-sep-lbl">
-                    {new Date(messages[0]?.createdAt || Date.now()).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}
-                  </div>
-                  <div className="sc-date-sep-line" />
-                </div>
-                {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} isOwn={message.senderRole === "client"} />
-                ))}
-              </>
+              messages.map((message) => (
+                <MessageBubble key={message.id} message={message} isOwn={message.senderRole === "client"} />
+              ))
             )}
 
             {shouldShowTopicChoices && (
@@ -1229,7 +1175,7 @@ const ClientSupportChat = () => {
                   className="sc-msg-avi"
                 />
                 <div className="sc-msg-col">
-                  <div className="sc-msg-sender">{chatbotConfig.botName || "Support Bot"}</div>
+                  <div className="sc-msg-sender">AI Support</div>
                   <div className="sc-typing-bubble">
                     <div className="sc-typing-dot" />
                     <div className="sc-typing-dot" />
@@ -1241,19 +1187,19 @@ const ClientSupportChat = () => {
           </div>
 
           <div className="sc-compose">
-            <div className="sc-compose-left">
-              <button className="sc-compose-icon-btn" aria-label="Emoji" title="Emoji">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-              </button>
-              <button className="sc-compose-icon-btn" aria-label="Attach" title="Attach file">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-              </button>
-            </div>
+            {selectedTopic && (
+              <div className="sc-topic-tag">
+                {selectedTopic.icon} {selectedTopic.label}
+                <button onClick={() => setSelectedTopic(null)} aria-label="Remove topic">
+                  <X size={13} />
+                </button>
+              </div>
+            )}
             <div className="sc-compose-box">
               <textarea
                 ref={textareaRef}
                 rows={1}
-                placeholder="Enter message"
+                placeholder={selectedTopic ? `Message about: ${selectedTopic.label}...` : `Message ${activeConv.title}...`}
                 value={draft}
                 onChange={(event) => {
                   setDraft(event.target.value);
@@ -1266,15 +1212,16 @@ const ClientSupportChat = () => {
                   }
                 }}
               />
+              <button
+                className="sc-send-btn"
+                disabled={!draft.trim() || isSending}
+                onClick={() => void sendMessage()}
+                aria-label="Send message"
+              >
+                <Send size={16} />
+              </button>
             </div>
-            <button
-              className="sc-send-btn"
-              disabled={!draft.trim() || isSending}
-              onClick={() => void sendMessage()}
-              aria-label="Send message"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </button>
+            <div className="sc-compose-hint">Enter to send · Shift+Enter for new line</div>
           </div>
         </main>
       </div>

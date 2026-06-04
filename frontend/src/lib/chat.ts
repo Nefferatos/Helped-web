@@ -36,6 +36,7 @@ export interface ChatMessage {
     size?: number;
   }>;
   createdAt: string;
+  isBot?: boolean;
 }
 
 export interface ClientConversation {

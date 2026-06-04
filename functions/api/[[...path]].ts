@@ -222,6 +222,7 @@ interface ChatMessageRecord {
   createdAt: string;
   readByAgency: boolean;
   readByClient: boolean;
+  isBot?: boolean;
 }
 
 interface EmployerContractRecord {
@@ -10130,6 +10131,65 @@ app.get("/api/chats/client", requireClientAuth, async (c) => {
   return c.json({ client: toSafeClient(client), messages });
 });
 
+const generateChatBotReply = async (
+  env: Bindings,
+  client: { id: number; name: string },
+  userMessage: ChatMessageRecord,
+): Promise<void> => {
+  try {
+    const supabase = getAiSupabaseConfig(env);
+    if (!supabase || !env.GROQ_API_KEY) return;
+    const data = await loadData(env, { readOnly: true });
+    const result = await runAIAgent({
+      agentId: "employer_support",
+      input: { message: userMessage.message },
+      actor: { role: "employer", userId: client.id, clientId: client.id, ip: "chat-bot" },
+      appData: data as unknown as Record<string, unknown>,
+      groqApiKey: env.GROQ_API_KEY,
+      supabase,
+      conversationId: `chat:support:${client.id}`,
+    });
+    const reply = result?.response?.trim();
+    if (!reply) return;
+    const replyData = await loadData(env);
+    replyData.chatMessages.push({
+      id: replyData.counters.chatMessages++,
+      clientId: client.id,
+      conversationType: userMessage.conversationType,
+      agencyId: userMessage.agencyId,
+      agencyName: userMessage.agencyName || "",
+      senderRole: "agency",
+      senderName: "AI Support",
+      message: reply,
+      createdAt: now(),
+      readByAgency: true,
+      readByClient: false,
+      isBot: true,
+    });
+    await saveData(env, replyData);
+  } catch (error) {
+    console.warn("Chat AI reply failed, storing fallback", error);
+    try {
+      const replyData = await loadData(env);
+      replyData.chatMessages.push({
+        id: replyData.counters.chatMessages++,
+        clientId: client.id,
+        conversationType: userMessage.conversationType,
+        agencyId: userMessage.agencyId,
+        agencyName: userMessage.agencyName || "",
+        senderRole: "agency",
+        senderName: "Support Bot",
+        message: "Thanks for your message! Our team has been notified and will follow up with you shortly. For urgent matters you can reach us via WhatsApp.",
+        createdAt: now(),
+        readByAgency: true,
+        readByClient: false,
+        isBot: true,
+      });
+      await saveData(env, replyData);
+    } catch { /* ignore */ }
+  }
+};
+
 app.post("/api/chats/client", requireClientAuth, async (c) => {
   const body = await parseBody<{ message?: string }>(c.req.raw);
   if (!body?.message?.trim()) {
@@ -10156,10 +10216,10 @@ app.post("/api/chats/client", requireClientAuth, async (c) => {
   };
   data.chatMessages.push(message);
   await saveData(c.env, data);
-  runChatBackgroundTask(
-    c,
-    touchChatPresence(c.env, "client", client.id, agencyId),
-  );
+  runChatBackgroundTask(c, touchChatPresence(c.env, "client", client.id, agencyId));
+  if (conversationType === "support") {
+    runChatBackgroundTask(c, generateChatBotReply(c.env, client, message));
+  }
   return c.json({ message }, 201);
 });
 
@@ -10282,6 +10342,7 @@ app.get("/api/chats/admin/stream", requireAgencyAdminAuth, async (c) => {
   return createSseResponse(c.req.raw, async (controller) => {
     let lastId = afterId;
     let lastHeartbeat = Date.now();
+    let idleTicks = 0;
     writeSseEvent(controller, "ready", { ok: true });
 
     while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
@@ -10292,13 +10353,15 @@ app.get("/api/chats/admin/stream", requireAgencyAdminAuth, async (c) => {
         lastId = Math.max(lastId, message.id);
       }
 
+      if (nextMessages.length > 0) { idleTicks = 0; } else { idleTicks++; }
+
       const nowTime = Date.now();
       if (nowTime - lastHeartbeat > 15_000) {
         writeSseComment(controller, "keep-alive");
         lastHeartbeat = nowTime;
       }
 
-      await sleep(1200);
+      await sleep(nextMessages.length > 0 ? 600 : idleTicks > 8 ? 2500 : 1200);
     }
   });
 });
@@ -10461,6 +10524,7 @@ app.get("/api/chats/client/stream", requireClientAuth, async (c) => {
   return createSseResponse(c.req.raw, async (controller) => {
     let lastId = afterId;
     let lastHeartbeat = Date.now();
+    let idleTicks = 0;
     writeSseEvent(controller, "ready", { ok: true });
 
     while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
@@ -10476,13 +10540,15 @@ app.get("/api/chats/client/stream", requireClientAuth, async (c) => {
         lastId = Math.max(lastId, message.id);
       }
 
+      if (nextMessages.length > 0) { idleTicks = 0; } else { idleTicks++; }
+
       const nowTime = Date.now();
       if (nowTime - lastHeartbeat > 15_000) {
         writeSseComment(controller, "keep-alive");
         lastHeartbeat = nowTime;
       }
 
-      await sleep(1200);
+      await sleep(nextMessages.length > 0 ? 600 : idleTicks > 8 ? 2500 : 1200);
     }
   });
 });
@@ -10524,6 +10590,7 @@ app.get(
     return createSseResponse(c.req.raw, async (controller) => {
       let lastId = afterId;
       let lastHeartbeat = Date.now();
+      let idleTicks = 0;
       writeSseEvent(controller, "ready", { ok: true });
 
       while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
@@ -10539,13 +10606,15 @@ app.get(
           lastId = Math.max(lastId, message.id);
         }
 
+        if (nextMessages.length > 0) { idleTicks = 0; } else { idleTicks++; }
+
         const nowTime = Date.now();
         if (nowTime - lastHeartbeat > 15_000) {
           writeSseComment(controller, "keep-alive");
           lastHeartbeat = nowTime;
         }
 
-        await sleep(1200);
+        await sleep(nextMessages.length > 0 ? 600 : idleTicks > 8 ? 2500 : 1200);
       }
     });
   },
