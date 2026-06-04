@@ -1,513 +1,465 @@
--- Helped Web production Supabase schema
+-- =============================================================================
+-- HELPED WEB — FULL SCHEMA RECONSTRUCTION (ONE-SHOT)
+-- Architecture: app_data blob (Worker read/write) + helped_query_* (fast reads)
 --
--- Safe to paste into the Supabase SQL editor.
--- This script is intentionally non-destructive for production data:
--- - It does not drop public.app_data.
--- - It does not overwrite the default app_data row if it already exists.
--- - It keeps the Cloudflare Worker compatible with the current app_data JSON contract.
--- - It adds query-friendly tables/views for smooth inspection and reporting.
+-- HOW TO USE:
+--   1. Paste this entire file into Supabase SQL Editor and run it.
+--   2. When it succeeds, run this one extra line:
+--        SELECT public.refresh_helped_query_tables('default');
 --
--- After running, optional refresh:
---   select public.refresh_helped_query_tables('default');
+-- SAFE ON EXISTING DATA:
+--   - Does NOT drop app_data or its existing rows.
+--   - Drops all old views cleanly before recreating them (fixes the 42P16 error).
+--   - Drops and recreates helped_query_* tables (repopulated from your blob).
+--   - Drops and recreates all indexes, triggers, views, and functions cleanly.
+-- =============================================================================
 
-begin;
+BEGIN;
 
-create extension if not exists pgcrypto;
-create extension if not exists pg_trgm;
+-- ---------------------------------------------------------------------------
+-- 0. EXTENSIONS
+-- ---------------------------------------------------------------------------
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
-create or replace function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
+-- ---------------------------------------------------------------------------
+-- 1. DROP ALL OLD VIEWS FIRST  (prevents 42P16 column rename errors)
+-- ---------------------------------------------------------------------------
+DROP VIEW IF EXISTS public.app_ats_document_summary        CASCADE;
+DROP VIEW IF EXISTS public.app_ats_profiles                CASCADE;
+DROP VIEW IF EXISTS public.app_ats_applications            CASCADE;
+DROP VIEW IF EXISTS public.app_ats_with_profile            CASCADE;
+DROP VIEW IF EXISTS public.app_request_message_threads     CASCADE;
+DROP VIEW IF EXISTS public.app_requests_with_client        CASCADE;
+DROP VIEW IF EXISTS public.app_data_overview               CASCADE;
+DROP VIEW IF EXISTS public.app_maids                       CASCADE;
+DROP VIEW IF EXISTS public.app_agency_admins               CASCADE;
+DROP VIEW IF EXISTS public.app_enquiries                   CASCADE;
+DROP VIEW IF EXISTS public.helped_storage_overview         CASCADE;
+
+-- ---------------------------------------------------------------------------
+-- 2. SHARED TRIGGER FUNCTIONS
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
 $$;
 
-create or replace function public.set_row_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.row_updated_at = now();
-  return new;
-end;
+CREATE OR REPLACE FUNCTION public.set_row_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.row_updated_at = NOW();
+  RETURN NEW;
+END;
 $$;
 
-create or replace function public.helped_try_int(value text)
-returns integer
-language plpgsql
-immutable
-as $$
-begin
-  if value is null or btrim(value) = '' then
-    return null;
-  end if;
-  return value::integer;
-exception when others then
-  return null;
-end;
+-- ---------------------------------------------------------------------------
+-- 3. SAFE CAST HELPERS
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.helped_try_int(value TEXT)
+RETURNS INTEGER LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+  IF value IS NULL OR BTRIM(value) = '' THEN RETURN NULL; END IF;
+  RETURN value::INTEGER;
+EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END;
 $$;
 
-create or replace function public.helped_try_numeric(value text)
-returns numeric
-language plpgsql
-immutable
-as $$
-begin
-  if value is null or btrim(value) = '' then
-    return null;
-  end if;
-  return value::numeric;
-exception when others then
-  return null;
-end;
+CREATE OR REPLACE FUNCTION public.helped_try_numeric(value TEXT)
+RETURNS NUMERIC LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+  IF value IS NULL OR BTRIM(value) = '' THEN RETURN NULL; END IF;
+  RETURN value::NUMERIC;
+EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END;
 $$;
 
-create or replace function public.helped_try_timestamptz(value text)
-returns timestamptz
-language plpgsql
-immutable
-as $$
-begin
-  if value is null or btrim(value) = '' then
-    return null;
-  end if;
-  return value::timestamptz;
-exception when others then
-  return null;
-end;
+CREATE OR REPLACE FUNCTION public.helped_try_timestamptz(value TEXT)
+RETURNS TIMESTAMPTZ LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+  IF value IS NULL OR BTRIM(value) = '' THEN RETURN NULL; END IF;
+  RETURN value::TIMESTAMPTZ;
+EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END;
 $$;
 
-create table if not exists public.app_data (
-  id text primary key,
-  data jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint app_data_id_not_blank check (length(btrim(id)) > 0),
-  constraint app_data_json_object check (jsonb_typeof(data) = 'object')
+-- ---------------------------------------------------------------------------
+-- 4. app_data  (blob store — Worker reads/writes this, never dropped)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.app_data (
+  id          TEXT        PRIMARY KEY,
+  data        JSONB       NOT NULL DEFAULT '{}'::JSONB,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT app_data_id_not_blank CHECK (LENGTH(BTRIM(id)) > 0),
+  CONSTRAINT app_data_json_object  CHECK (JSONB_TYPEOF(data) = 'object')
 );
 
-drop trigger if exists app_data_set_updated_at on public.app_data;
-create trigger app_data_set_updated_at
-before update on public.app_data
-for each row execute function public.set_updated_at();
+DROP TRIGGER IF EXISTS app_data_set_updated_at ON public.app_data;
+CREATE TRIGGER app_data_set_updated_at
+  BEFORE UPDATE ON public.app_data
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-create index if not exists app_data_updated_at_idx
-  on public.app_data (updated_at desc);
-create index if not exists app_data_data_gin_idx
-  on public.app_data using gin (data jsonb_path_ops);
+CREATE INDEX IF NOT EXISTS app_data_updated_at_idx
+  ON public.app_data (updated_at DESC);
 
-insert into public.app_data (id, data)
-values
-  (
-    'default',
-    jsonb_build_object(
-      'companyProfile', '{}'::jsonb,
-      'momPersonnel', '[]'::jsonb,
-      'testimonials', '[]'::jsonb,
-      'maids', '[]'::jsonb,
-      'enquiries', '[]'::jsonb,
-      'clients', '[]'::jsonb,
-      'clientSessions', '[]'::jsonb,
-      'agencyAdmins', '[]'::jsonb,
-      'agencyAdminSessions', '[]'::jsonb,
-      'directSales', '[]'::jsonb,
-      'requests', '[]'::jsonb,
-      'requestConversations', '[]'::jsonb,
-      'requestMessages', '[]'::jsonb,
-      'chatMessages', '[]'::jsonb,
-      'employers', '[]'::jsonb,
-      'employmentContracts', '[]'::jsonb,
-      'ats', jsonb_build_object(
-        'applications', '[]'::jsonb,
-        'profiles', '[]'::jsonb,
-        'scores', '{}'::jsonb,
-        'history', '{}'::jsonb,
-        'documents', '{}'::jsonb,
-        'notifications', '{}'::jsonb,
-        'presets', '[]'::jsonb
-      ),
-      'counters', '{}'::jsonb
-    )
-  ),
-  ('default:agency-admin-sessions', '{"agencyAdminSessions":[]}'::jsonb),
-  ('default:agency-admin-auth', '{"agencyAdmins":[]}'::jsonb)
-on conflict (id) do nothing;
+CREATE INDEX IF NOT EXISTS app_data_data_gin_idx
+  ON public.app_data USING GIN (data jsonb_path_ops);
 
-revoke all on table public.app_data from anon, authenticated;
-grant select, insert, update, delete on table public.app_data to service_role;
-alter table public.app_data enable row level security;
-drop policy if exists "service role manages app_data" on public.app_data;
-create policy "service role manages app_data"
-on public.app_data
-for all
-to service_role
-using (true)
-with check (true);
+-- Seed default rows only if missing
+INSERT INTO public.app_data (id, data) VALUES
+  ('default', jsonb_build_object(
+    'companyProfile',       '{}'::JSONB,
+    'momPersonnel',         '[]'::JSONB,
+    'testimonials',         '[]'::JSONB,
+    'maids',                '[]'::JSONB,
+    'enquiries',            '[]'::JSONB,
+    'clients',              '[]'::JSONB,
+    'clientSessions',       '[]'::JSONB,
+    'agencyAdmins',         '[]'::JSONB,
+    'agencyAdminSessions',  '[]'::JSONB,
+    'directSales',          '[]'::JSONB,
+    'requests',             '[]'::JSONB,
+    'requestConversations', '[]'::JSONB,
+    'requestMessages',      '[]'::JSONB,
+    'chatMessages',         '[]'::JSONB,
+    'employers',            '[]'::JSONB,
+    'employmentContracts',  '[]'::JSONB,
+    'ats', jsonb_build_object(
+      'applications',  '[]'::JSONB,
+      'profiles',      '[]'::JSONB,
+      'scores',        '{}'::JSONB,
+      'history',       '{}'::JSONB,
+      'documents',     '{}'::JSONB,
+      'notifications', '{}'::JSONB,
+      'presets',       '[]'::JSONB
+    ),
+    'counters', '{}'::JSONB
+  )),
+  ('default:agency-admin-sessions', '{"agencyAdminSessions":[]}'::JSONB),
+  ('default:agency-admin-auth',     '{"agencyAdmins":[]}'::JSONB)
+ON CONFLICT (id) DO NOTHING;
 
-create table if not exists public.helped_query_meta (
-  app_id text primary key,
-  refreshed_at timestamptz not null default now(),
-  source_updated_at timestamptz,
-  source_bytes integer not null default 0
+-- RLS: only service_role touches the blob
+REVOKE ALL ON TABLE public.app_data FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.app_data TO service_role;
+ALTER TABLE public.app_data ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service role manages app_data" ON public.app_data;
+CREATE POLICY "service role manages app_data"
+  ON public.app_data FOR ALL TO service_role
+  USING (TRUE) WITH CHECK (TRUE);
+
+-- ---------------------------------------------------------------------------
+-- 5. DROP + RECREATE QUERY TABLES  (always fresh, data comes from blob)
+-- ---------------------------------------------------------------------------
+DROP TABLE IF EXISTS public.helped_query_ats_profiles          CASCADE;
+DROP TABLE IF EXISTS public.helped_query_ats_applications      CASCADE;
+DROP TABLE IF EXISTS public.helped_query_request_messages      CASCADE;
+DROP TABLE IF EXISTS public.helped_query_request_conversations CASCADE;
+DROP TABLE IF EXISTS public.helped_query_requests              CASCADE;
+DROP TABLE IF EXISTS public.helped_query_direct_sales          CASCADE;
+DROP TABLE IF EXISTS public.helped_query_enquiries             CASCADE;
+DROP TABLE IF EXISTS public.helped_query_agency_admins         CASCADE;
+DROP TABLE IF EXISTS public.helped_query_clients               CASCADE;
+DROP TABLE IF EXISTS public.helped_query_maids                 CASCADE;
+DROP TABLE IF EXISTS public.helped_query_chat_messages         CASCADE;
+DROP TABLE IF EXISTS public.helped_query_employers             CASCADE;
+DROP TABLE IF EXISTS public.helped_query_employment_contracts  CASCADE;
+DROP TABLE IF EXISTS public.helped_query_meta                  CASCADE;
+
+CREATE TABLE public.helped_query_meta (
+  app_id            TEXT        PRIMARY KEY,
+  refreshed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  source_updated_at TIMESTAMPTZ,
+  source_bytes      INTEGER     NOT NULL DEFAULT 0
 );
 
-create table if not exists public.helped_query_maids (
-  app_id text not null,
-  record_id integer not null,
-  agency_id integer,
-  reference_code text,
-  full_name text,
-  status text,
-  maid_type text,
-  nationality text,
-  is_public boolean not null default false,
-  has_photo boolean not null default false,
-  created_at timestamptz,
-  updated_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, record_id),
-  constraint helped_query_maids_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_maids (
+  app_id         TEXT        NOT NULL,
+  record_id      INTEGER     NOT NULL,
+  agency_id      INTEGER,
+  reference_code TEXT,
+  full_name      TEXT,
+  status         TEXT,
+  maid_type      TEXT,
+  nationality    TEXT,
+  is_public      BOOLEAN     NOT NULL DEFAULT FALSE,
+  has_photo      BOOLEAN     NOT NULL DEFAULT FALSE,
+  created_at     TIMESTAMPTZ,
+  updated_at     TIMESTAMPTZ,
+  payload        JSONB       NOT NULL,
+  row_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, record_id),
+  CONSTRAINT helped_query_maids_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_clients (
-  app_id text not null,
-  record_id integer not null,
-  supabase_user_id text,
-  email text,
-  name text,
-  company text,
-  phone text,
-  created_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, record_id),
-  constraint helped_query_clients_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_clients (
+  app_id           TEXT        NOT NULL,
+  record_id        INTEGER     NOT NULL,
+  supabase_user_id TEXT,
+  email            TEXT,
+  name             TEXT,
+  company          TEXT,
+  phone            TEXT,
+  created_at       TIMESTAMPTZ,
+  payload          JSONB       NOT NULL,
+  row_created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, record_id),
+  CONSTRAINT helped_query_clients_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_agency_admins (
-  app_id text not null,
-  record_id integer not null,
-  agency_id integer,
-  username text,
-  email text,
-  supabase_user_id text,
-  agency_name text,
-  created_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, record_id),
-  constraint helped_query_agency_admins_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_agency_admins (
+  app_id           TEXT        NOT NULL,
+  record_id        INTEGER     NOT NULL,
+  agency_id        INTEGER,
+  username         TEXT,
+  email            TEXT,
+  supabase_user_id TEXT,
+  agency_name      TEXT,
+  created_at       TIMESTAMPTZ,
+  payload          JSONB       NOT NULL,
+  row_created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, record_id),
+  CONSTRAINT helped_query_agency_admins_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_enquiries (
-  app_id text not null,
-  record_id integer not null,
-  username text,
-  email text,
-  phone text,
-  created_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, record_id),
-  constraint helped_query_enquiries_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_enquiries (
+  app_id         TEXT        NOT NULL,
+  record_id      INTEGER     NOT NULL,
+  username       TEXT,
+  email          TEXT,
+  phone          TEXT,
+  created_at     TIMESTAMPTZ,
+  payload        JSONB       NOT NULL,
+  row_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, record_id),
+  CONSTRAINT helped_query_enquiries_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_direct_sales (
-  app_id text not null,
-  record_id integer not null,
-  agency_id integer,
-  client_id integer,
-  maid_reference_code text,
-  status text,
-  created_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, record_id),
-  constraint helped_query_direct_sales_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_direct_sales (
+  app_id              TEXT        NOT NULL,
+  record_id           INTEGER     NOT NULL,
+  agency_id           INTEGER,
+  client_id           INTEGER,
+  maid_reference_code TEXT,
+  status              TEXT,
+  created_at          TIMESTAMPTZ,
+  payload             JSONB       NOT NULL,
+  row_created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, record_id),
+  CONSTRAINT helped_query_direct_sales_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_requests (
-  app_id text not null,
-  request_id uuid not null,
-  client_id integer,
-  agency_id integer,
-  request_type text,
-  status text,
-  maid_references text[] not null default array[]::text[],
-  summary text,
-  updated_by text,
-  created_at timestamptz,
-  updated_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, request_id),
-  constraint helped_query_requests_payload_object check (jsonb_typeof(payload) = 'object')
+-- Primary fast-query table for GET /api/requests
+CREATE TABLE public.helped_query_requests (
+  app_id          TEXT        NOT NULL,
+  request_id      UUID        NOT NULL,
+  client_id       INTEGER,
+  agency_id       INTEGER,
+  request_type    TEXT,
+  status          TEXT,
+  maid_references TEXT[]      NOT NULL DEFAULT ARRAY[]::TEXT[],
+  summary         TEXT,
+  updated_by      TEXT,
+  created_at      TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ,
+  payload         JSONB       NOT NULL,
+  row_created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, request_id),
+  CONSTRAINT helped_query_requests_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_request_conversations (
-  app_id text not null,
-  conversation_id uuid not null,
-  request_id uuid not null,
-  agency_id integer,
-  client_id integer,
-  created_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, conversation_id),
-  constraint helped_query_request_conversations_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_request_conversations (
+  app_id          TEXT        NOT NULL,
+  conversation_id UUID        NOT NULL,
+  request_id      UUID        NOT NULL,
+  agency_id       INTEGER,
+  client_id       INTEGER,
+  created_at      TIMESTAMPTZ,
+  payload         JSONB       NOT NULL,
+  row_created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, conversation_id),
+  CONSTRAINT helped_query_request_conversations_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_request_messages (
-  app_id text not null,
-  message_id uuid not null,
-  conversation_id uuid not null,
-  sender_type text,
-  sender_id integer,
-  message text,
-  created_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, message_id),
-  constraint helped_query_request_messages_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_request_messages (
+  app_id          TEXT        NOT NULL,
+  message_id      UUID        NOT NULL,
+  conversation_id UUID        NOT NULL,
+  sender_type     TEXT,
+  sender_id       INTEGER,
+  message         TEXT,
+  created_at      TIMESTAMPTZ,
+  payload         JSONB       NOT NULL,
+  row_created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, message_id),
+  CONSTRAINT helped_query_request_messages_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_chat_messages (
-  app_id text not null,
-  record_id integer not null,
-  client_id integer,
-  agency_id integer,
-  conversation_type text,
-  sender_role text,
-  created_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, record_id),
-  constraint helped_query_chat_messages_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_chat_messages (
+  app_id            TEXT        NOT NULL,
+  record_id         INTEGER     NOT NULL,
+  client_id         INTEGER,
+  agency_id         INTEGER,
+  conversation_type TEXT,
+  sender_role       TEXT,
+  created_at        TIMESTAMPTZ,
+  payload           JSONB       NOT NULL,
+  row_created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, record_id),
+  CONSTRAINT helped_query_chat_messages_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_employers (
-  app_id text not null,
-  record_id integer not null,
-  agency_id integer,
-  ref_code text,
-  maid_reference_code text,
-  employer_name text,
-  created_at timestamptz,
-  updated_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, record_id),
-  constraint helped_query_employers_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_employers (
+  app_id              TEXT        NOT NULL,
+  record_id           INTEGER     NOT NULL,
+  agency_id           INTEGER,
+  ref_code            TEXT,
+  maid_reference_code TEXT,
+  employer_name       TEXT,
+  created_at          TIMESTAMPTZ,
+  updated_at          TIMESTAMPTZ,
+  payload             JSONB       NOT NULL,
+  row_created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, record_id),
+  CONSTRAINT helped_query_employers_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_employment_contracts (
-  app_id text not null,
-  record_id integer not null,
-  agency_id integer,
-  ref_code text,
-  employer_ref_code text,
-  maid_reference_code text,
-  maid_name text,
-  employer_name text,
-  created_at timestamptz,
-  updated_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, record_id),
-  constraint helped_query_employment_contracts_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_employment_contracts (
+  app_id              TEXT        NOT NULL,
+  record_id           INTEGER     NOT NULL,
+  agency_id           INTEGER,
+  ref_code            TEXT,
+  employer_ref_code   TEXT,
+  maid_reference_code TEXT,
+  maid_name           TEXT,
+  employer_name       TEXT,
+  created_at          TIMESTAMPTZ,
+  updated_at          TIMESTAMPTZ,
+  payload             JSONB       NOT NULL,
+  row_created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, record_id),
+  CONSTRAINT helped_query_employment_contracts_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_ats_applications (
-  app_id text not null,
-  application_id text not null,
-  agency_id integer,
-  profile_id text,
-  application_code text,
-  status text,
-  source text,
-  applied_at timestamptz,
-  updated_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, application_id),
-  constraint helped_query_ats_applications_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_ats_applications (
+  app_id           TEXT        NOT NULL,
+  application_id   TEXT        NOT NULL,
+  agency_id        INTEGER,
+  profile_id       TEXT,
+  application_code TEXT,
+  status           TEXT,
+  source           TEXT,
+  applied_at       TIMESTAMPTZ,
+  updated_at       TIMESTAMPTZ,
+  payload          JSONB       NOT NULL,
+  row_created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, application_id),
+  CONSTRAINT helped_query_ats_applications_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create table if not exists public.helped_query_ats_profiles (
-  app_id text not null,
-  profile_id text not null,
-  application_id text,
-  full_name text,
-  email text,
-  contact_number text,
-  nationality text,
-  years_of_experience numeric,
-  expected_salary numeric,
-  created_at timestamptz,
-  updated_at timestamptz,
-  payload jsonb not null,
-  row_created_at timestamptz not null default now(),
-  row_updated_at timestamptz not null default now(),
-  primary key (app_id, profile_id),
-  constraint helped_query_ats_profiles_payload_object check (jsonb_typeof(payload) = 'object')
+CREATE TABLE public.helped_query_ats_profiles (
+  app_id              TEXT        NOT NULL,
+  profile_id          TEXT        NOT NULL,
+  application_id      TEXT,
+  full_name           TEXT,
+  email               TEXT,
+  contact_number      TEXT,
+  nationality         TEXT,
+  years_of_experience NUMERIC,
+  expected_salary     NUMERIC,
+  created_at          TIMESTAMPTZ,
+  updated_at          TIMESTAMPTZ,
+  payload             JSONB       NOT NULL,
+  row_created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  row_updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, profile_id),
+  CONSTRAINT helped_query_ats_profiles_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
 );
 
-create index if not exists helped_query_maids_lookup_idx
-  on public.helped_query_maids (app_id, agency_id, is_public, updated_at desc);
-create index if not exists helped_query_maids_reference_idx
-  on public.helped_query_maids (app_id, reference_code);
-create index if not exists helped_query_maids_name_trgm_idx
-  on public.helped_query_maids using gin (full_name gin_trgm_ops);
-create index if not exists helped_query_clients_lookup_idx
-  on public.helped_query_clients (app_id, email, supabase_user_id);
-create index if not exists helped_query_agency_admins_lookup_idx
-  on public.helped_query_agency_admins (app_id, agency_id, email, username);
-create index if not exists helped_query_enquiries_created_idx
-  on public.helped_query_enquiries (app_id, created_at desc);
-create index if not exists helped_query_direct_sales_lookup_idx
-  on public.helped_query_direct_sales (app_id, agency_id, client_id, status, created_at desc);
-create index if not exists helped_query_requests_agency_status_idx
-  on public.helped_query_requests (app_id, agency_id, status, updated_at desc);
-create index if not exists helped_query_requests_client_idx
-  on public.helped_query_requests (app_id, client_id, updated_at desc);
-create index if not exists helped_query_request_conversations_request_idx
-  on public.helped_query_request_conversations (app_id, request_id);
-create index if not exists helped_query_request_messages_conversation_idx
-  on public.helped_query_request_messages (app_id, conversation_id, created_at asc);
-create index if not exists helped_query_chat_messages_lookup_idx
-  on public.helped_query_chat_messages (app_id, agency_id, client_id, conversation_type, created_at desc);
-create index if not exists helped_query_employers_ref_idx
-  on public.helped_query_employers (app_id, agency_id, ref_code);
-create index if not exists helped_query_employment_contracts_ref_idx
-  on public.helped_query_employment_contracts (app_id, agency_id, ref_code, employer_ref_code, maid_reference_code);
-create index if not exists helped_query_ats_applications_lookup_idx
-  on public.helped_query_ats_applications (app_id, agency_id, status, applied_at desc);
-create index if not exists helped_query_ats_profiles_lookup_idx
-  on public.helped_query_ats_profiles (app_id, application_id, full_name);
+-- ---------------------------------------------------------------------------
+-- 6. INDEXES
+-- ---------------------------------------------------------------------------
 
-create table if not exists public.ai_conversations (
-  id uuid primary key default gen_random_uuid(),
-  agent_id text not null,
-  actor_role text not null,
-  actor_id text,
-  agency_id integer,
-  title text,
-  metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint ai_conversations_agent_id_not_blank check (length(btrim(agent_id)) > 0),
-  constraint ai_conversations_actor_role_valid check (
-    actor_role in ('public', 'employer', 'agency', 'admin', 'applicant')
-  ),
-  constraint ai_conversations_metadata_object check (jsonb_typeof(metadata) = 'object')
-);
+-- Maids
+CREATE INDEX helped_query_maids_agency_idx
+  ON public.helped_query_maids (app_id, agency_id, is_public, updated_at DESC);
+CREATE INDEX helped_query_maids_reference_idx
+  ON public.helped_query_maids (app_id, reference_code);
+CREATE INDEX helped_query_maids_name_trgm_idx
+  ON public.helped_query_maids USING GIN (full_name gin_trgm_ops);
+CREATE INDEX helped_query_maids_status_idx
+  ON public.helped_query_maids (app_id, agency_id, status);
 
-drop trigger if exists ai_conversations_set_updated_at on public.ai_conversations;
-create trigger ai_conversations_set_updated_at
-before update on public.ai_conversations
-for each row execute function public.set_updated_at();
+-- Clients
+CREATE INDEX helped_query_clients_email_idx
+  ON public.helped_query_clients (app_id, email);
+CREATE INDEX helped_query_clients_supabase_idx
+  ON public.helped_query_clients (app_id, supabase_user_id)
+  WHERE supabase_user_id IS NOT NULL;
 
-create table if not exists public.ai_messages (
-  id uuid primary key default gen_random_uuid(),
-  conversation_id uuid not null references public.ai_conversations(id) on delete cascade,
-  agent_id text not null,
-  role text not null,
-  content text not null,
-  actor_role text,
-  actor_id text,
-  metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  constraint ai_messages_role_valid check (role in ('user', 'assistant', 'system', 'tool')),
-  constraint ai_messages_content_not_blank check (length(btrim(content)) > 0),
-  constraint ai_messages_metadata_object check (jsonb_typeof(metadata) = 'object')
-);
+-- Agency admins
+CREATE INDEX helped_query_agency_admins_login_idx
+  ON public.helped_query_agency_admins (app_id, agency_id, username, email);
 
-create table if not exists public.ai_agent_logs (
-  id uuid primary key default gen_random_uuid(),
-  conversation_id uuid references public.ai_conversations(id) on delete set null,
-  agent_id text not null,
-  actor_role text not null,
-  actor_id text,
-  agency_id integer,
-  status text not null,
-  latency_ms integer,
-  input jsonb not null default '{}'::jsonb,
-  output text,
-  error text,
-  created_at timestamptz not null default now(),
-  constraint ai_agent_logs_status_valid check (status in ('success', 'error', 'blocked')),
-  constraint ai_agent_logs_input_object check (jsonb_typeof(input) = 'object')
-);
+-- Requests (primary: agencyId + status + recency)
+CREATE INDEX helped_query_requests_agency_status_idx
+  ON public.helped_query_requests (app_id, agency_id, status, updated_at DESC NULLS LAST);
+CREATE INDEX helped_query_requests_client_idx
+  ON public.helped_query_requests (app_id, client_id, updated_at DESC NULLS LAST);
+CREATE INDEX helped_query_requests_type_idx
+  ON public.helped_query_requests (app_id, agency_id, request_type, updated_at DESC NULLS LAST);
 
-create table if not exists public.ai_agent_actions (
-  id uuid primary key default gen_random_uuid(),
-  conversation_id uuid references public.ai_conversations(id) on delete set null,
-  agent_id text not null,
-  action_type text not null,
-  status text not null default 'proposed',
-  payload jsonb not null default '{}'::jsonb,
-  created_by_role text,
-  created_by_id text,
-  approved_by text,
-  executed_at timestamptz,
-  created_at timestamptz not null default now(),
-  constraint ai_agent_actions_status_valid check (
-    status in ('proposed', 'approved', 'rejected', 'executed', 'failed')
-  ),
-  constraint ai_agent_actions_payload_object check (jsonb_typeof(payload) = 'object')
-);
+-- Conversations & messages
+CREATE INDEX helped_query_request_conversations_request_idx
+  ON public.helped_query_request_conversations (app_id, request_id);
+CREATE INDEX helped_query_request_messages_conversation_idx
+  ON public.helped_query_request_messages (app_id, conversation_id, created_at ASC);
 
-create table if not exists public.ai_agent_feedback (
-  id uuid primary key default gen_random_uuid(),
-  conversation_id uuid references public.ai_conversations(id) on delete cascade,
-  message_id uuid references public.ai_messages(id) on delete set null,
-  agent_id text not null,
-  actor_role text not null,
-  actor_id text,
-  rating integer,
-  feedback text,
-  metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  constraint ai_agent_feedback_rating_range check (rating is null or rating between 1 and 5),
-  constraint ai_agent_feedback_metadata_object check (jsonb_typeof(metadata) = 'object')
-);
+-- Chat messages
+CREATE INDEX helped_query_chat_messages_agency_client_idx
+  ON public.helped_query_chat_messages (app_id, agency_id, client_id, conversation_type, created_at DESC);
 
-create index if not exists ai_conversations_actor_idx
-  on public.ai_conversations (actor_role, actor_id, updated_at desc);
-create index if not exists ai_conversations_agency_idx
-  on public.ai_conversations (agency_id, updated_at desc);
-create index if not exists ai_messages_conversation_idx
-  on public.ai_messages (conversation_id, created_at asc);
-create index if not exists ai_agent_logs_agent_created_idx
-  on public.ai_agent_logs (agent_id, created_at desc);
-create index if not exists ai_agent_logs_agency_created_idx
-  on public.ai_agent_logs (agency_id, created_at desc);
-create index if not exists ai_agent_actions_conversation_idx
-  on public.ai_agent_actions (conversation_id, created_at desc);
-create index if not exists ai_agent_feedback_agent_idx
-  on public.ai_agent_feedback (agent_id, created_at desc);
+-- Direct sales
+CREATE INDEX helped_query_direct_sales_agency_status_idx
+  ON public.helped_query_direct_sales (app_id, agency_id, status, created_at DESC);
 
-do $$
-declare
-  tbl text;
-begin
-  foreach tbl in array array[
+-- Employers & contracts
+CREATE INDEX helped_query_employers_agency_ref_idx
+  ON public.helped_query_employers (app_id, agency_id, ref_code);
+CREATE INDEX helped_query_employment_contracts_agency_idx
+  ON public.helped_query_employment_contracts (app_id, agency_id, maid_reference_code);
+
+-- ATS
+CREATE INDEX helped_query_ats_applications_agency_status_idx
+  ON public.helped_query_ats_applications (app_id, agency_id, status, applied_at DESC NULLS LAST);
+CREATE INDEX helped_query_ats_profiles_name_trgm_idx
+  ON public.helped_query_ats_profiles USING GIN (full_name gin_trgm_ops);
+CREATE INDEX helped_query_ats_profiles_application_idx
+  ON public.helped_query_ats_profiles (app_id, application_id);
+
+-- ---------------------------------------------------------------------------
+-- 7. RLS ON ALL QUERY TABLES
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE tbl TEXT;
+BEGIN
+  FOREACH tbl IN ARRAY ARRAY[
     'helped_query_meta',
     'helped_query_maids',
     'helped_query_clients',
@@ -521,85 +473,90 @@ begin
     'helped_query_employers',
     'helped_query_employment_contracts',
     'helped_query_ats_applications',
-    'helped_query_ats_profiles',
-    'ai_conversations',
-    'ai_messages',
-    'ai_agent_logs',
-    'ai_agent_actions',
-    'ai_agent_feedback'
+    'helped_query_ats_profiles'
   ]
-  loop
-    execute format('alter table public.%I enable row level security', tbl);
-    execute format('revoke all on public.%I from anon, authenticated', tbl);
-    execute format('grant select, insert, update, delete on public.%I to service_role', tbl);
-    execute format('drop policy if exists "service role manages %1$s" on public.%I', tbl);
-    execute format(
-      'create policy "service role manages %1$s" on public.%I for all to service_role using (true) with check (true)',
-      tbl
+  LOOP
+    EXECUTE FORMAT('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tbl);
+    EXECUTE FORMAT('REVOKE ALL ON public.%I FROM anon, authenticated', tbl);
+    EXECUTE FORMAT('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO service_role', tbl);
+    EXECUTE FORMAT('GRANT SELECT ON public.%I TO authenticated', tbl);
+    EXECUTE FORMAT('DROP POLICY IF EXISTS "service role manages %1$s" ON public.%I', tbl, tbl);
+    EXECUTE FORMAT(
+      'CREATE POLICY "service role manages %1$s" ON public.%I FOR ALL TO service_role USING (TRUE) WITH CHECK (TRUE)',
+      tbl, tbl
     );
-  end loop;
-end
+    EXECUTE FORMAT('DROP POLICY IF EXISTS "authenticated read %1$s" ON public.%I', tbl, tbl);
+    EXECUTE FORMAT(
+      'CREATE POLICY "authenticated read %1$s" ON public.%I FOR SELECT TO authenticated USING (TRUE)',
+      tbl, tbl
+    );
+  END LOOP;
+END
 $$;
 
-create or replace function public.refresh_helped_query_tables(p_app_id text default 'default')
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_data jsonb;
-  v_updated_at timestamptz;
-begin
-  select data, updated_at
-  into v_data, v_updated_at
-  from public.app_data
-  where id = p_app_id;
+-- ---------------------------------------------------------------------------
+-- 8. REFRESH FUNCTION  (blob → all query tables, called by trigger + manually)
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.refresh_helped_query_tables(p_app_id TEXT DEFAULT 'default')
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_data       JSONB;
+  v_updated_at TIMESTAMPTZ;
+BEGIN
+  SELECT data, updated_at INTO v_data, v_updated_at
+  FROM public.app_data
+  WHERE id = p_app_id;
 
-  if v_data is null then
-    raise exception 'No app_data row found for app_id %', p_app_id;
-  end if;
+  IF v_data IS NULL THEN
+    RETURN jsonb_build_object('error', 'app_data row not found', 'app_id', p_app_id);
+  END IF;
 
-  delete from public.helped_query_maids where app_id = p_app_id;
-  delete from public.helped_query_clients where app_id = p_app_id;
-  delete from public.helped_query_agency_admins where app_id = p_app_id;
-  delete from public.helped_query_enquiries where app_id = p_app_id;
-  delete from public.helped_query_direct_sales where app_id = p_app_id;
-  delete from public.helped_query_requests where app_id = p_app_id;
-  delete from public.helped_query_request_conversations where app_id = p_app_id;
-  delete from public.helped_query_request_messages where app_id = p_app_id;
-  delete from public.helped_query_chat_messages where app_id = p_app_id;
-  delete from public.helped_query_employers where app_id = p_app_id;
-  delete from public.helped_query_employment_contracts where app_id = p_app_id;
-  delete from public.helped_query_ats_applications where app_id = p_app_id;
-  delete from public.helped_query_ats_profiles where app_id = p_app_id;
+  DELETE FROM public.helped_query_maids                 WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_clients               WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_agency_admins         WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_enquiries             WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_direct_sales          WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_requests              WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_request_conversations WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_request_messages      WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_chat_messages         WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_employers             WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_employment_contracts  WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_ats_applications      WHERE app_id = p_app_id;
+  DELETE FROM public.helped_query_ats_profiles          WHERE app_id = p_app_id;
 
-  insert into public.helped_query_maids (
-    app_id, record_id, agency_id, reference_code, full_name, status, maid_type,
-    nationality, is_public, has_photo, created_at, updated_at, payload
+  -- Maids
+  INSERT INTO public.helped_query_maids (
+    app_id, record_id, agency_id, reference_code, full_name,
+    status, maid_type, nationality, is_public, has_photo, created_at, updated_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    coalesce(public.helped_try_int(item->>'id'), row_number() over ()::integer),
+    COALESCE(public.helped_try_int(item->>'id'), ROW_NUMBER() OVER ()::INTEGER),
     public.helped_try_int(item->>'agencyId'),
     item->>'referenceCode',
     item->>'fullName',
     item->>'status',
     item->>'type',
     item->>'nationality',
-    coalesce((item->>'isPublic')::boolean, false),
-    coalesce((item->>'hasPhoto')::boolean, false),
+    COALESCE((item->>'isPublic')::BOOLEAN, FALSE),
+    COALESCE((item->>'hasPhoto')::BOOLEAN, FALSE),
     public.helped_try_timestamptz(item->>'createdAt'),
     public.helped_try_timestamptz(item->>'updatedAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'maids', '[]'::jsonb)) item;
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'maids', '[]'::JSONB)) item;
 
-  insert into public.helped_query_clients (
+  -- Clients
+  INSERT INTO public.helped_query_clients (
     app_id, record_id, supabase_user_id, email, name, company, phone, created_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    coalesce(public.helped_try_int(item->>'id'), row_number() over ()::integer),
+    COALESCE(public.helped_try_int(item->>'id'), ROW_NUMBER() OVER ()::INTEGER),
     item->>'supabaseUserId',
     item->>'email',
     item->>'name',
@@ -607,14 +564,15 @@ begin
     item->>'phone',
     public.helped_try_timestamptz(item->>'createdAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'clients', '[]'::jsonb)) item;
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'clients', '[]'::JSONB)) item;
 
-  insert into public.helped_query_agency_admins (
+  -- Agency admins
+  INSERT INTO public.helped_query_agency_admins (
     app_id, record_id, agency_id, username, email, supabase_user_id, agency_name, created_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    coalesce(public.helped_try_int(item->>'id'), row_number() over ()::integer),
+    COALESCE(public.helped_try_int(item->>'id'), ROW_NUMBER() OVER ()::INTEGER),
     public.helped_try_int(item->>'agencyId'),
     item->>'username',
     item->>'email',
@@ -622,109 +580,122 @@ begin
     item->>'agencyName',
     public.helped_try_timestamptz(item->>'createdAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'agencyAdmins', '[]'::jsonb)) item;
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'agencyAdmins', '[]'::JSONB)) item;
 
-  insert into public.helped_query_enquiries (
+  -- Enquiries
+  INSERT INTO public.helped_query_enquiries (
     app_id, record_id, username, email, phone, created_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    coalesce(public.helped_try_int(item->>'id'), row_number() over ()::integer),
+    COALESCE(public.helped_try_int(item->>'id'), ROW_NUMBER() OVER ()::INTEGER),
     item->>'username',
     item->>'email',
     item->>'phone',
     public.helped_try_timestamptz(item->>'createdAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'enquiries', '[]'::jsonb)) item;
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'enquiries', '[]'::JSONB)) item;
 
-  insert into public.helped_query_direct_sales (
+  -- Direct sales
+  INSERT INTO public.helped_query_direct_sales (
     app_id, record_id, agency_id, client_id, maid_reference_code, status, created_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    coalesce(public.helped_try_int(item->>'id'), row_number() over ()::integer),
+    COALESCE(public.helped_try_int(item->>'id'), ROW_NUMBER() OVER ()::INTEGER),
     public.helped_try_int(item->>'agencyId'),
     public.helped_try_int(item->>'clientId'),
     item->>'maidReferenceCode',
     item->>'status',
     public.helped_try_timestamptz(item->>'createdAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'directSales', '[]'::jsonb)) item;
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'directSales', '[]'::JSONB)) item;
 
-  insert into public.helped_query_requests (
-    app_id, request_id, client_id, agency_id, request_type, status, maid_references,
-    summary, updated_by, created_at, updated_at, payload
+  -- Requests (UUID guard)
+  INSERT INTO public.helped_query_requests (
+    app_id, request_id, client_id, agency_id, request_type, status,
+    maid_references, summary, updated_by, created_at, updated_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    (item->>'id')::uuid,
+    (item->>'id')::UUID,
     public.helped_try_int(item->>'clientId'),
     public.helped_try_int(item->>'agencyId'),
     item->>'type',
     item->>'status',
-    coalesce(
-      array(select jsonb_array_elements_text(coalesce(item->'maidReferences', '[]'::jsonb))),
-      array[]::text[]
+    COALESCE(
+      ARRAY(SELECT JSONB_ARRAY_ELEMENTS_TEXT(COALESCE(item->'maidReferences', '[]'::JSONB))),
+      ARRAY[]::TEXT[]
     ),
-    coalesce(item#>>'{details,primaryDuty}', item#>>'{details,nationality}', item->>'type'),
+    COALESCE(item#>>'{details,primaryDuty}', item#>>'{details,nationality}', item->>'type'),
     item->>'updatedBy',
     public.helped_try_timestamptz(item->>'createdAt'),
     public.helped_try_timestamptz(item->>'updatedAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'requests', '[]'::jsonb)) item
-  where coalesce(item->>'id', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'requests', '[]'::JSONB)) item
+  WHERE COALESCE(item->>'id', '') ~*
+    '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
 
-  insert into public.helped_query_request_conversations (
+  -- Request conversations
+  INSERT INTO public.helped_query_request_conversations (
     app_id, conversation_id, request_id, agency_id, client_id, created_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    (item->>'id')::uuid,
-    (item->>'requestId')::uuid,
+    (item->>'id')::UUID,
+    (item->>'requestId')::UUID,
     public.helped_try_int(item->>'agencyId'),
     public.helped_try_int(item->>'clientId'),
     public.helped_try_timestamptz(item->>'createdAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'requestConversations', '[]'::jsonb)) item
-  where coalesce(item->>'id', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-    and coalesce(item->>'requestId', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'requestConversations', '[]'::JSONB)) item
+  WHERE COALESCE(item->>'id', '') ~*
+      '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    AND COALESCE(item->>'requestId', '') ~*
+      '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
 
-  insert into public.helped_query_request_messages (
+  -- Request messages
+  INSERT INTO public.helped_query_request_messages (
     app_id, message_id, conversation_id, sender_type, sender_id, message, created_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    (item->>'id')::uuid,
-    (item->>'conversationId')::uuid,
+    (item->>'id')::UUID,
+    (item->>'conversationId')::UUID,
     item->>'senderType',
     public.helped_try_int(item->>'senderId'),
     item->>'message',
     public.helped_try_timestamptz(item->>'createdAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'requestMessages', '[]'::jsonb)) item
-  where coalesce(item->>'id', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-    and coalesce(item->>'conversationId', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'requestMessages', '[]'::JSONB)) item
+  WHERE COALESCE(item->>'id', '') ~*
+      '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    AND COALESCE(item->>'conversationId', '') ~*
+      '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
 
-  insert into public.helped_query_chat_messages (
+  -- Chat messages
+  INSERT INTO public.helped_query_chat_messages (
     app_id, record_id, client_id, agency_id, conversation_type, sender_role, created_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    coalesce(public.helped_try_int(item->>'id'), row_number() over ()::integer),
+    COALESCE(public.helped_try_int(item->>'id'), ROW_NUMBER() OVER ()::INTEGER),
     public.helped_try_int(item->>'clientId'),
     public.helped_try_int(item->>'agencyId'),
     item->>'conversationType',
     item->>'senderRole',
     public.helped_try_timestamptz(item->>'createdAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'chatMessages', '[]'::jsonb)) item;
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'chatMessages', '[]'::JSONB)) item;
 
-  insert into public.helped_query_employers (
-    app_id, record_id, agency_id, ref_code, maid_reference_code, employer_name, created_at, updated_at, payload
+  -- Employers
+  INSERT INTO public.helped_query_employers (
+    app_id, record_id, agency_id, ref_code, maid_reference_code, employer_name,
+    created_at, updated_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    coalesce(public.helped_try_int(item->>'id'), row_number() over ()::integer),
+    COALESCE(public.helped_try_int(item->>'id'), ROW_NUMBER() OVER ()::INTEGER),
     public.helped_try_int(item->>'agencyId'),
     item->>'refCode',
     item#>>'{maid,referenceCode}',
@@ -732,15 +703,16 @@ begin
     public.helped_try_timestamptz(item->>'createdAt'),
     public.helped_try_timestamptz(item->>'updatedAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'employers', '[]'::jsonb)) item;
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'employers', '[]'::JSONB)) item;
 
-  insert into public.helped_query_employment_contracts (
+  -- Employment contracts
+  INSERT INTO public.helped_query_employment_contracts (
     app_id, record_id, agency_id, ref_code, employer_ref_code, maid_reference_code,
     maid_name, employer_name, created_at, updated_at, payload
   )
-  select
+  SELECT
     p_app_id,
-    coalesce(public.helped_try_int(item->>'id'), row_number() over ()::integer),
+    COALESCE(public.helped_try_int(item->>'id'), ROW_NUMBER() OVER ()::INTEGER),
     public.helped_try_int(item->>'agencyId'),
     item->>'refCode',
     item->>'employerRefCode',
@@ -750,13 +722,14 @@ begin
     public.helped_try_timestamptz(item->>'createdAt'),
     public.helped_try_timestamptz(item->>'updatedAt'),
     item
-  from jsonb_array_elements(coalesce(v_data->'employmentContracts', '[]'::jsonb)) item;
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data->'employmentContracts', '[]'::JSONB)) item;
 
-  insert into public.helped_query_ats_applications (
-    app_id, application_id, agency_id, profile_id, application_code, status, source,
-    applied_at, updated_at, payload
+  -- ATS applications
+  INSERT INTO public.helped_query_ats_applications (
+    app_id, application_id, agency_id, profile_id, application_code,
+    status, source, applied_at, updated_at, payload
   )
-  select
+  SELECT
     p_app_id,
     item->>'id',
     public.helped_try_int(item->>'agencyId'),
@@ -767,14 +740,15 @@ begin
     public.helped_try_timestamptz(item->>'appliedAt'),
     public.helped_try_timestamptz(item->>'updatedAt'),
     item
-  from jsonb_array_elements(coalesce(v_data#>'{ats,applications}', '[]'::jsonb)) item
-  where coalesce(item->>'id', '') <> '';
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data#>'{ats,applications}', '[]'::JSONB)) item
+  WHERE COALESCE(item->>'id', '') <> '';
 
-  insert into public.helped_query_ats_profiles (
+  -- ATS profiles
+  INSERT INTO public.helped_query_ats_profiles (
     app_id, profile_id, application_id, full_name, email, contact_number,
     nationality, years_of_experience, expected_salary, created_at, updated_at, payload
   )
-  select
+  SELECT
     p_app_id,
     item->>'id',
     item->>'applicationId',
@@ -787,152 +761,85 @@ begin
     public.helped_try_timestamptz(item->>'createdAt'),
     public.helped_try_timestamptz(item->>'updatedAt'),
     item
-  from jsonb_array_elements(coalesce(v_data#>'{ats,profiles}', '[]'::jsonb)) item
-  where coalesce(item->>'id', '') <> '';
+  FROM JSONB_ARRAY_ELEMENTS(COALESCE(v_data#>'{ats,profiles}', '[]'::JSONB)) item
+  WHERE COALESCE(item->>'id', '') <> '';
 
-  insert into public.helped_query_meta (app_id, refreshed_at, source_updated_at, source_bytes)
-  values (p_app_id, now(), v_updated_at, pg_column_size(v_data))
-  on conflict (app_id) do update
-  set refreshed_at = excluded.refreshed_at,
-      source_updated_at = excluded.source_updated_at,
-      source_bytes = excluded.source_bytes;
+  -- Update meta
+  INSERT INTO public.helped_query_meta (app_id, refreshed_at, source_updated_at, source_bytes)
+  VALUES (p_app_id, NOW(), v_updated_at, PG_COLUMN_SIZE(v_data))
+  ON CONFLICT (app_id) DO UPDATE
+    SET refreshed_at      = EXCLUDED.refreshed_at,
+        source_updated_at = EXCLUDED.source_updated_at,
+        source_bytes      = EXCLUDED.source_bytes;
 
-  return jsonb_build_object(
-    'app_id', p_app_id,
-    'refreshed_at', now(),
-    'source_updated_at', v_updated_at,
-    'maids_count', (select count(*) from public.helped_query_maids where app_id = p_app_id),
-    'clients_count', (select count(*) from public.helped_query_clients where app_id = p_app_id),
-    'requests_count', (select count(*) from public.helped_query_requests where app_id = p_app_id),
-    'request_messages_count', (select count(*) from public.helped_query_request_messages where app_id = p_app_id),
-    'ats_applications_count', (select count(*) from public.helped_query_ats_applications where app_id = p_app_id)
+  RETURN jsonb_build_object(
+    'app_id',                 p_app_id,
+    'refreshed_at',           NOW(),
+    'maids_count',            (SELECT COUNT(*) FROM public.helped_query_maids              WHERE app_id = p_app_id),
+    'clients_count',          (SELECT COUNT(*) FROM public.helped_query_clients            WHERE app_id = p_app_id),
+    'agency_admins_count',    (SELECT COUNT(*) FROM public.helped_query_agency_admins      WHERE app_id = p_app_id),
+    'requests_count',         (SELECT COUNT(*) FROM public.helped_query_requests           WHERE app_id = p_app_id),
+    'request_messages_count', (SELECT COUNT(*) FROM public.helped_query_request_messages   WHERE app_id = p_app_id),
+    'ats_applications_count', (SELECT COUNT(*) FROM public.helped_query_ats_applications   WHERE app_id = p_app_id),
+    'ats_profiles_count',     (SELECT COUNT(*) FROM public.helped_query_ats_profiles       WHERE app_id = p_app_id)
   );
-end;
+END;
 $$;
 
-create or replace function public.load_helped_app_data(p_app_id text default 'default')
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-    (select data from public.app_data where id = p_app_id),
-    '{}'::jsonb
-  );
+GRANT EXECUTE ON FUNCTION public.refresh_helped_query_tables(TEXT) TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 9. AUTO-SYNC TRIGGER  (query tables update on every Worker save to app_data)
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.sync_query_tables_on_save()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  PERFORM public.refresh_helped_query_tables(NEW.id);
+  RETURN NEW;
+END;
 $$;
 
-create or replace function public.save_helped_app_data(
-  p_app_id text,
-  p_payload jsonb
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.app_data (id, data)
-  values (p_app_id, coalesce(p_payload, '{}'::jsonb))
-  on conflict (id) do update
-  set data = excluded.data;
+DROP TRIGGER IF EXISTS app_data_sync_query_tables ON public.app_data;
+CREATE TRIGGER app_data_sync_query_tables
+  AFTER INSERT OR UPDATE ON public.app_data
+  FOR EACH ROW EXECUTE FUNCTION public.sync_query_tables_on_save();
 
-  perform public.refresh_helped_query_tables(p_app_id);
-  return public.load_helped_app_data(p_app_id);
-end;
-$$;
+-- ---------------------------------------------------------------------------
+-- 10. VIEWS
+-- ---------------------------------------------------------------------------
 
-create or replace function public.get_helped_app_data_overview(p_app_id text default 'default')
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select jsonb_build_object(
-    'app_id', ad.id,
-    'updated_at', ad.updated_at,
-    'data_bytes', pg_column_size(ad.data),
-    'maids_count', jsonb_array_length(coalesce(ad.data->'maids', '[]'::jsonb)),
-    'clients_count', jsonb_array_length(coalesce(ad.data->'clients', '[]'::jsonb)),
-    'agency_admins_count', jsonb_array_length(coalesce(ad.data->'agencyAdmins', '[]'::jsonb)),
-    'enquiries_count', jsonb_array_length(coalesce(ad.data->'enquiries', '[]'::jsonb)),
-    'direct_sales_count', jsonb_array_length(coalesce(ad.data->'directSales', '[]'::jsonb)),
-    'requests_count', jsonb_array_length(coalesce(ad.data->'requests', '[]'::jsonb)),
-    'request_conversations_count', jsonb_array_length(coalesce(ad.data->'requestConversations', '[]'::jsonb)),
-    'request_messages_count', jsonb_array_length(coalesce(ad.data->'requestMessages', '[]'::jsonb)),
-    'chat_messages_count', jsonb_array_length(coalesce(ad.data->'chatMessages', '[]'::jsonb)),
-    'employers_count', jsonb_array_length(coalesce(ad.data->'employers', '[]'::jsonb)),
-    'employment_contracts_count', jsonb_array_length(coalesce(ad.data->'employmentContracts', '[]'::jsonb)),
-    'ats_applications_count', jsonb_array_length(coalesce(ad.data#>'{ats,applications}', '[]'::jsonb)),
-    'query_tables_refreshed_at', meta.refreshed_at
-  )
-  from public.app_data ad
-  left join public.helped_query_meta meta on meta.app_id = ad.id
-  where ad.id = p_app_id;
-$$;
-
-grant execute on function public.refresh_helped_query_tables(text) to service_role;
-grant execute on function public.load_helped_app_data(text) to service_role;
-grant execute on function public.save_helped_app_data(text, jsonb) to service_role;
-grant execute on function public.get_helped_app_data_overview(text) to service_role;
-
-drop view if exists public.app_ats_with_profile;
-drop view if exists public.app_request_message_threads;
-drop view if exists public.app_requests_with_client;
-drop view if exists public.app_data_overview;
-drop view if exists public.app_maids;
-
-create or replace view public.app_data_overview as
-select
+CREATE OR REPLACE VIEW public.app_data_overview AS
+SELECT
   ad.id,
   ad.created_at,
   ad.updated_at,
-  pg_column_size(ad.data) as data_bytes,
-  jsonb_array_length(coalesce(ad.data->'maids', '[]'::jsonb)) as maids_count,
-  jsonb_array_length(coalesce(ad.data->'clients', '[]'::jsonb)) as clients_count,
-  jsonb_array_length(coalesce(ad.data->'agencyAdmins', '[]'::jsonb)) as agency_admins_count,
-  jsonb_array_length(coalesce(ad.data->'enquiries', '[]'::jsonb)) as enquiries_count,
-  jsonb_array_length(coalesce(ad.data->'directSales', '[]'::jsonb)) as direct_sales_count,
-  jsonb_array_length(coalesce(ad.data->'requests', '[]'::jsonb)) as requests_count,
-  jsonb_array_length(coalesce(ad.data->'requestConversations', '[]'::jsonb)) as request_conversations_count,
-  jsonb_array_length(coalesce(ad.data->'requestMessages', '[]'::jsonb)) as request_messages_count,
-  jsonb_array_length(coalesce(ad.data->'chatMessages', '[]'::jsonb)) as chat_messages_count,
-  jsonb_array_length(coalesce(ad.data->'employers', '[]'::jsonb)) as employers_count,
-  jsonb_array_length(coalesce(ad.data->'employmentContracts', '[]'::jsonb)) as employment_contracts_count,
-  jsonb_array_length(coalesce(ad.data#>'{ats,applications}', '[]'::jsonb)) as ats_applications_count,
-  jsonb_array_length(coalesce(ad.data#>'{ats,profiles}', '[]'::jsonb)) as ats_profiles_count,
-  meta.refreshed_at as query_tables_refreshed_at
-from public.app_data ad
-left join public.helped_query_meta meta on meta.app_id = ad.id;
+  PG_COLUMN_SIZE(ad.data)                                                    AS data_bytes,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'maids',               '[]'::JSONB)) AS maids_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'clients',             '[]'::JSONB)) AS clients_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'agencyAdmins',        '[]'::JSONB)) AS agency_admins_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'enquiries',           '[]'::JSONB)) AS enquiries_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'directSales',         '[]'::JSONB)) AS direct_sales_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'requests',            '[]'::JSONB)) AS requests_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'requestMessages',     '[]'::JSONB)) AS request_messages_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'chatMessages',        '[]'::JSONB)) AS chat_messages_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'employers',           '[]'::JSONB)) AS employers_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data->'employmentContracts', '[]'::JSONB)) AS employment_contracts_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data#>'{ats,applications}',  '[]'::JSONB)) AS ats_applications_count,
+  JSONB_ARRAY_LENGTH(COALESCE(ad.data#>'{ats,profiles}',      '[]'::JSONB)) AS ats_profiles_count,
+  meta.refreshed_at                                                          AS query_tables_refreshed_at
+FROM public.app_data ad
+LEFT JOIN public.helped_query_meta meta ON meta.app_id = ad.id;
 
-create or replace view public.app_maids as
-select
-  row_number() over () as view_row_id,
-  m.reference_code,
-  m.full_name,
-  m.agency_id,
-  m.status,
-  m.maid_type as type,
-  m.nationality,
-  m.is_public,
-  m.has_photo,
-  m.created_at,
-  m.updated_at,
-  m.payload as raw_record
-from public.helped_query_maids m
-where m.app_id = 'default';
-
-create or replace view public.app_requests_with_client as
-select
+-- GET /api/requests — requests with client name/email/phone
+CREATE OR REPLACE VIEW public.app_requests_with_client AS
+SELECT
   r.app_id,
   r.request_id,
   r.agency_id,
   r.client_id,
-  c.name as client_name,
-  c.email as client_email,
-  c.phone as client_phone,
+  c.name         AS client_name,
+  c.email        AS client_email,
+  c.phone        AS client_phone,
   r.request_type,
   r.status,
   r.maid_references,
@@ -941,13 +848,14 @@ select
   r.created_at,
   r.updated_at,
   r.payload
-from public.helped_query_requests r
-left join public.helped_query_clients c
-  on c.app_id = r.app_id
- and c.record_id = r.client_id;
+FROM public.helped_query_requests r
+LEFT JOIN public.helped_query_clients c
+  ON c.app_id    = r.app_id
+ AND c.record_id = r.client_id;
 
-create or replace view public.app_request_message_threads as
-select
+-- Message threads
+CREATE OR REPLACE VIEW public.app_request_message_threads AS
+SELECT
   m.app_id,
   c.request_id,
   m.conversation_id,
@@ -957,13 +865,14 @@ select
   m.message,
   m.created_at,
   m.payload
-from public.helped_query_request_messages m
-join public.helped_query_request_conversations c
-  on c.app_id = m.app_id
- and c.conversation_id = m.conversation_id;
+FROM public.helped_query_request_messages m
+JOIN public.helped_query_request_conversations c
+  ON c.app_id         = m.app_id
+ AND c.conversation_id = m.conversation_id;
 
-create or replace view public.app_ats_with_profile as
-select
+-- ATS applications + profile
+CREATE OR REPLACE VIEW public.app_ats_with_profile AS
+SELECT
   a.app_id,
   a.application_id,
   a.agency_id,
@@ -972,328 +881,78 @@ select
   a.source,
   a.applied_at,
   a.updated_at,
-  p.profile_id,
   p.full_name,
   p.email,
   p.contact_number,
   p.nationality,
   p.years_of_experience,
   p.expected_salary,
-  a.payload as application_payload,
-  p.payload as profile_payload
-from public.helped_query_ats_applications a
-left join public.helped_query_ats_profiles p
-  on p.app_id = a.app_id
- and p.application_id = a.application_id;
+  a.payload AS application_payload,
+  p.payload AS profile_payload
+FROM public.helped_query_ats_applications a
+LEFT JOIN public.helped_query_ats_profiles p
+  ON p.app_id         = a.app_id
+ AND p.application_id = a.application_id;
 
-create or replace view public.app_ats_document_summary as
-select
-  ad.id as app_id,
-  application.key as application_id,
-  count(*) as document_count,
-  sum(coalesce(public.helped_try_int(document.value->>'size'), 0)) as total_document_bytes,
-  bool_or(coalesce(document.value->>'url', '') like 'data:%') as has_inline_data_urls
-from public.app_data ad
-cross join lateral jsonb_each(coalesce(ad.data#>'{ats,documents}', '{}'::jsonb)) as application(key, value)
-cross join lateral jsonb_array_elements(coalesce(application.value, '[]'::jsonb)) as document(value)
-group by ad.id, application.key;
+-- ---------------------------------------------------------------------------
+-- 11. UTILITY FUNCTIONS
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.debug_uid()
+RETURNS TEXT LANGUAGE SQL STABLE AS $$
+  SELECT auth.uid()::TEXT;
+$$;
+GRANT EXECUTE ON FUNCTION public.debug_uid() TO authenticated;
 
-create or replace function public.get_helped_company_payload(p_app_id text default 'default')
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select jsonb_build_object(
-    'companyProfile', coalesce(data->'companyProfile', '{}'::jsonb),
-    'momPersonnel', coalesce(data->'momPersonnel', '[]'::jsonb),
-    'testimonials', coalesce(data->'testimonials', '[]'::jsonb)
+CREATE OR REPLACE FUNCTION public.get_helped_app_data_overview(p_app_id TEXT DEFAULT 'default')
+RETURNS JSONB LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT jsonb_build_object(
+    'app_id',                    ad.id,
+    'updated_at',                ad.updated_at,
+    'data_bytes',                PG_COLUMN_SIZE(ad.data),
+    'maids_count',               JSONB_ARRAY_LENGTH(COALESCE(ad.data->'maids',              '[]'::JSONB)),
+    'clients_count',             JSONB_ARRAY_LENGTH(COALESCE(ad.data->'clients',            '[]'::JSONB)),
+    'requests_count',            JSONB_ARRAY_LENGTH(COALESCE(ad.data->'requests',           '[]'::JSONB)),
+    'ats_applications_count',    JSONB_ARRAY_LENGTH(COALESCE(ad.data#>'{ats,applications}', '[]'::JSONB)),
+    'query_tables_refreshed_at', meta.refreshed_at
   )
-  from public.app_data
-  where id = p_app_id;
+  FROM public.app_data ad
+  LEFT JOIN public.helped_query_meta meta ON meta.app_id = ad.id
+  WHERE ad.id = p_app_id;
 $$;
+GRANT EXECUTE ON FUNCTION public.get_helped_app_data_overview(TEXT) TO service_role;
 
-create or replace function public.get_helped_company_summary(p_app_id text default 'default')
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select jsonb_build_object(
-    'publicMaids', (select count(*) from public.helped_query_maids m where m.app_id = p_app_id and m.is_public),
-    'hiddenMaids', (select count(*) from public.helped_query_maids m where m.app_id = p_app_id and not m.is_public),
-    'totalMaids', (select count(*) from public.helped_query_maids m where m.app_id = p_app_id),
-    'maidsWithPhotos', (select count(*) from public.helped_query_maids m where m.app_id = p_app_id and m.has_photo),
-    'enquiries', jsonb_array_length(coalesce(ad.data->'enquiries', '[]'::jsonb)),
-    'requests', jsonb_array_length(coalesce(ad.data->'directSales', '[]'::jsonb)),
-    'pendingRequests', (
-      select count(*)
-      from public.helped_query_direct_sales ds
-      where ds.app_id = p_app_id
-        and ds.status = 'pending'
-    ),
-    'unreadAgencyChats', (
-      select count(*)
-      from public.helped_query_chat_messages cm
-      where cm.app_id = p_app_id
-        and cm.sender_role = 'client'
-        and coalesce((cm.payload->>'readByAgency')::boolean, false) = false
-    ),
-    'momPersonnel', jsonb_array_length(coalesce(ad.data->'momPersonnel', '[]'::jsonb)),
-    'testimonials', jsonb_array_length(coalesce(ad.data->'testimonials', '[]'::jsonb)),
-    'galleryImages', jsonb_array_length(coalesce(ad.data#>'{companyProfile,gallery_image_data_urls}', '[]'::jsonb))
-  )
-  from public.app_data ad
-  where ad.id = p_app_id;
-$$;
-
-create or replace function public.get_helped_chat_admin_summary(p_app_id text default 'default')
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select jsonb_build_object('unreadCount', count(*))
-  from public.helped_query_chat_messages
-  where app_id = p_app_id
-    and sender_role = 'client'
-    and coalesce((payload->>'readByAgency')::boolean, false) = false;
-$$;
-
-create or replace function public.get_helped_request_status_counts(
-  p_app_id text default 'default',
-  p_agency_id integer default null,
-  p_client_id integer default null
-)
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select jsonb_build_object(
-    'pending', count(*) filter (where status = 'pending'),
-    'interested', count(*) filter (where status = 'interested'),
-    'direct_hire', count(*) filter (where status = 'direct_hire'),
-    'rejected', count(*) filter (where status = 'rejected')
-  )
-  from public.helped_query_requests
-  where app_id = p_app_id
-    and (p_agency_id is null or agency_id = p_agency_id)
-    and (p_client_id is null or client_id = p_client_id);
-$$;
-
-create or replace function public.list_helped_requests(
-  p_app_id text default 'default',
-  p_agency_id integer default null,
-  p_client_id integer default null,
-  p_status text default null,
-  p_query text default null,
-  p_page integer default 1,
-  p_page_size integer default 12
-)
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  with input as (
-    select
-      greatest(coalesce(p_page, 1), 1) as page,
-      least(greatest(coalesce(p_page_size, 12), 1), 24) as page_size,
-      nullif(btrim(coalesce(p_query, '')), '') as query_text
-  ),
-  filtered as (
-    select r.*, c.payload as client_payload
-    from public.helped_query_requests r
-    left join public.helped_query_clients c
-      on c.app_id = r.app_id
-     and c.record_id = r.client_id
-    cross join input i
-    where r.app_id = p_app_id
-      and (p_agency_id is null or r.agency_id = p_agency_id)
-      and (p_client_id is null or r.client_id = p_client_id)
-      and (p_status is null or r.status = p_status)
-      and (
-        i.query_text is null
-        or r.request_type ilike '%' || i.query_text || '%'
-        or r.status ilike '%' || i.query_text || '%'
-        or r.updated_by ilike '%' || i.query_text || '%'
-        or r.summary ilike '%' || i.query_text || '%'
-        or coalesce(c.name, '') ilike '%' || i.query_text || '%'
-        or coalesce(c.email, '') ilike '%' || i.query_text || '%'
-        or array_to_string(r.maid_references, ' ') ilike '%' || i.query_text || '%'
-      )
-  ),
-  counted as (
-    select count(*)::integer as total from filtered
-  ),
-  paged as (
-    select f.*
-    from filtered f
-    cross join input i
-    order by f.created_at desc nulls last, f.request_id desc
-    limit (select page_size from input)
-    offset (select (page - 1) * page_size from input)
-  ),
-  enriched as (
-    select
-      p.created_at,
-      jsonb_build_object(
-        'id', p.request_id::text,
-        'clientId', p.client_id,
-        'agencyId', p.agency_id,
-        'type', coalesce(p.request_type, p.payload->>'type'),
-        'status', p.status,
-        'details', coalesce(p.payload->'details', '{}'::jsonb),
-        'maidReferences', coalesce(p.payload->'maidReferences', to_jsonb(p.maid_references)),
-        'updatedBy', p.updated_by,
-        'createdAt', coalesce(p.payload->>'createdAt', p.created_at::text),
-        'updatedAt', coalesce(p.payload->>'updatedAt', p.updated_at::text),
-        'client',
-          case
-            when p.client_payload is null then null
-            else jsonb_build_object(
-              'id', p.client_id,
-              'name', coalesce(p.client_payload->>'name', ''),
-              'company', coalesce(p.client_payload->>'company', ''),
-              'phone', coalesce(p.client_payload->>'phone', ''),
-              'email', coalesce(p.client_payload->>'email', ''),
-              'createdAt', coalesce(p.client_payload->>'createdAt', ''),
-              'profileImageUrl', coalesce(p.client_payload->>'profileImageUrl', '')
-            )
-          end,
-        'maids',
-          (
-            select coalesce(
-              jsonb_agg(
-                jsonb_build_object(
-                  'referenceCode', m.reference_code,
-                  'fullName', m.full_name,
-                  'nationality', m.nationality,
-                  'status', coalesce(m.status, 'available'),
-                  'type', m.maid_type,
-                  'photoDataUrl', coalesce(m.payload->>'photoDataUrl', '')
-                )
-                order by array_position(p.maid_references, m.reference_code)
-              ),
-              '[]'::jsonb
-            )
-            from public.helped_query_maids m
-            where m.app_id = p.app_id
-              and m.reference_code = any(p.maid_references)
-          )
-      ) as item
-    from paged p
-  )
-  select jsonb_build_object(
-    'data', coalesce((select jsonb_agg(item order by created_at desc nulls last) from enriched), '[]'::jsonb),
-    'pageInfo', jsonb_build_object(
-      'page', (select page from input),
-      'pageSize', (select page_size from input),
-      'total', (select total from counted),
-      'totalPages', greatest(1, ceil((select total from counted)::numeric / (select page_size from input))::integer)
-    )
-  );
-$$;
-
-grant select on
-  public.app_data_overview,
-  public.app_maids,
-  public.app_requests_with_client,
-  public.app_request_message_threads,
-  public.app_ats_with_profile,
-  public.app_ats_document_summary
-to service_role;
-
-grant execute on function public.get_helped_company_payload(text) to service_role;
-grant execute on function public.get_helped_company_summary(text) to service_role;
-grant execute on function public.get_helped_chat_admin_summary(text) to service_role;
-grant execute on function public.get_helped_request_status_counts(text, integer, integer) to service_role;
-grant execute on function public.list_helped_requests(text, integer, integer, text, text, integer, integer) to service_role;
-
-create or replace function public.find_large_inline_assets(limit_rows integer default 50)
-returns table (
-  section text,
-  record_id text,
-  bytes bigint
-)
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select *
-  from (
-    select
-      'maid.photoDataUrl'::text as section,
-      coalesce(maid.value->>'referenceCode', 'unknown') as record_id,
-      octet_length(coalesce(maid.value->>'photoDataUrl', ''))::bigint as bytes
-    from public.app_data ad
-    cross join lateral jsonb_array_elements(coalesce(ad.data->'maids', '[]'::jsonb)) as maid(value)
-    where ad.id = 'default'
-    union all
-    select
-      'maid.videoDataUrl'::text as section,
-      coalesce(maid.value->>'referenceCode', 'unknown') as record_id,
-      octet_length(coalesce(maid.value->>'videoDataUrl', ''))::bigint as bytes
-    from public.app_data ad
-    cross join lateral jsonb_array_elements(coalesce(ad.data->'maids', '[]'::jsonb)) as maid(value)
-    where ad.id = 'default'
-    union all
-    select
-      'ats.document.url'::text as section,
-      document.key as record_id,
-      octet_length(coalesce(doc.value->>'url', ''))::bigint as bytes
-    from public.app_data ad
-    cross join lateral jsonb_each(coalesce(ad.data#>'{ats,documents}', '{}'::jsonb)) document(key, value)
-    cross join lateral jsonb_array_elements(coalesce(document.value, '[]'::jsonb)) doc(value)
-    where ad.id = 'default'
-  ) sized
-  where bytes > 0
-  order by bytes desc
-  limit greatest(limit_rows, 1);
-$$;
-
-grant execute on function public.find_large_inline_assets(integer) to service_role;
-
-do $$
-begin
-  if exists (select 1 from information_schema.schemata where schema_name = 'storage') then
-    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-    values (
-      'ats-applications',
-      'ats-applications',
-      true,
-      10485760,
-      array[
-        'application/pdf',
-        'image/jpeg',
-        'image/png',
-        'image/webp',
+-- ---------------------------------------------------------------------------
+-- 12. STORAGE BUCKET
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'storage') THEN
+    INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    VALUES (
+      'ats-applications', 'ats-applications', TRUE, 10485760,
+      ARRAY[
+        'application/pdf', 'image/jpeg', 'image/png', 'image/webp',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ]
     )
-    on conflict (id) do update
-    set public = excluded.public,
-        file_size_limit = excluded.file_size_limit,
-        allowed_mime_types = excluded.allowed_mime_types;
-  end if;
-end
+    ON CONFLICT (id) DO UPDATE
+      SET public             = EXCLUDED.public,
+          file_size_limit    = EXCLUDED.file_size_limit,
+          allowed_mime_types = EXCLUDED.allowed_mime_types;
+  END IF;
+END
 $$;
 
-select public.refresh_helped_query_tables('default');
+COMMIT;
 
-commit;
-
--- Useful checks after running:
--- select * from public.app_data_overview;
--- select * from public.helped_query_maids order by updated_at desc nulls last limit 50;
--- select * from public.app_requests_with_client order by updated_at desc nulls last limit 50;
--- select * from public.app_request_message_threads order by created_at asc limit 100;
--- select * from public.find_large_inline_assets(50);
+-- =============================================================================
+-- DONE. Now run this one extra line to populate the query tables from your blob:
+--
+--   SELECT public.refresh_helped_query_tables('default');
+--
+-- Verify with:
+--   SELECT * FROM public.app_data_overview;
+--   SELECT * FROM public.app_requests_with_client
+--     WHERE agency_id = 1 ORDER BY updated_at DESC NULLS LAST LIMIT 9;
+-- =============================================================================
