@@ -1741,25 +1741,35 @@ const callSupabaseRpc = async <T>(
   payload: Record<string, unknown>,
 ): Promise<T> => {
   const url = `${config.baseUrl}/rest/v1/rpc/${encodeURIComponent(fnName)}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: supabaseHeaders(config, {
-      "content-type": "application/json",
-      accept: "application/json",
-    }),
-    body: JSON.stringify(payload),
-  });
+  const retryDelaysMs = [250, 600];
 
-  if (!response.ok) {
-    const details = await readSupabaseError(response);
-    throw new Error(`Supabase RPC failed for ${fnName} (${response.status}): ${details}`);
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
+    if (attempt > 0) await sleep(retryDelaysMs[attempt - 1]);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: supabaseHeaders(config, {
+        "content-type": "application/json",
+        accept: "application/json",
+        prefer: "statement_timeout=5000",
+      }),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const details = await readSupabaseError(response);
+      if (isSupabaseStatementTimeout(response.status, details) && attempt < retryDelaysMs.length) {
+        console.warn(`Supabase RPC timeout for ${fnName}, retrying (${attempt + 1}/${retryDelaysMs.length})...`);
+        continue;
+      }
+      throw new Error(`Supabase RPC failed for ${fnName} (${response.status}): ${details}`);
+    }
+
+    if (response.status === 204) return null as T;
+    return (await response.json()) as T;
   }
 
-  if (response.status === 204) {
-    return null as T;
-  }
-
-  return (await response.json()) as T;
+  throw new Error(`Supabase RPC failed for ${fnName} after retries`);
 };
 
 const tryCallSupabaseRpc = async <T>(
@@ -1796,14 +1806,14 @@ type MaidSlimRow = {
   has_photo?: boolean;
   created_at?: string;
   updated_at?: string;
-  dateOfBirth?: string | null;
-  maritalStatus?: string | null;
 };
 
+// Only top-level indexed columns — no payload JSONB extraction.
+// Reading payload->>field forces Postgres to parse the full 400 KB JSONB
+// (including embedded base64 photos) for every row, which causes 57014 timeouts.
 const SLIM_MAID_SELECT = [
   "record_id", "agency_id", "reference_code", "full_name", "status",
   "nationality", "maid_type", "is_public", "has_photo", "created_at", "updated_at",
-  "payload->>dateOfBirth", "payload->>maritalStatus",
 ].join(",");
 
 const slimRowToMaidRecord = (row: MaidSlimRow): MaidRecord => ({
@@ -1814,12 +1824,12 @@ const slimRowToMaidRecord = (row: MaidSlimRow): MaidRecord => ({
   status: row.status ?? "available",
   type: row.maid_type ?? "",
   nationality: row.nationality ?? "",
-  dateOfBirth: row.dateOfBirth ?? "",
+  dateOfBirth: "",
   placeOfBirth: "",
   height: 0,
   weight: 0,
   religion: "",
-  maritalStatus: row.maritalStatus ?? "",
+  maritalStatus: "",
   numberOfChildren: 0,
   numberOfSiblings: 0,
   homeAddress: "",
@@ -1885,38 +1895,43 @@ const listMaidsFromSupabaseNormalized = async (
 
   const headers = new Headers(supabaseHeaders(config, {
     accept: "application/json",
-    prefer: "count=estimated",
+    prefer: "count=estimated, statement_timeout=5000",
   }));
   if (typeof limit === "number" && limit > 0) {
     headers.set("range-unit", "items");
     headers.set("range", `${offset}-${offset + limit - 1}`);
   }
 
-  const response = await fetch(
-    `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
-    { method: "GET", headers },
-  );
+  const retryDelaysMs = [300];
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
+    if (attempt > 0) await sleep(retryDelaysMs[attempt - 1]);
 
-  if (!response.ok && response.status !== 206) {
-    const details = await readSupabaseError(response);
-    throw new Error(`Supabase maid list failed (${response.status}): ${details}`);
+    const response = await fetch(
+      `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
+      { method: "GET", headers },
+    );
+
+    if (!response.ok && response.status !== 206) {
+      const details = await readSupabaseError(response);
+      if (isSupabaseStatementTimeout(response.status, details) && attempt < retryDelaysMs.length) {
+        console.warn(`Supabase maid list timeout, retrying...`);
+        continue;
+      }
+      throw new Error(`Supabase maid list failed (${response.status}): ${details}`);
+    }
+
+    const total = parseContentRangeTotal(response.headers.get("content-range")) ?? 0;
+    if (noPhotos) {
+      const rows = (await response.json()) as MaidSlimRow[];
+      return { maids: rows.map(slimRowToMaidRecord), total: total || rows.length };
+    }
+    const rows = (await response.json()) as SupabaseMaidRow[];
+    return {
+      maids: rows.map((row) => row.payload).filter((maid): maid is MaidRecord => Boolean(maid)).map(normalizeMaid),
+      total: total || rows.length,
+    };
   }
-
-  const total = parseContentRangeTotal(response.headers.get("content-range")) ?? 0;
-
-  if (noPhotos) {
-    const rows = (await response.json()) as MaidSlimRow[];
-    return { maids: rows.map(slimRowToMaidRecord), total: total || rows.length };
-  }
-
-  const rows = (await response.json()) as SupabaseMaidRow[];
-  return {
-    maids: rows
-      .map((row) => row.payload)
-      .filter((maid): maid is MaidRecord => Boolean(maid))
-      .map(normalizeMaid),
-    total: total || rows.length,
-  };
+  throw new Error("Supabase maid list failed after retries");
 };
 
 const listMaidsFromSupabaseAppView = async (
@@ -1955,30 +1970,40 @@ const listMaidsFromSupabaseAppView = async (
 
   const headers = new Headers(supabaseHeaders(config, {
     accept: "application/json",
-    prefer: "count=estimated",
+    prefer: "count=estimated, statement_timeout=5000",
   }));
   if (typeof limit === "number" && limit > 0) {
     headers.set("range-unit", "items");
     headers.set("range", `${offset}-${offset + limit - 1}`);
   }
 
-  const response = await fetch(
-    `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
-    { method: "GET", headers },
-  );
+  const retryDelaysMs = [300];
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
+    if (attempt > 0) await sleep(retryDelaysMs[attempt - 1]);
 
-  if (!response.ok && response.status !== 206) {
-    const details = await readSupabaseError(response);
-    throw new Error(`Supabase maid view list failed (${response.status}): ${details}`);
+    const response = await fetch(
+      `${config.baseUrl}/rest/v1/${table}?${params.toString()}`,
+      { method: "GET", headers },
+    );
+
+    if (!response.ok && response.status !== 206) {
+      const details = await readSupabaseError(response);
+      if (isSupabaseStatementTimeout(response.status, details) && attempt < retryDelaysMs.length) {
+        console.warn(`Supabase maid view list timeout, retrying...`);
+        continue;
+      }
+      throw new Error(`Supabase maid view list failed (${response.status}): ${details}`);
+    }
+
+    const rows = (await response.json()) as SupabaseAppMaidViewRow[];
+    const total = parseContentRangeTotal(response.headers.get("content-range")) ?? rows.length;
+    const maids = rows
+      .map((row) => row.raw_record)
+      .filter((maid): maid is MaidRecord => Boolean(maid))
+      .map((maid) => noPhotos ? { ...normalizeMaid(maid), photoDataUrl: "", photoDataUrls: [] } : normalizeMaid(maid));
+    return { maids, total };
   }
-
-  const rows = (await response.json()) as SupabaseAppMaidViewRow[];
-  const total = parseContentRangeTotal(response.headers.get("content-range")) ?? rows.length;
-  const maids = rows
-    .map((row) => row.raw_record)
-    .filter((maid): maid is MaidRecord => Boolean(maid))
-    .map((maid) => noPhotos ? { ...normalizeMaid(maid), photoDataUrl: "", photoDataUrls: [] } : normalizeMaid(maid));
-  return { maids, total };
+  throw new Error("Supabase maid view list failed after retries");
 };
 
 const getMaidFromSupabaseNormalized = async (
