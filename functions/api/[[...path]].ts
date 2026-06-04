@@ -2526,6 +2526,21 @@ const saveDataToSupabase = async (
   throw new Error("Supabase write failed unexpectedly");
 };
 
+// ─── Module-level app-data cache ─────────────────────────────────────────────
+// Shared across requests within the same Worker isolate (15-second TTL).
+// structuredClone isolates each caller from the cached copy so mutations are safe.
+// Only applied to the normalized Supabase path (no tracking-property concerns).
+const APP_DATA_CACHE_TTL_MS = 15_000;
+let _appDataCache: { data: AppData; ts: number } | null = null;
+
+const getAppDataCache = (): AppData | null => {
+  if (!_appDataCache) return null;
+  if (Date.now() - _appDataCache.ts > APP_DATA_CACHE_TTL_MS) { _appDataCache = null; return null; }
+  return structuredClone(_appDataCache.data);
+};
+const putAppDataCache = (data: AppData) => { _appDataCache = { data: structuredClone(data), ts: Date.now() }; };
+const bustAppDataCache = () => { _appDataCache = null; };
+
 const loadData = async (
   env: Bindings,
   options: LoadDataOptions = {},
@@ -2533,8 +2548,13 @@ const loadData = async (
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
+      // Hot path: serve from in-memory cache
+      const hit = getAppDataCache();
+      if (hit) return hit;
       try {
-        return await loadDataFromSupabaseNormalized(supabase);
+        const data = await loadDataFromSupabaseNormalized(supabase);
+        putAppDataCache(data);
+        return data;
       } catch (error) {
         console.warn("Normalized Supabase load failed; falling back to app_data", error);
       }
@@ -2552,11 +2572,13 @@ const loadData = async (
 };
 
 const saveData = async (env: Bindings, data: AppData) => {
+  bustAppDataCache(); // invalidate before write so concurrent reads don't serve stale data
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
       try {
         await saveDataToSupabaseNormalized(supabase, data);
+        putAppDataCache(data); // re-prime with what we just saved
         return;
       } catch (error) {
         console.warn("Normalized Supabase save failed; falling back to app_data", error);
@@ -6990,23 +7012,24 @@ app.delete(
 
 app.get("/api/enquiries", async (c) => {
   const search = c.req.query("search")?.trim().toLowerCase();
-  const data = await loadData(c.env);
-  let enquiries = [...data.enquiries];
+  const page = Math.max(1, Number(c.req.query("page") ?? "1") || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(c.req.query("pageSize") ?? "50") || 50));
+  const data = await loadData(c.env, { readOnly: true });
+  let enquiries = [...data.enquiries].sort((l, r) => r.id - l.id);
   if (search) {
     enquiries = enquiries.filter((item) =>
       [item.username, item.email, item.phone, item.message]
-        .join(" ")
-        .toLowerCase()
-        .includes(search),
+        .join(" ").toLowerCase().includes(search),
     );
   }
   enquiries = enquiries.map((item) => enrichEnquiryWithClient(item, data.clients));
-  enquiries.sort((left, right) => right.id - left.id);
-  return c.json({ enquiries });
+  const total = enquiries.length;
+  const paged = enquiries.slice((page - 1) * pageSize, page * pageSize);
+  return c.json({ enquiries: paged, total, page, pageSize });
 });
 
 app.get("/api/enquiries/unread-count", async (c) => {
-  const data = await loadData(c.env);
+  const data = await loadData(c.env, { readOnly: true });
   return c.json({
     unreadCount: data.enquiries.length,
     count: data.enquiries.length,
@@ -7448,7 +7471,7 @@ app.post(
 );
 
 app.get("/api/requests/unread-count", async (c) => {
-  const data = await loadData(c.env);
+  const data = await loadData(c.env, { readOnly: true });
   const pendingRequests =
     data.requests.filter((item) => item.status === "pending").length +
     data.directSales.filter((item) => item.status === "pending").length;
@@ -9530,16 +9553,19 @@ app.patch(
 );
 
 app.get("/api/direct-sales", async (c) => {
-  const data = await loadData(c.env);
-  const directSales = [...data.directSales].sort(
-    (left, right) =>
-      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  const page = Math.max(1, Number(c.req.query("page") ?? "1") || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(c.req.query("pageSize") ?? "50") || 50));
+  const data = await loadData(c.env, { readOnly: true });
+  const sorted = [...data.directSales].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
   );
-  return c.json({ directSales });
+  const total = sorted.length;
+  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+  return c.json({ directSales: paged, total, page, pageSize });
 });
 
 app.get("/api/direct-sales/clients", async (c) => {
-  const data = await loadData(c.env);
+  const data = await loadData(c.env, { readOnly: true });
   const clients = [...data.clients]
     .sort((left, right) => right.id - left.id)
     .map((client) => ({
