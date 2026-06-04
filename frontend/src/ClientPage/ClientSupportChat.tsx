@@ -33,6 +33,7 @@ import "./ClientTheme.css";
 type TopicOption = AgencyChatbotTopicOption;
 const MAIN_MENU_TOPIC_ID = "__main_menu__";
 const GUIDE_STORAGE_KEY = "sc_guide_dismissed";
+const MESSAGE_PAGE_SIZE = 30;
 
 const defaultConversation: ClientConversation = {
   key: "support:1",
@@ -561,6 +562,8 @@ const ClientSupportChat = () => {
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -584,6 +587,7 @@ const ClientSupportChat = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const lastSigRef = useRef("");
+  const justPrependedRef = useRef(false);
   const activeConvRef = useRef<ClientConversation>(defaultConversation);
   const lastUnreadTotalRef = useRef(0);
   // Track IDs of messages we've already added optimistically so SSE doesn't double-add them
@@ -707,7 +711,7 @@ const ClientSupportChat = () => {
     try {
       if (!silent) setIsLoading(true);
       setErrorMessage("");
-      const response = await clientFetch(`/api/chats/client?${qs}`);
+      const response = await clientFetch(`/api/chats/client?${qs}&limit=${MESSAGE_PAGE_SIZE}`);
       const data = await readSafeJson<{
         messages?: ChatMessage[];
         error?: string;
@@ -715,11 +719,13 @@ const ClientSupportChat = () => {
       if (!response.ok || !data.messages) {
         throw new Error(data.error || "Failed to load chat");
       }
+      setHasMoreOlder(data.messages.length >= MESSAGE_PAGE_SIZE);
       const sorted = [...data.messages].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
       const signature = JSON.stringify(sorted.map((message) => [message.id, message.message, message.createdAt, message.senderRole]));
       if (signature !== lastSigRef.current) {
+        justPrependedRef.current = false;
         lastSigRef.current = signature;
         setMessages(sorted);
       }
@@ -731,6 +737,48 @@ const ClientSupportChat = () => {
       if (!silent) setIsLoading(false);
     }
   }, [qs]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (isLoadingOlder || !hasMoreOlder || messages.length === 0) return;
+    const oldestId = messages.reduce((min, m) => Math.min(min, m.id), messages[0].id);
+    const container = scrollRef.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    setIsLoadingOlder(true);
+    try {
+      const response = await clientFetch(`/api/chats/client?${qs}&before=${oldestId}&limit=${MESSAGE_PAGE_SIZE}`);
+      const data = await readSafeJson<{ messages?: ChatMessage[]; error?: string }>(response);
+      if (!response.ok || !data.messages) return;
+      setHasMoreOlder(data.messages.length >= MESSAGE_PAGE_SIZE);
+      if (data.messages.length === 0) return;
+      justPrependedRef.current = true;
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const older = data.messages!.filter((m) => !seen.has(m.id));
+        if (older.length === 0) return prev;
+        const merged = [...older, ...prev].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+        lastSigRef.current = JSON.stringify(merged.map((message) => [message.id, message.message, message.createdAt, message.senderRole]));
+        return merged;
+      });
+      requestAnimationFrame(() => {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight - previousHeight;
+      });
+    } catch {
+      /* keep existing messages on failure */
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [qs, hasMoreOlder, isLoadingOlder, messages]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop < 80 && hasMoreOlder && !isLoadingOlder) {
+      void loadOlderMessages();
+    }
+  }, [hasMoreOlder, isLoadingOlder, loadOlderMessages]);
 
   useEffect(() => {
     void loadChatbotConfig();
@@ -769,7 +817,7 @@ const ClientSupportChat = () => {
           return;
         }
         const response = await clientFetch("/api/chats/client/last-id", { signal: controller.signal });
-        const data = await readSafeJson<{ lastId?: number }>(response);
+        const data = await readSafeJson<{ lastId?: number; error?: string }>(response);
         if (response.ok && typeof data.lastId === "number") lastId = data.lastId;
       } catch {
         // ignore cursor bootstrap failures
@@ -844,14 +892,48 @@ const ClientSupportChat = () => {
   }, [loadMessages]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!scrollRef.current) return;
+    // Older history is prepended with a manually restored scroll position.
+    if (justPrependedRef.current) {
+      justPrependedRef.current = false;
+      return;
     }
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
     lastUnreadTotalRef.current = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
   }, [conversations]);
+
+  // Presence heartbeat: marks this client online while the tab is visible so
+  // the agency sees them online. Closing the tab fires an offline beacon;
+  // otherwise presence lapses to offline ~40s after the last heartbeat.
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      if (document.visibilityState !== "visible") return;
+      void clientFetch(`/api/chats/client/heartbeat?${qs}`, {
+        method: "POST",
+        keepalive: true,
+      }).catch(() => {});
+    };
+    const goOffline = () => {
+      void clientFetch("/api/chats/client/offline", {
+        method: "POST",
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    sendHeartbeat();
+    const interval = window.setInterval(sendHeartbeat, 25_000);
+    document.addEventListener("visibilitychange", sendHeartbeat);
+    window.addEventListener("beforeunload", goOffline);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", sendHeartbeat);
+      window.removeEventListener("beforeunload", goOffline);
+    };
+  }, [qs]);
 
   const autoResize = () => {
     const element = textareaRef.current;
@@ -1055,11 +1137,17 @@ const ClientSupportChat = () => {
               {activeConv.agencyProfileImageUrl
                 ? <img src={activeConv.agencyProfileImageUrl} alt={activeConv.title} />
                 : conversationType === "agency" ? "🏢" : "🤖"}
-              {chatbotEnabled && <div className="sc-chat-av-online" />}
+              {(activeConv.agencyOnline || chatbotEnabled) && <div className="sc-chat-av-online" />}
             </div>
             <div className="sc-chat-info">
               <div className="sc-chat-name">{activeConv.title}</div>
-              <div className="sc-chat-status">{chatbotEnabled ? "We're online ..." : "Support team"}</div>
+              <div className="sc-chat-status">
+                {activeConv.agencyOnline
+                  ? "Online now"
+                  : chatbotEnabled
+                    ? "We typically reply quickly"
+                    : "Support team"}
+              </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                 <span className="sc-topic-selected-pill">{getSupportStatusLabel(activeConv.status)}</span>
                 {activeConv.category && <span className="sc-topic-selected-pill">{activeConv.category}</span>}
@@ -1077,7 +1165,10 @@ const ClientSupportChat = () => {
           </div>
 
 
-          <div className="sc-msgs" ref={scrollRef}>
+          <div className="sc-msgs" ref={scrollRef} onScroll={handleMessagesScroll}>
+            {isLoadingOlder && (
+              <div className="sc-date-sep-lbl" style={{ alignSelf: "center", padding: "4px 0" }}>Loading earlier messages…</div>
+            )}
             {isLoading ? (
               <>
                 <div style={{ height: 42, width: "54%", borderRadius: 20, background: "#f0f0f0" }} />

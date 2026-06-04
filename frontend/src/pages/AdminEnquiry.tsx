@@ -589,7 +589,7 @@ const AdminEnquiry = () => {
     const loadLastId = async () => {
       try {
         const res = await fetch("/api/enquiries/last-id", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
-        const d = await readSafeJson<{ lastId?: number }>(res);
+        const d = await readSafeJson<{ lastId?: number; error?: string }>(res);
         if (res.ok && typeof d.lastId === "number") lastId = Math.max(lastId, d.lastId);
       } catch { /* ignore */ } finally {
         lastId = Math.max(lastId, computeLocalLastId());

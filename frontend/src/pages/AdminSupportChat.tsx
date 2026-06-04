@@ -48,6 +48,8 @@ type SortOption = "newest" | "oldest" | "unread" | "name";
 type FilterOption = "all" | "unread" | "support" | "agency";
 type StatusFilter = "ALL" | SupportConversationStatus;
 
+const MESSAGE_PAGE_SIZE = 30;
+
 /* ─── Quick reply templates ─────────────────────────────────────────────── */
 
 const QUICK_REPLIES = [
@@ -465,8 +467,8 @@ function ConversationItem({
           tone="client"
           size="md"
         />
-        {conversation.unreadCount > 0 && (
-          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white" style={{ background: "var(--msn-online)" }} />
+        {conversation.clientOnline && (
+          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white" style={{ background: "var(--msn-online)" }} title="Online" />
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -641,8 +643,11 @@ const AdminSupportChat = () => {
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isUpdatingMeta, setIsUpdatingMeta] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const justPrependedRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const activeConversationRef = useRef<AdminConversation | null>(null);
   const lastMessageSignatureRef = useRef("");
@@ -769,7 +774,7 @@ const AdminSupportChat = () => {
       if (!silent) setIsLoadingMessages(true);
       setErrorMessage("");
       const response = await fetch(
-        `/api/chats/admin/${conversation.clientId}?${buildQueryString(conversation)}`,
+        `/api/chats/admin/${conversation.clientId}?${buildQueryString(conversation)}&limit=${MESSAGE_PAGE_SIZE}`,
         { headers: { ...getAgencyAdminAuthHeaders() } },
       );
       const data = await readSafeJson<{ messages?: ChatMessage[]; error?: string }>(response);
@@ -777,9 +782,11 @@ const AdminSupportChat = () => {
         if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
         throw new Error(data.error || "Failed to load messages");
       }
+      setHasMoreOlder(data.messages.length >= MESSAGE_PAGE_SIZE);
       const nextMessages = [...data.messages].sort((l, r) => new Date(l.createdAt).getTime() - new Date(r.createdAt).getTime());
       const nextSig = JSON.stringify(nextMessages.map((m) => [m.id, m.message, m.createdAt, m.senderRole]));
       if (nextSig !== lastMessageSignatureRef.current) {
+        justPrependedRef.current = false;
         lastMessageSignatureRef.current = nextSig;
         setMessages(nextMessages);
       }
@@ -796,6 +803,52 @@ const AdminSupportChat = () => {
       if (!silent) setIsLoadingMessages(false);
     }
   }, [navigate]);
+
+  const loadOlderMessages = useCallback(async () => {
+    const conversation = activeConversationRef.current;
+    if (!conversation || isLoadingOlder || !hasMoreOlder || messages.length === 0) return;
+    const oldestId = messages.reduce((min, m) => Math.min(min, m.id), messages[0].id);
+    const container = scrollRef.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    setIsLoadingOlder(true);
+    try {
+      const response = await fetch(
+        `/api/chats/admin/${conversation.clientId}?${buildQueryString(conversation)}&before=${oldestId}&limit=${MESSAGE_PAGE_SIZE}`,
+        { headers: { ...getAgencyAdminAuthHeaders() } },
+      );
+      const data = await readSafeJson<{ messages?: ChatMessage[]; error?: string }>(response);
+      if (!response.ok || !data.messages) return;
+      setHasMoreOlder(data.messages.length >= MESSAGE_PAGE_SIZE);
+      if (data.messages.length === 0) return;
+      justPrependedRef.current = true;
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const older = data.messages!.filter((m) => !seen.has(m.id));
+        if (older.length === 0) return prev;
+        const merged = [...older, ...prev].sort(
+          (l, r) => new Date(l.createdAt).getTime() - new Date(r.createdAt).getTime(),
+        );
+        lastMessageSignatureRef.current = JSON.stringify(merged.map((m) => [m.id, m.message, m.createdAt, m.senderRole]));
+        return merged;
+      });
+      requestAnimationFrame(() => {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight - previousHeight;
+      });
+    } catch {
+      /* keep existing messages on failure */
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [hasMoreOlder, isLoadingOlder, messages]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop < 80 && hasMoreOlder && !isLoadingOlder) {
+      void loadOlderMessages();
+    }
+  }, [hasMoreOlder, isLoadingOlder, loadOlderMessages]);
 
   useEffect(() => {
     const token = getAgencyAdminToken();
@@ -898,47 +951,31 @@ const AdminSupportChat = () => {
     loadMessages,
   ]);
 
+  // Real-time delivery is handled by the SSE stream; we only re-sync the open
+  // conversation when the tab regains focus (covers any events missed while the
+  // stream was suspended in a backgrounded tab). No more 2.5s polling loop.
   useEffect(() => {
     if (!activeConversationKey) return;
 
-    let timeoutId: number | null = null;
-    let cancelled = false;
-
-    function queueNextPoll() {
-      if (cancelled) return;
-      const delay = document.visibilityState === "visible" ? 2500 : 8000;
-      timeoutId = window.setTimeout(() => {
-        void pollMessages();
-      }, delay);
-    }
-
-    async function pollMessages() {
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") return;
       const conversation = activeConversationRef.current;
       if (
         !conversation ||
         conversation.key !== activeConversationKey ||
         messagePollInFlightRef.current
       ) {
-        queueNextPoll();
         return;
       }
-
       messagePollInFlightRef.current = true;
-      try {
-        await loadMessages(conversation, true);
-      } finally {
+      void loadMessages(conversation, true).finally(() => {
         messagePollInFlightRef.current = false;
-        queueNextPoll();
-      }
-    }
+      });
+    };
 
-    queueNextPoll();
-
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
-      cancelled = true;
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [activeConversationKey, loadMessages]);
 
@@ -953,8 +990,46 @@ const AdminSupportChat = () => {
 
   useEffect(() => {
     if (!scrollRef.current) return;
+    // When older history is prepended we restore the scroll position manually,
+    // so skip the auto-scroll-to-bottom for that update only.
+    if (justPrependedRef.current) {
+      justPrependedRef.current = false;
+      return;
+    }
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
+
+  // Presence heartbeat: marks this admin online while the tab is visible so
+  // clients see the agency as online. Closing the tab fires an offline beacon;
+  // otherwise presence lapses to offline ~40s after the last heartbeat.
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      if (document.visibilityState !== "visible") return;
+      void fetch("/api/chats/admin/heartbeat", {
+        method: "POST",
+        headers: { ...getAgencyAdminAuthHeaders() },
+        keepalive: true,
+      }).catch(() => {});
+    };
+    const goOffline = () => {
+      void fetch("/api/chats/admin/offline", {
+        method: "POST",
+        headers: { ...getAgencyAdminAuthHeaders() },
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    sendHeartbeat();
+    const interval = window.setInterval(sendHeartbeat, 25_000);
+    document.addEventListener("visibilitychange", sendHeartbeat);
+    window.addEventListener("beforeunload", goOffline);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", sendHeartbeat);
+      window.removeEventListener("beforeunload", goOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const unreadNow = conversations.reduce((sum, item) => sum + item.unreadCount, 0);
@@ -1285,11 +1360,16 @@ const AdminSupportChat = () => {
                       tone="client"
                       size="lg"
                     />
-                    <span className="asc-online-dot absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white" style={{ background: "var(--msn-online)" }} />
+                    <span
+                      className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white ${activeConversation.clientOnline ? "asc-online-dot" : ""}`}
+                      style={{ background: activeConversation.clientOnline ? "var(--msn-online)" : "#9ca3af" }}
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[16px] font-bold leading-tight" style={{ color: "var(--msn-text-primary)" }}>{activeConversation.clientName}</p>
-                    <p className="text-[12px] font-medium" style={{ color: "var(--msn-online)" }}>Active now</p>
+                    <p className="text-[12px] font-medium" style={{ color: activeConversation.clientOnline ? "var(--msn-online)" : "var(--msn-text-muted)" }}>
+                      {activeConversation.clientOnline ? "Active now" : "Offline"}
+                    </p>
                   </div>
                   <div className="flex-shrink-0 text-right hidden sm:block">
                     <p className="text-[14px] font-semibold" style={{ color: "var(--msn-text-primary)" }}>{admin?.agencyName ?? "Agency"}</p>
@@ -1390,7 +1470,7 @@ const AdminSupportChat = () => {
             )}
 
             {/* Messages area */}
-            <div ref={scrollRef} className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+            <div ref={scrollRef} onScroll={handleMessagesScroll} className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-4 overflow-y-auto p-5">
               {isLoadingMessages ? (
                 <LoadingDots />
               ) : errorMessage ? (
@@ -1402,14 +1482,19 @@ const AdminSupportChat = () => {
               ) : messages.length === 0 ? (
                 <EmptyState label={activeConversation.description || "No messages yet. Say hello!"} />
               ) : (
-                messageGroups.map(({ label, messages: groupMsgs }) => (
+                <>
+                {isLoadingOlder && (
+                  <p className="py-1 text-center text-[12px] font-semibold" style={{ color: "var(--msn-text-muted)" }}>Loading earlier messages…</p>
+                )}
+                {messageGroups.map(({ label, messages: groupMsgs }) => (
                   <div key={label} className="flex flex-col gap-2">
                     <DateDivider label={label} />
                     {groupMsgs.map((msg) => (
                       <MessageBubble key={msg.id} message={msg} onCopy={copyMessage} />
                     ))}
                   </div>
-                ))
+                ))}
+                </>
               )}
             </div>
 

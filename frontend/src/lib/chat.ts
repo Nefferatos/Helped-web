@@ -60,6 +60,8 @@ export interface ClientConversation {
   assignedAdminId?: number;
   assignedAdminName?: string;
   subject?: string;
+  /** True when an admin/agency is currently online (heartbeat within ~40s). */
+  agencyOnline?: boolean;
 }
 
 export interface AdminConversation {
@@ -86,6 +88,8 @@ export interface AdminConversation {
   assignedAdminName?: string;
   subject?: string;
   description?: string;
+  /** True when this client is currently online (heartbeat within ~40s). */
+  clientOnline?: boolean;
 }
 
 export interface SupportNotification {

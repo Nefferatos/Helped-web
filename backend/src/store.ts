@@ -3353,6 +3353,45 @@ export const upsertAgencyChatbotConfigStore = async (
   return next
 }
 
+// ─── Presence (in-memory; the dev backend is a single process) ──────────────
+const PRESENCE_WINDOW_MS = 40_000
+const presenceLastSeen = new Map<string, { lastSeen: number; agencyId?: number }>()
+const presenceKey = (actorType: 'client' | 'admin', actorId: number) =>
+  `${actorType}:${actorId}`
+
+export const touchPresenceStore = (
+  actorType: 'client' | 'admin',
+  actorId: number,
+  agencyId?: number
+) => {
+  presenceLastSeen.set(presenceKey(actorType, actorId), {
+    lastSeen: Date.now(),
+    agencyId,
+  })
+}
+
+export const setPresenceOfflineStore = (
+  actorType: 'client' | 'admin',
+  actorId: number
+) => {
+  presenceLastSeen.delete(presenceKey(actorType, actorId))
+}
+
+export const isClientOnlineStore = (clientId: number) => {
+  const entry = presenceLastSeen.get(presenceKey('client', clientId))
+  return Boolean(entry && Date.now() - entry.lastSeen < PRESENCE_WINDOW_MS)
+}
+
+export const isAgencyOnlineStore = (agencyId: number) => {
+  const now = Date.now()
+  for (const [key, entry] of presenceLastSeen) {
+    if (!key.startsWith('admin:')) continue
+    if (now - entry.lastSeen >= PRESENCE_WINDOW_MS) continue
+    if (entry.agencyId == null || entry.agencyId === agencyId) return true
+  }
+  return false
+}
+
 export const getChatConversationsStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
@@ -3393,6 +3432,7 @@ export const getChatConversationsStore = async (
         assignedAdminName: conversation.assignedAdminName,
         subject: conversation.subject,
         description: conversation.description,
+        clientOnline: isClientOnlineStore(client.id),
       }
     })
     .filter(
@@ -3868,6 +3908,7 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
       assignedAdminId: conversation.assignedAdminId,
       assignedAdminName: conversation.assignedAdminName,
       subject: conversation.subject,
+      agencyOnline: isAgencyOnlineStore(conversation.agencyId),
     }))
 
   if (!conversations.some((conversation) => conversation.key === 'support:1')) {
@@ -3896,6 +3937,7 @@ export const getChatConversationsForClientStore = async (clientId: number) => {
       subject: 'Agency Support · General Inquiry',
       assignedAdminId: undefined,
       assignedAdminName: '',
+      agencyOnline: isAgencyOnlineStore(DEFAULT_AGENCY_ID),
     })
   }
 

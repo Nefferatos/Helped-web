@@ -1,5 +1,9 @@
 import express, { Router } from 'express'
 import {
+  adminHeartbeat,
+  adminOffline,
+  clientHeartbeat,
+  clientOffline,
   getAdminChatLastId,
   getAdminChatbotConfig,
   getAdminChatConversations,
@@ -29,7 +33,12 @@ router.get('/client/summary', getMyChatSummary)
 router.get('/client', getMyChatMessages)
 router.post('/client', sendMyChatMessage)
 router.post('/client/bot-reply', postMyChatBotReply)
+router.post('/client/heartbeat', clientHeartbeat)
+router.post('/client/offline', clientOffline)
 router.get('/admin', getAdminChatConversations)
+// Presence routes must precede the parametric '/admin/:clientId' handlers.
+router.post('/admin/heartbeat', adminHeartbeat)
+router.post('/admin/offline', adminOffline)
 router.get('/admin/config', getAdminChatbotConfig)
 router.put('/admin/config', updateAdminChatbotConfig)
 router.get('/admin/last-id', getAdminChatLastId)

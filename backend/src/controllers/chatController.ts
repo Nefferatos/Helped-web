@@ -19,6 +19,8 @@ import {
   getSupportNotificationsStore,
   markChatMessagesReadForAgencyStore,
   markChatMessagesReadForClientStore,
+  setPresenceOfflineStore,
+  touchPresenceStore,
   updateSupportConversationStore,
   upsertAgencyChatbotConfigStore,
 } from '../store'
@@ -158,6 +160,64 @@ export const sendMyChatMessage = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error sending client chat message:', error)
     res.status(500).json({ error: 'Failed to send chat message' })
+  }
+}
+
+export const clientHeartbeat = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+    const context = getConversationContext(req)
+    const agencyId = await getRequestAgencyId(req, context.agencyId ?? 1)
+    touchPresenceStore('client', client.id, agencyId)
+    res.status(200).json({ ok: true })
+  } catch (error) {
+    console.error('Error recording client presence:', error)
+    res.status(500).json({ error: 'Failed to record presence' })
+  }
+}
+
+export const clientOffline = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+    setPresenceOfflineStore('client', client.id)
+    res.status(200).json({ ok: true })
+  } catch (error) {
+    console.error('Error clearing client presence:', error)
+    res.status(500).json({ error: 'Failed to clear presence' })
+  }
+}
+
+export const adminHeartbeat = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+    touchPresenceStore('admin', admin.id, admin.agencyId)
+    res.status(200).json({ ok: true })
+  } catch (error) {
+    console.error('Error recording admin presence:', error)
+    res.status(500).json({ error: 'Failed to record presence' })
+  }
+}
+
+export const adminOffline = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+    setPresenceOfflineStore('admin', admin.id)
+    res.status(200).json({ ok: true })
+  } catch (error) {
+    console.error('Error clearing admin presence:', error)
+    res.status(500).json({ error: 'Failed to clear presence' })
   }
 }
 

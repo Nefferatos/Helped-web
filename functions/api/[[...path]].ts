@@ -9712,24 +9712,289 @@ app.patch("/api/direct-sales/:id/reject", async (c) => {
   return c.json({ directSale: data.directSales[saleIndex], maid });
 });
 
+/* ─── Chat fast-path + presence helpers ──────────────────────────────────
+ * Reads come from the indexed public.helped_query_chat_messages table via
+ * dedicated RPCs (see supabase/20260604_chat_fastpath_presence.sql) instead
+ * of loading the whole app-data blob. Every RPC call uses tryCallSupabaseRpc
+ * so the endpoints fall back to the legacy loadData path if the migration has
+ * not been applied yet. Message writes + mark-read still flow through
+ * loadData/saveData (the blob is the source of truth; saving rebuilds the
+ * query cache), but mark-read now runs in the background off the read path.
+ */
+
+type ChatPresenceSnapshot = {
+  clients: number[];
+  agencies: number[];
+  anyAdmin: boolean;
+};
+
+const CHAT_PRESENCE_WINDOW_SECONDS = 40;
+
+const loadChatPresence = async (
+  env: Bindings,
+): Promise<ChatPresenceSnapshot> => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return { clients: [], agencies: [], anyAdmin: false };
+  const result = await tryCallSupabaseRpc<Partial<ChatPresenceSnapshot>>(
+    config,
+    "get_helped_presence",
+    { p_app_id: config.rowId, p_window_seconds: CHAT_PRESENCE_WINDOW_SECONDS },
+  );
+  return {
+    clients: Array.isArray(result?.clients) ? result!.clients.map(Number) : [],
+    agencies: Array.isArray(result?.agencies)
+      ? result!.agencies.map(Number)
+      : [],
+    anyAdmin: Boolean(result?.anyAdmin),
+  };
+};
+
+const touchChatPresence = async (
+  env: Bindings,
+  actorType: "client" | "admin",
+  actorId: number,
+  agencyId?: number | null,
+) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return;
+  await tryCallSupabaseRpc(config, "helped_presence_touch", {
+    p_app_id: config.rowId,
+    p_actor_type: actorType,
+    p_actor_id: actorId,
+    p_agency_id: typeof agencyId === "number" ? agencyId : null,
+  });
+};
+
+const markChatPresenceOffline = async (
+  env: Bindings,
+  actorType: "client" | "admin",
+  actorId: number,
+) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return;
+  await tryCallSupabaseRpc(config, "helped_presence_offline", {
+    p_app_id: config.rowId,
+    p_actor_type: actorType,
+    p_actor_id: actorId,
+  });
+};
+
+const isAgencyOnlineFor = (
+  presence: ChatPresenceSnapshot,
+  conversationType: "support" | "agency",
+  agencyId?: number,
+) => {
+  if (typeof agencyId === "number" && presence.agencies.includes(agencyId)) {
+    return true;
+  }
+  return conversationType === "support" ? presence.anyAdmin : false;
+};
+
+// Run a fire-and-forget task without blocking the response (e.g. mark-read).
+const runChatBackgroundTask = (
+  c: { executionCtx?: { waitUntil?: (promise: Promise<unknown>) => void } },
+  task: Promise<unknown>,
+) => {
+  const guarded = task.catch((error) => {
+    console.warn("Chat background task failed", error);
+  });
+  try {
+    c.executionCtx?.waitUntil?.(guarded);
+  } catch {
+    void guarded;
+  }
+};
+
+const markAdminConversationRead = async (
+  env: Bindings,
+  clientId: number,
+  conversationType: "support" | "agency",
+  agencyId?: number,
+) => {
+  const data = await loadData(env);
+  let changed = false;
+  data.chatMessages = data.chatMessages.map((message) => {
+    if (
+      message.clientId === clientId &&
+      message.senderRole === "client" &&
+      message.conversationType === conversationType &&
+      (conversationType === "support" || message.agencyId === agencyId) &&
+      !message.readByAgency
+    ) {
+      changed = true;
+      return { ...message, readByAgency: true };
+    }
+    return message;
+  });
+  if (changed) await saveData(env, data);
+};
+
+const markClientConversationRead = async (
+  env: Bindings,
+  clientId: number,
+  conversationType: "support" | "agency",
+  agencyId?: number,
+) => {
+  const data = await loadData(env);
+  let changed = false;
+  data.chatMessages = data.chatMessages.map((message) => {
+    if (
+      message.clientId === clientId &&
+      message.senderRole === "agency" &&
+      message.conversationType === conversationType &&
+      (conversationType === "support" || message.agencyId === agencyId) &&
+      !message.readByClient
+    ) {
+      changed = true;
+      return { ...message, readByClient: true };
+    }
+    return message;
+  });
+  if (changed) await saveData(env, data);
+};
+
+type ChatMessageScope = {
+  clientId?: number;
+  conversationType?: "support" | "agency";
+  agencyId?: number;
+};
+
+// New messages after a cursor id (drives SSE loops). Uses the indexed RPC and
+// falls back to a full blob scan only when the migration is not yet applied.
+const loadChatMessagesAfter = async (
+  env: Bindings,
+  config: SupabaseAppDataConfig | null,
+  afterId: number,
+  scope: ChatMessageScope = {},
+): Promise<ChatMessageRecord[]> => {
+  if (config) {
+    const fast = await tryCallSupabaseRpc<ChatMessageRecord[]>(
+      config,
+      "get_helped_chat_messages_after",
+      {
+        p_app_id: config.rowId,
+        p_after_id: afterId,
+        p_client_id: scope.clientId ?? null,
+        p_conversation_type: scope.conversationType ?? null,
+        p_agency_id: scope.agencyId ?? null,
+      },
+    );
+    if (fast) return fast;
+  }
+
+  const data = await loadData(env, { readOnly: true });
+  return data.chatMessages
+    .filter(
+      (message) =>
+        message.id > afterId &&
+        (scope.clientId == null || message.clientId === scope.clientId) &&
+        (scope.conversationType == null ||
+          message.conversationType === scope.conversationType) &&
+        (scope.agencyId == null || message.agencyId === scope.agencyId),
+    )
+    .sort((left, right) => left.id - right.id);
+};
+
+const loadChatLastId = async (
+  env: Bindings,
+  clientId?: number,
+): Promise<number> => {
+  const config = getSupabaseAppDataConfig(env);
+  if (config) {
+    const fast = await tryCallSupabaseRpc<{ lastId?: number }>(
+      config,
+      "get_helped_chat_last_id",
+      { p_app_id: config.rowId, p_client_id: clientId ?? null },
+    );
+    if (fast && typeof fast.lastId === "number") return fast.lastId;
+  }
+
+  const data = await loadData(env, { readOnly: true });
+  return data.chatMessages
+    .filter((message) => clientId == null || message.clientId === clientId)
+    .reduce((maxId, message) => Math.max(maxId, message.id), 0);
+};
+
+type ClientConversationSummary = {
+  key: string;
+  clientId: number;
+  conversationType: "support" | "agency";
+  title: string;
+  description: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  unreadCount: number;
+  agencyId?: number;
+  agencyName?: string;
+  agencyOnline?: boolean;
+};
+
+const ensureDefaultSupportConversation = (
+  conversations: ClientConversationSummary[],
+  clientId: number,
+  fallbackAt: string,
+) => {
+  if (conversations.some((conv) => conv.key === "support:0")) return conversations;
+  return [
+    ...conversations,
+    {
+      key: "support:0",
+      clientId,
+      conversationType: "support" as const,
+      title: "Agency Support",
+      description: "General help, follow-up, and request support",
+      lastMessage: "",
+      lastMessageAt: fallbackAt,
+      unreadCount: 0,
+    },
+  ];
+};
+
+const attachAgencyOnline = (
+  conversations: ClientConversationSummary[],
+  presence: ChatPresenceSnapshot,
+) =>
+  conversations
+    .map((conv) => ({
+      ...conv,
+      agencyOnline: isAgencyOnlineFor(
+        presence,
+        conv.conversationType,
+        conv.agencyId,
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        new Date(right.lastMessageAt).getTime() -
+        new Date(left.lastMessageAt).getTime(),
+    );
+
 app.get("/api/chats/client/conversations", requireClientAuth, async (c) => {
   const client = c.get("client");
-  const data = await loadData(c.env);
-  const conversations = new Map<
-    string,
-    {
-      key: string;
-      clientId: number;
-      conversationType: "support" | "agency";
-      title: string;
-      description: string;
-      lastMessage: string;
-      lastMessageAt: string;
-      unreadCount: number;
-      agencyId?: number;
-      agencyName?: string;
+
+  const config = getSupabaseAppDataConfig(c.env);
+  if (config) {
+    const [fast, presence] = await Promise.all([
+      tryCallSupabaseRpc<ClientConversationSummary[]>(
+        config,
+        "list_helped_chat_client_conversations",
+        { p_app_id: config.rowId, p_client_id: client.id },
+      ),
+      loadChatPresence(c.env),
+    ]);
+    if (fast) {
+      const withDefault = ensureDefaultSupportConversation(
+        fast,
+        client.id,
+        client.createdAt,
+      );
+      return c.json({ conversations: attachAgencyOnline(withDefault, presence) });
     }
-  >();
+  }
+
+  const presence = await loadChatPresence(c.env);
+  const data = await loadData(c.env, { readOnly: true });
+  const conversations = new Map<string, ClientConversationSummary>();
 
   data.chatMessages
     .filter((message) => message.clientId === client.id)
@@ -9773,26 +10038,12 @@ app.get("/api/chats/client/conversations", requireClientAuth, async (c) => {
       }
     });
 
-  if (!conversations.has("support:0")) {
-    conversations.set("support:0", {
-      key: "support:0",
-      clientId: client.id,
-      conversationType: "support",
-      title: "Agency Support",
-      description: "General help, follow-up, and request support",
-      lastMessage: "",
-      lastMessageAt: client.createdAt,
-      unreadCount: 0,
-    });
-  }
-
-  return c.json({
-    conversations: Array.from(conversations.values()).sort(
-      (left, right) =>
-        new Date(right.lastMessageAt).getTime() -
-        new Date(left.lastMessageAt).getTime(),
-    ),
-  });
+  const withDefault = ensureDefaultSupportConversation(
+    Array.from(conversations.values()),
+    client.id,
+    client.createdAt,
+  );
+  return c.json({ conversations: attachAgencyOnline(withDefault, presence) });
 });
 
 app.get("/api/chats/client/summary", requireClientAuth, async (c) => {
@@ -9810,9 +10061,45 @@ app.get("/api/chats/client/summary", requireClientAuth, async (c) => {
 
 app.get("/api/chats/client", requireClientAuth, async (c) => {
   const client = c.get("client");
-  const { conversationType, agencyId } = getConversationContext(
-    new URL(c.req.url),
-  );
+  const url = new URL(c.req.url);
+  const { conversationType, agencyId } = getConversationContext(url);
+  const beforeId = Number(url.searchParams.get("before") ?? "");
+  const limit = Number(url.searchParams.get("limit") ?? "");
+  const isPaginating = Number.isInteger(beforeId) && beforeId > 0;
+
+  const config = getSupabaseAppDataConfig(c.env);
+  if (config) {
+    const fast = await tryCallSupabaseRpc<ChatMessageRecord[]>(
+      config,
+      "get_helped_chat_messages",
+      {
+        p_app_id: config.rowId,
+        p_client_id: client.id,
+        p_conversation_type: conversationType,
+        p_agency_id: conversationType === "agency" ? (agencyId ?? null) : null,
+        p_before_id: isPaginating ? beforeId : null,
+        p_limit: Number.isInteger(limit) && limit > 0 ? limit : 30,
+      },
+    );
+    if (fast) {
+      if (
+        !isPaginating &&
+        fast.some((m) => m.senderRole === "agency" && !m.readByClient)
+      ) {
+        runChatBackgroundTask(
+          c,
+          markClientConversationRead(
+            c.env,
+            client.id,
+            conversationType,
+            agencyId,
+          ),
+        );
+      }
+      return c.json({ client: toSafeClient(client), messages: fast });
+    }
+  }
+
   const data = await loadData(c.env);
   const messages = data.chatMessages
     .filter(
@@ -9869,11 +10156,49 @@ app.post("/api/chats/client", requireClientAuth, async (c) => {
   };
   data.chatMessages.push(message);
   await saveData(c.env, data);
+  runChatBackgroundTask(
+    c,
+    touchChatPresence(c.env, "client", client.id, agencyId),
+  );
   return c.json({ message }, 201);
 });
 
+app.post("/api/chats/client/heartbeat", requireClientAuth, async (c) => {
+  const client = c.get("client");
+  const { agencyId } = getConversationContext(new URL(c.req.url));
+  await touchChatPresence(c.env, "client", client.id, agencyId);
+  return c.json({ ok: true });
+});
+
+app.post("/api/chats/client/offline", requireClientAuth, async (c) => {
+  const client = c.get("client");
+  await markChatPresenceOffline(c.env, "client", client.id);
+  return c.json({ ok: true });
+});
+
 app.get("/api/chats/admin", requireAgencyAdminAuth, async (c) => {
-  const data = await loadData(c.env);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (config) {
+    const [fast, presence] = await Promise.all([
+      tryCallSupabaseRpc<Array<{ clientId: number }>>(
+        config,
+        "list_helped_chat_admin_conversations",
+        { p_app_id: config.rowId },
+      ),
+      loadChatPresence(c.env),
+    ]);
+    if (fast) {
+      return c.json({
+        conversations: fast.map((conv) => ({
+          ...conv,
+          clientOnline: presence.clients.includes(Number(conv.clientId)),
+        })),
+      });
+    }
+  }
+
+  const presence = await loadChatPresence(c.env);
+  const data = await loadData(c.env, { readOnly: true });
   const conversations = new Map<string, any>();
 
   data.chatMessages.forEach((message) => {
@@ -9911,11 +10236,16 @@ app.get("/api/chats/admin", requireAgencyAdminAuth, async (c) => {
   });
 
   return c.json({
-    conversations: Array.from(conversations.values()).sort(
-      (left: any, right: any) =>
-        new Date(right.lastMessageAt).getTime() -
-        new Date(left.lastMessageAt).getTime(),
-    ),
+    conversations: Array.from(conversations.values())
+      .map((conv: any) => ({
+        ...conv,
+        clientOnline: presence.clients.includes(Number(conv.clientId)),
+      }))
+      .sort(
+        (left: any, right: any) =>
+          new Date(right.lastMessageAt).getTime() -
+          new Date(left.lastMessageAt).getTime(),
+      ),
   });
 });
 
@@ -9947,6 +10277,7 @@ app.get("/api/chats/admin/stream", requireAgencyAdminAuth, async (c) => {
     return c.json({ error: "afterId must be a non-negative number" }, 400);
   }
 
+  const config = getSupabaseAppDataConfig(c.env);
   const startedAt = Date.now();
   return createSseResponse(c.req.raw, async (controller) => {
     let lastId = afterId;
@@ -9954,10 +10285,7 @@ app.get("/api/chats/admin/stream", requireAgencyAdminAuth, async (c) => {
     writeSseEvent(controller, "ready", { ok: true });
 
     while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
-      const data = await loadData(c.env);
-      const nextMessages = data.chatMessages
-        .filter((message) => message.id > lastId)
-        .sort((left, right) => left.id - right.id);
+      const nextMessages = await loadChatMessagesAfter(c.env, config, lastId);
 
       for (const message of nextMessages) {
         writeSseEvent(controller, "message", { message });
@@ -9976,12 +10304,22 @@ app.get("/api/chats/admin/stream", requireAgencyAdminAuth, async (c) => {
 });
 
 app.get("/api/chats/admin/last-id", requireAgencyAdminAuth, async (c) => {
-  const data = await loadData(c.env);
-  const lastId = data.chatMessages.reduce(
-    (maxId, message) => Math.max(maxId, message.id),
-    0,
-  );
+  const lastId = await loadChatLastId(c.env);
   return c.json({ lastId });
+});
+
+// Presence routes must be registered before the parametric '/admin/:clientId'
+// handlers so Hono does not match "heartbeat"/"offline" as a client id.
+app.post("/api/chats/admin/heartbeat", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin");
+  await touchChatPresence(c.env, "admin", admin.id, admin.agencyId);
+  return c.json({ ok: true });
+});
+
+app.post("/api/chats/admin/offline", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin");
+  await markChatPresenceOffline(c.env, "admin", admin.id);
+  return c.json({ ok: true });
 });
 
 app.get("/api/chats/admin/:clientId", requireAgencyAdminAuth, async (c) => {
@@ -9990,9 +10328,40 @@ app.get("/api/chats/admin/:clientId", requireAgencyAdminAuth, async (c) => {
     return c.json({ error: "Valid client id is required" }, 400);
   }
 
-  const { conversationType, agencyId } = getConversationContext(
-    new URL(c.req.url),
-  );
+  const url = new URL(c.req.url);
+  const { conversationType, agencyId } = getConversationContext(url);
+  const beforeId = Number(url.searchParams.get("before") ?? "");
+  const limit = Number(url.searchParams.get("limit") ?? "");
+  const isPaginating = Number.isInteger(beforeId) && beforeId > 0;
+
+  const config = getSupabaseAppDataConfig(c.env);
+  if (config) {
+    const fast = await tryCallSupabaseRpc<ChatMessageRecord[]>(
+      config,
+      "get_helped_chat_messages",
+      {
+        p_app_id: config.rowId,
+        p_client_id: clientId,
+        p_conversation_type: conversationType,
+        p_agency_id: conversationType === "agency" ? (agencyId ?? null) : null,
+        p_before_id: isPaginating ? beforeId : null,
+        p_limit: Number.isInteger(limit) && limit > 0 ? limit : 30,
+      },
+    );
+    if (fast) {
+      if (
+        !isPaginating &&
+        fast.some((m) => m.senderRole === "client" && !m.readByAgency)
+      ) {
+        runChatBackgroundTask(
+          c,
+          markAdminConversationRead(c.env, clientId, conversationType, agencyId),
+        );
+      }
+      return c.json({ messages: fast });
+    }
+  }
+
   const data = await loadData(c.env);
   const messages = data.chatMessages
     .filter(
@@ -10062,6 +10431,10 @@ app.post("/api/chats/admin/:clientId", requireAgencyAdminAuth, async (c) => {
   };
   data.chatMessages.push(message);
   await saveData(c.env, data);
+  runChatBackgroundTask(
+    c,
+    touchChatPresence(c.env, "admin", admin.id, admin.agencyId),
+  );
   return c.json({ message }, 201);
 });
 
@@ -10075,6 +10448,14 @@ app.get("/api/chats/client/stream", requireClientAuth, async (c) => {
 
   const streamAll = url.searchParams.get("all") === "1";
   const { conversationType, agencyId } = getConversationContext(url);
+  const scope: ChatMessageScope = streamAll
+    ? { clientId: client.id }
+    : {
+        clientId: client.id,
+        conversationType,
+        agencyId: conversationType === "agency" ? agencyId : undefined,
+      };
+  const config = getSupabaseAppDataConfig(c.env);
   const startedAt = Date.now();
 
   return createSseResponse(c.req.raw, async (controller) => {
@@ -10083,19 +10464,12 @@ app.get("/api/chats/client/stream", requireClientAuth, async (c) => {
     writeSseEvent(controller, "ready", { ok: true });
 
     while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
-      const data = await loadData(c.env);
-      const nextMessages = data.chatMessages
-        .filter(
-          (message) =>
-            message.clientId === client.id &&
-            message.id > lastId &&
-            (streamAll
-              ? true
-              : message.conversationType === conversationType &&
-                (conversationType === "support" ||
-                  message.agencyId === agencyId)),
-        )
-        .sort((left, right) => left.id - right.id);
+      const nextMessages = await loadChatMessagesAfter(
+        c.env,
+        config,
+        lastId,
+        scope,
+      );
 
       for (const message of nextMessages) {
         writeSseEvent(controller, "message", { message });
@@ -10115,11 +10489,7 @@ app.get("/api/chats/client/stream", requireClientAuth, async (c) => {
 
 app.get("/api/chats/client/last-id", requireClientAuth, async (c) => {
   const client = c.get("client");
-  const data = await loadData(c.env);
-  const lastId = data.chatMessages
-    .filter((message) => message.clientId === client.id)
-    .reduce((maxId, message) => Math.max(maxId, message.id), 0);
-
+  const lastId = await loadChatLastId(c.env, client.id);
   return c.json({ lastId });
 });
 
@@ -10143,6 +10513,12 @@ app.get(
     }
 
     const { conversationType, agencyId } = getConversationContext(url);
+    const scope: ChatMessageScope = {
+      clientId,
+      conversationType,
+      agencyId: conversationType === "agency" ? agencyId : undefined,
+    };
+    const config = getSupabaseAppDataConfig(c.env);
     const startedAt = Date.now();
 
     return createSseResponse(c.req.raw, async (controller) => {
@@ -10151,16 +10527,12 @@ app.get(
       writeSseEvent(controller, "ready", { ok: true });
 
       while (!c.req.raw.signal.aborted && Date.now() - startedAt < 60_000) {
-        const data = await loadData(c.env);
-        const nextMessages = data.chatMessages
-          .filter(
-            (message) =>
-              message.clientId === clientId &&
-              message.conversationType === conversationType &&
-              message.id > lastId &&
-              (conversationType === "support" || message.agencyId === agencyId),
-          )
-          .sort((left, right) => left.id - right.id);
+        const nextMessages = await loadChatMessagesAfter(
+          c.env,
+          config,
+          lastId,
+          scope,
+        );
 
         for (const message of nextMessages) {
           writeSseEvent(controller, "message", { message });
