@@ -18,7 +18,7 @@ import {
   subscribeToMaidSaveTask,
   type MaidSaveTaskSnapshot,
 } from "@/lib/maidSaveProgress";
-import { Search, Eye, EyeOff, Trash2, Download, Upload, ArrowLeft, AlertTriangle, CheckSquare, Square, Loader2 } from "lucide-react";
+import { Search, Eye, EyeOff, Trash2, Download, Upload, AlertTriangle, CheckSquare, Square, Loader2, ChevronLeft, ChevronRight, UserPlus } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
@@ -31,14 +31,12 @@ type ViewMode = "menu" | "public" | "hidden";
 type VisibilityTarget =
   | { maid: MaidProfile; makePublic: boolean }
   | { bulk: true; makePublic: boolean };
-// Transfer is now a minimal internal tracker — no banner, no status polling.
-// We just optimistically remove cards and fire PATCHes in the background.
 type VisibilityTransfer = {
   id: string;
   refs: string[];
 };
 
-const PAGE_SIZE = 14;
+const PAGE_SIZE = 12;
 
 type ImportBatchProgress = {
   active: boolean;
@@ -418,7 +416,7 @@ const getNationalityCode = (nationality?: string): string => {
 const FlagCircle = ({ code }: { code: string }) => {
   if (!code) return null;
   return (
-    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full overflow-hidden border border-black/[0.13] flex-shrink-0 mr-1 align-middle bg-gray-200">
+    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full overflow-hidden border border-slate-200 flex-shrink-0 mr-1 align-middle bg-slate-100">
       <img
         src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
         alt={code}
@@ -428,41 +426,125 @@ const FlagCircle = ({ code }: { code: string }) => {
   );
 };
 
-// ── Keyframe animations injected once ──────────────────────────────────────
+// ── Pagination component used in both top & bottom ─────────────────────────
+const PaginationBar = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) => {
+  const getPageNumbers = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [];
+    if (currentPage <= 4) {
+      pages.push(1, 2, 3, 4, 5, "…", totalPages);
+    } else if (currentPage >= totalPages - 3) {
+      pages.push(1, "…", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      pages.push(1, "…", currentPage - 1, currentPage, currentPage + 1, "…", totalPages);
+    }
+    return pages;
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        className="inline-flex items-center gap-1.5 h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-40 hover:bg-slate-50 hover:border-slate-300 transition-all"
+        disabled={currentPage <= 1}
+        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+        Prev
+      </button>
+
+      <div className="flex items-center gap-1">
+        {getPageNumbers().map((p, idx) =>
+          p === "…" ? (
+            <span key={`ellipsis-${idx}`} className="w-8 text-center text-xs text-slate-400 font-medium">…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p as number)}
+              className={`h-8 min-w-[2rem] rounded-lg border px-2 text-xs font-semibold transition-all ${
+                p === currentPage
+                  ? "bg-violet-600 text-white border-violet-600 shadow-[0_2px_8px_rgba(124,58,237,0.35)] scale-[1.05]"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-violet-50 hover:border-violet-300 hover:text-violet-700"
+              }`}
+            >
+              {p}
+            </button>
+          )
+        )}
+      </div>
+
+      <button
+        className="inline-flex items-center gap-1.5 h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-40 hover:bg-slate-50 hover:border-slate-300 transition-all"
+        disabled={currentPage >= totalPages}
+        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+      >
+        Next
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+};
+
+// ── Keyframe animations ────────────────────────────────────────────────────
 const globalStyles = `
   @keyframes float-icon {
     0%, 100% { transform: translateY(0px) rotateX(0deg); }
-    50%       { transform: translateY(-4px) rotateX(6deg); }
+    50%       { transform: translateY(-5px) rotateX(6deg); }
   }
   @keyframes pulse-dot {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50%       { opacity: 0.5; transform: scale(0.8); }
+    50%       { opacity: 0.45; transform: scale(0.75); }
   }
   @keyframes dropdown-in {
     from { opacity: 0; transform: translateY(-6px) scale(0.98); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
   @keyframes fade-in-up {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes rainbow-new {
+    0% { color: #ef4444; text-shadow: 0 0 4px rgba(239,68,68,0.35); }
+    16% { color: #f97316; text-shadow: 0 0 4px rgba(249,115,22,0.35); }
+    33% { color: #eab308; text-shadow: 0 0 4px rgba(234,179,8,0.35); }
+    50% { color: #22c55e; text-shadow: 0 0 4px rgba(34,197,94,0.35); }
+    66% { color: #06b6d4; text-shadow: 0 0 4px rgba(6,182,212,0.35); }
+    83% { color: #8b5cf6; text-shadow: 0 0 4px rgba(139,92,246,0.35); }
+    100% { color: #ec4899; text-shadow: 0 0 4px rgba(236,72,153,0.35); }
   }
   @keyframes slide-out-left {
     from { opacity: 1; transform: translateX(0) scale(1); }
     to   { opacity: 0; transform: translateX(-18px) scale(0.96); }
   }
-  .animate-float-icon { animation: float-icon 2s ease-in-out infinite; }
+  .animate-float-icon { animation: float-icon 2.2s ease-in-out infinite; }
   .animate-dropdown-in { animation: dropdown-in 0.15s cubic-bezier(0.16,1,0.3,1); }
   .animate-pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
   .animate-fade-in-up { animation: fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .animate-rainbow-new { animation: rainbow-new 1.35s linear infinite alternate; }
   .animate-slide-out-left { animation: slide-out-left 0.18s cubic-bezier(0.4,0,1,1) forwards; }
 
-  /* card hover arrow nudge */
   .card-arrow { transition: transform 0.2s ease; }
-  .group:hover .card-arrow { transform: translateX(3px); }
+  .group:hover .card-arrow { transform: translateX(4px); }
 
-  /* back button underline */
-  .back-btn-line { width: 0; transition: width 0.2s ease; background: #639922; height: 1px; position: absolute; left: 0; bottom: -2px; }
-  .back-btn:hover .back-btn-line { width: 100%; }
+  /* Card shimmer on hover */
+  .maid-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .maid-card:hover::before { opacity: 1; }
 `;
 
 const EditMaids = () => {
@@ -474,6 +556,7 @@ const EditMaids = () => {
   const [maids, setMaids] = useState<MaidProfile[]>([]);
   const [totalMaids, setTotalMaids] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [visibilitySelected, setVisibilitySelected] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -492,15 +575,7 @@ const EditMaids = () => {
   const [deleteTarget, setDeleteTarget] = useState<"selected" | MaidProfile | null>(null);
   const [visibilityDialogOpen, setVisibilityDialogOpen] = useState(false);
   const [pendingVisibilityTarget, setPendingVisibilityTarget] = useState<VisibilityTarget | null>(null);
-
-  // ── NEW: track in-flight visibility transfers (ref-level, no banner needed) ──
-  // Keys are referenceCode strings that are currently being PATCHed.
-  // We only use this to disable the button on the card while it's in-flight,
-  // so the user can't double-click. The cards are already removed from the list
-  // the instant the user confirms — this is purely a safety guard for edge cases
-  // where a card stays visible (e.g., page hasn't reloaded yet).
   const [inFlightRefs, setInFlightRefs] = useState<Set<string>>(new Set());
-
   const [manualImportOpen, setManualImportOpen] = useState(false);
   const [manualImportFields, setManualImportFields] = useState({ name: "", nationality: "", referenceCode: "" });
   const [menuSearch, setMenuSearch] = useState("");
@@ -519,20 +594,13 @@ const EditMaids = () => {
   const cancelImportRef = useRef<boolean>(false);
   const activeImportControllerRef = useRef<AbortController | null>(null);
 
-  // ── Ref snapshot for use inside fire-and-forget closures ──────────────────
   const maidsRef = useRef<MaidProfile[]>(maids);
   useEffect(() => { maidsRef.current = maids; }, [maids]);
 
-  // ── Pending background reload: instead of triggering listRefreshKey
-  //    immediately after a visibility PATCH (which causes a loading flash),
-  //    we schedule a quiet background reload that only updates state if the
-  //    component is still mounted and the user hasn't navigated away. ──────────
   const pendingReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleBackgroundReload = useCallback((delayMs = 1500) => {
     if (pendingReloadRef.current) clearTimeout(pendingReloadRef.current);
     pendingReloadRef.current = setTimeout(() => {
-      // Use startTransition so the reload doesn't interrupt any ongoing user
-      // interaction — React will batch this as a low-priority update.
       startTransition(() => {
         setListRefreshKey((v) => v + 1);
       });
@@ -560,9 +628,7 @@ const EditMaids = () => {
             headers: { ...getAgencyAdminAuthHeaders() },
           }),
         ]);
-        if (!pubRes.ok || !hidRes.ok) {
-          throw new Error("Failed to search maids");
-        }
+        if (!pubRes.ok || !hidRes.ok) throw new Error("Failed to search maids");
         const [pubData, hidData] = await Promise.all([
           readSafeJson<{ error?: string; maids?: MaidProfile[] }>(pubRes),
           readSafeJson<{ error?: string; maids?: MaidProfile[] }>(hidRes),
@@ -602,7 +668,7 @@ const EditMaids = () => {
     return (
       <>
         {text.slice(0, idx)}
-        <mark className="bg-amber-100/70 text-amber-600 rounded-[3px] px-px font-semibold">
+        <mark className="bg-violet-100 text-violet-700 rounded-[3px] px-px font-semibold">
           {text.slice(idx, idx + query.length)}
         </mark>
         {text.slice(idx + query.length)}
@@ -617,13 +683,11 @@ const EditMaids = () => {
   useEffect(() => {
     const taskId = locationState?.saveTaskId;
     if (!taskId) return;
-
     const snapshot = readMaidSaveTask(taskId);
     if (snapshot) {
       setSaveProgressTask(snapshot);
       setSaveProgressDialogOpen(true);
     }
-
     const unsubscribe = subscribeToMaidSaveTask(taskId, (nextSnapshot) => {
       setSaveProgressTask(nextSnapshot);
       setSaveProgressDialogOpen(true);
@@ -631,14 +695,8 @@ const EditMaids = () => {
         setListRefreshKey((value) => value + 1);
       }
     });
-
     return unsubscribe;
   }, [locationState?.saveTaskId]);
-
-  const handleBack = () => {
-    if (view !== "menu") { setView("menu"); return; }
-    navigate(adminPath("/"));
-  };
 
   const visibility = useMemo(() => {
     if (view === "public") return "public";
@@ -664,7 +722,6 @@ const EditMaids = () => {
         setMaids(data.maids);
         setTotalMaids(data.total ?? data.maids.length);
 
-        // Phase 2: fetch photos for all maids that have one, in a single batch request
         const refsWithPhoto = data.maids.filter((m) => m.hasPhoto).map((m) => m.referenceCode);
         if (refsWithPhoto.length > 0 && !controller.signal.aborted) {
           setPhotosLoading(true);
@@ -696,7 +753,7 @@ const EditMaids = () => {
     return () => controller.abort();
   }, [debouncedSearch, visibility, page, listRefreshKey]);
 
-  useEffect(() => { setPage(1); setSelected(new Set()); }, [search, view]);
+  useEffect(() => { setPage(1); setSelected(new Set()); setVisibilitySelected(new Set()); }, [search, view]);
 
   const totalPages = Math.max(1, Math.ceil(totalMaids / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -713,21 +770,27 @@ const EditMaids = () => {
     });
   };
 
-  const toggleAll = () => {
-    if (selected.size === paginatedMaids.length) setSelected(new Set());
-    else setSelected(new Set(paginatedMaids.map((m) => m.referenceCode)));
+  const toggleVisibilitySelection = (ref: string) => {
+    setVisibilitySelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(ref)) next.delete(ref);
+      else next.add(ref);
+      return next;
+    });
   };
 
   const removeLocal = (referenceCode: string) => {
     setMaids((prev) => prev.filter((m) => m.referenceCode !== referenceCode));
     setTotalMaids((prev) => Math.max(0, prev - 1));
     setSelected((prev) => { const next = new Set(prev); next.delete(referenceCode); return next; });
+    setVisibilitySelected((prev) => { const next = new Set(prev); next.delete(referenceCode); return next; });
   };
 
   const removeManyLocal = (referenceCodes: Set<string>) => {
     setMaids((prev) => prev.filter((m) => !referenceCodes.has(m.referenceCode)));
     setTotalMaids((prev) => Math.max(0, prev - referenceCodes.size));
     setSelected(new Set());
+    setVisibilitySelected(new Set());
   };
 
   const deleteMaid = async (referenceCode: string) => {
@@ -775,40 +838,15 @@ const EditMaids = () => {
 
   const openVisibilityDialog = (target: VisibilityTarget) => { setPendingVisibilityTarget(target); setVisibilityDialogOpen(true); };
 
-  // ── INSTANT optimistic visibility change — rewritten for zero perceived latency ──
-  //
-  // Key improvements over the original:
-  //
-  //  1. NO reloadVisibleMaids() call here at all. A background reload is
-  //     scheduled via scheduleBackgroundReload() with a 1.5 s delay so it
-  //     happens silently after the animation has settled and the user has
-  //     moved on. This removes the #1 source of perceived lag.
-  //
-  //  2. NO VisibilityTransfer banner with a spinner. The banner was causing
-  //     "Syncing" anxiety even though the card was already gone. We replaced
-  //     it with inFlightRefs — a lightweight Set that only disables the
-  //     button on the rare edge-case where a card stays visible.
-  //
-  //  3. All state mutations (dialog close, card removal, inFlightRefs) are
-  //     batched into a single synchronous block so React flushes them in one
-  //     paint — zero flicker, zero double-render.
-  //
-  //  4. PATCHes fire in parallel via Promise.allSettled — no sequential
-  //     waterfall even for bulk operations.
-  //
-  //  5. On failure, we roll back by clearing inFlightRefs and scheduling
-  //     an immediate listRefreshKey bump, which re-fetches from the server
-  //     to restore accurate state.
   const confirmVisibilityChange = () => {
     if (!pendingVisibilityTarget) return;
 
     const isBulk = "bulk" in pendingVisibilityTarget;
     const makePublic = pendingVisibilityTarget.makePublic;
 
-    // Snapshot affected maids synchronously — immune to stale closures
     const currentMaids = maidsRef.current;
     const affectedMaids = isBulk
-      ? currentMaids.filter((m) => selected.has(m.referenceCode))
+      ? currentMaids.filter((m) => visibilitySelected.has(m.referenceCode))
       : [pendingVisibilityTarget.maid];
 
     if (affectedMaids.length === 0) {
@@ -819,9 +857,6 @@ const EditMaids = () => {
 
     const affectedRefs = new Set(affectedMaids.map((m) => m.referenceCode));
 
-    // ── Single synchronous batch: React flushes ALL of these in one paint ──
-    // Dialog gone + cards gone + buttons disabled — the user sees the result
-    // the instant they click "Confirm", before any network call is even sent.
     setVisibilityDialogOpen(false);
     setPendingVisibilityTarget(null);
     removeManyLocal(affectedRefs);
@@ -831,17 +866,13 @@ const EditMaids = () => {
       return next;
     });
     setSelected(new Set());
+    setVisibilitySelected(new Set());
 
-    // Schedule a quiet background reload after 1.5 s — by then the PATCHes
-    // will have completed and the list will silently reflect server state.
-    // We do NOT await this here; it runs entirely in the background.
     scheduleBackgroundReload(1500);
 
-    // Fire all PATCHes in parallel — no sequential waterfall
     void Promise.allSettled(
       affectedMaids.map((maid) => updateMaidVisibility(maid, makePublic))
     ).then((results) => {
-      // Clear in-flight markers regardless of outcome
       setInFlightRefs((prev) => {
         const next = new Set(prev);
         affectedRefs.forEach((r) => next.delete(r));
@@ -851,8 +882,6 @@ const EditMaids = () => {
       const failedCount = results.filter((r) => r.status === "rejected").length;
 
       if (failedCount > 0) {
-        // Rollback: cancel the scheduled quiet reload and force an immediate
-        // one so the list accurately reflects what the server actually has.
         if (pendingReloadRef.current) clearTimeout(pendingReloadRef.current);
         startTransition(() => {
           setListRefreshKey((v) => v + 1);
@@ -863,7 +892,6 @@ const EditMaids = () => {
         return;
       }
 
-      // All succeeded — show a brief success toast, no banner needed
       if (isBulk) {
         toast.success(makePublic ? "Selected maids made public" : "Selected maids hidden");
       } else {
@@ -922,34 +950,15 @@ const EditMaids = () => {
       .replace(/^_+|_+$/g, "");
 
   const CSV_FIELD_MAP: Record<string, string> = {
-    reference_code: "referenceCode",
-    referencecode: "referenceCode",
-    ref_code: "referenceCode",
-    refcode: "referenceCode",
-    ref: "referenceCode",
-    ref_no: "referenceCode",
-    reference_no: "referenceCode",
-    maid_ref: "referenceCode",
-    maid_reference: "referenceCode",
-    maid_reference_code: "referenceCode",
-    name: "fullName",
-    full_name: "fullName",
-    full_name_of_fdw: "fullName",
-    maid_name: "fullName",
-    maidname: "fullName",
-    fullname: "fullName",
-    fdw_name: "fullName",
-    age: "age",
-    nationality: "nationality",
-    country: "nationality",
-    experience: "experience",
-    years: "experience",
-    years_of_experience: "experience",
-    photo: "photoDataUrl",
-    photo_url: "photoDataUrl",
-    image: "photoDataUrl",
-    image_url: "photoDataUrl",
-    picture: "photoDataUrl",
+    reference_code: "referenceCode", referencecode: "referenceCode", ref_code: "referenceCode",
+    refcode: "referenceCode", ref: "referenceCode", ref_no: "referenceCode",
+    reference_no: "referenceCode", maid_ref: "referenceCode", maid_reference: "referenceCode",
+    maid_reference_code: "referenceCode", name: "fullName", full_name: "fullName",
+    full_name_of_fdw: "fullName", maid_name: "fullName", maidname: "fullName",
+    fullname: "fullName", fdw_name: "fullName", age: "age", nationality: "nationality",
+    country: "nationality", experience: "experience", years: "experience",
+    years_of_experience: "experience", photo: "photoDataUrl", photo_url: "photoDataUrl",
+    image: "photoDataUrl", image_url: "photoDataUrl", picture: "photoDataUrl",
   };
 
   const normalizeCsv = (csvText: string): string => {
@@ -1228,7 +1237,6 @@ const EditMaids = () => {
     await importCsvText(`referenceCode,fullName,nationality\n${escapeCsv(ref)},${escapeCsv(name.trim())},${escapeCsv(nationality.trim())}`);
   };
 
-  // ── Upload progress helpers ────────────────────────────────────────────────
   const hasActiveUploadFile = importBatchProgress.active && importBatchProgress.currentIndex > importBatchProgress.completed + importBatchProgress.failed;
   const uploadProgressUnits = importBatchProgress.completed + importBatchProgress.failed + (hasActiveUploadFile ? 0.35 : 0);
   const uploadProgressPercent = importBatchProgress.total > 0 ? Math.min(100, Math.round((uploadProgressUnits / importBatchProgress.total) * 100)) : 0;
@@ -1240,12 +1248,8 @@ const EditMaids = () => {
       <Dialog open={saveProgressDialogOpen} onOpenChange={closeSaveProgressDialog}>
         <DialogContent
           className="max-w-md"
-          onInteractOutside={(event) => {
-            if (saveProgressIsActive) event.preventDefault();
-          }}
-          onEscapeKeyDown={(event) => {
-            if (saveProgressIsActive) event.preventDefault();
-          }}
+          onInteractOutside={(event) => { if (saveProgressIsActive) event.preventDefault(); }}
+          onEscapeKeyDown={(event) => { if (saveProgressIsActive) event.preventDefault(); }}
         >
           <DialogHeader>
             <DialogTitle>
@@ -1261,53 +1265,42 @@ const EditMaids = () => {
                 : "Tracking maid profile upload progress."}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-3">
-            <div className="rounded-lg border border-[#97C459]/30 bg-[#F8FBF3] px-4 py-3">
+            <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-[#27500A]">
+                <span className="text-sm font-medium text-violet-900">
                   {saveProgressTask?.stage || "Preparing maid profile upload..."}
                 </span>
-                <span className="text-sm font-bold text-[#3B6D11]">
+                <span className="text-sm font-bold text-violet-700">
                   {saveProgressTask?.percent ?? 0}%
                 </span>
               </div>
-              <Progress
-                value={saveProgressTask?.percent ?? 0}
-                className="h-2.5 bg-[#DCEAC7]"
-              />
+              <Progress value={saveProgressTask?.percent ?? 0} className="h-2.5 bg-violet-200" />
             </div>
-
             {saveProgressTask?.persisted && saveProgressTask.status !== "success" && (
-              <div className="rounded-lg border border-[#C0DD97] bg-[#F6FAEE] px-4 py-3 text-sm text-[#27500A]">
+              <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 text-sm text-violet-800">
                 Maid details are already saved. Remaining photos or video are uploading in the background one-by-one.
               </div>
             )}
-
             {saveProgressTask?.status === "error" && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {saveProgressTask.error || "Failed to save maid profile."}
               </div>
             )}
-
             {saveProgressTask?.status === "success" && (
-              <div className="rounded-lg border border-[#97C459]/40 bg-[#EAF3DE] px-4 py-3 text-sm text-[#27500A]">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                 The maid profile and media are ready, and the maids list has been refreshed.
               </div>
             )}
           </div>
-
           <DialogFooter>
             {saveProgressIsActive ? (
-              <Button disabled className="bg-[#639922] text-white">
+              <Button disabled className="bg-violet-600 text-white">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Saving...
               </Button>
             ) : (
-              <Button
-                onClick={() => closeSaveProgressDialog(false)}
-                className="bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
-              >
+              <Button onClick={() => closeSaveProgressDialog(false)} className="bg-violet-600 hover:bg-violet-700 text-white">
                 Close
               </Button>
             )}
@@ -1326,7 +1319,7 @@ const EditMaids = () => {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmExportOpen(false)} disabled={isExporting}>Cancel</Button>
-            <Button onClick={confirmExportPdf} disabled={isExporting} className="bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]">
+            <Button onClick={confirmExportPdf} disabled={isExporting} className="bg-violet-600 hover:bg-violet-700 text-white">
               {isExporting ? "Exporting..." : "Download PDF"}
             </Button>
           </DialogFooter>
@@ -1343,17 +1336,17 @@ const EditMaids = () => {
               Legacy <strong>.csv</strong>, <strong>.xls</strong>, <strong>.xlsx</strong>, <strong>.doc</strong>, and <strong>.docx</strong> files are still accepted.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border bg-muted/30 p-3 text-sm">
-            <span className="font-semibold">Selected file{pendingImportFiles.length === 1 ? "" : "s"}:</span>{" "}
-            {pendingImportFiles.length ? pendingImportFiles.map((f) => f.name).join(", ") : "None"}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+            <span className="font-semibold text-slate-700">Selected file{pendingImportFiles.length === 1 ? "" : "s"}:</span>{" "}
+            <span className="text-slate-600">{pendingImportFiles.length ? pendingImportFiles.map((f) => f.name).join(", ") : "None"}</span>
           </div>
-          <p className="text-xs text-muted-foreground">Bulk upload supports up to 50 files at once. CSV and Excel files are recommended for larger batch imports.</p>
+          <p className="text-xs text-slate-500">Bulk upload supports up to 50 files at once. CSV and Excel files are recommended for larger batch imports.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmImportOpen(false)} disabled={isImporting}>Cancel</Button>
             <Button
               onClick={() => void confirmImportFiles()}
               disabled={isImporting || pendingImportFiles.length === 0}
-              className="bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
+              className="bg-violet-600 hover:bg-violet-700 text-white"
             >
               {isImporting ? "Uploading..." : "Upload File"}
             </Button>
@@ -1366,21 +1359,24 @@ const EditMaids = () => {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100">
+                <AlertTriangle className="h-5 w-5 text-rose-600" />
               </div>
               <div>
-                <DialogTitle className="text-destructive">Confirm Deletion</DialogTitle>
+                <DialogTitle className="text-rose-700">Confirm Deletion</DialogTitle>
                 <DialogDescription className="mt-0.5">This action <strong>cannot be undone</strong>.</DialogDescription>
               </div>
             </div>
           </DialogHeader>
-          <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             You are about to permanently delete <strong>{getDeleteLabel()}</strong>. All associated data will be removed.
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void confirmDelete()}>
+            <Button
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              onClick={() => void confirmDelete()}
+            >
               <Trash2 className="mr-2 h-4 w-4" /> Yes, Delete
             </Button>
           </DialogFooter>
@@ -1398,10 +1394,10 @@ const EditMaids = () => {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${pendingVisibilityTarget?.makePublic ? "bg-[#EAF3DE]" : "bg-[#FAEEDA]"}`}>
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${pendingVisibilityTarget?.makePublic ? "bg-violet-100" : "bg-amber-100"}`}>
                 {pendingVisibilityTarget?.makePublic
-                  ? <Eye className="h-5 w-5 text-[#3B6D11]" />
-                  : <EyeOff className="h-5 w-5 text-[#854F0B]" />}
+                  ? <Eye className="h-5 w-5 text-violet-600" />
+                  : <EyeOff className="h-5 w-5 text-amber-600" />}
               </div>
               <div>
                 <DialogTitle>{pendingVisibilityTarget?.makePublic ? "Publish maid?" : "Hide maid?"}</DialogTitle>
@@ -1409,25 +1405,22 @@ const EditMaids = () => {
               </div>
             </div>
           </DialogHeader>
-          <div className={`rounded-lg px-4 py-3 text-sm ${pendingVisibilityTarget?.makePublic ? "bg-[#EAF3DE] border border-[#97C459]/50 text-[#27500A]" : "bg-[#FAEEDA] border border-[#FAC775]/60 text-[#633806]"}`}>
+          <div className={`rounded-xl px-4 py-3 text-sm ${pendingVisibilityTarget?.makePublic ? "bg-violet-50 border border-violet-200 text-violet-800" : "bg-amber-50 border border-amber-200 text-amber-800"}`}>
             {pendingVisibilityTarget && "bulk" in pendingVisibilityTarget ? (
-              <><strong>{selected.size} maid{selected.size !== 1 ? "s" : ""}</strong> will be{" "}<strong>{pendingVisibilityTarget.makePublic ? "made visible to the public" : "hidden from public view"}</strong>.</>
+              <><strong>{visibilitySelected.size} maid{visibilitySelected.size !== 1 ? "s" : ""}</strong> will be{" "}<strong>{pendingVisibilityTarget.makePublic ? "made visible to the public" : "hidden from public view"}</strong>.</>
             ) : (
               <><strong>{(pendingVisibilityTarget as { maid: MaidProfile } | null)?.maid?.fullName}</strong> will be{" "}<strong>{pendingVisibilityTarget?.makePublic ? "visible to the public" : "hidden from public view"}</strong>.</>
             )}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }}
-            >
+            <Button variant="outline" onClick={() => { setVisibilityDialogOpen(false); setPendingVisibilityTarget(null); }}>
               Cancel
             </Button>
             <Button
               onClick={confirmVisibilityChange}
               className={pendingVisibilityTarget?.makePublic
-                ? "bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
-                : "bg-[#EF9F27] hover:bg-[#BA7517] text-[#412402] border-[#BA7517]"}
+                ? "bg-violet-600 hover:bg-violet-700 text-white"
+                : "bg-amber-500 hover:bg-amber-600 text-white"}
             >
               {pendingVisibilityTarget?.makePublic
                 ? <><Eye className="mr-2 h-4 w-4" /> Publish</>
@@ -1446,23 +1439,23 @@ const EditMaids = () => {
               This PDF wasn't exported from this system. Review the extracted fields below, fill in anything missing, then click Import.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md px-3 py-2 text-xs flex items-start gap-2 bg-[#FAEEDA] border border-[#FAC775]/70 text-[#633806]">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <div className="rounded-xl px-3 py-2.5 text-xs flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-500" />
             <span>Photos cannot be extracted from external PDFs. After importing, open the maid profile and use <strong>Manage Photos</strong> to upload them manually.</span>
           </div>
           <div className="space-y-3 py-1">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Full Name <span className="text-destructive">*</span></label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Full Name <span className="text-rose-500">*</span></label>
               <Input value={manualImportFields.name} onChange={(e) => setManualImportFields((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Maria Santos" className="text-sm" />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nationality</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nationality</label>
               <Input value={manualImportFields.nationality} onChange={(e) => setManualImportFields((p) => ({ ...p, nationality: e.target.value }))} placeholder="e.g. Filipino" className="text-sm" />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reference Code</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reference Code</label>
               <Input value={manualImportFields.referenceCode} onChange={(e) => setManualImportFields((p) => ({ ...p, referenceCode: e.target.value }))} placeholder="Leave blank to auto-generate" className="text-sm font-mono" />
-              <p className="text-[10px] text-muted-foreground">If blank, a temporary code will be assigned — you can edit it later.</p>
+              <p className="text-[10px] text-slate-400">If blank, a temporary code will be assigned — you can edit it later.</p>
             </div>
           </div>
           <DialogFooter>
@@ -1470,7 +1463,7 @@ const EditMaids = () => {
             <Button
               onClick={() => void confirmManualImport()}
               disabled={isImporting || !manualImportFields.name.trim()}
-              className="bg-[#639922] hover:bg-[#3B6D11] text-white border-[#3B6D11]"
+              className="bg-violet-600 hover:bg-violet-700 text-white"
             >
               {isImporting ? "Importing…" : "Import"}
             </Button>
@@ -1485,19 +1478,19 @@ const EditMaids = () => {
     return (
       <div className="page-container">
         <style>{globalStyles}</style>
-        <div className="content-card animate-fade-in-up space-y-6">
+        <div className="content-card animate-fade-in-up space-y-6 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
 
           {/* Quick-search */}
           <div ref={menuSearchRef} className="relative">
-            <div className={`flex items-center gap-2 rounded-xl border bg-background px-3 py-1 shadow-sm transition-all ${menuSearchOpen ? "border-[#97C459]/80" : "border-border"}`}>
-              <Search className={`h-4 w-4 shrink-0 transition-colors ${menuSearchLoading ? "animate-pulse text-[#639922]" : "text-muted-foreground"}`} />
+            <div className={`flex items-center gap-2.5 rounded-xl border bg-white px-3.5 py-1 shadow-sm transition-all ${menuSearchOpen ? "border-violet-400 ring-2 ring-violet-100" : "border-slate-200 hover:border-slate-300"}`}>
+              <Search className={`h-4 w-4 shrink-0 transition-colors ${menuSearchLoading ? "animate-pulse text-violet-500" : "text-slate-400"}`} />
               <input
                 type="text"
                 placeholder="Quick-search any maid by name or reference code…"
                 value={menuSearch}
                 autoComplete="off"
                 spellCheck={false}
-                className="flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground/60"
+                className="flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-slate-400 text-slate-800"
                 onChange={(e) => setMenuSearch(e.target.value)}
                 onFocus={() => { if (menuSearchResults.length > 0) setMenuSearchOpen(true); }}
                 onKeyDown={(e) => {
@@ -1515,14 +1508,14 @@ const EditMaids = () => {
                 <button
                   type="button"
                   onClick={() => { setMenuSearch(""); setMenuSearchOpen(false); setMenuSearchResults([]); }}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-colors text-[10px]"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors text-[10px]"
                 >✕</button>
               )}
             </div>
 
             {/* Dropdown results */}
             {menuSearchOpen && menuSearchResults.length > 0 && (
-              <div className="animate-dropdown-in absolute top-[calc(100%+6px)] left-0 right-0 bg-background border-[1.5px] border-[#97C459]/55 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.10),0_2px_8px_rgba(0,0,0,0.05)] z-50 overflow-hidden">
+              <div className="animate-dropdown-in absolute top-[calc(100%+6px)] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] z-50 overflow-hidden">
                 {menuSearchResults.map((maid, idx) => {
                   const photo = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl;
                   const age = calculateAge(maid.dateOfBirth);
@@ -1531,48 +1524,48 @@ const EditMaids = () => {
                   return (
                     <div
                       key={maid.referenceCode}
-                      className={`flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer transition-colors border-b border-border/50 last:border-b-0 ${idx === menuActiveIndex ? "bg-[#EAF3DE]" : "hover:bg-[#EAF3DE]"}`}
+                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-slate-100 last:border-b-0 ${idx === menuActiveIndex ? "bg-violet-50" : "hover:bg-slate-50"}`}
                       onMouseEnter={() => setMenuActiveIndex(idx)}
                       onClick={() => { navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: vis ?? "public" } }); setMenuSearchOpen(false); }}
                     >
                       {photo ? (
-                        <img src={photo} alt={maid.fullName} className="w-[42px] h-[42px] rounded-lg object-cover flex-shrink-0 bg-[#EAF3DE] border border-[#97C459]/40" />
+                        <img src={photo} alt={maid.fullName} className="w-11 h-11 rounded-lg object-cover flex-shrink-0 bg-slate-100 border border-slate-200" />
                       ) : (
-                        <div className="w-[42px] h-[42px] rounded-lg bg-[#EAF3DE] border border-[#97C459]/50 flex items-center justify-center flex-shrink-0 text-xs font-bold text-[#3B6D11]">
+                        <div className="w-11 h-11 rounded-lg bg-violet-50 border border-violet-200 flex items-center justify-center flex-shrink-0 text-xs font-bold text-violet-700">
                           {maid.fullName.slice(0, 2).toUpperCase()}
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-foreground leading-tight">
+                        <p className="truncate text-sm font-semibold text-slate-900 leading-tight">
                           {highlightMatch(maid.fullName, menuSearch)}
                         </p>
-                        <p className="truncate text-[11px] text-foreground/55 mt-0.5 flex items-center">
+                        <p className="truncate text-[11px] text-slate-500 mt-0.5 flex items-center">
                           <span className="font-semibold">{highlightMatch(String(maid.referenceCode), menuSearch)}</span>
-                          {maid.nationality && (<><span className="mx-1">·</span><FlagCircle code={flagCode} />{maid.nationality}</>)}
-                          {age !== null ? ` · ${age} yrs` : ""}
+                          {maid.nationality && (<><span className="mx-1.5 text-slate-300">·</span><FlagCircle code={flagCode} />{maid.nationality}</>)}
+                          {age !== null ? <><span className="mx-1.5 text-slate-300">·</span>{age} yrs</> : ""}
                         </p>
                       </div>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide flex-shrink-0 ${vis === "public" ? "bg-[#EAF3DE] text-[#3B6D11]" : "bg-[#FAEEDA] text-[#854F0B]"}`}>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wide flex-shrink-0 ${vis === "public" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>
                         {vis === "public" ? "Public" : "Hidden"}
                       </span>
                     </div>
                   );
                 })}
-                <div className="px-3 py-2 text-[11px] text-foreground/40 text-center">
+                <div className="px-4 py-2.5 text-[11px] text-slate-400 text-center bg-slate-50">
                   {menuSearchResults.length === 8 ? "Showing top 8 results — refine your search" : `${menuSearchResults.length} result${menuSearchResults.length !== 1 ? "s" : ""} found`}
                 </div>
               </div>
             )}
 
             {menuSearchOpen && !menuSearchLoading && menuSearchResults.length === 0 && menuSearch.trim() && (
-              <div className="animate-dropdown-in absolute top-[calc(100%+6px)] left-0 right-0 bg-background border-[1.5px] border-[#97C459]/55 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.10)] z-50 overflow-hidden px-4 py-5 text-center">
-                <p className="text-sm font-medium text-foreground/70">No maids found</p>
-                <p className="text-xs text-foreground/40 mt-1">Try a different name or reference code</p>
+              <div className="animate-dropdown-in absolute top-[calc(100%+6px)] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] z-50 overflow-hidden px-4 py-6 text-center">
+                <p className="text-sm font-medium text-slate-600">No maids found</p>
+                <p className="text-xs text-slate-400 mt-1">Try a different name or reference code</p>
               </div>
             )}
           </div>
 
-          <hr className="border-border" />
+          <hr className="border-slate-100" />
 
           {/* Category cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1581,32 +1574,31 @@ const EditMaids = () => {
             <button
               onClick={() => setView("public")}
               className="group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center
-                bg-gradient-to-br from-[#EAF3DE] via-[#EAF3DE]/40 to-transparent
-                border-[1.5px] border-[#97C459]/50
+                bg-white border-[1.5px] border-slate-200
                 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                hover:border-[#97C459] hover:shadow-[0_8px_32px_rgba(99,153,34,0.22),0_2px_8px_rgba(99,153,34,0.12)]
+                hover:border-violet-300 hover:shadow-[0_8px_32px_rgba(124,58,237,0.15),0_2px_8px_rgba(124,58,237,0.08)]
                 hover:-translate-y-0.5 hover:scale-[1.01] active:translate-y-0 active:scale-[0.99]"
             >
-              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl bg-[#97C459]/20" />
-              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl bg-[#C0DD97]/18" />
-              <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-gradient-to-br from-[#97C459] to-[#639922]
-                shadow-[0_4px_0_#3B6D11,0_8px_20px_rgba(99,153,34,0.35),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_0_rgba(0,0,0,0.12)]
+              <div className="pointer-events-none absolute -top-8 -right-8 h-32 w-32 rounded-full blur-3xl bg-violet-100/60" />
+              <div className="pointer-events-none absolute -bottom-6 -left-6 h-24 w-24 rounded-full blur-2xl bg-violet-50/80" />
+              <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-gradient-to-br from-violet-500 to-violet-700
+                shadow-[0_4px_0_#5b21b6,0_8px_20px_rgba(124,58,237,0.30),inset_0_1px_0_rgba(255,255,255,0.30)]
                 transition-all duration-300
-                group-hover:animate-float-icon group-hover:shadow-[0_8px_0_#3B6D11,0_14px_30px_rgba(99,153,34,0.40),inset_0_1px_0_rgba(255,255,255,0.40),inset_0_-2px_0_rgba(0,0,0,0.12)]">
-                <div className="absolute inset-0 rounded-[22px] rounded-b-none h-1/2 bg-gradient-to-b from-white/28 to-transparent pointer-events-none" />
-                <Eye className="h-8 w-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)]" />
+                group-hover:animate-float-icon group-hover:shadow-[0_8px_0_#5b21b6,0_16px_32px_rgba(124,58,237,0.35)]">
+                <div className="absolute inset-0 rounded-[22px] rounded-b-none h-1/2 bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                <Eye className="h-8 w-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.20)]" />
               </div>
               <div className="space-y-1.5">
                 <div className="mb-2">
-                  <span className="inline-flex items-center gap-[5px] bg-[#EAF3DE] border border-[#97C459]/60 text-[#3B6D11] rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]">
-                    <span className="animate-pulse-dot w-1.5 h-1.5 rounded-full bg-[#639922]" />
+                  <span className="inline-flex items-center gap-[5px] bg-violet-50 border border-violet-200 text-violet-700 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]">
+                    <span className="animate-pulse-dot w-1.5 h-1.5 rounded-full bg-violet-500 flex-shrink-0" />
                     Live
                   </span>
                 </div>
-                <p className="text-lg font-bold tracking-tight text-[#3B6D11]">Maids in Public</p>
-                <p className="text-sm text-foreground/60 leading-relaxed">View, edit or remove<br />publicly visible maids</p>
+                <p className="text-lg font-bold tracking-tight text-slate-900">Maids in Public</p>
+                <p className="text-sm text-slate-500 leading-relaxed">View, edit or remove<br />publicly visible maids</p>
               </div>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#3B6D11]">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-600">
                 <span>Open list</span>
                 <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -1618,32 +1610,31 @@ const EditMaids = () => {
             <button
               onClick={() => setView("hidden")}
               className="group relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-8 text-center
-                bg-gradient-to-br from-[#FAEEDA] via-[#FAEEDA]/50 to-transparent
-                border-[1.5px] border-[#FAC775]/70
+                bg-white border-[1.5px] border-slate-200
                 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                hover:border-[#FAC775] hover:shadow-[0_8px_28px_rgba(186,117,23,0.18),0_2px_8px_rgba(186,117,23,0.10)]
+                hover:border-amber-300 hover:shadow-[0_8px_28px_rgba(245,158,11,0.15),0_2px_8px_rgba(245,158,11,0.08)]
                 hover:-translate-y-0.5 hover:scale-[1.01] active:translate-y-0 active:scale-[0.99]"
             >
-              <div className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 rounded-full blur-2xl bg-[#EF9F27]/18" />
-              <div className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full blur-xl bg-[#FAC775]/16" />
-              <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-gradient-to-br from-[#EF9F27] to-[#BA7517]
-                shadow-[0_4px_0_#854F0B,0_8px_20px_rgba(186,117,23,0.30),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_0_rgba(0,0,0,0.12)]
+              <div className="pointer-events-none absolute -top-8 -right-8 h-32 w-32 rounded-full blur-3xl bg-amber-100/60" />
+              <div className="pointer-events-none absolute -bottom-6 -left-6 h-24 w-24 rounded-full blur-2xl bg-amber-50/80" />
+              <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-gradient-to-br from-amber-400 to-amber-600
+                shadow-[0_4px_0_#b45309,0_8px_20px_rgba(245,158,11,0.28),inset_0_1px_0_rgba(255,255,255,0.30)]
                 transition-all duration-300
-                group-hover:animate-float-icon group-hover:shadow-[0_8px_0_#854F0B,0_14px_28px_rgba(186,117,23,0.35),inset_0_1px_0_rgba(255,255,255,0.40),inset_0_-2px_0_rgba(0,0,0,0.12)]">
-                <div className="absolute inset-0 rounded-[22px] rounded-b-none h-1/2 bg-gradient-to-b from-white/28 to-transparent pointer-events-none" />
-                <EyeOff className="h-8 w-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.22)]" />
+                group-hover:animate-float-icon group-hover:shadow-[0_8px_0_#b45309,0_16px_30px_rgba(245,158,11,0.32)]">
+                <div className="absolute inset-0 rounded-[22px] rounded-b-none h-1/2 bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                <EyeOff className="h-8 w-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.18)]" />
               </div>
               <div className="space-y-1.5">
                 <div className="mb-2">
-                  <span className="inline-flex items-center gap-[5px] bg-[#FAEEDA] border border-[#FAC775]/70 text-[#854F0B] rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#EF9F27] flex-shrink-0" />
+                  <span className="inline-flex items-center gap-[5px] bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
                     Draft
                   </span>
                 </div>
-                <p className="text-lg font-bold tracking-tight text-foreground">Maids Hidden</p>
-                <p className="text-sm text-foreground/60 leading-relaxed">Manage drafts &amp; maids<br />hidden from public view</p>
+                <p className="text-lg font-bold tracking-tight text-slate-900">Maids Hidden</p>
+                <p className="text-sm text-slate-500 leading-relaxed">Manage drafts &amp; maids<br />hidden from public view</p>
               </div>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#854F0B]">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
                 <span>Open list</span>
                 <svg className="h-3.5 w-3.5 card-arrow" fill="none" viewBox="0 0 16 16">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -1652,7 +1643,7 @@ const EditMaids = () => {
             </button>
           </div>
 
-          <p className="rounded-md px-3 py-2 text-center text-xs bg-[#FAEEDA] border border-[#FAC775]/70 text-[#854F0B]">
+          <p className="rounded-xl px-4 py-3 text-center text-xs bg-amber-50 border border-amber-200 text-amber-700">
             Maids without photos will not be displayed publicly. Add photos first, then make them searchable.
           </p>
         </div>
@@ -1663,52 +1654,30 @@ const EditMaids = () => {
 
   // ── LIST VIEW ─────────────────────────────────────────────────────────────
   const allPageSelected = paginatedMaids.length > 0 && paginatedMaids.every((m) => selected.has(m.referenceCode));
+  const isPublicView = view === "public";
+  const visibilityActionLabel = isPublicView ? "Hide" : "Publish";
 
   return (
-    <div className="page-container w-full max-w-full px-5">
+    <div className="page-container mx-auto w-full max-w-[1100px] px-4">
       <style>{globalStyles}</style>
 
       {/* List header bar */}
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <button
-          onClick={handleBack}
-          className="back-btn group inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-[#639922] focus:outline-none focus:ring-2 focus:ring-[#639922]/30"
-        >
-          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-          <span className="relative">
-            Back
-            <span className="back-btn-line" />
-          </span>
-        </button>
-
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
-            view === "public"
-              ? "bg-[#EAF3DE] text-[#3B6D11] border-[#97C459]/60"
-              : "bg-[#FAEEDA] text-[#854F0B] border-[#FAC775]/60"
-          }`}>
-            {view === "public" ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-            {view === "public" ? "Public Maids" : "Hidden Maids"}
-          </span>
-          {!isLoading && (
-            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/65">
-              {maids.length} total
-            </span>
-          )}
-        </div>
+      <div className="hidden">
+        {/* ── Improved back button ── */}
       </div>
 
-      <div className="content-card animate-fade-in-up w-full max-w-full space-y-4">
+      {/* Main card */}
+      <div className="content-card animate-fade-in-up mx-auto w-full max-w-[1040px] space-y-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
 
         {/* Toolbar */}
         <div className="flex flex-wrap gap-2">
-          <div className="flex flex-1 min-w-48 items-center gap-2 rounded-lg border border-input bg-background px-3 shadow-sm focus-within:border-input focus-within:shadow-sm focus-within:[outline:none] focus-within:[box-shadow:none]">
-            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="flex flex-1 min-w-48 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 shadow-sm focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
+            <Search className="h-4 w-4 shrink-0 text-slate-400" />
             <Input
               placeholder="Search by name or reference code…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border-0 bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-0 px-0"
+              className="border-0 bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-0 px-0 text-slate-800 placeholder:text-slate-400"
               autoComplete="off"
               spellCheck={false}
             />
@@ -1716,22 +1685,39 @@ const EditMaids = () => {
               <button
                 type="button"
                 onClick={() => setSearch("")}
-                className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-colors text-xs"
+                className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors text-xs"
                 aria-label="Clear search"
               >✕</button>
             )}
           </div>
-          {view === "public" && (
+          <Button
+            type="button"
+            onClick={() => navigate(adminPath("/add-maid"))}
+            className="h-10 bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            Add Maid
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setView(isPublicView ? "hidden" : "public")}
+            className="h-10 border-amber-200 text-amber-700 hover:border-amber-300 hover:bg-amber-50"
+          >
+            {isPublicView ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+            {isPublicView ? "Hidden Maids" : "Public Maids"}
+          </Button>
+          {isPublicView && (
             <>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => importInputRef.current?.click()}
                 disabled={isImporting || importBatchProgress.active}
-                className="h-10 border-[#C0DD97] text-[#3B6D11] hover:bg-[#EAF3DE]"
+                className="h-10 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
               >
                 <Upload className="mr-2 h-4 w-4" />
-                {importBatchProgress.active ? "Uploading..." : "Bulk Upload CSV/Excel"}
+                {importBatchProgress.active ? "Uploading..." : "Bulk Upload"}
               </Button>
               <input
                 ref={importInputRef}
@@ -1749,29 +1735,33 @@ const EditMaids = () => {
         {(importBatchProgress.active || importBatchProgress.completed > 0 || importBatchProgress.failed > 0) && (
           <div className={`rounded-xl border overflow-hidden ${
             importBatchProgress.cancelled
-              ? "bg-[#FAEEDA] border-[#EF9F27]/70"
+              ? "bg-amber-50 border-amber-200"
               : importBatchProgress.failed > 0 && !importBatchProgress.active
-                ? "bg-[#fef2f2]/85 border-[#fecaca]/60"
-                : "bg-[#EAF3DE] border-[#97C459]/65"
+                ? "bg-rose-50 border-rose-200"
+                : "bg-violet-50 border-violet-200"
           }`}>
             <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
               <div className="flex items-center gap-2 min-w-0">
                 {importBatchProgress.active ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#3B6D11]" />
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-600" />
                 ) : importBatchProgress.cancelled ? (
-                  <svg className="h-4 w-4 shrink-0 text-[#854F0B]" viewBox="0 0 16 16" fill="none">
+                  <svg className="h-4 w-4 shrink-0 text-amber-600" viewBox="0 0 16 16" fill="none">
                     <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
                     <path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
                 ) : importBatchProgress.failed > 0 ? (
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
                 ) : (
-                  <svg className="h-4 w-4 shrink-0 text-[#3B6D11]" viewBox="0 0 16 16" fill="none">
+                  <svg className="h-4 w-4 shrink-0 text-violet-600" viewBox="0 0 16 16" fill="none">
                     <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
                     <path d="M5 8l2.5 2.5L11 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
-                <p className={`text-sm font-bold truncate ${importBatchProgress.cancelled ? "text-[#633806]" : "text-[#27500A]"}`}>
+                <p className={`text-sm font-bold truncate ${
+                  importBatchProgress.cancelled ? "text-amber-800"
+                    : importBatchProgress.failed > 0 && !importBatchProgress.active ? "text-rose-700"
+                    : "text-violet-800"
+                }`}>
                   {importBatchProgress.active
                     ? "Bulk upload in progress…"
                     : importBatchProgress.cancelled
@@ -1781,10 +1771,9 @@ const EditMaids = () => {
                         : "Upload complete"}
                 </p>
               </div>
-
               <div className="flex items-center gap-2 shrink-0">
                 {importBatchProgress.completed > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-[#C0DD97] text-[#3B6D11]">
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700">
                     <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
                       <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -1792,21 +1781,19 @@ const EditMaids = () => {
                   </span>
                 )}
                 {importBatchProgress.failed > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-600">
                     <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
                       <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                     </svg>
                     {importBatchProgress.failed}
                   </span>
                 )}
-                <span className="text-xs font-bold tabular-nums text-[#3B6D11]">{uploadProgressPercent}%</span>
-
+                <span className="text-xs font-bold tabular-nums text-violet-700">{uploadProgressPercent}%</span>
                 {importBatchProgress.active && (
                   <button
                     type="button"
                     onClick={() => { cancelImportRef.current = true; activeImportControllerRef.current?.abort(); }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#EF9F27]/80 bg-white px-2.5 py-1 text-xs font-semibold text-[#BA7517] transition-colors hover:bg-[#FAEEDA]"
-                    title="Stop after the current batch finishes"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50"
                   >
                     <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
                       <rect x="2.5" y="2.5" width="7" height="7" rx="1" fill="currentColor" />
@@ -1818,209 +1805,192 @@ const EditMaids = () => {
                   <button
                     type="button"
                     onClick={() => setImportBatchProgress({ active: false, total: 0, currentIndex: 0, currentFileName: "", completed: 0, failed: 0, stage: "", cancelled: false })}
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-black/8 text-foreground/40 hover:bg-black/14 transition-colors text-[10px]"
-                    aria-label="Dismiss"
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200/70 text-slate-500 hover:bg-slate-300/70 transition-colors text-[10px]"
                   >✕</button>
                 )}
               </div>
             </div>
-
             <div className="px-4 pb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
               {importBatchProgress.stage && (
-                <span className={`text-xs opacity-85 ${importBatchProgress.cancelled ? "text-[#BA7517]" : "text-[#3B6D11]"}`}>
+                <span className={`text-xs opacity-80 ${importBatchProgress.cancelled ? "text-amber-700" : "text-violet-700"}`}>
                   {importBatchProgress.stage}
                 </span>
               )}
               {importBatchProgress.active && importBatchProgress.currentFileName && (
-                <span
-                  className="inline-block max-w-[280px] truncate rounded-md px-2 py-0.5 text-[11px] font-medium bg-[#97C459]/30 text-[#27500A]"
-                  title={importBatchProgress.currentFileName}
-                >
+                <span className="inline-block max-w-[280px] truncate rounded-md px-2 py-0.5 text-[11px] font-medium bg-violet-100 text-violet-800" title={importBatchProgress.currentFileName}>
                   {importBatchProgress.currentFileName}
                 </span>
               )}
               {importBatchProgress.total > 0 && (
-                <span className="ml-auto text-[11px] font-semibold text-[#3B6D11] opacity-70">
+                <span className="ml-auto text-[11px] font-semibold text-violet-700 opacity-70">
                   {Math.max(importBatchProgress.currentIndex, importBatchProgress.completed + importBatchProgress.failed)} / {importBatchProgress.total} files
                 </span>
               )}
             </div>
-
             <div className="mx-4 mb-3 h-2 overflow-hidden rounded-full bg-white/70">
               <div
                 className="h-full rounded-full transition-all duration-500 ease-out"
                 style={{
                   width: `${uploadProgressPercent}%`,
                   background: importBatchProgress.cancelled
-                    ? "#EF9F27"
+                    ? "#f59e0b"
                     : importBatchProgress.failed > 0 && !importBatchProgress.active
-                      ? "linear-gradient(90deg, #639922 0%, #f87171 100%)"
-                      : "linear-gradient(90deg, #639922 0%, #C0DD97 100%)",
-                  boxShadow: importBatchProgress.active ? "0 0 8px rgba(99,153,34,0.5)" : "none",
+                      ? "linear-gradient(90deg, #7c3aed 0%, #f43f5e 100%)"
+                      : "linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)",
+                  boxShadow: importBatchProgress.active ? "0 0 8px rgba(124,58,237,0.5)" : "none",
                 }}
               />
             </div>
           </div>
         )}
 
-        {/* Bulk actions bar */}
-        {maids.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#EAF3DE] border border-[#97C459]/45 rounded-xl">
-            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium select-none">
-              <button type="button" onClick={toggleAll} className="text-[#639922]">
-                {allPageSelected
-                  ? <CheckSquare className="h-4 w-4" />
-                  : <Square className="h-4 w-4 text-muted-foreground" />}
-              </button>
-              {selected.size > 0
-                ? <span className="text-foreground/80 font-semibold">{selected.size} selected</span>
-                : <span className="text-foreground/50">Select all on page</span>}
-            </label>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={selected.size === 0}
-                onClick={() => openVisibilityDialog({ bulk: true, makePublic: view !== "public" })}
-                className={`h-8 text-xs ${selected.size > 0 ? "border-[#97C459]/60 text-[#3B6D11]" : ""}`}
-              >
-                <EyeOff className="mr-1.5 h-3.5 w-3.5" />
-                {view === "public" ? "Hide Selected" : "Publish Selected"}
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={selected.size === 0}
-                onClick={() => openDeleteDialog("selected")}
-                className="h-8 text-xs"
-              >
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                Delete Selected ({selected.size})
-              </Button>
-            </div>
+        {/* ── TOP PAGINATION — centered ─────────────────────────────────── */}
+        {totalMaids > PAGE_SIZE && !isLoading && (
+          <div className="flex flex-col items-center gap-2 py-1 border-b border-slate-100 pb-4">
+            <p className="text-xs text-slate-500 font-medium">
+              Page <span className="font-bold text-slate-700">{currentPage}</span> of <span className="font-bold text-slate-700">{totalPages}</span>
+              <span className="ml-2 text-slate-400">({totalMaids} maids)</span>
+            </p>
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
           </div>
         )}
 
         {/* Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+          <div className="mx-auto grid max-w-[980px] grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-              <div key={i} className="animate-pulse border bg-muted/40 overflow-hidden">
-                <div className="aspect-[3/4] bg-muted min-h-[130px]" />
-                <div className="space-y-2 p-3">
-                  <div className="h-3.5 w-3/4 rounded bg-muted" />
-                  <div className="h-3 w-1/2 rounded bg-muted" />
-                  <div className="h-3 w-2/3 rounded bg-muted" />
+              <div key={i} className="animate-pulse bg-white text-center">
+                <div className="mx-auto aspect-[3/4] w-full max-w-[120px] bg-slate-100" />
+                <div className="mx-auto mt-2 space-y-1.5">
+                  <div className="mx-auto h-3 w-3/4 rounded-md bg-slate-100" />
+                  <div className="mx-auto h-2.5 w-1/2 rounded-md bg-slate-100" />
+                  <div className="mx-auto h-2.5 w-2/3 rounded-md bg-slate-100" />
                 </div>
               </div>
             ))}
           </div>
         ) : maids.length === 0 ? (
-          <div className="border border-dashed rounded-xl py-16 text-center">
-            <EyeOff className="mx-auto mb-3 h-8 w-8 text-foreground/25" />
-            <p className="text-sm font-semibold text-foreground/60">No maid records found.</p>
-            <p className="mt-1 text-xs text-foreground/40">Try a different search or adjust filters.</p>
+          <div className="border border-dashed border-slate-200 rounded-2xl py-20 text-center bg-slate-50/50">
+            <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
+              <EyeOff className="h-7 w-7 text-slate-300" />
+            </div>
+            <p className="text-sm font-semibold text-slate-500">No maid records found.</p>
+            <p className="mt-1.5 text-xs text-slate-400">Try a different search or adjust filters.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+          <div className="mx-auto grid max-w-[980px] grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {paginatedMaids.map((maid, i) => {
               const age = calculateAge(maid.dateOfBirth);
               const photoPreview = photoMap.get(maid.referenceCode) ?? (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl) ?? "";
               const photoLoaded = photoMap.has(maid.referenceCode);
               const isSelected = selected.has(maid.referenceCode);
+              const isVisibilitySelected = visibilitySelected.has(maid.referenceCode);
               const flagCode = getNationalityCode(maid.nationality);
-              // inFlightRefs covers the rare edge-case where a card stays
-              // visible after a visibility change (e.g., stale render). In
-              // the normal path the card is already removed from the list.
               const isInFlight = inFlightRefs.has(maid.referenceCode);
+              const createdTime = maid.createdAt ? new Date(maid.createdAt).getTime() : NaN;
+              const isNewMaid =
+                Number.isFinite(createdTime) &&
+                Date.now() >= createdTime &&
+                Date.now() - createdTime <= 7 * 24 * 60 * 60 * 1000;
 
               return (
                 <div
                   key={maid.referenceCode}
-                  className={`group relative flex flex-col overflow-hidden border-[1.5px] transition-all duration-200 ease-in-out
-                    hover:shadow-[0_6px_24px_rgba(99,153,34,0.14),0_2px_6px_rgba(0,0,0,0.06)]
-                    hover:-translate-y-0.5 hover:border-[#97C459]/70
-                    ${isSelected ? "border-[#639922] shadow-[0_0_0_3px_rgba(99,153,34,0.20)]" : "border-border"}
+                    className={`group relative flex min-w-0 flex-col items-center bg-white px-2 py-1.5 text-center transition-all duration-200 ease-in-out
+                    ${isSelected
+                      ? "bg-violet-50/80 ring-2 ring-violet-300"
+                      : isVisibilitySelected
+                        ? "bg-amber-50/80 ring-2 ring-amber-300"
+                      : "hover:bg-slate-50"}
                     ${isInFlight ? "opacity-40 pointer-events-none" : ""}`}
                   style={{ animation: "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards", animationDelay: `${i * 0.04}s`, opacity: 0 }}
                 >
                   {/* Photo area */}
                   <div
-                    className="relative w-full cursor-pointer"
+                    className="mx-auto w-full max-w-[120px] cursor-pointer"
                     onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
                   >
                     {photoPreview ? (
-                      <img src={photoPreview} alt={maid.fullName} className="w-full aspect-[3/4] object-contain object-top block min-h-[130px] bg-white align-top" loading="lazy" decoding="async" />
+                      <img
+                        src={photoPreview}
+                        alt={maid.fullName}
+                        className="block aspect-[3/4] w-full border border-slate-200 bg-slate-50 object-contain object-center align-top"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : !photoLoaded && maid.hasPhoto && photosLoading ? (
-                      <div className="w-full aspect-[3/4] min-h-[130px] animate-pulse bg-muted" />
+                      <div className="aspect-[3/4] w-full animate-pulse bg-slate-100" />
                     ) : (
-                      <div className="w-full aspect-[3/4] min-h-[130px] flex items-center justify-center bg-[#EAF3DE] text-[11px] text-[#27500A] font-medium">
-                        No Photo
+                      <div className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-1.5 bg-slate-50">
+                        <div className="w-10 h-10 bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">
+                          {maid.fullName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="text-[10px] text-slate-600 font-semibold">No Photo</span>
                       </div>
                     )}
-
-                    {/* Checkbox */}
-                    <div className="absolute left-2 top-2" onClick={(e) => { e.stopPropagation(); toggle(maid.referenceCode); }}>
-                      <div className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors cursor-pointer ${
-                        isSelected
-                          ? "border-[#639922] bg-[#639922] text-white"
-                          : "border-white/75 bg-black/25 backdrop-blur-sm"
-                      }`}>
-                        {isSelected && (
-                          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
-                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Delete button */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openDeleteDialog(maid); }}
-                      className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded border border-white/20 bg-black/40 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 hover:bg-destructive"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
                   </div>
 
                   {/* Card body */}
-                  <div className="flex flex-1 flex-col gap-1 p-[7px_8px_9px]">
+                  <div className="flex w-full min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 pt-1.5">
+                    <div className="mt-0.5 flex flex-wrap items-center justify-center gap-x-1 gap-y-0 text-[10.5px] leading-tight">
+                      <button
+                        type="button"
+                        title={isSelected ? "Unselect maid" : "Select maid"}
+                        aria-label={isSelected ? "Unselect maid" : "Select maid"}
+                        onClick={() => toggle(maid.referenceCode)}
+                        className={`inline-flex items-center justify-center gap-0.5 font-semibold transition-colors ${
+                          isSelected ? "text-violet-700" : "text-slate-700 hover:text-violet-700"
+                        }`}
+                      >
+                        <span>{isSelected ? "Selected to delete" : "Select to delete"}</span>
+                        {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        title={isVisibilitySelected ? `Unselect maid for ${visibilityActionLabel.toLowerCase()}` : `Select maid to ${visibilityActionLabel.toLowerCase()}`}
+                        aria-label={isVisibilitySelected ? `Unselect maid for ${visibilityActionLabel.toLowerCase()}` : `Select maid to ${visibilityActionLabel.toLowerCase()}`}
+                        className={`inline-flex basis-full items-center justify-center gap-0.5 font-semibold transition-colors ${
+                          isVisibilitySelected ? "text-amber-700" : "text-slate-700 hover:text-amber-700"
+                        }`}
+                        disabled={isInFlight}
+                        onClick={() => toggleVisibilitySelection(maid.referenceCode)}
+                      >
+                        {isInFlight ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <span>{isVisibilitySelected ? `Selected to ${visibilityActionLabel.toLowerCase()}` : `Select to ${visibilityActionLabel.toLowerCase()}`}</span>
+                            {isVisibilitySelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="w-full text-[10.5px] font-semibold leading-tight text-slate-900">
+                      <p className="flex min-w-0 flex-wrap items-center justify-center gap-x-1">
+                        <span>{maid.maritalStatus}{age !== null ? ` · ${age} yrs` : ""}</span>
+                        {isNewMaid && (
+                          <span className="animate-rainbow-new font-extrabold leading-none">NEW</span>
+                        )}
+                      </p>
+                      <p className="flex min-w-0 flex-wrap items-center justify-center gap-x-0.5">
+                        <FlagCircle code={flagCode} />
+                        <span className="min-w-0 break-words">{maid.nationality}</span>
+                      </p>
+                    </div>
                     <p
-                      className="text-xs font-extrabold text-[#0a0a0a] leading-[1.3] whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer hover:text-[#3B6D11] transition-colors"
+                      className="w-full cursor-pointer break-words text-[12px] font-extrabold leading-tight text-black transition-colors hover:text-violet-800"
                       onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
                     >
                       {maid.fullName}
                     </p>
-                    <div className="text-[10.5px] text-[#1a1a1a] leading-[1.55] font-medium">
-                      <p>{maid.maritalStatus}{age !== null ? ` · ${age} yrs` : ""}</p>
-                      <p className="flex items-center flex-wrap gap-x-0.5">
-                        <FlagCircle code={flagCode} />
-                        {maid.nationality}
-                      </p>
-                      <p>{maid.type}</p>
+                    <div className="mt-0.5 w-full text-[10px] font-bold leading-tight text-slate-950">
+                      <p className="break-all tabular-nums">Ref: {maid.referenceCode}</p>
+                      <p className="break-words text-slate-800">Upd on {formatDate(maid.updatedAt)}</p>
                     </div>
-                    <div>
-                      <p className="text-[10.5px] font-extrabold text-[#0a0a0a] tabular-nums">Ref: {maid.referenceCode}</p>
-                      <p className="text-[10px] text-[#2a2a2a] font-medium">Upd: {formatDate(maid.updatedAt)}</p>
-                    </div>
-                    <button
-                      className={`mt-0.5 inline-flex w-full items-center justify-center gap-1 rounded px-1.5 py-1.5 text-[10.5px] font-bold transition-colors cursor-pointer border ${
-                        view === "public"
-                          ? "bg-[#EAF3DE] text-[#3B6D11] border-[#97C459]/50 hover:bg-[#C0DD97]/60"
-                          : "bg-[#FAEEDA] text-[#854F0B] border-[#FAC775]/60 hover:bg-[#FAC775]/40"
-                      }`}
-                      disabled={isInFlight}
-                      onClick={() => openVisibilityDialog({ maid, makePublic: view !== "public" })}
-                    >
-                      {isInFlight ? (
-                        <><Loader2 className="h-3 w-3 animate-spin" /> Moving...</>
-                      ) : view === "public" ? (
-                        <><Eye className="h-3 w-3" /> Public — Hide</>
-                      ) : (
-                        <><EyeOff className="h-3 w-3" /> Hidden — Publish</>
-                      )}
-                    </button>
                   </div>
                 </div>
               );
@@ -2028,36 +1998,40 @@ const EditMaids = () => {
           </div>
         )}
 
-        {/* Pagination */}
-        {totalMaids > PAGE_SIZE && (
-          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
-            <button
-              className="h-9 rounded-lg border px-3 text-sm font-medium text-foreground/70 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted transition-colors"
-              disabled={currentPage <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+        {!isLoading && maids.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Button
+              type="button"
+              disabled={selected.size === 0}
+              onClick={() => openDeleteDialog("selected")}
+              className="bg-emerald-600 px-4 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Previous
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i}
-                onClick={() => setPage(i + 1)}
-                className={`h-9 min-w-[2.25rem] rounded-lg border px-3 text-sm font-medium transition-colors ${
-                  i + 1 === currentPage
-                    ? "bg-[#639922] text-white border-[#3B6D11] font-bold"
-                    : "text-foreground/70 hover:bg-muted"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button
-              className="h-9 rounded-lg border px-3 text-sm font-medium text-foreground/70 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted transition-colors"
-              disabled={currentPage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete the selected maids
+            </Button>
+            <Button
+              type="button"
+              disabled={visibilitySelected.size === 0}
+              onClick={() => openVisibilityDialog({ bulk: true, makePublic: !isPublicView })}
+              className="bg-amber-600 px-4 text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Next
-            </button>
+              {isPublicView ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+              {visibilityActionLabel} the selected maids
+            </Button>
+          </div>
+        )}
+
+        {/* ── BOTTOM PAGINATION — centered ──────────────────────────────── */}
+        {totalMaids > PAGE_SIZE && !isLoading && (
+          <div className="flex flex-col items-center gap-2 pt-4 border-t border-slate-100">
+            <p className="text-xs text-slate-500 font-medium">
+              Showing <span className="font-bold text-slate-700">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalMaids)}</span> of <span className="font-bold text-slate-700">{totalMaids}</span>
+            </p>
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>

@@ -1,6 +1,135 @@
 {
   "conversations": [
     {
+      "id": "49fedb3a-a35e-4af3-82c0-963330f04f3f",
+      "agencyId": 1,
+      "candidateReferenceCode": "MYR-ALL-9746",
+      "candidateId": 124,
+      "candidateName": "Myat Noe Wai",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-05-31T04:38:01.956Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-06-04T15:35:21.185Z",
+      "updatedAt": "2026-06-04T15:35:21.185Z"
+    },
+    {
+      "id": "5be0fe01-4c0a-455f-826e-5e740dab22d8",
+      "agencyId": 1,
+      "candidateReferenceCode": "IND-DAR-SAR-9117",
+      "candidateId": 92,
+      "candidateName": "Amita Lepcha",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-05-26T23:32:34.949Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-06-04T14:05:49.401Z",
+      "updatedAt": "2026-06-04T14:05:49.401Z"
+    },
+    {
+      "id": "7bcf7d2b-44c3-4fc3-90b8-1ad2ed3f8b78",
+      "agencyId": 1,
+      "candidateReferenceCode": "IND-DAR-SAM-9633",
+      "candidateId": 70,
+      "candidateName": "Reema Sarki",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-05-20T21:55:45.896Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-06-04T13:31:08.203Z",
+      "updatedAt": "2026-06-04T14:11:05.969Z"
+    },
+    {
       "id": "ebdbadee-e0c0-4f71-b086-a6ea9a022f16",
       "agencyId": 1,
       "candidateReferenceCode": "IND-DAR-SAR-9732",
