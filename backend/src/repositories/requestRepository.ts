@@ -328,6 +328,53 @@ export const updateRequestMaidsRecord = async (
   return result.rows[0] ? mapRequestRow(result.rows[0]) : null
 }
 
+export const getRequestStatusCountsRecord = async (filters: {
+  agencyId?: number
+  clientId?: number
+}): Promise<Record<SqlRequestStatus, number>> => {
+  const conditions: string[] = []
+  const values: unknown[] = []
+
+  if (typeof filters.agencyId === 'number') {
+    values.push(filters.agencyId)
+    conditions.push(`COALESCE(agency_id, 1) = $${values.length}`)
+  }
+  if (typeof filters.clientId === 'number') {
+    values.push(filters.clientId)
+    conditions.push(`client_id = $${values.length}`)
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  const result = (await query(
+    `
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE status = 'interested')::int AS interested,
+        COUNT(*) FILTER (WHERE status = 'direct_hire')::int AS direct_hire,
+        COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
+      FROM requests
+      ${whereClause}
+    `,
+    values
+  )) as {
+    rows: Array<{
+      pending: number
+      interested: number
+      direct_hire: number
+      rejected: number
+    }>
+  }
+
+  const row = result.rows[0]
+  return {
+    pending: Number(row?.pending ?? 0),
+    interested: Number(row?.interested ?? 0),
+    direct_hire: Number(row?.direct_hire ?? 0),
+    rejected: Number(row?.rejected ?? 0),
+  }
+}
+
 export const getConversationByRequestId = async (requestId: string) => {
   const result = (await query(
     `SELECT * FROM conversations WHERE request_id = $1 LIMIT 1`,

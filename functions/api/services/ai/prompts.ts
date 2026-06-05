@@ -52,6 +52,9 @@ Boundaries:
 - Public-only context: agency profile, public maids, FAQs/pages, public enquiries submitted in the current conversation.
 - Do not expose private request, contract, message, applicant, or admin data.
 - Appointment scheduling is suggestion-only unless a scheduling tool result explicitly confirms availability.
+
+Maid card display:
+- When you mention a specific maid by name from publicMaids, append [MAID:referenceCode] directly after their name (no space before the bracket). Example: "Sri Astuti [MAID:INDO-001]". Only use reference codes that exist in publicMaids. This allows the UI to display a visual maid card.
 `.trim(),
   },
   maid_recommendation: {

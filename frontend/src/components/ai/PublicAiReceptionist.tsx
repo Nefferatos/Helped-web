@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   Loader2,
   Send,
@@ -7,17 +7,161 @@ import {
   X,
   ChevronDown,
   Trash2,
+  Lock,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { callAiAgent } from "@/lib/aiAgents";
+import { getClientToken } from "@/lib/clientAuth";
+
+/* ── Maid card types ───────────────────────────────────────────────────────── */
+
+type FeaturedMaid = {
+  id: number | string;
+  referenceCode: string;
+  fullName: string;
+  nationality?: string;
+  type?: string;
+  status?: string;
+  hasPhoto?: boolean;
+  photoUrl?: string | null;
+};
 
 type Message = {
   role: "user" | "assistant";
   text: string;
   timestamp?: Date;
+  maids?: FeaturedMaid[];
 };
+
+/* ── Nationality flags ─────────────────────────────────────────────────────── */
+
+const NAT_FLAGS: Record<string, string> = {
+  filipino:"ph", philippines:"ph", indonesian:"id", indonesia:"id",
+  myanmar:"mm", burmese:"mm", cambodian:"kh", cambodia:"kh",
+  vietnamese:"vn", vietnam:"vn", thai:"th", thailand:"th",
+  indian:"in", india:"in", "sri lankan":"lk", "sri lanka":"lk",
+  bangladeshi:"bd", bangladesh:"bd", nepali:"np", nepal:"np",
+};
+const getFlagCode = (nat?: string) => {
+  if (!nat) return "";
+  const k = nat.toLowerCase().trim();
+  return NAT_FLAGS[k] ?? Object.entries(NAT_FLAGS).find(([key]) => k.includes(key))?.[1] ?? "";
+};
+
+/* ── Maid card shown inside the chat ─────────────────────────────────────── */
+
+function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: boolean }) {
+  const flagCode = getFlagCode(maid.nationality);
+  const photo = maid.photoUrl || null;
+  const profileUrl = `/maids/${encodeURIComponent(maid.referenceCode)}`;
+  const loginUrl = `/employer-login?redirect=${encodeURIComponent(profileUrl)}`;
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-xl border"
+      style={{
+        background: "#fff",
+        borderColor: "rgba(22,101,58,0.18)",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
+        width: "100%",
+        maxWidth: 300,
+      }}
+    >
+      <div className="flex items-start gap-3 p-3">
+        {/* Photo */}
+        <div
+          className="relative flex-shrink-0 overflow-hidden rounded-lg"
+          style={{ width: 64, height: 80, background: "#f0f7f3" }}
+        >
+          {photo ? (
+            <img
+              src={photo}
+              alt={maid.fullName}
+              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <User className="h-7 w-7" style={{ color: "#a3c8b2" }} />
+            </div>
+          )}
+          {/* Blur overlay for non-logged-in */}
+          {!isLoggedIn && (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ backdropFilter: "blur(6px)", background: "rgba(255,255,255,0.45)" }}
+            >
+              <Lock className="h-4 w-4" style={{ color: "#16653A" }} />
+            </div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-bold leading-tight" style={{ color: "#0C1E12" }}>
+            {maid.fullName}
+          </p>
+          <p className="mt-0.5 text-[11px]" style={{ color: "#3C6652" }}>
+            {maid.referenceCode}
+          </p>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {/* Flag + nationality */}
+            {maid.nationality && (
+              <span className="flex items-center gap-1 text-[11px]" style={{ color: "#3C6652" }}>
+                {flagCode && (
+                  <img
+                    src={`https://flagcdn.com/w20/${flagCode}.png`}
+                    alt={flagCode}
+                    style={{ width: 14, height: 10, borderRadius: 2, objectFit: "cover" }}
+                  />
+                )}
+                {maid.nationality}
+              </span>
+            )}
+            {/* Type badge */}
+            {maid.type && (
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                style={{ background: "#EAF7EF", color: "#16653A" }}
+              >
+                {maid.type}
+              </span>
+            )}
+          </div>
+
+          {/* Status */}
+          {maid.status && (
+            <p className="mt-1 text-[10px] font-medium" style={{ color: maid.status.toLowerCase().includes("available") ? "#16653A" : "#6b7280" }}>
+              ● {maid.status}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* CTA */}
+      {isLoggedIn ? (
+        <Link
+          to={profileUrl}
+          className="flex w-full items-center justify-center gap-1.5 py-2 text-[12px] font-semibold transition-colors"
+          style={{ borderTop: "1px solid rgba(22,101,58,0.12)", background: "#f0f7f3", color: "#16653A" }}
+        >
+          View Full Profile →
+        </Link>
+      ) : (
+        <Link
+          to={loginUrl}
+          className="flex w-full items-center justify-center gap-1.5 py-2 text-[12px] font-semibold transition-colors"
+          style={{ borderTop: "1px solid rgba(22,101,58,0.12)", background: "#f0f7f3", color: "#16653A" }}
+        >
+          <Lock className="h-3 w-3" /> Login to view profile
+        </Link>
+      )}
+    </div>
+  );
+}
 
 const PROMPTS = [
   "I want to hire a helper",
@@ -241,6 +385,7 @@ export default function PublicAiReceptionist() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
+  const isLoggedIn = Boolean(getClientToken());
   const [showForm, setShowForm] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showGreeting, setShowGreeting] = useState(false);
@@ -336,10 +481,12 @@ export default function PublicAiReceptionist() {
         contact,
         conversationId,
       });
+      const payload = result as unknown as { featuredMaids?: FeaturedMaid[] };
       const assistantMsg: Message = {
         role: "assistant",
         text: result.response || "I'm here to help — could you tell me more?",
         timestamp: new Date(),
+        maids: payload.featuredMaids?.length ? payload.featuredMaids : undefined,
       };
       setMessages((prev) => [...prev, assistantMsg]);
       if (result.conversationId) setConversationId(result.conversationId);
@@ -796,6 +943,23 @@ export default function PublicAiReceptionist() {
                           {msg.text}
                         </div>
                       </div>
+
+                      {/* Maid cards */}
+                      {msg.role === "assistant" && msg.maids && msg.maids.length > 0 && (
+                        <div className="mt-2 flex flex-col gap-2 pl-9" style={{ width: "100%" }}>
+                          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#6b7280" }}>
+                            Available Helpers
+                          </p>
+                          {msg.maids.map((maid) => (
+                            <AiMaidCard key={maid.referenceCode} maid={maid} isLoggedIn={isLoggedIn} />
+                          ))}
+                          {!isLoggedIn && (
+                            <p className="text-[11px]" style={{ color: "#9ca3af", paddingLeft: 2 }}>
+                              🔒 Login to view full profiles and contact details
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       {msg.timestamp && (
                         <p

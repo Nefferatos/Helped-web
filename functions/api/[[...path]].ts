@@ -8329,11 +8329,11 @@ app.post(
     const data = await loadData(c.env);
     const name = toTrimmedString(body.name);
     const contact = toTrimmedString(body.contact);
-    const message = toTrimmedString(body.message || body.prompt || body.task);
+    const msgText = toTrimmedString(body.message || body.prompt || body.task);
 
-    if (name && contact && message) {
+    if (name && contact && msgText) {
       const exists = data.enquiries.some(
-        (item) => item.message === message && (item.email === contact || item.phone === contact),
+        (item) => item.message === msgText && (item.email === contact || item.phone === contact),
       );
       if (!exists) {
         const enquiry: EnquiryRecord = {
@@ -8342,7 +8342,7 @@ app.post(
           date: buildFallbackDate(),
           email: WORKFLOW_EMAIL_PATTERN.test(contact) ? contact : "",
           phone: WORKFLOW_EMAIL_PATTERN.test(contact) ? "" : contact,
-          message,
+          message: msgText,
           createdAt: now(),
         };
         data.enquiries.unshift(enquiry);
@@ -8350,7 +8350,71 @@ app.post(
       }
     }
 
-    return runAiEndpoint(c, "receptionist", { role: "public" }, data, body);
+    // Call runAIAgent directly so we can post-process and attach featured maid cards
+    const input = {
+      ...body,
+      message: toTrimmedString(body.message) || toTrimmedString(body.prompt) || toTrimmedString(body.task),
+    };
+    if (!input.message) return c.json({ error: "message, prompt, or task is required" }, 400);
+
+    const aiActor = {
+      role: "public" as const,
+      ip: c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown",
+    };
+
+    const result = await runAIAgent({
+      agentId: "receptionist",
+      input,
+      actor: aiActor,
+      appData: data as unknown as Record<string, unknown>,
+      groqApiKey: c.env.GROQ_API_KEY,
+      supabase: getAiSupabaseConfig(c.env),
+      conversationId: toTrimmedString(body.conversationId) || undefined,
+      request: c.req.raw,
+    });
+
+    // Extract [MAID:refCode] markers the AI inserted
+    const MAID_RE = /\[MAID:([^\]]+)\]/g;
+    const mentionedCodes = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = MAID_RE.exec(result.response)) !== null) mentionedCodes.add(m[1].trim());
+
+    const publicMaids = (data.maids || []).filter((maid) => Boolean((maid as Record<string,unknown>).isPublic));
+
+    // Primary: marker match. Fallback: name substring match.
+    let featured = publicMaids.filter((maid) =>
+      mentionedCodes.has(String((maid as Record<string,unknown>).referenceCode)),
+    );
+    if (featured.length === 0) {
+      featured = publicMaids.filter((maid) => {
+        const n = String((maid as Record<string,unknown>).fullName || "").trim();
+        return n.length > 3 && result.response.includes(n);
+      });
+    }
+
+    const featuredMaids = featured.slice(0, 4).map((maid) => {
+      const r = maid as Record<string, unknown>;
+      const photos = Array.isArray(r.photoDataUrls) ? (r.photoDataUrls as string[]) : [];
+      return {
+        id: r.id,
+        referenceCode: String(r.referenceCode || ""),
+        fullName: String(r.fullName || ""),
+        nationality: String(r.nationality || ""),
+        type: String(r.type || ""),
+        status: String(r.status || ""),
+        hasPhoto: Boolean(r.hasPhoto),
+        photoUrl: typeof r.photoDataUrl === "string" && r.photoDataUrl ? r.photoDataUrl : (photos[0] || null),
+      };
+    });
+
+    // Remove markers from displayed text
+    const cleanedResponse = result.response.replace(/\s*\[MAID:[^\]]+\]/g, "");
+
+    return c.json({
+      ...result,
+      response: cleanedResponse,
+      ...(featuredMaids.length > 0 ? { featuredMaids } : {}),
+    });
   }),
 );
 

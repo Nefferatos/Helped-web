@@ -3208,7 +3208,8 @@ const syncLegacyChatMessageFromSupport = (
 export const getChatMessagesForClientStore = async (
   clientId: number,
   conversationType: 'support' | 'agency' = 'support',
-  agencyId: number = DEFAULT_AGENCY_ID
+  agencyId: number = DEFAULT_AGENCY_ID,
+  options?: { before?: number; limit?: number }
 ) => {
   const data = await loadData()
   const client = data.clients.find((item) => item.id === clientId)
@@ -3225,12 +3226,19 @@ export const getChatMessagesForClientStore = async (
   )
   if (!conversation) return []
 
+  const pageSize = Math.min(options?.limit ?? 200, 200)
+  const beforeId = options?.before
+
   const messages = data.supportMessages
-    .filter((message) => message.conversationId === conversation.id)
+    .filter((message) => {
+      if (message.conversationId !== conversation.id) return false
+      if (typeof beforeId === 'number' && message.id >= beforeId) return false
+      return true
+    })
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
   return messages
-    .slice(-200)
+    .slice(-pageSize)
     .map((message) => ({
       ...message,
       clientProfileImageUrl: client.profileImageUrl ?? '',

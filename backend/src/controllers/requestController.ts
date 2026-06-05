@@ -16,6 +16,7 @@ import {
   createRequestRecord,
   getRequestRecordById,
   getRequestMetricsByAgencyId,
+  getRequestStatusCountsRecord,
   listRequestRecords,
   type SqlRequestRecord,
   updateRequestMaidsRecord,
@@ -408,6 +409,42 @@ export const createRequest = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error creating request:', error)
     res.status(500).json({ error: 'Failed to create request' })
+  }
+}
+
+export const getRequestStatusCounts = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    const client = admin ? null : await getAuthenticatedClient(req)
+
+    if (!admin && !client) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const isGlobalAdmin = admin?.role === 'admin'
+    const requestedAgencyId = Number(req.query.agencyId ?? '')
+    const requestedClientId = Number(req.query.clientId ?? '')
+
+    const agencyId =
+      isGlobalAdmin && Number.isInteger(requestedAgencyId) && requestedAgencyId > 0
+        ? requestedAgencyId
+        : admin && !isGlobalAdmin
+        ? admin.agencyId
+        : undefined
+
+    const clientId =
+      client?.id ??
+      (Number.isInteger(requestedClientId) && requestedClientId > 0 ? requestedClientId : undefined)
+
+    const counts = await getRequestStatusCountsRecord({
+      ...(typeof agencyId === 'number' ? { agencyId } : {}),
+      ...(typeof clientId === 'number' ? { clientId } : {}),
+    })
+
+    res.status(200).json(counts)
+  } catch (error) {
+    console.error('Error fetching request status counts:', error)
+    res.status(500).json({ error: 'Failed to fetch request status counts' })
   }
 }
 

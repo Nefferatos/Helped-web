@@ -80,10 +80,13 @@ export const getMyChatMessages = async (req: Request, res: Response) => {
 
     const context = getConversationContext(req)
     const agencyId = await getRequestAgencyId(req, context.agencyId ?? 1)
+    const beforeId = toPositiveAfterId(req.query.before) || undefined
+    const limit = Math.min(Number(req.query.limit) || 200, 200)
     const messages = await getChatMessagesForClientStore(
       client.id,
       context.conversationType,
-      agencyId
+      agencyId,
+      { before: beforeId, limit }
     )
     await markChatMessagesReadForClientStore(
       client.id,
@@ -392,10 +395,13 @@ export const getAdminChatMessages = async (req: Request, res: Response) => {
       context.conversationType === 'agency'
         ? context.agencyId ?? admin.agencyId
         : admin.agencyId
+    const beforeId = toPositiveAfterId(req.query.before) || undefined
+    const limit = Math.min(Number(req.query.limit) || 200, 200)
     const messages = await getChatMessagesForClientStore(
       clientId,
       context.conversationType,
-      agencyId
+      agencyId,
+      { before: beforeId, limit }
     )
     await markChatMessagesReadForAgencyStore(
       clientId,
