@@ -1,6 +1,7 @@
 import express, { Router } from 'express'
 import {
   addMaidPhoto,
+  bringMaidToTop,
   createMaid,
   deleteMaid,
   exportMaidsCsv,
@@ -25,6 +26,7 @@ router.get('/export.xls', exportMaidsXls)
 router.post('/import.batch', importMaidsBatch)
 router.post('/import.csv', importMaidsCsv)
 router.post('/photos-batch', getMaidPhotosBatch)
+router.patch('/:referenceCode/bring-to-top', bringMaidToTop)
 router.get('/:referenceCode', getMaidByReferenceCode)
 router.post('/', createMaid)
 router.put('/:referenceCode', updateMaid)

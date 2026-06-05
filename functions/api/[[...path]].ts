@@ -6382,6 +6382,62 @@ app.put(
 );
 
 app.patch(
+  "/api/maids/:referenceCode/bring-to-top",
+  safeApi(async (c) => {
+    const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
+    const config = getSupabaseAppDataConfig(c.env);
+
+    if (config) {
+      try {
+        if (isNormalizedSupabaseEnabled(c.env)) {
+          const existing = await getMaidFromSupabaseNormalized(config, referenceCode);
+          if (!existing) {
+            return c.json({ error: "Maid not found" }, 404);
+          }
+          const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...payload } = existing;
+          const maid = await upsertMaidInSupabaseNormalized(config, payload, {
+            create: false,
+            referenceCode,
+          });
+          if (!maid) {
+            return c.json({ error: "Maid not found" }, 404);
+          }
+          return c.json({ maid });
+        }
+
+        const existing = await getMaidFromSupabaseAppView(config, referenceCode);
+        if (!existing) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+        const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...payload } = existing;
+        const maid = await updateMaidInSupabaseAppData(config, referenceCode, payload);
+        if (!maid) {
+          return c.json({ error: "Maid not found" }, 404);
+        }
+        return c.json({ maid });
+      } catch (error) {
+        console.warn("Fast maid bring-to-top path failed; falling back to app data", error);
+      }
+    }
+
+    const data = await loadData(c.env);
+    const index = data.maids.findIndex(
+      (maid) => maid.referenceCode === referenceCode,
+    );
+    if (index === -1) {
+      return c.json({ error: "Maid not found" }, 404);
+    }
+
+    data.maids[index] = {
+      ...data.maids[index],
+      updatedAt: now(),
+    };
+    await saveData(c.env, data);
+    return c.json({ maid: data.maids[index] });
+  }),
+);
+
+app.patch(
   "/api/maids/:referenceCode/visibility",
   safeApi(async (c) => {
     const body = await parseBody<{ isPublic?: boolean }>(c.req.raw);

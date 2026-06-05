@@ -1020,6 +1020,30 @@ export const getMaidByReferenceCode = async (req: Request, res: Response) => {
   }
 }
 
+export const bringMaidToTop = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const referenceCode = String(req.params.referenceCode ?? '').trim()
+    const existing = await getMaidByReferenceCodeStore(referenceCode, agencyId)
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Maid not found' })
+    }
+
+    const result = await updateMaidStore(referenceCode, toMaidRecord(existing), agencyId)
+
+    if (!result) {
+      return res.status(404).json({ error: 'Maid not found' })
+    }
+
+    clearMaidListCache()
+    res.status(200).json({ maid: result })
+  } catch (error) {
+    console.error('Error bringing maid to top:', error)
+    res.status(500).json({ error: 'Failed to bring maid to top' })
+  }
+}
+
 export const createMaid = async (req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(req)

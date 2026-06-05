@@ -428,6 +428,11 @@ const FlagCircle = ({ code }: { code: string }) => {
 
 type LooseMaidProfile = MaidProfile & Record<string, unknown>;
 
+const normalizeMaidFieldKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const isRecordValue = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
 const getMaidString = (maid: MaidProfile, keys: string[]) => {
   const record = maid as LooseMaidProfile;
   for (const key of keys) {
@@ -437,17 +442,60 @@ const getMaidString = (maid: MaidProfile, keys: string[]) => {
   return "";
 };
 
+const getMaidNestedString = (maid: MaidProfile, keys: string[]) => {
+  const direct = getMaidString(maid, keys);
+  if (direct) return direct;
+
+  const wantedKeys = new Set(keys.map(normalizeMaidFieldKey));
+  const findInRecord = (record: Record<string, unknown>, depth = 0): string => {
+    if (depth > 3) return "";
+
+    for (const [key, value] of Object.entries(record)) {
+      if (wantedKeys.has(normalizeMaidFieldKey(key)) && value !== null && value !== undefined && String(value).trim()) {
+        return String(value).trim();
+      }
+    }
+
+    for (const value of Object.values(record)) {
+      if (isRecordValue(value)) {
+        const nested = findInRecord(value, depth + 1);
+        if (nested) return nested;
+      }
+    }
+
+    return "";
+  };
+
+  return findInRecord(maid as LooseMaidProfile);
+};
+
 const getMaidDateOfBirth = (maid: MaidProfile) =>
-  getMaidString(maid, ["dateOfBirth", "date_of_birth", "dob", "birthDate", "birth_date"]);
+  getMaidNestedString(maid, [
+    "dateOfBirth",
+    "date_of_birth",
+    "dob",
+    "birthDate",
+    "birth_date",
+    "Date of Birth",
+    "Date of Birth *",
+  ]);
 
 const getMaidMaritalStatus = (maid: MaidProfile) =>
-  getMaidString(maid, ["maritalStatus", "marital_status", "marital", "civilStatus", "civil_status"]);
+  getMaidNestedString(maid, [
+    "maritalStatus",
+    "marital_status",
+    "marital",
+    "civilStatus",
+    "civil_status",
+    "Marital Status",
+    "Civil Status",
+  ]);
 
 const getMaidAge = (maid: MaidProfile) => {
   const calculatedAge = calculateAge(getMaidDateOfBirth(maid));
   if (calculatedAge !== null) return calculatedAge;
 
-  const age = Number.parseInt(getMaidString(maid, ["age"]), 10);
+  const age = Number.parseInt(getMaidNestedString(maid, ["age", "Age"]), 10);
   return Number.isFinite(age) && age > 0 && age < 100 ? age : null;
 };
 
@@ -729,6 +777,63 @@ const EditMaids = () => {
     return null;
   }, [view]);
 
+  const hydrateMissingMaidDetails = useCallback(async (list: MaidProfile[], signal: AbortSignal) => {
+    const refsToHydrate = list
+      .filter((maid) => maid.referenceCode && (!getMaidMaritalStatus(maid) || getMaidAge(maid) === null))
+      .map((maid) => maid.referenceCode);
+
+    if (refsToHydrate.length === 0) return;
+
+    const results = await Promise.allSettled(
+      refsToHydrate.map(async (referenceCode) => {
+        const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}`, {
+          signal,
+          headers: { ...getAgencyAdminAuthHeaders() },
+        });
+        const data = await readSafeJson<{ error?: string; maid?: MaidProfile }>(response);
+        if (!response.ok || !data.maid) throw new Error(data.error || "Failed to load maid details");
+        return data.maid;
+      })
+    );
+
+    if (signal.aborted) return;
+
+    const detailsByRef = new Map<string, MaidProfile>();
+    results.forEach((result) => {
+      if (result.status === "fulfilled") detailsByRef.set(result.value.referenceCode, result.value);
+    });
+    if (detailsByRef.size === 0) return;
+
+    setMaids((current) =>
+      current.map((maid) => {
+        const detail = detailsByRef.get(maid.referenceCode);
+        if (!detail) return maid;
+
+        const detailDateOfBirth = getMaidDateOfBirth(detail);
+        const detailMaritalStatus = getMaidMaritalStatus(detail);
+
+        return {
+          ...detail,
+          ...maid,
+          dateOfBirth: getMaidDateOfBirth(maid) || detailDateOfBirth,
+          maritalStatus: getMaidMaritalStatus(maid) || detailMaritalStatus,
+          introduction: {
+            ...((detail.introduction as Record<string, unknown>) || {}),
+            ...((maid.introduction as Record<string, unknown>) || {}),
+          },
+          skillsPreferences: {
+            ...((detail.skillsPreferences as Record<string, unknown>) || {}),
+            ...((maid.skillsPreferences as Record<string, unknown>) || {}),
+          },
+          agencyContact: {
+            ...((detail.agencyContact as Record<string, unknown>) || {}),
+            ...((maid.agencyContact as Record<string, unknown>) || {}),
+          },
+        };
+      })
+    );
+  }, []);
+
   useEffect(() => {
     if (!visibility) return;
     const controller = new AbortController();
@@ -746,6 +851,7 @@ const EditMaids = () => {
         if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
         setMaids(data.maids);
         setTotalMaids(data.total ?? data.maids.length);
+        void hydrateMissingMaidDetails(data.maids, controller.signal);
 
         const refsWithPhoto = data.maids.filter((m) => m.hasPhoto).map((m) => m.referenceCode);
         if (refsWithPhoto.length > 0 && !controller.signal.aborted) {
@@ -776,7 +882,7 @@ const EditMaids = () => {
     };
     void load();
     return () => controller.abort();
-  }, [debouncedSearch, visibility, page, listRefreshKey]);
+  }, [debouncedSearch, visibility, page, listRefreshKey, hydrateMissingMaidDetails]);
 
   useEffect(() => { setPage(1); setSelected(new Set()); setVisibilitySelected(new Set()); }, [search, view]);
 
@@ -1567,7 +1673,7 @@ const EditMaids = () => {
                         <p className="truncate text-[11px] text-slate-500 mt-0.5 flex items-center">
                           <span className="font-semibold">{highlightMatch(String(maid.referenceCode), menuSearch)}</span>
                           {maid.nationality && (<><span className="mx-1.5 text-slate-300">·</span><FlagCircle code={flagCode} />{maid.nationality}</>)}
-                          {age !== null ? <><span className="mx-1.5 text-slate-300">·</span>{age} yrs</> : ""}
+                          {age !== null ? <><span className="mx-1.5 text-slate-300">·</span>({age}) yrs</> : ""}
                         </p>
                       </div>
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wide flex-shrink-0 ${vis === "public" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>

@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getClientToken, getStoredClient } from "@/lib/clientAuth";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import {
   Dialog,
   DialogContent,
@@ -224,12 +225,12 @@ const MaidProfilePage = () => {
       setIsBringingToTop(true);
       const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/bring-to-top`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       });
       if (response.status === 404) {
         const putResponse = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
           body: JSON.stringify({ ...maid, updatedAt: new Date().toISOString() }),
         });
         const putData = (await putResponse.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
@@ -252,7 +253,9 @@ const MaidProfilePage = () => {
     const loadMaid = async () => {
       if (!refCode) return;
       try {
-        const response = await fetch(`/api/maids/${encodeURIComponent(refCode)}`);
+        const response = await fetch(`/api/maids/${encodeURIComponent(refCode)}`, {
+          headers: { ...getAgencyAdminAuthHeaders() },
+        });
         const data = (await response.json()) as { error?: string; maid?: MaidProfile };
         if (!response.ok || !data.maid) throw new Error(data.error || "Failed to load maid");
         setMaid(data.maid);
@@ -269,7 +272,10 @@ const MaidProfilePage = () => {
     if (!maid) return;
     try {
       setIsDeleting(true);
-      const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}`, { method: "DELETE" });
+      const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}`, {
+        method: "DELETE",
+        headers: { ...getAgencyAdminAuthHeaders() },
+      });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Failed to delete maid");
       toast.success("Maid profile deleted successfully");
@@ -327,7 +333,7 @@ const MaidProfilePage = () => {
     try {
       setIsMediaSaving(true);
       const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+        method: "PUT", headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify({ ...maid, photoDataUrls: cleaned, photoDataUrl: cleaned[0] || "", hasPhoto: cleaned.length > 0 } satisfies MaidProfile),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
@@ -345,7 +351,7 @@ const MaidProfilePage = () => {
     try {
       setIsMediaSaving(true);
       const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}/video`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify({ videoDataUrl: videoLinkDraft.trim() }),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };

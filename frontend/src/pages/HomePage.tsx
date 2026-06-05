@@ -450,22 +450,22 @@ const HomePage = () => {
   ] : [];
 
   const menuCards = [
-    { icon: <Building2 size={14} />,     label: "Our Profile",   desc: "Agency info & branding",  path: adminPath("/agency-profile"),       accentColor: "#1D4ED8", gradientFrom: "#1E40AF", gradientTo: "#3B82F6", badge: s ? `${s.momPersonnel} MOM` : undefined,                           badgeUrgent: false },
+    { icon: <Building2 size={14} />,     label: "Our Profile",   desc: "Agency info & branding",  path: adminPath("/agency-profile"),       accentColor: "#1D4ED8", gradientFrom: "#1E40AF", gradientTo: "#3B82F6", badge: undefined,                                                           badgeUrgent: false },
     { icon: <UserPlus size={14} />,      label: "New Maid",      desc: "Add to roster",            path: adminPath("/add-maid"),             accentColor: "#059669", gradientFrom: "#047857", gradientTo: "#10B981", badge: undefined,                                                           badgeUrgent: false },
-    { icon: <Pencil size={14} />,        label: "Manage Maids",  desc: "Edit or remove profiles",  path: adminPath("/edit-maids"),           accentColor: "#B45309", gradientFrom: "#92400E", gradientTo: "#D97706", badge: s ? `${s.publicMaids} live` : undefined,                           badgeUrgent: false },
+    { icon: <Pencil size={14} />,        label: "Manage Maids",  desc: "Edit or remove profiles",  path: adminPath("/edit-maids"),            accentColor: "#B45309", gradientFrom: "#92400E", gradientTo: "#D97706", badge: undefined,                                                           badgeUrgent: false },
     { icon: <MessageSquare size={14} />, label: "Messages",      desc: "Respond to clients",       path: adminPath("/chat-support"),         accentColor: "#6D28D9", gradientFrom: "#4C1D95", gradientTo: "#7C3AED", badge: s?.unreadAgencyChats ? `${s.unreadAgencyChats} unread` : undefined, badgeUrgent: !!(s?.unreadAgencyChats && s.unreadAgencyChats > 0) },
     { icon: <Lock size={14} />,          label: "Security",      desc: "Change password",          path: adminPath("/change-password"),      accentColor: "#334155", gradientFrom: "#0F172A", gradientTo: "#334155", badge: undefined,                                                           badgeUrgent: false },
     { icon: <ScrollText size={14} />,    label: "Contracts",     desc: "Employment contracts",     path: adminPath("/employment-contracts"), accentColor: "#0F766E", gradientFrom: "#134E4A", gradientTo: "#0D9488", badge: undefined,                                                           badgeUrgent: false },
-    { icon: <PhoneIncoming size={14} />, label: "Enquiries",     desc: "See who's reaching out",   path: adminPath("/enquiry"),              accentColor: "#9D174D", gradientFrom: "#831843", gradientTo: "#BE185D", badge: s ? `${s.enquiries} total` : undefined,                             badgeUrgent: false },
-    { icon: <ClipboardList size={14} />, label: "Requests",      desc: "Track bookings",           path: adminPath("/requests"),             accentColor: "#0E7490", gradientFrom: "#164E63", gradientTo: "#0891B2", badge: s?.pendingRequests ? `${s.pendingRequests} pending` : undefined,    badgeUrgent: !!(s?.pendingRequests && s.pendingRequests > 0) },
+    { icon: <PhoneIncoming size={14} />, label: "Enquiries",     desc: "See who's reaching out",   path: adminPath("/enquiry"),              accentColor: "#9D174D", gradientFrom: "#831843", gradientTo: "#BE185D", badge: undefined,                                                           badgeUrgent: false },
+    { icon: <ClipboardList size={14} />, label: "Requests",      desc: "Track bookings",           path: adminPath("/requests"),             accentColor: "#0E7490", gradientFrom: "#164E63", gradientTo: "#0891B2", badge: undefined,    badgeUrgent: false },
   ];
 
   const gap = compact ? 6 : 8;
   const pad = isSm ? "10px 10px 16px" : compact ? "10px 14px" : "12px 16px";
 
   const outerStyles: React.CSSProperties = isSm
-    ? { padding: pad, background: "#F0F4F8", width: "100%", minHeight: "100vh", boxSizing: "border-box", display: "flex", flexDirection: "column", gap }
-    : { padding: pad, background: "#F0F4F8", width: "100%", height: "100vh", maxHeight: "100vh", overflow: "hidden", boxSizing: "border-box", display: "flex", flexDirection: "column", gap };
+    ? { padding: pad, background: "#F0F4F8", width: "100%", minHeight: "110vh", boxSizing: "border-box", display: "flex", flexDirection: "column", gap }
+    : { padding: pad, background: "#F0F4F8", width: "100%", height: "110vh", maxHeight: "110vh", overflow: "hidden", boxSizing: "border-box", display: "flex", flexDirection: "column", gap };
 
   return (
     <div style={outerStyles}>
