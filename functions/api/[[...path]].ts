@@ -8379,21 +8379,21 @@ app.post(
     let m: RegExpExecArray | null;
     while ((m = MAID_RE.exec(result.response)) !== null) mentionedCodes.add(m[1].trim());
 
-    const publicMaids = (data.maids || []).filter((maid) => Boolean((maid as Record<string,unknown>).isPublic));
+    const publicMaids = (data.maids || []).filter((maid) => Boolean((maid as unknown as Record<string,unknown>).isPublic));
 
     // Primary: marker match. Fallback: name substring match.
     let featured = publicMaids.filter((maid) =>
-      mentionedCodes.has(String((maid as Record<string,unknown>).referenceCode)),
+      mentionedCodes.has(String((maid as unknown as Record<string,unknown>).referenceCode)),
     );
     if (featured.length === 0) {
       featured = publicMaids.filter((maid) => {
-        const n = String((maid as Record<string,unknown>).fullName || "").trim();
+        const n = String((maid as unknown as Record<string,unknown>).fullName || "").trim();
         return n.length > 3 && result.response.includes(n);
       });
     }
 
     const featuredMaids = featured.slice(0, 4).map((maid) => {
-      const r = maid as Record<string, unknown>;
+      const r = maid as unknown as Record<string, unknown>;
       const photos = Array.isArray(r.photoDataUrls) ? (r.photoDataUrls as string[]) : [];
       return {
         id: r.id,
