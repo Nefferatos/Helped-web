@@ -1263,16 +1263,16 @@
       "maidReferenceCode": "FIL-FB1-PHK-9707",
       "profileId": "325c73e2-8305-447b-84cf-502ecbb6c4d5",
       "applicationCode": "APP-D0EE888B",
-      "status": "Background Check",
+      "status": "Ready to Configure Public Profile",
       "source": "synced_from_maid",
       "appliedAt": "2026-05-21T16:36:22.400Z",
-      "updatedAt": "2026-05-28T00:02:17.044Z",
+      "updatedAt": "2026-06-06T12:28:23.504Z",
       "aiParseSummary": "Profile seeded from maid record FIL-FB1-PHK-9707.",
       "aiParseReviewRequired": false,
       "notificationLogIds": [],
       "autoRejectedReason": "Missing required documents",
       "rejectedAt": "2026-05-24T04:13:52.971Z",
-      "approvedAt": "2026-05-28T00:01:42.781Z"
+      "approvedAt": "2026-06-06T12:28:21.627Z"
     },
     {
       "id": "fa186ed9-b3a6-49e2-8a07-adbc8ac128ac",
@@ -9755,6 +9755,24 @@
   ],
   "history": [
     {
+      "id": "c63b5c51-6720-4972-a595-afaaf4bf889b",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "fromStage": "Approved",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-06-06T12:28:23.504Z"
+    },
+    {
+      "id": "11c1ec70-a735-4c6f-b3a2-cc385c00e1ea",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "fromStage": "Background Check",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Stage changed to Approved",
+      "createdAt": "2026-06-06T12:28:21.627Z"
+    },
+    {
       "id": "e1cd4db3-3df4-417e-91fb-754f9753b846",
       "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",
       "fromStage": "Ready to Configure Public Profile",
@@ -11419,6 +11437,26 @@
     }
   ],
   "notifications": [
+    {
+      "id": "bd036e37-a787-4893-853f-65a04b076eb7",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "application_received",
+      "message": "Pao Catherine Lapina moved to Ready to Configure Public Profile",
+      "createdAt": "2026-06-06T12:28:23.504Z"
+    },
+    {
+      "id": "8e8f6274-921a-4d36-9be8-c73292f50f92",
+      "applicationId": "ad1d4ee5-8a85-4a2e-92ad-d4b0110d2c2e",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "",
+      "templateKey": "approved",
+      "message": "Pao Catherine Lapina moved to Approved",
+      "createdAt": "2026-06-06T12:28:21.627Z"
+    },
     {
       "id": "f8383c1f-d025-4f81-a1bb-e4416fdf9018",
       "applicationId": "0162e258-ce60-41f4-ab69-4b7de1c78c74",

@@ -37,6 +37,10 @@ type VisibilityTransfer = {
 };
 
 const PAGE_SIZE = 12;
+const NEW_MAID_BADGE_DURATION_MS = 24 * 60 * 60 * 1000;
+const MAID_PAGE_CACHE_TTL_MS = 60 * 1000;
+const OPTIMISTIC_DELETED_MAIDS_KEY = "editmaids_optimistic_deleted_refs";
+const NEWLY_UPLOADED_MAIDS_KEY = "editmaids_newly_uploaded_refs";
 
 type ImportBatchProgress = {
   active: boolean;
@@ -61,10 +65,60 @@ type ImportBatchResult = {
   errors: string[];
 };
 
+type MaidPageCacheEntry = {
+  maids: MaidProfile[];
+  total: number;
+  photos: Record<string, string>;
+  cachedAt: number;
+};
+
 type EditMaidsLocationState = {
   fromView?: ViewMode;
   saveTaskId?: string;
+  newMaidReferenceCode?: string;
+  deletedReferenceCode?: string;
 } | null;
+
+const readNewlyUploadedMaidRefs = () => {
+  if (typeof window === "undefined") return new Map<string, number>();
+  try {
+    const raw = window.sessionStorage.getItem(NEWLY_UPLOADED_MAIDS_KEY);
+    const entries = raw ? JSON.parse(raw) : [];
+    return new Map(
+      Array.isArray(entries)
+        ? entries
+            .map((entry) => [String(entry?.[0] || ""), Number(entry?.[1])] as const)
+            .filter(([ref, timestamp]) => ref && Number.isFinite(timestamp))
+        : [],
+    );
+  } catch {
+    return new Map<string, number>();
+  }
+};
+
+const writeNewlyUploadedMaidRefs = (refs: Map<string, number>) => {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(NEWLY_UPLOADED_MAIDS_KEY, JSON.stringify([...refs]));
+};
+
+const getMaidPageCacheKey = (visibility: "public" | "hidden", search: string, page: number, refreshKey: number) =>
+  JSON.stringify([visibility, search.trim().toLowerCase(), page, refreshKey]);
+
+const readOptimisticDeletedMaidRefs = () => {
+  if (typeof window === "undefined") return new Set<string>();
+  try {
+    const raw = window.sessionStorage.getItem(OPTIMISTIC_DELETED_MAIDS_KEY);
+    const refs = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(refs) ? refs.map(String).filter(Boolean) : []);
+  } catch {
+    return new Set<string>();
+  }
+};
+
+const writeOptimisticDeletedMaidRefs = (refs: Set<string>) => {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(OPTIMISTIC_DELETED_MAIDS_KEY, JSON.stringify([...refs]));
+};
 
 class ManualImportRequiredError extends Error {
   guessedName: string;
@@ -510,16 +564,9 @@ const PaginationBar = ({
   onPageChange: (page: number) => void;
 }) => {
   const getPageNumbers = () => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const pages: (number | "…")[] = [];
-    if (currentPage <= 4) {
-      pages.push(1, 2, 3, 4, 5, "…", totalPages);
-    } else if (currentPage >= totalPages - 3) {
-      pages.push(1, "…", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-    } else {
-      pages.push(1, "…", currentPage - 1, currentPage, currentPage + 1, "…", totalPages);
-    }
-    return pages;
+    const startPage = Math.floor((currentPage - 1) / 5) * 5 + 1;
+    const endPage = Math.min(totalPages, startPage + 4);
+    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
   };
 
   return (
@@ -534,13 +581,10 @@ const PaginationBar = ({
       </button>
 
       <div className="flex items-center gap-1">
-        {getPageNumbers().map((p, idx) =>
-          p === "…" ? (
-            <span key={`ellipsis-${idx}`} className="w-8 text-center text-xs text-slate-400 font-medium">…</span>
-          ) : (
+        {getPageNumbers().map((p) => (
             <button
               key={p}
-              onClick={() => onPageChange(p as number)}
+              onClick={() => onPageChange(p)}
               className={`h-8 min-w-[2rem] rounded-lg border px-2 text-xs font-semibold transition-all ${
                 p === currentPage
                   ? "bg-violet-600 text-white border-violet-600 shadow-[0_2px_8px_rgba(124,58,237,0.35)] scale-[1.05]"
@@ -549,8 +593,7 @@ const PaginationBar = ({
             >
               {p}
             </button>
-          )
-        )}
+        ))}
       </div>
 
       <button
@@ -567,6 +610,23 @@ const PaginationBar = ({
 
 // ── Keyframe animations ────────────────────────────────────────────────────
 const globalStyles = `
+  .edit-maids-page :where(h1, h2, h3, h4, h5, h6, p, span, label, button, a, div, strong, mark, input, textarea, select):not(.animate-rainbow-new) {
+    color: #000 !important;
+    font-weight: 500 !important;
+  }
+  .edit-maids-page .editmaids-hide-action {
+    color: #e11d48 !important;
+  }
+  .edit-maids-page .editmaids-display-action {
+    color: #2563eb !important;
+  }
+  .edit-maids-page .editmaids-strong-name {
+    font-weight: 800 !important;
+  }
+  .edit-maids-page .editmaids-white-text,
+  .edit-maids-page .editmaids-white-text :where(span, svg) {
+    color: #fff !important;
+  }
   @keyframes float-icon {
     0%, 100% { transform: translateY(0px) rotateX(0deg); }
     50%       { transform: translateY(-5px) rotateX(6deg); }
@@ -600,7 +660,10 @@ const globalStyles = `
   .animate-dropdown-in { animation: dropdown-in 0.15s cubic-bezier(0.16,1,0.3,1); }
   .animate-pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
   .animate-fade-in-up { animation: fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
-  .animate-rainbow-new { animation: rainbow-new 1.35s linear infinite alternate; }
+  .edit-maids-page .animate-rainbow-new {
+    animation: rainbow-new 1.35s linear infinite alternate;
+    font-weight: 800 !important;
+  }
   .animate-slide-out-left { animation: slide-out-left 0.18s cubic-bezier(0.4,0,1,1) forwards; }
 
   .card-arrow { transition: transform 0.2s ease; }
@@ -627,6 +690,7 @@ const EditMaids = () => {
   const [view, setView] = useState<ViewMode>("menu");
   const [search, setSearch] = useState("");
   const [maids, setMaids] = useState<MaidProfile[]>([]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [totalMaids, setTotalMaids] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [visibilitySelected, setVisibilitySelected] = useState<Set<string>>(new Set());
@@ -666,9 +730,62 @@ const EditMaids = () => {
   const importInputRef = useRef<HTMLInputElement>(null);
   const cancelImportRef = useRef<boolean>(false);
   const activeImportControllerRef = useRef<AbortController | null>(null);
+  const maidPageCacheRef = useRef<Map<string, MaidPageCacheEntry>>(new Map());
+  const inFlightPageFetchesRef = useRef<Set<string>>(new Set());
+  const photoCacheRef = useRef<Map<string, string>>(new Map());
+  const optimisticDeletedRefsRef = useRef<Set<string>>(readOptimisticDeletedMaidRefs());
+  const newlyUploadedRefsRef = useRef<Map<string, number>>(readNewlyUploadedMaidRefs());
+  const clearMaidPageCache = useCallback(() => {
+    maidPageCacheRef.current.clear();
+    inFlightPageFetchesRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    const newMaidReferenceCode = locationState?.newMaidReferenceCode;
+    if (!newMaidReferenceCode) return;
+    newlyUploadedRefsRef.current.set(newMaidReferenceCode, Date.now());
+    writeNewlyUploadedMaidRefs(newlyUploadedRefsRef.current);
+    setNowMs(Date.now());
+  }, [locationState?.newMaidReferenceCode]);
+
+  useEffect(() => {
+    const deletedReferenceCode = locationState?.deletedReferenceCode;
+    if (!deletedReferenceCode) return;
+    optimisticDeletedRefsRef.current.add(deletedReferenceCode);
+    writeOptimisticDeletedMaidRefs(optimisticDeletedRefsRef.current);
+    clearMaidPageCache();
+    setMaids((prev) => prev.filter((maid) => maid.referenceCode !== deletedReferenceCode));
+    const timer = window.setTimeout(() => {
+      optimisticDeletedRefsRef.current.delete(deletedReferenceCode);
+      writeOptimisticDeletedMaidRefs(optimisticDeletedRefsRef.current);
+      clearMaidPageCache();
+      setListRefreshKey((value) => value + 1);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [clearMaidPageCache, locationState?.deletedReferenceCode]);
 
   const maidsRef = useRef<MaidProfile[]>(maids);
   useEffect(() => { maidsRef.current = maids; }, [maids]);
+
+  useEffect(() => {
+    const nextExpiryMs = maids.reduce<number | null>((soonest, maid) => {
+      const createdTime = maid.createdAt ? new Date(maid.createdAt).getTime() : NaN;
+      const uploadedTime = newlyUploadedRefsRef.current.get(maid.referenceCode) ?? NaN;
+      const badgeTime = Number.isFinite(createdTime) ? createdTime : uploadedTime;
+      if (!Number.isFinite(badgeTime) || nowMs < badgeTime) return soonest;
+      const expiresAt = badgeTime + NEW_MAID_BADGE_DURATION_MS;
+      if (expiresAt <= nowMs) return soonest;
+      return soonest === null || expiresAt < soonest ? expiresAt : soonest;
+    }, null);
+
+    if (nextExpiryMs === null) return;
+
+    const timer = window.setTimeout(() => {
+      setNowMs(Date.now());
+    }, Math.max(0, nextExpiryMs - nowMs) + 50);
+
+    return () => window.clearTimeout(timer);
+  }, [maids, nowMs]);
 
   const pendingReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleBackgroundReload = useCallback((delayMs = 1500) => {
@@ -834,55 +951,147 @@ const EditMaids = () => {
     );
   }, []);
 
+  const getCachedPhotoMapForMaids = useCallback((list: MaidProfile[]) => {
+    const next = new Map<string, string>();
+    list.forEach((maid) => {
+      const cached = photoCacheRef.current.get(maid.referenceCode);
+      if (cached) next.set(maid.referenceCode, cached);
+    });
+    return next;
+  }, []);
+
+  const applyMaidPage = useCallback((list: MaidProfile[], total: number, photos?: Record<string, string>) => {
+    const visibleList = list.filter((maid) => !optimisticDeletedRefsRef.current.has(maid.referenceCode));
+    const adjustedTotal = Math.max(0, total - (list.length - visibleList.length));
+    if (photos) {
+      Object.entries(photos).forEach(([ref, photo]) => {
+        if (photo) photoCacheRef.current.set(ref, photo);
+      });
+    }
+    setNowMs(Date.now());
+    setMaids(visibleList);
+    setTotalMaids(adjustedTotal);
+    setPhotoMap(getCachedPhotoMapForMaids(visibleList));
+  }, [getCachedPhotoMapForMaids]);
+
+  const loadMaidPage = useCallback(async ({
+    targetPage,
+    signal,
+    applyResult,
+    showLoader,
+  }: {
+    targetPage: number;
+    signal: AbortSignal;
+    applyResult: boolean;
+    showLoader: boolean;
+  }) => {
+    if (!visibility) return null;
+
+    const cacheKey = getMaidPageCacheKey(visibility, debouncedSearch, targetPage, listRefreshKey);
+    const cached = maidPageCacheRef.current.get(cacheKey);
+    if (!applyResult && cached && Date.now() - cached.cachedAt < MAID_PAGE_CACHE_TTL_MS) return cached;
+    if (!applyResult && inFlightPageFetchesRef.current.has(cacheKey)) return cached ?? null;
+
+    try {
+      inFlightPageFetchesRef.current.add(cacheKey);
+      if (showLoader) {
+        setIsLoading(true);
+        setPhotosLoading(false);
+        setPhotoMap(new Map());
+      }
+
+      const params = new URLSearchParams({ visibility, page: String(targetPage), pageSize: String(PAGE_SIZE), noPhotos: "1" });
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      const response = await fetch(`/api/maids?${params.toString()}`, {
+        signal,
+        headers: { ...getAgencyAdminAuthHeaders() },
+      });
+      const data = await readSafeJson<{ error?: string; maids?: MaidProfile[]; total?: number }>(response);
+      if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
+
+      const total = data.total ?? data.maids.length;
+      const entry: MaidPageCacheEntry = { maids: data.maids, total, photos: {}, cachedAt: Date.now() };
+      maidPageCacheRef.current.set(cacheKey, entry);
+      if (applyResult && !signal.aborted) {
+        applyMaidPage(data.maids, total);
+        void hydrateMissingMaidDetails(data.maids, signal);
+      }
+
+      const refsWithPhoto = data.maids
+        .filter((m) => m.hasPhoto && !photoCacheRef.current.has(m.referenceCode))
+        .map((m) => m.referenceCode);
+      if (refsWithPhoto.length > 0 && !signal.aborted) {
+        if (applyResult) setPhotosLoading(true);
+        try {
+          const photoRes = await fetch("/api/maids/photos-batch", {
+            method: "POST",
+            signal,
+            headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+            body: JSON.stringify({ refs: refsWithPhoto }),
+          });
+          if (photoRes.ok && !signal.aborted) {
+            const photoData = await readSafeJson<{ error?: string; photos?: Record<string, string> }>(photoRes);
+            if (photoData.photos) {
+              entry.photos = photoData.photos;
+              entry.cachedAt = Date.now();
+              Object.entries(photoData.photos).forEach(([ref, photo]) => {
+                if (photo) photoCacheRef.current.set(ref, photo);
+              });
+              if (applyResult) setPhotoMap(getCachedPhotoMapForMaids(data.maids));
+            }
+          }
+        } finally {
+          if (applyResult && !signal.aborted) setPhotosLoading(false);
+        }
+      }
+
+      return entry;
+    } finally {
+      inFlightPageFetchesRef.current.delete(cacheKey);
+      if (showLoader && !signal.aborted) setIsLoading(false);
+    }
+  }, [applyMaidPage, debouncedSearch, getCachedPhotoMapForMaids, hydrateMissingMaidDetails, listRefreshKey, visibility]);
+
   useEffect(() => {
     if (!visibility) return;
     const controller = new AbortController();
-    setPhotoMap(new Map());
-    const load = async () => {
-      try {
-        setIsLoading(true);
-        const params = new URLSearchParams({ visibility, page: String(page), pageSize: String(PAGE_SIZE), noPhotos: "1" });
-        if (debouncedSearch) params.set("search", debouncedSearch);
-        const response = await fetch(`/api/maids?${params.toString()}`, {
-          signal: controller.signal,
-          headers: { ...getAgencyAdminAuthHeaders() },
-        });
-        const data = await readSafeJson<{ error?: string; maids?: MaidProfile[]; total?: number }>(response);
-        if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
-        setMaids(data.maids);
-        setTotalMaids(data.total ?? data.maids.length);
-        void hydrateMissingMaidDetails(data.maids, controller.signal);
+    const cacheKey = getMaidPageCacheKey(visibility, debouncedSearch, page, listRefreshKey);
+    const cached = maidPageCacheRef.current.get(cacheKey);
+    const hasFreshCache = Boolean(cached && Date.now() - cached.cachedAt < MAID_PAGE_CACHE_TTL_MS);
 
-        const refsWithPhoto = data.maids.filter((m) => m.hasPhoto).map((m) => m.referenceCode);
-        if (refsWithPhoto.length > 0 && !controller.signal.aborted) {
-          setPhotosLoading(true);
-          try {
-            const photoRes = await fetch("/api/maids/photos-batch", {
-              method: "POST",
-              signal: controller.signal,
-              headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-              body: JSON.stringify({ refs: refsWithPhoto }),
-            });
-            if (photoRes.ok && !controller.signal.aborted) {
-              const photoData = await readSafeJson<{ error?: string; photos?: Record<string, string> }>(photoRes);
-              if (photoData.photos) {
-                setPhotoMap(new Map(Object.entries(photoData.photos)));
-              }
-            }
-          } finally {
-            if (!controller.signal.aborted) setPhotosLoading(false);
-          }
-        }
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError"))
-          toast.error(error instanceof Error ? error.message : "Failed to load maids");
-      } finally {
-        if (!controller.signal.aborted) setIsLoading(false);
-      }
-    };
-    void load();
+    if (hasFreshCache && cached) {
+      setIsLoading(false);
+      setPhotosLoading(false);
+      applyMaidPage(cached.maids, cached.total, cached.photos);
+      void hydrateMissingMaidDetails(cached.maids, controller.signal);
+    }
+
+    void loadMaidPage({
+      targetPage: page,
+      signal: controller.signal,
+      applyResult: true,
+      showLoader: !hasFreshCache,
+    }).then((entry) => {
+      if (!entry || controller.signal.aborted) return;
+      const totalPagesForEntry = Math.max(1, Math.ceil(entry.total / PAGE_SIZE));
+      [page + 1, page - 1]
+        .filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForEntry)
+        .forEach((nextPage) => {
+          void loadMaidPage({
+            targetPage: nextPage,
+            signal: controller.signal,
+            applyResult: false,
+            showLoader: false,
+          }).catch(() => {});
+        });
+    }).catch((error) => {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        toast.error(error instanceof Error ? error.message : "Failed to load maids");
+      if (!controller.signal.aborted) setIsLoading(false);
+    });
+
     return () => controller.abort();
-  }, [debouncedSearch, visibility, page, listRefreshKey, hydrateMissingMaidDetails]);
+  }, [applyMaidPage, debouncedSearch, hydrateMissingMaidDetails, listRefreshKey, loadMaidPage, page, visibility]);
 
   useEffect(() => { setPage(1); setSelected(new Set()); setVisibilitySelected(new Set()); }, [search, view]);
 
@@ -911,6 +1120,7 @@ const EditMaids = () => {
   };
 
   const removeLocal = (referenceCode: string) => {
+    clearMaidPageCache();
     setMaids((prev) => prev.filter((m) => m.referenceCode !== referenceCode));
     setTotalMaids((prev) => Math.max(0, prev - 1));
     setSelected((prev) => { const next = new Set(prev); next.delete(referenceCode); return next; });
@@ -918,6 +1128,7 @@ const EditMaids = () => {
   };
 
   const removeManyLocal = (referenceCodes: Set<string>) => {
+    clearMaidPageCache();
     setMaids((prev) => prev.filter((m) => !referenceCodes.has(m.referenceCode)));
     setTotalMaids((prev) => Math.max(0, prev - referenceCodes.size));
     setSelected(new Set());
@@ -931,7 +1142,6 @@ const EditMaids = () => {
     });
     const data = await readSafeJson<{ error?: string }>(response);
     if (!response.ok) throw new Error(data.error || "Failed to delete maid");
-    removeLocal(referenceCode);
   };
 
   const updateMaidVisibility = (maid: MaidProfile, isPublic: boolean): Promise<MaidProfile> => {
@@ -956,15 +1166,38 @@ const EditMaids = () => {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleteDialogOpen(false);
+    const targets =
+      deleteTarget === "selected"
+        ? maids.filter((maid) => selected.has(maid.referenceCode))
+        : [deleteTarget as MaidProfile];
+    const targetRefs = new Set(targets.map((maid) => maid.referenceCode));
+    if (targetRefs.size === 0) return;
+
+    removeManyLocal(targetRefs);
+
     try {
-      if (deleteTarget === "selected") {
-        for (const ref of selected) await deleteMaid(ref);
-        toast.success(`${selected.size} maid${selected.size !== 1 ? "s" : ""} deleted`);
-      } else {
-        await deleteMaid((deleteTarget as MaidProfile).referenceCode);
-        toast.success("Maid deleted");
+      const results = await Promise.allSettled(targets.map((maid) => deleteMaid(maid.referenceCode)));
+      const failedTargets = targets.filter((_, index) => results[index].status === "rejected");
+
+      if (failedTargets.length > 0) {
+        const failedRefs = new Set(failedTargets.map((maid) => maid.referenceCode));
+        setMaids((prev) => [...failedTargets, ...prev.filter((maid) => !failedRefs.has(maid.referenceCode))]);
+        setTotalMaids((prev) => prev + failedTargets.length);
+        clearMaidPageCache();
+        toast.error(`Failed to delete ${failedTargets.length} maid${failedTargets.length !== 1 ? "s" : ""}. Restored to the list.`);
       }
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to delete"); }
+
+      const deletedCount = targets.length - failedTargets.length;
+      if (deletedCount > 0) {
+        toast.success(`${deletedCount} maid${deletedCount !== 1 ? "s" : ""} deleted`);
+        scheduleBackgroundReload(400);
+      }
+    } catch (error) {
+      setMaids((prev) => [...targets, ...prev.filter((maid) => !targetRefs.has(maid.referenceCode))]);
+      setTotalMaids((prev) => prev + targets.length);
+      clearMaidPageCache();
+      toast.error(error instanceof Error ? error.message : "Failed to delete");
+    }
   };
 
   const openVisibilityDialog = (target: VisibilityTarget) => { setPendingVisibilityTarget(target); setVisibilityDialogOpen(true); };
@@ -1110,6 +1343,7 @@ const EditMaids = () => {
   };
 
   const reloadVisibleMaids = async (preferredVisibility?: "public" | "hidden") => {
+    clearMaidPageCache();
     const reloadVisibility = preferredVisibility ?? visibility ?? "public";
     const params = new URLSearchParams({ visibility: reloadVisibility, page: String(page), pageSize: String(PAGE_SIZE) });
     if (search.trim()) params.set("search", search.trim());
@@ -1118,8 +1352,10 @@ const EditMaids = () => {
     });
     const reloadData = await readSafeJson<{ error?: string; maids?: MaidProfile[]; total?: number }>(reload);
     if (reload.ok && reloadData.maids) {
-      setMaids(reloadData.maids);
-      setTotalMaids(reloadData.total ?? reloadData.maids.length);
+      const visibleMaids = reloadData.maids.filter((maid) => !optimisticDeletedRefsRef.current.has(maid.referenceCode));
+      setNowMs(Date.now());
+      setMaids(visibleMaids);
+      setTotalMaids(Math.max(0, (reloadData.total ?? reloadData.maids.length) - (reloadData.maids.length - visibleMaids.length)));
       if (view === "menu" && reloadData.maids.length > 0) setView(reloadVisibility === "hidden" ? "hidden" : "public");
     }
   };
@@ -1353,7 +1589,7 @@ const EditMaids = () => {
       setImportBatchProgress((prev) => ({ ...prev, completed, failed, currentIndex: Math.min(prev.total, batchStart + batch.length), stage: failed > 0 ? "Continuing with remaining files" : "Saving imported data" }));
     }
     const wasCancelled = cancelImportRef.current;
-    if (completed > 0) await reloadVisibleMaids("public");
+    if (completed > 0) await reloadVisibleMaids(visibility ?? "public");
     setImportBatchProgress((prev) => ({ ...prev, active: false, currentIndex: wasCancelled ? Math.min(prev.currentIndex, prev.total) : prev.total, completed, failed, cancelled: wasCancelled, stage: wasCancelled ? "Upload cancelled" : failed ? "Completed with some failed files" : "Completed successfully" }));
     if (wasCancelled) toast.error(`Upload cancelled — ${completed} file${completed !== 1 ? "s" : ""} imported before cancel`);
     else toast.success(`Bulk upload finished: ${completed} uploaded${failed ? `, ${failed} failed` : ""}`);
@@ -1786,10 +2022,10 @@ const EditMaids = () => {
   // ── LIST VIEW ─────────────────────────────────────────────────────────────
   const allPageSelected = paginatedMaids.length > 0 && paginatedMaids.every((m) => selected.has(m.referenceCode));
   const isPublicView = view === "public";
-  const visibilityActionLabel = isPublicView ? "Hide" : "Publish";
+  const visibilityActionLabel = isPublicView ? "Hide" : "Display";
 
   return (
-    <div className="page-container mx-auto w-full max-w-[1100px] px-4">
+    <div className="edit-maids-page page-container mx-auto w-full max-w-[1100px] px-4">
       <style>{globalStyles}</style>
 
       {/* List header bar */}
@@ -1824,7 +2060,7 @@ const EditMaids = () => {
           <Button
             type="button"
             onClick={() => navigate(adminPath("/add-maid"))}
-            className="h-10 bg-emerald-600 text-white hover:bg-emerald-700"
+            className="editmaids-white-text h-10 bg-emerald-600 text-white hover:bg-emerald-700"
           >
             <UserPlus className="mr-2 h-4 w-4" />
             Add Maid
@@ -1838,28 +2074,24 @@ const EditMaids = () => {
             {isPublicView ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
             {isPublicView ? "Hidden Maids" : "Public Maids"}
           </Button>
-          {isPublicView && (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => importInputRef.current?.click()}
-                disabled={isImporting || importBatchProgress.active}
-                className="h-10 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                {importBatchProgress.active ? "Uploading..." : "Bulk Upload"}
-              </Button>
-              <input
-                ref={importInputRef}
-                type="file"
-                multiple
-                accept=".csv,.xls,.xlsx,.pdf,.doc,.docx"
-                className="hidden"
-                onChange={(event) => { void requestImportFiles(event.target.files ?? undefined); event.target.value = ""; }}
-              />
-            </>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => importInputRef.current?.click()}
+            disabled={isImporting || importBatchProgress.active}
+            className="h-10 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            {importBatchProgress.active ? "Uploading..." : "Bulk Upload"}
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            multiple
+            accept=".csv,.xls,.xlsx,.pdf,.doc,.docx"
+            className="hidden"
+            onChange={(event) => { void requestImportFiles(event.target.files ?? undefined); event.target.value = ""; }}
+          />
         </div>
 
         {/* Batch upload progress */}
@@ -2024,10 +2256,12 @@ const EditMaids = () => {
               const flagCode = getNationalityCode(maid.nationality);
               const isInFlight = inFlightRefs.has(maid.referenceCode);
               const createdTime = maid.createdAt ? new Date(maid.createdAt).getTime() : NaN;
+              const uploadedTime = newlyUploadedRefsRef.current.get(maid.referenceCode) ?? NaN;
+              const newBadgeTime = Number.isFinite(createdTime) ? createdTime : uploadedTime;
               const isNewMaid =
-                Number.isFinite(createdTime) &&
-                Date.now() >= createdTime &&
-                Date.now() - createdTime <= 7 * 24 * 60 * 60 * 1000;
+                Number.isFinite(newBadgeTime) &&
+                nowMs >= newBadgeTime &&
+                nowMs - newBadgeTime < NEW_MAID_BADGE_DURATION_MS;
 
               return (
                 <div
@@ -2078,15 +2312,15 @@ const EditMaids = () => {
                           isSelected ? "text-violet-700" : "text-slate-700 hover:text-violet-700"
                         }`}
                       >
-                        <span>{isSelected ? "Selected to delete" : "Select to delete"}</span>
+                        <span>{isSelected ? "Selected to Delete" : "Select to Delete"}</span>
                         {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                       </button>
                       <button
                         type="button"
                         title={isVisibilitySelected ? `Unselect maid for ${visibilityActionLabel.toLowerCase()}` : `Select maid to ${visibilityActionLabel.toLowerCase()}`}
                         aria-label={isVisibilitySelected ? `Unselect maid for ${visibilityActionLabel.toLowerCase()}` : `Select maid to ${visibilityActionLabel.toLowerCase()}`}
-                        className={`inline-flex basis-full items-center justify-center gap-0.5 font-semibold transition-colors ${
-                          isVisibilitySelected ? "text-amber-700" : "text-slate-700 hover:text-amber-700"
+                        className={`inline-flex basis-full items-center justify-center gap-0.5 font-semibold text-slate-700 transition-colors ${
+                          isPublicView ? "hover:text-slate-700" : isVisibilitySelected ? "text-amber-700" : "hover:text-amber-700"
                         }`}
                         disabled={isInFlight}
                         onClick={() => toggleVisibilitySelection(maid.referenceCode)}
@@ -2095,7 +2329,14 @@ const EditMaids = () => {
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
                           <>
-                            <span>{isVisibilitySelected ? `Selected to ${visibilityActionLabel.toLowerCase()}` : `Select to ${visibilityActionLabel.toLowerCase()}`}</span>
+                            <span>
+                              {isVisibilitySelected ? "Selected to " : "Select to "}
+                              {isPublicView ? (
+                                <span className="editmaids-hide-action">Hide</span>
+                              ) : (
+                                <span className="editmaids-display-action">Display</span>
+                              )}
+                            </span>
                             {isVisibilitySelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                           </>
                         )}
@@ -2114,7 +2355,7 @@ const EditMaids = () => {
                       </p>
                     </div>
                     <p
-                      className="w-full cursor-pointer break-words text-[12px] font-extrabold leading-tight text-black transition-colors hover:text-violet-800"
+                      className="editmaids-strong-name w-full cursor-pointer break-words text-[12px] font-extrabold leading-tight text-black transition-colors hover:text-violet-800"
                       onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
                     >
                       {maid.fullName}
@@ -2136,7 +2377,7 @@ const EditMaids = () => {
               type="button"
               disabled={selected.size === 0}
               onClick={() => openDeleteDialog("selected")}
-              className="bg-emerald-600 px-4 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="editmaids-white-text bg-emerald-600 px-4 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete the selected maids
@@ -2145,7 +2386,7 @@ const EditMaids = () => {
               type="button"
               disabled={visibilitySelected.size === 0}
               onClick={() => openVisibilityDialog({ bulk: true, makePublic: !isPublicView })}
-              className="bg-amber-600 px-4 text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="editmaids-white-text bg-amber-600 px-4 text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isPublicView ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
               {visibilityActionLabel} the selected maids

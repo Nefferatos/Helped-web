@@ -100,18 +100,15 @@ function buildEnquiryPreview(message: string) {
 function sanitizeConversationPreview(message: string, senderRole?: ChatMessage["senderRole"]) {
   const normalized = compactWhitespace(message);
   if (!normalized) return "No messages yet";
-
   if (
     senderRole === "agency" &&
     /(thank you for reaching out|thank you for your message|we are reviewing your request|we will get back to you shortly|how can we help you today)/i.test(normalized)
   ) {
     return "Professional follow-up sent";
   }
-
   if (senderRole === "agency" && /(tracked case|support team|logged with our support team)/i.test(normalized)) {
     return "Support acknowledgement sent";
   }
-
   return normalized.length > 96 ? `${normalized.slice(0, 95)}...` : normalized;
 }
 
@@ -119,33 +116,23 @@ function getConversationTypeLabel(conversationType: ConversationType) {
   return conversationType === "agency" ? "Agency" : "Support";
 }
 
-function getStatusTone(status?: SupportConversationStatus) {
+function getStatusConfig(status?: SupportConversationStatus) {
   switch (status) {
-    case "OPEN":
-      return { label: "Open", bg: "#eff6ff", fg: "#1d4ed8", border: "#bfdbfe" };
-    case "WAITING_CLIENT":
-      return { label: "Waiting Client", bg: "#fff7ed", fg: "#c2410c", border: "#fdba74" };
-    case "WAITING_SUPPORT":
-      return { label: "Waiting Support", bg: "#fef3c7", fg: "#b45309", border: "#fcd34d" };
-    case "RESOLVED":
-      return { label: "Resolved", bg: "#ecfdf5", fg: "#047857", border: "#86efac" };
-    case "CLOSED":
-      return { label: "Closed", bg: "#f3f4f6", fg: "#4b5563", border: "#d1d5db" };
-    default:
-      return { label: "Open", bg: "#eff6ff", fg: "#1d4ed8", border: "#bfdbfe" };
+    case "OPEN":           return { label: "Open",            color: "#1d4ed8", bg: "#eff6ff", dot: "#2563eb" };
+    case "WAITING_CLIENT": return { label: "Waiting Client",  color: "#9a3412", bg: "#fff7ed", dot: "#ea580c" };
+    case "WAITING_SUPPORT":return { label: "Waiting Support", color: "#92400e", bg: "#fef3c7", dot: "#d97706" };
+    case "RESOLVED":       return { label: "Resolved",        color: "#065f46", bg: "#ecfdf5", dot: "#059669" };
+    case "CLOSED":         return { label: "Closed",          color: "#1f2937", bg: "#f3f4f6", dot: "#6b7280" };
+    default:               return { label: "Open",            color: "#1d4ed8", bg: "#eff6ff", dot: "#2563eb" };
   }
 }
 
-function getPriorityTone(priority?: SupportPriority) {
+function getPriorityConfig(priority?: SupportPriority) {
   switch (priority) {
-    case "URGENT":
-      return { bg: "#fef2f2", fg: "#b91c1c", border: "#fca5a5" };
-    case "HIGH":
-      return { bg: "#fff7ed", fg: "#c2410c", border: "#fdba74" };
-    case "MEDIUM":
-      return { bg: "#fffbeb", fg: "#b45309", border: "#fcd34d" };
-    default:
-      return { bg: "#f0fdf4", fg: "#166534", border: "#86efac" };
+    case "URGENT": return { color: "#991b1b", bg: "#fef2f2", label: "Urgent" };
+    case "HIGH":   return { color: "#9a3412", bg: "#fff7ed", label: "High" };
+    case "MEDIUM": return { color: "#92400e", bg: "#fffbeb", label: "Medium" };
+    default:       return { color: "#14532d", bg: "#f0fdf4", label: "Low" };
   }
 }
 
@@ -179,61 +166,94 @@ function buildQueryString(
 function sortConversations(conversations: AdminConversation[], sort: SortOption): AdminConversation[] {
   const sorted = [...conversations];
   switch (sort) {
-    case "newest":
-      return sorted.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-    case "oldest":
-      return sorted.sort((a, b) => new Date(a.lastMessageAt).getTime() - new Date(b.lastMessageAt).getTime());
-    case "unread":
-      return sorted.sort((a, b) => b.unreadCount - a.unreadCount || new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-    case "name":
-      return sorted.sort((a, b) => a.clientName.localeCompare(b.clientName));
-    default:
-      return sorted;
+    case "newest":  return sorted.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    case "oldest":  return sorted.sort((a, b) => new Date(a.lastMessageAt).getTime() - new Date(b.lastMessageAt).getTime());
+    case "unread":  return sorted.sort((a, b) => b.unreadCount - a.unreadCount || new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    case "name":    return sorted.sort((a, b) => a.clientName.localeCompare(b.clientName));
+    default:        return sorted;
   }
+}
+
+/* ─── Avatar helpers ─────────────────────────────────────────────────────── */
+
+const AVATAR_GRADIENTS = [
+  "linear-gradient(135deg,#667eea,#764ba2)",
+  "linear-gradient(135deg,#f093fb,#f5576c)",
+  "linear-gradient(135deg,#4facfe,#00f2fe)",
+  "linear-gradient(135deg,#43e97b,#38f9d7)",
+  "linear-gradient(135deg,#fa709a,#fee140)",
+  "linear-gradient(135deg,#a18cd1,#fbc2eb)",
+  "linear-gradient(135deg,#ffecd2,#fcb69f)",
+  "linear-gradient(135deg,#a1c4fd,#c2e9fb)",
+];
+
+function avatarGradient(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
 /* ─── Sub-components ────────────────────────────────────────────────────── */
 
-type AvatarTone = "client" | "agency" | "support";
-
-const TONE_CLASSES: Record<AvatarTone, string> = {
-  client: "bg-violet-100 text-violet-800",
-  agency: "bg-blue-100 text-blue-800",
-  support: "bg-sky-100 text-sky-800",
-};
-
-const SIZE_CLASSES: Record<"sm" | "md" | "lg", string> = {
-  sm: "h-10 w-10 text-[15px]",
-  md: "h-12 w-12 text-[17px]",
-  lg: "h-16 w-16 text-[20px]",
-};
-
 function AvatarBubble({
   name,
   imageUrl,
-  tone = "client",
   size = "md",
+  showRing = false,
 }: {
   name: string;
   imageUrl?: string;
-  tone?: AvatarTone;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
+  showRing?: boolean;
 }) {
+  const sizeMap = { xs: 28, sm: 36, md: 44, lg: 52 };
+  const px = sizeMap[size];
+  const fontSize = size === "lg" ? 18 : size === "md" ? 15 : size === "sm" ? 13 : 11;
   return (
-    <div className={`flex flex-shrink-0 items-center justify-center rounded-full font-bold tracking-wide ${TONE_CLASSES[tone]} ${SIZE_CLASSES[size]}`}>
-      {imageUrl ? (
-        <img src={imageUrl} alt={name} className="h-full w-full rounded-full object-cover" />
-      ) : (
-        initials(name)
-      )}
+    <div
+      className="flex-shrink-0 flex items-center justify-center rounded-full font-bold select-none"
+      style={{
+        width: px,
+        height: px,
+        fontSize,
+        background: imageUrl ? "transparent" : avatarGradient(name),
+        color: "#fff",
+        boxShadow: showRing ? "0 0 0 3px rgba(79,110,247,0.25), 0 2px 8px rgba(0,0,0,0.12)" : "0 2px 6px rgba(0,0,0,0.10)",
+        flexShrink: 0,
+        letterSpacing: "0.02em",
+      }}
+    >
+      {imageUrl
+        ? <img src={imageUrl} alt={name} className="w-full h-full rounded-full object-cover" />
+        : initials(name)
+      }
     </div>
+  );
+}
+
+function OnlineDot({ online, size = "sm" }: { online?: boolean; size?: "sm" | "md" }) {
+  const px = size === "md" ? 13 : 10;
+  return (
+    <span
+      className={online ? "asc-pulse-dot" : ""}
+      style={{
+        display: "block",
+        width: px,
+        height: px,
+        borderRadius: "50%",
+        background: online ? "#10b981" : "#d1d5db",
+        border: "2px solid #fff",
+        boxShadow: online ? "0 0 0 0 rgba(16,185,129,0.4)" : "none",
+      }}
+    />
   );
 }
 
 function UnreadBadge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span className="inline-flex min-w-[22px] items-center justify-center rounded-full px-2 py-0.5 text-[12px] font-bold leading-none text-white shadow-sm" style={{ background: "var(--msn-unread)" }}>
+    <span className="asc-badge-pop inline-flex min-w-[20px] h-5 items-center justify-center rounded-full px-1.5 leading-none text-white"
+      style={{ fontSize: 10.5, fontWeight: 900, background: "linear-gradient(135deg,#f87171,#ef4444)", boxShadow: "0 2px 6px rgba(239,68,68,0.4)" }}>
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -241,18 +261,35 @@ function UnreadBadge({ count }: { count: number }) {
 
 function MessageSkeleton() {
   const rows = [
-    { own: false, w: "58%", h: 40 },
-    { own: true,  w: "44%", h: 40 },
-    { own: false, w: "70%", h: 56 },
-    { own: true,  w: "52%", h: 40 },
-    { own: false, w: "38%", h: 40 },
+    { own: false, w: "56%", h: 44 },
+    { own: true,  w: "42%", h: 40 },
+    { own: false, w: "68%", h: 60 },
+    { own: true,  w: "50%", h: 40 },
+    { own: false, w: "36%", h: 40 },
   ];
   return (
-    <div className="flex flex-col gap-4 py-2">
+    <div className="flex flex-col gap-5 py-3 px-1">
       {rows.map((row, i) => (
-        <div key={i} className={`flex items-end gap-2 ${row.own ? "ml-auto flex-row-reverse" : ""}`} style={{ maxWidth: "75%", animationDelay: `${i * 60}ms` }}>
-          <div className="h-8 w-8 flex-shrink-0 rounded-full asc-skeleton" />
-          <div style={{ width: row.w, height: row.h, borderRadius: 18, borderBottomRightRadius: row.own ? 4 : undefined, borderBottomLeftRadius: !row.own ? 4 : undefined }} className="asc-skeleton" />
+        <div key={i} className={`flex items-end gap-2.5 ${row.own ? "ml-auto flex-row-reverse" : ""}`}
+          style={{ maxWidth: "72%", animationDelay: `${i * 70}ms` }}>
+          <div className="rounded-full asc-skeleton flex-shrink-0" style={{ width: 36, height: 36 }} />
+          <div className="asc-skeleton rounded-2xl" style={{ width: row.w, height: row.h, borderRadius: 18 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LoadingDots() {
+  return (
+    <div className="flex flex-1 flex-col gap-2 px-3 py-4">
+      {[78, 62, 88, 70, 52].map((w, i) => (
+        <div key={i} className="flex items-center gap-3 px-2 py-2">
+          <div className="rounded-full asc-skeleton flex-shrink-0" style={{ width: 40, height: 40 }} />
+          <div className="flex flex-1 flex-col gap-2">
+            <div className="h-3 rounded-full asc-skeleton" style={{ width: `${w}%` }} />
+            <div className="h-2.5 rounded-full asc-skeleton" style={{ width: `${w - 18}%` }} />
+          </div>
         </div>
       ))}
     </div>
@@ -262,64 +299,29 @@ function MessageSkeleton() {
 function EmptyState({ label, icon }: { label: string; icon?: "message" | "user" }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-10">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "var(--msn-blue-light)" }}>
-        {icon === "user" ? <Users className="h-8 w-8" style={{ color: "var(--msn-blue)" }} /> : <Inbox className="h-8 w-8" style={{ color: "var(--msn-blue)" }} />}
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl"
+        style={{ background: "linear-gradient(135deg,#eef1ff,#e0e7ff)", boxShadow: "0 4px 16px rgba(79,110,247,0.12)" }}>
+        {icon === "user"
+          ? <Users className="h-7 w-7" style={{ color: "#4f6ef7" }} />
+          : <Inbox className="h-7 w-7" style={{ color: "#4f6ef7" }} />}
       </div>
-      <p className="max-w-[240px] text-center text-[14px] leading-relaxed font-medium" style={{ color: "var(--msn-text-secondary)" }}>{label}</p>
-    </div>
-  );
-}
-
-function LoadingDots() {
-  return (
-    <div className="flex flex-1 flex-col gap-3 px-3 py-4">
-      {[80, 65, 90, 70, 55].map((w, i) => (
-        <div key={i} className="flex items-center gap-3 px-1 py-1.5">
-          <div className="h-10 w-10 flex-shrink-0 rounded-full asc-skeleton" />
-          <div className="flex flex-1 flex-col gap-2">
-            <div className="h-3 rounded-full asc-skeleton" style={{ width: `${w}%` }} />
-            <div className="h-2.5 rounded-full asc-skeleton" style={{ width: `${w - 15}%` }} />
-          </div>
-        </div>
-      ))}
+      <p className="max-w-[220px] text-center leading-relaxed font-medium" style={{ fontSize: 13.5, color: "#374151" }}>{label}</p>
     </div>
   );
 }
 
 function DateDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 my-2">
-      <div className="h-px flex-1" style={{ background: "var(--msn-divider)" }} />
-      <span className="whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-semibold" style={{ background: "#e4e6eb", color: "var(--msn-text-secondary)" }}>{label}</span>
-      <div className="h-px flex-1" style={{ background: "var(--msn-divider)" }} />
+    <div className="flex items-center gap-3 my-3">
+      <div className="h-px flex-1" style={{ background: "linear-gradient(to right, transparent, #e5e7eb)" }} />
+      <span className="whitespace-nowrap rounded-full px-3 py-1 font-semibold tracking-wide"
+        style={{ fontSize: 11, background: "#f1f3f9", color: "#374151", border: "1px solid #e5e7eb" }}>
+        {label}
+      </span>
+      <div className="h-px flex-1" style={{ background: "linear-gradient(to left, transparent, #e5e7eb)" }} />
     </div>
   );
 }
-
-/* ─── AI Status Banner ───────────────────────────────────────────────────── */
-
-/* function AiStatusBanner({ status, onRetry }: { status: AiStatus; onRetry: () => void }) {
-  if (status === "online") {
-    return (
-      <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold" style={{ background: "#e7f8ee", color: "#1a7a3c", border: "1px solid #b8f0cc" }}>
-        <div className="h-2 w-2 rounded-full" style={{ background: "var(--msn-online)" }} />
-        AI suggestions active
-      </div>
-    );
-  }
-  if (status === "offline") {
-    return (
-      <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px]" style={{ background: "#fff8e1", border: "1px solid #ffe082" }}>
-        <AlertCircle className="h-3 w-3 flex-shrink-0" style={{ color: "#f59e0b" }} />
-        <span className="font-semibold" style={{ color: "#92400e" }}>AI offline – fallback mode</span>
-        <button type="button" onClick={onRetry} className="ml-1 flex items-center gap-0.5 font-semibold transition-opacity hover:opacity-70" style={{ color: "#b45309" }}>
-          <RefreshCw className="h-2.5 w-2.5" /> Retry
-        </button>
-      </div>
-    );
-  }
-  return null;
-} */
 
 /* ─── Quick Reply Panel ─────────────────────────────────────────────────── */
 
@@ -329,30 +331,37 @@ function QuickReplyPanel({ onSelect }: { onSelect: (text: string) => void }) {
     <div className="relative">
       <button
         onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors hover:opacity-80"
-        style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)", border: "1px solid #c2deff" }}
+        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold transition-all hover:scale-105 active:scale-95"
+        style={{ fontSize: 12, background: "linear-gradient(135deg,#eef1ff,#e0e7ff)", color: "#3d55d4", border: "1px solid rgba(79,110,247,0.2)", boxShadow: "0 1px 4px rgba(79,110,247,0.12)" }}
       >
-        <Zap className="h-3 w-3" style={{ color: "var(--msn-blue)" }} />
+        <Zap className="h-3 w-3" />
         Quick replies
-        <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {isOpen && (
-        <div className="absolute bottom-full left-0 mb-2 z-10 w-80 rounded-2xl overflow-hidden shadow-2xl" style={{ border: "1px solid var(--msn-divider)", background: "#fff" }}>
-          <div className="px-4 py-2.5" style={{ borderBottom: "1px solid var(--msn-divider)" }}>
-            <p className="text-[12px] font-bold" style={{ color: "var(--msn-text-secondary)" }}>Quick reply templates</p>
+        <div className="asc-float-panel absolute bottom-full left-0 mb-2.5 z-20 w-80 rounded-2xl overflow-hidden"
+          style={{ background: "#fff", boxShadow: "0 20px 48px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06)", border: "1px solid #eaecf5" }}>
+          <div className="px-4 py-3 flex items-center gap-2"
+            style={{ background: "linear-gradient(135deg,#f8f9ff,#eef1ff)", borderBottom: "1px solid #eaecf5" }}>
+            <Zap className="h-3.5 w-3.5" style={{ color: "#4f6ef7" }} />
+            <p className="font-bold tracking-wide" style={{ fontSize: 12, color: "#1e3a8a" }}>QUICK REPLY TEMPLATES</p>
           </div>
-          <div className="max-h-60 overflow-y-auto">
-            {QUICK_REPLIES.map((r) => (
+          <div className="max-h-56 overflow-y-auto asc-scrollbar">
+            {QUICK_REPLIES.map((r, i) => (
               <button
                 key={r.label}
                 onClick={() => { onSelect(r.text); setIsOpen(false); }}
-                className="w-full px-4 py-3 text-left transition-colors"
-                style={{ borderBottom: "1px solid #f0f2f5" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "#f0f2f5")}
-                onMouseLeave={e => (e.currentTarget.style.background = "")}
+                className="w-full px-4 py-3 text-left transition-all group"
+                style={{ borderBottom: i < QUICK_REPLIES.length - 1 ? "1px solid #f3f4f8" : "none" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#f8f9ff"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = ""; }}
               >
-                <p className="text-[13px] font-bold mb-0.5" style={{ color: "var(--msn-text-primary)" }}>{r.label}</p>
-                <p className="text-[12px] leading-relaxed line-clamp-2" style={{ color: "var(--msn-text-secondary)" }}>{r.text}</p>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-bold" style={{ fontSize: 12.5, color: "#111827" }}>{r.label}</p>
+                  <span className="font-semibold rounded-full px-2 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ fontSize: 10, background: "#eef1ff", color: "#3d55d4" }}>Use →</span>
+                </div>
+                <p className="leading-relaxed line-clamp-2" style={{ fontSize: 12, color: "#374151" }}>{r.text}</p>
               </button>
             ))}
           </div>
@@ -364,100 +373,102 @@ function QuickReplyPanel({ onSelect }: { onSelect: (text: string) => void }) {
 
 /* ─── Filter & Sort Bar ─────────────────────────────────────────────────── */
 
-function FilterSortBar({
-  filter,
-  sort,
-  onFilterChange,
-  onSortChange,
-}: {
-  filter: FilterOption;
-  sort: SortOption;
-  onFilterChange: (f: FilterOption) => void;
-  onSortChange: (s: SortOption) => void;
-}) {
-  const filters: { value: FilterOption; label: string }[] = [
-    { value: "all", label: "All" },
-    { value: "unread", label: "Unread" },
-    { value: "support", label: "Support" },
-    { value: "agency", label: "Agency" },
-  ];
-  const sorts: { value: SortOption; label: string; icon: typeof Clock }[] = [
-    { value: "newest", label: "Newest", icon: Clock },
-    { value: "unread", label: "Unread first", icon: Star },
-    { value: "name", label: "Name A–Z", icon: Filter },
-    { value: "oldest", label: "Oldest", icon: RefreshCw },
-  ];
-
+function FilterPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <div className="space-y-2">
-      {/* Filter pills */}
-      <div className="flex gap-1.5 flex-wrap">
-        {filters.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => onFilterChange(f.value)}
-            className="rounded-full px-3 py-1 text-[12px] font-semibold transition-all"
-            style={
-              filter === f.value
-                ? { background: "var(--msn-blue)", color: "#fff" }
-                : { background: "#f0f2f5", color: "var(--msn-text-secondary)" }
-            }
-          >
-            {f.label}
-          </button>
+    <button
+      onClick={onClick}
+      className="rounded-full px-3.5 py-1.5 font-semibold transition-all hover:scale-105 active:scale-95"
+      style={
+        active
+          ? { fontSize: 13, background: "linear-gradient(135deg,#6580f8,#4f6ef7)", color: "#fff", boxShadow: "0 2px 8px rgba(79,110,247,0.35)" }
+          : { fontSize: 13, background: "#f0f1f6", color: "#111827", border: "1px solid #d1d5db" }
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
+function TypeFilterRow({ filter, setFilter }: { filter: FilterOption; setFilter: (f: FilterOption) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scroll = (dir: "left" | "right") => {
+    if (scrollRef.current) scrollRef.current.scrollBy({ left: dir === "left" ? -100 : 100, behavior: "smooth" });
+  };
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => scroll("left")} className="flex-shrink-0 flex items-center justify-center rounded-lg transition-all hover:scale-105 active:scale-95"
+        style={{ width: 24, height: 24, background: "#f0f1f6", border: "1px solid #d1d5db", color: "#374151" }}>
+        <ChevronDown className="h-3 w-3" style={{ transform: "rotate(90deg)" }} />
+      </button>
+      <div ref={scrollRef} className="asc-hscroll flex gap-1.5 flex-1" style={{ overflowX: "auto", paddingBottom: 2 }}>
+        {(["all", "unread", "support", "agency"] as FilterOption[]).map((f) => (
+          <div key={f} className="flex-shrink-0">
+            <FilterPill label={f.charAt(0).toUpperCase() + f.slice(1)} active={filter === f} onClick={() => setFilter(f)} />
+          </div>
         ))}
       </div>
-      {/* Sort select */}
-      <div className="relative">
-        <SlidersHorizontal className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2" style={{ color: "var(--msn-text-muted)" }} />
-        <select
-          value={sort}
-          onChange={(e) => onSortChange(e.target.value as SortOption)}
-          className="h-8 w-full rounded-full pl-8 pr-4 text-[12px] font-semibold outline-none transition-colors appearance-none cursor-pointer"
-          style={{ border: "1px solid var(--msn-divider)", background: "#f0f2f5", color: "var(--msn-text-primary)" }}
-        >
-          {sorts.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-        <ChevronDown className="absolute right-3 top-1/2 h-3 w-3 -translate-y-1/2 pointer-events-none" style={{ color: "var(--msn-text-muted)" }} />
-      </div>
+      <button onClick={() => scroll("right")} className="flex-shrink-0 flex items-center justify-center rounded-lg transition-all hover:scale-105 active:scale-95"
+        style={{ width: 24, height: 24, background: "#f0f1f6", border: "1px solid #d1d5db", color: "#374151" }}>
+        <ChevronDown className="h-3 w-3" style={{ transform: "rotate(-90deg)" }} />
+      </button>
     </div>
   );
 }
 
-function StatusTabs({
-  value,
-  onChange,
-}: {
-  value: StatusFilter;
-  onChange: (value: StatusFilter) => void;
-}) {
-  const tabs: { value: StatusFilter; label: string }[] = [
-    { value: "ALL", label: "All statuses" },
-    { value: "OPEN", label: "Open" },
-    { value: "WAITING_SUPPORT", label: "Waiting support" },
-    { value: "WAITING_CLIENT", label: "Waiting client" },
-    { value: "RESOLVED", label: "Resolved" },
-    { value: "CLOSED", label: "Closed" },
-  ];
 
+function StatusTabs({ value, onChange }: { value: StatusFilter; onChange: (value: StatusFilter) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const tabs: { value: StatusFilter; label: string }[] = [
+    { value: "ALL",             label: "All statuses" },
+    { value: "OPEN",            label: "Open" },
+    { value: "WAITING_SUPPORT", label: "Waiting support" },
+    { value: "WAITING_CLIENT",  label: "Waiting client" },
+    { value: "RESOLVED",        label: "Resolved" },
+    { value: "CLOSED",          label: "Closed" },
+  ];
+  const scroll = (dir: "left" | "right") => {
+    if (scrollRef.current) scrollRef.current.scrollBy({ left: dir === "left" ? -120 : 120, behavior: "smooth" });
+  };
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1">
-      {tabs.map((tab) => (
-        <button
-          key={tab.value}
-          onClick={() => onChange(tab.value)}
-          className="whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-semibold transition-colors"
-          style={
-            value === tab.value
-              ? { background: "var(--msn-blue)", color: "#fff" }
-              : { background: "#f7f8fa", color: "var(--msn-text-secondary)", border: "1px solid var(--msn-divider)" }
-          }
-        >
-          {tab.label}
-        </button>
-      ))}
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => scroll("left")}
+        className="flex-shrink-0 flex items-center justify-center rounded-lg transition-all active:scale-95"
+        style={{ width: 24, height: 24, background: "#f0f1f6", border: "1px solid #d1d5db", color: "#374151" }}
+      >
+        <ChevronDown className="h-3 w-3" style={{ transform: "rotate(90deg)" }} />
+      </button>
+      <div ref={scrollRef} className="asc-hscroll flex gap-1.5 flex-1" style={{ overflowX: "auto", paddingBottom: 2 }}>
+        {tabs.map((tab) => {
+          const cfg = tab.value !== "ALL" ? getStatusConfig(tab.value as SupportConversationStatus) : null;
+          const isActive = value === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => onChange(tab.value)}
+              className="rounded-full font-semibold flex items-center gap-1.5 flex-shrink-0 transition-colors"
+              style={
+                isActive
+                  ? { fontSize: 12, padding: "5px 12px", whiteSpace: "nowrap", background: cfg ? cfg.bg : "#eef1ff", color: cfg ? cfg.color : "#1e3a8a", border: `1.5px solid ${cfg ? cfg.dot : "#4f6ef7"}`, fontWeight: 700 }
+                  : { fontSize: 12, padding: "5px 12px", whiteSpace: "nowrap", background: "#f0f1f6", color: "#111827", border: "1px solid #d1d5db" }
+              }
+            >
+              {isActive && (
+                <span className="inline-block rounded-full flex-shrink-0"
+                  style={{ width: 6, height: 6, background: cfg ? cfg.dot : "#4f6ef7" }} />
+              )}
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        onClick={() => scroll("right")}
+        className="flex-shrink-0 flex items-center justify-center rounded-lg transition-all active:scale-95"
+        style={{ width: 24, height: 24, background: "#f0f1f6", border: "1px solid #d1d5db", color: "#374151" }}
+      >
+        <ChevronDown className="h-3 w-3" style={{ transform: "rotate(-90deg)" }} />
+      </button>
     </div>
   );
 }
@@ -473,65 +484,80 @@ function ConversationItem({
   isActive: boolean;
   onClick: () => void;
 }) {
-  const statusTone = getStatusTone(conversation.status);
+  const statusCfg = getStatusConfig(conversation.status);
   const hasUnread = conversation.unreadCount > 0;
+  const isSupport = conversation.conversationType === "support";
+
   return (
     <button
       onClick={onClick}
-      className="group relative flex w-full items-start gap-3 px-3 py-3 text-left transition-all rounded-xl mx-1 my-0.5"
+      className="group w-full text-left transition-all duration-150 rounded-xl px-3 py-3 mx-1 relative overflow-hidden"
       style={{
         width: "calc(100% - 8px)",
-        background: isActive ? "var(--msn-sidebar-active)" : "transparent",
-        borderLeft: isActive ? "3px solid var(--msn-blue)" : "3px solid transparent",
+        background: isActive
+          ? "linear-gradient(135deg,rgba(79,110,247,0.10),rgba(79,110,247,0.05))"
+          : "transparent",
+        borderLeft: isActive ? "2.5px solid #4f6ef7" : "2.5px solid transparent",
       }}
-      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--msn-sidebar-hover)"; }}
+      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(0,0,0,0.03)"; }}
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
     >
-      {/* Avatar */}
-      <div className="relative flex-shrink-0 mt-0.5">
-        <AvatarBubble name={conversation.clientName} imageUrl={conversation.clientProfileImageUrl} tone="client" size="md" />
-        <span
-          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${conversation.clientOnline ? "asc-online-dot" : ""}`}
-          style={{ background: conversation.clientOnline ? "var(--msn-online)" : "#d1d5db" }}
-        />
-      </div>
+      {/* Unread shimmer accent */}
+      {hasUnread && !isActive && (
+        <div className="absolute inset-0 rounded-xl pointer-events-none"
+          style={{ background: "linear-gradient(90deg,rgba(239,68,68,0.04),transparent)" }} />
+      )}
 
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-1">
-          <p className="truncate text-[14px] leading-snug" style={{ color: "var(--msn-text-primary)", fontWeight: hasUnread ? 700 : 600 }}>
-            {conversation.clientName}
-          </p>
-          <span className="flex-shrink-0 text-[11px]" style={{ color: hasUnread ? "var(--msn-blue)" : "var(--msn-text-muted)", fontWeight: hasUnread ? 600 : 400 }}>
-            {formatTime(conversation.lastMessageAt)}
-          </span>
+      <div className="flex items-start gap-3">
+        {/* Avatar + status */}
+        <div className="relative flex-shrink-0">
+          <AvatarBubble name={conversation.clientName} imageUrl={conversation.clientProfileImageUrl} size="md" showRing={isActive} />
+          <div className="absolute -bottom-0.5 -right-0.5">
+            <OnlineDot online={conversation.clientOnline} size="sm" />
+          </div>
         </div>
 
-        {/* Status + type row */}
-        <div className="mt-1 flex flex-wrap items-center gap-1">
-          <span className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)" }}>
-            {getConversationTypeLabel(conversation.conversationType)}
-          </span>
-          {conversation.status && (
-            <span className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: statusTone.bg, color: statusTone.fg }}>
-              {statusTone.label}
+        {/* Content */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-1 mb-1">
+            <p className="truncate leading-snug"
+              style={{ fontSize: 14, color: "#0f172a", fontWeight: hasUnread ? 700 : 600 }}>
+              {conversation.clientName}
+            </p>
+            <span className="flex-shrink-0 mt-0.5"
+              style={{ fontSize: 11.5, color: hasUnread ? "#dc2626" : "#374151", fontWeight: hasUnread ? 600 : 500 }}>
+              {formatTime(conversation.lastMessageAt)}
             </span>
-          )}
+          </div>
+
+          {/* Tags row */}
+          <div className="flex items-center gap-1 mb-1.5 flex-wrap">
+            <span className="rounded-md px-1.5 py-px font-bold uppercase tracking-wider"
+              style={{ fontSize: 10, background: isSupport ? "#eef1ff" : "#f0fdf4", color: isSupport ? "#1e3a8a" : "#14532d" }}>
+              {isSupport ? "Support" : "Agency"}
+            </span>
+            {conversation.status && (
+              <span className="rounded-md px-1.5 py-px font-semibold"
+                style={{ fontSize: 10, background: statusCfg.bg, color: statusCfg.color }}>
+                {statusCfg.label}
+              </span>
+            )}
+          </div>
+
+          {/* Preview */}
+          <p className="line-clamp-1 leading-5"
+            style={{ fontSize: 12.5, color: hasUnread ? "#1f2937" : "#374151", fontWeight: hasUnread ? 500 : 400 }}>
+            {sanitizeConversationPreview(conversation.lastMessage)}
+          </p>
         </div>
 
-        {/* Preview */}
-        <p className="mt-1 line-clamp-1 text-[12.5px] leading-5" style={{ color: hasUnread ? "var(--msn-text-secondary)" : "var(--msn-text-muted)", fontWeight: hasUnread ? 500 : 400 }}>
-          {sanitizeConversationPreview(conversation.lastMessage)}
-        </p>
-      </div>
-
-      {/* Right column */}
-      <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
-        {hasUnread ? (
-          <UnreadBadge count={conversation.unreadCount} />
-        ) : (
-          <CheckCheck className="h-3.5 w-3.5" style={{ color: "var(--msn-text-muted)", opacity: 0.5 }} />
-        )}
+        {/* Right badge */}
+        <div className="flex-shrink-0 flex flex-col items-end gap-1 ml-0.5">
+          {hasUnread
+            ? <UnreadBadge count={conversation.unreadCount} />
+            : <CheckCheck className="h-3.5 w-3.5 mt-0.5" style={{ color: "#9ca3af" }} />
+          }
+        </div>
       </div>
     </button>
   );
@@ -543,109 +569,83 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
   const isOwn = message.senderRole === "agency";
   const isPending = Boolean(message._optimistic);
   const isBot = Boolean(message.isBot);
-  const tone: AvatarTone = isOwn ? "agency" : "client";
-  const avatarName = isOwn ? message.agencyName || message.senderName : message.senderName;
+  const avatarName = isOwn ? (message.agencyName || message.senderName) : message.senderName;
   const avatarUrl = isOwn ? message.agencyProfileImageUrl : message.clientProfileImageUrl;
 
   return (
-    <div
-      className={`asc-msg-row group flex items-end gap-2.5 ${isOwn ? "ml-auto flex-row-reverse" : ""}`}
-      style={{ maxWidth: "78%", opacity: isPending ? 0.7 : 1, transition: "opacity 0.2s ease" }}
-    >
-      <div className="flex-shrink-0">
-        <AvatarBubble name={avatarName} imageUrl={avatarUrl} tone={tone} size="sm" />
-      </div>
+    <div className={`asc-msg-row group flex items-end gap-2.5 ${isOwn ? "ml-auto flex-row-reverse" : ""}`}
+      style={{ maxWidth: "76%", opacity: isPending ? 0.75 : 1, transition: "opacity 0.2s" }}>
+      <AvatarBubble name={avatarName} imageUrl={avatarUrl} size="sm" />
+
       <div className="min-w-0 flex flex-col">
         {!isOwn && (
-          <p className="mb-1 pl-1 text-[11px] font-semibold flex items-center gap-1.5" style={{ color: "var(--msn-text-muted)" }}>
+          <p className="mb-1 pl-1 font-semibold flex items-center gap-1.5" style={{ fontSize: 12, color: "#374151" }}>
             {message.senderName}
             {isBot && (
-              <span className="rounded-full px-1.5 py-px text-[9px] font-bold tracking-wide" style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)" }}>
-                AI
-              </span>
+              <span className="rounded-full px-1.5 py-px font-black tracking-wider"
+                style={{ fontSize: 9, background: "linear-gradient(135deg,#eef1ff,#e0e7ff)", color: "#3d55d4" }}>AI</span>
             )}
           </p>
         )}
-        <div
-          className={`asc-bubble-pop relative rounded-2xl px-4 py-2.5 text-[14.5px] leading-relaxed ${isOwn ? "asc-bubble-out-style" : "asc-bubble-in-style"}`}
+
+        <div className={`relative rounded-2xl px-4 py-2.5 ${isOwn ? "asc-bubble-out" : "asc-bubble-in"}`}
           style={{
-            borderBottomRightRadius: isOwn ? 4 : undefined,
-            borderBottomLeftRadius: isOwn ? undefined : 4,
-            color: isOwn ? "var(--msn-bubble-out-text)" : "var(--msn-bubble-in-text)",
-            ...(isPending && isOwn ? { opacity: 0.75 } : {}),
-          }}
-        >
-          <span style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>{message.message}</span>
+            borderBottomRightRadius: isOwn ? 6 : undefined,
+            borderBottomLeftRadius: isOwn ? undefined : 6,
+          }}>
+          <span className="leading-relaxed" style={{ fontSize: 14, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+            {message.message}
+          </span>
+
+          {/* Copy button */}
           {!isPending && (
             <button
               onClick={() => onCopy(message.message)}
-              className={`absolute -top-2.5 ${isOwn ? "-left-2.5" : "-right-2.5"} hidden group-hover:flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-md transition-all hover:scale-110`}
-              style={{ color: "var(--msn-text-secondary)", border: "1px solid var(--msn-divider)" }}
-            >
+              className={`absolute -top-2.5 ${isOwn ? "-left-2.5" : "-right-2.5"} hidden group-hover:flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-lg transition-all hover:scale-110 active:scale-90`}
+              style={{ color: "#374151", border: "1px solid #e5e7eb" }}>
               <Copy className="h-3 w-3" />
             </button>
           )}
         </div>
-        <div className={`mt-1 flex items-center gap-1 text-[11px] ${isOwn ? "justify-end pr-1" : "pl-1"}`} style={{ color: "var(--msn-text-muted)" }}>
-          {isPending ? (
-            <span className="italic">Sending…</span>
-          ) : (
-            <>
-              <span>{formatTime(message.createdAt)}</span>
-              {isOwn && <CheckCheck className="h-3 w-3" style={{ color: "var(--msn-blue)", opacity: 0.8 }} />}
-            </>
-          )}
+
+        {/* Timestamp */}
+        <div className={`mt-1 flex items-center gap-1 ${isOwn ? "justify-end pr-1" : "pl-1"}`}
+          style={{ fontSize: 11, color: "#374151" }}>
+          {isPending
+            ? <span className="italic" style={{ color: "#6b7280" }}>Sending…</span>
+            : <>
+                <span>{formatTime(message.createdAt)}</span>
+                {isOwn && <CheckCheck className="h-3 w-3" style={{ color: "#a5b4fc" }} />}
+              </>
+          }
         </div>
       </div>
     </div>
   );
 }
 
-/* ─── AI Suggestion Strip ────────────────────────────────────────────────── */
+/* ─── Meta Card ─────────────────────────────────────────────────────────── */
 
-/* function AiSuggestionStrip({
-  conversation,
-  messages,
-  status,
-  onSelect,
+function MetaCard({
+  icon,
+  label,
+  children,
 }: {
-  conversation: AdminConversation | null;
-  messages: ChatMessage[];
-  status: AiStatus;
-  onSelect: (text: string) => void | Promise<void>;
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
 }) {
-  if (!conversation) return null;
-  const suggestions =
-    status === "offline"
-      ? buildOfflineAutoReplies(conversation, messages)
-      : [
-          `Hi ${firstName(conversation.clientName)}, thank you for your message.`,
-          "Could you provide more details so we can assist you better?",
-          "We are looking into this and will update you shortly.",
-        ];
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid var(--msn-divider)", background: status === "offline" ? "#fffbf0" : "#f0f7ff" }}>
-      <span className="mr-1 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ color: status === "offline" ? "#b45309" : "var(--msn-blue)", background: "#fff" }}>
-        <Bot className="h-3 w-3" /> {status === "offline" ? "Fallback replies" : "Suggested replies"}
-      </span>
-      {suggestions.map((s) => (
-        <button
-          key={s}
-          type="button"
-          onClick={() => onSelect(s)}
-          className="rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors"
-          style={
-            status === "offline"
-              ? { borderColor: "#fcd34d", color: "#92400e", background: "#fff" }
-              : { borderColor: "#bfdbfe", color: "var(--msn-blue)", background: "#fff" }
-          }
-        >
-          {s.length > 44 ? s.slice(0, 44) + "…" : s}
-        </button>
-      ))}
+    <div className="rounded-2xl px-3.5 py-3 flex flex-col gap-2"
+      style={{ background: "#fff", border: "1px solid #e5e7eb", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+      <div className="flex items-center gap-1.5">
+        <span style={{ color: "#374151" }}>{icon}</span>
+        <p className="font-bold uppercase tracking-[0.1em]" style={{ fontSize: 11, color: "#374151" }}>{label}</p>
+      </div>
+      {children}
     </div>
   );
-} */
+}
 
 /* ─── Main component ─────────────────────────────────────────────────────── */
 
@@ -702,30 +702,20 @@ const AdminSupportChat = () => {
     pendingConversation ? [pendingConversation, ...conversations.filter((c) => c.key !== pendingConversation.key)] : conversations
   ), [conversations, pendingConversation]);
 
-  // Filter and sort conversations
   const filteredConversations = useMemo(() => {
     let result = [...effectiveConversations];
-
-    // Text search
     const term = search.trim().toLowerCase();
     if (term) {
       result = result.filter((c) =>
-        [c.clientName, c.clientEmail, c.clientCompany, c.agencyName, c.lastMessage]
-          .join(" ").toLowerCase().includes(term),
+        [c.clientName, c.clientEmail, c.clientCompany, c.agencyName, c.lastMessage].join(" ").toLowerCase().includes(term),
       );
     }
-
-    // Filter
     switch (filter) {
-      case "unread": result = result.filter((c) => c.unreadCount > 0); break;
+      case "unread":  result = result.filter((c) => c.unreadCount > 0); break;
       case "support": result = result.filter((c) => c.conversationType === "support"); break;
-      case "agency": result = result.filter((c) => c.conversationType === "agency"); break;
+      case "agency":  result = result.filter((c) => c.conversationType === "agency"); break;
     }
-
-    if (statusFilter !== "ALL") {
-      result = result.filter((c) => c.status === statusFilter);
-    }
-
+    if (statusFilter !== "ALL") result = result.filter((c) => c.status === statusFilter);
     return sortConversations(result, sort);
   }, [effectiveConversations, search, filter, sort, statusFilter]);
 
@@ -745,20 +735,14 @@ const AdminSupportChat = () => {
         if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
         throw new Error(data.error || "Failed to load conversations");
       }
-
       setConversations(data.conversations);
       setActiveConversationKey((prev) => {
         const queryKey = queryClientId
           ? `${queryClientId}:${queryConversationType}:${queryConversationType === "support" ? 1 : (queryAgencyId ?? 0)}`
           : null;
-
         if (queryKey) {
           const existing = data.conversations.some((c) => c.key === queryKey);
-          if (existing) {
-            setPendingConversation(null);
-            return queryKey;
-          }
-
+          if (existing) { setPendingConversation(null); return queryKey; }
           if (queryConversationType === "support") {
             const enquiryPreview = buildEnquiryPreview(queryEnquiryMessage);
             setPendingConversation({
@@ -782,7 +766,6 @@ const AdminSupportChat = () => {
             return queryKey;
           }
         }
-
         if (prev && data.conversations.some((c) => c.key === prev)) return prev;
         return data.conversations[0]?.key ?? null;
       });
@@ -803,9 +786,7 @@ const AdminSupportChat = () => {
   }, [navigate, queryAgencyId, queryClientId, queryClientName, queryConversationType, queryEnquiryEmail, queryEnquiryMessage]);
 
   const scheduleConversationRefresh = useCallback(() => {
-    if (conversationRefreshTimeoutRef.current !== null) {
-      window.clearTimeout(conversationRefreshTimeoutRef.current);
-    }
+    if (conversationRefreshTimeoutRef.current !== null) window.clearTimeout(conversationRefreshTimeoutRef.current);
     conversationRefreshTimeoutRef.current = window.setTimeout(() => {
       conversationRefreshTimeoutRef.current = null;
       void loadConversations(true);
@@ -842,10 +823,7 @@ const AdminSupportChat = () => {
       const message = (error as { name?: string }).name === "AbortError"
         ? "Server is not responding. Please try again."
         : error instanceof Error ? error.message : "Failed to load messages";
-      if (!silent) {
-        setErrorMessage(message);
-        toast.error(message);
-      }
+      if (!silent) { setErrorMessage(message); toast.error(message); }
     } finally {
       window.clearTimeout(timeoutId);
       if (!silent) setIsLoadingMessages(false);
@@ -883,20 +861,14 @@ const AdminSupportChat = () => {
         const el = scrollRef.current;
         if (el) el.scrollTop = el.scrollHeight - previousHeight;
       });
-    } catch {
-      /* keep existing messages on failure */
-    } finally {
-      setIsLoadingOlder(false);
-    }
+    } catch { /* keep existing messages */ } finally { setIsLoadingOlder(false); }
   }, [hasMoreOlder, isLoadingOlder, messages]);
 
   const handleMessagesScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (el.scrollTop < 80 && hasMoreOlder && !isLoadingOlder) {
-      void loadOlderMessages();
-    }
+    if (el.scrollTop < 80 && hasMoreOlder && !isLoadingOlder) void loadOlderMessages();
   }, [hasMoreOlder, isLoadingOlder, loadOlderMessages]);
 
   useEffect(() => {
@@ -930,17 +902,13 @@ const AdminSupportChat = () => {
               if (isActive) {
                 setMessages((prev) => {
                   if (prev.some((item) => item.id === next.id)) return prev;
-                  // Remove any pending optimistic messages with the same text/role so the
-                  // confirmed message from SSE replaces them without a double-render.
                   const filtered = prev.filter(
                     (item) => !(item._optimistic && item.senderRole === next.senderRole && item.message === next.message),
                   );
                   const updated = [...filtered, next].sort(
                     (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
                   );
-                  lastMessageSignatureRef.current = JSON.stringify(
-                    updated.map((message) => [message.id, message.message, message.createdAt, message.senderRole]),
-                  );
+                  lastMessageSignatureRef.current = JSON.stringify(updated.map((m) => [m.id, m.message, m.createdAt, m.senderRole]));
                   return updated;
                 });
               }
@@ -960,9 +928,7 @@ const AdminSupportChat = () => {
     };
     void run();
     return () => {
-      if (conversationRefreshTimeoutRef.current !== null) {
-        window.clearTimeout(conversationRefreshTimeoutRef.current);
-      }
+      if (conversationRefreshTimeoutRef.current !== null) window.clearTimeout(conversationRefreshTimeoutRef.current);
       controller.abort();
     };
   }, [loadConversations, loadMessages, navigate, scheduleConversationRefresh]);
@@ -971,12 +937,8 @@ const AdminSupportChat = () => {
 
   useEffect(() => {
     if (!activeConversationKey) {
-      setMessages([]);
-      lastMessageSignatureRef.current = "";
-      lastLoadedConversationKeyRef.current = null;
-      return;
+      setMessages([]); lastMessageSignatureRef.current = ""; lastLoadedConversationKeyRef.current = null; return;
     }
-
     const conversation = activeConversationRef.current;
     if (
       conversation &&
@@ -985,102 +947,54 @@ const AdminSupportChat = () => {
       conversation.conversationType === activeConversationType &&
       (conversation.agencyId ?? null) === activeConversationAgencyId
     ) {
-      if (lastLoadedConversationKeyRef.current === activeConversationKey) {
-        return;
-      }
+      if (lastLoadedConversationKeyRef.current === activeConversationKey) return;
       lastLoadedConversationKeyRef.current = activeConversationKey;
       lastMessageSignatureRef.current = "";
       void loadMessages(conversation, false);
       return;
     }
+    setMessages([]); lastMessageSignatureRef.current = ""; lastLoadedConversationKeyRef.current = null;
+  }, [activeConversationAgencyId, activeConversationClientId, activeConversationKey, activeConversationType, loadMessages]);
 
-    setMessages([]);
-    lastMessageSignatureRef.current = "";
-    lastLoadedConversationKeyRef.current = null;
-  }, [
-    activeConversationAgencyId,
-    activeConversationClientId,
-    activeConversationKey,
-    activeConversationType,
-    loadMessages,
-  ]);
-
-  // Real-time delivery is handled by the SSE stream; we only re-sync the open
-  // conversation when the tab regains focus (covers any events missed while the
-  // stream was suspended in a backgrounded tab). No more 2.5s polling loop.
   useEffect(() => {
     if (!activeConversationKey) return;
-
     const handleVisibility = () => {
       if (document.visibilityState !== "visible") return;
       const conversation = activeConversationRef.current;
-      if (
-        !conversation ||
-        conversation.key !== activeConversationKey ||
-        messagePollInFlightRef.current
-      ) {
-        return;
-      }
+      if (!conversation || conversation.key !== activeConversationKey || messagePollInFlightRef.current) return;
       messagePollInFlightRef.current = true;
-      void loadMessages(conversation, true).finally(() => {
-        messagePollInFlightRef.current = false;
-      });
+      void loadMessages(conversation, true).finally(() => { messagePollInFlightRef.current = false; });
     };
-
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
+    return () => { document.removeEventListener("visibilitychange", handleVisibility); };
   }, [activeConversationKey, loadMessages]);
 
   useEffect(() => {
     if (!pendingConversation) return;
     const actual = conversations.find((item) => item.key === pendingConversation.key);
-    if (actual) {
-      setPendingConversation(null);
-      setActiveConversationKey(actual.key);
-    }
+    if (actual) { setPendingConversation(null); setActiveConversationKey(actual.key); }
   }, [conversations, pendingConversation]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (justPrependedRef.current) { justPrependedRef.current = false; return; }
-    if (isNearBottomRef.current) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    }
-    // If the loaded batch doesn't fill the viewport there's no scrollbar,
-    // so the onScroll trigger never fires — kick off the older-load here.
-    if (el.scrollHeight <= el.clientHeight && hasMoreOlder && !isLoadingOlder) {
-      void loadOlderMessages();
-    }
+    if (isNearBottomRef.current) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (el.scrollHeight <= el.clientHeight && hasMoreOlder && !isLoadingOlder) void loadOlderMessages();
   }, [messages, hasMoreOlder, isLoadingOlder, loadOlderMessages]);
 
-  // Presence heartbeat: marks this admin online while the tab is visible so
-  // clients see the agency as online. Closing the tab fires an offline beacon;
-  // otherwise presence lapses to offline ~40s after the last heartbeat.
   useEffect(() => {
     const sendHeartbeat = () => {
       if (document.visibilityState !== "visible") return;
-      void fetch("/api/chats/admin/heartbeat", {
-        method: "POST",
-        headers: { ...getAgencyAdminAuthHeaders() },
-        keepalive: true,
-      }).catch(() => {});
+      void fetch("/api/chats/admin/heartbeat", { method: "POST", headers: { ...getAgencyAdminAuthHeaders() }, keepalive: true }).catch(() => {});
     };
     const goOffline = () => {
-      void fetch("/api/chats/admin/offline", {
-        method: "POST",
-        headers: { ...getAgencyAdminAuthHeaders() },
-        keepalive: true,
-      }).catch(() => {});
+      void fetch("/api/chats/admin/offline", { method: "POST", headers: { ...getAgencyAdminAuthHeaders() }, keepalive: true }).catch(() => {});
     };
-
     sendHeartbeat();
     const interval = window.setInterval(sendHeartbeat, 25_000);
     document.addEventListener("visibilitychange", sendHeartbeat);
     window.addEventListener("beforeunload", goOffline);
-
     return () => {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", sendHeartbeat);
@@ -1092,25 +1006,18 @@ const AdminSupportChat = () => {
     const unreadNow = conversations.reduce((sum, item) => sum + item.unreadCount, 0);
     if (unreadNow > lastUnreadTotalRef.current) {
       try {
-        const context = new (window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)();
-        const oscillator = context.createOscillator();
-        const gainNode = context.createGain();
-        oscillator.type = "sine";
-        oscillator.frequency.value = 880;
-        gainNode.gain.value = 0.03;
-        oscillator.connect(gainNode);
-        gainNode.connect(context.destination);
-        oscillator.start();
-        oscillator.stop(context.currentTime + 0.08);
-      } catch {
-        // ignore notification sound failures
-      }
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = "sine"; osc.frequency.value = 880; gain.gain.value = 0.03;
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.08);
+      } catch { /* ignore */ }
     }
     lastUnreadTotalRef.current = unreadNow;
   }, [conversations]);
 
   const copyMessage = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard")).catch(() => toast.error("Copy failed"));
+    navigator.clipboard.writeText(text).then(() => toast.success("Copied!")).catch(() => toast.error("Copy failed"));
   };
 
   const updateConversationMeta = useCallback(async (payload: {
@@ -1129,64 +1036,43 @@ const AdminSupportChat = () => {
           body: JSON.stringify(payload),
         },
       );
-      const data = await readSafeJson<{
-        conversation?: Partial<AdminConversation>;
-        error?: string;
-      }>(response);
-      if (!response.ok || !data.conversation) {
-        throw new Error(data.error || "Failed to update conversation");
-      }
+      const data = await readSafeJson<{ conversation?: Partial<AdminConversation>; error?: string }>(response);
+      if (!response.ok || !data.conversation) throw new Error(data.error || "Failed to update");
       setConversations((prev) =>
         prev.map((item) =>
           item.key === activeConversation.key
-            ? {
-                ...item,
-                ...data.conversation,
-                assignedAdminName: admin?.username || admin?.agencyName || item.assignedAdminName,
-                assignedAdminId: admin?.id || item.assignedAdminId,
-              }
+            ? { ...item, ...data.conversation, assignedAdminName: admin?.username || admin?.agencyName || item.assignedAdminName, assignedAdminId: admin?.id || item.assignedAdminId }
             : item,
         ),
       );
-      toast.success("Conversation updated");
+      toast.success("Updated");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update conversation");
-    } finally {
-      setIsUpdatingMeta(false);
-    }
+      toast.error(error instanceof Error ? error.message : "Failed to update");
+    } finally { setIsUpdatingMeta(false); }
   }, [activeConversation, admin]);
 
   const sendText = useCallback(async (rawText: string) => {
     if (!activeConversation) return;
     const messageText = rawText.trim();
     if (!messageText) return;
-
-    // Optimistic update — show the message instantly with a temp negative ID
     const tempId = -Date.now();
     const optimistic: ChatMessage = {
-      id: tempId,
-      clientId: activeConversation.clientId,
+      id: tempId, clientId: activeConversation.clientId,
       conversationType: activeConversation.conversationType,
-      agencyId: activeConversation.agencyId,
-      agencyName: activeConversation.agencyName,
-      senderRole: "agency",
-      senderName: admin?.username || admin?.agencyName || "Support",
-      message: messageText,
-      createdAt: new Date().toISOString(),
-      _optimistic: true,
+      agencyId: activeConversation.agencyId, agencyName: activeConversation.agencyName,
+      senderRole: "agency", senderName: admin?.username || admin?.agencyName || "Support",
+      message: messageText, createdAt: new Date().toISOString(), _optimistic: true,
     };
     setMessages((prev) => {
       const next = [...prev, optimistic];
       lastMessageSignatureRef.current = JSON.stringify(next.map((m) => [m.id, m.message, m.createdAt, m.senderRole]));
-      isNearBottomRef.current = true; // just sent — always scroll
+      isNearBottomRef.current = true;
       return next;
     });
     setDraft("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
-
     try {
-      setIsSending(true);
-      setErrorMessage("");
+      setIsSending(true); setErrorMessage("");
       const response = await fetch(
         `/api/chats/admin/${activeConversation.clientId}?${buildQueryString(activeConversation)}`,
         {
@@ -1198,9 +1084,8 @@ const AdminSupportChat = () => {
       const data = await readSafeJson<{ message?: ChatMessage; error?: string }>(response);
       if (!response.ok || !data.message) {
         if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
-        throw new Error(data.error || "Failed to send message");
+        throw new Error(data.error || "Failed to send");
       }
-      // Replace the optimistic message with the confirmed one from the server
       setMessages((prev) => {
         const without = prev.filter((m) => m.id !== tempId);
         if (without.some((m) => m.id === data.message!.id)) return without;
@@ -1219,20 +1104,14 @@ const AdminSupportChat = () => {
       );
       scheduleConversationRefresh();
     } catch (error) {
-      // Revert: remove optimistic message and restore the draft
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setDraft(messageText);
-      const message = error instanceof Error ? error.message : "Failed to send message";
-      setErrorMessage(message);
-      toast.error(message);
-    } finally {
-      setIsSending(false);
-    }
+      const message = error instanceof Error ? error.message : "Failed to send";
+      setErrorMessage(message); toast.error(message);
+    } finally { setIsSending(false); }
   }, [activeConversation, admin, navigate, scheduleConversationRefresh]);
 
-  const sendMessage = useCallback(async () => {
-    await sendText(draft);
-  }, [draft, sendText]);
+  const sendMessage = useCallback(async () => { await sendText(draft); }, [draft, sendText]);
 
   const handleRefreshMessages = useCallback(() => {
     const conversation = activeConversationRef.current;
@@ -1253,345 +1132,391 @@ const AdminSupportChat = () => {
 
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
   const messageGroups = groupMessagesByDate(messages);
-
-  const headerSubtitle = activeConversation
-    ? activeConversation.conversationType === "agency"
-      ? `Agency thread${activeConversation.agencyName ? ` · ${activeConversation.agencyName}` : ""}`
-      : "Support thread"
-    : "Choose a conversation to begin";
+  const statusCfg = getStatusConfig(activeConversation?.status);
+  const priorityCfg = getPriorityConfig(activeConversation?.priority);
 
   return (
     <>
       <style>{`
         /* ── Design tokens ── */
         .asc-root {
-          --msn-blue: #4f6ef7;
-          --msn-blue-dark: #3d5bf5;
-          --msn-blue-light: #eef1ff;
-          --msn-sidebar-bg: #ffffff;
-          --msn-sidebar-hover: #f6f8ff;
-          --msn-sidebar-active: #eef1ff;
-          --msn-header-bg: #ffffff;
-          --msn-chat-bg: #f3f4f8;
-          --msn-bubble-in: #ffffff;
-          --msn-bubble-in-text: #1a1d2e;
-          --msn-bubble-out: #4f6ef7;
-          --msn-bubble-out-text: #ffffff;
-          --msn-divider: #eaecf0;
-          --msn-text-primary: #111827;
-          --msn-text-secondary: #6b7280;
-          --msn-text-muted: #9ca3af;
-          --msn-online: #10b981;
-          --msn-unread: #ef4444;
-          --msn-shadow-xs: 0 1px 2px rgba(0,0,0,0.06);
-          --msn-shadow-sm: 0 1px 4px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
-          --msn-shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+          --c-blue: #4f6ef7;
+          --c-blue-dark: #3d5bf5;
+          --c-blue-light: #eef1ff;
+          --c-surface: #ffffff;
+          --c-bg: #f5f6fa;
+          --c-divider: #edf0f7;
+          --c-text-1: #111827;
+          --c-text-2: #374151;
+          --c-text-3: #6b7280;
+          --c-online: #10b981;
+          --c-unread: #ef4444;
+          font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+          font-size: 14px;
+          color: #111827;
         }
 
-        /* ── Skeleton shimmer ── */
-        @keyframes ascShimmer {
-          0%   { background-position: -400px 0; }
-          100% { background-position: 400px 0; }
+        /* ── Shimmer ── */
+        @keyframes asc-shimmer {
+          0%   { background-position: -500px 0; }
+          100% { background-position: 500px 0; }
         }
         .asc-skeleton {
-          background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
-          background-size: 800px 100%;
-          animation: ascShimmer 1.6s ease-in-out infinite;
+          background: linear-gradient(90deg, #f0f1f6 25%, #e8eaf2 50%, #f0f1f6 75%);
+          background-size: 1000px 100%;
+          animation: asc-shimmer 1.8s ease-in-out infinite;
         }
 
-        /* ── Entry animations ── */
-        @keyframes fadeSlideUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
-        @keyframes slideIn     { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:none; } }
-        @keyframes popIn       { from { opacity:0; transform:scale(0.90); } to { opacity:1; transform:scale(1); } }
-        .asc-msg-row   { animation: fadeSlideUp 0.20s cubic-bezier(.22,1,.36,1) both; }
-        .asc-conv-item { animation: slideIn 0.16s cubic-bezier(.22,1,.36,1) both; }
-        .asc-bubble-pop{ animation: popIn 0.16s cubic-bezier(.34,1.56,.64,1) both; }
+        /* ── Animations ── */
+        @keyframes asc-fade-up   { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+        @keyframes asc-slide-in  { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:none} }
+        @keyframes asc-pop       { from{opacity:0;transform:scale(0.88)} to{opacity:1;transform:scale(1)} }
+        @keyframes asc-badge-in  { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
+        @keyframes asc-float-in  { from{opacity:0;transform:translateY(8px) scale(0.97)} to{opacity:1;transform:none} }
+        .asc-msg-row   { animation: asc-fade-up 0.22s cubic-bezier(.22,1,.36,1) both; }
+        .asc-conv-item { animation: asc-slide-in 0.18s cubic-bezier(.22,1,.36,1) both; }
+        .asc-badge-pop { animation: asc-badge-in 0.25s cubic-bezier(.34,1.56,.64,1) both; }
+        .asc-float-panel { animation: asc-float-in 0.2s cubic-bezier(.22,1,.36,1) both; }
 
         /* ── Scrollbars ── */
-        .asc-scrollbar::-webkit-scrollbar       { width: 5px; }
+        .asc-scrollbar::-webkit-scrollbar { width: 4px; }
         .asc-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); border-radius: 10px; }
-        .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.20); }
+        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); border-radius: 8px; }
+        .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
 
         /* ── Bubbles ── */
-        .asc-bubble-out-style {
-          background: linear-gradient(135deg, #6580f8 0%, #4f6ef7 60%, #3d5bf5 100%);
-          box-shadow: 0 3px 12px rgba(79,110,247,0.30);
+        .asc-bubble-out {
+          background: linear-gradient(135deg,#6580f8 0%,#4f6ef7 55%,#3d5bf5 100%);
+          color: #ffffff;
+          box-shadow: 0 4px 16px rgba(79,110,247,0.28);
         }
-        .asc-bubble-in-style {
+        .asc-bubble-in {
           background: #ffffff;
-          box-shadow: var(--msn-shadow-sm);
-          border: 1px solid #eaecf0;
+          color: #111827;
+          box-shadow: 0 1px 6px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb;
         }
 
-        /* ── Chat background ── */
-        .asc-chat-bg { background-color: var(--msn-chat-bg); }
-
-        /* ── Search & compose focus ── */
-        .asc-search:focus { border-color: var(--msn-blue) !important; box-shadow: 0 0 0 3px rgba(79,110,247,0.15) !important; background: #fff !important; }
-        .asc-compose-inner:focus-within { border-color: var(--msn-blue) !important; box-shadow: 0 0 0 3px rgba(79,110,247,0.12) !important; background: #fff !important; }
-        .asc-textarea { outline: none; }
-
-        /* ── Send button ── */
-        @keyframes asc-spin { to { transform: rotate(360deg); } }
+        /* ── Send btn ── */
+        @keyframes asc-spin { to{transform:rotate(360deg)} }
         .animate-spin { animation: asc-spin 0.8s linear infinite; }
-        .asc-send-btn { background: linear-gradient(135deg, #6580f8, #4f6ef7); box-shadow: 0 2px 8px rgba(79,110,247,0.35); transition: transform 0.12s, box-shadow 0.12s; }
-        .asc-send-btn:not(:disabled):hover  { transform: scale(1.07); box-shadow: 0 4px 14px rgba(79,110,247,0.45); }
-        .asc-send-btn:not(:disabled):active { transform: scale(0.94); }
-        .asc-send-btn:disabled { background: #e5e7eb; box-shadow: none; }
+        .asc-send-btn {
+          background: linear-gradient(135deg,#6580f8,#4f6ef7);
+          box-shadow: 0 3px 10px rgba(79,110,247,0.4);
+          transition: transform 0.12s, box-shadow 0.12s;
+        }
+        .asc-send-btn:not(:disabled):hover  { transform:scale(1.08); box-shadow:0 5px 16px rgba(79,110,247,0.5); }
+        .asc-send-btn:not(:disabled):active { transform:scale(0.93); }
+        .asc-send-btn:disabled { background:#e5e7eb; box-shadow:none; }
 
         /* ── Online pulse ── */
-        @keyframes onlinePulse {
-          0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
-          60%      { box-shadow: 0 0 0 5px rgba(16,185,129,0); }
+        @keyframes asc-pulse {
+          0%,100% { box-shadow:0 0 0 0 rgba(16,185,129,0.5); }
+          60%      { box-shadow:0 0 0 6px rgba(16,185,129,0); }
         }
-        .asc-online-dot { animation: onlinePulse 2.2s ease infinite; }
+        .asc-pulse-dot { animation: asc-pulse 2.4s ease infinite; }
 
-        /* ── Compose elevation ── */
-        .asc-compose-wrap { background: #ffffff; border-top: 1px solid var(--msn-divider); }
+        /* ── Search focus ── */
+        .asc-search { font-size: 13.5px; color: #111827; }
+        .asc-search::placeholder { color: #6b7280; }
+        .asc-search:focus {
+          border-color: #a5b4fc !important;
+          box-shadow: 0 0 0 3px rgba(79,110,247,0.10) !important;
+          background: #fff !important;
+        }
+
+        /* ── Compose focus ── */
+        .asc-compose:focus-within {
+          border-color: #a5b4fc !important;
+          box-shadow: 0 0 0 3px rgba(79,110,247,0.10) !important;
+          background: #fff !important;
+        }
+
+        /* ── Meta select ── */
+        .asc-meta-select {
+          appearance: none;
+          cursor: pointer;
+          transition: border-color 0.15s, background 0.15s;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #111827;
+        }
+        .asc-meta-select:focus {
+          outline: none;
+          border-color: #a5b4fc;
+          box-shadow: 0 0 0 3px rgba(79,110,247,0.10);
+        }
+        .asc-meta-select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ── Global text readability ── */
+        .asc-root * { -webkit-font-smoothing: antialiased; }
+        .asc-root p, .asc-root span, .asc-root button, .asc-root select, .asc-root textarea, .asc-root input {
+          color: inherit;
+        }
+
+        /* ── Horizontal scroll strips ── */
+        .asc-hscroll { scrollbar-width: none; }
+        .asc-hscroll::-webkit-scrollbar { display: none; }
       `}</style>
 
-      <div className="asc-root flex flex-col" style={{ height: "calc(100vh - 130px)", minHeight: 440 }}>
+      <div className="asc-root flex flex-col" style={{ height: "calc(100vh - 130px)", minHeight: 480, color: "#111827" }}>
 
-        {/* ── Page title bar ── */}
-        <div className="mb-4 flex flex-shrink-0 items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-md" style={{ background: "linear-gradient(135deg, #6580f8 0%, #4f6ef7 50%, #3d5bf5 100%)" }}>
+        {/* ── Page header ── */}
+        <div className="mb-5 flex flex-shrink-0 items-center gap-3.5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl"
+            style={{ background: "linear-gradient(135deg,#6580f8 0%,#4f6ef7 50%,#3d5bf5 100%)", boxShadow: "0 4px 14px rgba(79,110,247,0.35)" }}>
             <MessageCircle className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h2 className="text-[21px] font-extrabold leading-tight tracking-tight" style={{ color: "var(--msn-text-primary)" }}>Messages</h2>
-            <p className="text-[12px] font-medium mt-0.5" style={{ color: "var(--msn-text-muted)" }}>Client support inbox</p>
+            <h2 className="leading-tight tracking-tight" style={{ fontSize: 20, fontWeight: 900, color: "#111827" }}>Messages</h2>
+            <p className="font-medium mt-0.5" style={{ fontSize: 13, color: "#374151" }}>Client support inbox</p>
           </div>
           {totalUnread > 0 && (
-            <span className="ml-1 flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-bold text-white shadow-sm" style={{ background: "var(--msn-unread)" }}>
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-white opacity-90" />
+            <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold text-white ml-1"
+              style={{ fontSize: 12, background: "linear-gradient(135deg,#f87171,#ef4444)", boxShadow: "0 2px 8px rgba(239,68,68,0.35)" }}>
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
               {totalUnread} unread
-            </span>
+            </div>
           )}
-          <div className="ml-auto flex items-center gap-2">
-            <span className="rounded-full px-3 py-1.5 text-[12px] font-semibold" style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)", border: "1px solid rgba(79,110,247,0.2)" }}>
-              ⚡ Quick replies
-            </span>
-          </div>
         </div>
 
-        {/* ── Chat shell ── */}
-        <div className="flex flex-1 overflow-hidden rounded-2xl" style={{ boxShadow: "var(--msn-shadow-md)", border: "1px solid var(--msn-divider)", background: "#fff" }}>
+        {/* ── Shell ── */}
+        <div className="flex flex-1 overflow-hidden rounded-2xl"
+          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid #e5e7eb", background: "#fff" }}>
 
-          {/* ── Sidebar ── */}
-          <div className={`flex flex-col ${
-            mobileView === "chat" ? "hidden md:flex md:w-[340px] md:min-w-[300px]" : "flex w-full md:w-[340px] md:min-w-[300px]"
-          }`} style={{ borderRight: "1px solid var(--msn-divider)", background: "var(--msn-sidebar-bg)" }}>
+          {/* ══════════════════════════════════════════════════════
+              SIDEBAR
+          ══════════════════════════════════════════════════════ */}
+          <div className={`flex flex-col ${mobileView === "chat" ? "hidden md:flex md:w-[320px]" : "flex w-full md:w-[320px]"}`}
+            style={{ borderRight: "1px solid #e5e7eb", background: "#fcfcff", minWidth: 0 }}>
 
             {/* Sidebar header */}
-            <div className="flex-shrink-0 px-5 pt-5 pb-4" style={{ borderBottom: "1px solid var(--msn-divider)" }}>
-              <div className="flex items-center justify-between">
-                <p className="text-[18px] font-extrabold tracking-tight" style={{ color: "var(--msn-text-primary)" }}>Chats</p>
-                <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ background: "var(--msn-blue-light)", color: "var(--msn-blue)" }}>
-                  {effectiveConversations.length}
-                </span>
-              </div>
-              <p className="text-[12px] mt-0.5" style={{ color: "var(--msn-text-muted)" }}>
-                {filteredConversations.length} shown
-                {totalUnread > 0 && <span className="ml-2 font-semibold" style={{ color: "var(--msn-unread)" }}>· {totalUnread} unread</span>}
-              </p>
+            <div className="px-5 pt-5 pb-4 flex-shrink-0" style={{ borderBottom: "1px solid #e5e7eb" }}>
+              <p className="tracking-tight" style={{ fontSize: 18, fontWeight: 900, color: "#0f172a" }}>Conversations</p>
             </div>
 
-            {/* Search + filters */}
-            <div className="flex-shrink-0 px-4 pt-3 pb-2.5" style={{ borderBottom: "1px solid var(--msn-divider)" }}>
-              <div className="relative mb-2.5">
-                <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: "var(--msn-text-muted)" }} />
+            {/* Search */}
+            <div className="px-4 pt-3.5 pb-3 flex-shrink-0 space-y-3" style={{ borderBottom: "1px solid #e5e7eb" }}>
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: "#6b7280" }} />
                 <input
                   type="text"
                   placeholder="Search conversations…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="asc-search h-9 w-full rounded-xl border pl-10 pr-4 text-[13px] font-medium outline-none transition-all"
-                  style={{ borderColor: "var(--msn-divider)", background: "#f6f7fb", color: "var(--msn-text-primary)" }}
+                  className="asc-search h-10 w-full rounded-xl border pl-10 pr-4 font-medium outline-none transition-all"
+                  style={{ fontSize: 13.5, borderColor: "#d1d5db", background: "#f5f6fa", color: "#111827" }}
                 />
               </div>
-              <div className="mb-2.5">
+
+              <div>
+                <p className="font-bold uppercase tracking-widest mb-2" style={{ fontSize: 11, color: "#374151" }}>Status</p>
                 <StatusTabs value={statusFilter} onChange={setStatusFilter} />
               </div>
-              <FilterSortBar filter={filter} sort={sort} onFilterChange={setFilter} onSortChange={setSort} />
+
+              {/* Filter pills */}
+              <div>
+                <p className="font-bold uppercase tracking-widest mb-2" style={{ fontSize: 11, color: "#374151" }}>Type</p>
+                <TypeFilterRow filter={filter} setFilter={setFilter} />
+              </div>
+
+              {/* Sort */}
+              <div className="relative">
+                <SlidersHorizontal className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 pointer-events-none" style={{ color: "#6b7280" }} />
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortOption)}
+                  className="asc-meta-select h-9 w-full rounded-xl pl-9 pr-8"
+                  style={{ fontSize: 13, fontWeight: 600, border: "1px solid #d1d5db", background: "#f5f6fa", color: "#111827" }}
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="unread">Unread first</option>
+                  <option value="name">Name A–Z</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 pointer-events-none" style={{ color: "#6b7280" }} />
+              </div>
             </div>
 
-            {/* Conversation list */}
-            <div className="asc-scrollbar flex-1 overflow-y-auto">
+            {/* List */}
+            <div className="asc-scrollbar flex-1 overflow-y-auto py-1.5">
               {isLoadingConversations ? (
                 <LoadingDots />
               ) : errorMessage && conversations.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 p-6 text-center">
-                  <AlertCircle className="h-8 w-8" style={{ color: "#ef4444" }} />
-                  <p className="text-[13px] font-medium leading-snug" style={{ color: "var(--msn-text-secondary)" }}>{errorMessage}</p>
-                  <button
-                    onClick={() => { setErrorMessage(""); void loadConversations(false); }}
-                    className="rounded-full px-4 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-                    style={{ background: "var(--msn-blue)" }}
-                  >
+                  <AlertCircle className="h-7 w-7" style={{ color: "#dc2626" }} />
+                  <p className="font-medium leading-snug max-w-[200px]" style={{ fontSize: 13, color: "#374151" }}>{errorMessage}</p>
+                  <button onClick={() => { setErrorMessage(""); void loadConversations(false); }}
+                    className="rounded-full px-4 py-1.5 font-bold text-white transition-opacity hover:opacity-90"
+                    style={{ fontSize: 12, background: "linear-gradient(135deg,#6580f8,#4f6ef7)" }}>
                     Retry
                   </button>
                 </div>
               ) : filteredConversations.length === 0 ? (
-                <EmptyState label={search || filter !== "all" ? "No conversations match your filters." : "No conversations found."} icon="user" />
+                <EmptyState label={search || filter !== "all" ? "No conversations match your filters." : "No conversations yet."} icon="user" />
               ) : (
                 filteredConversations.map((conv, i) => (
-                  <div key={conv.key} className="asc-conv-item" style={{ animationDelay: `${i * 0.04}s` }}>
+                  <div key={conv.key} className="asc-conv-item" style={{ animationDelay: `${i * 35}ms` }}>
                     <ConversationItem conversation={conv} isActive={conv.key === activeConversationKey} onClick={() => handleSelectConversation(conv.key)} />
                   </div>
                 ))
               )}
             </div>
 
-            {/* Sidebar stats footer */}
-            <div className="flex-shrink-0 grid grid-cols-2 gap-2 p-3" style={{ borderTop: "1px solid var(--msn-divider)", background: "#fafbff" }}>
-              <div className="rounded-xl px-3 py-2.5 text-center" style={{ background: "#f0f1f5" }}>
-                <p className="text-[22px] font-bold leading-none" style={{ color: "var(--msn-text-primary)" }}>{effectiveConversations.length}</p>
-                <p className="text-[11px] font-semibold mt-0.5" style={{ color: "var(--msn-text-muted)" }}>Total</p>
+            {/* Stats footer */}
+            <div className="flex-shrink-0 grid grid-cols-2 gap-2 p-3" style={{ borderTop: "1px solid #e5e7eb", background: "#f9fafb" }}>
+              <div className="rounded-xl px-3 py-3 flex flex-col items-center justify-center gap-0.5"
+                style={{ background: "#fff", border: "1px solid #e5e7eb", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                <p style={{ fontSize: 22, fontWeight: 900, color: "#111827", lineHeight: 1 }}>{effectiveConversations.length}</p>
+                <p className="font-semibold" style={{ fontSize: 11.5, color: "#374151" }}>Total</p>
               </div>
-              <div className="rounded-xl px-3 py-2.5 text-center" style={{ background: totalUnread > 0 ? "rgba(239,68,68,0.08)" : "var(--msn-blue-light)" }}>
-                <p className="text-[22px] font-bold leading-none" style={{ color: totalUnread > 0 ? "var(--msn-unread)" : "var(--msn-blue)" }}>{totalUnread}</p>
-                <p className="text-[11px] font-semibold mt-0.5" style={{ color: totalUnread > 0 ? "var(--msn-unread)" : "var(--msn-blue)" }}>Unread</p>
+              <div className="rounded-xl px-3 py-3 flex flex-col items-center justify-center gap-0.5"
+                style={{
+                  background: totalUnread > 0 ? "#fff" : "#fff",
+                  border: `1px solid ${totalUnread > 0 ? "#fecaca" : "#e5e7eb"}`,
+                  boxShadow: totalUnread > 0 ? "0 1px 3px rgba(239,68,68,0.08)" : "0 1px 3px rgba(0,0,0,0.04)",
+                }}>
+                <p style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, color: totalUnread > 0 ? "#4f6ef7" : "#374151" }}>{totalUnread}</p>
+                <p className="font-semibold" style={{ fontSize: 11.5, color: totalUnread > 0 ? "#4f6ef7" : "#374151" }}>Unread</p>
               </div>
             </div>
           </div>
 
-          {/* ── Message panel ── */}
+          {/* ══════════════════════════════════════════════════════
+              MESSAGE PANEL
+          ══════════════════════════════════════════════════════ */}
           <div className={`flex min-w-0 flex-1 flex-col ${mobileView === "list" ? "hidden md:flex" : "flex"}`}>
 
             {/* Chat header */}
-            <div className="flex flex-shrink-0 items-center gap-3 px-4 py-3 shadow-sm" style={{ borderBottom: "1px solid var(--msn-divider)", background: "var(--msn-header-bg)" }}>
+            <div className="flex flex-shrink-0 items-center gap-3 px-5 py-3.5"
+              style={{ borderBottom: "1px solid #e5e7eb", background: "#fff", minHeight: 68 }}>
               <button
                 onClick={() => setMobileView("list")}
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-colors md:hidden"
-                style={{ color: "var(--msn-blue)" }}
-              >
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors md:hidden hover:bg-gray-50"
+                style={{ color: "#4f6ef7" }}>
                 <ArrowLeft className="h-5 w-5" />
               </button>
+
               {activeConversation ? (
                 <>
                   <div className="relative flex-shrink-0">
-                    <AvatarBubble
-                      name={activeConversation.clientName}
-                      imageUrl={activeConversation.clientProfileImageUrl}
-                      tone="client"
-                      size="lg"
-                    />
-                    <span
-                      className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white ${activeConversation.clientOnline ? "asc-online-dot" : ""}`}
-                      style={{ background: activeConversation.clientOnline ? "var(--msn-online)" : "#9ca3af" }}
-                    />
+                    <AvatarBubble name={activeConversation.clientName} imageUrl={activeConversation.clientProfileImageUrl} size="lg" showRing />
+                    <div className="absolute bottom-0 right-0">
+                      <OnlineDot online={activeConversation.clientOnline} size="md" />
+                    </div>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[16px] font-bold leading-tight" style={{ color: "var(--msn-text-primary)" }}>{activeConversation.clientName}</p>
-                    <p className="text-[12px] font-medium" style={{ color: activeConversation.clientOnline ? "var(--msn-online)" : "var(--msn-text-muted)" }}>
+                    <p className="truncate font-black" style={{ fontSize: 15.5, color: "#111827" }}>{activeConversation.clientName}</p>
+                    <p className="font-medium flex items-center gap-1.5 mt-0.5"
+                      style={{ fontSize: 12, color: activeConversation.clientOnline ? "#059669" : "#374151" }}>
+                      <span className="inline-block w-1.5 h-1.5 rounded-full"
+                        style={{ background: activeConversation.clientOnline ? "#10b981" : "#d1d5db" }} />
                       {activeConversation.clientOnline ? "Active now" : "Offline"}
                     </p>
                   </div>
                   <div className="flex-shrink-0 text-right hidden sm:block">
-                    <p className="text-[14px] font-semibold" style={{ color: "var(--msn-text-primary)" }}>{admin?.agencyName ?? "Agency"}</p>
-                    <p className="text-[12px] mt-0.5" style={{ color: "var(--msn-text-secondary)" }}>{activeConversation.clientEmail}</p>
+                    <p className="font-bold" style={{ fontSize: 13.5, color: "#111827" }}>{admin?.agencyName ?? "Agency"}</p>
+                    <p className="mt-0.5" style={{ fontSize: 12, color: "#374151" }}>{activeConversation.clientEmail}</p>
                   </div>
+                  {/* ── Reload icon: BLACK ── */}
                   <button
                     type="button"
                     onClick={handleRefreshMessages}
-                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border transition-colors hover:bg-slate-50"
-                    style={{ borderColor: "var(--msn-divider)", color: "var(--msn-text-secondary)" }}
-                    aria-label="Refresh chat"
-                    title="Refresh chat"
-                  >
-                    <RefreshCw className="h-4 w-4" />
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition-all hover:scale-105 hover:bg-gray-50"
+                    style={{ borderColor: "#d1d5db", color: "#111827" }}>
+                    <RefreshCw className="h-4 w-4" style={{ color: "#111827" }} />
                   </button>
                 </>
               ) : (
-                <p className="text-[15px] font-semibold" style={{ color: "var(--msn-text-secondary)" }}>{headerSubtitle}</p>
+                <p className="font-medium" style={{ fontSize: 14, color: "#374151" }}>Select a conversation to begin</p>
               )}
             </div>
 
+            {/* Meta bar */}
             {activeConversation && (
-              <div className="grid gap-3 px-4 py-3 sm:grid-cols-2 xl:grid-cols-4" style={{ borderBottom: "1px solid var(--msn-divider)", background: "#fcfcfd" }}>
-                <div className="rounded-2xl border px-3 py-3" style={{ borderColor: "var(--msn-divider)", background: "#fff" }}>
-                  <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--msn-text-muted)" }}>Status</p>
-                  <div className="flex items-center gap-2">
-                    <CircleDot className="h-4 w-4" style={{ color: getStatusTone(activeConversation.status).fg }} />
+              <div className="flex-shrink-0 grid gap-2.5 px-5 py-3 sm:grid-cols-2 xl:grid-cols-4"
+                style={{ borderBottom: "1px solid #e5e7eb", background: "#fbfbfe" }}>
+
+                <MetaCard icon={<CircleDot className="h-3.5 w-3.5" />} label="Status">
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full pointer-events-none"
+                      style={{ background: statusCfg.dot }} />
                     <select
                       value={activeConversation.status ?? "OPEN"}
                       disabled={isUpdatingMeta}
                       onChange={(e) => void updateConversationMeta({ status: e.target.value as SupportConversationStatus })}
-                      className="w-full rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
-                      style={{ borderColor: "var(--msn-divider)", background: "#fff", color: "var(--msn-text-primary)" }}
-                    >
-                      {["OPEN", "WAITING_SUPPORT", "WAITING_CLIENT", "RESOLVED", "CLOSED"].map((status) => (
-                        <option key={status} value={status}>{status.replace(/_/g, " ")}</option>
+                      className="asc-meta-select w-full rounded-xl border pl-7 pr-3 py-2"
+                      style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#e5e7eb", background: statusCfg.bg, color: statusCfg.color }}>
+                      {["OPEN","WAITING_SUPPORT","WAITING_CLIENT","RESOLVED","CLOSED"].map((s) => (
+                        <option key={s} value={s}>{s.replace(/_/g," ")}</option>
                       ))}
                     </select>
                   </div>
-                </div>
-                <div className="rounded-2xl border px-3 py-3" style={{ borderColor: "var(--msn-divider)", background: "#fff" }}>
-                  <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--msn-text-muted)" }}>Category</p>
-                  <div className="flex items-center gap-2">
-                    <Tag className="h-4 w-4" style={{ color: "var(--msn-blue)" }} />
-                    <select
-                      value={activeConversation.category ?? "General Inquiry"}
-                      disabled={isUpdatingMeta}
-                      onChange={(e) => void updateConversationMeta({ category: e.target.value as SupportInquiryCategory })}
-                      className="w-full rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
-                      style={{ borderColor: "var(--msn-divider)", background: "#fff", color: "var(--msn-text-primary)" }}
-                    >
-                      {["Booking Concern", "Payment Concern", "Contract Concern", "Maid Replacement", "Technical Support", "General Inquiry"].map((category) => (
-                        <option key={category} value={category}>{category}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="rounded-2xl border px-3 py-3" style={{ borderColor: "var(--msn-divider)", background: "#fff" }}>
-                  <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--msn-text-muted)" }}>Priority</p>
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4" style={{ color: getPriorityTone(activeConversation.priority).fg }} />
+                </MetaCard>
+
+                <MetaCard icon={<Tag className="h-3.5 w-3.5" />} label="Category">
+                  <select
+                    value={activeConversation.category ?? "General Inquiry"}
+                    disabled={isUpdatingMeta}
+                    onChange={(e) => void updateConversationMeta({ category: e.target.value as SupportInquiryCategory })}
+                    className="asc-meta-select w-full rounded-xl border px-3 py-2"
+                    style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#e5e7eb", background: "#f5f6fa", color: "#111827" }}>
+                    {["Booking Concern","Payment Concern","Contract Concern","Maid Replacement","Technical Support","General Inquiry"].map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </MetaCard>
+
+                <MetaCard icon={<ShieldAlert className="h-3.5 w-3.5" />} label="Priority">
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <span style={{ fontSize: 9, fontWeight: 900, color: priorityCfg.color }}>●</span>
+                    </div>
                     <select
                       value={activeConversation.priority ?? "MEDIUM"}
                       disabled={isUpdatingMeta}
                       onChange={(e) => void updateConversationMeta({ priority: e.target.value as SupportPriority })}
-                      className="w-full rounded-xl border px-3 py-2 text-[13px] font-semibold outline-none"
-                      style={{ borderColor: "var(--msn-divider)", background: "#fff", color: "var(--msn-text-primary)" }}
-                    >
-                      {["LOW", "MEDIUM", "HIGH", "URGENT"].map((priority) => (
-                        <option key={priority} value={priority}>{priority}</option>
+                      className="asc-meta-select w-full rounded-xl border pl-7 pr-3 py-2"
+                      style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#e5e7eb", background: priorityCfg.bg, color: priorityCfg.color }}>
+                      {["LOW","MEDIUM","HIGH","URGENT"].map((p) => (
+                        <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
                   </div>
-                </div>
-                <div className="rounded-2xl border px-3 py-3" style={{ borderColor: "var(--msn-divider)", background: "#fff" }}>
-                  <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--msn-text-muted)" }}>Owner</p>
+                </MetaCard>
+
+                <MetaCard icon={<UserCheck className="h-3.5 w-3.5" />} label="Owner">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-semibold" style={{ color: "var(--msn-text-primary)" }}>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold" style={{ fontSize: 12.5, color: "#111827" }}>
                         {activeConversation.assignedAdminName || admin?.username || admin?.agencyName || "Unassigned"}
                       </p>
-                      <p className="text-[11px]" style={{ color: "var(--msn-text-secondary)" }}>
-                        {activeConversation.subject || "Trackable support inquiry"}
+                      <p className="truncate mt-0.5" style={{ fontSize: 11, color: "#374151" }}>
+                        {activeConversation.subject || "Trackable inquiry"}
                       </p>
                     </div>
                     <button
                       type="button"
                       disabled={isUpdatingMeta}
                       onClick={() => void updateConversationMeta({ status: "RESOLVED" })}
-                      className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                      style={{ background: "#16a34a" }}
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Mark resolved
+                      className="flex-shrink-0 inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                      style={{ fontSize: 11, color: "#ffffff", background: "linear-gradient(135deg,#34d399,#10b981)", boxShadow: "0 2px 8px rgba(16,185,129,0.3)", textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}>
+                      <CheckCircle2 className="h-3 w-3" style={{ color: "#ffffff" }} />
+                      Resolve
                     </button>
                   </div>
-                </div>
+                </MetaCard>
               </div>
             )}
 
-            {/* Messages area */}
-            <div ref={scrollRef} onScroll={handleMessagesScroll} className="asc-scrollbar asc-chat-bg flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+            {/* Messages */}
+            <div ref={scrollRef} onScroll={handleMessagesScroll}
+              className="asc-scrollbar flex flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-5"
+              style={{ background: "#f5f6fa" }}>
               {isLoadingMessages ? (
                 <MessageSkeleton />
               ) : errorMessage ? (
-                <div className="mx-auto max-w-sm rounded-2xl px-5 py-4 text-center text-[14px] font-semibold" style={{ background: "#fff0f0", color: "#c0392b", border: "1px solid #ffd0d0" }}>
+                <div className="mx-auto max-w-sm rounded-2xl px-5 py-4 text-center font-semibold"
+                  style={{ fontSize: 13.5, background: "#fff0f0", color: "#991b1b", border: "1px solid #fecaca" }}>
                   {errorMessage}
                 </div>
               ) : !activeConversation ? (
@@ -1600,31 +1525,22 @@ const AdminSupportChat = () => {
                 <EmptyState label={activeConversation.description || "No messages yet. Say hello!"} />
               ) : (
                 <>
-                  {/* ── Load earlier messages ── */}
                   {hasMoreOlder && (
-                    <div className="flex justify-center py-2">
+                    <div className="flex justify-center pb-1">
                       <button
                         onClick={() => void loadOlderMessages()}
                         disabled={isLoadingOlder}
-                        className="flex items-center gap-2 rounded-full px-4 py-1.5 text-[12px] font-semibold transition-all disabled:opacity-60"
-                        style={{ background: "#e4e6eb", color: "var(--msn-text-secondary)", border: "1px solid var(--msn-divider)" }}
-                      >
-                        {isLoadingOlder ? (
-                          <>
-                            <RefreshCw className="h-3 w-3 animate-spin" />
-                            Loading earlier messages…
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="h-3 w-3" />
-                            Load earlier messages
-                          </>
-                        )}
+                        className="flex items-center gap-2 rounded-full px-4 py-1.5 font-semibold transition-all hover:scale-105 disabled:opacity-60"
+                        style={{ fontSize: 12, background: "#fff", color: "#374151", border: "1px solid #d1d5db", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                        {isLoadingOlder
+                          ? <><RefreshCw className="h-3 w-3 animate-spin" style={{ color: "#111827" }} /> Loading…</>
+                          : <><RefreshCw className="h-3 w-3" style={{ color: "#111827" }} /> Load earlier</>
+                        }
                       </button>
                     </div>
                   )}
                   {messageGroups.map(({ label, messages: groupMsgs }) => (
-                    <div key={label} className="flex flex-col gap-2">
+                    <div key={label} className="flex flex-col gap-3">
                       <DateDivider label={label} />
                       {groupMsgs.map((msg) => (
                         <MessageBubble key={msg.id} message={msg} onCopy={copyMessage} />
@@ -1635,22 +1551,23 @@ const AdminSupportChat = () => {
               )}
             </div>
 
-            {/* Compose bar */}
-            <div className="asc-compose-wrap flex-shrink-0 px-4 pt-2 pb-4">
-              {/* Quick reply row */}
-              <div className="flex items-center gap-2 mb-2">
+            {/* Compose */}
+            <div className="flex-shrink-0 px-5 pt-2.5 pb-4" style={{ borderTop: "1px solid #e5e7eb", background: "#fff" }}>
+              {/* Toolbar row */}
+              <div className="flex items-center gap-2 mb-2.5">
                 <QuickReplyPanel onSelect={(text) => setDraft(text)} />
                 {draft.trim() && (
-                  <span className="text-[11px]" style={{ color: "var(--msn-text-muted)" }}>
-                    {draft.length} chars · Enter to send
+                  <span className="ml-auto" style={{ fontSize: 11, color: "#374151" }}>
+                    {draft.length} chars · ↵ send
                   </span>
                 )}
               </div>
-              {/* Input row */}
-              <div className="asc-compose-inner flex items-end gap-2 rounded-2xl p-2" style={{ background: "#f6f7fb", border: "1.5px solid var(--msn-divider)", transition: "border-color 0.15s, box-shadow 0.15s, background 0.15s" }}>
+              {/* Input */}
+              <div className="asc-compose flex items-end gap-2.5 rounded-2xl p-2"
+                style={{ background: "#f5f6fa", border: "1.5px solid #d1d5db", transition: "all 0.15s" }}>
                 <textarea
                   ref={textareaRef}
-                  placeholder={activeConversation ? `Message ${activeConversation.clientName}…` : "Select a conversation to reply…"}
+                  placeholder={activeConversation ? `Reply to ${activeConversation.clientName}…` : "Select a conversation…"}
                   value={draft}
                   rows={1}
                   disabled={!activeConversation || isSending}
@@ -1660,16 +1577,18 @@ const AdminSupportChat = () => {
                     e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
                   }}
                   onKeyDown={handleKeyDown}
-                  className="asc-scrollbar asc-textarea flex-1 resize-none bg-transparent px-2 py-1.5 text-[14.5px] leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ maxHeight: 120, minHeight: 36, color: "var(--msn-text-primary)" }}
+                  className="asc-scrollbar flex-1 resize-none bg-transparent px-2 py-1.5 leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ fontSize: 14, maxHeight: 120, minHeight: 36, color: "#111827" }}
                 />
                 <button
                   onClick={() => void sendMessage()}
                   disabled={isSending || !draft.trim() || !activeConversation}
                   className="asc-send-btn flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white"
-                  aria-label="Send message"
-                >
-                  <Send className="h-4 w-4" />
+                  aria-label="Send">
+                  {isSending
+                    ? <RefreshCw className="h-4 w-4 animate-spin" />
+                    : <Send className="h-4 w-4" />
+                  }
                 </button>
               </div>
             </div>

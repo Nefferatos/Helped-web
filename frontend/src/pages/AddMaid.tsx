@@ -930,6 +930,7 @@ const AddMaid = () => {
       state: {
         fromView: "public",
         saveTaskId: taskId,
+        newMaidReferenceCode: payload.referenceCode,
       },
     });
 

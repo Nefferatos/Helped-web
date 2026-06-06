@@ -87,7 +87,6 @@ function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: bool
               <User className="h-7 w-7" style={{ color: "#a3c8b2" }} />
             </div>
           )}
-          {/* Blur overlay for non-logged-in */}
           {!isLoggedIn && (
             <div
               className="absolute inset-0 flex items-center justify-center"
@@ -108,7 +107,6 @@ function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: bool
           </p>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {/* Flag + nationality */}
             {maid.nationality && (
               <span className="flex items-center gap-1 text-[11px]" style={{ color: "#3C6652" }}>
                 {flagCode && (
@@ -121,7 +119,6 @@ function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: bool
                 {maid.nationality}
               </span>
             )}
-            {/* Type badge */}
             {maid.type && (
               <span
                 className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
@@ -132,7 +129,6 @@ function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: bool
             )}
           </div>
 
-          {/* Status */}
           {maid.status && (
             <p className="mt-1 text-[10px] font-medium" style={{ color: maid.status.toLowerCase().includes("available") ? "#16653A" : "#6b7280" }}>
               ● {maid.status}
@@ -141,7 +137,6 @@ function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: bool
         </div>
       </div>
 
-      {/* CTA */}
       {isLoggedIn ? (
         <Link
           to={profileUrl}
@@ -231,150 +226,6 @@ function MaidAvatar({ size = "md" }: { size?: "sm" | "md" | "fab" }) {
   );
 }
 
-// Animated greeting bubble that pops up from the FAB
-function GreetingBubble({ onDismiss }: { onDismiss: () => void }) {
-  const [phase, setPhase] = useState<"in" | "visible" | "out">("in");
-  const [dotCount, setDotCount] = useState(1);
-  const [showText, setShowText] = useState(false);
-
-  const greeting = "Hello! 👋 Need help hiring a helper?";
-
-  useEffect(() => {
-    // Typing dots phase
-    const dotInterval = setInterval(() => {
-      setDotCount((d) => (d % 3) + 1);
-    }, 400);
-
-    // Show text after "typing" delay
-    const textTimer = setTimeout(() => {
-      clearInterval(dotInterval);
-      setShowText(true);
-    }, 1400);
-
-    // Start fade-out after display time
-    const outTimer = setTimeout(() => {
-      setPhase("out");
-    }, 7000);
-
-    // Remove after fade
-    const removeTimer = setTimeout(() => {
-      onDismiss();
-    }, 7600);
-
-    return () => {
-      clearInterval(dotInterval);
-      clearTimeout(textTimer);
-      clearTimeout(outTimer);
-      clearTimeout(removeTimer);
-    };
-  }, [onDismiss]);
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        animation:
-          phase === "in"
-            ? "greetIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both"
-            : phase === "out"
-            ? "greetOut 0.5s ease-in both"
-            : undefined,
-      }}
-    >
-      {/* Bubble */}
-      <div
-        style={{
-          background: "linear-gradient(135deg, #1a3410 0%, #2c5415 100%)",
-          borderRadius: "16px 16px 4px 16px",
-          padding: "10px 14px",
-          boxShadow:
-            "0 8px 28px rgba(25,51,12,0.30), 0 2px 8px rgba(25,51,12,0.18), 0 0 0 1px rgba(192,221,151,0.25)",
-          maxWidth: 220,
-          minWidth: 130,
-          cursor: "pointer",
-          userSelect: "none",
-          position: "relative",
-        }}
-        onClick={onDismiss}
-        title="Click to dismiss"
-      >
-        {/* Close micro-button */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          style={{
-            position: "absolute",
-            top: -6,
-            right: -6,
-            width: 16,
-            height: 16,
-            borderRadius: "50%",
-            background: "#1a3410",
-            border: "1.5px solid rgba(192,221,151,0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            color: "rgba(255,255,255,0.55)",
-            padding: 0,
-            lineHeight: 1,
-            fontSize: 9,
-          }}
-        >
-          ✕
-        </button>
-
-        {!showText ? (
-          // Typing indicator
-          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 4px" }}>
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                style={{
-                  display: "inline-block",
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: i < dotCount ? "#C0DD97" : "rgba(192,221,151,0.3)",
-                  transition: "background 0.2s",
-                }}
-              />
-            ))}
-          </div>
-        ) : (
-          <p
-            style={{
-              color: "rgba(255,255,255,0.90)",
-              fontSize: 12.5,
-              lineHeight: 1.5,
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontWeight: 500,
-              margin: 0,
-              animation: "typeReveal 0.35s ease both",
-            }}
-          >
-            {greeting}
-          </p>
-        )}
-      </div>
-
-      {/* Tail pointing down-right toward FAB */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: -6,
-          right: 18,
-          width: 0,
-          height: 0,
-          borderLeft: "7px solid transparent",
-          borderRight: "0px solid transparent",
-          borderTop: "7px solid #2c5415",
-          filter: "drop-shadow(0 3px 4px rgba(25,51,12,0.18))",
-        }}
-      />
-    </div>
-  );
-}
-
 export default function PublicAiReceptionist() {
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
@@ -388,8 +239,6 @@ export default function PublicAiReceptionist() {
   const isLoggedIn = Boolean(getClientToken());
   const [showForm, setShowForm] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [showGreeting, setShowGreeting] = useState(false);
-  const [greetingDismissed, setGreetingDismissed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -417,13 +266,6 @@ export default function PublicAiReceptionist() {
     } catch {
       // ignore
     }
-
-    // Show greeting bubble after a short delay on mount
-    const greetingTimer = setTimeout(() => {
-      setShowGreeting(true);
-    }, 1800);
-
-    return () => clearTimeout(greetingTimer);
   }, []);
 
   useEffect(() => {
@@ -455,9 +297,6 @@ export default function PublicAiReceptionist() {
   useEffect(() => {
     if (open) {
       setTimeout(() => textareaRef.current?.focus(), 120);
-      // Hide greeting when chat opens
-      setShowGreeting(false);
-      setGreetingDismissed(true);
     }
   }, [open]);
 
@@ -531,11 +370,10 @@ export default function PublicAiReceptionist() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
 
         .air-panel { font-family: 'DM Sans', system-ui, sans-serif; }
 
-        /* Panel slide-in */
         .air-panel-slide {
           animation: airPanelSlide 0.32s cubic-bezier(0.34, 1.4, 0.64, 1) both;
         }
@@ -544,7 +382,6 @@ export default function PublicAiReceptionist() {
           to   { opacity: 1; transform: translateY(0)    scale(1);    }
         }
 
-        /* Message bubbles */
         .air-bubble {
           animation: airBubble 0.24s cubic-bezier(0.34,1.56,0.64,1) both;
         }
@@ -553,12 +390,10 @@ export default function PublicAiReceptionist() {
           to   { opacity: 1; transform: translateY(0)   scale(1);    }
         }
 
-        /* Scrollbar */
         .air-scroll::-webkit-scrollbar { width: 3px; }
         .air-scroll::-webkit-scrollbar-track { background: transparent; }
         .air-scroll::-webkit-scrollbar-thumb { background: #C0DD97; border-radius: 99px; }
 
-        /* Typing dots */
         .air-typing-dot {
           display: inline-block; width: 6px; height: 6px;
           border-radius: 50%; background: #97C459;
@@ -571,16 +406,16 @@ export default function PublicAiReceptionist() {
           40%          { transform: scale(1);    opacity: 1;   }
         }
 
-        /* Quick-prompt chips */
-        .air-chip { transition: background 0.14s, transform 0.12s, box-shadow 0.14s; }
+        .air-chip {
+          transition: background 0.14s, transform 0.12s, border-color 0.14s;
+        }
         .air-chip:hover {
-          background: #EAF3DE !important;
+          background: rgba(192,221,151,0.1) !important;
+          border-color: rgba(192,221,151,0.4) !important;
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(99,153,34,0.18) !important;
         }
         .air-chip:active { transform: scale(0.97); }
 
-        /* FAB */
         .air-fab { transition: box-shadow 0.2s, transform 0.18s; }
         .air-fab:hover {
           box-shadow: 0 16px 40px rgba(25,51,12,0.42), 0 4px 12px rgba(25,51,12,0.22) !important;
@@ -594,14 +429,12 @@ export default function PublicAiReceptionist() {
           65%      { transform: translateY(2px) rotate(2deg); }
         }
 
-        /* Pulsing online dot */
         @keyframes onlinePulse {
           0%   { box-shadow: 0 0 0 0   rgba(74,222,128,0.80); }
           65%  { box-shadow: 0 0 0 8px rgba(74,222,128,0.00); }
           100% { box-shadow: 0 0 0 0   rgba(74,222,128,0.00); }
         }
 
-        /* FAB ring pulse (idle) */
         @keyframes fabRingPulse {
           0%, 100% { box-shadow: 0 6px 24px rgba(25,51,12,0.32), 0 2px 8px rgba(25,51,12,0.18), 0 0 0 0   rgba(192,221,151,0.55); }
           50%       { box-shadow: 0 6px 24px rgba(25,51,12,0.32), 0 2px 8px rgba(25,51,12,0.18), 0 0 0 8px rgba(192,221,151,0.00); }
@@ -610,37 +443,24 @@ export default function PublicAiReceptionist() {
           animation: fabRingPulse 2.8s ease-in-out infinite;
         }
 
-        /* Greeting bubble */
-        @keyframes greetIn {
-          from { opacity: 0; transform: translateY(10px) scale(0.88); }
-          to   { opacity: 1; transform: translateY(0)    scale(1);    }
-        }
-        @keyframes greetOut {
-          from { opacity: 1; transform: translateY(0)    scale(1);    }
-          to   { opacity: 0; transform: translateY(8px)  scale(0.92); }
-        }
-        @keyframes typeReveal {
-          from { opacity: 0; transform: translateY(3px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Wave hand emoji wobble */
-        @keyframes waveHand {
-          0%,100% { transform: rotate(0deg); }
-          20%      { transform: rotate(20deg); }
-          40%      { transform: rotate(-10deg); }
-          60%      { transform: rotate(14deg); }
-          80%      { transform: rotate(-6deg); }
-        }
-        .wave-hand { display: inline-block; animation: waveHand 1.5s ease 1.8s 2 both; }
-
-        /* Shimmer on header gradient */
-        @keyframes headerShimmer {
-          0%   { background-position: -200% center; }
-          100% { background-position: 200% center; }
+        /* ── RINZIN background text ── */
+        .rinzin-bg {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: 'Syne', sans-serif;
+          font-size: 72px;
+          font-weight: 800;
+          letter-spacing: -3px;
+          color: rgba(192,221,151,0.08);
+          pointer-events: none;
+          user-select: none;
+          white-space: nowrap;
+          overflow: hidden;
         }
 
-        /* Input focus glow */
         .air-textarea:focus-visible {
           outline: none;
           ring: none;
@@ -648,7 +468,6 @@ export default function PublicAiReceptionist() {
           border-color: #97C459 !important;
         }
 
-        /* Unread badge bounce */
         @keyframes badgePop {
           0%   { transform: scale(0); }
           70%  { transform: scale(1.2); }
@@ -656,7 +475,6 @@ export default function PublicAiReceptionist() {
         }
         .badge-pop { animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
 
-        /* Scanline texture overlay on header */
         .header-scanlines {
           background-image: repeating-linear-gradient(
             0deg,
@@ -666,6 +484,24 @@ export default function PublicAiReceptionist() {
             rgba(255,255,255,0.015) 4px
           );
         }
+
+        @keyframes waveHand {
+          0%,100% { transform: rotate(0deg); }
+          20%      { transform: rotate(20deg); }
+          40%      { transform: rotate(-10deg); }
+          60%      { transform: rotate(14deg); }
+          80%      { transform: rotate(-6deg); }
+        }
+        .wave-hand { display: inline-block; animation: waveHand 1.5s ease 0.4s 2 both; }
+
+        @keyframes modalIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes modalCardIn {
+          from { opacity: 0; transform: scale(0.88) translateY(12px); }
+          to   { opacity: 1; transform: scale(1)    translateY(0); }
+        }
       `}</style>
 
       <div className="air-panel fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
@@ -673,7 +509,7 @@ export default function PublicAiReceptionist() {
         {/* ── Chat panel ── */}
         {open && (
           <div
-            className="air-panel-slide flex flex-col overflow-hidden rounded-2xl bg-white"
+            className="air-panel-slide relative flex flex-col overflow-hidden rounded-2xl bg-white"
             style={{
               width: "min(390px, calc(100vw - 28px))",
               height: "min(590px, calc(100vh - 100px))",
@@ -685,12 +521,11 @@ export default function PublicAiReceptionist() {
             <div
               className="header-scanlines flex shrink-0 items-center justify-between px-4 py-3"
               style={{
-                background: "linear-gradient(135deg, #0f2008 0%, #1a3410 45%, #2c5415 100%)",
+                background: "linear-gradient(135deg, #0a1607 0%, #162b0d 45%, #1e3d10 100%)",
                 borderBottom: "1px solid rgba(151,196,89,0.14)",
               }}
             >
               <div className="flex items-center gap-3">
-                {/* Avatar with shimmer ring */}
                 <div className="relative shrink-0">
                   <div
                     className="flex h-10 w-10 items-center justify-center rounded-full overflow-hidden"
@@ -701,12 +536,11 @@ export default function PublicAiReceptionist() {
                   >
                     <MaidAvatar size="md" />
                   </div>
-                  {/* Online dot */}
                   <span
                     className="absolute -bottom-0.5 -right-0.5 h-[10px] w-[10px] rounded-full"
                     style={{
                       background: "#4ADE80",
-                      border: "2px solid #0f2008",
+                      border: "2px solid #0a1607",
                       boxShadow: "0 0 8px rgba(74,222,128,0.70)",
                       animation: "onlinePulse 2.4s ease-out infinite",
                     }}
@@ -753,28 +587,7 @@ export default function PublicAiReceptionist() {
 
             {/* Clear confirm strip */}
             {showClearConfirm && (
-              <div
-                className="shrink-0 flex items-center justify-between gap-2 px-4 py-2"
-                style={{ background: "#FEF3C7", borderBottom: "1px solid #FDE68A" }}
-              >
-                <p className="text-[12px] font-medium text-amber-800">
-                  Clear entire conversation?
-                </p>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={clearChat}
-                    className="rounded-lg bg-red-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-red-600 transition-colors"
-                  >
-                    Clear
-                  </button>
-                  <button
-                    onClick={() => setShowClearConfirm(false)}
-                    className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              <></>
             )}
 
             {/* ── Messages area ── */}
@@ -788,39 +601,16 @@ export default function PublicAiReceptionist() {
             >
               {!hasConversation ? (
                 <div className="flex flex-col gap-3 p-4">
-                  {/* Greeting hero card */}
+                  {/* ── Greeting hero card — dark ── */}
                   <div
                     className="rounded-2xl p-4 relative overflow-hidden"
                     style={{
-                      background: "linear-gradient(135deg, #0f2008 0%, #1a3410 55%, #2d5916 100%)",
+                      background: "linear-gradient(135deg, #0f2008 0%, #1a3410 45%, #2c5415 100%)",
                       boxShadow: "0 6px 24px rgba(25,51,12,0.28)",
                     }}
                   >
-                    {/* Decorative circles */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: -20,
-                        right: -20,
-                        width: 80,
-                        height: 80,
-                        borderRadius: "50%",
-                        background: "rgba(192,221,151,0.07)",
-                        pointerEvents: "none",
-                      }}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: -10,
-                        right: 40,
-                        width: 50,
-                        height: 50,
-                        borderRadius: "50%",
-                        background: "rgba(192,221,151,0.05)",
-                        pointerEvents: "none",
-                      }}
-                    />
+                    {/* RINZIN watermark text */}
+                    <div className="rinzin-bg">RINZIN</div>
 
                     <div className="mb-3 flex items-center gap-3 relative">
                       <div
@@ -833,21 +623,32 @@ export default function PublicAiReceptionist() {
                         <MaidAvatar size="md" />
                       </div>
                       <div>
-                        <span className="text-[11px] font-bold uppercase tracking-widest text-[#C0DD97] block">
+                        <span className="text-[11px] font-bold uppercase tracking-widest block" style={{ color: "#C0DD97" }}>
                           Hi there <span className="wave-hand">👋</span>
                         </span>
-                        <p className="text-[11px] mt-0.5 font-medium" style={{ color: "rgba(192,221,151,0.55)" }}>
+                        <p className="text-[11px] mt-0.5 font-medium flex items-center gap-1.5" style={{ color: "rgba(192,221,151,0.6)" }}>
+                          <span
+                            style={{
+                              width: 5,
+                              height: 5,
+                              borderRadius: "50%",
+                              background: "#4ADE80",
+                              display: "inline-block",
+                              animation: "onlinePulse 2.2s ease-out infinite",
+                            }}
+                          />
                           AI Receptionist · Online now
                         </p>
                       </div>
                       <div
                         className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
-                        style={{ background: "rgba(192,221,151,0.14)", border: "1px solid rgba(192,221,151,0.2)" }}
+                        style={{ background: "rgba(192,221,151,0.12)", border: "1px solid rgba(192,221,151,0.2)" }}
                       >
-                        <Sparkles className="h-3.5 w-3.5 text-[#C0DD97]" />
+                        <Sparkles className="h-3.5 w-3.5" style={{ color: "#C0DD97" }} />
                       </div>
                     </div>
-                    <p className="text-[13px] leading-relaxed relative" style={{ color: "rgba(255,255,255,0.80)" }}>
+
+                    <p className="text-[13px] leading-relaxed relative mb-0" style={{ color: "rgba(255,255,255,0.82)" }}>
                       Ask me anything about hiring a helper, our services, or fees. I'll get you the
                       right information fast.
                     </p>
@@ -855,7 +656,7 @@ export default function PublicAiReceptionist() {
 
                   {/* Quick prompts */}
                   <div>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#6b7280" }}>
                       Quick questions
                     </p>
                     <div className="flex flex-col gap-1.5">
@@ -867,15 +668,17 @@ export default function PublicAiReceptionist() {
                             setMessage(prompt);
                             textareaRef.current?.focus();
                           }}
-                          className="air-chip flex w-full items-center gap-2.5 rounded-xl border border-[#C0DD97]/30 bg-white px-3.5 py-2.5 text-left text-[13px] font-medium text-[#2c5415]"
+                          className="air-chip flex w-full items-center gap-2.5 rounded-xl border bg-white px-3.5 py-2.5 text-left text-[13px] font-semibold"
                           style={{
-                            boxShadow: "0 1px 4px rgba(0,0,0,0.045)",
+                            borderColor: "rgba(192,221,151,0.30)",
+                            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                            color: "#0f2008",
                             animationDelay: `${idx * 60}ms`,
                           }}
                         >
                           <span
                             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                            style={{ background: "#EAF3DE", color: "#3B6D11" }}
+                            style={{ background: "#EAF3DE", color: "#1a3410" }}
                           >
                             →
                           </span>
@@ -899,7 +702,7 @@ export default function PublicAiReceptionist() {
                         className={`flex items-end gap-2 ${
                           msg.role === "user" ? "flex-row-reverse" : "flex-row"
                         }`}
-                        style={{ maxWidth: "100%" }}
+                        style={{ maxWidth: "78%" }}
                       >
                         {msg.role === "assistant" && (
                           <div
@@ -916,7 +719,7 @@ export default function PublicAiReceptionist() {
                         <div
                           className="text-[13px] leading-relaxed"
                           style={{
-                            maxWidth: "78%",
+                            width: "fit-content",
                             minWidth: 0,
                             wordBreak: "break-word",
                             overflowWrap: "anywhere",
@@ -928,13 +731,13 @@ export default function PublicAiReceptionist() {
                             padding: "10px 14px",
                             ...(msg.role === "user"
                               ? {
-                                  background: "linear-gradient(135deg, #1a3410 0%, #2c5415 100%)",
+                                  background: "linear-gradient(135deg, #162b0d 0%, #1e3d10 100%)",
                                   color: "#fff",
                                   boxShadow: "0 3px 12px rgba(25,51,12,0.22)",
                                 }
                               : {
                                   background: "#fff",
-                                  color: "#1E293B",
+                                  color: "#0f2008",
                                   border: "1px solid rgba(151,196,89,0.22)",
                                   boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
                                 }),
@@ -1061,7 +864,7 @@ export default function PublicAiReceptionist() {
                   onClick={() => void submit()}
                   disabled={loading || !message.trim()}
                   className="h-10 w-10 shrink-0 rounded-xl p-0 text-white shadow-none transition-all hover:opacity-90 active:scale-95 disabled:opacity-30"
-                  style={{ background: "linear-gradient(135deg, #1a3410, #2c5415)" }}
+                  style={{ background: "linear-gradient(135deg, #162b0d, #1e3d10)" }}
                 >
                   {loading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1075,17 +878,93 @@ export default function PublicAiReceptionist() {
                 Enter to send · Shift+Enter for new line
               </p>
             </div>
-          </div>
-        )}
 
-        {/* ── Greeting bubble (shown when chat is closed) ── */}
-        {showGreeting && !open && !greetingDismissed && (
-          <GreetingBubble
-            onDismiss={() => {
-              setShowGreeting(false);
-              setGreetingDismissed(true);
-            }}
-          />
+            {/* ── Clear chat modal overlay ── */}
+            {showClearConfirm && (
+              <div
+                className="absolute inset-0 flex items-center justify-center"
+                style={{
+                  background: "rgba(10,22,7,0.72)",
+                  backdropFilter: "blur(6px)",
+                  zIndex: 10,
+                  animation: "modalIn 0.2s cubic-bezier(0.34,1.3,0.64,1) both",
+                }}
+                onClick={(e) => { if (e.target === e.currentTarget) setShowClearConfirm(false); }}
+              >
+                <div
+                  style={{
+                    background: "#fff",
+                    borderRadius: 20,
+                    width: 280,
+                    overflow: "hidden",
+                    boxShadow: "0 24px 64px rgba(0,0,0,0.36), 0 4px 16px rgba(0,0,0,0.18)",
+                    animation: "modalCardIn 0.24s cubic-bezier(0.34,1.4,0.64,1) both",
+                  }}
+                >
+                  {/* Top — icon + text */}
+                  <div className="flex flex-col items-center px-6 pt-6 pb-5" style={{ textAlign: "center" }}>
+                    {/* Trash icon circle */}
+                    <div
+                      className="flex items-center justify-center rounded-full mb-4"
+                      style={{
+                        width: 52,
+                        height: 52,
+                        background: "#FEF2F2",
+                        border: "1px solid #FECACA",
+                      }}
+                    >
+                      <Trash2 className="h-5 w-5" style={{ color: "#EF4444" }} />
+                    </div>
+
+                    <p className="text-[15px] font-bold leading-tight mb-1.5" style={{ color: "#0f172a" }}>
+                      Clear conversation?
+                    </p>
+                    <p className="text-[12.5px] leading-relaxed" style={{ color: "#64748b" }}>
+                      All messages will be permanently deleted. This action cannot be undone.
+                    </p>
+                  </div>
+
+                  {/* Divider */}
+                  <div style={{ height: "1px", background: "#f1f5f9" }} />
+
+                  {/* Buttons */}
+                  <div className="flex">
+                    <button
+                      onClick={() => setShowClearConfirm(false)}
+                      className="flex-1 py-3.5 text-[13px] font-semibold transition-colors"
+                      style={{
+                        color: "#64748b",
+                        borderTop: "none",
+                        borderBottom: "none",
+                        borderLeft: "none",
+                        borderRight: "1px solid #f1f5f9",
+                        cursor: "pointer",
+                        background: "transparent",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#f8fafc")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={clearChat}
+                      className="flex-1 py-3.5 text-[13px] font-bold transition-colors"
+                      style={{
+                        color: "#EF4444",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#FEF2F2")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ── FAB ── */}
@@ -1093,17 +972,14 @@ export default function PublicAiReceptionist() {
           onClick={() => {
             setOpen((v) => !v);
             setShowClearConfirm(false);
-            setShowGreeting(false);
-            setGreetingDismissed(true);
           }}
           aria-label={open ? "Close chat" : "Open AI Receptionist"}
           className="air-fab air-fab-pulse relative flex h-16 w-16 items-center justify-center rounded-full border-2"
           style={{
-            background: "linear-gradient(145deg, #1a3410 0%, #2c5415 60%, #3a6b1a 100%)",
+            background: "linear-gradient(145deg, #0a1607 0%, #162b0d 60%, #1e3d10 100%)",
             borderColor: "rgba(192,221,151,0.45)",
           }}
         >
-          {/* Inner avatar circle */}
           <span
             className="maid-bounce flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full overflow-hidden"
             style={{
@@ -1112,34 +988,21 @@ export default function PublicAiReceptionist() {
             }}
           >
             {open ? (
-              <X className="h-5 w-5 text-[#1a3410]" style={{ strokeWidth: 2.5 }} />
+              <X className="h-5 w-5 text-[#0a1607]" style={{ strokeWidth: 2.5 }} />
             ) : (
               <MaidAvatar size="fab" />
             )}
           </span>
 
-          {/* Pulsing online dot — hidden when panel open */}
           {!open && (
             <span
               className="absolute bottom-0.5 right-0.5 h-[14px] w-[14px] rounded-full"
               style={{
                 background: "#4ADE80",
-                border: "2.5px solid #1a3410",
+                border: "2.5px solid #0a1607",
                 animation: "onlinePulse 2.2s ease-out infinite",
               }}
             />
-          )}
-
-          {/* Unread badge — show if there are messages and panel is closed */}
-          {!open && hasConversation && (
-            <span
-              className="badge-pop absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
-              style={{ background: "#EF4444", border: "2px solid white" }}
-            >
-              {messages.filter((m) => m.role === "assistant").length > 9
-                ? "9+"
-                : messages.filter((m) => m.role === "assistant").length}
-            </span>
           )}
         </button>
       </div>

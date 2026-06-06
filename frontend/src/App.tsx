@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -223,6 +223,15 @@ const ClientHomeRedirect = () => {
   return status === "portal" ? <Navigate to="/client/home" replace /> : <ClientLandingPage />;
 };
 
+const FloatingAiReceptionist = () => {
+  const location = useLocation();
+  const pathname = location.pathname.replace(/\/+$/, "");
+
+  if (pathname === "/client/support-chat") return null;
+
+  return <PublicAiReceptionist />;
+};
+
 const App = () => {
   useEffect(() => {
     if (!supabase) return;
@@ -371,7 +380,7 @@ const App = () => {
             <Route path="/faq" element={withRouteLoader(<FaqPage />)} />
             <Route path="/agency" element={withRouteLoader(<AgencyPortal />)} />
           </Routes>
-          <PublicAiReceptionist />
+          <FloatingAiReceptionist />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
