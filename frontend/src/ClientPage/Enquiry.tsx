@@ -173,6 +173,17 @@ function SimpleEnquiryForm({
       return;
     }
 
+    if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (phoneDigits.length < 8) {
+      setError("Please enter a valid phone number including country code, e.g. +65 9123 4567.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError("");
@@ -232,11 +243,13 @@ function SimpleEnquiryForm({
       <div>
         <label className="mb-2 block text-sm font-semibold text-gray-800">Phone</label>
         <input
+          type="tel"
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
-          placeholder="+65 ..."
+          placeholder="+65 9123 4567"
           className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
         />
+        <p className="mt-1 text-xs text-gray-400">Include country code, e.g. +65 for Singapore</p>
       </div>
 
       <div>

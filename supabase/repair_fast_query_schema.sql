@@ -23,7 +23,8 @@ drop view if exists public.app_requests_with_client;
 drop view if exists public.app_data_overview;
 drop view if exists public.app_maids;
 
-create or replace view public.app_data_overview as
+create or replace view public.app_data_overview
+with (security_invoker = true) as
 select
   ad.id,
   ad.created_at,
@@ -46,7 +47,8 @@ select
 from public.app_data ad
 left join public.helped_query_meta meta on meta.app_id = ad.id;
 
-create or replace view public.app_maids as
+create or replace view public.app_maids
+with (security_invoker = true) as
 select
   row_number() over () as view_row_id,
   m.reference_code,
@@ -63,7 +65,8 @@ select
 from public.helped_query_maids m
 where m.app_id = 'default';
 
-create or replace view public.app_requests_with_client as
+create or replace view public.app_requests_with_client
+with (security_invoker = true) as
 select
   r.app_id,
   r.request_id,
@@ -85,7 +88,8 @@ left join public.helped_query_clients c
   on c.app_id = r.app_id
  and c.record_id = r.client_id;
 
-create or replace view public.app_request_message_threads as
+create or replace view public.app_request_message_threads
+with (security_invoker = true) as
 select
   m.app_id,
   c.request_id,

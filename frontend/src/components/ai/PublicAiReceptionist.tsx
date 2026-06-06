@@ -159,9 +159,9 @@ function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: bool
 }
 
 const PROMPTS = [
-  "I want to hire a helper",
-  "Ask about transfer helpers",
-  "What are your agency fees?",
+  "Show me your available helpers",
+  "I need a transfer maid — who's available now?",
+  "Find a helper with childcare experience",
 ];
 
 const STORAGE_KEY = "ai_receptionist_messages";

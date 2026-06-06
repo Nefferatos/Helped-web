@@ -123,7 +123,7 @@ const emptyTestimonialForm: NewTestimonialForm = {
   message: "",
 };
 
-const profileFields: Array<{ label: string; field: keyof CompanyFormData }> = [
+const profileFields: Array<{ label: string; field: keyof CompanyFormData; type?: "text" | "tel" | "email" | "number"; placeholder?: string; hint?: string }> = [
   { label: "Company Name", field: "companyName" },
   { label: "Short Name", field: "shortName" },
   { label: "License No", field: "licenseNo" },
@@ -132,12 +132,12 @@ const profileFields: Array<{ label: string; field: keyof CompanyFormData }> = [
   { label: "Postal Code", field: "postalCode" },
   { label: "Country", field: "country" },
   { label: "Contact Person", field: "contactPerson" },
-  { label: "Contact Phone", field: "contactPhone" },
+  { label: "Contact Phone", field: "contactPhone", type: "tel", placeholder: "+65 6123 4567" },
   { label: "Email", field: "email" },
   { label: "Fax", field: "fax" },
   { label: "Website", field: "website" },
   { label: "Facebook", field: "facebook" },
-  { label: "WhatsApp Number", field: "whatsappNumber" },
+  { label: "WhatsApp Number", field: "whatsappNumber", type: "tel", placeholder: "+65 9123 4567", hint: "Include country code for non-Singapore numbers, e.g. +60 12 345 6789" },
   { label: "Theme Color", field: "themeColor" },
   { label: "Button Color", field: "buttonColor" },
 ];
@@ -603,23 +603,30 @@ const AgencyProfileEdit = () => {
             >
               {/* ── Basic Fields ── */}
               <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-                {profileFields.map(({ label, field }) => (
+                {profileFields.map(({ label, field, type, placeholder, hint }) => (
                   <div
                     key={field}
                     style={{
                       display: "grid",
                       gridTemplateColumns: "200px 1fr",
-                      alignItems: "center",
+                      alignItems: hint ? "flex-start" : "center",
                       gap: "0.75rem",
                     }}
                     className="form-row-responsive"
                   >
                     <label style={{ ...labelStyle, textAlign: "right" }}>{label}:</label>
-                    <input
-                      style={inputStyle}
-                      value={formData[field] as string}
-                      onChange={(e) => handleChange(field, e.target.value)}
-                    />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                      <input
+                        type={type ?? "text"}
+                        placeholder={placeholder}
+                        style={inputStyle}
+                        value={formData[field] as string}
+                        onChange={(e) => handleChange(field, e.target.value)}
+                      />
+                      {hint && (
+                        <span style={{ fontSize: "0.72rem", color: "#94a3b8", lineHeight: 1.4 }}>{hint}</span>
+                      )}
+                    </div>
                   </div>
                 ))}
 

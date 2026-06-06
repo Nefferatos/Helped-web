@@ -1,3 +1,14 @@
+export const NATIONALITY_DIAL_CODE: Record<string, string> = {
+  "Filipino maid": "+63",
+  "Indonesian maid": "+62",
+  "Indian maid": "+91",
+  "Myanmar maid": "+95",
+  "Sri Lankan maid": "+94",
+  "Bangladeshi maid": "+880",
+  "Nepali maid": "+977",
+  "Cambodian maid": "+855",
+};
+
 export interface MaidProfile {
   id?: number;
   agencyId?: number;

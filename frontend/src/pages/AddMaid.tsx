@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import type { AtsApplicationListItem } from "@/lib/ats";
-import { defaultMaidProfile, type MaidProfile } from "@/lib/maids";
+import { defaultMaidProfile, NATIONALITY_DIAL_CODE, type MaidProfile } from "@/lib/maids";
 import { startMaidSaveTask } from "@/lib/maidSaveProgress";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { compressImage, compressImageFile, getImageSizeInMB } from "@/lib/imageCompression";
@@ -1839,7 +1839,26 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
               <Field label="Nationality">
                 <StyledSelect
                   value={formData.nationality}
-                  onChange={(e) => setFormData((p) => ({ ...p, nationality: e.target.value }))}
+                  onChange={(e) => {
+                    const nat = e.target.value;
+                    setFormData((p) => {
+                      const existing = String((p.agencyContact as Record<string, unknown>)?.homeCountryContactNumber || "").trim();
+                      const dialCode = NATIONALITY_DIAL_CODE[nat];
+                      // Pre-fill country code only when the field is blank or still holds a bare dial-code prefix.
+                      // When switching to "Others" (no dialCode), clear any stale bare prefix so it doesn't mislead.
+                      const isBarePrefix = /^\+\d{1,4}\s*$/.test(existing);
+                      const shouldPrefill = dialCode && (!existing || isBarePrefix);
+                      const shouldClear = !dialCode && isBarePrefix;
+                      return {
+                        ...p,
+                        nationality: nat,
+                        agencyContact: {
+                          ...((p.agencyContact as Record<string, unknown>) || {}),
+                          ...(shouldPrefill ? { homeCountryContactNumber: dialCode + " " } : shouldClear ? { homeCountryContactNumber: "" } : {}),
+                        },
+                      };
+                    });
+                  }}
                   options={[
                     { value: "", label: "Select Nationality", disabled: true },
                     "Filipino maid", "Indonesian maid", "Indian maid", "Myanmar maid",
@@ -1949,6 +1968,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
             right={
               <Field label="Contact Number in Home Country">
                 <StyledInput
+                  type="tel"
                   value={String(agencyContact.homeCountryContactNumber || "")}
                   onChange={(e) =>
                     setFormData((p) => ({
@@ -1956,7 +1976,7 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
                       agencyContact: { ...((p.agencyContact as Record<string, unknown>) || {}), homeCountryContactNumber: e.target.value },
                     }))
                   }
-                  placeholder="+63 XXX XXXX"
+                  placeholder={NATIONALITY_DIAL_CODE[formData.nationality] ? `${NATIONALITY_DIAL_CODE[formData.nationality]} XXX XXXX` : "+XX XXX XXXX"}
                 />
               </Field>
             }

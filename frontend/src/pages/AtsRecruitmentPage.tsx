@@ -845,101 +845,169 @@ const AtsRecruitmentPage = () => {
         open={showGuide}
         onOpenChange={(open) => (!open ? closeGuide() : openGuide())}
       >
-        <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-[#0a1020] p-0 text-slate-100 shadow-[0_32px_90px_rgba(2,6,23,0.7)]">
+        <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-3xl border-0 bg-[#060c1a] p-0 text-slate-100 shadow-[0_40px_120px_rgba(2,6,23,0.9),0_0_0_1px_rgba(56,189,248,0.08)]">
           {/* Header */}
-          <div className="shrink-0 border-b border-slate-800 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.12),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.12),_transparent_30%),linear-gradient(180deg,_rgba(15,23,42,0.96),_rgba(10,16,32,0.96))] p-5">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-lg font-black text-white">
-                <Lightbulb className="h-4.5 w-4.5" />
-                Recruiter Walkthrough
-              </DialogTitle>
-              <DialogDescription className="text-sm text-slate-400">
-                A guided tour for moving applicants from intake to public profile
-                setup. Reopen any time from the tutorial button.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                <span>
-                  {activeGuide.eyebrow} of {walkthroughSteps.length}
-                </span>
-                <span>{Math.round(guideProgress)}% complete</span>
+          <div className="relative shrink-0 overflow-hidden border-b border-white/5 px-6 py-5">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_top_left,_rgba(56,189,248,0.13),_transparent),radial-gradient(ellipse_60%_50%_at_top_right,_rgba(16,185,129,0.1),_transparent)]" />
+            <div className="relative flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-emerald-500 shadow-[0_0_18px_rgba(56,189,248,0.4)]">
+                  <Lightbulb className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <DialogTitle className="text-sm font-black leading-none text-white">
+                    Recruiter Walkthrough
+                  </DialogTitle>
+                  <DialogDescription className="mt-0.5 text-[11px] text-slate-500">
+                    Guided tour · intake to public profile
+                  </DialogDescription>
+                </div>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-sky-400 via-cyan-400 to-emerald-400 transition-all duration-300"
-                  style={{ width: `${guideProgress}%` }}
-                />
+              {/* Segmented step pills */}
+              <div className="flex items-center gap-1.5">
+                {walkthroughSteps.map((step, i) => (
+                  <button
+                    key={step.label}
+                    type="button"
+                    onClick={() => setActiveGuideStep(i)}
+                    title={step.label}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      i < activeGuideStep
+                        ? "w-6 bg-emerald-500/80"
+                        : i === activeGuideStep
+                        ? "w-10 bg-gradient-to-r from-sky-400 to-emerald-400 shadow-[0_0_8px_rgba(56,189,248,0.55)]"
+                        : "w-4 bg-slate-700 hover:bg-slate-600"
+                    }`}
+                  />
+                ))}
+                <span className="ml-2 text-[10px] font-bold tabular-nums text-slate-500">
+                  {Math.round(guideProgress)}%
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Body — fixed height, scrollable */}
-          <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[260px_1fr]">
-            {/* Sidebar */}
-            <div className="overflow-y-auto border-b border-slate-800 bg-[#0d1427] p-4 lg:border-b-0 lg:border-r">
-              <div className="space-y-2">
+          {/* Body */}
+          <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[200px_1fr]">
+            {/* Sidebar stepper */}
+            <div className="overflow-y-auto border-b border-white/5 bg-[#07101f] p-4 lg:border-b-0 lg:border-r">
+              <p className="mb-4 text-[9px] font-black uppercase tracking-[0.32em] text-slate-600">
+                Steps
+              </p>
+              <ol className="relative space-y-0">
                 {applicantFlowGuide.map((step, index) => {
                   const isActive = index === activeGuideStep;
                   const isComplete = index < activeGuideStep;
+                  const isLast = index === applicantFlowGuide.length - 1;
                   return (
-                    <button
-                      key={step.title}
-                      type="button"
-                      onClick={() => setActiveGuideStep(index)}
-                      className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-all ${
-                        isActive
-                          ? "border-sky-500/50 bg-slate-900 shadow-[0_0_0_1px_rgba(56,189,248,0.1)]"
-                          : "border-transparent bg-transparent hover:border-slate-700 hover:bg-slate-900/70"
-                      }`}
-                    >
-                      <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
-                          isActive
-                            ? "border-sky-400/40 bg-sky-500/20 text-sky-300"
-                            : isComplete
-                            ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-300"
-                            : "border-slate-700 bg-slate-800 text-slate-400"
-                        }`}
+                    <li key={step.title} className="relative flex gap-3">
+                      {/* Vertical connector line */}
+                      {!isLast && (
+                        <div
+                          className={`absolute left-[21px] top-11 h-[calc(100%-28px)] w-px ${
+                            isComplete ? "bg-emerald-500/25" : "bg-slate-800"
+                          }`}
+                        />
+                      )}
+                      {/* Single button wrapping icon + label */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveGuideStep(index)}
+                        aria-current={isActive ? "step" : undefined}
+                        className="mb-5 flex flex-1 items-start gap-3 text-left"
                       >
-                        <step.icon className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                          {step.stage}
-                        </p>
-                        <p className="mt-0.5 text-xs font-bold text-slate-100 leading-snug">
-                          {step.title}
-                        </p>
-                        <p className="mt-1 text-[11px] leading-4 text-slate-400">
-                          {walkthroughSteps[index]?.helper}
-                        </p>
-                      </div>
-                    </button>
+                        <div
+                          className={`relative z-10 mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-all duration-200 ${
+                            isActive
+                              ? "border-sky-400/40 bg-gradient-to-br from-sky-500/20 to-emerald-500/15 shadow-[0_0_20px_rgba(56,189,248,0.18),inset_0_0_0_1px_rgba(56,189,248,0.08)]"
+                              : isComplete
+                              ? "border-emerald-500/25 bg-emerald-500/8"
+                              : "border-slate-700/60 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800"
+                          }`}
+                        >
+                          {isComplete ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                          ) : (
+                            <step.icon
+                              className={`h-4 w-4 ${
+                                isActive ? "text-sky-300" : "text-slate-500"
+                              }`}
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`text-[9px] font-black uppercase tracking-[0.26em] ${
+                              isActive
+                                ? "text-sky-400"
+                                : isComplete
+                                ? "text-emerald-500/60"
+                                : "text-slate-600"
+                            }`}
+                          >
+                            Step {index + 1}
+                          </p>
+                          <p
+                            className={`mt-0.5 text-[11px] font-bold leading-snug ${
+                              isActive
+                                ? "text-white"
+                                : isComplete
+                                ? "text-slate-400"
+                                : "text-slate-500"
+                            }`}
+                          >
+                            {step.title.replace(/^\d+\.\s/, "")}
+                          </p>
+                          {isActive && (
+                            <p className="mt-1 text-[10px] leading-[1.5] text-slate-500">
+                              {walkthroughSteps[index]?.helper}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    </li>
                   );
                 })}
-              </div>
+              </ol>
             </div>
 
             {/* Main panel */}
-            <div className="overflow-y-auto bg-[#0a1020] p-5">
+            <div className="overflow-y-auto bg-[#060c1a] p-5">
               <div className="space-y-4">
                 {/* Hero card */}
-                <div className="rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_top_right,_rgba(56,189,248,0.12),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.12),_transparent_25%),linear-gradient(180deg,_rgba(15,23,42,0.95),_rgba(17,24,39,0.95))] p-5">
-                  <p className="text-[10px] font-black uppercase tracking-[0.26em] text-cyan-300">
-                    {activeGuide.eyebrow}
-                  </p>
-                  <h3 className="mt-1.5 text-xl font-black tracking-tight text-white">
-                    {activeGuide.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">
-                    {activeGuide.summary}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {activeGuide.chips.map((chip) => (
+                <div className="relative overflow-hidden rounded-2xl border border-white/5 p-5">
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_top_right,_rgba(56,189,248,0.1),_transparent),radial-gradient(ellipse_50%_50%_at_bottom_left,_rgba(16,185,129,0.08),_transparent),linear-gradient(135deg,rgba(10,18,40,0.99),rgba(6,12,26,0.99))]" />
+                  <div className="relative flex items-start gap-4">
+                    {/* Step number badge */}
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-sky-400/20 bg-gradient-to-br from-sky-500/15 to-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.06)]">
+                      <span className="text-3xl font-black leading-none text-sky-300">
+                        {activeGuideStep + 1}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-sky-400/80">
+                        {activeGuide.eyebrow}
+                      </p>
+                      <h3 className="mt-1 text-xl font-black tracking-tight text-white">
+                        {activeGuide.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        {activeGuide.summary}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Chips */}
+                  <div className="relative mt-4 flex flex-wrap gap-2">
+                    {activeGuide.chips.map((chip, i) => (
                       <span
                         key={chip}
-                        className="rounded-full border border-sky-400/20 bg-slate-800 px-3 py-0.5 text-xs font-semibold text-slate-200"
+                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold tracking-wide ${
+                          i % 3 === 0
+                            ? "border-sky-400/20 bg-sky-500/10 text-sky-300"
+                            : i % 3 === 1
+                            ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                            : "border-violet-400/20 bg-violet-500/10 text-violet-300"
+                        }`}
                       >
                         {chip}
                       </span>
@@ -949,54 +1017,70 @@ const AtsRecruitmentPage = () => {
 
                 {/* Two-col grid */}
                 <div className="grid gap-4 lg:grid-cols-2">
-                  {/* What to do */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                    <p className="text-xs font-bold text-white">
-                      What to do in this step
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {activeGuide.points.map((item) => (
+                  {/* Action steps */}
+                  <div className="rounded-2xl border border-white/5 bg-slate-900/30 p-4">
+                    <div className="mb-4 flex items-center gap-2">
+                      <div className="h-4 w-1 rounded-full bg-gradient-to-b from-sky-400 to-emerald-400" />
+                      <p className="text-xs font-bold text-white">
+                        Actions for this step
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {activeGuide.points.map((item, i) => (
                         <div
                           key={item}
-                          className="flex items-start gap-2.5 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300"
+                          className="flex items-start gap-3 rounded-xl border border-white/5 bg-slate-950/50 p-3 transition-colors hover:border-slate-700/60 hover:bg-slate-900/60"
                         >
-                          <div className="mt-0.5 shrink-0 rounded-full bg-emerald-500/15 p-1 text-emerald-300">
-                            <CheckCircle2 className="h-3 w-3" />
+                          <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-sky-400/25 bg-sky-500/10">
+                            <span className="text-[9px] font-black text-sky-400">
+                              {i + 1}
+                            </span>
                           </div>
-                          <span className="leading-5">{item}</span>
+                          <span className="text-xs leading-5 text-slate-300">
+                            {item}
+                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Daily checklist */}
+                  {/* Right column */}
                   <div className="space-y-3">
-                    <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-4">
-                      <div className="flex items-center gap-2">
-                        <div className="rounded-xl bg-indigo-400/15 p-1.5 text-indigo-300">
-                          <Lightbulb className="h-3.5 w-3.5" />
+                    {/* Tip */}
+                    <div className="rounded-2xl border border-indigo-400/15 bg-gradient-to-br from-indigo-500/8 to-violet-500/5 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-500/12">
+                          <Lightbulb className="h-3.5 w-3.5 text-indigo-300" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-white">Tip</p>
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-xs font-bold text-white">
+                            Pro tip
+                          </p>
+                          <p className="mt-1 text-[11px] leading-[1.55] text-slate-400">
                             Reopen this walkthrough any time from the tutorial
-                            button.
+                            button in the page header.
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                        Daily checklist
-                      </p>
-                      <div className="mt-2.5 space-y-2">
+                    {/* Daily checklist */}
+                    <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <div className="h-4 w-1 rounded-full bg-emerald-400" />
+                        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">
+                          Daily checklist
+                        </p>
+                      </div>
+                      <div className="space-y-2.5">
                         {processChecklist.map((item) => (
                           <div
                             key={item}
-                            className="flex items-start gap-2 text-[11px] leading-5 text-slate-300"
+                            className="flex items-start gap-2.5 text-[11px] leading-5 text-slate-400"
                           >
-                            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                            <div className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10">
+                              <CheckCircle2 className="h-2 w-2 text-emerald-400" />
+                            </div>
                             <span>{item}</span>
                           </div>
                         ))}
@@ -1006,28 +1090,26 @@ const AtsRecruitmentPage = () => {
                 </div>
 
                 {/* Footer controls */}
-                <div className="flex flex-col gap-3 border-t border-slate-800 pt-4">
+                <div className="flex flex-col gap-3 border-t border-white/5 pt-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <label className="flex items-center gap-2 text-sm text-slate-300">
+                    <label className="flex cursor-pointer select-none items-center gap-2.5 text-xs text-slate-400">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400"
+                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400 focus:ring-offset-0"
                         checked={guideDoNotShowAgain}
                         onChange={(e) =>
                           setGuideDoNotShowAgain(e.target.checked)
                         }
                       />
-                      Do not show again
+                      Don't show on startup
                     </label>
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
+                        className="border-white/10 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:bg-slate-700 hover:text-white"
                         onClick={() =>
-                          setActiveGuideStep((c) =>
-                            Math.max(c - 1, 0)
-                          )
+                          setActiveGuideStep((c) => Math.max(c - 1, 0))
                         }
                         disabled={activeGuideStep === 0}
                       >
@@ -1037,7 +1119,7 @@ const AtsRecruitmentPage = () => {
                       {activeGuideStep < walkthroughSteps.length - 1 ? (
                         <Button
                           size="sm"
-                          className="bg-gradient-to-r from-sky-500 to-emerald-500 text-slate-950 hover:from-sky-400 hover:to-emerald-400"
+                          className="bg-gradient-to-r from-sky-500 to-emerald-500 font-bold text-slate-950 shadow-[0_0_16px_rgba(56,189,248,0.28)] hover:from-sky-400 hover:to-emerald-400 hover:shadow-[0_0_22px_rgba(56,189,248,0.4)]"
                           onClick={() =>
                             setActiveGuideStep((c) =>
                               Math.min(c + 1, walkthroughSteps.length - 1)
@@ -1050,17 +1132,15 @@ const AtsRecruitmentPage = () => {
                       ) : (
                         <Button
                           size="sm"
-                          className="bg-gradient-to-r from-sky-500 to-emerald-500 text-slate-950 hover:from-sky-400 hover:to-emerald-400"
+                          className="bg-gradient-to-r from-sky-500 to-emerald-500 font-bold text-slate-950 shadow-[0_0_16px_rgba(56,189,248,0.28)] hover:from-sky-400 hover:to-emerald-400"
                           onClick={closeGuide}
                         >
+                          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                           Start recruiting
                         </Button>
                       )}
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500">
-                    Step {activeGuideStep + 1} of {walkthroughSteps.length}
-                  </p>
                 </div>
               </div>
             </div>
@@ -1070,53 +1150,66 @@ const AtsRecruitmentPage = () => {
 
       {/* ── SOP Modal ────────────────────────────────────────────────────── */}
       <Dialog open={sopModalOpen} onOpenChange={setSopModalOpen}>
-        <DialogContent className="flex max-h-[86vh] max-w-3xl flex-col overflow-hidden rounded-2xl border border-emerald-100 bg-white p-0 shadow-[0_24px_64px_rgba(15,23,42,0.16)]">
+        <DialogContent className="flex max-h-[86vh] max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white p-0 shadow-[0_32px_80px_rgba(15,23,42,0.15)]">
           {/* Header */}
-          <div className="shrink-0 border-b border-emerald-100 bg-gradient-to-br from-emerald-50 to-slate-50 px-6 py-5">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-lg font-black text-slate-900">
-                <Lightbulb className="h-5 w-5 text-emerald-600" />
+          <div className="relative shrink-0 overflow-hidden border-b border-slate-100 px-6 py-5">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(16,185,129,0.07),_transparent_55%)]" />
+            <DialogHeader className="relative">
+              <DialogTitle className="flex items-center gap-2.5 text-lg font-black text-slate-900">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500 shadow-[0_0_14px_rgba(16,185,129,0.35)]">
+                  <Lightbulb className="h-4 w-4 text-white" />
+                </div>
                 Applicants List Workflow
               </DialogTitle>
-              <DialogDescription className="text-sm text-slate-600">
+              <DialogDescription className="text-sm text-slate-500">
                 Recruiter SOP for moving an applicant from submission to
                 placement or closure.
               </DialogDescription>
             </DialogHeader>
-            <div className="mt-3 rounded-xl border border-emerald-200 bg-white/80 px-4 py-2.5 text-sm text-slate-700">
-              Apply → review → contact → verify → approve → configure profile →
-              place or close.
+            <div className="relative mt-3 flex items-center gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2.5">
+              <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+              <p className="text-xs font-medium text-slate-600">
+                Apply → review → contact → verify → approve → configure profile → place or close
+              </p>
             </div>
           </div>
 
           {/* Scrollable body */}
-          <div className="min-h-0 flex-1 overflow-y-auto p-6">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
               {applicantListSop.map((item, index) => (
                 <div
                   key={item.stage}
-                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                  className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all hover:border-emerald-100 hover:shadow-md"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
-                      {index + 1}
-                    </span>
-                    <p className="text-sm font-bold text-slate-900 leading-snug">
-                      {item.stage}
-                    </p>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-sm">
+                      <span className="text-[11px] font-black text-white">
+                        {index + 1}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold leading-snug text-slate-900">
+                        {item.stage}
+                      </p>
+                      <p className="mt-1.5 text-[11px] leading-5 text-slate-500">
+                        {item.action}
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-2.5 text-xs leading-5 text-slate-600">
-                    {item.action}
-                  </p>
                 </div>
               ))}
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button variant="outline" className="bg-white" onClick={openGuide}>
+              <Button
+                variant="outline"
+                className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                onClick={openGuide}
+              >
                 Open full walkthrough
               </Button>
               <Button
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                className="bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.25)] hover:bg-emerald-600"
                 onClick={() => setSopModalOpen(false)}
               >
                 Close
@@ -1212,12 +1305,13 @@ const AtsRecruitmentPage = () => {
             <Button
               size="sm"
               onClick={() =>
+                selectedId &&
                 stageMutation.mutate({
-                  applicationId: selectedId || applications[0]?.id || "",
+                  applicationId: selectedId,
                   stage: READY_TO_POST_PUBLIC_STAGE,
                 })
               }
-              disabled={!selectedId && !applications.length}
+              disabled={!selectedId || stageMutation.isPending}
               className="bg-emerald-600 hover:bg-emerald-700"
             >
               <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />

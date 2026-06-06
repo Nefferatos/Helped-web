@@ -808,7 +808,8 @@ CREATE TRIGGER app_data_sync_query_tables
 -- 10. VIEWS
 -- ---------------------------------------------------------------------------
 
-CREATE OR REPLACE VIEW public.app_data_overview AS
+CREATE OR REPLACE VIEW public.app_data_overview
+WITH (security_invoker = true) AS
 SELECT
   ad.id,
   ad.created_at,
@@ -830,8 +831,28 @@ SELECT
 FROM public.app_data ad
 LEFT JOIN public.helped_query_meta meta ON meta.app_id = ad.id;
 
+-- Public maid listing (mirrors repair_fast_query_schema.sql)
+CREATE OR REPLACE VIEW public.app_maids
+WITH (security_invoker = true) AS
+SELECT
+  ROW_NUMBER() OVER () AS view_row_id,
+  m.reference_code,
+  m.full_name,
+  m.agency_id,
+  m.status,
+  m.maid_type AS type,
+  m.nationality,
+  m.is_public,
+  m.has_photo,
+  m.created_at,
+  m.updated_at,
+  m.payload AS raw_record
+FROM public.helped_query_maids m
+WHERE m.app_id = 'default';
+
 -- GET /api/requests — requests with client name/email/phone
-CREATE OR REPLACE VIEW public.app_requests_with_client AS
+CREATE OR REPLACE VIEW public.app_requests_with_client
+WITH (security_invoker = true) AS
 SELECT
   r.app_id,
   r.request_id,
@@ -854,7 +875,8 @@ LEFT JOIN public.helped_query_clients c
  AND c.record_id = r.client_id;
 
 -- Message threads
-CREATE OR REPLACE VIEW public.app_request_message_threads AS
+CREATE OR REPLACE VIEW public.app_request_message_threads
+WITH (security_invoker = true) AS
 SELECT
   m.app_id,
   c.request_id,

@@ -2,6 +2,7 @@ import type { AiAgentId } from "./prompts";
 
 type AppDataLike = {
   companyProfile?: Record<string, unknown>;
+  momPersonnel?: Array<Record<string, unknown>>;
   testimonials?: Array<Record<string, unknown>>;
   maids?: Array<Record<string, unknown>>;
   enquiries?: Array<Record<string, unknown>>;
@@ -47,6 +48,12 @@ const includesAny = (source: unknown, needles: string[]) => {
   return needles.some((needle) => value.includes(needle.toLowerCase()));
 };
 
+// Module-level constants — defined once, reused on every request.
+const BLOB_KEYS = new Set(["logo_data_url", "gallery_image_data_urls", "intro_video_data_url"]);
+const maidTier = (m: Record<string, unknown>) =>
+  lower(m.status).includes("available") ? 0 :
+  lower(m.type).includes("transfer") ? 1 : 2;
+
 const compactMaid = (maid: Record<string, unknown>) => ({
   id: maid.id,
   agencyId: maid.agencyId,
@@ -63,6 +70,87 @@ const compactMaid = (maid: Record<string, unknown>) => ({
   hasPhoto: maid.hasPhoto,
   isPublic: maid.isPublic,
 });
+
+const calcAge = (dateOfBirth: unknown) => {
+  const dob = text(dateOfBirth);
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age >= 0 ? age : null;
+};
+
+const compactPublicMaid = (maid: Record<string, unknown>) => ({
+  // Omit id, agencyId, isPublic — internal DB fields with no value for public AI context.
+  referenceCode: maid.referenceCode,
+  fullName: maid.fullName,
+  status: maid.status,
+  type: maid.type,
+  nationality: maid.nationality,
+  languageSkills: maid.languageSkills,
+  skillsPreferences: maid.skillsPreferences,
+  workAreas: maid.workAreas,
+  employmentHistory: maid.employmentHistory,
+  introduction: maid.introduction,
+  hasPhoto: maid.hasPhoto,
+  age: calcAge(maid.dateOfBirth),
+  educationLevel: maid.educationLevel,
+  religion: maid.religion,
+  maritalStatus: maid.maritalStatus,
+  numberOfChildren: num(maid.numberOfChildren),
+});
+
+// Normalises a Singapore mobile number to E.164 digits (no +).
+// Returns "" for invalid/non-digit input (e.g. "N/A", "TBD").
+// Handles: bare 8-digit "80730757" → "6580730757"
+//          leading-zero 9-digit "080730757" → "6580730757" (common user entry mistake)
+//          already-prefixed "6580730757" (10 digits) → unchanged
+const toE164SG = (raw: string): string => {
+  let digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 9 && digits.startsWith("0")) digits = digits.slice(1);
+  return digits.length === 8 ? `65${digits}` : digits;
+};
+
+const buildPublicFaqs = (profile: Record<string, unknown>): string[] => {
+  const phone = text(profile.contact_phone);
+  const whatsapp = text(profile.social_whatsapp_number);
+  const email = text(profile.contact_email);
+  const contactPerson = text(profile.contact_person);
+  const hours = text(profile.office_hours_regular);
+
+  // Show phone and WhatsApp separately when they are different numbers.
+  const phoneWhatsappPart = phone && whatsapp && phone !== whatsapp
+    ? `call ${phone} / WhatsApp ${whatsapp}`
+    : phone
+      ? `call/WhatsApp ${phone}`
+      : whatsapp
+        ? `WhatsApp ${whatsapp}`
+        : "";
+
+  const contactLine = [
+    contactPerson && `speak to ${contactPerson}`,
+    phoneWhatsappPart,
+    email && `email ${email}`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return [
+    contactLine
+      ? `Contact us: ${contactLine}.${hours ? ` Office hours: ${hours}.` : ""}`
+      : hours
+        ? `Office hours: ${hours}.`
+        : null,
+    "Agency fees vary by maid type, nationality, and services required. Contact the agency directly for an accurate quote.",
+    "To enquire about a specific maid or general hiring, submit an enquiry form on the website or contact us directly.",
+    "For complaints or urgent matters, contact the agency immediately via phone or WhatsApp for direct staff assistance.",
+    "FDW applicants can submit their application via the public application page on this website.",
+  ].filter((s): s is string => s !== null);
+};
 
 const scoreMaid = (maid: Record<string, unknown>, input: Record<string, unknown>) => {
   let score = 35;
@@ -133,11 +221,16 @@ const getEmployerContext = (data: AppDataLike, actor: AiActorContext) => {
 
 const getAgencyContext = (data: AppDataLike, actor: AiActorContext) => {
   const agencyId = actor.agencyId;
+  // Strip large base64 blob fields before passing to the LLM — they serve no purpose
+  // in text generation and can exhaust the context window or hit API payload limits.
+  const companyProfileForAI = Object.fromEntries(
+    Object.entries((data.companyProfile ?? {}) as Record<string, unknown>).filter(([k]) => !BLOB_KEYS.has(k)),
+  );
   return {
     agency: {
       id: agencyId,
       name: actor.agencyName,
-      companyProfile: data.companyProfile,
+      companyProfile: companyProfileForAI,
     },
     requests: list(data.requests).filter((item) => item.agencyId === agencyId).slice(-80),
     enquiries: list(data.enquiries).slice(-80),
@@ -224,15 +317,41 @@ export const runAgentTools = (context: AiToolContext) => {
   const { agentId, input, actor, data } = context;
 
   if (agentId === "receptionist") {
+    const profile = (data.companyProfile ?? {}) as Record<string, unknown>;
+    const phoneRaw = text(profile.contact_phone);
+    const whatsappRaw = text(profile.social_whatsapp_number);
+    // Prefer the dedicated WhatsApp number; fall back to phone when absent.
+    const linkE164 = toE164SG(whatsappRaw || phoneRaw);
+    const contactInfo = {
+      contactPerson: text(profile.contact_person),
+      phone: phoneRaw,
+      email: text(profile.contact_email),
+      whatsapp: whatsappRaw,
+      // Pre-built wa.me deep link — use this directly in chat responses.
+      whatsappLink: linkE164 ? `https://wa.me/${linkE164}` : "",
+      officeHours: text(profile.office_hours_regular),
+      officeHoursOther: text(profile.office_hours_other),
+      address: [text(profile.address_line1), text(profile.address_line2), text(profile.postal_code)]
+        .filter(Boolean)
+        .join(", "),
+      website: text(profile.contact_website),
+      facebook: text(profile.social_facebook),
+      licenseNo: text(profile.license_no),
+      aboutUs: text(profile.about_us),
+    };
     return {
-      publicAgencyInfo: data.companyProfile,
-      testimonials: list(data.testimonials).slice(-10),
-      publicMaids: list(data.maids).filter((maid) => maid.isPublic).slice(0, 20).map(compactMaid),
-      publicFaqs: [
-        "Employers can search public maid profiles and submit enquiries.",
-        "Applicants can apply from the public application page.",
-        "Agency staff will confirm appointment and hiring details directly.",
-      ],
+      contactInfo,
+      momPersonnel: list(data.momPersonnel).map((p) => ({
+        name: text(p.name),
+        registrationNumber: text(p.registration_number),
+      })),
+      testimonials: list(data.testimonials).slice(0, 10),
+      publicMaids: list(data.maids)
+        .filter((maid) => maid.isPublic)
+        .sort((a, b) => maidTier(a) - maidTier(b))
+        .slice(0, 30)
+        .map(compactPublicMaid),
+      publicFaqs: buildPublicFaqs(profile),
     };
   }
 

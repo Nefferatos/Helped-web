@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
-import type { MaidProfile } from "@/lib/maids";
+import { NATIONALITY_DIAL_CODE, type MaidProfile } from "@/lib/maids";
 
 /* ─── Constants ─── */
 
@@ -852,7 +852,25 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
               <Field label="Nationality">
                 <StyledSelect
                   value={form.nationality}
-                  onChange={(e) => setForm((p) => (p ? { ...p, nationality: e.target.value } : p))}
+                  onChange={(e) => {
+                    const nat = e.target.value;
+                    setForm((p) => {
+                      if (!p) return p;
+                      const existing = p.agencyContact.homeCountryContactNumber.trim();
+                      const dialCode = NATIONALITY_DIAL_CODE[nat];
+                      const isBarePrefix = /^\+\d{1,4}\s*$/.test(existing);
+                      const shouldPrefill = dialCode && (!existing || isBarePrefix);
+                      const shouldClear = !dialCode && isBarePrefix;
+                      return {
+                        ...p,
+                        nationality: nat,
+                        agencyContact: {
+                          ...p.agencyContact,
+                          ...(shouldPrefill ? { homeCountryContactNumber: dialCode + " " } : shouldClear ? { homeCountryContactNumber: "" } : {}),
+                        },
+                      };
+                    });
+                  }}
                   options={[
                     { value: "", label: "Select Nationality", disabled: true },
                     "Filipino maid",
@@ -995,6 +1013,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
             right={
               <Field label="Contact Number in Home Country">
                 <StyledInput
+                  type="tel"
                   value={form.agencyContact.homeCountryContactNumber}
                   onChange={(e) =>
                     setForm((p) =>
@@ -1009,7 +1028,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
                         : p,
                     )
                   }
-                  placeholder="+63 XXX XXXX"
+                  placeholder={NATIONALITY_DIAL_CODE[form.nationality] ? `${NATIONALITY_DIAL_CODE[form.nationality]} XXX XXXX` : "+XX XXX XXXX"}
                 />
               </Field>
             }
