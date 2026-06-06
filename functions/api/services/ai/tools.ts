@@ -76,10 +76,12 @@ const calcAge = (dateOfBirth: unknown) => {
   if (!dob) return null;
   const birth = new Date(dob);
   if (isNaN(birth.getTime())) return null;
+  // Use UTC throughout — new Date("YYYY-MM-DD") parses as UTC midnight, so comparing
+  // against local-time today() would produce a one-day error near the birthday.
   const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  let age = today.getUTCFullYear() - birth.getUTCFullYear();
+  const m = today.getUTCMonth() - birth.getUTCMonth();
+  if (m < 0 || (m === 0 && today.getUTCDate() < birth.getUTCDate())) age--;
   return age >= 0 ? age : null;
 };
 
@@ -103,16 +105,19 @@ const compactPublicMaid = (maid: Record<string, unknown>) => ({
   numberOfChildren: num(maid.numberOfChildren),
 });
 
-// Normalises a Singapore mobile number to E.164 digits (no +).
+// Normalises a phone number to E.164 digits (no +) for use in wa.me links.
 // Returns "" for invalid/non-digit input (e.g. "N/A", "TBD").
-// Handles: bare 8-digit "80730757" → "6580730757"
-//          leading-zero 9-digit "080730757" → "6580730757" (common user entry mistake)
-//          already-prefixed "6580730757" (10 digits) → unchanged
-const toE164SG = (raw: string): string => {
+// When the raw value starts with "+" the country code is already explicit — just strip
+// non-digits and return. The SG-specific fallbacks only apply to bare local numbers:
+//   bare 8-digit "80730757"   → "6580730757"  (SG default for numbers without a prefix)
+//   leading-zero "080730757"  → "6580730757"  (common SG entry mistake)
+const toE164 = (raw: string): string => {
+  const hasPlus = raw.trimStart().startsWith("+");
   let digits = raw.replace(/\D/g, "");
   if (!digits) return "";
-  if (digits.length === 9 && digits.startsWith("0")) digits = digits.slice(1);
-  return digits.length === 8 ? `65${digits}` : digits;
+  if (!hasPlus && digits.length === 9 && digits.startsWith("0")) digits = digits.slice(1);
+  if (!hasPlus && digits.length === 8) return `65${digits}`;
+  return digits;
 };
 
 const buildPublicFaqs = (profile: Record<string, unknown>): string[] => {
@@ -321,7 +326,7 @@ export const runAgentTools = (context: AiToolContext) => {
     const phoneRaw = text(profile.contact_phone);
     const whatsappRaw = text(profile.social_whatsapp_number);
     // Prefer the dedicated WhatsApp number; fall back to phone when absent.
-    const linkE164 = toE164SG(whatsappRaw || phoneRaw);
+    const linkE164 = toE164(whatsappRaw || phoneRaw);
     const contactInfo = {
       contactPerson: text(profile.contact_person),
       phone: phoneRaw,
@@ -345,7 +350,7 @@ export const runAgentTools = (context: AiToolContext) => {
         name: text(p.name),
         registrationNumber: text(p.registration_number),
       })),
-      testimonials: list(data.testimonials).slice(0, 10),
+      testimonials: list(data.testimonials).slice(-10),
       publicMaids: list(data.maids)
         .filter((maid) => maid.isPublic)
         .sort((a, b) => maidTier(a) - maidTier(b))

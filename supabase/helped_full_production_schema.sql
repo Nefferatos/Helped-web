@@ -835,7 +835,8 @@ LEFT JOIN public.helped_query_meta meta ON meta.app_id = ad.id;
 CREATE OR REPLACE VIEW public.app_maids
 WITH (security_invoker = true) AS
 SELECT
-  ROW_NUMBER() OVER () AS view_row_id,
+  ROW_NUMBER() OVER (ORDER BY m.updated_at DESC NULLS LAST) AS view_row_id,
+  m.app_id,
   m.reference_code,
   m.full_name,
   m.agency_id,
@@ -847,8 +848,7 @@ SELECT
   m.created_at,
   m.updated_at,
   m.payload AS raw_record
-FROM public.helped_query_maids m
-WHERE m.app_id = 'default';
+FROM public.helped_query_maids m;
 
 -- GET /api/requests — requests with client name/email/phone
 CREATE OR REPLACE VIEW public.app_requests_with_client

@@ -9,6 +9,19 @@ export const NATIONALITY_DIAL_CODE: Record<string, string> = {
   "Cambodian maid": "+855",
 };
 
+// Returns the new homeCountryContactNumber value when nationality changes, or undefined
+// if the existing value should be left as-is.
+export const getDialCodePrefillForNationality = (
+  nat: string,
+  existing: string,
+): string | undefined => {
+  const dialCode = NATIONALITY_DIAL_CODE[nat];
+  const isBarePrefix = /^\+\d{1,4}\s*$/.test(existing);
+  if (dialCode && (!existing || isBarePrefix)) return dialCode + " ";
+  if (!dialCode && isBarePrefix) return "";
+  return undefined;
+};
+
 export interface MaidProfile {
   id?: number;
   agencyId?: number;

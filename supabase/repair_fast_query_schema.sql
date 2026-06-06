@@ -50,7 +50,8 @@ left join public.helped_query_meta meta on meta.app_id = ad.id;
 create or replace view public.app_maids
 with (security_invoker = true) as
 select
-  row_number() over () as view_row_id,
+  row_number() over (order by m.updated_at desc nulls last) as view_row_id,
+  m.app_id,
   m.reference_code,
   m.full_name,
   m.agency_id,
@@ -62,8 +63,7 @@ select
   m.created_at,
   m.updated_at,
   m.payload as raw_record
-from public.helped_query_maids m
-where m.app_id = 'default';
+from public.helped_query_maids m;
 
 create or replace view public.app_requests_with_client
 with (security_invoker = true) as

@@ -1956,6 +1956,7 @@ const listMaidsFromSupabaseAppView = async (
   const params = new URLSearchParams();
   params.set("select", "raw_record");
   params.set("order", "updated_at.desc.nullslast,view_row_id.desc");
+  params.set("app_id", `eq.${config.rowId}`);
 
   if (visibility === "public" || visibility === "hidden") {
     params.set("is_public", `eq.${visibility === "public"}`);
@@ -2035,6 +2036,7 @@ const getMaidFromSupabaseAppView = async (
     {
       select: "raw_record",
       filters: {
+        app_id: config.rowId,
         reference_code: normalizeReferenceCode(referenceCode),
       },
       limit: 1,
@@ -6150,6 +6152,7 @@ const batchMaidPhotosFromSupabaseAppView = async (
   const refsFilter = referenceCodes.map((r) => normalizeReferenceCode(r)).join(",");
   const params = new URLSearchParams();
   params.set("select", "reference_code,raw_record");
+  params.set("app_id", `eq.${config.rowId}`);
   params.set("reference_code", `in.(${refsFilter})`);
   const response = await fetch(`${config.baseUrl}/rest/v1/${table}?${params.toString()}`, {
     method: "GET",

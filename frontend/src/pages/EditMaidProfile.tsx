@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
-import { NATIONALITY_DIAL_CODE, type MaidProfile } from "@/lib/maids";
+import { getDialCodePrefillForNationality, NATIONALITY_DIAL_CODE, type MaidProfile } from "@/lib/maids";
 
 /* ─── Constants ─── */
 
@@ -857,16 +857,13 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
                     setForm((p) => {
                       if (!p) return p;
                       const existing = p.agencyContact.homeCountryContactNumber.trim();
-                      const dialCode = NATIONALITY_DIAL_CODE[nat];
-                      const isBarePrefix = /^\+\d{1,4}\s*$/.test(existing);
-                      const shouldPrefill = dialCode && (!existing || isBarePrefix);
-                      const shouldClear = !dialCode && isBarePrefix;
+                      const prefill = getDialCodePrefillForNationality(nat, existing);
                       return {
                         ...p,
                         nationality: nat,
                         agencyContact: {
                           ...p.agencyContact,
-                          ...(shouldPrefill ? { homeCountryContactNumber: dialCode + " " } : shouldClear ? { homeCountryContactNumber: "" } : {}),
+                          ...(prefill !== undefined ? { homeCountryContactNumber: prefill } : {}),
                         },
                       };
                     });
