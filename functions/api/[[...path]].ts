@@ -8382,7 +8382,90 @@ app.post(
     let m: RegExpExecArray | null;
     while ((m = MAID_RE.exec(result.response)) !== null) mentionedCodes.add(m[1].trim());
 
-    const publicMaids = (data.maids || []).filter((maid) => Boolean((maid as unknown as Record<string,unknown>).isPublic));
+    const maidCardRequest =
+      /\b(top|best|show|find|recommend|match|shortlist|list|available|availability|who|which|suitable)\b/i.test(input.message) &&
+      /\b(maid|maids|helper|helpers|fdw|filipino|indonesian|myanmar|burmese|indian|sri lankan|bangladeshi|transfer|elderly|childcare|infant|disabled|housework|cooking|cook)\b/i.test(input.message);
+    const genericCardTerms = new Set([
+      "available",
+      "availability",
+      "best",
+      "find",
+      "maid",
+      "maids",
+      "helper",
+      "helpers",
+      "fdw",
+      "list",
+      "match",
+      "recommend",
+      "show",
+      "shortlist",
+      "suitable",
+      "top",
+      "which",
+      "who",
+      "hire",
+      "hired",
+      "hiring",
+      "need",
+      "want",
+      "looking",
+      "look",
+    ]);
+    const cardTerms = input.message
+      .toLowerCase()
+      .replace(/\bfilipina\b/g, "filipino")
+      .replace(/\bphilippines?\b/g, "filipino")
+      .replace(/\bburmese\b/g, "myanmar")
+      .replace(/\bchildren\b/g, "child")
+      .replace(/\bbaby\b/g, "infant")
+      .replace(/\bold\s+folk(s)?\b/g, "elderly")
+      .replace(/\bsenior(s)?\b/g, "elderly")
+      .replace(/\baged\b/g, "elderly")
+      .split(/[^a-z0-9]+/)
+      .filter((term) => term.length >= 3 && !genericCardTerms.has(term));
+    const isDisplayablePublicMaid = (maid: MaidRecord) => {
+      const status = String(maid.status ?? "").trim().toLowerCase();
+      if (!status) return true;
+      return !/\b(unavailable|inactive|rejected|blacklist|blacklisted|hidden|archived|deleted)\b/.test(status);
+    };
+    const maidSearchText = (maid: MaidRecord) =>
+      [
+        maid.fullName,
+        maid.referenceCode,
+        maid.nationality,
+        maid.type,
+        maid.status,
+        maid.educationLevel,
+        maid.religion,
+        maid.maritalStatus,
+        JSON.stringify(maid.languageSkills ?? {}),
+        JSON.stringify(maid.skillsPreferences ?? {}),
+        JSON.stringify(maid.workAreas ?? {}),
+        JSON.stringify(maid.employmentHistory ?? []),
+        JSON.stringify(maid.introduction ?? {}),
+      ]
+        .join(" ")
+        .toLowerCase();
+    const scoreMaidCard = (maid: MaidRecord) => {
+      const haystack = maidSearchText(maid);
+      const nationality = String(maid.nationality || "").toLowerCase();
+      const workAreas = JSON.stringify(maid.workAreas ?? {}).toLowerCase();
+      const intro = JSON.stringify(maid.introduction ?? {}).toLowerCase();
+      const skills = JSON.stringify(maid.skillsPreferences ?? {}).toLowerCase();
+      const employment = JSON.stringify(maid.employmentHistory ?? []).toLowerCase();
+      return cardTerms.reduce((sum, term) => {
+        if (!haystack.includes(term)) return sum;
+        const exactNationality = nationality.includes(term) ? 8 : 0;
+        const workMatch = workAreas.includes(term) ? 5 : 0;
+        const profileMatch = intro.includes(term) || skills.includes(term) || employment.includes(term) ? 3 : 0;
+        return sum + 1 + exactNationality + workMatch + profileMatch;
+      }, 0);
+    };
+
+    const publicMaids = (data.maids || []).filter(
+      (maid) => Boolean((maid as unknown as Record<string, unknown>).isPublic) && isDisplayablePublicMaid(maid),
+    );
 
     // Primary: marker match. Fallback: name substring match.
     let featured = publicMaids.filter((maid) =>
@@ -8395,7 +8478,22 @@ app.post(
       });
     }
 
-    const featuredMaids = featured.slice(0, 4).map((maid) => {
+    if (maidCardRequest && featured.length < 10) {
+      const featuredRefs = new Set(
+        featured.map((maid) => String((maid as unknown as Record<string, unknown>).referenceCode || "")),
+      );
+      const rankedTopUp = publicMaids
+        .map((maid) => ({ maid, score: scoreMaidCard(maid) }))
+        .filter(({ maid, score }) => {
+          const ref = String((maid as unknown as Record<string, unknown>).referenceCode || "");
+          return !featuredRefs.has(ref) && (cardTerms.length === 0 || score > 0);
+        })
+        .sort((left, right) => right.score - left.score || Number(right.maid.id || 0) - Number(left.maid.id || 0))
+        .map(({ maid }) => maid);
+      featured = [...featured, ...rankedTopUp].slice(0, 10);
+    }
+
+    const featuredMaids = featured.slice(0, 10).map((maid) => {
       const r = maid as unknown as Record<string, unknown>;
       const photos = Array.isArray(r.photoDataUrls) ? (r.photoDataUrls as string[]) : [];
       return {

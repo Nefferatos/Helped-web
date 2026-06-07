@@ -31,8 +31,8 @@ import atsRoutes from './routes/atsRoutes'
 import { initializeDatabase } from './db'
 import {
   getAgencyAdminsStore,
+  getAllMaidsStore,
   syncMaidsToSqlStore,
-  getMaidsStore,
   getStoreDiagnostics,
   initializeStore,
 } from './store'
@@ -159,7 +159,7 @@ app.use('/api/employer-files', employerContractFileRoutes)
 // ─── Public maids ─────────────────────────────────────────────────────────────
 app.get('/api/public-maids', async (_req: Request, res: Response) => {
   try {
-    const maids = await getMaidsStore(undefined, 'public')
+    const maids = await getAllMaidsStore(undefined, 'public')
     res.status(200).json({ maids })
   } catch (error) {
     console.error('Error fetching public maids:', error)

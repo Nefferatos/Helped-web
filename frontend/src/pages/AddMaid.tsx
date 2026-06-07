@@ -2049,12 +2049,12 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
 
           <FormRow2Col
             left={
-              <Field label="Present Salary (S$)">
+              <Field label="Present Salary ($)">
                 <StyledInput value={String(introduction.presentSalary || "")} onChange={(e) => setIntroductionField("presentSalary", e.target.value)} placeholder="e.g. 650" />
               </Field>
             }
             right={
-              <Field label="Expected Salary (S$)">
+              <Field label="Expected Salary ($)">
                 <StyledInput value={String(introduction.expectedSalary || "")} onChange={(e) => setIntroductionField("expectedSalary", e.target.value)} placeholder="e.g. 700" />
               </Field>
             }
@@ -2095,12 +2095,12 @@ const ProfileTab = memo(({ formData, setFormData, onSave, isSaving, onUploadPhot
 
           <FormRow2Col
             left={
-              <Field label="Maid Loan (S$)">
+              <Field label="Maid Loan ($)">
                 <StyledInput value={String(introduction.maidLoan || "")} onChange={(e) => setIntroductionField("maidLoan", e.target.value)} placeholder="0" />
               </Field>
             }
             right={
-              <Field label="Off-day Compensation (S$/day)">
+              <Field label="Off-day Compensation ($/day)">
                 <StyledInput value={String(introduction.offdayCompensation || "0")} onChange={(e) => setIntroductionField("offdayCompensation", e.target.value)} />
               </Field>
             }

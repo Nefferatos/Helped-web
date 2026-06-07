@@ -191,12 +191,12 @@ const MaidProfileFullView = () => {
         <Row label="Number of Siblings" value={String(maid.numberOfSiblings)} />
         <Row label="Number of Children" value={String(maid.numberOfChildren)} />
         <Row label="Ages of Children" value={String(introduction.agesOfChildren || "")} />
-        <Row label="Present Salary (S$)" value={String(introduction.presentSalary || "")} />
+        <Row label="Present Salary ($)" value={String(introduction.presentSalary || "")} />
         <Row label="Expected Salary" value={String(introduction.expectedSalary || "")} />
         <Row label="When Available?" value={String(introduction.availability || "")} />
         <Row label="Contract Ends" value={String(introduction.contractEnds || "")} />
-        <Row label="Maid Loan (S$)" value={String(introduction.maidLoan || "")} />
-        <Row label="Offday Compensation (S$/day)" value={String(introduction.offdayCompensation || "")} />
+        <Row label="Maid Loan ($)" value={String(introduction.maidLoan || "")} />
+        <Row label="Offday Compensation ($/day)" value={String(introduction.offdayCompensation || "")} />
         <Row label="Off-days Per Month" value={String(skillsPreferences.offDaysPerMonth || "")} />
         <Row label="Status" value={String(maid.status || "available")} />
         <Row label="Public" value={String(Boolean(maid.isPublic))} />

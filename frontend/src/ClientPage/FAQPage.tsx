@@ -110,8 +110,8 @@ const faqItems = [
     q: "How much is the maid levy?",
     a: (
       <div className="faq-rich">
-        <p>The standard levy is <strong>S$300.00 per month</strong> (S$9.87 per day) for the duration of the valid work permit.</p>
-        <p>A <strong>concessionary rate of S$60/month</strong> applies if you have in the same household:</p>
+        <p>The standard levy is <strong>$300.00 per month</strong> ($9.87 per day) for the duration of the valid work permit.</p>
+        <p>A <strong>concessionary rate of $60/month</strong> applies if you have in the same household:</p>
         <ul>
           <li>A child below 16 years old</li>
           <li>An elderly person at least 67 years old</li>
@@ -141,13 +141,13 @@ const faqItems = [
     id: 7,
     cat: "legal",
     q: "What is a security bond and how much is it?",
-    a: "Employers must post a security deposit (bond) of S$5,000 per maid with the Work Permit Department, MOM. You are responsible for repatriating the maid when the two-year contract expires or is terminated. Failure to repatriate risks forfeiture of the deposit.",
+    a: "Employers must post a security deposit (bond) of $5,000 per maid with the Work Permit Department, MOM. You are responsible for repatriating the maid when the two-year contract expires or is terminated. Failure to repatriate risks forfeiture of the deposit.",
   },
   {
     id: 8,
     cat: "legal",
-    q: "What are the alternatives to the S$5,000 security deposit?",
-    a: "You may purchase an insurance policy from ANDA or NTUC Income instead of making the full S$5,000 cash deposit — a significantly cheaper alternative.",
+    q: "What are the alternatives to the $5,000 security deposit?",
+    a: "You may purchase an insurance policy from ANDA or NTUC Income instead of making the full $5,000 cash deposit — a significantly cheaper alternative.",
   },
   {
     id: 16,
@@ -183,7 +183,7 @@ const faqItems = [
     q: "What is the Personal Accident Insurance?",
     a: (
       <div className="faq-rich">
-        <p>Employers must purchase personal accident insurance for their maid with a minimum insured sum of <strong>S$10,000</strong>. Approved insurers include:</p>
+        <p>Employers must purchase personal accident insurance for their maid with a minimum insured sum of <strong>$10,000</strong>. Approved insurers include:</p>
         <ul>
           <li><strong>Augaries Insurance</strong> — 116 Lavender Street, #02-05 Pek Chuan Building. Tel: 6293 6232</li>
           <li><strong>ANDA Insurance Agencies Pte Ltd</strong> — 60 Eu Tong Sen Street, #01-13/14 Furama Hotel. Tel: 6534-2288</li>
@@ -231,49 +231,49 @@ const faqItems = [
     id: 22,
     cat: "salaries",
     q: "What is the average salary of a Myanmar maid?",
-    a: "Myanmar maid salary ranges from approximately S$450–S$550, depending on skill level. Experienced or transfer Myanmar maids typically earn S$500–S$650 or more.",
+    a: "Myanmar maid salary ranges from approximately $450–$550, depending on skill level. Experienced or transfer Myanmar maids typically earn $500–$650 or more.",
   },
   {
     id: 23,
     cat: "salaries",
     q: "What is the average salary of a Filipino maid?",
-    a: "The Philippine Overseas Employment Administration stipulates a minimum salary of S$570. New or transfer Filipino maids typically earn S$570–S$650, while more experienced maids may command S$600–S$750 or higher.",
+    a: "The Philippine Overseas Employment Administration stipulates a minimum salary of $570. New or transfer Filipino maids typically earn $570–$650, while more experienced maids may command $600–$750 or higher.",
   },
   {
     id: 24,
     cat: "salaries",
     q: "What is the average salary of an Indonesian maid?",
-    a: "New Indonesian maids typically earn S$550–S$570. Experienced Indonesian maids earn S$600–S$750 or more, depending on skill sets and years of experience.",
+    a: "New Indonesian maids typically earn $550–$570. Experienced Indonesian maids earn $600–$750 or more, depending on skill sets and years of experience.",
   },
   {
     id: 25,
     cat: "salaries",
     q: "What is the average salary of a Sri Lankan maid?",
-    a: "New Sri Lankan maids earn approximately S$480–S$550. Experienced Sri Lankan maids start from S$650 and above.",
+    a: "New Sri Lankan maids earn approximately $480–$550. Experienced Sri Lankan maids start from $650 and above.",
   },
   {
     id: 26,
     cat: "salaries",
     q: "What is the average salary of an Indian maid?",
-    a: "Indian maid salaries range from approximately S$400–S$600, increasing with experience and specialised skills.",
+    a: "Indian maid salaries range from approximately $400–$600, increasing with experience and specialised skills.",
   },
   {
     id: 27,
     cat: "salaries",
     q: "What is the salary of a Bangladeshi maid?",
-    a: "Approximately S$400–S$600. Salary increases with experience.",
+    a: "Approximately $400–$600. Salary increases with experience.",
   },
   {
     id: 28,
     cat: "salaries",
     q: "What is the salary of a Punjabi maid?",
-    a: "Starting from approximately S$480. The salary increases with experience and skill level.",
+    a: "Starting from approximately $480. The salary increases with experience and skill level.",
   },
   {
     id: 14,
     cat: "situations",
     q: "What should I do if my maid goes missing?",
-    a: "Cancel her work permit immediately to stop the levy payment. You are given one month to locate and repatriate her. Failure to do so risks forfeiture of the S$5,000 security deposit.",
+    a: "Cancel her work permit immediately to stop the levy payment. You are given one month to locate and repatriate her. Failure to do so risks forfeiture of the $5,000 security deposit.",
   },
   {
     id: 15,

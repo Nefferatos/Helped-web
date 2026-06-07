@@ -1125,7 +1125,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
 
           <FormRow2Col
             left={
-              <Field label="Present Salary (S$)">
+              <Field label="Present Salary ($)">
                 <StyledInput
                   value={form.introduction.presentSalary}
                   onChange={(e) => setIntroField("presentSalary", e.target.value)}
@@ -1134,7 +1134,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
               </Field>
             }
             right={
-              <Field label="Expected Salary (S$)">
+              <Field label="Expected Salary ($)">
                 <StyledInput
                   value={form.introduction.expectedSalary}
                   onChange={(e) => setIntroField("expectedSalary", e.target.value)}
@@ -1187,7 +1187,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
 
           <FormRow2Col
             left={
-              <Field label="Maid Loan (S$)">
+              <Field label="Maid Loan ($)">
                 <StyledInput
                   value={form.introduction.maidLoan}
                   onChange={(e) => setIntroField("maidLoan", e.target.value)}
@@ -1196,7 +1196,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
               </Field>
             }
             right={
-              <Field label="Off-day Compensation (S$/day)">
+              <Field label="Off-day Compensation ($/day)">
                 <StyledInput
                   value={form.introduction.offdayCompensation}
                   onChange={(e) => setIntroField("offdayCompensation", e.target.value)}

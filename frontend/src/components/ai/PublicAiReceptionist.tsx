@@ -319,6 +319,7 @@ export default function PublicAiReceptionist() {
         name,
         contact,
         conversationId,
+        currentPath: location.pathname,
       });
       const payload = result as unknown as { featuredMaids?: FeaturedMaid[] };
       const assistantMsg: Message = {
