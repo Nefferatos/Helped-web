@@ -555,8 +555,9 @@ const AdminEnquiry = () => {
         setIsLoading(true);
         const params = new URLSearchParams();
         if (search.trim()) params.set("search", search.trim());
+        params.set("pageSize", "500");
         const response = await fetch(
-          `/api/enquiries${params.toString() ? `?${params.toString()}` : ""}`,
+          `/api/enquiries?${params.toString()}`,
           { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal },
         );
         const data = await readSafeJson<{ error?: string; enquiries?: EnquiryRecord[] }>(response);
@@ -623,7 +624,7 @@ const AdminEnquiry = () => {
             pollTimer = window.setInterval(async () => {
               if (controller.signal.aborted || searchRef.current.trim()) return;
               try {
-                const res = await fetch("/api/enquiries", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
+                const res = await fetch("/api/enquiries?pageSize=500", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
                 const d = await readSafeJson<{ enquiries?: EnquiryRecord[] }>(res);
                 if (res.ok && d.enquiries) {
                   setEnquiries(enrichWithMeta([...d.enquiries].sort((a, b) => b.id - a.id)));

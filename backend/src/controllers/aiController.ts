@@ -16,6 +16,18 @@ import { getAllMaidsStore, getCompanyBundle, type CompanyProfileRecord, type Mai
 const GROQ_CHAT_COMPLETIONS_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant'
 
+const buildWhatsAppLink = (profile: CompanyProfileRecord | null): string => {
+  if (!profile) return ''
+  const p = profile as unknown as Record<string, unknown>
+  const raw = (p.social_whatsapp_number || p.contact_phone || '') as string
+  const hasPlus = raw.trimStart().startsWith('+')
+  let digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  if (!hasPlus && digits.length === 9 && digits.startsWith('0')) digits = digits.slice(1)
+  if (!hasPlus && digits.length === 8) digits = `65${digits}`
+  return `https://wa.me/${digits}`
+}
+
 const FAQ_KNOWLEDGE = [
   {
     q: 'How much is the maid levy?',
@@ -493,6 +505,7 @@ const callGroqReceptionist = async (params: {
     params.relevantMaids.length > 0
       ? params.relevantMaids.map(describeMaidForPrompt).join('\n\n---\n\n')
       : 'No matching public maid profiles.'
+  const whatsappLink = buildWhatsAppLink(params.companyProfile)
   const companyContext = params.companyProfile
     ? [
         `Company: ${params.companyProfile.company_name || params.companyProfile.short_name || 'N/A'}`,
@@ -506,6 +519,8 @@ const callGroqReceptionist = async (params: {
           .filter(Boolean)
           .join(', ') || 'N/A'}`,
         `Phone: ${params.companyProfile.contact_phone || 'N/A'}`,
+        `WhatsApp number: ${(params.companyProfile.social_whatsapp_number || params.companyProfile.contact_phone) || 'N/A'}`,
+        `WhatsApp link (use this full URL in replies): ${whatsappLink || 'N/A'}`,
         `Email: ${params.companyProfile.contact_email || 'N/A'}`,
         `Website: ${params.companyProfile.contact_website || 'N/A'}`,
         `Office hours: ${params.companyProfile.office_hours_regular || 'N/A'}`,
@@ -528,7 +543,7 @@ const callGroqReceptionist = async (params: {
         {
           role: 'system',
           content:
-            'You are the AI Receptionist for a Singapore maid agency. Answer naturally and directly using only the supplied FAQ, company, and public maid profile context. If the user asks about a maid background, biodata, experience, or profile details, answer from the public maid profile context in text only. If the user asks about fees, costs, salary, levy, loan, or insurance, answer in text only and do not suggest profile cards. Mention profile cards only when profile cards are provided for an explicit list, top, show, find, recommend, match, shortlist, or availability request. If the question is not about the company, maid profiles, or hiring helpers, politely say you can only help with those topics. If exact agency fees are not supplied, say the team can confirm agency fees instead of inventing numbers. Keep answers concise and helpful.',
+            'You are the AI Receptionist for a Singapore maid agency. Answer naturally using only the supplied FAQ, company, and maid profile context.\n\nHIRING INTENT: Treat ANY of these as hiring intent and respond by showcasing available maids: "looking for a maid", "need help at home", "help around the house", "need a helper", "domestic helper", "someone to cook/clean", "need childcare help", "someone for elderly care", "how much does it cost", "what maids do you have". Never refuse these as off-topic.\n\nFEES: Never state any specific dollar amount, MOM levy figure, insurance cost, or placement fee — even if you know them from general knowledge, because rates change and the agency must quote accurately. Always say "Contact us for an accurate fee breakdown."\n\nWHATSAPP: When asked for WhatsApp, output the full WhatsApp link URL from the company context AND the human-readable number. Never show just the number alone.\n\nURGENT: For anything described as urgent, give the phone number and WhatsApp link URL in your FIRST sentence before asking follow-up questions.\n\nPROFILE CARDS: Mention profile cards only when the profile cards section lists specific maids.\n\nOFF-TOPIC: If the question is truly unrelated to maids, hiring, or the agency, politely redirect. Keep answers concise and helpful.',
         },
         {
           role: 'user',

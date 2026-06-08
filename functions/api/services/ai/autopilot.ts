@@ -160,6 +160,44 @@ const isOlderThan = (value: unknown, ms: number) => {
   return Number.isFinite(timestamp) && Date.now() - timestamp > ms;
 };
 
+const isGroqUnavailable = (error: unknown): boolean => {
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes("429") || /rate.?limit/i.test(msg) || msg.includes("GROQ_API_KEY is not configured");
+};
+
+const offlineFallback = (candidate: AutopilotCandidate, data: AppDataLike): string => {
+  const id = candidate.agencyId;
+  const pending = list(data.requests).filter((r) => num(r.agencyId) === id && r.status === "pending");
+  const unread = list(data.chatMessages).filter(
+    (m) => num(m.agencyId) === id && m.senderRole === "client" && m.readByAgency === false,
+  );
+  const activeApps = list(data.ats?.applications).filter(
+    (a) => num(a.agencyId) === id && !["Approved", "Placed", "Rejected"].includes(text(a.status)),
+  );
+  const publicMaids = list(data.maids).filter((m) => num(m.agencyId) === id && m.isPublic === true);
+  const stale = publicMaids.filter((m) => isOlderThan(m.updatedAt, 60 * DAY_MS));
+  const enquiries = list(data.enquiries).filter((e) => num(e.agencyId) === id);
+
+  const lines: string[] = ["**Offline Operations Summary** *(AI unavailable — rule-based)*", ""];
+  lines.push(`**Pending requests:** ${pending.length}`);
+  lines.push(`**Unread client messages:** ${unread.length}`);
+  lines.push(`**Active ATS applications:** ${activeApps.length}`);
+  lines.push(`**Public maid profiles:** ${publicMaids.length} (${stale.length} not updated in 60+ days)`);
+  lines.push(`**Enquiries on file:** ${enquiries.length}`);
+  lines.push("");
+
+  if (pending.length > 0)
+    lines.push(`⚠ ${pending.length} pending request${pending.length !== 1 ? "s" : ""} need agency action.`);
+  if (unread.length > 0)
+    lines.push(`⚠ ${unread.length} unread client message${unread.length !== 1 ? "s" : ""} waiting for reply.`);
+  if (stale.length > 0)
+    lines.push(`⚠ ${stale.length} maid profile${stale.length !== 1 ? "s" : ""} not refreshed in over 60 days.`);
+  if (pending.length === 0 && unread.length === 0 && stale.length === 0)
+    lines.push("✓ No urgent items detected.");
+
+  return lines.join("\n");
+};
+
 const createCandidates = (data: AppDataLike, agencyId?: number, agencyName?: string) => {
   const agencies = candidateAgencies(data, agencyId, agencyName);
   const candidates: AutopilotCandidate[] = [];
@@ -296,20 +334,34 @@ export const runAiAutopilot = async (options: AiAutopilotOptions) => {
       agencyName: candidate.agencyName,
       ip: "scheduled-autopilot",
     };
-    const result = await runAIAgent({
-      agentId: candidate.agentId,
-      input: {
-        message: candidate.message,
-        autopilot: true,
-        actionType: candidate.actionType,
-        target: candidate.target,
-      },
-      actor,
-      appData: options.appData as Record<string, unknown>,
-      groqApiKey: options.groqApiKey,
-      supabase: options.supabase,
-      request: options.request,
-    });
+    let result: Awaited<ReturnType<typeof runAIAgent>>;
+    try {
+      result = await runAIAgent({
+        agentId: candidate.agentId,
+        input: {
+          message: candidate.message,
+          autopilot: true,
+          actionType: candidate.actionType,
+          target: candidate.target,
+        },
+        actor,
+        appData: options.appData as Record<string, unknown>,
+        groqApiKey: options.groqApiKey,
+        supabase: options.supabase,
+        request: options.request,
+      });
+    } catch (err) {
+      if (!isGroqUnavailable(err)) throw err;
+      const fallbackText = offlineFallback(candidate, options.appData);
+      result = {
+        agent: { id: candidate.agentId, name: candidate.agentId },
+        conversationId: crypto.randomUUID(),
+        response: fallbackText,
+        toolResults: {},
+        usage: {},
+        offline: true,
+      } as unknown as Awaited<ReturnType<typeof runAIAgent>>;
+    }
 
     const actionId = options.dryRun ? null : await writeAction(options.supabase, candidate, result);
     existingKeys.add(candidate.dedupeKey);
@@ -323,6 +375,7 @@ export const runAiAutopilot = async (options: AiAutopilotOptions) => {
       target: candidate.target,
       conversationId: result.conversationId,
       preview: result.response.slice(0, 240),
+      offline: (result as Record<string, unknown>).offline === true,
     });
   }
 

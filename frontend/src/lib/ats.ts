@@ -144,13 +144,6 @@ export const fetchAtsApplication = async (applicationId: string) => {
   return ensureOk<AtsApplicationBundle & { error?: string }>(response);
 };
 
-export const syncAtsFromMaids = async () => {
-  const response = await fetch("/api/ats/sync-from-maids", {
-    method: "POST",
-    headers: { ...getAgencyAdminAuthHeaders() },
-  });
-  return ensureOk<{ synced: number; error?: string }>(response);
-};
 
 export const updateAtsStage = async (applicationId: string, stage: string, reason?: string) => {
   const response = await fetch(`/api/ats/applications/${encodeURIComponent(applicationId)}/stage`, {

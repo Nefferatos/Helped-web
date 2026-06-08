@@ -450,6 +450,7 @@ type Bindings = {
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
   MAKE_WEBHOOK_URL?: string;
+  STORAGE_BACKEND?: string;
 };
 
 type Variables = {
@@ -1132,15 +1133,30 @@ const loadDataFromKv = async (
   const raw = await kv.get("app-data.json");
   if (!raw) {
     const initial = defaultData();
-    await kv.put("app-data.json", JSON.stringify(initial));
+    await kv.put("app-data.json", JSON.stringify({ ...initial, __v: 2 }));
     return initial;
   }
 
-  return mergeAppData(JSON.parse(stripBom(raw)) as Partial<AppData>);
+  const parsed = JSON.parse(stripBom(raw)) as Partial<AppData> & { __v?: number };
+  // __v >= 2 means data was already normalized when saved — skip the expensive mergeAppData pass.
+  // Still fill in any top-level fields that are missing (e.g. new fields added after this blob
+  // was written) so callers never receive undefined where an array is expected.
+  if ((parsed.__v ?? 0) >= 2) {
+    const { __v: _v, ...data } = parsed as Record<string, unknown>;
+    const defaults = defaultData() as Record<string, unknown>;
+    for (const key of Object.keys(defaults)) {
+      if ((data as Record<string, unknown>)[key] === undefined) {
+        (data as Record<string, unknown>)[key] = defaults[key];
+      }
+    }
+    return data as AppData;
+  }
+  return mergeAppData(parsed);
 };
 
 const saveDataToKv = async (kv: KVNamespace, data: AppData) => {
-  await kv.put("app-data.json", JSON.stringify(data));
+  // Mark as pre-normalized so the next load skips mergeAppData.
+  await kv.put("app-data.json", JSON.stringify({ ...data, __v: 2 }));
 };
 
 type SupabaseAppDataConfig = {
@@ -2529,6 +2545,9 @@ const saveDataToSupabase = async (
 };
 
 // ─── Module-level app-data cache ─────────────────────────────────────────────
+const isKvBackend = (env: Bindings) =>
+  env.STORAGE_BACKEND?.trim().toLowerCase() === "kv";
+
 // Shared across requests within the same Worker isolate (15-second TTL).
 // structuredClone isolates each caller from the cached copy so mutations are safe.
 // Only applied to the normalized Supabase path (no tracking-property concerns).
@@ -2547,6 +2566,13 @@ const loadData = async (
   env: Bindings,
   options: LoadDataOptions = {},
 ): Promise<AppData> => {
+  if (isKvBackend(env) && env.APP_DATA) {
+    const hit = getAppDataCache();
+    if (hit) return hit;
+    const data = await loadDataFromKv(env.APP_DATA, options);
+    putAppDataCache(data);
+    return data;
+  }
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
@@ -2575,6 +2601,11 @@ const loadData = async (
 
 const saveData = async (env: Bindings, data: AppData) => {
   bustAppDataCache(); // invalidate before write so concurrent reads don't serve stale data
+  if (isKvBackend(env) && env.APP_DATA) {
+    await saveDataToKv(env.APP_DATA, data);
+    putAppDataCache(data);
+    return;
+  }
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
@@ -2599,11 +2630,18 @@ const saveData = async (env: Bindings, data: AppData) => {
   await saveDataToKv(env.APP_DATA, data);
 };
 
+const AGENCY_SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
 const mergeAgencyAdminSessions = (sessions: AgencyAdminSessionRecord[]) => {
   const seen = new Set<string>();
+  const cutoff = Date.now() - AGENCY_SESSION_TTL_MS;
   return sessions
     .filter((session) => {
       if (!session?.token || seen.has(session.token)) {
+        return false;
+      }
+      // Drop sessions older than 90 days to prevent unbounded KV growth.
+      if (session.createdAt && new Date(session.createdAt).getTime() < cutoff) {
         return false;
       }
       seen.add(session.token);
@@ -3008,6 +3046,10 @@ const safeApi =
       console.error("API handler error", c.req.method, c.req.path, error);
       const message =
         error instanceof Error ? error.message : "Internal Server Error";
+      // Propagate upstream rate-limit as 429 so clients can retry correctly.
+      if (/rate.?limit|429/i.test(message)) return jsonError(message, 429);
+      // Propagate upstream AI daily-limit as 503.
+      if (/tokens per day|daily.?limit/i.test(message)) return jsonError(message, 503);
       return jsonError(message, 500);
     }
   };
@@ -5490,6 +5532,7 @@ const ensureRequestConversation = (
 };
 
 const getStorageMode = (env: Bindings) => {
+  if (isKvBackend(env) && env.APP_DATA) return "kv";
   const hasSupabase = Boolean(getSupabaseAppDataConfig(env));
   if (hasSupabase) {
     return isNormalizedSupabaseEnabled(env) ? "supabase-normalized" : "supabase";
@@ -5617,6 +5660,7 @@ app.get(
 
 app.put(
   "/api/company",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<Partial<CompanyProfileRecord>>(c.req.raw);
     if (!body) {
@@ -5671,6 +5715,7 @@ app.put(
 
 app.post(
   "/api/company/mom-personnel",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{
       name?: string;
@@ -5702,6 +5747,7 @@ app.post(
 
 app.put(
   "/api/company/mom-personnel/:id",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) {
@@ -5744,6 +5790,7 @@ app.put(
 
 app.delete(
   "/api/company/mom-personnel/:id",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const id = Number(c.req.param("id"));
     const data = await loadData(c.env);
@@ -5763,6 +5810,7 @@ app.delete(
 
 app.post(
   "/api/company/testimonials",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ message?: string; author?: string }>(
       c.req.raw,
@@ -5790,6 +5838,7 @@ app.post(
 
 app.delete(
   "/api/company/testimonials/:id",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const id = Number(c.req.param("id"));
     const data = await loadData(c.env);
@@ -5903,6 +5952,7 @@ app.get(
 
 app.get(
   "/api/maids/export.csv",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const data = await loadData(c.env);
     const rows = data.maids.map((maid) =>
@@ -5923,6 +5973,7 @@ app.get(
 
 app.get(
   "/api/maids/export.xls",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const data = await loadData(c.env);
     const rows = data.maids.map((maid) =>
@@ -5990,6 +6041,7 @@ app.get(
 
 app.post(
   "/api/maids/import.csv",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ csv?: string }>(c.req.raw);
     if (!body?.csv?.trim()) {
@@ -6015,6 +6067,7 @@ app.post(
 
 app.post(
   "/api/maids/import.batch",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ operations?: MaidImportOperation[] }>(c.req.raw);
     const operations = Array.isArray(body?.operations) ? body.operations : [];
@@ -6171,6 +6224,7 @@ const batchMaidPhotosFromSupabaseAppView = async (
 
 app.post(
   "/api/maids/photos-batch",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ refs?: unknown }>(c.req.raw);
     if (!Array.isArray(body?.refs) || body.refs.length === 0) {
@@ -6239,6 +6293,7 @@ app.get(
 
 app.post(
   "/api/maids",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<Record<string, unknown>>(c.req.raw);
     if (!body) {
@@ -6288,6 +6343,7 @@ app.post(
 
 app.put(
   "/api/maids/:referenceCode",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<Record<string, unknown>>(c.req.raw);
     if (!body) {
@@ -6386,6 +6442,7 @@ app.put(
 
 app.patch(
   "/api/maids/:referenceCode/bring-to-top",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
     const config = getSupabaseAppDataConfig(c.env);
@@ -6442,6 +6499,7 @@ app.patch(
 
 app.patch(
   "/api/maids/:referenceCode/visibility",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ isPublic?: boolean }>(c.req.raw);
     if (typeof body?.isPublic !== "boolean") {
@@ -6493,6 +6551,7 @@ app.patch(
 
 app.patch(
   "/api/maids/:referenceCode/photo",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ photoDataUrl?: string }>(c.req.raw);
     if (typeof body?.photoDataUrl !== "string") {
@@ -6565,6 +6624,7 @@ app.patch(
 
 app.patch(
   "/api/maids/:referenceCode/photos",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ photoDataUrl?: string }>(c.req.raw);
     if (typeof body?.photoDataUrl !== "string" || !body.photoDataUrl.trim()) {
@@ -6659,6 +6719,7 @@ app.patch(
 
 app.put(
   "/api/maids/:referenceCode/photo-gallery",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ photoDataUrls?: string[] }>(c.req.raw);
     if (!Array.isArray(body?.photoDataUrls)) {
@@ -6745,6 +6806,7 @@ app.put(
 
 app.patch(
   "/api/maids/:referenceCode/video",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{ videoDataUrl?: string }>(c.req.raw);
     if (typeof body?.videoDataUrl !== "string") {
@@ -6815,6 +6877,7 @@ app.patch(
 
 app.delete(
   "/api/maids/:referenceCode",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const data = await loadData(c.env);
     const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
@@ -6866,6 +6929,7 @@ app.get(
 
 app.post(
   "/api/employers",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{
       refCode?: string | null;
@@ -7061,6 +7125,7 @@ app.post(
 
 app.post(
   "/api/employment-contract",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const request = new Request(new URL("/api/employers", c.req.url), {
       method: "POST",
@@ -7071,8 +7136,69 @@ app.post(
   }),
 );
 
+// ─── Employer contract file uploads ──────────────────────────────────────────
+// Stores files in Supabase Storage and returns public URLs.
+app.post(
+  "/api/employer-files",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const storageConfig = getSupabaseStorageConfig(c.env);
+    if (!storageConfig) {
+      return c.json({ error: "File storage not configured (SUPABASE_SERVICE_ROLE_KEY required)" }, 503);
+    }
+    const formData = await c.req.raw.formData().catch(() => null);
+    if (!formData) return c.json({ error: "Multipart form data is required" }, 400);
+
+    await ensureSupabaseStorageBucket(storageConfig);
+
+    const uploaded: Array<{ name: string; url: string; size: number }> = [];
+    for (const [, value] of formData.entries()) {
+      if (!(value instanceof File)) continue;
+      const ext = value.name.split(".").pop() ?? "bin";
+      const key = `contracts/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+      const uploadResp = await fetch(
+        `${storageConfig.baseUrl}/storage/v1/object/${encodeURIComponent(storageConfig.bucket)}/${key}`,
+        {
+          method: "POST",
+          headers: {
+            apikey: storageConfig.serviceRoleKey,
+            authorization: `Bearer ${storageConfig.serviceRoleKey}`,
+            "content-type": value.type || "application/octet-stream",
+            "x-upsert": "true",
+          },
+          body: await value.arrayBuffer(),
+        },
+      );
+      if (!uploadResp.ok) {
+        throw new Error(`File upload failed: ${await uploadResp.text()}`);
+      }
+      uploaded.push({
+        name: value.name,
+        url: buildSupabasePublicFileUrl(storageConfig, key),
+        size: value.size,
+      });
+    }
+    return c.json({ files: uploaded });
+  }),
+);
+
+app.get(
+  "/api/employer-files",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const data = await loadData(c.env, { readOnly: true });
+    const files = data.employmentContracts.flatMap((contract) =>
+      Array.isArray((contract as unknown as Record<string, unknown>).files)
+        ? ((contract as unknown as Record<string, unknown>).files as Array<{ name: string; url: string; size: number }>)
+        : [],
+    );
+    return c.json({ files });
+  }),
+);
+
 app.delete(
   "/api/employers/:refCode",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const data = await loadData(c.env);
     const refCode = toTrimmedString(c.req.param("refCode"));
@@ -7091,10 +7217,10 @@ app.delete(
   }),
 );
 
-app.get("/api/enquiries", async (c) => {
+app.get("/api/enquiries", requireAgencyAdminAuth, async (c) => {
   const search = c.req.query("search")?.trim().toLowerCase();
   const page = Math.max(1, Number(c.req.query("page") ?? "1") || 1);
-  const pageSize = Math.min(100, Math.max(1, Number(c.req.query("pageSize") ?? "50") || 50));
+  const pageSize = Math.min(500, Math.max(1, Number(c.req.query("pageSize") ?? "50") || 50));
   const data = await loadData(c.env, { readOnly: true });
   let enquiries = [...data.enquiries].sort((l, r) => r.id - l.id);
   if (search) {
@@ -7184,15 +7310,18 @@ app.post("/api/enquiries", async (c) => {
       400,
     );
   }
+  if (body.username.length > 200 || body.email.length > 200 || body.phone.length > 50 || body.message.length > 5000) {
+    return c.json({ error: "Input exceeds maximum allowed length" }, 400);
+  }
 
   const data = await loadData(c.env);
   const enquiry: EnquiryRecord = {
     id: data.counters.enquiries++,
-    username: body.username,
+    username: body.username.slice(0, 200),
     date: body.date || buildFallbackDate(),
-    email: body.email,
-    phone: body.phone,
-    message: body.message,
+    email: body.email.slice(0, 200),
+    phone: body.phone.slice(0, 50),
+    message: body.message.slice(0, 5000),
     createdAt: now(),
   };
   data.enquiries.unshift(enquiry);
@@ -7227,7 +7356,7 @@ function enrichEnquiryWithClient(enquiry: EnquiryRecord, clients: Array<{ id: nu
   };
 }
 
-app.delete("/api/enquiries/:id", async (c) => {
+app.delete("/api/enquiries/:id", requireAgencyAdminAuth, async (c) => {
   const id = Number(c.req.param("id"));
   const data = await loadData(c.env);
   const existing = data.enquiries.find((item) => item.id === id);
@@ -8482,13 +8611,22 @@ app.post(
       const featuredRefs = new Set(
         featured.map((maid) => String((maid as unknown as Record<string, unknown>).referenceCode || "")),
       );
+      const getMaidTier = (m: MaidRecord) => {
+        const status = String((m as unknown as Record<string, unknown>).status ?? "").toLowerCase();
+        const type   = String((m as unknown as Record<string, unknown>).type   ?? "").toLowerCase();
+        return status.includes("available") ? 0 : type.includes("transfer") ? 1 : 2;
+      };
       const rankedTopUp = publicMaids
         .map((maid) => ({ maid, score: scoreMaidCard(maid) }))
         .filter(({ maid, score }) => {
           const ref = String((maid as unknown as Record<string, unknown>).referenceCode || "");
           return !featuredRefs.has(ref) && (cardTerms.length === 0 || score > 0);
         })
-        .sort((left, right) => right.score - left.score || Number(right.maid.id || 0) - Number(left.maid.id || 0))
+        .sort((left, right) =>
+          right.score - left.score ||
+          getMaidTier(left.maid) - getMaidTier(right.maid) ||
+          Number(right.maid.id || 0) - Number(left.maid.id || 0),
+        )
         .map(({ maid }) => maid);
       featured = [...featured, ...rankedTopUp].slice(0, 10);
     }
@@ -8687,6 +8825,28 @@ app.post(
     return runAiEndpoint(
       c,
       "content_generator",
+      {
+        role: "agency",
+        userId: admin.id,
+        agencyId: admin.agencyId,
+        agencyName: admin.agencyName,
+      },
+      data,
+      body,
+    );
+  }),
+);
+
+app.post(
+  "/api/ai/automation",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const body = await parseAiBody(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    return runAiEndpoint(
+      c,
+      "workflow_automation",
       {
         role: "agency",
         userId: admin.id,
@@ -9412,6 +9572,214 @@ app.post("/api/client-auth/logout", requireClientAuth, async (c) => {
   return c.json({ message: "Logged out successfully" });
 });
 
+// ─── WhatsApp candidate communication ────────────────────────────────────────
+// Stores per-candidate conversations in KV under the key "whatsapp:{ref}".
+// Provides a working panel without requiring an external WhatsApp API.
+
+const kvWhatsAppKey = (ref: string) => `whatsapp:${ref}`;
+
+type WaConversation = {
+  id: string;
+  candidateReferenceCode: string;
+  candidateName: string;
+  phoneNumber: string;
+  currentStage: string;
+  nextStep: string;
+  tags: string[];
+  unreadRecruiterCount: number;
+  unreadApplicantCount: number;
+  lastMessageAt: string;
+  lastMessagePreview: string;
+  status: "active" | "needs_attention" | "closed";
+  aiEnabled: boolean;
+  interviewSchedule?: { date: string; time: string; status: string };
+  documentChecklist: Array<{ key: string; label: string; completed: boolean; lastSubmittedAt?: string }>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type WaMessage = {
+  id: string;
+  direction: "incoming" | "outgoing";
+  status: "queued" | "sent" | "delivered" | "read" | "failed";
+  type: "text" | "template" | "image" | "video" | "document" | "audio" | "system";
+  senderName: string;
+  senderRole: "recruiter" | "applicant" | "ai" | "system";
+  text: string;
+  templateKey?: string;
+  automated: boolean;
+  createdAt: string;
+  attachments: Array<{ id: string; fileName: string; mimeType: string; size: number; kind: string; publicUrl: string; uploadedAt: string }>;
+};
+
+type WaStore = { conversation: WaConversation; messages: WaMessage[]; events: Array<{ id: string; type: string; detail: string; createdAt: string }> };
+
+const loadWaStore = async (kv: KVNamespace, ref: string, maidName: string): Promise<WaStore> => {
+  const raw = await kv.get(kvWhatsAppKey(ref));
+  if (raw) return JSON.parse(raw) as WaStore;
+  const ts = now();
+  return {
+    conversation: {
+      id: `wa-${ref}`,
+      candidateReferenceCode: ref,
+      candidateName: maidName,
+      phoneNumber: "",
+      currentStage: "New Applicant",
+      nextStep: "Review and send introduction message",
+      tags: [],
+      unreadRecruiterCount: 0,
+      unreadApplicantCount: 0,
+      lastMessageAt: ts,
+      lastMessagePreview: "",
+      status: "active",
+      aiEnabled: false,
+      documentChecklist: [],
+      createdAt: ts,
+      updatedAt: ts,
+    },
+    messages: [],
+    events: [],
+  };
+};
+
+const saveWaStore = async (kv: KVNamespace, ref: string, store: WaStore) => {
+  await kv.put(kvWhatsAppKey(ref), JSON.stringify(store));
+};
+
+const buildWaBundle = (store: WaStore, maid: MaidRecord) => ({
+  conversation: store.conversation,
+  candidate: { referenceCode: maid.referenceCode, fullName: maid.fullName, agencyId: maid.agencyId },
+  messages: store.messages,
+  templates: [],
+  events: store.events,
+});
+
+app.get(
+  "/api/whatsapp/candidates/:referenceCode",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    if (!c.env.APP_DATA || isKvBackend(c.env) === false) return c.json({ error: "WhatsApp feature requires KV storage (set STORAGE_BACKEND=kv and bind APP_DATA)" }, 503);
+    const ref = normalizeReferenceCode(c.req.param("referenceCode"));
+    const data = await loadData(c.env, { readOnly: true });
+    const maid = data.maids.find((m) => m.referenceCode === ref);
+    if (!maid) return c.json({ error: "Maid not found" }, 404);
+    const store = await loadWaStore(c.env.APP_DATA, ref, maid.fullName);
+    return c.json(buildWaBundle(store, maid));
+  }),
+);
+
+app.post(
+  "/api/whatsapp/candidates/:referenceCode/messages",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    if (!c.env.APP_DATA || isKvBackend(c.env) === false) return c.json({ error: "WhatsApp feature requires KV storage (set STORAGE_BACKEND=kv and bind APP_DATA)" }, 503);
+    const ref = normalizeReferenceCode(c.req.param("referenceCode"));
+    const body = await parseBody<{ text?: string; templateKey?: string; attachments?: unknown[] }>(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    const maid = data.maids.find((m) => m.referenceCode === ref);
+    if (!maid) return c.json({ error: "Maid not found" }, 404);
+    const store = await loadWaStore(c.env.APP_DATA, ref, maid.fullName);
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const message: WaMessage = {
+      id: crypto.randomUUID(),
+      direction: "outgoing",
+      status: "queued",
+      type: body?.templateKey ? "template" : "text",
+      senderName: admin.username || "Agency Staff",
+      senderRole: "recruiter",
+      text: toTrimmedString(body?.text),
+      templateKey: body?.templateKey ? toTrimmedString(body.templateKey) : undefined,
+      automated: false,
+      createdAt: now(),
+      attachments: [],
+    };
+    store.messages.push(message);
+    store.conversation.lastMessageAt = message.createdAt;
+    store.conversation.lastMessagePreview = message.text.slice(0, 100);
+    store.conversation.updatedAt = message.createdAt;
+    await saveWaStore(c.env.APP_DATA, ref, store);
+    return c.json(buildWaBundle(store, maid));
+  }),
+);
+
+app.patch(
+  "/api/whatsapp/candidates/:referenceCode/stage",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    if (!c.env.APP_DATA || isKvBackend(c.env) === false) return c.json({ error: "WhatsApp feature requires KV storage (set STORAGE_BACKEND=kv and bind APP_DATA)" }, 503);
+    const ref = normalizeReferenceCode(c.req.param("referenceCode"));
+    const body = await parseBody<{ stage?: string; sendWorkflowTemplate?: boolean; interviewSchedule?: { date: string; time: string; status: string } }>(c.req.raw);
+    const data = await loadData(c.env, { readOnly: true });
+    const maid = data.maids.find((m) => m.referenceCode === ref);
+    if (!maid) return c.json({ error: "Maid not found" }, 404);
+    const store = await loadWaStore(c.env.APP_DATA, ref, maid.fullName);
+    const ts = now();
+    if (body?.stage) {
+      store.conversation.currentStage = body.stage;
+      store.conversation.updatedAt = ts;
+      if (body.interviewSchedule) store.conversation.interviewSchedule = body.interviewSchedule;
+      store.events.push({ id: crypto.randomUUID(), type: "stage_change", detail: `Stage updated to ${body.stage}`, createdAt: ts });
+    }
+    await saveWaStore(c.env.APP_DATA, ref, store);
+    return c.json(buildWaBundle(store, maid));
+  }),
+);
+
+app.post(
+  "/api/whatsapp/inbound",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    if (!c.env.APP_DATA) return c.json({ ok: true });
+    const body = await parseBody<{ candidateReferenceCode?: string; applicantName?: string; text?: string }>(c.req.raw);
+    const ref = toTrimmedString(body?.candidateReferenceCode);
+    if (!ref) return c.json({ ok: true });
+    const data = await loadData(c.env, { readOnly: true });
+    const maid = data.maids.find((m) => m.referenceCode === ref);
+    if (!maid) return c.json({ ok: true });
+    const store = await loadWaStore(c.env.APP_DATA, ref, maid.fullName);
+    const ts = now();
+    const message: WaMessage = {
+      id: crypto.randomUUID(),
+      direction: "incoming",
+      status: "delivered",
+      type: "text",
+      senderName: toTrimmedString(body?.applicantName) || maid.fullName,
+      senderRole: "applicant",
+      text: toTrimmedString(body?.text),
+      automated: false,
+      createdAt: ts,
+      attachments: [],
+    };
+    store.messages.push(message);
+    store.conversation.lastMessageAt = ts;
+    store.conversation.lastMessagePreview = message.text.slice(0, 100);
+    store.conversation.unreadRecruiterCount += 1;
+    store.conversation.updatedAt = ts;
+    await saveWaStore(c.env.APP_DATA, ref, store);
+    return c.json({ ok: true });
+  }),
+);
+
+app.get(
+  "/api/whatsapp/dashboard/metrics",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    return c.json({
+      messagesSent: 0,
+      messagesDelivered: 0,
+      messagesRead: 0,
+      responseRate: 0,
+      averageResponseTimeMinutes: 0,
+      activeConversations: 0,
+      pendingReplies: 0,
+      interviewConfirmations: 0,
+      documentSubmissionRate: 0,
+    });
+  }),
+);
+
+// ─── Agency auth ─────────────────────────────────────────────────────────────
+
 app.post("/api/agency-auth/register", async (c) => {
   const body = await parseBody<{
     username?: string;
@@ -9795,7 +10163,7 @@ app.patch(
   },
 );
 
-app.get("/api/direct-sales", async (c) => {
+app.get("/api/direct-sales", requireAgencyAdminAuth, async (c) => {
   const page = Math.max(1, Number(c.req.query("page") ?? "1") || 1);
   const pageSize = Math.min(100, Math.max(1, Number(c.req.query("pageSize") ?? "50") || 50));
   const data = await loadData(c.env, { readOnly: true });
@@ -9807,7 +10175,7 @@ app.get("/api/direct-sales", async (c) => {
   return c.json({ directSales: paged, total, page, pageSize });
 });
 
-app.get("/api/direct-sales/clients", async (c) => {
+app.get("/api/direct-sales/clients", requireAgencyAdminAuth, async (c) => {
   const data = await loadData(c.env, { readOnly: true });
   const clients = [...data.clients]
     .sort((left, right) => right.id - left.id)
@@ -9836,6 +10204,12 @@ app.post("/api/direct-sales", async (c) => {
   }
   if (!Number.isInteger(body.clientId)) {
     return c.json({ error: "clientId is required" }, 400);
+  }
+  if (body.referenceCode.length > 100) {
+    return c.json({ error: "Input exceeds maximum allowed length" }, 400);
+  }
+  if (body.formData && JSON.stringify(body.formData).length > 10_000) {
+    return c.json({ error: "Form data exceeds maximum allowed size" }, 400);
   }
 
   const request = new Request(
@@ -9926,7 +10300,7 @@ app.post("/api/direct-sales/:referenceCode", async (c) => {
   return c.json({ directSale, maid: data.maids[maidIndex] }, 201);
 });
 
-app.patch("/api/direct-sales/:id/interested", async (c) => {
+app.patch("/api/direct-sales/:id/interested", requireAgencyAdminAuth, async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) {
     return c.json({ error: "Valid direct sale id is required" }, 400);
@@ -9953,7 +10327,7 @@ app.patch("/api/direct-sales/:id/interested", async (c) => {
   return c.json({ directSale: data.directSales[saleIndex], maid });
 });
 
-app.patch("/api/direct-sales/:id/direct-hire", async (c) => {
+app.patch("/api/direct-sales/:id/direct-hire", requireAgencyAdminAuth, async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) {
     return c.json({ error: "Valid direct sale id is required" }, 400);
@@ -9980,7 +10354,7 @@ app.patch("/api/direct-sales/:id/direct-hire", async (c) => {
   return c.json({ directSale: data.directSales[saleIndex], maid });
 });
 
-app.patch("/api/direct-sales/:id/reject", async (c) => {
+app.patch("/api/direct-sales/:id/reject", requireAgencyAdminAuth, async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) {
     return c.json({ error: "Valid direct sale id is required" }, 400);
@@ -10665,6 +11039,37 @@ app.get("/api/chats/admin/last-id", requireAgencyAdminAuth, async (c) => {
   return c.json({ lastId });
 });
 
+app.get("/api/chats/admin/config", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const data = await loadData(c.env, { readOnly: true });
+  const raw = ((data.companyProfile as unknown as Record<string, unknown>).chatbotConfig ?? {}) as Record<string, unknown>;
+  const config = {
+    agencyId: admin.agencyId,
+    enabled: raw.enabled !== false,
+    botName: toTrimmedString(raw.botName) || "Support Bot",
+    welcomeMessage: toTrimmedString(raw.welcomeMessage),
+    fallbackShortResponse: toTrimmedString(raw.fallbackShortResponse),
+    fallbackLongResponse: toTrimmedString(raw.fallbackLongResponse),
+    suggestionChips: Array.isArray(raw.suggestionChips) ? raw.suggestionChips : [],
+    topicOptions: Array.isArray(raw.topicOptions) ? raw.topicOptions : [],
+    responseRules: Array.isArray(raw.responseRules) ? raw.responseRules : [],
+    updatedAt: toTrimmedString(raw.updatedAt),
+  };
+  return c.json({ config });
+});
+
+app.put("/api/chats/admin/config", requireAgencyAdminAuth, async (c) => {
+  const body = await parseBody<Record<string, unknown>>(c.req.raw);
+  if (!body) return c.json({ error: "Request body is required" }, 400);
+  const data = await loadData(c.env);
+  (data.companyProfile as unknown as Record<string, unknown>).chatbotConfig = {
+    ...body,
+    updatedAt: now(),
+  };
+  await saveData(c.env, data);
+  return c.json({ config: (data.companyProfile as unknown as Record<string, unknown>).chatbotConfig });
+});
+
 // Presence routes must be registered before the parametric '/admin/:clientId'
 // handlers so Hono does not match "heartbeat"/"offline" as a client id.
 app.post("/api/chats/admin/heartbeat", requireAgencyAdminAuth, async (c) => {
@@ -10988,8 +11393,18 @@ app.post(
 app.post(
   "/api/ats/public/apply",
   safeApi(async (c) => {
-    const formData = await c.req.raw.formData();
-    const parsed = await parseAtsFormData(c.env, formData);
+    let formData: FormData;
+    try {
+      formData = await c.req.raw.formData();
+    } catch {
+      return c.json({ error: "Multipart form data is required" }, 400);
+    }
+    let parsed: Awaited<ReturnType<typeof parseAtsFormData>>;
+    try {
+      parsed = await parseAtsFormData(c.env, formData);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : "Invalid form data" }, 400);
+    }
     const supabase = getSupabaseAppDataConfig(c.env);
 
     if (supabase && isNormalizedSupabaseEnabled(c.env)) {
@@ -11119,8 +11534,11 @@ app.patch("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, 
   const body = await parseBody<{ stage?: RecruitmentStage; reason?: string }>(c.req.raw);
   const stage = body?.stage;
 
-  if (!stage || !atsStageOrder.includes(stage)) {
+  if (!stage) {
     return c.json({ error: "stage is required" }, 400);
+  }
+  if (!atsStageOrder.includes(stage)) {
+    return c.json({ error: `Invalid stage "${stage}". Valid values: ${atsStageOrder.join(", ")}` }, 400);
   }
 
   const data = await loadData(c.env);

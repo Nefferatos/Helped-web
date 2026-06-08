@@ -682,12 +682,6 @@ const AddMaid = () => {
               quality: 0.72,
               maxSizeMB: 0.45,
             });
-            const compressedSize = getImageSizeInMB(compressed);
-            if (originalSize > 0.5) {
-              console.log(
-                `[Image Compression] Original: ${originalSize.toFixed(2)}MB → Compressed: ${compressedSize.toFixed(2)}MB`
-              );
-            }
             resolve(compressed);
           } catch (error) {
             reject(error);
@@ -702,12 +696,6 @@ const AddMaid = () => {
   const fileToDataUrl = useCallback(async (file: File) => {
     const originalSize = file.size / 1024 / 1024;
     const compressed = await compressImageFile(file, PHOTO_UPLOAD_OPTIONS);
-    const compressedSize = getImageSizeInMB(compressed);
-    if (originalSize > 0.35 || compressedSize > 0.35) {
-      console.log(
-        `[Image Compression] Original: ${originalSize.toFixed(2)}MB -> Compressed: ${compressedSize.toFixed(2)}MB`
-      );
-    }
     return compressed;
   }, []);
 

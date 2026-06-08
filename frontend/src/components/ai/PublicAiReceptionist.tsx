@@ -586,11 +586,6 @@ export default function PublicAiReceptionist() {
               </div>
             </div>
 
-            {/* Clear confirm strip */}
-            {showClearConfirm && (
-              <></>
-            )}
-
             {/* ── Messages area ── */}
             <div
               ref={scrollContainerRef}
