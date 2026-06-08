@@ -10,10 +10,10 @@ import {
   Star,
   Sparkles,
   Shield,
-  Building2,
   Eye,
   EyeOff,
   ChevronRight,
+  Quote,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import {
@@ -43,17 +43,17 @@ interface AgencyAuthResponse {
 
 const testimonials = [
   {
-    agency: "Dans Services",
+    agency: "Bright Future Agency",
     quote:
-      "Since 2018, FindMaid has been a reliable tool — we receive many phone calls and emails from employers brought in by the platform.",
-    author: "Mr. Khyle",
+      "The PDF auto-generation alone saves us hours every week. Contracts, biodata, MOM forms — all done in seconds.",
+    author: "Ms. Rowena",
     rating: 5,
   },
   {
-    agency: "1st Choice Pte Ltd",
+    agency: "Elite Home Services",
     quote:
-      "The backend auto-generates all employment contracts in PDF — Salary Schedule, Standard Contract, Insurance Forms — saving us huge time and cost.",
-    author: "Mr. Jonathan",
+      "Our listings look professional and employers find us easily. The dashboard is clean and straightforward to use.",
+    author: "Mr. Raymond",
     rating: 5,
   },
 ];
@@ -118,34 +118,35 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
       {!isEmbedded && <PublicSiteNavbar />}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Playfair+Display:ital,wght@0,700;1,500&display=swap');
 
         /* ── Tokens ───────────────────────────────────────────────────── */
         :root {
-          --pine:       #0b2217;
-          --pine-2:     #163629;
-          --pine-3:     #1f4d3b;
-          --pine-4:     #2b6652;
-          --gold:       #c8963e;
-          --gold-2:     #e3b96a;
-          --gold-3:     #f5dca0;
-          --gold-pale:  #fdf6e3;
-          --surface:    #f8f5ef;
-          --surface-2:  #f0ece3;
+          --pine:       #0c2218;
+          --pine-2:     #153620;
+          --pine-3:     #1e4d2e;
+          --pine-4:     #2e6b42;
+          --pine-light: #e8f0eb;
+          --gold:       #b5832a;
+          --gold-2:     #d4a24e;
+          --gold-3:     #eed898;
+          --gold-pale:  #faf6ed;
+          --surface:    #f6f4f0;
+          --surface-2:  #eeebe4;
           --white:      #ffffff;
-          --ink:        #100e0b;
-          --ink-2:      #2c2720;
-          --ink-3:      #5a5248;
-          --ink-4:      #8c847a;
-          --rule:       #d9d3c9;
-          --rule-2:     #e8e3da;
-          --shadow-sm:  0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-          --shadow-md:  0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
-          --shadow-lg:  0 20px 60px rgba(11,34,23,0.13), 0 4px 16px rgba(0,0,0,0.06);
-          --radius-sm:  8px;
-          --radius-md:  12px;
-          --radius-lg:  20px;
-          --radius-xl:  28px;
+          --ink:        #171210;
+          --ink-2:      #2e2822;
+          --ink-3:      #584f47;
+          --ink-4:      #958d85;
+          --rule:       #ddd7ce;
+          --rule-2:     #e9e4dc;
+          --shadow-sm:  0 1px 2px rgba(0,0,0,0.05);
+          --shadow-md:  0 4px 18px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+          --shadow-lg:  0 24px 64px rgba(12,34,24,0.11), 0 4px 16px rgba(0,0,0,0.05);
+          --r-sm: 6px;
+          --r-md: 10px;
+          --r-lg: 16px;
+          --r-xl: 22px;
         }
 
         /* ── Root ─────────────────────────────────────────────────────── */
@@ -154,10 +155,10 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           display: flex;
           flex-direction: column;
           background: var(--surface);
-          font-family: 'Inter', system-ui, sans-serif;
+          font-family: 'DM Sans', system-ui, sans-serif;
           background-image:
-            radial-gradient(ellipse 70% 55% at 15% -5%, rgba(200,150,62,0.09) 0%, transparent 65%),
-            radial-gradient(ellipse 55% 45% at 88% 105%, rgba(11,34,23,0.09) 0%, transparent 60%);
+            radial-gradient(ellipse 80% 50% at 0% 0%, rgba(180,120,40,0.07) 0%, transparent 60%),
+            radial-gradient(ellipse 60% 60% at 100% 100%, rgba(12,34,24,0.07) 0%, transparent 55%);
         }
 
         /* ── Page wrapper ─────────────────────────────────────────────── */
@@ -172,16 +173,16 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         /* ── Card ─────────────────────────────────────────────────────── */
         .ap-card {
           width: 100%;
-          max-width: 1080px;
+          max-width: 1060px;
           background: var(--white);
-          border-radius: var(--radius-xl);
+          border-radius: var(--r-xl);
           border: 1px solid var(--rule);
           box-shadow: var(--shadow-lg);
           overflow: hidden;
-          animation: cardReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation: cardReveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
         @keyframes cardReveal {
-          from { opacity: 0; transform: translateY(20px) scale(0.99); }
+          from { opacity: 0; transform: translateY(18px); }
           to   { opacity: 1; transform: none; }
         }
 
@@ -189,78 +190,62 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         .ap-header {
           display: flex;
           align-items: center;
-          gap: 1rem;
+          gap: 0.875rem;
           padding: 0 1.75rem;
-          height: 60px;
+          height: 58px;
           background: var(--pine);
           position: relative;
           overflow: hidden;
         }
-        /* Decorative light beam */
         .ap-header::before {
           content: '';
           position: absolute;
-          top: -40px; right: 120px;
-          width: 160px; height: 160px;
-          background: radial-gradient(circle, rgba(200,150,62,0.18) 0%, transparent 70%);
+          top: -60px; right: 80px;
+          width: 200px; height: 200px;
+          background: radial-gradient(circle, rgba(181,131,42,0.14) 0%, transparent 70%);
           pointer-events: none;
         }
-        /* Subtle stripes */
         .ap-header::after {
           content: '';
           position: absolute;
           inset: 0;
           background: repeating-linear-gradient(
-            -48deg,
+            -52deg,
             transparent 0px,
-            transparent 18px,
-            rgba(255,255,255,0.018) 18px,
-            rgba(255,255,255,0.018) 19px
+            transparent 20px,
+            rgba(255,255,255,0.015) 20px,
+            rgba(255,255,255,0.015) 21px
           );
           pointer-events: none;
         }
 
         .ap-logo-mark {
           position: relative; z-index: 1;
-          width: 36px; height: 36px;
-          border-radius: 10px;
-          background: rgba(200,150,62,0.16);
-          border: 1px solid rgba(200,150,62,0.28);
+          width: 34px; height: 34px;
+          border-radius: 9px;
+          background: rgba(181,131,42,0.14);
+          border: 1px solid rgba(181,131,42,0.25);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
         }
 
         .ap-header-text { flex: 1; position: relative; z-index: 1; }
         .ap-header-title {
-          font-family: 'Fraunces', serif;
-          font-size: 1.05rem;
+          font-family: 'Playfair Display', serif;
+          font-size: 1rem;
           font-weight: 700;
-          color: #f0ebe0;
+          color: #ede8de;
           margin: 0;
           line-height: 1;
-          letter-spacing: 0.005em;
+          letter-spacing: 0.01em;
         }
         .ap-header-sub {
-          font-size: 0.68rem;
+          font-size: 0.66rem;
           font-weight: 500;
-          color: rgba(240,235,224,0.55);
+          color: rgba(237,232,222,0.48);
           margin: 0.2rem 0 0;
-          letter-spacing: 0.08em;
+          letter-spacing: 0.1em;
           text-transform: uppercase;
-        }
-
-        .ap-header-badge {
-          position: relative; z-index: 1;
-          display: flex; align-items: center; gap: 0.4rem;
-          padding: 0.28rem 0.7rem;
-          border-radius: 20px;
-          background: rgba(200,150,62,0.13);
-          border: 1px solid rgba(200,150,62,0.22);
-          font-size: 0.72rem;
-          font-weight: 600;
-          color: var(--gold-2);
-          letter-spacing: 0.04em;
-          white-space: nowrap;
         }
 
         /* ── Alert banner ─────────────────────────────────────────────── */
@@ -268,22 +253,20 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          padding: 0.75rem 1.75rem;
-          background: #fffcf2;
-          border-bottom: 1px solid #eee2b2;
-          border-left: 3px solid var(--gold);
+          padding: 0.7rem 1.75rem;
+          background: #fffdf5;
+          border-bottom: 1px solid #ecdfa8;
         }
-        .ap-alert-icon {
-          width: 26px; height: 26px;
+        .ap-alert-dot {
+          width: 6px; height: 6px;
           border-radius: 50%;
-          background: rgba(180,83,9,0.08);
-          display: flex; align-items: center; justify-content: center;
+          background: var(--gold);
           flex-shrink: 0;
         }
         .ap-alert p {
           margin: 0;
-          font-size: 0.845rem;
-          color: var(--ink-2);
+          font-size: 0.825rem;
+          color: var(--ink-3);
           line-height: 1.5;
         }
         .ap-alert strong { color: var(--pine-2); font-weight: 600; }
@@ -291,17 +274,16 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         /* ── Three-column body ────────────────────────────────────────── */
         .ap-body {
           display: grid;
-          grid-template-columns: 1fr 1px 1.1fr 1px 1fr;
+          grid-template-columns: 1fr 1px 1.05fr 1px 1fr;
         }
         @media (max-width: 840px) {
           .ap-body { grid-template-columns: 1fr; }
-          .ap-rule { display: none; }
+          .ap-divider { display: none; }
         }
 
-        .ap-rule {
+        .ap-divider {
           background: var(--rule-2);
           align-self: stretch;
-          margin: 0;
         }
 
         /* ── Column base ──────────────────────────────────────────────── */
@@ -315,41 +297,34 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           padding: 1.75rem 1.625rem;
           display: flex;
           flex-direction: column;
-          gap: 1.1rem;
-          background: linear-gradient(170deg, #fafaf8 0%, var(--white) 100%);
+          gap: 1rem;
         }
 
-        /* ── Section eyebrow ──────────────────────────────────────────── */
-        .ap-eyebrow {
+        /* ── Section label ────────────────────────────────────────────── */
+        .ap-section-label {
           display: flex;
           align-items: center;
-          gap: 0.45rem;
-          font-size: 0.68rem;
-          font-weight: 700;
-          letter-spacing: 0.12em;
+          gap: 0.5rem;
+          font-size: 0.64rem;
+          font-weight: 600;
+          letter-spacing: 0.13em;
           text-transform: uppercase;
-          color: var(--ink-3);
+          color: var(--ink-4);
+          margin-bottom: 0.1rem;
         }
-        .ap-eyebrow-line {
-          width: 16px; height: 1px;
-          background: var(--rule);
+        .ap-section-label::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: var(--rule-2);
         }
 
         /* ── Image ────────────────────────────────────────────────────── */
         .ap-img-wrap {
           width: 100%;
-          border-radius: var(--radius-md);
+          border-radius: var(--r-md);
           overflow: hidden;
           border: 1px solid var(--rule);
-          background: var(--surface);
-          position: relative;
-        }
-        .ap-img-wrap::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          box-shadow: inset 0 -20px 28px rgba(255,255,255,0.6);
-          pointer-events: none;
         }
         .ap-img-wrap img {
           width: 100%;
@@ -358,23 +333,23 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         }
 
         /* ── Form ─────────────────────────────────────────────────────── */
-        .ap-form { display: flex; flex-direction: column; gap: 0.875rem; }
+        .ap-form { display: flex; flex-direction: column; gap: 0.85rem; }
 
         .ap-label {
           display: block;
-          font-size: 0.72rem;
-          font-weight: 700;
-          letter-spacing: 0.08em;
+          font-size: 0.7rem;
+          font-weight: 600;
+          letter-spacing: 0.07em;
           text-transform: uppercase;
-          color: var(--pine);
-          margin-bottom: 0.4rem;
+          color: var(--ink-2);
+          margin-bottom: 0.38rem;
         }
 
         .ap-field { position: relative; }
 
         .ap-field-icon {
           position: absolute;
-          left: 0.75rem;
+          left: 0.8rem;
           top: 50%;
           transform: translateY(-50%);
           pointer-events: none;
@@ -385,29 +360,28 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         .ap-input {
           width: 100%;
           border: 1.5px solid var(--rule);
-          border-radius: var(--radius-sm);
+          border-radius: var(--r-sm);
           background: var(--white);
-          padding: 0.72rem 0.875rem 0.72rem 2.2rem;
-          font-size: 0.9rem;
-          font-weight: 500;
-          font-family: 'Inter', sans-serif;
+          padding: 0.7rem 0.875rem 0.7rem 2.15rem;
+          font-size: 0.875rem;
+          font-weight: 400;
+          font-family: 'DM Sans', sans-serif;
           color: var(--ink);
           outline: none;
-          box-shadow: var(--shadow-sm);
           transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
           box-sizing: border-box;
         }
         .ap-input::placeholder {
           color: var(--ink-4);
-          font-weight: 400;
+          font-weight: 300;
         }
         .ap-input:focus {
           border-color: var(--pine-3);
-          background: #f5faf8;
-          box-shadow: 0 0 0 3px rgba(27,77,59,0.1), var(--shadow-sm);
+          background: #f5faf7;
+          box-shadow: 0 0 0 3px rgba(30,77,46,0.09);
         }
-        .ap-input:disabled { opacity: 0.55; }
-        .ap-input-pr { padding-right: 2.5rem; }
+        .ap-input:disabled { opacity: 0.5; }
+        .ap-input-pr { padding-right: 2.4rem; }
 
         .ap-eye-btn {
           position: absolute;
@@ -430,46 +404,47 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         .ap-btn {
           width: 100%;
           border: none;
-          border-radius: var(--radius-sm);
-          padding: 0.8rem 1.25rem;
+          border-radius: var(--r-sm);
+          padding: 0.78rem 1.25rem;
           font-size: 0.875rem;
-          font-family: 'Inter', sans-serif;
+          font-family: 'DM Sans', sans-serif;
           font-weight: 600;
-          letter-spacing: 0.01em;
+          letter-spacing: 0.02em;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 0.5rem;
-          position: relative;
-          overflow: hidden;
           background: var(--pine);
           color: var(--white);
-          box-shadow: 0 2px 8px rgba(11,34,23,0.25), inset 0 1px 0 rgba(255,255,255,0.07);
+          box-shadow: 0 2px 10px rgba(12,34,24,0.22);
           transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+          position: relative;
+          overflow: hidden;
         }
-        /* Shimmer sweep */
         .ap-btn::after {
           content: '';
           position: absolute;
           inset: 0;
-          background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.09) 50%, transparent 65%);
-          transform: translateX(-100%);
-          transition: transform 0.55s ease;
+          background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+          transform: translateX(-120%);
+          transition: transform 0.6s ease;
         }
-        .ap-btn:hover:not(:disabled)::after { transform: translateX(100%); }
+        .ap-btn:hover:not(:disabled)::after { transform: translateX(120%); }
         .ap-btn:hover:not(:disabled) {
-          background: var(--pine-2);
-          box-shadow: 0 6px 22px rgba(11,34,23,0.32), inset 0 1px 0 rgba(255,255,255,0.09);
+          background: var(--pine-3);
+          box-shadow: 0 6px 24px rgba(12,34,24,0.28);
           transform: translateY(-1px);
         }
-        .ap-btn:active:not(:disabled) { transform: none; box-shadow: 0 1px 4px rgba(11,34,23,0.2); }
-        .ap-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .ap-btn:active:not(:disabled) {
+          transform: none;
+          box-shadow: 0 1px 4px rgba(12,34,24,0.18);
+        }
+        .ap-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* Loading spinner */
         .ap-spinner {
-          width: 14px; height: 14px;
-          border: 2px solid rgba(255,255,255,0.25);
+          width: 13px; height: 13px;
+          border: 2px solid rgba(255,255,255,0.22);
           border-top-color: #fff;
           border-radius: 50%;
           animation: spin 0.65s linear infinite;
@@ -481,158 +456,167 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           align-items: center;
           justify-content: center;
           gap: 0.4rem;
-          font-size: 0.76rem;
+          font-size: 0.74rem;
           color: var(--ink-4);
-          letter-spacing: 0.01em;
         }
 
         /* ── Testimonials ─────────────────────────────────────────────── */
         .ap-tcard {
           background: var(--surface);
           border: 1px solid var(--rule-2);
-          border-radius: var(--radius-md);
-          padding: 1.05rem 1.05rem 1.05rem 1.3rem;
+          border-radius: var(--r-md);
+          padding: 1rem 1rem 1rem 1.25rem;
           position: relative;
           overflow: hidden;
-          transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
           animation: slideUp 0.45s ease both;
         }
-        .ap-tcard:nth-child(2) { animation-delay: 0.07s; }
-        .ap-tcard:nth-child(3) { animation-delay: 0.14s; }
+        .ap-tcard:nth-child(2) { animation-delay: 0.08s; }
         @keyframes slideUp {
-          from { opacity: 0; transform: translateY(8px); }
+          from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: none; }
         }
-        .ap-tcard:hover {
-          transform: translateY(-2px);
-          box-shadow: var(--shadow-md);
-          border-color: var(--rule);
-        }
-        /* Gold left accent bar */
         .ap-tcard::before {
           content: '';
           position: absolute;
-          left: 0; top: 14px; bottom: 14px; width: 3px;
-          background: linear-gradient(to bottom, var(--gold), var(--gold-2));
-          border-radius: 0 3px 3px 0;
+          left: 0; top: 16px; bottom: 16px; width: 2.5px;
+          background: linear-gradient(to bottom, var(--gold), var(--gold-3));
+          border-radius: 0 2px 2px 0;
+        }
+
+        .ap-tcard-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 0.55rem;
         }
 
         .ap-tcard-stars {
           display: flex; gap: 2px;
-          margin-bottom: 0.55rem;
+        }
+
+        .ap-tcard-quote-icon {
+          color: var(--gold-3);
+          opacity: 0.7;
         }
 
         .ap-tcard-quote {
-          font-size: 0.845rem;
-          line-height: 1.75;
-          color: var(--ink-2);
+          font-size: 0.83rem;
+          line-height: 1.7;
+          color: var(--ink-3);
           font-style: italic;
           margin-bottom: 0.65rem;
-          position: relative;
-        }
-        .ap-tcard-quote::before {
-          content: '\u201C';
-          font-family: 'Fraunces', serif;
-          font-size: 1.8rem;
-          line-height: 0;
-          vertical-align: -0.5rem;
-          color: var(--gold);
-          margin-right: 0.1rem;
-          opacity: 0.55;
         }
 
-        .ap-tcard-meta { display: flex; align-items: baseline; gap: 0.5rem; }
+        .ap-tcard-meta { display: flex; align-items: center; gap: 0.4rem; }
+        .ap-tcard-dot {
+          width: 3px; height: 3px;
+          border-radius: 50%;
+          background: var(--rule);
+        }
         .ap-tcard-agency {
-          font-size: 0.845rem;
-          font-weight: 700;
+          font-size: 0.82rem;
+          font-weight: 600;
           color: var(--pine-2);
         }
         .ap-tcard-by {
-          font-size: 0.775rem;
-          color: var(--ink-3);
+          font-size: 0.78rem;
+          color: var(--ink-4);
         }
 
         /* ── Benefits ─────────────────────────────────────────────────── */
         .ap-bheader {
-          border-radius: var(--radius-md);
-          padding: 0.875rem 1rem;
-          background: linear-gradient(135deg, #a87828, var(--gold), var(--gold-2));
+          border-radius: var(--r-md);
+          padding: 0.85rem 1rem;
+          background: var(--pine);
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          box-shadow: 0 4px 16px rgba(180,130,40,0.22), inset 0 1px 0 rgba(255,255,255,0.28);
+          position: relative;
+          overflow: hidden;
+        }
+        .ap-bheader::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: repeating-linear-gradient(
+            -45deg,
+            transparent 0px,
+            transparent 16px,
+            rgba(255,255,255,0.02) 16px,
+            rgba(255,255,255,0.02) 17px
+          );
+          pointer-events: none;
         }
         .ap-bheader-icon {
-          width: 32px; height: 32px;
-          border-radius: var(--radius-sm);
-          background: rgba(255,255,255,0.22);
-          border: 1px solid rgba(255,255,255,0.3);
+          position: relative;
+          width: 30px; height: 30px;
+          border-radius: var(--r-sm);
+          background: rgba(181,131,42,0.18);
+          border: 1px solid rgba(181,131,42,0.28);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
         }
         .ap-bheader-title {
-          font-family: 'Fraunces', serif;
-          font-size: 0.975rem;
+          position: relative;
+          font-family: 'Playfair Display', serif;
+          font-size: 0.935rem;
           font-weight: 700;
-          color: rgba(20,10,0,0.92);
+          color: #ede8de;
           margin: 0;
           line-height: 1.2;
         }
         .ap-bheader-sub {
-          font-size: 0.76rem;
-          color: rgba(35,18,0,0.72);
-          margin: 0.1rem 0 0;
-          font-weight: 500;
+          position: relative;
+          font-size: 0.72rem;
+          color: rgba(237,232,222,0.52);
+          margin: 0.15rem 0 0;
+          font-weight: 400;
         }
 
-        .ap-benefits { display: flex; flex-direction: column; gap: 0.3rem; }
+        .ap-benefits { display: flex; flex-direction: column; gap: 0.28rem; }
 
         .ap-benefit {
           display: flex;
           align-items: center;
-          gap: 0.6rem;
-          padding: 0.55rem 0.7rem;
-          border-radius: var(--radius-sm);
-          background: var(--surface);
-          border: 1px solid var(--rule-2);
-          font-size: 0.845rem;
-          font-weight: 500;
-          color: var(--ink);
+          gap: 0.55rem;
+          padding: 0.5rem 0.65rem;
+          border-radius: var(--r-sm);
+          border: 1px solid transparent;
+          font-size: 0.83rem;
+          font-weight: 400;
+          color: var(--ink-2);
           line-height: 1.4;
-          cursor: default;
-          transition: background 0.15s, border-color 0.15s, transform 0.13s;
+          transition: background 0.15s, border-color 0.15s;
         }
         .ap-benefit:hover {
-          background: var(--surface-2);
-          border-color: var(--rule);
-          transform: translateX(2px);
+          background: var(--surface);
+          border-color: var(--rule-2);
         }
-        .ap-benefit-emoji { font-size: 0.875rem; width: 1rem; text-align: center; flex-shrink: 0; }
+        .ap-benefit-emoji { font-size: 0.85rem; width: 1rem; text-align: center; flex-shrink: 0; }
         .ap-benefit-check {
-          width: 16px; height: 16px;
+          width: 14px; height: 14px;
           border-radius: 50%;
-          background: rgba(27,77,59,0.09);
-          border: 1px solid rgba(27,77,59,0.1);
+          background: rgba(30,77,46,0.08);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
           margin-left: auto;
         }
 
-        .ap-signup-link {
-          font-size: 0.8rem;
-          color: var(--ink-3);
+        .ap-note {
+          font-size: 0.78rem;
+          color: var(--ink-4);
           line-height: 1.6;
           margin: 0;
         }
-        .ap-signup-link a {
-          color: var(--pine-2);
-          font-weight: 600;
+        .ap-note a {
+          color: var(--pine-3);
+          font-weight: 500;
           text-decoration: none;
-          border-bottom: 1.5px solid rgba(200,150,62,0.5);
+          border-bottom: 1px solid rgba(181,131,42,0.4);
           padding-bottom: 1px;
           transition: color 0.15s, border-color 0.15s;
         }
-        .ap-signup-link a:hover {
+        .ap-note a:hover {
           color: var(--pine);
           border-color: var(--gold);
         }
@@ -642,24 +626,29 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 0.5rem;
-          padding: 0.85rem 1.75rem;
+          gap: 0.45rem;
+          padding: 0.8rem 1.75rem;
           background: var(--surface);
           border-top: 1px solid var(--rule-2);
-          font-size: 0.845rem;
-          color: var(--ink-3);
+          font-size: 0.82rem;
+          color: var(--ink-4);
           flex-wrap: wrap;
         }
         .ap-footer a {
           display: inline-flex;
           align-items: center;
-          gap: 0.2rem;
-          color: var(--pine-2);
+          gap: 0.15rem;
+          color: var(--pine-3);
           font-weight: 600;
           text-decoration: none;
           transition: color 0.15s;
         }
         .ap-footer a:hover { color: var(--pine); }
+        .ap-footer-sep {
+          width: 3px; height: 3px;
+          border-radius: 50%;
+          background: var(--rule);
+        }
       `}</style>
 
       <main className="ap-outer">
@@ -668,7 +657,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           {/* ── Header ───────────────────────────────────────────────── */}
           <div className="ap-header">
             <div className="ap-logo-mark">
-              <KeyRound size={16} color="#e3b96a" strokeWidth={1.75} />
+              <KeyRound size={15} color="#d4a24e" strokeWidth={1.75} />
             </div>
             <div className="ap-header-text">
               <p className="ap-header-title">Agency Portal</p>
@@ -678,9 +667,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
 
           {/* ── Alert ────────────────────────────────────────────────── */}
           <div className="ap-alert">
-            <div className="ap-alert-icon">
-              <Info size={12} color="#b45309" strokeWidth={2} />
-            </div>
+            <div className="ap-alert-dot" />
             <p>
               Sign in with your <strong>FindMaid agency account</strong> to access your dashboard, listings, and documents.
             </p>
@@ -691,36 +678,38 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
 
             {/* Col 1 — Testimonials */}
             <div className="ap-col">
-              <div className="ap-eyebrow">
-                <span className="ap-eyebrow-line" />
-                <Star size={9} strokeWidth={2} />
-                Agency Reviews
+              <div className="ap-section-label">
+                <Star size={8} strokeWidth={2} />
+                What agencies say
               </div>
 
               {testimonials.map((t) => (
                 <div key={t.agency} className="ap-tcard">
-                  <div className="ap-tcard-stars">
-                    {Array.from({ length: t.rating }).map((_, i) => (
-                      <Star key={i} size={10} color="#c8963e" fill="#c8963e" />
-                    ))}
+                  <div className="ap-tcard-top">
+                    <div className="ap-tcard-stars">
+                      {Array.from({ length: t.rating }).map((_, i) => (
+                        <Star key={i} size={10} color="#b5832a" fill="#b5832a" />
+                      ))}
+                    </div>
+                    <Quote size={14} className="ap-tcard-quote-icon" strokeWidth={1.5} />
                   </div>
-                  <p className="ap-tcard-quote">{t.quote}"</p>
+                  <p className="ap-tcard-quote">{t.quote}</p>
                   <div className="ap-tcard-meta">
                     <span className="ap-tcard-agency">{t.agency}</span>
-                    <span className="ap-tcard-by">— {t.author}</span>
+                    <span className="ap-tcard-dot" />
+                    <span className="ap-tcard-by">{t.author}</span>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="ap-rule" />
+            <div className="ap-divider" />
 
             {/* Col 2 — Sign In */}
             <div className="ap-col-mid">
-              <div className="ap-eyebrow">
-                <span className="ap-eyebrow-line" />
-                <KeyRound size={9} strokeWidth={2} />
-                Sign In
+              <div className="ap-section-label">
+                <KeyRound size={8} strokeWidth={2} />
+                Sign in
               </div>
 
               <div className="ap-img-wrap">
@@ -734,7 +723,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                     <span className="ap-field-icon">
                       <User
                         size={13}
-                        color={focused === "username" ? "#1f4d3b" : "#c4bfb8"}
+                        color={focused === "username" ? "#1e4d2e" : "#c0b8b0"}
                         strokeWidth={1.75}
                       />
                     </span>
@@ -759,7 +748,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                     <span className="ap-field-icon">
                       <Lock
                         size={13}
-                        color={focused === "password" ? "#1f4d3b" : "#c4bfb8"}
+                        color={focused === "password" ? "#1e4d2e" : "#c0b8b0"}
                         strokeWidth={1.75}
                       />
                     </span>
@@ -783,8 +772,8 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword
-                        ? <EyeOff size={14} strokeWidth={1.75} />
-                        : <Eye size={14} strokeWidth={1.75} />}
+                        ? <EyeOff size={13} strokeWidth={1.75} />
+                        : <Eye size={13} strokeWidth={1.75} />}
                     </button>
                   </div>
                 </div>
@@ -792,45 +781,39 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                 <button type="submit" disabled={isSubmitting} className="ap-btn">
                   {isSubmitting
                     ? <><span className="ap-spinner" />Signing in…</>
-                    : <>Sign in to Dashboard <ArrowRight size={14} strokeWidth={2.5} /></>
+                    : <>Sign in to Dashboard <ArrowRight size={13} strokeWidth={2.5} /></>
                   }
                 </button>
 
                 <div className="ap-ssl">
-                  <Shield size={11} color="#b0a99f" strokeWidth={2} />
+                  <Shield size={10} color="#b0a89e" strokeWidth={2} />
                   <span>256-bit SSL encrypted</span>
                 </div>
               </form>
             </div>
 
-            <div className="ap-rule" />
+            <div className="ap-divider" />
 
             {/* Col 3 — Benefits */}
             <div className="ap-col">
-              <div className="ap-eyebrow">
-                <span className="ap-eyebrow-line" />
-                <Sparkles size={9} strokeWidth={2} />
-                Platform Features
+              <div className="ap-section-label">
+                <Sparkles size={8} strokeWidth={2} />
+                Platform features
               </div>
 
               <div className="ap-bheader">
                 <div className="ap-bheader-icon">
-                  <Sparkles size={14} color="rgba(40,20,0,0.7)" strokeWidth={1.75} />
+                  <Sparkles size={13} color="#d4a24e" strokeWidth={1.75} />
                 </div>
                 <div>
                   <p className="ap-bheader-title">New to FindMaid?</p>
-                  <p className="ap-bheader-sub">Join 500+ agencies on the platform</p>
+                  <p className="ap-bheader-sub">Join agencies already on the platform</p>
                 </div>
               </div>
 
-              <p className="ap-signup-link">
-                Sign up is not available for now{" "}
-                and unlock powerful agency tools:
+              <p className="ap-note">
+                Sign-up is currently by invitation. Once registered, you unlock:
               </p>
-              {/* <p className="ap-signup-link">
-                <Link to="/login">Sign up for a FindMaid plan</Link>{" "}
-                and unlock powerful agency tools:
-              </p> */}
 
               <div className="ap-benefits">
                 {benefits.map((b) => (
@@ -838,14 +821,14 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                     <span className="ap-benefit-emoji">{b.icon}</span>
                     <span style={{ flex: 1 }}>{b.text}</span>
                     <div className="ap-benefit-check">
-                      <Check size={9} color="#1f4d3b" strokeWidth={2.5} />
+                      <Check size={8} color="#1e4d2e" strokeWidth={2.5} />
                     </div>
                   </div>
                 ))}
               </div>
 
-              <p className="ap-signup-link">
-                By creating an account you agree to our{" "}
+              <p className="ap-note">
+                By using this platform you agree to our{" "}
                 <Link to="/faq">Terms of Service</Link>.
               </p>
             </div>
@@ -855,8 +838,9 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           {/* ── Card footer ──────────────────────────────────────────── */}
           <div className="ap-footer">
             <span>Looking for the employer login?</span>
+            <span className="ap-footer-sep" />
             <Link to="/employer-login">
-              Go to Employer Login <ChevronRight size={13} strokeWidth={2.5} />
+              Employer Login <ChevronRight size={12} strokeWidth={2.5} />
             </Link>
           </div>
 

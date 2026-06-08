@@ -534,7 +534,7 @@ const LanguageRating = ({ level }: { level?: string }) => {
     return <span className="text-[11px] text-black">{String(level || "N.A.")}</span>;
   }
   return (
-    <div className="flex items-center gap-0.5" title={String(level)}>
+    <div className="flex items-center gap-0.5 flex-shrink-0" title={String(level)}>
       {Array.from({ length: 5 }, (_, i) => (
         <Star key={i} className={`h-3.5 w-3.5 ${i < rating ? "fill-amber-500 text-amber-500" : "text-gray-200"}`} />
       ))}
@@ -542,12 +542,11 @@ const LanguageRating = ({ level }: { level?: string }) => {
   );
 };
 
-
-
+// ── KVRow — responsive label width ───────────────────────────────────────────
 const KVRow = ({ label, value }: { label: string; value: string }) => (
   <div className="contents">
-    <p className="py-1 pr-3 text-[12px] font-semibold text-black border-b border-dashed border-gray-200 leading-snug">{label}</p>
-    <p className="py-1 text-[13px] text-black border-b border-dashed border-gray-200 leading-snug">{value || "—"}</p>
+    <p className="py-1 pr-2 text-[12px] font-semibold text-black border-b border-dashed border-gray-200 leading-snug break-words">{label}</p>
+    <p className="py-1 text-[12px] text-black border-b border-dashed border-gray-200 leading-snug break-words">{value || "—"}</p>
   </div>
 );
 
@@ -958,15 +957,25 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
             {/* Personal details */}
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Personal Details</SectionHeader>
-              <div className="grid grid-cols-[140px_1fr] p-4 text-sm">
+              {/*
+                ── MOBILE FIX ──
+                On mobile the fixed 140px label column was too wide relative to the content column,
+                causing the language stars to overflow. We now use:
+                  - grid-cols-[100px_1fr]  on mobile (< sm)
+                  - grid-cols-[130px_1fr]  on sm+
+                And the language row inner flex uses flex-wrap + min-w-0 on the label so it never
+                pushes the stars off-screen.
+              */}
+              <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[130px_1fr] p-3 sm:p-4 text-sm">
                 {detailRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
 
                 {/* ── LANGUAGES — always star ratings ── */}
-                <p className="py-1 pr-3 text-[12px] font-semibold text-black border-b border-dashed border-gray-200">Languages</p>
-                <div className="py-1 text-[13px] border-b border-dashed border-gray-200 space-y-1.5">
+                <p className="py-1 pr-2 text-[12px] font-semibold text-black border-b border-dashed border-gray-200 leading-snug">Languages</p>
+                <div className="py-1 text-[13px] border-b border-dashed border-gray-200 space-y-2 min-w-0">
                   {fixedLanguages.map(([lang, level]) => (
-                    <div key={lang} className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-black text-[12px] leading-tight">{lang}</span>
+                    <div key={lang} className="flex items-center gap-2 min-w-0">
+                      {/* Label shrinks; stars stay right but don't overflow */}
+                      <span className="font-medium text-black text-[12px] leading-tight flex-1 min-w-0 break-words">{lang}</span>
                       <LanguageRating level={level} />
                     </div>
                   ))}
@@ -980,8 +989,8 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                     </button>
                   )}
                   {showOtherLanguages && otherLanguages.map(([lang, level]) => (
-                    <div key={lang} className="flex items-center justify-between gap-2">
-                      <span className="text-black text-[12px] leading-tight">{lang}</span>
+                    <div key={lang} className="flex items-center gap-2 min-w-0">
+                      <span className="text-black text-[12px] leading-tight flex-1 min-w-0 break-words">{lang}</span>
                       <LanguageRating level={level} />
                     </div>
                   ))}
@@ -1124,7 +1133,6 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                   const remarks  = row.remarks  || "—";
                   return (
                     <div key={`${maid.referenceCode}-mob-${index}`} className="px-4 py-3 space-y-2">
-                      {/* Header row: job number + period */}
                       <div className="flex items-center justify-between gap-2">
                         <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 text-[11px] font-bold text-black flex-shrink-0">
                           {index + 1}
@@ -1133,7 +1141,6 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                           {from} — {to}
                         </span>
                       </div>
-                      {/* Country + employer */}
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Country</p>
@@ -1144,14 +1151,12 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
                           <p className="text-[13px] text-black leading-snug">{employer}</p>
                         </div>
                       </div>
-                      {/* Duties */}
                       {duties !== "—" && (
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Duties</p>
                           <p className="text-[13px] text-black leading-snug">{duties}</p>
                         </div>
                       )}
-                      {/* Remarks */}
                       {remarks !== "—" && (
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Remarks</p>
@@ -1171,7 +1176,7 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
             {/* Medical */}
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Medical / Dietary</SectionHeader>
-              <div className="grid grid-cols-[130px_1fr] p-4 text-sm">
+              <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[130px_1fr] p-3 sm:p-4 text-sm">
                 {medicalRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
               </div>
               {Object.keys(pastIllnesses).length > 0 && (
@@ -1196,7 +1201,7 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
             <div className="rounded-lg border overflow-hidden">
               <SectionHeader>Private Information</SectionHeader>
               {canViewPrivateIntro ? (
-                <div className="grid grid-cols-[130px_1fr] p-4 text-sm">
+                <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[130px_1fr] p-3 sm:p-4 text-sm">
                   {privateRows.map(([label, value]) => <KVRow key={label} label={label} value={value} />)}
                 </div>
               ) : (
