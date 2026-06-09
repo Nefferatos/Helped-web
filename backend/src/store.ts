@@ -852,8 +852,11 @@ let cache: AppData | null = null
 let pendingSave: Promise<void> = Promise.resolve()
 
 const stripBom = (value: string) => value.replace(/^\uFEFF/, '')
-const generateEmailConfirmationCode = () =>
-  String(Math.floor(100000 + Math.random() * 900000))
+const generateEmailConfirmationCode = () => {
+  // 8 cryptographically random decimal digits
+  const n = randomBytes(4).readUInt32BE(0) % 100_000_000
+  return String(n).padStart(8, '0')
+}
 const normalizeAgencyId = (value: unknown) => {
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_AGENCY_ID
@@ -1444,16 +1447,26 @@ const migrateLegacyChatToSupport = (
     supportNotifications,
   }
 }
-const hashPassword = (password: string) =>
-  scryptSync(password, 'agency-admin-auth', 64).toString('hex')
+const hashPassword = (password: string) => {
+  const salt = randomBytes(16).toString('hex')
+  const hash = scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
 const verifyPassword = (password: string, passwordHash?: string) => {
   if (!passwordHash?.trim()) {
     return false
   }
 
   try {
-    const expected = Buffer.from(passwordHash, 'hex')
-    const actual = scryptSync(password, 'agency-admin-auth', expected.length)
+    // Support legacy format (no salt prefix) for backwards compatibility
+    if (!passwordHash.includes(':')) {
+      const expected = Buffer.from(passwordHash, 'hex')
+      const actual = scryptSync(password, 'agency-admin-auth', expected.length)
+      return expected.length === actual.length && timingSafeEqual(expected, actual)
+    }
+    const [salt, storedHash] = passwordHash.split(':')
+    const expected = Buffer.from(storedHash, 'hex')
+    const actual = scryptSync(password, salt, expected.length)
     return expected.length === actual.length && timingSafeEqual(expected, actual)
   } catch {
     return false
@@ -2290,15 +2303,9 @@ export const updateMaidVisibilityStore = async (
   isPublic: boolean,
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
-  try {
-    const updated = await updateMaidVisibilitySql(referenceCode, isPublic, agencyId)
-    if (updated) {
-      return updated
-    }
-  } catch (error) {
-    // Visibility changes must stay in sync with the primary store or the maid can
-    // disappear from one list and never show up in the other.
-    throw error
+  const updated = await updateMaidVisibilitySql(referenceCode, isPublic, agencyId)
+  if (updated) {
+    return updated
   }
 
   const data = await loadData()
@@ -2725,7 +2732,7 @@ export const authenticateAgencyAdminStore = async (
         recordUsername === normalizedIdentifier || recordEmail === normalizedIdentifier
       const passwordMatches = admin.passwordHash
         ? verifyPassword(password, admin.passwordHash)
-        : admin.password === password
+        : verifyPassword(password, admin.password)
       return identifierMatches && passwordMatches
     }) ?? null
   )
@@ -2811,7 +2818,7 @@ export const registerClientStore = async (payload: {
     company: payload.company ?? '',
     phone: payload.phone ?? '',
     email: payload.email,
-    password: payload.password,
+    password: hashPassword(payload.password),
     emailVerified: false,
     emailConfirmationCode: '',
     emailConfirmationCodeCreatedAt: '',
@@ -2877,7 +2884,7 @@ export const authenticateClientStore = async (
     data.clients.find(
       (client) =>
         client.email.toLowerCase() === email.toLowerCase() &&
-        client.password === password
+        verifyPassword(password, client.password)
     ) ?? null
   )
 }
@@ -3366,6 +3373,14 @@ const PRESENCE_WINDOW_MS = 40_000
 const presenceLastSeen = new Map<string, { lastSeen: number; agencyId?: number }>()
 const presenceKey = (actorType: 'client' | 'admin', actorId: number) =>
   `${actorType}:${actorId}`
+
+// Purge stale presence entries every minute to prevent unbounded Map growth
+setInterval(() => {
+  const cutoff = Date.now() - PRESENCE_WINDOW_MS
+  for (const [key, entry] of presenceLastSeen) {
+    if (entry.lastSeen < cutoff) presenceLastSeen.delete(key)
+  }
+}, 60_000).unref()
 
 export const touchPresenceStore = (
   actorType: 'client' | 'admin',

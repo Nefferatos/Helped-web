@@ -14,6 +14,7 @@ import {
 
 const MAX_FILES = 10
 const MAX_BYTES_PER_FILE = 100 * 1024 * 1024
+const MAX_BYTES_TOTAL = 200 * 1024 * 1024
 const PDF_ONLY_MESSAGE = 'Only PDF files are allowed'
 const FILE_SIZE_LIMIT_MESSAGE = 'File exceeds 100MB limit'
 const uploadsRoot = path.resolve(__dirname, '../../data/uploads')
@@ -290,11 +291,12 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
       refCode: string
     }> = []
 
+    let totalBytes = 0
     for (const f of normalized) {
       if (!f.name || !f.size || !f.dataBase64) {
         return res.status(400).json({ error: 'Invalid file payload' })
       }
-      if (!/^[A-Za-z0-9+/=]+$/.test(f.dataBase64)) {
+      if (!/^[A-Za-z0-9+/=\-_]+$/.test(f.dataBase64)) {
         return res.status(400).json({ error: 'Invalid base64 data' })
       }
       const buffer = Buffer.from(f.dataBase64, 'base64')
@@ -303,6 +305,10 @@ export const uploadEmployerContractFiles = async (req: Request, res: Response) =
       }
       if (buffer.length > MAX_BYTES_PER_FILE) {
         return res.status(400).json({ error: FILE_SIZE_LIMIT_MESSAGE })
+      }
+      totalBytes += buffer.length
+      if (totalBytes > MAX_BYTES_TOTAL) {
+        return res.status(413).json({ error: 'Total upload size exceeds 200MB limit' })
       }
       if (!isPdfFile(f.type, f.name, buffer)) {
         return res.status(400).json({ error: PDF_ONLY_MESSAGE })
@@ -349,9 +355,16 @@ const sendEmployerContractFile = async (
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' })
     const file = await getEmployerContractFileStore(id, agencyId)
     if (!file) return res.status(404).json({ error: 'File not found' })
-    const buffer = file.storagePath
-      ? await readFile(path.join(uploadsRoot, file.storagePath))
-      : Buffer.from(file.dataBase64, 'base64')
+    let buffer: Buffer
+    if (file.storagePath) {
+      const resolvedPath = path.resolve(uploadsRoot, file.storagePath)
+      if (!resolvedPath.startsWith(uploadsRoot + path.sep) && resolvedPath !== uploadsRoot) {
+        return res.status(400).json({ error: 'Invalid file path' })
+      }
+      buffer = await readFile(resolvedPath)
+    } else {
+      buffer = Buffer.from(file.dataBase64, 'base64')
+    }
     const safeFileName = file.name.replace(new RegExp(escapeRegExp('"'), 'g'), '')
     res.status(200)
       .setHeader('Content-Type', file.type || 'application/octet-stream')

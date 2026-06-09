@@ -149,6 +149,10 @@ interface ExtractedData {
   ableGardening?:             boolean | null;
   willingWashCar?:            boolean | null;
   willingWorkOffDay?:         boolean | null;
+  sgExperienceFromC2?:        boolean | null;
+  canWorkLandedHouse?:        boolean | null;
+  canWorkIndianFamily?:       boolean | null;
+  canWorkVegetarianFamily?:   string  | null;
   interviewAvailability?:     string[] | null;
   availabilityRemark?:        string | null;
   intro?:                     string | null;
@@ -381,6 +385,21 @@ FOOD HANDLING PREFERENCES: only include items whose checkbox is ticked (☑).
 
 REST DAYS: integer (e.g. "02" → 2)
 
+PRIORITY FOR CONFLICTS: When page 1 form boxes and Section E text conflict for the same field (DOB, height, weight, religion, education), always prefer the page 1 form boxes.
+
+C2 SINGAPORE EXPERIENCE: Section C2 has a "Previous working experience in Singapore" Yes/No checkbox. Set sgExperienceFromC2 to true if Yes is ticked, false if No, null if section absent.
+
+SECTION E EXTRA PREFERENCES:
+  canWorkLandedHouse: true if "Can work in landed house" = Yes, false if No, null if absent.
+  canWorkIndianFamily: true if "Can work for Indian family" = Yes, false if No, null if absent.
+  canWorkVegetarianFamily: the value string as-is (e.g. "both family", "yes", "no"). null if absent.
+
+SECTION E SKILLS FALLBACK: If ALL rows of the B1 skills table Willingness column are blank (no Yes/No ticked), check Section E for lines like "Can care of baby: No", "Can care of Children: yes", "Can care of elderly: yes", "Can take care of dogs: yes". Use those values to set skills[].willing for the matching area. Unmentioned areas stay null.
+
+LANGUAGE PROFICIENCY RANGES: If proficiency is given as a range (e.g. "Fair - Good", "Poor - Fair"), use the LOWER of the two levels.
+
+EXPECTED SALARY / PRESENT SALARY: Extract only the monetary amount (e.g. "$550 + $50"). Strip leading qualifiers like "New is" and trailing phrases like "and 2 off".
+
 EVALUATION METHOD (B1 section):
   evalByDeclaration: true if "Based on FDW's declaration…" checkbox ☑, false if ☐, null if section absent.
   evalInterviewedBySgEA: true if "Interviewed by Singapore EA" checkbox ☑, false if ☐, null if absent.
@@ -490,6 +509,10 @@ SECTION E (Other Remarks):
   "ableGardening": null,
   "willingWashCar": null,
   "willingWorkOffDay": null,
+  "sgExperienceFromC2": null,
+  "canWorkLandedHouse": null,
+  "canWorkIndianFamily": null,
+  "canWorkVegetarianFamily": null,
   "interviewAvailability": [],
   "availabilityRemark": null,
   "intro": null,
@@ -578,17 +601,10 @@ async function callGroq(pdfText: string, model: string): Promise<ExtractedData> 
 }
 
 // ─── Main extraction pipeline ─────────────────────────────────────────────────
-async function extractFromPdf(
-  file: File,
+async function callGroqWithText(
+  pdfText: string,
   onRetry?: (attempt: number, model: string, delayMs: number) => void,
 ): Promise<ExtractedData> {
-  const pdfText = await extractPdfText(file);
-  if (!pdfText.trim()) {
-    throw new Error(
-      "Could not extract any text from this PDF. It may be a scanned image — please use a text-based biodata PDF.",
-    );
-  }
-
   for (let modelIdx = 0; modelIdx < GROQ_MODELS.length; modelIdx++) {
     const model = GROQ_MODELS[modelIdx];
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -754,11 +770,16 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
   if (e.ableSewing        != null) otherInfo["Able to do simple sewing?"]                      = e.ableSewing;
   if (e.ableGardening     != null) otherInfo["Able to do gardening work?"]                     = e.ableGardening;
   if (e.willingWashCar    != null) otherInfo["Willing to wash car?"]                           = e.willingWashCar;
-  if (e.willingWorkOffDay != null) otherInfo["Willing to work on off-days with compensation?"] = e.willingWorkOffDay;
+  if (e.willingWorkOffDay  != null) otherInfo["Willing to work on off-days with compensation?"] = e.willingWorkOffDay;
+  if (e.canWorkLandedHouse  != null) otherInfo["Can work in landed house?"]                     = e.canWorkLandedHouse;
+  if (e.canWorkIndianFamily != null) otherInfo["Can work for Indian family?"]                   = e.canWorkIndianFamily;
 
-  const hasSgExp = empHistory.length > 0
-    ? empHistory.some((h) => String(h["country"] ?? "").toLowerCase().includes("singapore"))
-    : undefined;
+  const hasSgExp: boolean | undefined =
+    empHistory.some((h) => String(h["country"] ?? "").toLowerCase().includes("singapore"))
+      ? true
+      : e.sgExperienceFromC2 != null
+        ? e.sgExperienceFromC2
+        : (e.type?.toLowerCase().includes("ex-singapore") ? true : undefined);
 
   const prevIntro     = (prev.introduction as Record<string, unknown>) ?? {};
   const prevIllnesses = (prevIntro.pastIllnesses as Record<string, boolean>) ?? {};
@@ -787,6 +808,11 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
   }
 
   const resolvedSiblings = e.numberOfSiblings != null ? e.numberOfSiblings : null;
+
+  const vegRemark = e.canWorkVegetarianFamily != null
+    ? `Can work for vegetarian family: ${e.canWorkVegetarianFamily}`
+    : null;
+  const mergedOtherRemarks = [e.otherRemarks, vegRemark].filter(Boolean).join("\n") || null;
 
   return {
     ...prev,
@@ -839,7 +865,7 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
       ...(e.presentSalary   != null ? { presentSalary: String(e.presentSalary) }   : {}),
       ...(e.expectedSalary  != null ? { expectedSalary: String(e.expectedSalary) } : {}),
       ...(e.availability    != null ? { availability: e.availability }             : {}),
-      ...(e.otherRemarks    != null ? { otherRemarks: e.otherRemarks }             : {}),
+      ...(mergedOtherRemarks != null ? { otherRemarks: mergedOtherRemarks }         : {}),
       ...(e.intro           != null ? { intro: e.intro }                           : {}),
       ...(e.publicIntro     != null ? { publicIntro: e.publicIntro }               : {}),
     },
@@ -851,10 +877,22 @@ function countFields(e: ExtractedData): number {
   let n = 0;
   for (const v of Object.values(e)) {
     if (v == null) continue;
-    if (typeof v === "object" && !Array.isArray(v))
-      n += Object.values(v as Record<string, unknown>).filter((x) => x != null && x !== false).length;
-    else if (Array.isArray(v)) n += v.length;
-    else n++;
+    if (typeof v === "object" && !Array.isArray(v)) {
+      n += Object.values(v as Record<string, unknown>).filter((x) => x != null).length;
+    } else if (Array.isArray(v)) {
+      for (const item of v) {
+        if (item == null) continue;
+        if (typeof item === "object") {
+          if (Object.values(item as Record<string, unknown>).some((x) => x != null && x !== "")) n++;
+        } else if (typeof item === "string") {
+          if (item.trim()) n++;
+        } else {
+          n++;
+        }
+      }
+    } else {
+      n++;
+    }
   }
   return n;
 }
@@ -1189,10 +1227,16 @@ export function PdfAutofillBanner({
     startTicker(1, 25, 1200);
 
     try {
+      const pdfText = await extractPdfText(file);
+      if (!pdfText.trim()) {
+        throw new Error("Could not extract any text from this PDF. It may be a scanned image — please use a text-based biodata PDF.");
+      }
+
+      stopTicker();
       setStatus("extracting");
       startTicker(25, 92, 14000);
 
-      const extracted = await extractFromPdf(file, (attempt, model, delayMs) => {
+      const extracted = await callGroqWithText(pdfText, (attempt, model, delayMs) => {
         console.info(`[PdfAutofill] Retry ${attempt} on ${model} in ${delayMs}ms`);
       });
 

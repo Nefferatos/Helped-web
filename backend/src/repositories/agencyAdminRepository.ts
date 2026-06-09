@@ -29,14 +29,8 @@ type AgencyAdminSessionRow = {
   created_at: Date | string
 }
 
-type AgencySummaryRow = {
-  agency_id: number
-  agency_name: string | null
-  email: string
-  created_at: Date | string
-}
 
-const PASSWORD_SALT = 'agency-admin-auth'
+const LEGACY_PASSWORD_SALT = 'agency-admin-auth'
 const SYNTHETIC_EMAIL_DOMAIN = 'local.helped.invalid'
 
 const nowIso = (value: Date | string) =>
@@ -44,8 +38,11 @@ const nowIso = (value: Date | string) =>
 
 const normalizeIdentifier = (value: string) => value.trim().toLowerCase()
 
-const hashPassword = (password: string) =>
-  scryptSync(password, PASSWORD_SALT, 64).toString('hex')
+const hashPassword = (password: string) => {
+  const salt = randomBytes(16).toString('hex')
+  const hash = scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
 
 const verifyPassword = (password: string, passwordHash: string) => {
   if (!passwordHash.trim()) {
@@ -53,8 +50,15 @@ const verifyPassword = (password: string, passwordHash: string) => {
   }
 
   try {
-    const expected = Buffer.from(passwordHash, 'hex')
-    const actual = scryptSync(password, PASSWORD_SALT, expected.length)
+    if (!passwordHash.includes(':')) {
+      // Legacy format — hardcoded salt, backwards compatible
+      const expected = Buffer.from(passwordHash, 'hex')
+      const actual = scryptSync(password, LEGACY_PASSWORD_SALT, expected.length)
+      return expected.length === actual.length && timingSafeEqual(expected, actual)
+    }
+    const [salt, storedHash] = passwordHash.split(':')
+    const expected = Buffer.from(storedHash, 'hex')
+    const actual = scryptSync(password, salt, expected.length)
     return expected.length === actual.length && timingSafeEqual(expected, actual)
   } catch {
     return false

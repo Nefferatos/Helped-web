@@ -144,15 +144,42 @@ const ensurePool = async () => {
 }
 
 /**
- * Execute a database query
- * @param text - SQL query string
- * @param params - Query parameters for prepared statements (prevents SQL injection)
- * @returns Query result with rows array
+ * Branded SQL query — only constructable via the `sql` tag, never from raw string
+ * concatenation. Carry both the parameterized text and the bound values together
+ * so callers cannot accidentally split them.
  */
-export const query = async (text: string, params: unknown[] = []) => {
+export type SqlQuery = { readonly __sqlBrand: unique symbol; text: string; values: unknown[] }
+
+/**
+ * Tagged template for safe parameterized SQL.
+ *
+ * Usage:
+ *   const result = await query(sql`SELECT * FROM maids WHERE agency_id = ${agencyId}`)
+ *
+ * Each interpolated value becomes a $N placeholder — never interpolated into the
+ * query string directly, so SQL injection is structurally impossible.
+ */
+export const sql = (strings: TemplateStringsArray, ...values: unknown[]): SqlQuery => {
+  let text = ''
+  strings.forEach((str, i) => {
+    text += str
+    if (i < values.length) text += `$${i + 1}`
+  })
+  return { text, values } as unknown as SqlQuery
+}
+
+/**
+ * Execute a database query.
+ * Prefer passing a `sql` tagged template (type-safe). The plain-string overload
+ * exists for legacy callers but should not be used for new code.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const query = async (textOrQuery: string | SqlQuery, params: unknown[] = []): Promise<any> => {
+  const text = typeof textOrQuery === 'string' ? textOrQuery : (textOrQuery as { text: string }).text
+  const queryParams = typeof textOrQuery === 'string' ? params : (textOrQuery as { values: unknown[] }).values
   try {
     const activePool = await ensurePool()
-    const result = await activePool.query(text, params)
+    const result = await activePool.query(text, queryParams)
     poolReconnectAfter = 0
     lastPoolFailure = null
     return result

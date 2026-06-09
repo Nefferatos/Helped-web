@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { getMaidsStore, type MaidRecord } from './store'
@@ -874,14 +874,27 @@ export const createPublicAtsApplication = async (payload: PublicApplicantSubmiss
   const createdAt = now()
   const uploadedDocs: Array<Pick<MaidApplicationDocumentRecord, 'type' | 'name' | 'url' | 'uploadedAt'>> = []
 
+  const persistedPaths: string[] = []
   for (const file of payload.files) {
-    const url = await persistPublicApplicantFile(payload.agencyId, applicationId, file)
-    uploadedDocs.push({
-      type: file.kind,
-      name: file.name,
-      url,
-      uploadedAt: createdAt,
-    })
+    try {
+      const url = await persistPublicApplicantFile(payload.agencyId, applicationId, file)
+      persistedPaths.push(url)
+      uploadedDocs.push({
+        type: file.kind,
+        name: file.name,
+        url,
+        uploadedAt: createdAt,
+      })
+    } catch (fileError) {
+      // Roll back any files already written before re-throwing
+      await Promise.allSettled(
+        persistedPaths.map((p) => {
+          const abs = path.join(uploadsRoot, p.replace(/^\/uploads\//, ''))
+          return rm(abs, { force: true })
+        })
+      )
+      throw fileError
+    }
   }
 
   const profile: MaidProfileRecord = {

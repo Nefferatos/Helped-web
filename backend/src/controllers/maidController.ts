@@ -137,6 +137,14 @@ const clearMaidListCache = () => {
   maidListCache.clear()
 }
 
+// Evict expired entries every 30 seconds to prevent unbounded Map growth
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of maidListCache) {
+    if (entry.expiresAt <= now) maidListCache.delete(key)
+  }
+}, 30_000).unref()
+
 const buildMaidListCacheKey = (params: {
   search?: string
   visibility?: string
@@ -771,9 +779,11 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
 
     for (let i = 1; i < lines.length; i += 1) {
       const rowValues = parseCsvRow(lines[i])
-      const rowMap = Object.fromEntries(headers.map((h, index) => [h, rowValues[index] ?? '']))
-      const referenceCode = (rowMap.referenceCode || '').trim()
-      const fullName = (rowMap.fullName || '').trim()
+      const rowMap = Object.fromEntries(
+        headers.map((h, index) => [h, String(rowValues[index] ?? '').replace(/[<>"'`]/g, '').trim()])
+      )
+      const referenceCode = rowMap.referenceCode.replace(/[^a-zA-Z0-9._-]/g, '').trim()
+      const fullName = rowMap.fullName
 
       if (!referenceCode || !fullName) {
         errors.push(`Row ${i + 1}: referenceCode and fullName are required`)
@@ -836,12 +846,12 @@ export const importMaidsCsv = async (req: Request, res: Response) => {
     }
 
     let batchResult = { created: 0, updated: 0 }
+    clearMaidListCache()
     if (batchProfiles.length > 0) {
       batchResult = await bulkUpsertMaidRecordsStore(batchProfiles, agencyId)
     }
 
     const statusCode = errors.length > 0 ? 207 : 200
-    clearMaidListCache()
     res.status(statusCode).json({
       message: 'CSV import completed',
       created: batchResult.created,
@@ -1058,8 +1068,8 @@ export const createMaid = async (req: Request, res: Response) => {
       return res.status(400).json({ error: validationError })
     }
 
-    const created = await createMaidStore(toMaidRecord(payload as MaidProfile), agencyId)
     clearMaidListCache()
+    const created = await createMaidStore(toMaidRecord(payload as MaidProfile), agencyId)
     res.status(201).json({ maid: created })
   } catch (error) {
     if (isMediaTooLargeError(error)) {
@@ -1113,13 +1123,13 @@ export const updateMaid = async (req: Request, res: Response) => {
           : existing.hasPhoto,
     }
 
+    clearMaidListCache()
     const result = await updateMaidStore(referenceCode, toMaidRecord(merged), agencyId)
 
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
     }
 
-    clearMaidListCache()
     res.status(200).json({ maid: result })
   } catch (error) {
     if (isMediaTooLargeError(error)) {

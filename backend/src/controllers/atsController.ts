@@ -111,10 +111,17 @@ export const listAtsApplicationsController = async (req: Request, res: Response)
   try {
     await initializeAtsStore()
     const agencyId = await getRequestAgencyId(req)
-    const filters =
-      typeof req.query.filters === 'string' && req.query.filters.trim()
-        ? (JSON.parse(req.query.filters) as Record<string, unknown>)
-        : {}
+    let filters: Record<string, unknown> = {}
+    if (typeof req.query.filters === 'string' && req.query.filters.trim()) {
+      try {
+        const parsed = JSON.parse(req.query.filters)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          filters = parsed as Record<string, unknown>
+        }
+      } catch {
+        return res.status(400).json({ error: 'Invalid filters JSON' })
+      }
+    }
     const result = await listAtsApplications(agencyId, {
       query: typeof req.query.q === 'string' ? req.query.q : undefined,
       sort: typeof req.query.sort === 'string' ? req.query.sort : undefined,
@@ -281,7 +288,11 @@ export const saveAtsPresetController = async (req: Request, res: Response) => {
 export const createPublicAtsApplicationController = async (req: Request, res: Response) => {
   try {
     const formData = await parseMultipartRequest(req)
-    const agencyId = Number(formData.get('agencyId') ?? 1) || 1
+    const rawAgencyId = formData.get('agencyId')
+    const agencyId = Number(rawAgencyId)
+    if (!rawAgencyId || !Number.isInteger(agencyId) || agencyId <= 0) {
+      return res.status(400).json({ error: 'agencyId is required' })
+    }
     const fullName = String(formData.get('fullName') ?? '').trim()
     const contactNumber = String(formData.get('contactNumber') ?? '').trim()
     const email = String(formData.get('email') ?? '').trim()

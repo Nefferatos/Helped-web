@@ -30,6 +30,31 @@ type TellFriendEmailInput = {
 
 let transporterPromise: Promise<nodemailer.Transporter> | null = null
 
+// Rate limiting: max 5 emails per sender address per 10 minutes
+const EMAIL_RATE_LIMIT = 5
+const EMAIL_RATE_WINDOW_MS = 10 * 60 * 1000
+const emailRateLimitMap = new Map<string, { count: number; windowStart: number }>()
+
+const checkEmailRateLimit = (senderKey: string) => {
+  const now = Date.now()
+  const entry = emailRateLimitMap.get(senderKey)
+  if (!entry || now - entry.windowStart > EMAIL_RATE_WINDOW_MS) {
+    emailRateLimitMap.set(senderKey, { count: 1, windowStart: now })
+    return true
+  }
+  if (entry.count >= EMAIL_RATE_LIMIT) return false
+  entry.count++
+  return true
+}
+
+// Prune stale rate-limit entries every 30 minutes to prevent unbounded growth
+setInterval(() => {
+  const cutoff = Date.now() - EMAIL_RATE_WINDOW_MS
+  for (const [key, entry] of emailRateLimitMap) {
+    if (entry.windowStart < cutoff) emailRateLimitMap.delete(key)
+  }
+}, 30 * 60 * 1000).unref()
+
 const DEFAULT_SMTP_PORT = 587
 const DEFAULT_CONNECTION_TIMEOUT_MS = 10_000
 const DEFAULT_GREETING_TIMEOUT_MS = 10_000
@@ -217,6 +242,9 @@ export const sendTellFriendEmail = async ({
   message,
   maidRefCode,
 }: TellFriendEmailInput) => {
+  if (!checkEmailRateLimit(fromEmail.toLowerCase())) {
+    throw new MailDeliveryError('Too many emails sent. Please try again later.', 'RATE_LIMITED')
+  }
   const normalizedSubject = normalizeHeaderValue(subject, DEFAULT_SUBJECT_LENGTH)
   const normalizedMessage = normalizeTextContent(
     message,
