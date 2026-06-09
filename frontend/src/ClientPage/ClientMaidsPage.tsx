@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ChevronDown,
   Search,
-  SlidersHorizontal,
   Sparkles,
   X,
   Users,
@@ -22,9 +21,6 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
 import { readSafeJson } from "@/lib/safeJson";
@@ -32,7 +28,7 @@ import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
-// ── Nationality → ISO 3166-1 alpha-2 country code ──────────────────────────
+// ── Nationality → ISO 3166-1 alpha-2 ─────────────────────────────────────────
 const NATIONALITY_FLAGS: Record<string, string> = {
   filipino: "ph", philippines: "ph",
   indonesian: "id", indonesia: "id",
@@ -75,7 +71,7 @@ const FlagCircle = ({ code }: { code: string }) => {
     <span style={{
       display: "inline-flex", alignItems: "center", justifyContent: "center",
       width: 16, height: 16, borderRadius: "50%", overflow: "hidden",
-      border: "1.5px solid rgba(0,0,0,0.10)", flexShrink: 0,
+      border: "1.5px solid rgba(0,0,0,0.12)", flexShrink: 0,
       verticalAlign: "middle", background: "#e5e7eb",
     }}>
       <img
@@ -211,7 +207,7 @@ const FILTER_LABELS: Partial<Record<keyof Filters, string>> = {
   relFreeThinker: "Free thinker", relChristian: "Christian", relCatholic: "Catholic",
   relBuddhist: "Buddhist", relMuslim: "Muslim", relHindu: "Hindu",
   relSikh: "Sikh", relOthers: "Other religion",
-  willingOffDays: "Willing off-days", hasChildren: "Has children", withVideo: "With video",
+  willingOffDays: "Off-days OK", hasChildren: "Has children", withVideo: "With video",
 };
 
 const NATIONALITY_OPTIONS = ["No Preference","Filipino","Indonesian","Indian","Sri Lankan","Myanmar","Cambodian","Bangladeshi","Nepali"] as const;
@@ -307,22 +303,22 @@ const Chip = ({
   color = "primary",
 }: {
   label: string; checked: boolean; onChange: () => void;
-  color?: "primary" | "green" | "blue" | "amber";
+  color?: "primary" | "teal" | "blue" | "amber";
 }) => {
   const activeStyle =
-    color === "green" ? "border-emerald-400 bg-emerald-500 text-white shadow-emerald-200 shadow-sm" :
-    color === "blue" ? "border-blue-400 bg-blue-500 text-white shadow-blue-200 shadow-sm" :
-    color === "amber" ? "border-amber-400 bg-amber-500 text-white shadow-amber-200 shadow-sm" :
-    "border-green-500 bg-green-600 text-white shadow-green-200 shadow-sm";
+    color === "teal"  ? "border-teal-500 bg-teal-500 text-white shadow-sm" :
+    color === "blue"  ? "border-blue-500 bg-blue-500 text-white shadow-sm" :
+    color === "amber" ? "border-amber-500 bg-amber-500 text-white shadow-sm" :
+    "border-teal-500 bg-teal-600 text-white shadow-sm";
 
   return (
     <button
       type="button"
       onClick={onChange}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 select-none cursor-pointer ${
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all duration-150 select-none cursor-pointer ${
         checked
-          ? `${activeStyle}`
-          : "border-gray-200 bg-white text-gray-600 hover:border-green-300 hover:bg-green-50 hover:text-green-700"
+          ? activeStyle
+          : "border-slate-200 bg-white text-slate-600 hover:border-teal-400 hover:bg-teal-50 hover:text-teal-700"
       }`}
     >
       {checked && <CheckCircle2 className="h-3 w-3 shrink-0" />}
@@ -333,11 +329,11 @@ const Chip = ({
 
 // ── Filter active tag ─────────────────────────────────────────────────────────
 const FilterTag = ({ label, onRemove }: { label: string; onRemove: () => void }) => (
-  <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-800">
+  <span className="inline-flex items-center gap-1 rounded-md border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
     {label}
     <button
       type="button" onClick={onRemove}
-      className="ml-0.5 flex items-center justify-center rounded-full p-0.5 transition-colors hover:text-red-500"
+      className="ml-0.5 flex items-center justify-center rounded p-0.5 transition-colors hover:text-red-500"
       aria-label={`Remove ${label}`}
     >
       <X className="h-2.5 w-2.5" />
@@ -354,21 +350,21 @@ const FilterSection = ({
 }) => {
   const [open, setOpen] = useState(defaultOpen || (count !== undefined && count > 0));
   return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50/50 overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
       <button
         type="button" onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-gray-100/60 transition-colors"
+        className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-slate-100 transition-colors"
       >
         <div className="flex items-center gap-2">
-          {icon && <span className="text-green-600">{icon}</span>}
-          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{title}</span>
+          {icon && <span className="text-teal-600">{icon}</span>}
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{title}</span>
           {count !== undefined && count > 0 && (
-            <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-green-600 px-1 text-[9px] font-bold text-white">
+            <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded bg-teal-600 px-1 text-[9px] font-bold text-white">
               {count}
             </span>
           )}
         </div>
-        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
       {open && <div className="flex flex-wrap gap-1.5 px-3 pb-3 pt-1">{children}</div>}
     </div>
@@ -378,30 +374,30 @@ const FilterSection = ({
 // ── Maid type badge ───────────────────────────────────────────────────────────
 const getMaidTypeBadge = (maidType?: string) => {
   const t = (maidType || "").toLowerCase();
-  if (t.includes("new")) return { cls: "bg-emerald-500 text-white", label: "New" };
-  if (t.includes("transfer")) return { cls: "bg-blue-500 text-white", label: "Transfer" };
-  return { cls: "bg-amber-500 text-white", label: "Ex-SG" };
+  if (t.includes("new"))      return { cls: "bg-teal-500 text-white",   label: "New" };
+  if (t.includes("transfer")) return { cls: "bg-blue-500 text-white",   label: "Transfer" };
+  return                               { cls: "bg-amber-500 text-white", label: "Ex-SG" };
 };
 
 // ── LOCKED maid card ──────────────────────────────────────────────────────────
 const LockedMaidCard = ({ onLoginClick }: { onLoginClick: () => void }) => (
   <div
     onClick={onLoginClick}
-    className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md hover:border-green-300 cursor-pointer"
+    className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md hover:border-teal-300 cursor-pointer"
   >
-    <div className="relative w-full bg-gray-100 select-none pointer-events-none" style={{ aspectRatio: "3/4" }}>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gray-100">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
-          <Lock className="h-4 w-4 text-gray-400" />
+    <div className="relative w-full bg-slate-100 select-none pointer-events-none" style={{ aspectRatio: "3/4" }}>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-100">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-200">
+          <Lock className="h-5 w-5 text-slate-400" />
         </div>
-        <div className="space-y-1.5 w-full px-3">
-          <div className="h-2 w-3/4 mx-auto rounded bg-gray-200" />
-          <div className="h-2 w-1/2 mx-auto rounded bg-gray-200" />
+        <div className="space-y-2 w-full px-4">
+          <div className="h-2 w-3/4 mx-auto rounded bg-slate-200" />
+          <div className="h-2 w-1/2 mx-auto rounded bg-slate-200" />
         </div>
       </div>
     </div>
-    <div className="p-3 bg-white">
-      <p className="text-center text-[10px] font-semibold text-green-700">🔒 Login to view</p>
+    <div className="p-3 bg-white border-t border-slate-100">
+      <p className="text-center text-[10px] font-bold text-teal-700 tracking-wide uppercase">🔒 Login to view</p>
     </div>
   </div>
 );
@@ -420,9 +416,9 @@ const MaidCard = ({
   return (
     <div
       onClick={() => onViewProfile(maid)}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:shadow-lg hover:border-green-400 hover:-translate-y-0.5 cursor-pointer"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:shadow-xl hover:border-teal-400 hover:-translate-y-1 cursor-pointer"
     >
-      <div className="relative w-full bg-gray-50" style={{ aspectRatio: "3/4" }}>
+      <div className="relative w-full bg-slate-100" style={{ aspectRatio: "3/4" }}>
         {maid.photoUrl ? (
           <img
             src={maid.photoUrl} alt={maid.name}
@@ -430,18 +426,18 @@ const MaidCard = ({
             loading="lazy" decoding="async"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100">
-            <Users className="h-8 w-8 text-green-300" />
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-100 to-teal-50">
+            <Users className="h-8 w-8 text-teal-200" />
           </div>
         )}
 
-        {/* Gradient overlay at bottom */}
-        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent" />
+        {/* Bottom gradient */}
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
 
         {/* Maid type badge */}
         {maid.maidType && (
           <div className="absolute top-2 left-2">
-            <span className={`inline-block px-2 py-0.5 text-[9px] font-bold rounded-full ${badge.cls}`}>
+            <span className={`inline-block px-2 py-0.5 text-[9px] font-black rounded tracking-wider uppercase ${badge.cls}`}>
               {badge.label}
             </span>
           </div>
@@ -450,37 +446,37 @@ const MaidCard = ({
         {/* Video badge */}
         {maid.hasVideo && (
           <div className="absolute top-2 right-2">
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-purple-500 text-white">
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-600 text-white">
               ▶ Video
             </span>
           </div>
         )}
 
-        {/* Name overlay on photo */}
+        {/* Name overlay */}
         <div className="absolute bottom-2 left-2 right-2">
-          <p className="text-[11px] font-bold text-white drop-shadow-sm line-clamp-1">{maid.name}</p>
+          <p className="text-[11px] font-bold text-white drop-shadow line-clamp-1">{maid.name}</p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5 p-2.5 bg-white">
+      <div className="flex flex-col gap-1.5 p-2.5">
         {maid.refCode && (
-          <p className="text-[10px] text-gray-400 font-mono">{maid.refCode}</p>
+          <p className="text-[9px] text-slate-400 font-mono tracking-widest uppercase">{maid.refCode}</p>
         )}
         <div className="flex flex-wrap gap-1">
           {maid.nationality && (
-            <span className="inline-flex items-center gap-1 bg-gray-100 rounded-full px-2 py-0.5 text-[10px] text-gray-700 font-medium">
+            <span className="inline-flex items-center gap-1 bg-slate-100 rounded px-2 py-0.5 text-[10px] text-slate-700 font-semibold">
               <FlagCircle code={flagCode} />
               {maid.nationality}
             </span>
           )}
           {maid.age && (
-            <span className="bg-gray-100 rounded-full px-2 py-0.5 text-[10px] text-gray-700 font-medium">
+            <span className="bg-slate-100 rounded px-2 py-0.5 text-[10px] text-slate-700 font-semibold">
               {maid.age}y
             </span>
           )}
         </div>
         {maid.duties?.slice(0, 1).map((d) => (
-          <span key={d} className="rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-[10px] text-green-700 font-medium w-fit">
+          <span key={d} className="rounded bg-teal-50 border border-teal-200 px-2 py-0.5 text-[10px] text-teal-700 font-semibold w-fit">
             {d}
           </span>
         ))}
@@ -491,29 +487,29 @@ const MaidCard = ({
 
 // ── Login gate banner ─────────────────────────────────────────────────────────
 const LoginGateBanner = ({ onLoginClick }: { onLoginClick: () => void }) => (
-  <div className="overflow-hidden rounded-2xl border-2 border-green-200 bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 shadow-sm">
+  <div className="overflow-hidden rounded-2xl border-2 border-amber-200 bg-amber-50 shadow-sm">
     <div className="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6 sm:p-6">
-      <div className="flex items-start gap-3.5">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-green-600 shadow-md shadow-green-200">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500 shadow-md">
           <Lock className="h-5 w-5 text-white" />
         </div>
         <div>
-          <p className="font-bold text-green-900 text-base">Profiles are hidden until you log in</p>
-          <p className="mt-0.5 text-sm text-green-700 leading-relaxed">
-            Create a free account or log in to view names, photos, full biodata, contact details, and more.
+          <p className="font-black text-amber-900 text-base leading-snug">Profiles are hidden until you log in</p>
+          <p className="mt-1 text-sm text-amber-700 leading-relaxed">
+            Create a free account or log in to view names, photos, full biodata, and contact details.
           </p>
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col">
         <button
           onClick={onLoginClick}
-          className="flex-1 sm:flex-none rounded-xl bg-green-700 hover:bg-green-800 text-white font-bold text-sm px-5 py-2.5 transition-colors shadow-sm"
+          className="flex-1 sm:flex-none rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm px-5 py-2.5 transition-colors shadow-sm"
         >
           Log in to unlock
         </button>
         <button
           onClick={onLoginClick}
-          className="flex-1 sm:flex-none rounded-xl border-2 border-green-300 bg-white hover:bg-green-50 text-green-800 font-bold text-sm px-5 py-2.5 transition-colors"
+          className="flex-1 sm:flex-none rounded-xl border-2 border-amber-300 bg-white hover:bg-amber-50 text-amber-800 font-bold text-sm px-5 py-2.5 transition-colors"
         >
           Create account
         </button>
@@ -636,27 +632,31 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
     }
   };
 
-  const inputClass = "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all";
-  const selectClass = "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all appearance-none cursor-pointer";
-  const labelClass = "block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5";
+  const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all";
+  const selectClass = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all appearance-none cursor-pointer";
+  const labelClass = "block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5";
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
       {/* Header */}
-      <div className="bg-gradient-to-r from-green-700 to-emerald-700 px-5 py-5 sm:px-6">
-        <div className="flex items-start justify-between gap-3">
+      <div
+        className="px-6 py-6 sm:px-7"
+        style={{ background: "linear-gradient(135deg, #0f4c5c 0%, #0d6b79 50%, #0a8a85 100%)" }}
+      >
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-yellow-300" />
-              Request Agency Help
-            </h2>
-            <p className="mt-1 text-sm text-green-100">
-              Send your requirements and our agency will personally match the best candidates for you.
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 mb-3">
+              <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+              <span className="text-xs font-bold text-white/80 tracking-wide">Agency Matching</span>
+            </div>
+            <h2 className="text-xl font-black text-white leading-tight">Request Agency Help</h2>
+            <p className="mt-1.5 text-sm text-teal-200 max-w-sm">
+              Send your requirements and our team will personally match the best candidates for you.
             </p>
           </div>
           <button
             type="button" onClick={onBack}
-            className="shrink-0 flex items-center gap-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-semibold text-white transition-colors"
+            className="shrink-0 flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-bold text-white transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back
@@ -664,11 +664,11 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
         </div>
 
         {highlights.length > 0 && (
-          <div className="mt-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-green-200 mb-2">Pre-filled from your filters</p>
+          <div className="mt-4 rounded-xl border border-white/20 bg-white/10 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-teal-200 mb-2">Pre-filled from your filters</p>
             <div className="flex flex-wrap gap-1.5">
               {highlights.map((item) => (
-                <span key={item} className="rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-xs font-medium text-white">
+                <span key={item} className="rounded-lg border border-white/25 bg-white/15 px-2.5 py-1 text-xs font-semibold text-white">
                   {item}
                 </span>
               ))}
@@ -677,44 +677,44 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
         )}
       </div>
 
-      <form onSubmit={(e) => void handleSubmit(e)} className="divide-y divide-gray-100">
-        {/* Contact Details */}
+      <form onSubmit={(e) => void handleSubmit(e)} className="divide-y divide-slate-100">
+        {/* Step 1 – Contact */}
         <div className="p-5 sm:p-6 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">1</div>
-            <p className="text-sm font-bold text-gray-900">Your Contact Details</p>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600 text-xs font-black text-white">1</span>
+            <p className="text-sm font-black text-slate-800">Your Contact Details</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Full Name <span className="text-red-500 normal-case text-sm font-normal">*</span></label>
+              <label className={labelClass}>Full Name <span className="text-red-500 normal-case text-xs font-normal">*</span></label>
               <input className={inputClass} placeholder="e.g. Sarah Tan" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
             </div>
             <div>
-              <label className={labelClass}>Email Address <span className="text-red-500 normal-case text-sm font-normal">*</span></label>
+              <label className={labelClass}>Email Address <span className="text-red-500 normal-case text-xs font-normal">*</span></label>
               <input type="email" className={inputClass} placeholder="you@example.com" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} required />
             </div>
             <div>
-              <label className={labelClass}>Phone Number <span className="text-red-500 normal-case text-sm font-normal">*</span></label>
+              <label className={labelClass}>Phone Number <span className="text-red-500 normal-case text-xs font-normal">*</span></label>
               <input className={inputClass} placeholder="+65 9123 4567" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} required />
             </div>
             <div>
-              <label className={labelClass}>Agency <span className="text-red-500 normal-case text-sm font-normal">*</span></label>
+              <label className={labelClass}>Agency <span className="text-red-500 normal-case text-xs font-normal">*</span></label>
               <div className="relative">
                 <select className={selectClass} value={form.agencyId} onChange={(e) => setForm((p) => ({ ...p, agencyId: e.target.value }))} required>
                   <option value="">Choose an agency</option>
                   {agencyOptions.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Maid Preferences */}
+        {/* Step 2 – Preferences */}
         <div className="p-5 sm:p-6 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">2</div>
-            <p className="text-sm font-bold text-gray-900">Maid Preferences</p>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600 text-xs font-black text-white">2</span>
+            <p className="text-sm font-black text-slate-800">Maid Preferences</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {[
@@ -733,18 +733,18 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
                   >
                     {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Special Requirements */}
+        {/* Step 3 – Requirements */}
         <div className="p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">3</div>
-            <p className="text-sm font-bold text-gray-900">Special Requirements</p>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600 text-xs font-black text-white">3</span>
+            <p className="text-sm font-black text-slate-800">Special Requirements</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {([
@@ -762,7 +762,7 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
               />
             ))}
           </div>
-          <div>
+          <div className="mt-2">
             <label className={labelClass}>Additional Notes</label>
             <textarea
               value={form.otherRequirements}
@@ -775,17 +775,17 @@ const RequestForm = ({ prefillFilters, onBack }: RequestFormProps) => {
         </div>
 
         {/* Submit */}
-        <div className="flex flex-col-reverse gap-3 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 bg-gray-50">
+        <div className="flex flex-col-reverse gap-3 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 bg-slate-50">
           <button
             type="button" onClick={onBack}
-            className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex items-center justify-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 disabled:opacity-60 px-8 py-2.5 text-sm font-bold text-white transition-colors shadow-md shadow-green-200 min-w-[160px]"
+            className="flex items-center justify-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-60 px-8 py-2.5 text-sm font-black text-white transition-colors shadow-md shadow-teal-200 min-w-[160px]"
           >
             {isSubmitting ? (
               <>
@@ -814,11 +814,11 @@ const SearchResults = ({
 }) => {
   if (isLoading) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex items-center justify-center py-20">
-          <div className="flex flex-col items-center gap-3 text-gray-500">
-            <span className="h-8 w-8 animate-spin rounded-full border-3 border-gray-200 border-t-green-600" style={{ borderWidth: 3 }} />
-            <span className="text-sm font-medium">Finding perfect matches…</span>
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-center py-24">
+          <div className="flex flex-col items-center gap-3 text-slate-400">
+            <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-slate-200 border-t-teal-600" />
+            <span className="text-sm font-semibold">Finding matches…</span>
           </div>
         </div>
       </div>
@@ -827,14 +827,14 @@ const SearchResults = ({
 
   if (maids.length === 0) {
     return (
-      <div className="overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center px-6">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
-            <Search className="h-7 w-7 text-gray-400" />
+      <div className="overflow-hidden rounded-2xl border-2 border-dashed border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col items-center justify-center gap-4 py-24 text-center px-6">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+            <Search className="h-7 w-7 text-slate-400" />
           </div>
           <div>
-            <p className="text-base font-bold text-gray-900">No profiles found</p>
-            <p className="mt-1 text-sm text-gray-500">Try adjusting your filters or broadening your search.</p>
+            <p className="text-base font-black text-slate-800">No profiles found</p>
+            <p className="mt-1 text-sm text-slate-500">Try adjusting your filters or broadening your search.</p>
           </div>
         </div>
       </div>
@@ -845,18 +845,18 @@ const SearchResults = ({
     <div className="flex flex-col gap-4">
       {!isLoggedIn && <LoginGateBanner onLoginClick={onLoginClick} />}
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-600">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 bg-slate-50">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600">
               <Users className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className="text-sm font-bold text-gray-900">
+            <span className="text-sm font-black text-slate-800">
               {maids.length} profile{maids.length !== 1 ? "s" : ""} found
             </span>
           </div>
           {!isLoggedIn && (
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
               <Lock className="h-3 w-3" />
               <span className="hidden sm:inline">Log in to see full details</span>
             </div>
@@ -876,13 +876,13 @@ const SearchResults = ({
   );
 };
 
-// ─── Stat pill ────────────────────────────────────────────────────────────────
+// ── Stat pill ─────────────────────────────────────────────────────────────────
 const StatPill = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) => (
-  <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2">
-    <div className="text-green-600">{icon}</div>
+  <div className="flex items-center gap-2.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 backdrop-blur-sm">
+    <div className="text-teal-300">{icon}</div>
     <div>
-      <p className="text-xs font-bold text-green-900 leading-none">{value}</p>
-      <p className="text-[10px] text-green-600 leading-none mt-0.5">{label}</p>
+      <p className="text-sm font-black text-white leading-none">{value}</p>
+      <p className="text-[10px] text-teal-300 leading-none mt-0.5 font-medium">{label}</p>
     </div>
   </div>
 );
@@ -1031,67 +1031,78 @@ const ClientMaidsPage = ({
   const handleLoginClick = () => navigate(loginPath);
 
   return (
-    <div className="client-page-theme min-h-screen bg-gray-50">
+    <div className="client-page-theme min-h-screen" style={{ background: "#f8fafc" }}>
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
-      {/* ── Page Hero ── */}
-      <div className="bg-gradient-to-br from-green-900 via-green-800 to-emerald-900 px-4 py-8 sm:py-10 sm:px-6">
-        <div className="mx-auto max-w-5xl">
-          
+      {/* ── Hero ── */}
+      <div
+        className="relative overflow-hidden px-4 py-10 sm:py-14 sm:px-6"
+        style={{ background: "linear-gradient(135deg, #0a2540 0%, #0f4c5c 45%, #0d6b79 100%)" }}
+      >
+        {/* Subtle geometric accents */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full bg-teal-400/10 blur-3xl" />
+          <div className="absolute top-1/2 -left-16 h-48 w-48 rounded-full bg-amber-400/10 blur-2xl" />
+          <div className="absolute bottom-0 right-1/3 h-32 w-32 rounded-full bg-teal-300/10 blur-2xl" />
+        </div>
 
-          <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="relative mx-auto max-w-5xl">
+          <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-green-500/40 bg-green-500/20 px-3 py-1.5 mb-3">
-                <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
-                <span className="text-xs font-semibold text-green-100">500+ Active Profiles</span>
+              {/* Eyebrow */}
+              <div className="inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-400/10 px-3.5 py-1.5 mb-4">
+                <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
+                <span className="text-xs font-bold text-teal-200 tracking-wide">500+ Verified Profiles</span>
               </div>
-              <h1 className="text-2xl font-black text-white sm:text-3xl xl:text-4xl leading-tight">
+
+              <h1 className="text-3xl font-black text-white leading-[1.1] sm:text-4xl xl:text-5xl">
                 Find Your Perfect
                 <br />
-                <span className="text-yellow-400">Domestic Helper</span>
+                <span className="text-amber-400">Domestic Helper</span>
               </h1>
-              <p className="mt-2.5 max-w-md text-sm text-green-200 leading-relaxed">
-                Browse verified profiles with advanced filters, or let our expert team personally shortlist the best matches for your household.
+              <p className="mt-3 max-w-lg text-sm text-teal-200 leading-relaxed sm:text-base">
+                Browse verified profiles with advanced filters, or let our expert team personally shortlist the best candidates for your household.
               </p>
 
-              {/* Steps */}
-              <div className="mt-4 flex flex-wrap gap-2">
+              {/* How it works */}
+              <div className="mt-5 flex flex-wrap gap-2">
                 {[
                   { n: "1", label: "Set Filters" },
-                  { n: "2", label: "Search Profiles" },
+                  { n: "2", label: "Browse Profiles" },
                   { n: "3", label: "Request Help" },
                 ].map(({ n, label }) => (
-                  <span key={n} className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-yellow-400 text-[10px] font-black text-green-900">{n}</span>
+                  <span key={n} className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/8 px-3.5 py-2 text-xs font-semibold text-white/80 backdrop-blur-sm"
+                    style={{ background: "rgba(255,255,255,0.07)" }}>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-slate-900">{n}</span>
                     {label}
                   </span>
                 ))}
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="flex flex-wrap gap-2 sm:gap-3 lg:flex-col">
+            {/* Trust stats */}
+            <div className="flex flex-row flex-wrap gap-2 lg:flex-col lg:gap-2.5">
               <StatPill icon={<Shield className="h-4 w-4" />} value="100%" label="Verified profiles" />
-              <StatPill icon={<Clock className="h-4 w-4" />} value="24hr" label="Avg. response" />
+              <StatPill icon={<Clock className="h-4 w-4" />} value="24 hrs" label="Avg. response time" />
               <StatPill icon={<Heart className="h-4 w-4" />} value="98%" label="Satisfaction rate" />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:px-6 sm:py-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-7">
 
         {/* ── Filter Panel ── */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {/* Panel header */}
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-white px-4 py-3">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-100">
-                <Filter className="h-4 w-4 text-green-700" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-600">
+                <Filter className="h-4 w-4 text-white" />
               </div>
-              <span className="text-sm font-bold text-gray-900">Search Filters</span>
+              <span className="text-sm font-black text-slate-800">Search Filters</span>
               {activeFilterCount > 0 && (
-                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-600 px-1.5 text-[10px] font-bold text-white">
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded bg-teal-600 px-1.5 text-[10px] font-black text-white">
                   {activeFilterCount}
                 </span>
               )}
@@ -1100,7 +1111,7 @@ const ClientMaidsPage = ({
               {activeFilterCount > 0 && (
                 <button
                   type="button" onClick={clearAllFilters}
-                  className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+                  className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-100"
                 >
                   <X className="h-3 w-3" />
                   <span className="hidden xs:inline">Clear all</span>
@@ -1108,7 +1119,7 @@ const ClientMaidsPage = ({
               )}
               <button
                 type="button" onClick={() => setFiltersOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
               >
                 <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`} />
                 <span className="hidden xs:inline">{filtersOpen ? "Collapse" : "Expand"}</span>
@@ -1118,7 +1129,7 @@ const ClientMaidsPage = ({
 
           {/* Active filter tags */}
           {activeTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 border-b border-gray-100 bg-green-50 px-4 py-2.5">
+            <div className="flex flex-wrap gap-1.5 border-b border-slate-100 bg-teal-50/60 px-4 py-2.5">
               {activeTags.map(({ key, label }) => (
                 <FilterTag key={`${key}-${label}`} label={label} onRemove={() => removeTag(key)} />
               ))}
@@ -1126,61 +1137,69 @@ const ClientMaidsPage = ({
           )}
 
           {filtersOpen && (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-slate-100">
               {/* Primary search fields */}
               <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
+                {/* Keyword */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">Keyword Search</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Keyword Search</label>
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       value={draft.keyword}
                       onChange={(e) => set("keyword", e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-9 text-sm text-gray-900 placeholder:text-gray-400 focus:border-green-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-9 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
                       placeholder="Name, ref code, nationality…"
                     />
                     {draft.keyword && (
-                      <button type="button" onClick={() => set("keyword", "")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      <button type="button" onClick={() => set("keyword", "")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
                 </div>
 
+                {/* Biodata created within */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">Profile Created Within</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Profile Created Within</label>
                   <div className="relative">
                     <select
                       value={draft.biodataCreatedWithin}
                       onChange={(e) => set("biodataCreatedWithin", e.target.value)}
-                      className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-green-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all cursor-pointer"
+                      className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all cursor-pointer"
                     >
                       <option>No Preference</option>
                       <option>1 week</option><option>2 weeks</option>
                       <option>1 month</option><option>3 months</option>
                       <option>6 months</option><option>1 year</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   </div>
                 </div>
 
+                {/* Maid type */}
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">Maid Type</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Maid Type</label>
                   <div className="flex flex-wrap gap-2">
                     {(["New Maid","Transfer Maid","Ex-Singapore Maid"] as const).map((type) => (
                       <Chip key={type} label={type} checked={draft.maidType === type}
                         onChange={() => set("maidType", draft.maidType === type ? "" : type)}
-                        color={type === "New Maid" ? "green" : type === "Transfer Maid" ? "blue" : "amber"}
+                        color={type === "New Maid" ? "teal" : type === "Transfer Maid" ? "blue" : "amber"}
                       />
                     ))}
                   </div>
                 </div>
 
+                {/* Quick filters */}
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">Quick Filters</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Quick Filters</label>
                   <div className="flex flex-wrap gap-2">
-                    {([["willingOffDays","🌟 Off-days OK"],["hasChildren","👶 Has Children"],["withVideo","🎥 Has Video"]] as [keyof Filters, string][]).map(([key, label]) => (
+                    {([
+                      ["willingOffDays","🌟 Off-days OK"],
+                      ["hasChildren","👶 Has Children"],
+                      ["withVideo","🎥 Has Video"],
+                    ] as [keyof Filters, string][]).map(([key, label]) => (
                       <Chip key={key} label={label} checked={!!draft[key]} onChange={() => toggle(key)} />
                     ))}
                   </div>
@@ -1189,7 +1208,7 @@ const ClientMaidsPage = ({
 
               {/* Detailed filters */}
               <div className="p-4 sm:p-5">
-                <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">Detailed Preferences</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Detailed Preferences</p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 
                   <FilterSection
@@ -1283,32 +1302,33 @@ const ClientMaidsPage = ({
               </div>
 
               {/* Action buttons */}
-              <div className="flex flex-col gap-3 bg-gradient-to-r from-gray-50 to-green-50/50 p-4 sm:flex-row sm:p-5">
+              <div className="flex flex-col gap-3 bg-slate-50 p-4 sm:flex-row sm:p-5">
                 <button
                   type="button"
                   onClick={() => void handleSearch()}
-                  className="flex flex-1 sm:flex-none sm:min-w-[180px] items-center justify-center gap-2.5 rounded-xl bg-green-700 hover:bg-green-800 active:bg-green-900 px-6 py-3 text-sm font-bold text-white transition-all shadow-md shadow-green-200"
+                  className="flex flex-1 sm:flex-none sm:min-w-[180px] items-center justify-center gap-2.5 rounded-xl px-6 py-3 text-sm font-black text-white transition-all shadow-md shadow-teal-200/60"
+                  style={{ background: "linear-gradient(135deg, #0d6b79, #0a8a85)" }}
                 >
                   <Search className="h-4 w-4" />
                   Search Maids
                   {activeFilterCount > 0 && (
-                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white/25 px-1.5 text-[10px] font-bold">{activeFilterCount}</span>
+                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded bg-white/25 px-1.5 text-[10px] font-black">{activeFilterCount}</span>
                   )}
                 </button>
 
                 <button
                   type="button"
                   onClick={handleOpenRequest}
-                  className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-xl border-2 border-green-300 bg-white hover:bg-green-50 px-5 py-3 text-sm font-bold text-green-800 transition-colors"
+                  className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-xl border-2 border-amber-400 bg-amber-50 hover:bg-amber-100 px-5 py-3 text-sm font-black text-amber-900 transition-colors"
                 >
-                  <Sparkles className="h-4 w-4 text-green-600" />
+                  <Sparkles className="h-4 w-4 text-amber-600" />
                   Request Agency Help
                 </button>
 
                 {activeFilterCount > 0 && (
                   <button
                     type="button" onClick={clearAllFilters}
-                    className="flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white hover:bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition-colors sm:ml-auto"
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white hover:bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition-colors sm:ml-auto"
                   >
                     <X className="h-3.5 w-3.5" />
                     Clear
@@ -1330,29 +1350,33 @@ const ClientMaidsPage = ({
 
         {/* ── Agency CTA ── */}
         {!requestOpen && (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div
+            className="overflow-hidden rounded-2xl shadow-xl"
+            style={{ background: "linear-gradient(135deg, #0a2540 0%, #0f4c5c 55%, #0a8a85 100%)" }}
+          >
             <div className="relative overflow-hidden">
-              {/* Decorative background */}
-              <div className="absolute inset-0 bg-gradient-to-br from-green-800 to-emerald-900" />
-              <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-yellow-400/10 -translate-y-1/2 translate-x-1/4" />
-              <div className="absolute bottom-0 left-12 w-32 h-32 rounded-full bg-green-500/20 translate-y-1/2" />
+              {/* Decorative blobs */}
+              <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-amber-400/15 blur-3xl" />
+                <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-teal-400/15 blur-2xl" />
+              </div>
 
-              <div className="relative grid gap-5 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-7">
+              <div className="relative grid gap-6 p-6 sm:grid-cols-[1fr_auto] sm:items-center sm:p-8">
                 <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-yellow-400/30 bg-yellow-400/20 px-3 py-1 mb-3">
-                    <Sparkles className="h-3.5 w-3.5 text-yellow-300" />
-                    <span className="text-xs font-bold text-yellow-200">Prefer a personal touch?</span>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/15 px-3.5 py-1.5 mb-4">
+                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                    <span className="text-xs font-bold text-amber-300 tracking-wide">Prefer a personal touch?</span>
                   </div>
-                  <h2 className="text-xl font-black text-white sm:text-2xl leading-tight">
+                  <h2 className="text-xl font-black text-white sm:text-2xl leading-snug">
                     Let the agency shortlist for you.
                   </h2>
-                  <p className="mt-2 max-w-md text-sm text-green-200 leading-relaxed">
+                  <p className="mt-2 max-w-md text-sm text-teal-200 leading-relaxed">
                     Skip browsing — send your requirements and get curated, expert-matched candidates within 48 hours.
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {["Free service","Expert matching","48hr response"].map((feat) => (
-                      <span key={feat} className="flex items-center gap-1.5 rounded-full bg-white/10 border border-white/20 px-3 py-1 text-xs font-medium text-white">
-                        <CheckCircle2 className="h-3 w-3 text-green-300" />
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {["Free service","Expert matching","48 hr turnaround"].map((feat) => (
+                      <span key={feat} className="flex items-center gap-1.5 rounded-lg bg-white/10 border border-white/15 px-3 py-1.5 text-xs font-semibold text-white">
+                        <CheckCircle2 className="h-3 w-3 text-teal-300" />
                         {feat}
                       </span>
                     ))}
@@ -1361,11 +1385,11 @@ const ClientMaidsPage = ({
 
                 <div className="shrink-0">
                   {requestHighlights.length > 0 && (
-                    <div className="mb-3 rounded-xl border border-white/20 bg-white/10 p-3 sm:w-52">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-green-200 mb-2">Your filters</p>
-                      <div className="flex flex-wrap gap-1">
-                        {requestHighlights.slice(0, 3).map((item) => (
-                          <span key={item} className="rounded-full bg-white/15 border border-white/20 px-2 py-0.5 text-[10px] font-medium text-white">
+                    <div className="mb-4 rounded-xl border border-white/15 bg-white/8 p-3.5 sm:w-56" style={{ background: "rgba(255,255,255,0.07)" }}>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-teal-300 mb-2.5">Your current filters</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {requestHighlights.slice(0, 4).map((item) => (
+                          <span key={item} className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-semibold text-white">
                             {item}
                           </span>
                         ))}
@@ -1374,7 +1398,7 @@ const ClientMaidsPage = ({
                   )}
                   <button
                     type="button" onClick={handleOpenRequest}
-                    className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 px-6 py-3 text-sm font-black text-green-900 transition-all shadow-lg shadow-yellow-400/30"
+                    className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-amber-400 hover:bg-amber-300 active:bg-amber-500 px-6 py-3.5 text-sm font-black text-slate-900 transition-all shadow-lg shadow-amber-400/25"
                   >
                     Open Request Form
                     <ChevronRight className="h-4 w-4" />

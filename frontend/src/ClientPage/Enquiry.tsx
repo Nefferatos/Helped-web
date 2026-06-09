@@ -19,6 +19,278 @@ import {
   Loader2,
 } from "lucide-react";
 
+// ─── Inline styles injected once ────────────────────────────────────────────
+const GLOBAL_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+  .enq-root * { box-sizing: border-box; }
+  .enq-root { font-family: 'Inter', sans-serif; }
+
+  @keyframes enq-fadeUp {
+    from { opacity: 0; transform: translateY(22px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes enq-fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes enq-shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes enq-pulse-dot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%       { transform: scale(1.4); opacity: 0.7; }
+  }
+  @keyframes enq-spin-slow {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes enq-bounce-in {
+    0%   { transform: scale(0.7); opacity: 0; }
+    60%  { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  @keyframes enq-check-draw {
+    from { stroke-dashoffset: 60; }
+    to   { stroke-dashoffset: 0; }
+  }
+  @keyframes enq-slide-right {
+    from { transform: translateX(-8px); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+  }
+
+  .enq-fade-up   { animation: enq-fadeUp 0.55s cubic-bezier(.22,.68,0,1.2) both; }
+  .enq-fade-in   { animation: enq-fadeIn 0.4s ease both; }
+  .enq-bounce-in { animation: enq-bounce-in 0.6s cubic-bezier(.22,.68,0,1.2) both; }
+
+  .enq-delay-1 { animation-delay: 0.08s; }
+  .enq-delay-2 { animation-delay: 0.16s; }
+  .enq-delay-3 { animation-delay: 0.24s; }
+  .enq-delay-4 { animation-delay: 0.32s; }
+  .enq-delay-5 { animation-delay: 0.40s; }
+  .enq-delay-6 { animation-delay: 0.48s; }
+  .enq-delay-7 { animation-delay: 0.56s; }
+
+  .enq-shimmer-text {
+    background: linear-gradient(90deg, #FCD34D 0%, #fff8d6 40%, #FCD34D 60%, #f59e0b 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: enq-shimmer 3s linear infinite;
+  }
+
+  .enq-topic-btn {
+    transition: all 0.18s cubic-bezier(.22,.68,0,1.2);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    width: 100%;
+    text-align: left;
+  }
+  .enq-topic-btn:hover .enq-topic-inner {
+    transform: translateX(4px);
+    border-color: #FCD34D;
+    background: #fffbeb;
+    box-shadow: 0 4px 16px rgba(252,211,77,0.18);
+  }
+  .enq-topic-btn.active .enq-topic-inner {
+    border-color: #FCD34D;
+    background: linear-gradient(135deg, #fffbeb 0%, #fef9c3 100%);
+    box-shadow: 0 4px 20px rgba(252,211,77,0.25);
+  }
+  .enq-topic-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 12px 14px;
+    transition: all 0.18s cubic-bezier(.22,.68,0,1.2);
+  }
+
+  .enq-input {
+    width: 100%;
+    border: 1.5px solid #d1d5db;
+    border-radius: 14px;
+    background: #fff;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: #111827;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+  .enq-input:focus {
+    border-color: #0E4E5E;
+    box-shadow: 0 0 0 4px rgba(14,78,94,0.10);
+  }
+  .enq-input::placeholder { color: #9ca3af; }
+
+  .enq-submit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #0E4E5E;
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 13px 24px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+  .enq-submit-btn:hover:not(:disabled) {
+    background: #0a3845;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(14,78,94,0.30);
+  }
+  .enq-submit-btn:active:not(:disabled) { transform: translateY(0); }
+  .enq-submit-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%);
+    transform: translateX(-100%);
+    transition: transform 0.4s;
+  }
+  .enq-submit-btn:hover::after { transform: translateX(100%); }
+  .enq-submit-btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+
+  .enq-step-card {
+    transition: transform 0.2s cubic-bezier(.22,.68,0,1.2), box-shadow 0.2s;
+  }
+  .enq-step-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(14,78,94,0.12); }
+
+  .enq-card-form { transition: box-shadow 0.2s; }
+  .enq-card-form:hover { box-shadow: 0 12px 40px rgba(14,78,94,0.10); }
+
+  .enq-pulse-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #FCD34D;
+    animation: enq-pulse-dot 1.6s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  .enq-hero-slash {
+    position: absolute;
+    top: -30px; right: -20px;
+    width: 180px; height: 180px;
+    background: linear-gradient(135deg, #FCD34D22, #FCD34D44);
+    border-radius: 40px;
+    transform: rotate(20deg);
+    pointer-events: none;
+  }
+
+  /* ── Responsive: Steps grid ── */
+  .enq-steps-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  /* ── Responsive: Main content grid ── */
+  .enq-main-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  /* ── Responsive: Name/Email row ── */
+  .enq-name-email-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* ── Responsive: Submit row ── */
+  .enq-submit-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Hero padding ── */
+  .enq-hero {
+    padding: 56px 48px 52px;
+    margin-bottom: 32px;
+  }
+
+  /* ── Confirmation ── */
+  .enq-confirm-wrap {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  /* Tablet: ≤ 1024px */
+  @media (max-width: 1024px) {
+    .enq-main-grid {
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+    }
+    .enq-steps-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* Mobile-landscape / small tablet: ≤ 768px */
+  @media (max-width: 768px) {
+    .enq-main-grid {
+      grid-template-columns: 1fr;
+    }
+    .enq-hero {
+      padding: 36px 28px 32px;
+      margin-bottom: 20px;
+    }
+    .enq-steps-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+  }
+
+  /* Mobile: ≤ 480px */
+  @media (max-width: 480px) {
+    .enq-hero {
+      padding: 28px 20px 26px;
+    }
+    .enq-steps-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .enq-name-email-grid {
+      grid-template-columns: 1fr;
+    }
+    .enq-submit-row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .enq-submit-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .enq-fade-up, .enq-fade-in, .enq-bounce-in { animation: none; }
+    .enq-shimmer-text { animation: none; -webkit-text-fill-color: #FCD34D; }
+    .enq-pulse-dot { animation: none; }
+    .enq-submit-btn::after { display: none; }
+  }
+`;
+
 type EnquiryProps = {
   embedded?: boolean;
 };
@@ -62,71 +334,196 @@ const QUICK_TOPICS = [
 ];
 
 const STEPS = [
-  { icon: Inbox, label: "You send your enquiry", color: "text-violet-600", bg: "bg-violet-50", ring: "ring-violet-100" },
-  { icon: Users, label: "Agency team reviews it", color: "text-emerald-600", bg: "bg-emerald-50", ring: "ring-emerald-100" },
-  { icon: Zap, label: "Admin inbox is updated", color: "text-amber-500", bg: "bg-amber-50", ring: "ring-amber-100" },
-  { icon: MessageSquare, label: "Agency contacts you", color: "text-sky-600", bg: "bg-sky-50", ring: "ring-sky-100" },
+  { icon: Inbox,         label: "Send your enquiry",   num: "01" },
+  { icon: Users,         label: "Agency team reviews", num: "02" },
+  { icon: Zap,           label: "Inbox updated live",  num: "03" },
+  { icon: MessageSquare, label: "Agency contacts you", num: "04" },
 ];
 
+// ─── Confirmation screen ─────────────────────────────────────────────────────
 function ConfirmationScreen({ onReset }: { onReset: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-      <div className="relative mb-8">
-        <div className="flex h-28 w-28 items-center justify-center rounded-full bg-emerald-100 ring-8 ring-emerald-50">
-          <CheckCircle2 className="h-14 w-14 text-emerald-500" />
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "60px 24px 80px",
+        textAlign: "center",
+      }}
+      className="enq-fade-in"
+    >
+      {/* Check icon */}
+      <div className="enq-bounce-in" style={{ marginBottom: 32, position: "relative" }}>
+        <div
+          style={{
+            width: 112,
+            height: 112,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #0E4E5E 0%, #1a6b80 100%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 16px 48px rgba(14,78,94,0.30)",
+          }}
+        >
+          <CheckCircle2 style={{ width: 52, height: 52, color: "#FCD34D" }} />
         </div>
-        <div className="absolute -top-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 shadow-lg">
-          <Sparkles className="h-5 w-5 text-white" />
+        <div
+          style={{
+            position: "absolute",
+            top: -4,
+            right: -4,
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            background: "#FCD34D",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 12px rgba(252,211,77,0.50)",
+          }}
+        >
+          <Sparkles style={{ width: 16, height: 16, color: "#0E4E5E" }} />
         </div>
       </div>
 
-      <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3 tracking-tight">
+      <h2
+        className="enq-fade-up enq-delay-1"
+        style={{
+          fontSize: "clamp(26px, 6vw, 36px)",
+          fontWeight: 900,
+          color: "#0E4E5E",
+          marginBottom: 12,
+          letterSpacing: "-0.03em",
+        }}
+      >
         Enquiry Received!
       </h2>
-      <p className="text-gray-500 max-w-md mb-10 leading-relaxed text-[15px]">
-        Your enquiry has been sent to the agency team. They will review it and get back to you shortly.
+      <p
+        className="enq-fade-up enq-delay-2"
+        style={{ color: "#6b7280", maxWidth: 420, marginBottom: 40, lineHeight: 1.7, fontSize: 15 }}
+      >
+        Your message has been sent to the agency team. They'll review it and follow up with you shortly.
       </p>
 
-      <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white shadow-md p-6 mb-8 text-left">
-        <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-5">
+      {/* Next steps card */}
+      <div
+        className="enq-fade-up enq-delay-3"
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          borderRadius: 20,
+          border: "1.5px solid #e5e7eb",
+          background: "#fff",
+          padding: "24px 28px",
+          marginBottom: 28,
+          textAlign: "left",
+          boxShadow: "0 4px 24px rgba(14,78,94,0.07)",
+        }}
+      >
+        <p
+          style={{
+            fontSize: 10,
+            fontWeight: 800,
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            color: "#9ca3af",
+            marginBottom: 20,
+          }}
+        >
           What happens next
         </p>
-        <div className="space-y-4">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {[
-            { icon: Inbox, color: "bg-sky-50 text-sky-600", text: "Your enquiry is now in the agency inbox" },
-            { icon: Users, color: "bg-emerald-50 text-emerald-600", text: "The admin or agency team will review it" },
-            { icon: CalendarClock, color: "bg-amber-50 text-amber-500", text: "Expect a reply within 1-2 business hours" },
-            { icon: Phone, color: "bg-violet-50 text-violet-600", text: "Check your phone or email for follow-up" },
-          ].map(({ icon: Icon, color, text }, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}>
-                <Icon className="h-5 w-5" />
+            { icon: Inbox,         color: "#0E4E5E", bg: "rgba(14,78,94,0.08)",   text: "Enquiry is now in the agency inbox" },
+            { icon: Users,         color: "#0E4E5E", bg: "rgba(14,78,94,0.08)",   text: "Admin or agency team will review it" },
+            { icon: CalendarClock, color: "#d97706", bg: "rgba(252,211,77,0.20)", text: "Expect a reply within 1–2 business hours" },
+            { icon: Phone,         color: "#0E4E5E", bg: "rgba(14,78,94,0.08)",   text: "Check your phone or email for follow-up" },
+          ].map(({ icon: Icon, color, bg, text }, i) => (
+            <div
+              key={i}
+              className={`enq-fade-up enq-delay-${i + 3}`}
+              style={{ display: "flex", alignItems: "center", gap: 14 }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  background: bg,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Icon style={{ width: 18, height: 18, color }} />
               </div>
-              <p className="text-[14px] font-semibold text-gray-700">{text}</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>{text}</p>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="flex items-center gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50 px-5 py-3.5 mb-8">
-        <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
-        <p className="text-[13px] font-semibold text-emerald-800">
-          Typical agency response: <span className="font-black">1-2 business hours</span>
+      {/* Response time badge */}
+      <div
+        className="enq-fade-up enq-delay-5"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          borderRadius: 999,
+          background: "linear-gradient(135deg, #0E4E5E, #1a6b80)",
+          padding: "10px 20px",
+          marginBottom: 32,
+        }}
+      >
+        <span className="enq-pulse-dot" />
+        <p style={{ fontSize: 13, fontWeight: 600, color: "#FCD34D" }}>
+          Typical response: <span style={{ fontWeight: 900 }}>1–2 business hours</span>
         </p>
       </div>
 
       <button
         type="button"
         onClick={onReset}
-        className="inline-flex items-center gap-2 rounded-2xl border-2 border-gray-200 bg-white px-6 py-3 text-[14px] font-bold text-gray-700 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-all duration-200"
+        className="enq-fade-up enq-delay-6"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          borderRadius: 14,
+          border: "1.5px solid #d1d5db",
+          background: "#fff",
+          padding: "11px 22px",
+          fontSize: 14,
+          fontWeight: 700,
+          color: "#374151",
+          cursor: "pointer",
+          transition: "all 0.15s",
+          fontFamily: "Inter, sans-serif",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "#0E4E5E";
+          (e.currentTarget as HTMLButtonElement).style.color = "#0E4E5E";
+          (e.currentTarget as HTMLButtonElement).style.background = "rgba(14,78,94,0.04)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "#d1d5db";
+          (e.currentTarget as HTMLButtonElement).style.color = "#374151";
+          (e.currentTarget as HTMLButtonElement).style.background = "#fff";
+        }}
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft style={{ width: 16, height: 16 }} />
         Submit another enquiry
       </button>
     </div>
   );
 }
 
+// ─── Simple enquiry form ─────────────────────────────────────────────────────
 function SimpleEnquiryForm({
   initialName,
   initialEmail,
@@ -147,53 +544,32 @@ function SimpleEnquiryForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    setName((current) => current || initialName);
-  }, [initialName]);
-
-  useEffect(() => {
-    setEmail((current) => current || initialEmail);
-  }, [initialEmail]);
-
-  useEffect(() => {
-    setPhone((current) => current || initialPhone);
-  }, [initialPhone]);
-
-  useEffect(() => {
-    if (initialMessage) {
-      setMessage(initialMessage);
-    }
-  }, [initialMessage]);
+  useEffect(() => { setName((c) => c || initialName); }, [initialName]);
+  useEffect(() => { setEmail((c) => c || initialEmail); }, [initialEmail]);
+  useEffect(() => { setPhone((c) => c || initialPhone); }, [initialPhone]);
+  useEffect(() => { if (initialMessage) setMessage(initialMessage); }, [initialMessage]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     if (!name.trim() || !email.trim() || !phone.trim() || !message.trim()) {
       setError("Name, email, phone, and message are required.");
       return;
     }
-
     if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(email.trim())) {
       setError("Please enter a valid email address.");
       return;
     }
-
     const phoneDigits = phone.replace(/\D/g, "");
     if (phoneDigits.length < 8) {
       setError("Please enter a valid phone number including country code, e.g. +65 9123 4567.");
       return;
     }
-
     try {
       setIsSubmitting(true);
       setError("");
-
       const response = await fetch("/api/enquiries", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getClientAuthHeaders(),
-        },
+        headers: { "Content-Type": "application/json", ...getClientAuthHeaders() },
         body: JSON.stringify({
           username: name.trim(),
           email: email.trim(),
@@ -201,12 +577,8 @@ function SimpleEnquiryForm({
           message: message.trim(),
         }),
       });
-
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to submit enquiry");
-      }
-
+      if (!response.ok) throw new Error(data.error || "Failed to submit enquiry");
       setMessage("");
       onSuccess();
     } catch (submitError) {
@@ -217,73 +589,108 @@ function SimpleEnquiryForm({
   };
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)} className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2">
+    <form onSubmit={(event) => void handleSubmit(event)} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Name + Email row — collapses to single column on mobile via CSS class */}
+      <div className="enq-name-email-grid">
         <div>
-          <label className="mb-2 block text-sm font-semibold text-gray-800">Name</label>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+            Full Name
+          </label>
           <input
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(e) => setName(e.target.value)}
             placeholder="Your full name"
-            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+            className="enq-input"
           />
         </div>
         <div>
-          <label className="mb-2 block text-sm font-semibold text-gray-800">Email</label>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+            Email Address
+          </label>
           <input
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+            className="enq-input"
           />
         </div>
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-semibold text-gray-800">Phone</label>
+        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+          Phone Number
+        </label>
         <input
           type="tel"
           value={phone}
-          onChange={(event) => setPhone(event.target.value)}
+          onChange={(e) => setPhone(e.target.value)}
           placeholder="+65 9123 4567"
-          className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+          className="enq-input"
         />
-        <p className="mt-1 text-xs text-gray-400">Include country code, e.g. +65 for Singapore</p>
+        <p style={{ marginTop: 6, fontSize: 12, color: "#9ca3af" }}>Include country code, e.g. +65 for Singapore</p>
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-semibold text-gray-800">Message</label>
+        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+          Your Message
+        </label>
         <textarea
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          placeholder="Tell the agency what kind of help you need."
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Tell the agency what kind of help you need — the more detail, the faster they can match you."
           rows={8}
-          className="w-full resize-y rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm leading-relaxed text-gray-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+          className="enq-input"
+          style={{ resize: "vertical", lineHeight: 1.7 }}
         />
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+        <div
+          style={{
+            borderRadius: 12,
+            border: "1.5px solid #fca5a5",
+            background: "#fef2f2",
+            padding: "12px 16px",
+            fontSize: 13,
+            fontWeight: 500,
+            color: "#b91c1c",
+          }}
+        >
           {error}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Inbox className="h-4 w-4" />}
-          {isSubmitting ? "Sending..." : "Send Enquiry"}
+      <div className="enq-submit-row">
+        <button type="submit" disabled={isSubmitting} className="enq-submit-btn">
+          {isSubmitting
+            ? <Loader2 style={{ width: 16, height: 16, animation: "enq-spin-slow 0.8s linear infinite" }} />
+            : <Inbox style={{ width: 16, height: 16 }} />
+          }
+          {isSubmitting ? "Sending…" : "Send Enquiry"}
+          {!isSubmitting && (
+            <span
+              style={{
+                marginLeft: 4,
+                background: "#FCD34D",
+                color: "#0E4E5E",
+                borderRadius: 6,
+                padding: "2px 8px",
+                fontSize: 11,
+                fontWeight: 800,
+              }}
+            >
+              FREE
+            </span>
+          )}
         </button>
-        <p className="text-xs text-gray-500">This sends a simple enquiry directly to the agency admin inbox.</p>
+        <p style={{ fontSize: 12, color: "#9ca3af" }}>Goes straight to the agency admin inbox.</p>
       </div>
     </form>
   );
 }
 
+// ─── Main page ───────────────────────────────────────────────────────────────
 const Enquiry = ({ embedded = false }: EnquiryProps) => {
   const [clientUser] = useState<ClientUser | null>(getStoredClient());
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -298,199 +705,587 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
   };
 
   return (
-    <div className="client-page-theme min-h-screen flex flex-col bg-[#f8faf9]">
-      {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
+    <>
+      {/* Inject global CSS once */}
+      <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
 
-      <main className="flex-1 py-12 md:py-20">
-        <div className="w-full max-w-[1380px] mx-auto px-4 sm:px-6 lg:px-10 xl:px-16">
-          {submitted ? (
-            <div className="max-w-2xl mx-auto">
-              <ConfirmationScreen onReset={handleReset} />
-            </div>
-          ) : (
-            <>
-              <div className="text-center mb-10 md:mb-14">
-                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-[13px] font-semibold text-emerald-700 mb-6 shadow-sm">
-                  <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
-                  Direct Agency Enquiry
-                </div>
-                <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-gray-900 mb-5 leading-[1.08]">
-                  Send Your{" "}
-                  <span className="text-emerald-600 relative">
-                    Enquiry
-                    <span className="absolute -bottom-1 left-0 right-0 h-1 bg-emerald-200 rounded-full opacity-60" />
-                  </span>
-                </h1>
-                <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">
-                  Tell the agency what you need and your enquiry will go straight to the admin inbox for follow-up.
-                </p>
+      <div
+        className="enq-root"
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          background: "#f4f7f8",
+        }}
+      >
+        {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
+
+        <main style={{ flex: 1, paddingTop: 56, paddingBottom: 80 }}>
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 1360,
+              margin: "0 auto",
+              padding: "0 16px",
+            }}
+          >
+            {submitted ? (
+              <div className="enq-confirm-wrap">
+                <ConfirmationScreen onReset={handleReset} />
               </div>
-
-              <div className="mb-10 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                {STEPS.map(({ icon: Icon, label, color, bg, ring }, i) => (
+            ) : (
+              <>
+                {/* ── Hero ── */}
+                <div
+                  className="enq-fade-up enq-hero"
+                  style={{
+                    position: "relative",
+                    borderRadius: 28,
+                    background: "linear-gradient(135deg, #0E4E5E 0%, #0a3845 100%)",
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* decorative slash shapes */}
                   <div
-                    key={label}
-                    className="relative flex flex-col items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-6 text-center shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+                    style={{
+                      position: "absolute",
+                      top: -40,
+                      right: -40,
+                      width: 220,
+                      height: 220,
+                      borderRadius: 56,
+                      background: "rgba(252,211,77,0.12)",
+                      transform: "rotate(20deg)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: -60,
+                      right: 160,
+                      width: 160,
+                      height: 160,
+                      borderRadius: 40,
+                      background: "rgba(252,211,77,0.07)",
+                      transform: "rotate(-15deg)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      right: 48,
+                      transform: "translateY(-50%)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      opacity: 0.15,
+                      pointerEvents: "none",
+                    }}
                   >
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${bg} ring-4 ${ring} ${color}`}>
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <span className="text-[13px] font-semibold text-gray-700 leading-snug">{label}</span>
-                    <span className="absolute -top-3 -right-3 flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-[11px] font-bold text-white shadow-md">
-                      {i + 1}
+                    {[...Array(5)].map((_, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          width: 40 + i * 12,
+                          height: 3,
+                          borderRadius: 99,
+                          background: "#FCD34D",
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* badge */}
+                  <div
+                    className="enq-fade-up enq-delay-1"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      borderRadius: 999,
+                      border: "1.5px solid rgba(252,211,77,0.35)",
+                      background: "rgba(252,211,77,0.10)",
+                      padding: "7px 16px",
+                      marginBottom: 22,
+                    }}
+                  >
+                    <span className="enq-pulse-dot" />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#FCD34D", letterSpacing: "0.04em" }}>
+                      Direct Agency Enquiry
                     </span>
                   </div>
-                ))}
-              </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[380px_1fr] gap-6 xl:gap-8 items-start">
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                    <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-1">
-                      Quick topics
-                    </p>
-                    <p className="text-[12px] text-gray-400 mb-4 leading-relaxed">
-                      Pick a topic to auto-fill a message template.
-                    </p>
-                    <div className="space-y-1.5">
-                      {QUICK_TOPICS.map((topic) => (
-                        <button
-                          key={topic.label}
-                          onClick={() => setSelectedTopic(topic.label === selectedTopic ? null : topic.label)}
-                          className={`group flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-all duration-150 ${
-                            selectedTopic === topic.label
-                              ? "border-emerald-300 bg-emerald-50 shadow-sm"
-                              : "border-transparent bg-gray-50 hover:border-gray-200 hover:bg-gray-100/60"
-                          }`}
-                        >
-                          <span className="text-lg leading-none w-7 text-center flex-shrink-0">{topic.icon}</span>
-                          <div className="min-w-0 flex-1">
-                            <p className={`text-[13px] font-semibold leading-tight ${selectedTopic === topic.label ? "text-emerald-900" : "text-gray-800"}`}>
-                              {topic.label}
-                            </p>
-                            <p className={`text-[11px] mt-0.5 truncate ${selectedTopic === topic.label ? "text-emerald-600" : "text-gray-400"}`}>
-                              {topic.desc}
-                            </p>
-                          </div>
-                          <ChevronRight
-                            className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-150 ${
-                              selectedTopic === topic.label ? "rotate-90 text-emerald-500" : "text-gray-300 group-hover:text-gray-400"
-                            }`}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <h1
+                    className="enq-fade-up enq-delay-2"
+                    style={{
+                      fontSize: "clamp(28px, 5vw, 56px)",
+                      fontWeight: 900,
+                      color: "#fff",
+                      letterSpacing: "-0.035em",
+                      lineHeight: 1.08,
+                      marginBottom: 16,
+                      maxWidth: 600,
+                    }}
+                  >
+                    Find the right help{" "}
+                    <span className="enq-shimmer-text">faster.</span>
+                  </h1>
 
-                  <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50/40 p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100">
-                        <Star className="h-3.5 w-3.5 text-amber-600" />
-                      </div>
-                      <p className="text-[13px] font-bold text-amber-900">Tips for faster matching</p>
-                    </div>
-                    <ul className="space-y-2.5 text-[13px] text-amber-800 leading-relaxed">
-                      {[
-                        "Mention your preferred start date",
-                        "Specify live-in or live-out",
-                        "Include a monthly budget range",
-                        "Note special requirements (languages, dietary, etc.)",
-                      ].map((tip) => (
-                        <li key={tip} className="flex items-start gap-2">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                          {tip}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="flex items-start gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-100">
-                      <Phone className="h-4 w-4 text-indigo-600" />
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-bold text-indigo-900">Add your phone number</p>
-                      <p className="text-[12px] text-indigo-700 mt-0.5 leading-relaxed">
-                        Enquiries with a phone number get a response faster because agencies often call for quick follow-up.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gray-50">
-                      <Clock className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-semibold text-gray-700">Typical response</p>
-                      <p className="text-[12px] text-gray-400">Agency replies within 1-2 business hours</p>
-                    </div>
-                  </div>
+                  <p
+                    className="enq-fade-up enq-delay-3"
+                    style={{
+                      fontSize: "clamp(14px, 2vw, 16px)",
+                      color: "rgba(255,255,255,0.70)",
+                      maxWidth: 480,
+                      lineHeight: 1.75,
+                      marginBottom: 0,
+                    }}
+                  >
+                    Fill out the enquiry below and it lands directly in the agency inbox — no middlemen, no delays.
+                  </p>
                 </div>
 
-                <div className="flex flex-col gap-4">
-                  {selectedTopic && selectedTopicData && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 flex items-start gap-3">
-                      <span className="text-2xl leading-none mt-0.5">{selectedTopicData.icon}</span>
-                      <div>
-                        <p className="text-[14px] font-bold text-emerald-800">
-                          Template loaded: {selectedTopicData.label}
+                {/* ── Process steps ── */}
+                <div className="enq-steps-grid">
+                  {STEPS.map(({ icon: Icon, label, num }, i) => (
+                    <div
+                      key={label}
+                      className={`enq-step-card enq-fade-up enq-delay-${i + 2}`}
+                      style={{
+                        borderRadius: 20,
+                        border: "1.5px solid #e5e7eb",
+                        background: "#fff",
+                        padding: "22px 18px 20px",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 14,
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {/* Step number watermark */}
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 10,
+                          right: 14,
+                          fontSize: 36,
+                          fontWeight: 900,
+                          color: "rgba(14,78,94,0.06)",
+                          letterSpacing: "-0.04em",
+                          lineHeight: 1,
+                          userSelect: "none",
+                        }}
+                      >
+                        {num}
+                      </span>
+                      {/* Icon badge */}
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 14,
+                          background: i === 0 || i === 1 || i === 3
+                            ? "linear-gradient(135deg, #0E4E5E, #1a6b80)"
+                            : "linear-gradient(135deg, #d97706, #f59e0b)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 4px 12px rgba(14,78,94,0.20)",
+                        }}
+                      >
+                        <Icon style={{ width: 20, height: 20, color: i === 2 ? "#fff" : "#FCD34D" }} />
+                      </div>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: "#1f2937", lineHeight: 1.4 }}>{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Main grid ── */}
+                <div className="enq-main-grid">
+
+                  {/* ── Left sidebar ── */}
+                  <div
+                    className="enq-fade-up enq-delay-4"
+                    style={{ display: "flex", flexDirection: "column", gap: 16 }}
+                  >
+                    {/* Quick topics */}
+                    <div
+                      style={{
+                        borderRadius: 20,
+                        border: "1.5px solid #e5e7eb",
+                        background: "#fff",
+                        padding: "20px",
+                        boxShadow: "0 2px 12px rgba(14,78,94,0.05)",
+                      }}
+                    >
+                      <div style={{ marginBottom: 16 }}>
+                        <p
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.12em",
+                            color: "#9ca3af",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Quick Topics
                         </p>
-                        <p className="text-[13px] text-emerald-700 mt-0.5 leading-relaxed">
-                          A message has been pre-filled below. Replace the bracketed parts with your actual details.
+                        <p style={{ fontSize: 12, color: "#9ca3af", lineHeight: 1.5 }}>
+                          Pick a topic to auto-fill a message template.
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {QUICK_TOPICS.map((topic) => (
+                          <button
+                            key={topic.label}
+                            onClick={() => setSelectedTopic(topic.label === selectedTopic ? null : topic.label)}
+                            className={`enq-topic-btn${selectedTopic === topic.label ? " active" : ""}`}
+                          >
+                            <div className="enq-topic-inner">
+                              <span style={{ fontSize: 18, lineHeight: 1, width: 28, textAlign: "center", flexShrink: 0 }}>
+                                {topic.icon}
+                              </span>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <p
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    color: selectedTopic === topic.label ? "#0E4E5E" : "#1f2937",
+                                    lineHeight: 1.3,
+                                  }}
+                                >
+                                  {topic.label}
+                                </p>
+                                <p
+                                  style={{
+                                    fontSize: 11,
+                                    marginTop: 2,
+                                    color: selectedTopic === topic.label ? "#0a6075" : "#9ca3af",
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }}
+                                >
+                                  {topic.desc}
+                                </p>
+                              </div>
+                              <ChevronRight
+                                style={{
+                                  width: 14,
+                                  height: 14,
+                                  flexShrink: 0,
+                                  color: selectedTopic === topic.label ? "#0E4E5E" : "#d1d5db",
+                                  transform: selectedTopic === topic.label ? "rotate(90deg)" : "none",
+                                  transition: "transform 0.18s",
+                                }}
+                              />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Tips card */}
+                    <div
+                      style={{
+                        borderRadius: 20,
+                        background: "linear-gradient(135deg, #0E4E5E 0%, #0a3845 100%)",
+                        padding: "20px",
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: -20,
+                          right: -20,
+                          width: 80,
+                          height: 80,
+                          borderRadius: 20,
+                          background: "rgba(252,211,77,0.12)",
+                          transform: "rotate(20deg)",
+                        }}
+                      />
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 8,
+                            background: "#FCD34D",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Star style={{ width: 14, height: 14, color: "#0E4E5E" }} />
+                        </div>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: "#FCD34D" }}>Tips for faster matching</p>
+                      </div>
+                      <ul style={{ display: "flex", flexDirection: "column", gap: 10, listStyle: "none", padding: 0, margin: 0 }}>
+                        {[
+                          "Mention your preferred start date",
+                          "Specify live-in or live-out",
+                          "Include a monthly budget range",
+                          "Note special requirements (languages, diet…)",
+                        ].map((tip) => (
+                          <li key={tip} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                            <CheckCircle2
+                              style={{ width: 14, height: 14, color: "#FCD34D", flexShrink: 0, marginTop: 2 }}
+                            />
+                            <span style={{ fontSize: 13, color: "rgba(255,255,255,0.80)", lineHeight: 1.5 }}>{tip}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Phone nudge */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 12,
+                        borderRadius: 16,
+                        border: "1.5px solid rgba(252,211,77,0.35)",
+                        background: "rgba(252,211,77,0.06)",
+                        padding: "16px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 10,
+                          background: "#FCD34D",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Phone style={{ width: 16, height: 16, color: "#0E4E5E" }} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: "#0E4E5E", marginBottom: 4 }}>
+                          Add your phone number
+                        </p>
+                        <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6 }}>
+                          Enquiries with a phone number get faster responses — agencies often call for a quick follow-up.
                         </p>
                       </div>
                     </div>
-                  )}
 
-                  {selectedTopicData && (
-                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-5 py-4 text-[13px] text-indigo-800">
-                      <p className="font-bold mb-2">Template preview</p>
-                      <pre className="whitespace-pre-wrap rounded-xl bg-white border border-indigo-100/80 p-4 text-[12.5px] text-gray-600 leading-relaxed font-sans shadow-sm">
-                        {selectedTopicData.prefill}
-                      </pre>
+                    {/* Response time */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        borderRadius: 14,
+                        border: "1.5px solid #e5e7eb",
+                        background: "#fff",
+                        padding: "14px 16px",
+                      }}
+                    >
+                      <span className="enq-pulse-dot" style={{ background: "#0E4E5E" }} />
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "#1f2937" }}>Typical response</p>
+                        <p style={{ fontSize: 12, color: "#9ca3af" }}>Agency replies within 1–2 business hours</p>
+                      </div>
                     </div>
-                  )}
+                  </div>
 
-                  <div className="rounded-2xl border border-gray-200 bg-white shadow-md overflow-hidden">
-                    <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-                          <Bot className="h-5 w-5 text-white" />
-                        </div>
+                  {/* ── Right: form column ── */}
+                  <div
+                    className="enq-fade-up enq-delay-5"
+                    style={{ display: "flex", flexDirection: "column", gap: 16 }}
+                  >
+                    {/* Template loaded banner */}
+                    {selectedTopic && selectedTopicData && (
+                      <div
+                        className="enq-slide-right enq-fade-in"
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 12,
+                          borderRadius: 16,
+                          border: "1.5px solid #FCD34D",
+                          background: "rgba(252,211,77,0.10)",
+                          padding: "14px 18px",
+                        }}
+                      >
+                        <span style={{ fontSize: 22, lineHeight: 1, marginTop: 2 }}>{selectedTopicData.icon}</span>
                         <div>
-                          <h2 className="text-lg font-black text-white tracking-tight">Submit Your Enquiry</h2>
-                          <p className="text-[12px] text-emerald-100 mt-0.5">
-                            Send a simple enquiry directly to the agency admin team.
+                          <p style={{ fontSize: 14, fontWeight: 800, color: "#0E4E5E" }}>
+                            Template loaded: {selectedTopicData.label}
+                          </p>
+                          <p style={{ fontSize: 13, color: "#4b5563", marginTop: 2, lineHeight: 1.6 }}>
+                            Message pre-filled below. Replace the{" "}
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                color: "#0E4E5E",
+                                background: "rgba(252,211,77,0.3)",
+                                borderRadius: 4,
+                                padding: "1px 5px",
+                              }}
+                            >
+                              [bracketed]
+                            </span>{" "}
+                            parts with your actual details.
                           </p>
                         </div>
                       </div>
+                    )}
+
+                    {/* Template preview */}
+                    {selectedTopicData && (
+                      <div
+                        style={{
+                          borderRadius: 16,
+                          border: "1.5px solid rgba(14,78,94,0.12)",
+                          background: "rgba(14,78,94,0.03)",
+                          padding: "16px 18px",
+                        }}
+                      >
+                        <p
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.1em",
+                            color: "#0E4E5E",
+                            marginBottom: 10,
+                          }}
+                        >
+                          Template Preview
+                        </p>
+                        <pre
+                          style={{
+                            whiteSpace: "pre-wrap",
+                            borderRadius: 12,
+                            background: "#fff",
+                            border: "1.5px solid rgba(14,78,94,0.10)",
+                            padding: "14px 16px",
+                            fontSize: 12.5,
+                            color: "#374151",
+                            lineHeight: 1.75,
+                            fontFamily: "Inter, sans-serif",
+                            boxShadow: "0 2px 8px rgba(14,78,94,0.06)",
+                            overflowX: "auto",
+                          }}
+                        >
+                          {selectedTopicData.prefill}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Form card */}
+                    <div
+                      className="enq-card-form"
+                      style={{
+                        borderRadius: 24,
+                        border: "1.5px solid #e5e7eb",
+                        background: "#fff",
+                        overflow: "hidden",
+                        boxShadow: "0 4px 24px rgba(14,78,94,0.08)",
+                      }}
+                    >
+                      {/* Card header */}
+                      <div
+                        style={{
+                          background: "linear-gradient(135deg, #0E4E5E 0%, #0a3845 100%)",
+                          padding: "22px 28px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 14,
+                          position: "relative",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: -20,
+                            right: -20,
+                            width: 100,
+                            height: 100,
+                            borderRadius: 28,
+                            background: "rgba(252,211,77,0.10)",
+                            transform: "rotate(15deg)",
+                          }}
+                        />
+                        <div
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 14,
+                            background: "rgba(255,255,255,0.12)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "1.5px solid rgba(255,255,255,0.18)",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Bot style={{ width: 22, height: 22, color: "#FCD34D" }} />
+                        </div>
+                        <div>
+                          <h2 style={{ fontSize: 18, fontWeight: 900, color: "#fff", letterSpacing: "-0.02em" }}>
+                            Submit Your Enquiry
+                          </h2>
+                          <p style={{ fontSize: 12, color: "rgba(252,211,77,0.80)", marginTop: 2 }}>
+                            Sent directly to the agency admin team.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Form body */}
+                      <div style={{ padding: "28px" }}>
+                        <SimpleEnquiryForm
+                          initialName={clientUser?.name ?? ""}
+                          initialEmail={clientUser?.email ?? ""}
+                          initialPhone={clientUser?.phone ?? ""}
+                          initialMessage={selectedTopicData?.prefill ?? ""}
+                          onSuccess={() => setSubmitted(true)}
+                        />
+                      </div>
                     </div>
 
-                    <div className="p-6">
-                      <SimpleEnquiryForm
-                        initialName={clientUser?.name ?? ""}
-                        initialEmail={clientUser?.email ?? ""}
-                        initialPhone={clientUser?.phone ?? ""}
-                        initialMessage={selectedTopicData?.prefill ?? ""}
-                        onSuccess={() => setSubmitted(true)}
-                      />
+                    {/* Footer note */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        borderRadius: 14,
+                        border: "1.5px solid #e5e7eb",
+                        background: "#fff",
+                        padding: "14px 18px",
+                        boxShadow: "0 2px 8px rgba(14,78,94,0.04)",
+                      }}
+                    >
+                      <Zap style={{ width: 16, height: 16, color: "#FCD34D", flexShrink: 0, marginTop: 2 }} />
+                      <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>
+                        <span style={{ fontWeight: 700, color: "#374151" }}>Submission note: </span>
+                        This page sends a plain enquiry straight to the agency or admin enquiry inbox for follow-up.
+                      </p>
                     </div>
-                  </div>
-
-                  <div className="rounded-xl border border-gray-100 bg-white px-5 py-4 text-[13px] text-gray-500 leading-relaxed shadow-sm flex items-start gap-3">
-                    <Zap className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                    <p>
-                      <span className="font-semibold text-gray-700">Submission note: </span>
-                      This page sends a plain enquiry straight to the agency or admin enquiry inbox for follow-up.
-                    </p>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
-        </div>
-      </main>
-    </div>
+              </>
+            )}
+          </div>
+        </main>
+      </div>
+    </>
   );
 };
 
