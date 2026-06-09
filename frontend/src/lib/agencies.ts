@@ -9,6 +9,7 @@ export interface PublicAgencyOption {
   createdAt: string;
   totalMaids: number;
   publicMaids: number;
+  isMain?: boolean;
 }
 
 export const fetchAgencyOptions = async (): Promise<PublicAgencyOption[]> => {
@@ -61,6 +62,7 @@ export interface AgencySummary {
   featuredSkills: string[];
   logoUrl?: string;
   about?: string;
+  isMain?: boolean;
 }
 
 const uniqueStrings = (values: Array<string | undefined>) =>
@@ -98,27 +100,35 @@ export const fetchAgencies = async (): Promise<AgencySummary[]> => {
 
   const publicMaids = (maidsData.maids ?? []).filter((maid) => maid.isPublic);
 
-  return agencies.map((agency) => {
-    const agencyMaids = publicMaids.filter((maid) => maid.agencyId === agency.id);
-    return {
-      id: agency.id,
-      name: agency.name,
-      shortName: agency.name,
-      licenseNo: "N/A",
-      contactPhone: "N/A",
-      contactPerson: agency.name,
-      contactEmail: agency.email || "N/A",
-      website: "",
-      location: "Singapore",
-      rating: agencyMaids.length > 0 ? 4.8 : 4.5,
-      publicMaidsCount: agency.publicMaids,
-      availableMaidsCount: agencyMaids.filter((maid) => !maid.status || maid.status === "available").length,
-      previewMaids: agencyMaids.slice(0, 3),
-      featuredSkills: uniqueStrings(agencyMaids.flatMap((maid) => getMaidSkills(maid))).slice(0, 6),
-      logoUrl: "",
-      about: "",
-    };
-  });
+  return agencies
+    .map((agency) => {
+      const agencyMaids = publicMaids.filter((maid) => maid.agencyId === agency.id);
+      return {
+        id: agency.id,
+        name: agency.name,
+        shortName: agency.name,
+        licenseNo: "N/A",
+        contactPhone: "N/A",
+        contactPerson: agency.name,
+        contactEmail: agency.email || "N/A",
+        website: "",
+        location: "Singapore",
+        rating: agencyMaids.length > 0 ? 4.8 : 4.5,
+        publicMaidsCount: agency.publicMaids,
+        availableMaidsCount: agencyMaids.filter((maid) => !maid.status || maid.status === "available").length,
+        previewMaids: agencyMaids.slice(0, 3),
+        featuredSkills: uniqueStrings(agencyMaids.flatMap((maid) => getMaidSkills(maid))).slice(0, 6),
+        logoUrl: "",
+        about: "",
+        isMain: Boolean(agency.isMain),
+      };
+    })
+    .sort((left, right) => {
+      if (left.isMain && !right.isMain) return -1;
+      if (!left.isMain && right.isMain) return 1;
+      if (right.publicMaidsCount !== left.publicMaidsCount) return right.publicMaidsCount - left.publicMaidsCount;
+      return left.name.localeCompare(right.name);
+    });
 };
 
 export const fetchAgencyDetails = async (agencyId: number) => {

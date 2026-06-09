@@ -157,6 +157,37 @@ const buildPublicFaqs = (profile: Record<string, unknown>): string[] => {
   ].filter((s): s is string => s !== null);
 };
 
+const buildPlatformGuide = (input: Record<string, unknown>) => ({
+  visitorCurrentPage: text(input.currentPath) || "/",
+  pages: {
+    browseHelpers: "/search-maids — browse and filter all available helper profiles by nationality, skills, type, and more",
+    viewHelperProfile: "/maids/{referenceCode} — view a helper's full biodata, skills, and work history",
+    hireHelper: "/hire/{referenceCode} — start the official hiring process for a specific helper",
+    submitEnquiry: "/enquiry2 — submit a general enquiry (name + contact + message); agency follows up",
+    applyAsFDW: "/apply-as-maid — FDW applicants submit their 4-step application here",
+    checkApplicationStatus: "/apply-as-maid/status/{applicationId} — FDW applicants check status here",
+    employerLogin: "/employer-login — employer portal login",
+    faq: "/faq — full FAQ page covering hiring, fees, permits, and more",
+  },
+  howToHire: [
+    "1. Browse helpers — visit /search-maids or ask the receptionist to show options.",
+    "2. Pick a helper — view their profile at /maids/{refCode}.",
+    "3. Start the hiring process — go to /hire/{refCode}, OR submit an enquiry at /enquiry2 with your requirements and let the agency shortlist for you.",
+    "4. Agency reviews requirements, arranges an interview, and confirms your selection.",
+    "5. Contract is signed and placement fee arranged.",
+    "6. Agency handles MOM work permit application, medical exam, and insurance (typically 2–4 weeks).",
+    "7. Helper is deployed to your home.",
+  ].join(" "),
+  howToEnquire: "Visit /enquiry2. Fill in your name, phone or email, and a message describing your needs (e.g. nationality preference, skills needed, budget). The agency team will review and contact you. For faster response, use the WhatsApp or phone number in contactInfo.",
+  howToApplyAsFDW: "Visit /apply-as-maid. Complete the 4-step form — Step 1: Biodata (name, nationality, education, contact); Step 2: Health & Preferences (medical history, religion, food preferences); Step 3: Skills & History (work experience, skills, expected salary); Step 4: Attachments (upload resume, passport copy, certificates). After submitting, track your application at /apply-as-maid/status/{applicationId}.",
+  howToSendRequest: "Logged-in employers can submit hiring requests directly from their portal at /client/requests. Public visitors: submit an enquiry at /enquiry2 or contact the agency by phone/WhatsApp — agency staff will create and manage the request on your behalf.",
+  helperTypes: {
+    fresh: "Fresh helper — first deployment in Singapore. Longer processing time (4–8 weeks). Lower placement cost. Good for employers who prefer to train.",
+    transfer: "Transfer helper — currently working in Singapore, changing employer. Faster deployment (1–2 weeks). Already familiar with Singapore environment.",
+    exSingapore: "Ex-Singapore helper — previously worked in Singapore, now overseas. Experienced with local standards. Processing similar to fresh.",
+  },
+});
+
 const scoreMaid = (maid: Record<string, unknown>, input: Record<string, unknown>) => {
   let score = 35;
   const reasons: string[] = [];
@@ -344,6 +375,38 @@ export const runAgentTools = (context: AiToolContext) => {
       licenseNo: text(profile.license_no),
       aboutUs: text(profile.about_us),
     };
+    const allPublicMaids = list(data.maids).filter((maid) => maid.isPublic);
+
+    const agencyHighlights = {
+      agencyName: text(profile.company_name),
+      shortName: text(profile.short_name),
+      licenseNo: text(profile.license_no),
+      aboutUs: text(profile.about_us),
+      totalPublicHelpers: allPublicMaids.length,
+      availableHelpers: allPublicMaids.filter((m) => lower(text(m.status)).includes("available")).length,
+      transferHelpers: allPublicMaids.filter((m) => lower(text(m.type)).includes("transfer")).length,
+      nationalitiesOffered: [...new Set(allPublicMaids.map((m) => text(m.nationality)).filter(Boolean))],
+      recentTestimonials: list(data.testimonials)
+        .slice(-3)
+        .map((t) => {
+          const r = t as Record<string, unknown>;
+          return {
+            from: text(r.author ?? r.client_name ?? r.clientName ?? r.name),
+            review: text(r.message ?? r.content ?? r.text),
+          };
+        })
+        .filter((t) => t.review),
+    };
+
+    const msgForNat = lower(text(input.message))
+      .replace(/\bfilipina\b/g, "filipino")
+      .replace(/\bphilippines?\b/g, "filipino")
+      .replace(/\bburmese\b/g, "myanmar");
+    const NATIONALITY_KEYS = ["filipino", "indonesian", "myanmar", "indian", "bangladeshi", "sri lankan"];
+    const requestedNat = NATIONALITY_KEYS.find((n) => msgForNat.includes(n));
+    const maidPool = requestedNat
+      ? allPublicMaids.filter((m) => lower(text(m.nationality)).includes(requestedNat))
+      : allPublicMaids;
     return {
       contactInfo,
       momPersonnel: list(data.momPersonnel).map((p) => ({
@@ -351,12 +414,13 @@ export const runAgentTools = (context: AiToolContext) => {
         registrationNumber: text(p.registration_number),
       })),
       testimonials: list(data.testimonials).slice(-10),
-      publicMaids: list(data.maids)
-        .filter((maid) => maid.isPublic)
+      publicMaids: (maidPool.length > 0 ? maidPool : allPublicMaids)
         .sort((a, b) => maidTier(a) - maidTier(b))
         .slice(0, 30)
         .map(compactPublicMaid),
       publicFaqs: buildPublicFaqs(profile),
+      platformGuide: buildPlatformGuide(input),
+      agencyHighlights,
     };
   }
 

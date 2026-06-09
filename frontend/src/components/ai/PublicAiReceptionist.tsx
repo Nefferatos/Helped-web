@@ -164,9 +164,6 @@ const PROMPTS = [
   "Find a helper with childcare experience",
 ];
 
-const STORAGE_KEY = "ai_receptionist_messages";
-const CONV_ID_KEY = "ai_receptionist_conv_id";
-
 const normalizePath = (path: string) => path.replace(/\/+$/, "") || "/";
 
 const matchesRoute = (path: string, route: string) => {
@@ -246,45 +243,7 @@ export default function PublicAiReceptionist() {
 
   useEffect(() => {
     setMounted(true);
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Array<{
-          role: "user" | "assistant";
-          text: string;
-          timestamp?: string;
-        }>;
-        setMessages(
-          parsed.map((m) => ({
-            ...m,
-            timestamp: m.timestamp ? new Date(m.timestamp) : undefined,
-          }))
-        );
-      }
-      const savedConvId = localStorage.getItem(CONV_ID_KEY);
-      if (savedConvId) setConversationId(savedConvId);
-    } catch {
-      // ignore
-    }
   }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-    } catch {
-      // ignore
-    }
-  }, [messages, mounted]);
-
-  useEffect(() => {
-    if (!mounted || !conversationId) return;
-    try {
-      localStorage.setItem(CONV_ID_KEY, conversationId);
-    } catch {
-      // ignore
-    }
-  }, [conversationId, mounted]);
 
   useEffect(() => {
     if (open) {
@@ -320,6 +279,7 @@ export default function PublicAiReceptionist() {
         contact,
         conversationId,
         currentPath: location.pathname,
+        history: messages.slice(-12).map((msg) => ({ role: msg.role, content: msg.text })),
       });
       const payload = result as unknown as { featuredMaids?: FeaturedMaid[] };
       const assistantMsg: Message = {
@@ -358,12 +318,6 @@ export default function PublicAiReceptionist() {
     setMessages([]);
     setConversationId(undefined);
     setShowClearConfirm(false);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(CONV_ID_KEY);
-    } catch {
-      // ignore
-    }
   };
 
   const hasConversation = messages.length > 0;

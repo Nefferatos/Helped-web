@@ -5587,7 +5587,16 @@ app.get(
 
     const uniqueAgencies = Array.from(
       new Map(agencies.map((agency) => [agency.id, agency])).values(),
-    ).sort((left, right) => left.name.localeCompare(right.name));
+    )
+      .map((agency) => ({ ...agency, isMain: agency.id === 1 }))
+      .sort((left, right) => {
+        // Main admin agency (id = 1) always first
+        if (left.isMain && !right.isMain) return -1;
+        if (!left.isMain && right.isMain) return 1;
+        // Then by public maid count descending, then name
+        if (right.publicMaids !== left.publicMaids) return right.publicMaids - left.publicMaids;
+        return left.name.localeCompare(right.name);
+      });
 
     return c.json({ agencies: uniqueAgencies });
   }),
@@ -8511,9 +8520,17 @@ app.post(
     let m: RegExpExecArray | null;
     while ((m = MAID_RE.exec(result.response)) !== null) mentionedCodes.add(m[1].trim());
 
+    // Detect if a specific nationality was requested so we can filter cards accordingly
+    const normalizedMsgNat = input.message.toLowerCase()
+      .replace(/\bfilipina\b/g, "filipino")
+      .replace(/\bphilippines?\b/g, "filipino")
+      .replace(/\bburmese\b/g, "myanmar");
+    const NATIONALITY_CARD_KEYS = ["filipino", "indonesian", "myanmar", "indian", "bangladeshi", "sri lankan"];
+    const requestedNatCard = NATIONALITY_CARD_KEYS.find((n) => normalizedMsgNat.includes(n));
+
     const maidCardRequest =
-      /\b(top|best|show|find|recommend|match|shortlist|list|available|availability|who|which|suitable)\b/i.test(input.message) &&
-      /\b(maid|maids|helper|helpers|fdw|filipino|indonesian|myanmar|burmese|indian|sri lankan|bangladeshi|transfer|elderly|childcare|infant|disabled|housework|cooking|cook)\b/i.test(input.message);
+      /\b(top|best|show|find|recommend|match|shortlist|list|available|availability|who|which|suitable|have|any|got|need|want|looking|do|can|hire|hiring)\b/i.test(input.message) &&
+      /\b(maid|maids|helper|helpers|fdw|filipino|indonesian|myanmar|burmese|indian|sri\s+lankan|bangladeshi|transfer|elderly|childcare|infant|newborn|nanny|babysit|disabled|housework|housekeep|cleaning|cooking|cook|chef|care)\b/i.test(input.message);
     const genericCardTerms = new Set([
       "available",
       "availability",
@@ -8540,17 +8557,59 @@ app.post(
       "want",
       "looking",
       "look",
+      "have",
+      "any",
+      "got",
+      "can",
+      "you",
+      "the",
+      "for",
+      "are",
+      "get",
+      "our",
+      "with",
+      "that",
+      "this",
+      "what",
+      "how",
+      "about",
+      "some",
+      "one",
+      "good",
+      "great",
+      "please",
+      "like",
+      "also",
     ]);
     const cardTerms = input.message
       .toLowerCase()
+      // Nationality normalisation
       .replace(/\bfilipina\b/g, "filipino")
       .replace(/\bphilippines?\b/g, "filipino")
       .replace(/\bburmese\b/g, "myanmar")
-      .replace(/\bchildren\b/g, "child")
-      .replace(/\bbaby\b/g, "infant")
+      // Age / elderly synonyms
       .replace(/\bold\s+folk(s)?\b/g, "elderly")
       .replace(/\bsenior(s)?\b/g, "elderly")
       .replace(/\baged\b/g, "elderly")
+      .replace(/\bgrandma\b/g, "elderly")
+      .replace(/\bgrandpa\b/g, "elderly")
+      .replace(/\bgrandparent(s)?\b/g, "elderly")
+      // Child / infant synonyms
+      .replace(/\bchildren\b/g, "child")
+      .replace(/\bbab(y|ies)\b/g, "infant")
+      .replace(/\bnewborn(s)?\b/g, "infant")
+      .replace(/\bnanny\b/g, "childcare")
+      .replace(/\bbabysit(ter|ting)?\b/g, "infant")
+      // Housework synonyms
+      .replace(/\bhousekeep(er|ing)?\b/g, "housework")
+      .replace(/\bhouse\s+clean(ing|er)?\b/g, "housework")
+      .replace(/\bcleaning\b/g, "housework")
+      // Cooking synonyms
+      .replace(/\bchef\b/g, "cook")
+      .replace(/\bmeal(s)?\b/g, "cook")
+      // Care synonyms
+      .replace(/\bbedridden\b/g, "disabled")
+      .replace(/\bwheelchair\b/g, "disabled")
       .split(/[^a-z0-9]+/)
       .filter((term) => term.length >= 3 && !genericCardTerms.has(term));
     const isDisplayablePublicMaid = (maid: MaidRecord) => {
@@ -8596,6 +8655,12 @@ app.post(
       (maid) => Boolean((maid as unknown as Record<string, unknown>).isPublic) && isDisplayablePublicMaid(maid),
     );
 
+    const matchesRequestedNat = (maid: MaidRecord) => {
+      if (!requestedNatCard) return true;
+      const nat = String((maid as unknown as Record<string, unknown>).nationality || "").toLowerCase();
+      return nat.includes(requestedNatCard);
+    };
+
     // Primary: marker match. Fallback: name substring match.
     let featured = publicMaids.filter((maid) =>
       mentionedCodes.has(String((maid as unknown as Record<string,unknown>).referenceCode)),
@@ -8605,6 +8670,11 @@ app.post(
         const n = String((maid as unknown as Record<string,unknown>).fullName || "").trim();
         return n.length > 3 && result.response.includes(n);
       });
+    }
+
+    // Strip any LLM-hallucinated wrong-nationality maids from featured when a specific nationality was requested
+    if (requestedNatCard) {
+      featured = featured.filter(matchesRequestedNat);
     }
 
     if (maidCardRequest && featured.length < 10) {
@@ -8620,7 +8690,9 @@ app.post(
         .map((maid) => ({ maid, score: scoreMaidCard(maid) }))
         .filter(({ maid, score }) => {
           const ref = String((maid as unknown as Record<string, unknown>).referenceCode || "");
-          return !featuredRefs.has(ref) && (cardTerms.length === 0 || score > 0);
+          if (featuredRefs.has(ref)) return false;
+          if (requestedNatCard) return matchesRequestedNat(maid);
+          return cardTerms.length === 0 || score > 0;
         })
         .sort((left, right) =>
           right.score - left.score ||

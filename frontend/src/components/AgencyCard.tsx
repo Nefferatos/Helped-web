@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MapPin, Star, Users } from "lucide-react";
+import { MapPin, Star, Trophy, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +14,17 @@ const AgencyCard = ({ agency }: Props) => {
   const isLoggedIn = Boolean(getClientToken());
 
   return (
-    <Card className="overflow-hidden rounded-3xl border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card
+      className="overflow-hidden rounded-3xl border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      style={agency.isMain ? { borderColor: "#16653a", boxShadow: "0 0 0 2px #16653a22, 0 4px 16px rgba(22,101,58,0.10)" } : undefined}
+    >
       <CardHeader className="space-y-4 p-5 pb-4">
+        {agency.isMain && (
+          <div className="flex items-center gap-1.5 rounded-xl bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700" style={{ width: "fit-content" }}>
+            <Trophy className="h-3.5 w-3.5" />
+            Top Recommended Agency
+          </div>
+        )}
         <div className="flex items-start gap-4">
           {agency.logoUrl ? (
             <img src={agency.logoUrl} alt={agency.name} className="h-16 w-16 flex-shrink-0 rounded-2xl object-cover" />

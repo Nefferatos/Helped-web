@@ -144,7 +144,21 @@ const writeLog = async (
 export const buildAgentMessages = async (options: AiRunOptions) => {
   const definition = getAgentDefinition(options.agentId);
   const conversationId = await ensureConversation(options);
-  const memory = await readMemory(options.supabase, conversationId);
+
+  // Prefer inline history sent by the client (always available in the same session).
+  // Fall back to Supabase memory when no inline history is provided.
+  const inlineHistory = Array.isArray(options.input.history)
+    ? (options.input.history as Array<{ role: string; content: string }>)
+        .filter(
+          (item) =>
+            (item.role === "user" || item.role === "assistant") &&
+            typeof item.content === "string" &&
+            item.content.trim().length > 0,
+        )
+        .slice(-12)
+    : [];
+  const memory = inlineHistory.length > 0 ? inlineHistory : await readMemory(options.supabase, conversationId);
+
   const toolResults = runAgentTools({
     agentId: options.agentId,
     input: options.input,
