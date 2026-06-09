@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:3000/api/ats/dashboard)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(type\\(d\\), list\\(d.keys\\(\\)\\)[:5] if isinstance\\(d, dict\\) else 'array'\\)\")",
+      "Bash(pkill -f \"ts-node-dev.*server.ts\")",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/ats/public/apply -X POST -H \"Content-Type: application/json\" -d '{}')",
+      "Bash(find ~/.wrangler -name \"*.json\" 2>/dev/null | head -5 && cat ~/.wrangler/config/default.toml 2>/dev/null | head -20)",
+      "Read(//c/Users/jonri/**)",
+      "Read(//c/Users/jonri/.wrangler/config/**)",
+      "PowerShell($token = \\(Get-Content \"$env:APPDATA\\\\xdg.config\\\\.wrangler\\\\config\\\\default.toml\" -ErrorAction SilentlyContinue\\); $token | Select-Object -First 10)"
+    ]
+  }
+}

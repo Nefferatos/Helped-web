@@ -1142,14 +1142,14 @@ const loadDataFromKv = async (
   // Still fill in any top-level fields that are missing (e.g. new fields added after this blob
   // was written) so callers never receive undefined where an array is expected.
   if ((parsed.__v ?? 0) >= 2) {
-    const { __v: _v, ...data } = parsed as Record<string, unknown>;
-    const defaults = defaultData() as Record<string, unknown>;
+    const { __v: _v, ...data } = parsed as unknown as Record<string, unknown>;
+    const defaults = defaultData() as unknown as Record<string, unknown>;
     for (const key of Object.keys(defaults)) {
-      if ((data as Record<string, unknown>)[key] === undefined) {
-        (data as Record<string, unknown>)[key] = defaults[key];
+      if (data[key] === undefined) {
+        data[key] = defaults[key];
       }
     }
-    return data as AppData;
+    return data as unknown as AppData;
   }
   return mergeAppData(parsed);
 };
