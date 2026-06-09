@@ -370,9 +370,11 @@ export const createRequest = async (req: Request, res: Response) => {
         ? await getPublicMaidByReferenceCodeStore(firstReference)
         : null
     const requestedAgencyId = Number(body.agencyId ?? '')
-    const agencyId =
-      directMaid?.agencyId ??
-      (Number.isInteger(requestedAgencyId) && requestedAgencyId > 0 ? requestedAgencyId : 1)
+    const agencyId = directMaid?.agencyId ??
+      (Number.isInteger(requestedAgencyId) && requestedAgencyId > 0 ? requestedAgencyId : null)
+    if (!agencyId) {
+      return res.status(400).json({ error: 'agencyId is required' })
+    }
 
     const requestData = {
       clientId: normalizedClientId,

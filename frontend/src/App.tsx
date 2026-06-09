@@ -84,7 +84,6 @@ const DataDeletion = lazyRoute(() => import("@/pages/DataDeletion"));
 const AiAutomationPage = lazyRoute(() => import("@/pages/AiAutomationPage"));
 const AiAgentsPage = lazyRoute(() => import("@/pages/AiAgentsPage"));
 const ClientEmployerLogin = lazyRoute(() => import("@/ClientPage/ClientEmployerLogin"));
-const ClientAiAgentsPage = lazyRoute(() => import("@/ClientPage/ClientAiAgentsPage"));
 const ClientSupportChat = lazyRoute(() => import("@/ClientPage/ClientSupportChat"));
 const ClientDashboard = lazyRoute(() => import("@/ClientPage/ClientDashboard"));
 const ClientHistoryPage = lazyRoute(() => import("@/ClientPage/ClientHistoryPage"));
@@ -344,7 +343,7 @@ const App = () => {
               <Route path="maids/search" element={withRouteLoader(<MaidSearchPage embedded />)} />
               <Route path="faq" element={withRouteLoader(<FaqPage />)} />
               <Route path="requests" element={withRouteLoader(<ClientRequestsPage />)} />
-              <Route path="ai-assistant" element={withRouteLoader(<ClientAiAgentsPage />)} />
+              <Route path="ai-assistant" element={<Navigate to="../home" replace />} />
               <Route path="messages" element={<Navigate to="../support-chat" replace />} />
               <Route path="support-chat" element={withRouteLoader(<ClientSupportChat />)} />
               <Route path="profile" element={withRouteLoader(<ClientProfilePage />)} />

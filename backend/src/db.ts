@@ -67,6 +67,38 @@ const createPool = (config: ConstructorParameters<typeof Pool>[0]) => {
   return pool
 }
 
+// Supabase transaction pooler (port 6543) requires username format: postgres.{project-ref}
+// Also handles the case where the project-ref was accidentally placed in the password field
+// (common copy-paste mistake from Supabase dashboard).
+const patchSupabasePoolerUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url)
+    if (parsed.port !== '6543') return url
+    const supabaseUrl = process.env.SUPABASE_URL?.trim()
+    if (!supabaseUrl) return url
+    const projectRef = new URL(supabaseUrl).hostname.split('.')[0]
+    if (!projectRef) return url
+
+    // Fix username: must be postgres.{project-ref} for the transaction pooler
+    if (!parsed.username.includes('.')) {
+      parsed.username = `${parsed.username}.${projectRef}`
+    }
+
+    // Fix password: if the project-ref was accidentally prepended to the password
+    // e.g. password = "{project-ref}:@{real-password}" → extract real-password
+    const decodedPassword = decodeURIComponent(parsed.password)
+    if (decodedPassword.startsWith(`${projectRef}:@`)) {
+      parsed.password = encodeURIComponent(decodedPassword.slice(projectRef.length + 2))
+      console.info('[db] Cleaned Supabase pooler password (removed accidental project-ref prefix)')
+    }
+
+    console.info('[db] Patched Supabase pooler connection string')
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
 const buildPoolCandidates = () => {
   const candidates: Array<{
     label: string
@@ -74,14 +106,13 @@ const buildPoolCandidates = () => {
   }> = []
 
   if (connectionString) {
+    const patchedConnectionString = patchSupabasePoolerUrl(connectionString)
+    const isSupabase = connectionString.includes('supabase.co') || connectionString.includes('supabase.com')
     candidates.push({
       label: 'DATABASE_URL',
       config: {
-        connectionString,
-        ssl:
-          localDbSslEnabled || connectionString.includes('supabase.co')
-            ? { rejectUnauthorized: false }
-            : undefined,
+        connectionString: patchedConnectionString,
+        ssl: localDbSslEnabled || isSupabase ? { rejectUnauthorized: false } : undefined,
       },
     })
   }

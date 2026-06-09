@@ -4046,7 +4046,8 @@ const buildPublicAtsSummary = (
 };
 
 const parseAtsFormData = async (env: Bindings, formData: FormData) => {
-  const agencyId = toNumericValue(formData.get("agencyId"), 1) || 1;
+  const agencyId = toNumericValue(formData.get("agencyId"), 0);
+  if (!agencyId || agencyId <= 0) throw new Error("agencyId is required");
   const fullName = toTrimmedString(formData.get("fullName"));
   const email = toTrimmedString(formData.get("email"));
   const contactNumber = toTrimmedString(formData.get("contactNumber"));
@@ -7381,7 +7382,7 @@ app.delete("/api/enquiries/:id", requireAgencyAdminAuth, async (c) => {
 app.get(
   "/api/requests",
   safeApi(async (c) => {
-    const fastConfig = getSupabaseAppDataConfig(c.env);
+    const fastConfig = !isKvBackend(c.env) ? getSupabaseAppDataConfig(c.env) : null;
     if (fastConfig) {
       const fastPage = Math.max(1, Number(c.req.query("page") ?? "1") || 1);
       const fastPageSize = Math.min(
@@ -7531,7 +7532,7 @@ app.get(
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    const config = getSupabaseAppDataConfig(c.env);
+    const config = !isKvBackend(c.env) ? getSupabaseAppDataConfig(c.env) : null;
     if (config) {
       const sessions = await loadAgencyAdminSessions(c.env);
       const session = sessions.find((item) => item.token === token);
@@ -7644,13 +7645,17 @@ app.post(
       ? data.maids.find((maid) => maid.referenceCode === firstReference)
       : null;
     const requestedAgencyId = Number(body.agencyId ?? "");
-    const agencyId =
+    const resolvedAgencyId =
       actor.type === "admin"
         ? actor.admin.agencyId
         : directMaid?.agencyId ??
           (Number.isInteger(requestedAgencyId) && requestedAgencyId > 0
             ? requestedAgencyId
-            : 1);
+            : null);
+    if (!resolvedAgencyId) {
+      return c.json({ error: "agencyId is required" }, 400);
+    }
+    const agencyId = resolvedAgencyId;
     const createdAt = now();
     const requestRecord: RequestRecord = {
       id: crypto.randomUUID(),

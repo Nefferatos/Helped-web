@@ -103,6 +103,7 @@ app.get('/api/diagnostics', async (_req: Request, res: Response) => {
   }
 })
 
+
 app.get('/api', (_req: Request, res: Response) => {
   res.json({ message: 'Welcome to Maid Agency Backend API' })
 })

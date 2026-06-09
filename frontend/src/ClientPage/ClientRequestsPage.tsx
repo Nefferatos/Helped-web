@@ -646,6 +646,13 @@ const ClientRequestsPage = () => {
     staleTime: 60_000,
   });
 
+  // Auto-select the first agency once the list loads (functional update avoids dependency on form.agencyId)
+  useEffect(() => {
+    const agencies = agenciesQuery.data;
+    if (!agencies || agencies.length === 0) return;
+    setForm((c) => c.agencyId ? c : { ...c, agencyId: String(agencies[0].id) });
+  }, [agenciesQuery.data]);
+
   const conversationQuery = useQuery({
     queryKey: ["request-conversation", selectedRequestId],
     enabled: Boolean(selectedRequestId),
@@ -672,10 +679,14 @@ const ClientRequestsPage = () => {
         requirements.transferMaid ? "Transfer Maid" : null,
         requirements.exSingaporeMaid ? "Ex-Singapore Maid" : null,
       ].filter(Boolean);
+      const agencyId = Number(form.agencyId);
+      if (!agencyId || !Number.isInteger(agencyId) || agencyId <= 0) {
+        throw new Error("Please select an agency before submitting.");
+      }
       return createRequest({
         clientId: storedClient.id,
         type: "general",
-        agencyId: form.agencyId ? Number(form.agencyId) : 1,
+        agencyId,
         details: {
           nationality: form.nationality,
           primaryDuty: form.primaryDuty,
@@ -739,7 +750,7 @@ const ClientRequestsPage = () => {
     return unsub;
   }, [requestsQuery.refetch]);
 
-  const requests = requestsQuery.data?.data ?? [];
+  const requests = useMemo(() => requestsQuery.data?.data ?? [], [requestsQuery.data]);
 
   useEffect(() => {
     if (!selectedRequestId && requests.length > 0) setSelectedRequestId(requests[0].id);
@@ -932,10 +943,9 @@ const ClientRequestsPage = () => {
                   <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Agency</label>
                   <StyledSelect
                     value={form.agencyId || "No Preference"}
-                    onChange={(v) => setForm((c) => ({ ...c, agencyId: v === "No Preference" ? "" : v }))}
+                    onChange={(v) => setForm((c) => ({ ...c, agencyId: v }))}
                   >
-                    <option value="No Preference">Choose an agency</option>
-                    <option value="admin">Admin Agency</option>
+                    <option value="">Choose an agency</option>
                     {(agenciesQuery.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </StyledSelect>
                 </div>
