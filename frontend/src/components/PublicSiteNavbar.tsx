@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useLocation, NavLink } from "react-router-dom";
 import { X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,37 +15,108 @@ import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import { cn } from "@/lib/utils";
 
+/* ─── Scoped keyframes injected once ─────────────────────────────────────── */
+const STYLE_ID = "pubnavbar-styles";
+if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
+  const s = document.createElement("style");
+  s.id = STYLE_ID;
+  s.textContent = `
+    @keyframes _pnb_shimmer {
+      0%   { background-position: -200% center; }
+      100% { background-position:  200% center; }
+    }
+    @keyframes _pnb_fadeDown {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes _pnb_pulse_dot {
+      0%, 100% { transform: scale(1);   opacity: 1; }
+      50%       { transform: scale(1.6); opacity: .7; }
+    }
+    @keyframes _pnb_slideIn {
+      from { opacity: 0; transform: translateX(8px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    ._pnb_shimmer-btn {
+      background: linear-gradient(
+        110deg,
+        #FCD34D 0%,
+        #fde68a 40%,
+        #FCD34D 60%,
+        #ca9f1a 100%
+      );
+      background-size: 200% auto;
+    }
+    ._pnb_shimmer-btn:hover {
+      animation: _pnb_shimmer 1.4s linear infinite;
+    }
+    ._pnb_dot {
+      animation: _pnb_pulse_dot 2s ease-in-out infinite;
+    }
+    ._pnb_drawer {
+      animation: _pnb_fadeDown .22s cubic-bezier(.22,1,.36,1) both;
+    }
+    ._pnb_nav-link-slide {
+      animation: _pnb_slideIn .18s ease both;
+    }
+  `;
+  document.head.appendChild(s);
+}
+
+/* ─── Constants ──────────────────────────────────────────────────────────── */
+const TEAL   = "#0E4E5E";
+const TEAL_D = "#0a3a47";
+const AMBER  = "#FCD34D";
+const AMBER_D = "#ca9f1a";
+
 const links = [
-  { label: "Home",         to: "/"          },
+  { label: "Home",         to: "/"             },
   { label: "Search Maids", to: "/search-maids" },
-  { label: "About Us",     to: "/about"     },
-  { label: "Agency",       to: "/agency"    },
-  { label: "Enquiry",      to: "/enquiry2"  },
-  { label: "FAQ",          to: "/faq"       },
+  { label: "About Us",     to: "/about"        },
+  { label: "Agency",       to: "/agency"       },
+  { label: "Enquiry",      to: "/enquiry2"     },
+  { label: "FAQ",          to: "/faq"          },
 ];
 
-const ArrowRightIcon = () => (
+/* ─── Tiny SVG helpers ───────────────────────────────────────────────────── */
+const ArrowIcon = () => (
   <svg
     viewBox="0 0 16 16"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="2.2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className="h-3.5 w-3.5"
+    className="h-3.5 w-3.5 flex-shrink-0"
   >
     <path d="M3 8h10M9 4l4 4-4 4" />
   </svg>
 );
 
+const ChevronDown = () => (
+  <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3 opacity-70">
+    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+/* ─── Component ──────────────────────────────────────────────────────────── */
 const PublicSiteNavbar = () => {
   const location = useLocation();
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+
+  /* scroll shadow */
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
-    void syncClientProfileFromSession().then((client) =>
-      setClientUser(client ?? getStoredClient())
+    void syncClientProfileFromSession().then((c) =>
+      setClientUser(c ?? getStoredClient())
     );
     setIsMobileMenuOpen(false);
   }, [location.pathname, location.search, location.hash]);
@@ -55,130 +126,129 @@ const PublicSiteNavbar = () => {
     return () => { document.body.style.overflow = ""; };
   }, [isMobileMenuOpen]);
 
-  // Always redirect to homepage after login, regardless of which page the user was on
   const loginPath = buildEmployerLoginPath("/");
 
-  const LoginButton = () => (
+  /* ── Login Button ── */
+  const LoginButton = ({ full = false, onClick }: { full?: boolean; onClick?: () => void }) => (
     <Link
       to={loginPath}
+      onClick={onClick}
+      style={{ background: TEAL, borderColor: TEAL_D, color: "#fff" }}
       className={cn(
-        "inline-flex items-center gap-0 overflow-hidden",
-        "rounded-[10px] border-b-[3px] border-green-950",
-        "bg-[#1c5e2a] text-white",
-        "text-[13.5px] font-bold tracking-wide",
-        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
-        "select-none"
+        "inline-flex overflow-hidden rounded-[10px] border-b-[3px]",
+        "text-[13.5px] font-bold tracking-wide select-none",
+        "transition-all duration-150 hover:brightness-110 active:translate-y-[2px] active:border-b-[1px]",
+        full && "w-full h-11"
       )}
     >
       <span
-        className={cn(
-          "flex h-full items-center justify-center",
-          "bg-[#164d22]",
-          "px-3 py-[9px]",
-          "border-r border-green-950/40"
-        )}
+        style={{ background: TEAL_D, borderColor: `${TEAL_D}99` }}
+        className="flex items-center justify-center px-3 border-r"
       >
-        <ArrowRightIcon />
+        <ArrowIcon />
       </span>
-      <span className="px-4 py-[9px]">Employer Login</span>
-    </Link>
-  );
-
-  const ApplyButton = () => (
-    <Link
-      to="/apply-as-maid"
-      className={cn(
-        "inline-flex items-center gap-2",
-        "rounded-[10px] border-b-[3px] border-amber-900",
-        "bg-[#f59e0b] px-4 py-[9px] text-white",
-        "text-[13.5px] font-bold tracking-wide",
-        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
-        "select-none"
-      )}
-    >
-      <span className="h-2 w-2 rounded-full bg-white/90" />
-      <span>Apply as FDW</span>
-    </Link>
-  );
-
-  const LoginButtonFull = () => (
-    <Link
-      to={loginPath}
-      onClick={() => setIsMobileMenuOpen(false)}
-      className={cn(
-        "flex h-11 w-full overflow-hidden",
-        "rounded-[10px] border-b-[3px] border-green-950",
-        "bg-[#1c5e2a] text-white",
-        "text-[14px] font-bold tracking-wide",
-        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
-        "select-none"
-      )}
-    >
-      <span
-        className={cn(
-          "flex items-center justify-center",
-          "bg-[#164d22]",
-          "px-4",
-          "border-r border-green-950/40"
-        )}
-      >
-        <ArrowRightIcon />
-      </span>
-      <span className="flex flex-1 items-center justify-center">
+      <span className={cn("flex items-center px-4 py-[9px]", full && "flex-1 justify-center")}>
         Employer Login
       </span>
     </Link>
   );
 
-  const ApplyButtonFull = () => (
+  /* ── Apply Button ── */
+  const ApplyButton = ({
+    full = false,
+    compact = false,
+    onClick,
+  }: {
+    full?: boolean;
+    compact?: boolean;
+    onClick?: () => void;
+  }) => (
     <Link
       to="/apply-as-maid"
-      onClick={() => setIsMobileMenuOpen(false)}
+      onClick={onClick}
+      style={{ borderColor: AMBER_D }}
       className={cn(
-        "flex h-11 w-full items-center justify-center gap-2",
-        "rounded-[10px] border-b-[3px] border-amber-900",
-        "bg-[#f59e0b] px-4 text-[14px] font-bold tracking-wide text-white",
-        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
-        "select-none"
+        "_pnb_shimmer-btn inline-flex items-center gap-2 rounded-[10px] border-b-[3px]",
+        "font-bold tracking-wide select-none",
+        "transition-all duration-150 hover:brightness-105 active:translate-y-[2px] active:border-b-[1px]",
+        "text-[#3d2800]",
+        full    && "w-full h-11 justify-center text-[14px] px-4",
+        compact && "h-[38px] px-3 text-[12px]",
+        !full && !compact && "px-4 py-[9px] text-[13.5px]"
       )}
     >
-      <span className="h-2 w-2 rounded-full bg-white/90" />
-      <span>Apply as FDW</span>
+      <span className="_pnb_dot h-2 w-2 rounded-full bg-[#3d2800]/50 flex-shrink-0" />
+      {compact ? (
+        <>
+          <span className="hidden sm:inline">Apply as FDW</span>
+          <span className="sm:hidden">FDW Apply</span>
+        </>
+      ) : (
+        <span>Apply as FDW</span>
+      )}
     </Link>
   );
 
-  const ApplyButtonCompact = () => (
-    <Link
-      to="/apply-as-maid"
+  /* ── User Chip ── */
+  const UserChip = ({ small = false }: { small?: boolean }) => (
+    <button
+      style={{ borderColor: `${TEAL}33`, background: `${TEAL}0d`, color: TEAL }}
       className={cn(
-        "inline-flex h-[38px] items-center gap-2",
-        "rounded-[10px] border-b-[3px] border-amber-900",
-        "bg-[#f59e0b] px-3 text-[12px] font-bold tracking-wide text-white",
-        "transition-all hover:brightness-110 active:border-b-[1px] active:translate-y-[2px]",
-        "select-none"
+        "flex items-center gap-2 rounded-full border-2 py-1 pl-1 transition-colors",
+        small ? "pr-2.5" : "pr-3",
+        "hover:brightness-95"
       )}
     >
-      <span className="h-2 w-2 rounded-full bg-white/90" />
-      <span className="hidden sm:inline">Apply as FDW</span>
-      <span className="sm:hidden">FDW Apply</span>
-    </Link>
+      <Avatar className="h-7 w-7">
+        <AvatarImage src={clientUser?.profileImageUrl} alt={clientUser?.name} />
+        <AvatarFallback style={{ background: TEAL }} className="text-xs font-bold text-white">
+          {clientUser?.name[0].toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <span
+        className={cn(
+          "font-medium truncate",
+          small ? "text-[12.5px] max-w-[70px]" : "text-[13px] max-w-[110px]"
+        )}
+      >
+        {small ? clientUser?.name.split(" ")[0] : clientUser?.name}
+      </span>
+      {!small && <ChevronDown />}
+    </button>
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b-2 border-green-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
-      <div className="mx-auto flex h-14 max-w-screen-xl items-center px-4 sm:px-6 md:h-[80px]">
+    <header
+      ref={headerRef}
+      className={cn(
+        "sticky top-0 z-50 bg-white/96 backdrop-blur supports-[backdrop-filter]:bg-white/92",
+        "transition-shadow duration-300",
+        scrolled
+          ? "shadow-[0_2px_20px_rgba(14,78,94,.13)]"
+          : "border-b border-[#0E4E5E]/10"
+      )}
+    >
+      {/* Top accent bar */}
+      <div
+        style={{
+          background: `linear-gradient(90deg, ${TEAL} 0%, ${AMBER} 60%, ${TEAL} 100%)`,
+        }}
+        className="h-[3px] w-full"
+      />
+
+      <div className="mx-auto flex h-14 max-w-screen-xl items-center px-4 sm:px-6 md:h-[76px]">
 
         {/* Logo */}
-        <Link to="/" className="flex shrink-0 items-center">
+        <Link to="/" className="flex shrink-0 items-center group">
           <img
             src="/FM_logo.png"
             alt="Find Maids At The Agency"
-            className="h-12 w-auto object-contain md:h-20"
+            className="h-11 w-auto object-contain md:h-[58px] transition-transform duration-200 group-hover:scale-[1.03]"
           />
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+        <nav className="hidden flex-1 items-center justify-center gap-0.5 lg:flex" aria-label="Main">
           {links.map((link) => (
             <NavLink
               key={link.to}
@@ -186,47 +256,57 @@ const PublicSiteNavbar = () => {
               end={link.to === "/"}
               className={({ isActive }) =>
                 cn(
-                  "relative px-3 py-1.5 text-[14px] font-medium transition-colors",
-                  "after:absolute after:bottom-[-2px] after:left-3 after:right-3 after:h-[2px] after:rounded-full after:bg-green-700 after:transition-opacity",
+                  "relative px-3.5 py-2 text-[13.5px] font-medium rounded-lg transition-colors duration-150",
                   isActive
-                    ? "font-bold text-green-800 after:opacity-100"
-                    : "text-gray-700 after:opacity-0 hover:text-green-800"
+                    ? "font-semibold"
+                    : "text-gray-600 hover:bg-[#0E4E5E]/5 hover:text-[#0E4E5E]"
                 )
               }
+              style={({ isActive }) =>
+                isActive ? { color: TEAL } : {}
+              }
             >
-              {link.label}
+              {({ isActive }) => (
+                <>
+                  {link.label}
+                  <span
+                    style={{ background: isActive ? AMBER : TEAL }}
+                    className={cn(
+                      "absolute bottom-1 left-3.5 right-3.5 h-[2px] rounded-full transition-all duration-200",
+                      isActive ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
 
-        {/* Desktop: login or avatar — always visible on all pages */}
-        <div className="ml-auto hidden shrink-0 items-center gap-3 lg:flex">
+        {/* Desktop CTA row */}
+        <div className="ml-auto hidden shrink-0 items-center gap-2.5 lg:flex">
           <ApplyButton />
           {clientUser ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 rounded-full border-2 border-green-200 bg-green-50 py-1 pl-1 pr-3 font-medium text-green-900 transition-colors hover:bg-green-100">
-                  <Avatar className="h-7 w-7">
-                    <AvatarImage src={clientUser.profileImageUrl} alt={clientUser.name} />
-                    <AvatarFallback className="bg-green-800 text-xs font-bold text-white">
-                      {clientUser.name[0].toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="max-w-[110px] truncate text-[13px]">{clientUser.name}</span>
-                  <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3 text-green-600">
-                    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </button>
+                <span><UserChip /></span>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuLabel className="text-green-950">My Account</DropdownMenuLabel>
+              <DropdownMenuContent align="end" className="w-44 _pnb_drawer">
+                <DropdownMenuLabel style={{ color: TEAL }} className="font-semibold">
+                  My Account
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link to="/client/home">Portal Home</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link to="/client/profile">Profile</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link to="/client/history">History</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/client/home">Portal Home</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/client/profile">Profile</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/client/history">History</Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  className="text-red-600"
+                  className="text-red-600 focus:text-red-600"
                   onClick={() => void logoutClientPortal("/")}
                 >
                   Logout
@@ -238,37 +318,31 @@ const PublicSiteNavbar = () => {
           )}
         </div>
 
-        {/* Tablet + Mobile: hamburger */}
-        <div className="ml-auto flex items-center lg:hidden">
-          <div className="mr-2">
-            <ApplyButtonCompact />
-          </div>
+        {/* Mobile: compact right cluster */}
+        <div className="ml-auto flex items-center gap-2 lg:hidden">
+          <ApplyButton compact />
           {clientUser && (
-            <button className="mr-2 hidden items-center gap-2 rounded-full border-2 border-green-200 bg-green-50 py-1 pl-1 pr-2.5 sm:flex">
-              <Avatar className="h-7 w-7">
-                <AvatarImage src={clientUser.profileImageUrl} alt={clientUser.name} />
-                <AvatarFallback className="bg-green-800 text-xs font-bold text-white">
-                  {clientUser.name[0].toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-[12.5px] font-medium text-green-900">
-                {clientUser.name.split(" ")[0]}
-              </span>
-            </button>
+            <span className="hidden sm:inline-flex">
+              <UserChip small />
+            </span>
           )}
-
           <button
-            className="flex h-[38px] w-[38px] flex-col items-center justify-center gap-[5px] rounded-lg border-2 border-green-200 bg-green-50 transition-colors hover:bg-green-100"
+            style={{ borderColor: `${TEAL}2a`, background: `${TEAL}08` }}
+            className={cn(
+              "flex h-9 w-9 flex-col items-center justify-center gap-[5px]",
+              "rounded-lg border-2 transition-colors duration-150",
+              isMobileMenuOpen ? "bg-[#0E4E5E]/10" : "hover:bg-[#0E4E5E]/10"
+            )}
             onClick={() => setIsMobileMenuOpen((v) => !v)}
             aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
           >
             {isMobileMenuOpen ? (
-              <X className="h-4 w-4 text-green-800" />
+              <X className="h-4 w-4" style={{ color: TEAL }} />
             ) : (
               <>
-                <span className="h-[2px] w-[18px] rounded-full bg-green-800" />
-                <span className="h-[2px] w-[13px] rounded-full bg-green-800" />
-                <span className="h-[2px] w-[18px] rounded-full bg-green-800" />
+                <span style={{ background: TEAL }}  className="h-[2px] w-[18px] rounded-full" />
+                <span style={{ background: AMBER }} className="h-[2px] w-[13px] rounded-full" />
+                <span style={{ background: TEAL }}  className="h-[2px] w-[18px] rounded-full" />
               </>
             )}
           </button>
@@ -279,70 +353,102 @@ const PublicSiteNavbar = () => {
       {isMobileMenuOpen && (
         <>
           <div
-            className="fixed inset-0 top-14 z-40 bg-black/20 lg:hidden"
+            className="fixed inset-0 top-[calc(3.5rem+3px)] z-40 bg-black/25 lg:hidden"
             onClick={() => setIsMobileMenuOpen(false)}
           />
-          <div className="fixed left-0 right-0 top-14 z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-t border-green-100 bg-white shadow-lg lg:hidden">
-            <nav className="flex flex-col">
-              {links.map((link) => (
+          <div
+            className="_pnb_drawer fixed left-0 right-0 top-[calc(3.5rem+3px)] z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto bg-white lg:hidden"
+            style={{
+              borderTop: `2px solid ${TEAL}1a`,
+              boxShadow: `0 12px 40px ${TEAL}22`,
+            }}
+          >
+            <nav className="flex flex-col" aria-label="Mobile">
+              {links.map((link, i) => (
                 <NavLink
                   key={link.to}
                   to={link.to}
                   end={link.to === "/"}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center justify-between border-b border-green-50 px-5 py-3.5 text-[14px] font-medium transition-colors",
-                      "border-l-[3px]",
+                      "_pnb_nav-link-slide flex items-center justify-between px-5 py-3.5",
+                      "text-[14px] font-medium transition-colors duration-100",
+                      "border-b border-b-gray-50 border-l-[3px]",
                       isActive
-                        ? "border-l-green-700 bg-green-50 font-bold text-green-800"
-                        : "border-l-transparent text-gray-700 hover:bg-green-50 hover:text-green-800"
+                        ? "font-semibold bg-[#0E4E5E]/5"
+                        : "border-l-transparent text-gray-600 hover:bg-[#0E4E5E]/5"
                     )
                   }
+                  style={({ isActive }) => ({
+                    animationDelay: `${i * 35}ms`,
+                    borderLeftColor: isActive ? TEAL : "transparent",
+                    color: isActive ? TEAL : undefined,
+                  })}
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   {({ isActive }) => (
                     <>
                       <span>{link.label}</span>
-                      <span className={cn("text-base", isActive ? "text-green-500" : "text-gray-300")}>›</span>
+                      <span
+                        style={{ color: isActive ? AMBER : "#d1d5db" }}
+                        className="text-lg leading-none"
+                      >
+                        ›
+                      </span>
                     </>
                   )}
                 </NavLink>
               ))}
             </nav>
 
-            {/* Mobile login section — always visible on all pages */}
-            <div className="space-y-3 border-t border-green-100 p-4">
-              <ApplyButtonFull />
+            <div
+              className="space-y-3 p-4"
+              style={{ borderTop: `1px solid ${TEAL}15` }}
+            >
+              <ApplyButton full onClick={() => setIsMobileMenuOpen(false)} />
               {clientUser ? (
                 <div className="space-y-2.5">
-                  <div className="flex items-center gap-3 px-1 py-1">
+                  <div
+                    className="flex items-center gap-3 px-1 py-2 rounded-xl"
+                    style={{ background: `${TEAL}08` }}
+                  >
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={clientUser.profileImageUrl} alt={clientUser.name} />
-                      <AvatarFallback className="bg-green-800 text-sm font-bold text-white">
+                      <AvatarFallback
+                        style={{ background: TEAL }}
+                        className="text-sm font-bold text-white"
+                      >
                         {clientUser.name[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-[14px] font-bold text-green-950">{clientUser.name}</p>
-                      <p className="text-xs text-green-600">Logged in</p>
+                      <p style={{ color: TEAL }} className="text-[14px] font-bold">
+                        {clientUser.name}
+                      </p>
+                      <p className="text-xs text-gray-400">Logged in</p>
                     </div>
                   </div>
                   <Link
                     to="/client/home"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="flex h-11 w-full items-center justify-center rounded-[9px] border-b-[3px] border-green-950 bg-green-800 text-[14px] font-bold text-white hover:bg-green-900"
+                    style={{ background: TEAL, borderColor: TEAL_D }}
+                    className="flex h-11 w-full items-center justify-center rounded-[9px] border-b-[3px] text-[14px] font-bold text-white hover:brightness-110 transition-all active:translate-y-[2px] active:border-b-[1px]"
                   >
                     Open Portal
                   </Link>
                   <button
-                    className="flex h-11 w-full items-center justify-center rounded-[9px] border-2 border-green-200 bg-green-50 text-[14px] font-semibold text-green-800 hover:bg-green-100"
-                    onClick={() => { setIsMobileMenuOpen(false); void logoutClientPortal("/"); }}
+                    style={{ borderColor: `${TEAL}33`, color: TEAL }}
+                    className="flex h-11 w-full items-center justify-center rounded-[9px] border-2 bg-white text-[14px] font-semibold hover:bg-[#0E4E5E]/5 transition-colors"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      void logoutClientPortal("/");
+                    }}
                   >
                     Logout
                   </button>
                 </div>
               ) : (
-                <LoginButtonFull />
+                <LoginButton full onClick={() => setIsMobileMenuOpen(false)} />
               )}
             </div>
           </div>
