@@ -54,7 +54,6 @@ const lazyRoute = <T extends ComponentType<object>>(
 
 const AgenciesPage = lazyRoute(() => import("@/pages/AgenciesPage"));
 const AgencyDetailsPage = lazyRoute(() => import("@/pages/AgencyDetailsPage"));
-const AgencyAdminLogin = lazyRoute(() => import("@/pages/AgencyAdminLogin"));
 const HiringProcessPage = lazyRoute(() => import("@/pages/HiringProcessPage"));
 const HomePage = lazyRoute(() => import("@/pages/HomePage"));
 const AgencyProfile = lazyRoute(() => import("@/pages/AgencyProfile"));
@@ -309,7 +308,7 @@ const App = () => {
             <Route path="/agencies" element={withRouteLoader(<AgenciesPage />)} />
             <Route path="/agencies/:id" element={withRouteLoader(<AgencyDetailsPage />)} />
             <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
-            <Route path="/agencyadmin/login" element={withRouteLoader(<AgencyAdminLogin />)} />
+            <Route path="/agencyadmin/login" element={<Navigate to="/agency" replace />} />
             <Route path="/agencyadmin/dashboard" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>)} />

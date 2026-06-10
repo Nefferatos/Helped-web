@@ -698,10 +698,11 @@ const ClientRequestsPage = () => {
   });
 
   /* ── Effects ── */
+  const refetchRequests = requestsQuery.refetch;
   useEffect(() => {
-    const unsub = subscribeToRequestsChanged(() => { void requestsQuery.refetch(); });
+    const unsub = subscribeToRequestsChanged(() => { void refetchRequests(); });
     return unsub;
-  }, [requestsQuery.refetch]);
+  }, [refetchRequests]);
 
   const requests = useMemo(() => requestsQuery.data?.data ?? [], [requestsQuery.data]);
 
