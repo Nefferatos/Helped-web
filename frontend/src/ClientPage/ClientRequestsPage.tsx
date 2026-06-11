@@ -264,6 +264,7 @@ const HIDE_CHROME_CSS = `
   [class*="nav-bar"], [class*="top-bar"], [class*="TopBar"],
   [id*="navbar"], [id*="header"],
   [role="navigation"], [role="banner"] { display: none !important; }
+  .air-panel { display: none !important; }
   a[href*="/maids/search"], a[href*="/maids"][href$="search"] { display: none !important; }
   .content-card > div:first-child:has(a[href*="/maids"]),
   .content-card > div:first-child:has(button),
@@ -341,6 +342,7 @@ const MaidProfileModal = ({
         .modal-backdrop.modal-leaving { animation: modal-backdrop-out 0.26s ease forwards; }
         .modal-panel { animation: modal-panel-in 0.30s cubic-bezier(0.22,1,0.36,1) forwards; }
         .modal-panel.modal-leaving { animation: modal-panel-out 0.26s ease forwards; }
+        .air-panel { display: none !important; }
       `}</style>
       <div
         className={cn("modal-backdrop", !visible && "modal-leaving")}
