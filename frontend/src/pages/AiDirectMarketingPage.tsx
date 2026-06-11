@@ -179,6 +179,7 @@ export default function AiDirectMarketingPage() {
   const [maidsLoading, setML]       = useState(true);
   const [contacts, setContacts]     = useState<Contact[]>([]);
   const [contactsLoading, setCL]    = useState(false);
+  const [contactsError, setCErr]    = useState(false);
   const [audienceCounts, setCounts] = useState<Partial<Record<AudienceType, number>>>({});
 
   // Campaign
@@ -219,13 +220,14 @@ export default function AiDirectMarketingPage() {
   // Load contacts for selected audience
   const loadContacts = useCallback(async (type: AudienceType) => {
     setCL(true);
+    setCErr(false);
     try {
       const res = await fetch(`/api/ai/direct-marketing/audience?type=${type}`, { headers: getAgencyAdminAuthHeaders() });
-      if (!res.ok) return;
+      if (!res.ok) { setCErr(true); return; }
       const d = (await res.json()) as { contacts?: Contact[] };
       setContacts(d.contacts ?? []);
       setCounts((prev) => ({ ...prev, [type]: d.contacts?.length ?? 0 }));
-    } catch { /* ignore */ } finally { setCL(false); }
+    } catch { setCErr(true); } finally { setCL(false); }
   }, []);
 
   useEffect(() => { void loadContacts(audienceType); }, [audienceType, loadContacts]);
@@ -482,9 +484,22 @@ export default function AiDirectMarketingPage() {
                   </div>
                 )}
 
-                {contacts.length === 0 && !contactsLoading && (
+                {contacts.length === 0 && !contactsLoading && !contactsError && (
                   <div className="mt-5 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
                     No contacts found for this audience. Add clients or enquiry leads first.
+                  </div>
+                )}
+
+                {contactsError && (
+                  <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-5 text-center">
+                    <p className="text-sm font-semibold text-red-700">Could not load contacts</p>
+                    <p className="mt-1 text-xs text-red-600">The request failed — your session may have expired or the server is unavailable.</p>
+                    <button
+                      onClick={() => loadContacts(audienceType)}
+                      className="mt-3 rounded-lg border border-red-300 bg-white px-4 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    >
+                      Retry
+                    </button>
                   </div>
                 )}
 
@@ -620,9 +635,15 @@ export default function AiDirectMarketingPage() {
                     {selectedMaids.length} helper{selectedMaids.length !== 1 ? "s" : ""} featured
                   </span>
                 )}
-                <span className="text-xs text-muted-foreground">
-                  {contactsLoading ? "…" : `${contactCount} contact${contactCount !== 1 ? "s" : ""}`}
-                </span>
+                {contactsError ? (
+                  <button onClick={() => loadContacts(audienceType)} className="flex items-center gap-1 text-xs font-medium text-red-600 hover:underline">
+                    <RefreshCw className="h-3 w-3" /> Failed to load — retry
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    {contactsLoading ? "Loading contacts…" : `${contactCount} contact${contactCount !== 1 ? "s" : ""}`}
+                  </span>
+                )}
               </div>
 
               <Button onClick={generate} disabled={generating || contactCount === 0} size="lg"
