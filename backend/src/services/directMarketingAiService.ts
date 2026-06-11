@@ -42,6 +42,8 @@ export interface MarketingMessage {
   contactSource: string
   message: string
   whatsappLink: string
+  charCount: number
+  whatsappReady: boolean
 }
 
 export interface MarketingCampaign {
@@ -52,8 +54,11 @@ export interface MarketingCampaign {
   maidReferences: string[]
   audienceType: AudienceType
   messageTemplate: string
+  subject: string
   messages: MarketingMessage[]
   contactCount: number
+  whatsappReadyCount: number
+  emailOnlyCount: number
   generatedAt: string
   aiUsed: boolean
 }
@@ -64,8 +69,7 @@ const campaignsByAgency = new Map<number, MarketingCampaign[]>()
 
 export const saveCampaignToMemory = (campaign: MarketingCampaign) => {
   const existing = campaignsByAgency.get(campaign.agencyId) ?? []
-  const updated = [campaign, ...existing].slice(0, 20)
-  campaignsByAgency.set(campaign.agencyId, updated)
+  campaignsByAgency.set(campaign.agencyId, [campaign, ...existing].slice(0, 20))
 }
 
 export const getCampaignsByAgency = (agencyId: number): MarketingCampaign[] =>
@@ -91,71 +95,124 @@ const buildWhatsAppLink = (phone: string, message: string): string => {
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
 }
 
-const goalLabel = (goal: CampaignGoal): string => ({
-  new_arrivals: 'promote newly arrived and available domestic helpers',
-  re_engage: 're-engage past clients who previously showed interest',
-  promotion: 'announce a special promotion or limited offer',
-  holiday: 'send a festive greeting and helper availability update',
-  follow_up: 'follow up on a previous inquiry or pending placement',
-  custom: 'send a personalized outreach message',
+const goalMeta = (goal: CampaignGoal) => ({
+  new_arrivals: {
+    intent: 'promote newly arrived and available domestic helpers to potential clients',
+    hook: 'New helpers have just arrived!',
+    emoji: '✨',
+    subject: 'New Helpers Available',
+  },
+  re_engage: {
+    intent: 're-engage past clients and enquiry leads who have not converted yet',
+    hook: 'We still have excellent helpers ready for you.',
+    emoji: '👋',
+    subject: 'Still Looking for a Helper?',
+  },
+  promotion: {
+    intent: 'announce a special promotion, discounted placement fee, or limited-time offer',
+    hook: 'Special offer — limited slots available!',
+    emoji: '🎉',
+    subject: 'Special Offer for You',
+  },
+  holiday: {
+    intent: 'send warm festive greetings while highlighting helper availability',
+    hook: "Season's greetings from our family to yours!",
+    emoji: '🎊',
+    subject: 'Festive Greetings & Helper Availability',
+  },
+  follow_up: {
+    intent: 'follow up warmly on a previous enquiry, pending placement, or unanswered message',
+    hook: 'Just following up — we would love to help!',
+    emoji: '🔔',
+    subject: 'Following Up on Your Enquiry',
+  },
+  custom: {
+    intent: 'send a personalized outreach message based on the additional instructions provided',
+    hook: 'We have something for you.',
+    emoji: '💬',
+    subject: 'Message from Our Agency',
+  },
 }[goal])
 
-const toneLabel = (tone: CampaignTone): string => ({
-  professional: 'formal and professional',
-  warm: 'friendly and warm',
-  urgent: 'urgent and action-oriented',
-  casual: 'casual and conversational',
+const toneGuide = (tone: CampaignTone): string => ({
+  professional: 'formal, polished, and respectful — no emojis, complete sentences, no contractions',
+  warm: 'friendly, caring, and genuine — 1-2 emojis only, conversational but tasteful',
+  urgent: 'direct, action-oriented, and time-sensitive — one strong emoji, short punchy sentences',
+  casual: 'relaxed, chatty, and approachable — natural language, one emoji, feels like a friend texting',
 }[tone])
 
 const describeMaid = (maid: MaidRecord): string => {
   const intro = maid.introduction as Record<string, unknown> | undefined
-  const salary = (intro?.expectedSalary as string | undefined) ?? ''
+  const salary = (intro?.expectedSalary as string | undefined)?.replace(/S\$/g, '$').trim() ?? ''
   const availability = (intro?.availability as string | undefined) ?? 'available now'
-  const skills = Object.entries(maid.workAreas ?? {})
+
+  const topSkills = Object.entries(maid.workAreas ?? {})
     .filter(([, v]) => {
       const cfg = v as Record<string, unknown>
-      return cfg?.willing || cfg?.experience
+      return cfg?.experience || cfg?.willing
     })
+    .sort(([, a], [, b]) => {
+      const score = (v: unknown) => {
+        const cfg = v as Record<string, unknown>
+        const ev = String(cfg?.evaluation ?? '').toLowerCase()
+        if (/excellent/i.test(ev)) return 4
+        if (/very good/i.test(ev)) return 3
+        if (cfg?.experience) return 2
+        return 1
+      }
+      return score(b) - score(a)
+    })
+    .slice(0, 2)
     .map(([area]) => area)
-    .slice(0, 3)
-    .join(', ')
+    .join(' & ')
 
   return [
-    `${maid.fullName} (${maid.referenceCode})`,
-    `${maid.nationality} – ${maid.type}`,
-    skills ? `Skills: ${skills}` : '',
-    salary ? `Expected salary: ${salary}` : '',
+    `Name: ${maid.fullName} | Ref: ${maid.referenceCode}`,
+    `Nationality: ${maid.nationality} | Type: ${maid.type}`,
+    topSkills ? `Top skills: ${topSkills}` : '',
+    salary ? `Expected salary: ${salary}/mth` : '',
     `Availability: ${availability}`,
-  ]
-    .filter(Boolean)
-    .join(' | ')
+  ].filter(Boolean).join('\n')
 }
 
 // ─── AI generation ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are an expert WhatsApp marketing copywriter for a Singapore domestic helper (maid) agency.
-Your job is to craft concise, compelling outreach messages that feel personal and human — not spammy.
+const SYSTEM_PROMPT = `You are a WhatsApp marketing expert for a Singapore domestic helper agency.
+Write ONE outreach message template for sending to potential clients.
 
-Rules:
-- Start with: Hi {{name}},
-- Keep total length under 350 characters
-- Feature the specific helpers provided — mention name, nationality, and 1-2 top skills
-- Always end with the agency's WhatsApp number or a CTA to contact the agency
-- Match the tone requested exactly
-- Use simple everyday English, no jargon
-- Never make false guarantees
-- For Singapore context: use $ not S$, mention "transfer helper" or "new helper" where relevant
-- Return ONLY valid JSON with shape: {"template": "...", "subject": "..."}
-  where template uses {{name}} as the client name placeholder and {{agencyPhone}} for the contact number`
+FORMAT RULES (strict):
+- Open exactly with: Hi {{name}},
+- One blank line, then the hook/body (2-4 short sentences max)
+- End with a CTA that includes {{agencyPhone}}
+- Total: 200-300 characters maximum (count carefully — WhatsApp previews cut off long messages)
+- Singapore context: use $ not S$, "transfer helper" / "new helper"
+- 1-2 relevant emojis only (0 for professional tone)
+- Use {{name}} for client name, {{agencyPhone}} for contact number
+
+OUTPUT FORMAT — respond ONLY with valid JSON, no markdown:
+{"template": "Hi {{name}},\\n\\nYour message here. CTA with {{agencyPhone}}.", "subject": "Short email subject line"}`
+
+const parseAiJson = (text: string): { template: string; subject: string } | null => {
+  const firstBrace = text.indexOf('{')
+  const lastBrace = text.lastIndexOf('}')
+  if (firstBrace === -1 || lastBrace <= firstBrace) return null
+  try {
+    const parsed = JSON.parse(text.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>
+    if (typeof parsed.template === 'string' && parsed.template.includes('{{name}}')) {
+      return { template: parsed.template, subject: String(parsed.subject ?? 'Helper Update') }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
 
 const generateWithClaude = async (userPrompt: string): Promise<{ template: string; subject: string } | null> => {
   const apiKey = firstDefinedEnv('ANTHROPIC_API_KEY', 'CLAUDE_API_KEY')
   if (!apiKey) return null
-
   const model = firstDefinedEnv('ANTHROPIC_MODEL', 'CLAUDE_MODEL') || 'claude-3-5-haiku-latest'
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 12000)
-
+  const timeout = setTimeout(() => controller.abort(), 14000)
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -166,27 +223,17 @@ const generateWithClaude = async (userPrompt: string): Promise<{ template: strin
       },
       body: JSON.stringify({
         model,
-        max_tokens: 512,
+        max_tokens: 600,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt }],
       }),
       signal: controller.signal,
     })
-
     clearTimeout(timeout)
     if (!response.ok) return null
-    const data = (await response.json()) as {
-      content?: Array<{ type: string; text?: string }>
-    }
+    const data = (await response.json()) as { content?: Array<{ type: string; text?: string }> }
     const text = data.content?.find((b) => b.type === 'text')?.text?.trim() ?? ''
-    const firstBrace = text.indexOf('{')
-    const lastBrace = text.lastIndexOf('}')
-    if (firstBrace === -1 || lastBrace <= firstBrace) return null
-    const parsed = JSON.parse(text.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>
-    if (typeof parsed.template === 'string') {
-      return { template: parsed.template, subject: String(parsed.subject ?? 'Helper Availability Update') }
-    }
-    return null
+    return parseAiJson(text)
   } catch {
     clearTimeout(timeout)
     return null
@@ -196,22 +243,17 @@ const generateWithClaude = async (userPrompt: string): Promise<{ template: strin
 const generateWithGroq = async (userPrompt: string): Promise<{ template: string; subject: string } | null> => {
   const apiKey = firstDefinedEnv('GROQ_API_KEY', 'AI_RECEPTIONIST_API_KEY')
   if (!apiKey) return null
-
-  const model = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant'
+  const model = process.env.GROQ_MODEL?.trim() || 'llama-3.3-70b-versatile'
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 12000)
-
+  const timeout = setTimeout(() => controller.abort(), 14000)
   try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
-        temperature: 0.4,
-        max_tokens: 512,
+        temperature: 0.45,
+        max_tokens: 600,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: userPrompt },
@@ -219,21 +261,11 @@ const generateWithGroq = async (userPrompt: string): Promise<{ template: string;
       }),
       signal: controller.signal,
     })
-
     clearTimeout(timeout)
     if (!response.ok) return null
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>
-    }
+    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
     const text = data.choices?.[0]?.message?.content?.trim() ?? ''
-    const firstBrace = text.indexOf('{')
-    const lastBrace = text.lastIndexOf('}')
-    if (firstBrace === -1 || lastBrace <= firstBrace) return null
-    const parsed = JSON.parse(text.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>
-    if (typeof parsed.template === 'string') {
-      return { template: parsed.template, subject: String(parsed.subject ?? 'Helper Availability Update') }
-    }
-    return null
+    return parseAiJson(text)
   } catch {
     clearTimeout(timeout)
     return null
@@ -242,24 +274,38 @@ const generateWithGroq = async (userPrompt: string): Promise<{ template: string;
 
 const buildFallbackTemplate = (
   goal: CampaignGoal,
+  tone: CampaignTone,
   maids: MaidRecord[],
-  agencyName: string
+  agencyName: string,
+  agencyPhone: string,
 ): string => {
-  const maidLine = maids
-    .slice(0, 2)
-    .map((m) => `${m.fullName} (${m.nationality}, ${m.type})`)
-    .join(' & ')
+  const meta = goalMeta(goal)
+  const emoji = tone === 'professional' ? '' : meta.emoji + ' '
+  const contact = agencyPhone || agencyName
 
-  const goalLines: Record<CampaignGoal, string> = {
-    new_arrivals: `We have new helpers just arrived! ${maidLine || 'Great profiles available now'}.`,
-    re_engage: `We'd love to help you find the right helper. ${maidLine || 'We have great options available'}.`,
-    promotion: `Special offer available now. ${maidLine || 'New and transfer helpers ready'}.`,
-    holiday: `Season's greetings! We have helpers ready to assist your family. ${maidLine || 'Available now'}.`,
-    follow_up: `Following up on your recent inquiry. ${maidLine || 'We have helpers that may suit your needs'}.`,
-    custom: `${maidLine || 'We have excellent domestic helpers available'}.`,
+  const maidHighlight = maids.slice(0, 2)
+    .map((m) => {
+      const topSkill = Object.entries(m.workAreas ?? {})
+        .filter(([, v]) => (v as Record<string, unknown>)?.experience)
+        .map(([area]) => area)[0]
+      return `${m.fullName} (${m.nationality}${topSkill ? `, ${topSkill}` : ''})`
+    })
+    .join(' and ')
+
+  const bodies: Record<CampaignGoal, string> = {
+    new_arrivals: maidHighlight
+      ? `${emoji}${maidHighlight} ${maids.length > 2 ? 'and more are' : 'is'} now available. Experienced, verified, and ready to start soon.`
+      : `${emoji}We have new verified helpers available now. Let us help you find the perfect match for your family.`,
+    re_engage: `${emoji}We noticed you enquired with us before. We still have excellent helpers available and would love to assist you.`,
+    promotion: `${emoji}Limited slots this month — reduced placement fees for new clients. ${maidHighlight ? `${maidHighlight} available now.` : 'Great helpers ready to start.'}`,
+    holiday: `${emoji}Warmest greetings from ${agencyName}! We have helpers available over the festive season. ${maidHighlight || 'Many profiles to choose from.'}`,
+    follow_up: `${emoji}Just following up on your earlier enquiry. ${maidHighlight ? `${maidHighlight} is still available.` : 'We still have great helpers ready for you.'}`,
+    custom: `${emoji}${maidHighlight ? `${maidHighlight} — available now.` : `We have excellent domestic helpers available.`} Contact us to find out more.`,
   }
 
-  return `Hi {{name}}, ${goalLines[goal]} Contact us to find out more — ${agencyName} is here to help! Reply to this message or call us at {{agencyPhone}}.`
+  return `Hi {{name}},\n\n${bodies[goal]}\n\nReply here or WhatsApp us at {{agencyPhone}} — ${agencyName}.`
+    .replace('{{agencyPhone}}', contact)
+    .replace('{{agencyPhone}}', contact)
 }
 
 // ─── Audience builders ────────────────────────────────────────────────────────
@@ -279,7 +325,6 @@ export const buildAudience = async (
   agencyId: number
 ): Promise<MarketingContact[]> => {
   const contacts: MarketingContact[] = []
-
   const includeClients = audienceType === 'all_clients' || audienceType === 'all_contacts'
   const includeEnquiries = audienceType === 'enquiry_leads' || audienceType === 'all_contacts'
   const includeDirectSales = audienceType === 'direct_sale_leads' || audienceType === 'all_contacts'
@@ -326,7 +371,7 @@ export const buildAudience = async (
   return dedupeContacts(contacts)
 }
 
-// ─── Main generation function ─────────────────────────────────────────────────
+// ─── Main generation ──────────────────────────────────────────────────────────
 
 export const generateMarketingCampaign = async (params: {
   agencyId: number
@@ -353,21 +398,23 @@ export const generateMarketingCampaign = async (params: {
     ? allMaids.filter((m) => params.maidReferences.includes(m.referenceCode) && m.isPublic)
     : allMaids.filter((m) => m.isPublic).slice(0, 3)
 
-  const maidContext = selectedMaids.map(describeMaid).join('\n')
+  const meta = goalMeta(params.goal)
 
   const userPrompt = [
-    `Goal: ${goalLabel(params.goal)}`,
-    `Tone: ${toneLabel(params.tone)}`,
+    `Campaign goal: ${meta.intent}`,
+    `Tone: ${toneGuide(params.tone)}`,
     `Agency name: ${agencyName}`,
-    `Agency contact: ${agencyPhone || 'our agency number'}`,
+    `Agency WhatsApp / phone: ${agencyPhone || 'our agency number'}`,
     '',
-    'Featured domestic helpers:',
-    maidContext || '(No specific helpers selected — write a general availability message)',
+    'Featured domestic helpers (include 1-2 names and 1 skill each in the message):',
+    selectedMaids.length > 0
+      ? selectedMaids.map(describeMaid).join('\n\n')
+      : '(No specific helpers provided — write a compelling general availability message)',
     '',
-    params.customNote?.trim() ? `Additional instruction: ${params.customNote.trim()}` : '',
-  ]
-    .filter((line) => line !== undefined)
-    .join('\n')
+    params.customNote?.trim()
+      ? `Special instruction from agency: ${params.customNote.trim()}`
+      : '',
+  ].filter((l) => l !== undefined).join('\n')
 
   let aiResult: { template: string; subject: string } | null = null
   let aiUsed = false
@@ -380,7 +427,9 @@ export const generateMarketingCampaign = async (params: {
     if (aiResult) aiUsed = true
   }
 
-  const template = aiResult?.template ?? buildFallbackTemplate(params.goal, selectedMaids, agencyName)
+  const template = aiResult?.template
+    ?? buildFallbackTemplate(params.goal, params.tone, selectedMaids, agencyName, agencyPhone)
+  const subject = aiResult?.subject ?? meta.subject
 
   const messages: MarketingMessage[] = contacts.map((contact) => {
     const personalized = template
@@ -395,8 +444,12 @@ export const generateMarketingCampaign = async (params: {
       contactSource: contact.source,
       message: personalized,
       whatsappLink: contact.phone ? buildWhatsAppLink(contact.phone, personalized) : '',
+      charCount: personalized.length,
+      whatsappReady: Boolean(contact.phone),
     }
   })
+
+  const whatsappReadyCount = messages.filter((m) => m.whatsappReady).length
 
   const campaign: MarketingCampaign = {
     id: randomUUID(),
@@ -406,8 +459,11 @@ export const generateMarketingCampaign = async (params: {
     maidReferences: params.maidReferences,
     audienceType: params.audienceType,
     messageTemplate: template,
+    subject,
     messages,
     contactCount: contacts.length,
+    whatsappReadyCount,
+    emailOnlyCount: contacts.length - whatsappReadyCount,
     generatedAt: new Date().toISOString(),
     aiUsed,
   }
