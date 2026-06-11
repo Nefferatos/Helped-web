@@ -25,6 +25,7 @@ import inquiryWorkflowRoutes from './routes/inquiryWorkflowRoutes'
 import matchingWorkflowRoutes from './routes/matchingWorkflowRoutes'
 import automationRoutes from './routes/automationRoutes'
 import aiRoutes from './routes/aiRoutes'
+import directMarketingRoutes from './routes/directMarketingRoutes'
 import shareRoutes from './routes/shareRoutes'
 import whatsappRoutes from './routes/whatsappRoutes'
 import atsRoutes from './routes/atsRoutes'
@@ -136,6 +137,7 @@ app.use('/api/chats', chatRoutes)
 app.use('/api/leads', leadWorkflowRoutes)
 app.use('/api/inquiry', inquiryWorkflowRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/ai/direct-marketing', directMarketingRoutes)
 app.use('/api/whatsapp', whatsappRoutes)
 app.use('/api/ats', atsRoutes)
 

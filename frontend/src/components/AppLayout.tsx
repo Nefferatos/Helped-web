@@ -20,6 +20,7 @@ import {
   Hand,
   Sparkles,
   Brain,
+  Megaphone,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -167,6 +168,16 @@ const navItems = [
     iconBg: "linear-gradient(145deg, #67E8F9, #0891B2)",
     iconShadow: "0 4px 0 #0E7490, 0 6px 12px rgba(8,145,178,0.45)",
     iconShadowActive: "0 2px 0 #0E7490, 0 3px 8px rgba(8,145,178,0.4)",
+    iconColor: "#fff",
+    badgeKey: null,
+  },
+  {
+    label: "AI Marketing",
+    path: adminPath("/ai-marketing"),
+    icon: Megaphone,
+    iconBg: "linear-gradient(145deg, #F9A8D4, #DB2777)",
+    iconShadow: "0 4px 0 #BE185D, 0 6px 12px rgba(219,39,119,0.45)",
+    iconShadowActive: "0 2px 0 #BE185D, 0 3px 8px rgba(219,39,119,0.4)",
     iconColor: "#fff",
     badgeKey: null,
   },
