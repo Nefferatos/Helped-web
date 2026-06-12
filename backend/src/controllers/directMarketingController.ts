@@ -8,6 +8,12 @@ import {
   type CampaignGoal,
   type CampaignTone,
 } from '../services/directMarketingAiService'
+import {
+  executeOpportunity,
+  runAutonomousCampaigns,
+  scanForOpportunities,
+  type AdvertisingOpportunity,
+} from '../services/autonomousMarketingService'
 
 const VALID_GOALS = new Set<CampaignGoal>([
   'new_arrivals', 're_engage', 'promotion', 'holiday', 'follow_up', 'custom',
@@ -110,5 +116,42 @@ export const getCampaignById = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[directMarketing] getCampaignById error:', error)
     res.status(500).json({ error: 'Failed to load campaign' })
+  }
+}
+
+// ─── Autonomous agent endpoints ───────────────────────────────────────────────
+
+export const autonomousScan = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const result = await scanForOpportunities(agencyId)
+    res.status(200).json(result)
+  } catch (error) {
+    console.error('[directMarketing] autonomousScan error:', error)
+    res.status(500).json({ error: 'Scan failed' })
+  }
+}
+
+export const autonomousRun = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+
+    // If an explicit opportunity is passed, execute just that one
+    if (req.body.opportunity) {
+      const opp = req.body.opportunity as AdvertisingOpportunity
+      const campaign = await executeOpportunity(agencyId, opp)
+      return res.status(200).json({ campaigns: [campaign], skippedCount: 0 })
+    }
+
+    // Otherwise run all detected opportunities
+    const result = await runAutonomousCampaigns(agencyId)
+    res.status(200).json({
+      scannedAt: result.scannedAt,
+      campaigns: result.generated,
+      skippedCount: result.skippedCount,
+    })
+  } catch (error) {
+    console.error('[directMarketing] autonomousRun error:', error)
+    res.status(500).json({ error: 'Autonomous run failed' })
   }
 }

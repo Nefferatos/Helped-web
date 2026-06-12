@@ -8962,6 +8962,271 @@ app.post(
   }),
 );
 
+// ─── Autonomous marketing cron ────────────────────────────────────────────────
+
+const MARKETING_LOG_KEY = "marketing-last-run.json";
+
+type MarketingDispatchResult = {
+  scannedAt: string;
+  opportunitiesFound: number;
+  campaigns: Array<{
+    goal: string;
+    audience: string;
+    totalContacts: number;
+    emailsSent: number;
+    whatsappQueued: number;
+    skipped: number;
+  }>;
+  emailsTotal: number;
+  whatsappTotal: number;
+};
+
+const buildWhatsAppLinkMarketing = (phone: string, message: string): string => {
+  if (!phone?.trim()) return "";
+  const hasPlus = phone.trimStart().startsWith("+");
+  let digits = phone.replace(/\D/g, "");
+  if (!digits) return "";
+  if (!hasPlus && digits.length === 9 && digits.startsWith("0")) digits = digits.slice(1);
+  if (!hasPlus && digits.length === 8) digits = `65${digits}`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+};
+
+const goalMetaMarketing = (goal: string) =>
+  ({
+    new_arrivals: { subject: "New Helpers Available", hook: "New helpers just arrived!", emoji: "✨" },
+    re_engage: { subject: "Still Looking for a Helper?", hook: "We still have excellent helpers ready.", emoji: "👋" },
+    follow_up: { subject: "Following Up on Your Enquiry", hook: "Just following up — we'd love to help!", emoji: "🔔" },
+    holiday: { subject: "Festive Greetings & Availability", hook: "Season's greetings from our team!", emoji: "🎊" },
+    promotion: { subject: "Special Offer for You", hook: "Limited slots — special offer!", emoji: "🎉" },
+    custom: { subject: "Message from Our Agency", hook: "We have something for you.", emoji: "💬" },
+  }[goal] ?? { subject: "Helper Update", hook: "Hello!", emoji: "" });
+
+const generateMarketingTemplate = async (
+  goal: string,
+  tone: string,
+  agencyName: string,
+  agencyPhone: string,
+  featuredNames: string[],
+  groqApiKey: string | undefined,
+): Promise<string> => {
+  const meta = goalMetaMarketing(goal);
+  const emojiPrefix = tone === "professional" ? "" : `${meta.emoji} `;
+  const highlight = featuredNames.slice(0, 2).join(" and ");
+  const fallback = `Hi {{name}},\n\n${emojiPrefix}${meta.hook}${highlight ? ` Meet ${highlight} — available now.` : ""}\n\nContact us at {{agencyPhone}} — ${agencyName}.`;
+
+  if (!groqApiKey) return fallback;
+
+  const toneMap: Record<string, string> = {
+    warm: "friendly and caring, 1-2 emojis",
+    professional: "formal and polished, no emojis",
+    casual: "relaxed and conversational, 1 emoji",
+    urgent: "direct and action-oriented, 1 emoji",
+  };
+
+  const systemPrompt = `You are a WhatsApp marketing expert for a Singapore domestic helper agency. Write ONE outreach message template. FORMAT: Open with "Hi {{name}},", blank line, 2-3 short sentences, CTA with {{agencyPhone}}. Max 280 characters total. Respond with ONLY the message text, nothing else.`;
+  const userPrompt = `Goal: ${meta.subject}. Tone: ${toneMap[tone] ?? toneMap.warm}. Agency: ${agencyName}. Phone: ${agencyPhone || "our number"}.${highlight ? ` Feature: ${highlight}.` : ""}`;
+
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${groqApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.4,
+        max_tokens: 350,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return fallback;
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (text && text.includes("{{name}}")) return text;
+    if (text) return text.replace(/^Hi there/i, "Hi {{name}}").includes("{{name}}") ? text.replace(/^Hi there/i, "Hi {{name}}") : `Hi {{name}},\n\n${text}\n\nContact us at {{agencyPhone}}.`;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const detectMarketingOpportunities = (data: AppData) => {
+  const DAY = 86_400_000;
+  const now = Date.now();
+  const ops: Array<{ goal: string; tone: string; audience: string; triggerReason: string }> = [];
+
+  const newMaids = data.maids.filter((m) => {
+    const ts = Date.parse(m.createdAt ?? "");
+    return m.isPublic && Number.isFinite(ts) && now - ts < DAY;
+  });
+  if (newMaids.length > 0) ops.push({ goal: "new_arrivals", tone: "warm", audience: "all", triggerReason: `${newMaids.length} new helper(s) added in the last 24h` });
+
+  const staleEnquiries = data.enquiries.filter((e) => {
+    const ts = Date.parse(e.createdAt ?? "");
+    return Number.isFinite(ts) && now - ts > 3 * DAY;
+  });
+  if (staleEnquiries.length > 0) ops.push({ goal: "follow_up", tone: "warm", audience: "enquiries", triggerReason: `${staleEnquiries.length} enquiry(ies) without follow-up for 3+ days` });
+
+  const coldLeads = data.directSales.filter((ds) => {
+    const ts = Date.parse(ds.createdAt ?? "");
+    return Number.isFinite(ts) && now - ts > 7 * DAY;
+  });
+  if (coldLeads.length > 0) ops.push({ goal: "re_engage", tone: "casual", audience: "leads", triggerReason: `${coldLeads.length} lead(s) inactive for 7+ days` });
+
+  const holidays = [
+    [1, 1, "New Year"], [2, 14, "Valentine's Day"], [8, 9, "National Day"],
+    [12, 25, "Christmas"], [12, 31, "New Year's Eve"],
+  ] as [number, number, string][];
+  const horizon = new Date(now + 7 * DAY);
+  for (const [m, d, name] of holidays) {
+    for (const yr of [new Date().getFullYear(), new Date().getFullYear() + 1]) {
+      const date = new Date(yr, m - 1, d);
+      if (date.getTime() >= now && date <= horizon) {
+        ops.push({ goal: "holiday", tone: "warm", audience: "all", triggerReason: `${name} is within 7 days` });
+        break;
+      }
+    }
+  }
+
+  return ops;
+};
+
+const buildAudienceMarketing = (data: AppData, audience: string) => {
+  type Contact = { name: string; phone: string; email: string };
+  const contacts: Contact[] = [];
+  const seen = new Set<string>();
+
+  const add = (name: string, phone: string, email: string) => {
+    const key = phone?.replace(/\D/g, "") || email?.toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    contacts.push({ name: name || "there", phone: phone || "", email: email || "" });
+  };
+
+  if (audience === "all" || audience === "clients") {
+    for (const c of data.clients) add(c.name, c.phone ?? "", c.email);
+  }
+  if (audience === "all" || audience === "enquiries") {
+    for (const e of data.enquiries) add(e.username, e.phone, e.email);
+  }
+  if (audience === "all" || audience === "leads") {
+    for (const ds of data.directSales) add(ds.clientName, ds.clientPhone, ds.clientEmail);
+  }
+
+  return contacts;
+};
+
+const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchResult> => {
+  const data = await loadData(env);
+  const scannedAt = new Date().toISOString();
+  const makeUrl = env.MAKE_WEBHOOK_URL?.trim();
+  const agencyPhone = data.companyProfile?.social_whatsapp_number?.trim() ?? data.companyProfile?.contact_phone?.trim() ?? "";
+  const agencyName = data.companyProfile?.company_name?.trim() ?? data.companyProfile?.short_name?.trim() ?? "Our Agency";
+
+  const opportunities = detectMarketingOpportunities(data);
+  const result: MarketingDispatchResult = {
+    scannedAt,
+    opportunitiesFound: opportunities.length,
+    campaigns: [],
+    emailsTotal: 0,
+    whatsappTotal: 0,
+  };
+
+  if (opportunities.length === 0) {
+    if (env.APP_DATA) await env.APP_DATA.put(MARKETING_LOG_KEY, JSON.stringify(result), { expirationTtl: 7 * 86400 });
+    return result;
+  }
+
+  const featuredMaids = (data.maids ?? []).filter((m) => m.isPublic).slice(0, 3);
+  const featuredNames = featuredMaids.map((m) => m.fullName).filter(Boolean);
+
+  for (const opp of opportunities) {
+    const contacts = buildAudienceMarketing(data, opp.audience);
+    if (contacts.length === 0) continue;
+
+    const template = await generateMarketingTemplate(opp.goal, opp.tone, agencyName, agencyPhone, featuredNames, env.GROQ_API_KEY);
+    const meta = goalMetaMarketing(opp.goal);
+    let emailsSent = 0, whatsappQueued = 0, skipped = 0;
+
+    for (const contact of contacts) {
+      const personalized = template
+        .replace(/\{\{name\}\}/g, contact.name || "there")
+        .replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
+
+      if (contact.phone && makeUrl) {
+        // Dispatch via Make.com for WhatsApp
+        try {
+          await fetch(makeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              scenario: "whatsapp_marketing",
+              to: contact.phone,
+              message: personalized,
+              goal: opp.goal,
+              agencyName,
+            }),
+            signal: AbortSignal.timeout(5000),
+          });
+          whatsappQueued++;
+        } catch { skipped++; }
+      } else if (contact.email) {
+        // Primary: Resend API. Fallback: Make.com email_marketing scenario.
+        const emailResult = await sendEmailViaResend(env, contact.email, meta.subject, personalized);
+        if (emailResult.ok) {
+          emailsSent++;
+        } else if (makeUrl) {
+          try {
+            await fetch(makeUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                scenario: "email_marketing",
+                to: contact.email,
+                subject: meta.subject,
+                message: personalized,
+                goal: opp.goal,
+                agencyName,
+              }),
+              signal: AbortSignal.timeout(5000),
+            });
+            emailsSent++;
+          } catch { skipped++; }
+        } else {
+          skipped++;
+        }
+      } else {
+        skipped++;
+      }
+    }
+
+    result.campaigns.push({ goal: opp.goal, audience: opp.audience, totalContacts: contacts.length, emailsSent, whatsappQueued, skipped });
+    result.emailsTotal += emailsSent;
+    result.whatsappTotal += whatsappQueued;
+
+    // Stagger requests to avoid rate limits
+    await new Promise((r) => setTimeout(r, 800));
+  }
+
+  if (env.APP_DATA) await env.APP_DATA.put(MARKETING_LOG_KEY, JSON.stringify(result), { expirationTtl: 7 * 86400 });
+  return result;
+};
+
+// ─── Marketing status endpoint ────────────────────────────────────────────────
+
+app.get(
+  "/api/ai/direct-marketing/autonomous/status",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    if (!c.env.APP_DATA) return c.json({ lastRun: null });
+    const raw = await c.env.APP_DATA.get(MARKETING_LOG_KEY);
+    const lastRun = raw ? (JSON.parse(raw) as MarketingDispatchResult) : null;
+    return c.json({ lastRun });
+  }),
+);
+
 const runScheduledAiAutopilot = async (env: Bindings) => {
   if (!isAiAutopilotEnabled(env)) {
     return {
@@ -11808,9 +12073,59 @@ export default {
     env: Bindings,
     executionContext: ExecutionContext,
   ) {
+    // Autopilot: draft actions + notify admin via Make.com if any high-priority actions were created
     executionContext.waitUntil(
-      runScheduledAiAutopilot(env).catch((error) => {
+      (async () => {
+        const result = await runScheduledAiAutopilot(env);
+        const makeUrl = env.MAKE_WEBHOOK_URL?.trim();
+        if (
+          makeUrl &&
+          result &&
+          "actionCount" in result &&
+          (result as { actionCount: number }).actionCount > 0
+        ) {
+          const data = await loadData(env);
+          const agencyPhone =
+            data.companyProfile?.social_whatsapp_number?.trim() ??
+            data.companyProfile?.contact_phone?.trim() ??
+            "";
+          const agencyName =
+            data.companyProfile?.company_name?.trim() ??
+            data.companyProfile?.short_name?.trim() ??
+            "Our Agency";
+          const typedResult = result as {
+            actionCount: number;
+            actions: Array<{ title: string; priority: string; actionType: string }>;
+          };
+          const highPriorityCount = typedResult.actions.filter(
+            (a) => a.priority === "high",
+          ).length;
+          await fetch(makeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              scenario: "autopilot_notification",
+              actionCount: typedResult.actionCount,
+              highPriorityCount,
+              agencyName,
+              agencyPhone,
+              summaryText: typedResult.actions
+                .slice(0, 3)
+                .map((a) => a.title)
+                .join(" | "),
+            }),
+            signal: AbortSignal.timeout(5000),
+          }).catch(() => {});
+        }
+      })().catch((error) => {
         console.error("AI autopilot scheduled run failed", error);
+      }),
+    );
+
+    // Autonomous marketing: detect opportunities + dispatch WhatsApp/email
+    executionContext.waitUntil(
+      runScheduledMarketing(env).catch((error) => {
+        console.error("Autonomous marketing scheduled run failed", error);
       }),
     );
   },
