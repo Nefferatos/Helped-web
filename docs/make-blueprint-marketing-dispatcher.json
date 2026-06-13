@@ -5,64 +5,61 @@
       "id": 1,
       "module": "gateway:CustomWebHook",
       "version": 1,
-      "parameters": {
-        "hook": 1,
-        "maxResults": 1
-      },
+      "parameters": { "hook": 1, "maxResults": 1 },
       "mapper": {},
       "metadata": {
         "designer": { "x": -450, "y": 0 },
         "restore": {
           "parameters": {
-            "hook": {
-              "data": { "editable": "true" },
-              "label": "Helped Agentic Webhook"
-            }
+            "hook": { "data": { "editable": "true" }, "label": "Helped Agentic Webhook" }
           }
         }
       }
     },
     {
       "id": 2,
-      "module": "tools:SetVariables",
-      "version": 1,
-      "parameters": {},
-      "mapper": {
-        "variables": [
-          {
-            "name": "formattedPhone",
-            "value": "{{if(length(replace(replace(replace(replace(replace(1.to; \"+\"; \"\"); \" \"; \"\"); \"-\"; \"\"); \"(\"; \"\"); \")\"; \"\")) = 8; \"65\" & replace(replace(replace(replace(replace(1.to; \"+\"; \"\"); \" \"; \"\"); \"-\"; \"\"); \"(\"; \"\"); \")\"; \"\"); replace(replace(replace(replace(replace(1.to; \"+\"; \"\"); \" \"; \"\"); \"-\"; \"\"); \"(\"; \"\"); \")\"; \"\"))}}"
-          },
-          {
-            "name": "notifyPhone",
-            "value": "{{if(length(replace(replace(replace(replace(replace(1.agencyPhone; \"+\"; \"\"); \" \"; \"\"); \"-\"; \"\"); \"(\"; \"\"); \")\"; \"\")) > 9; replace(replace(replace(replace(replace(1.agencyPhone; \"+\"; \"\"); \" \"; \"\"); \"-\"; \"\"); \"(\"; \"\"); \")\"; \"\"); if(length(replace(replace(replace(replace(replace(1.agencyPhone; \"+\"; \"\"); \" \"; \"\"); \"-\"; \"\"); \"(\"; \"\"); \")\"; \"\")) = 8; \"65\" & replace(replace(replace(replace(replace(1.agencyPhone; \"+\"; \"\"); \" \"; \"\"); \"-\"; \"\"); \"(\"; \"\"); \")\"; \"\"); \"REPLACE_WITH_AGENCY_ADMIN_PHONE\"))}}"
-          }
-        ]
-      },
-      "metadata": {
-        "designer": { "x": -200, "y": 0 }
-      }
-    },
-    {
-      "id": 3,
       "module": "builtin:BasicRouter",
       "version": 1,
       "parameters": {},
       "mapper": {},
-      "metadata": {
-        "designer": { "x": 100, "y": 0 }
-      },
+      "metadata": { "designer": { "x": -150, "y": 0 } },
       "routes": [
         {
           "flow": [
             {
+              "id": 3,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
+              "mapper": {
+                "url": "https://api.groq.com/openai/v1/chat/completions",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_GROQ_API_KEY" },
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "authUser": "",
+                "authPass": "",
+                "timeout": "30",
+                "shareCookies": false,
+                "ca": "",
+                "rejectUnauthorized": true,
+                "followRedirect": true,
+                "useQuerystring": false,
+                "gzip": true,
+                "body": "{\"model\":\"llama-3.3-70b-versatile\",\"temperature\":0.45,\"max_tokens\":300,\"messages\":[{\"role\":\"system\",\"content\":\"You are a WhatsApp marketing writer for a Singapore domestic helper agency. Write ONE short WhatsApp outreach message. Rules: start with Hi [contact name], use 1 warm emoji, max 280 characters, end with a WhatsApp CTA number. Return ONLY the message text, nothing else.\"},{\"role\":\"user\",\"content\":\"Contact name: {{1.contactName}}. Campaign goal: {{1.goal}}. Agency name: {{1.agencyName}}. Agency WhatsApp: {{1.agencyPhone}}. Featured helpers: {{1.maidHighlights}}. Write the message.\"}]}"
+              },
+              "metadata": { "designer": { "x": 150, "y": -500 } }
+            },
+            {
               "id": 4,
               "module": "http:ActionSendData",
               "version": 3,
-              "parameters": {
-                "handleErrors": true,
-                "useNewZLibDecompress": true
-              },
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
               "mapper": {
                 "url": "https://graph.facebook.com/v18.0/REPLACE_WITH_PHONE_NUMBER_ID/messages",
                 "serializeUrl": false,
@@ -83,19 +80,17 @@
                 "followRedirect": true,
                 "useQuerystring": false,
                 "gzip": true,
-                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.formattedPhone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"{{1.message}}\"}}"
+                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{1.to}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"{{3.choices[1].message.content}}\"}}"
               },
-              "metadata": {
-                "designer": { "x": 400, "y": -600 }
-              }
+              "metadata": { "designer": { "x": 450, "y": -500 } }
             }
           ],
           "metadata": {
-            "name": "📣 WhatsApp Marketing",
+            "name": "📣 WhatsApp (Groq)",
             "color": "#25D366",
             "conditions": [
               { "a": "{{1.scenario}}", "b": "whatsapp_marketing", "o": "text:equal" },
-              { "a": "{{length(2.formattedPhone)}}", "b": "9", "o": "number:greater" }
+              { "a": "{{length(1.to)}}", "b": "9", "o": "number:greater" }
             ]
           }
         },
@@ -105,10 +100,37 @@
               "id": 5,
               "module": "http:ActionSendData",
               "version": 3,
-              "parameters": {
-                "handleErrors": true,
-                "useNewZLibDecompress": true
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
+              "mapper": {
+                "url": "https://api.anthropic.com/v1/messages",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [
+                  { "name": "x-api-key", "value": "REPLACE_WITH_CLAUDE_API_KEY" },
+                  { "name": "anthropic-version", "value": "2023-06-01" },
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "authUser": "",
+                "authPass": "",
+                "timeout": "30",
+                "shareCookies": false,
+                "ca": "",
+                "rejectUnauthorized": true,
+                "followRedirect": true,
+                "useQuerystring": false,
+                "gzip": true,
+                "body": "{\"model\":\"claude-haiku-4-5-20251001\",\"max_tokens\":400,\"system\":\"You are an email marketing writer for a Singapore domestic helper agency. Write a warm, professional plain-text email body. Max 120 words. Include the agency phone as a CTA. Return ONLY the email body text, no subject line.\",\"messages\":[{\"role\":\"user\",\"content\":\"Contact: {{1.contactName}}. Goal: {{1.goal}}. Agency: {{1.agencyName}}. Phone: {{1.agencyPhone}}. Featured helpers: {{1.maidHighlights}}.\"}]}"
               },
+              "metadata": { "designer": { "x": 150, "y": -200 } }
+            },
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
               "mapper": {
                 "url": "https://api.resend.com/emails",
                 "serializeUrl": false,
@@ -129,15 +151,13 @@
                 "followRedirect": true,
                 "useQuerystring": false,
                 "gzip": true,
-                "body": "{\"from\":\"REPLACE_WITH_FROM_EMAIL\",\"to\":[\"{{1.to}}\"],\"subject\":\"{{1.subject}}\",\"text\":\"{{1.message}}\",\"html\":\"<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px'><p style='font-size:15px;line-height:1.7;color:#1a1a1a'>{{replace(1.message; '\\n'; '<br>')}}</p><hr style='border:none;border-top:1px solid #e5e7eb;margin:24px 0'/><p style='font-size:12px;color:#6b7280'>Sent by {{1.agencyName}}. Reply STOP to unsubscribe.</p></div>\"}"
+                "body": "{\"from\":\"REPLACE_WITH_FROM_EMAIL\",\"to\":[\"{{1.to}}\"],\"subject\":\"{{1.subject}}\",\"text\":\"{{5.content[1].text}}\",\"html\":\"<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px'><p style='font-size:15px;line-height:1.8;color:#1a1a1a'>{{replace(5.content[1].text; '\\n'; '<br>')}}</p><hr style='border:none;border-top:1px solid #e5e7eb;margin:24px 0'/><p style='font-size:12px;color:#6b7280'>Sent by {{1.agencyName}} &middot; {{1.agencyPhone}}. Reply STOP to unsubscribe.</p></div>\"}"
               },
-              "metadata": {
-                "designer": { "x": 400, "y": -360 }
-              }
+              "metadata": { "designer": { "x": 450, "y": -200 } }
             }
           ],
           "metadata": {
-            "name": "📧 Email Marketing",
+            "name": "📧 Email (Claude)",
             "color": "#4F46E5",
             "conditions": [
               { "a": "{{1.scenario}}", "b": "email_marketing", "o": "text:equal" },
@@ -148,13 +168,10 @@
         {
           "flow": [
             {
-              "id": 6,
+              "id": 7,
               "module": "http:ActionSendData",
               "version": 3,
-              "parameters": {
-                "handleErrors": true,
-                "useNewZLibDecompress": true
-              },
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
               "mapper": {
                 "url": "https://graph.facebook.com/v18.0/REPLACE_WITH_PHONE_NUMBER_ID/messages",
                 "serializeUrl": false,
@@ -175,15 +192,13 @@
                 "followRedirect": true,
                 "useQuerystring": false,
                 "gzip": true,
-                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.notifyPhone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"📋 *New Inquiry — Action Needed*\\n\\nFrom: {{1.name}}\\nContact: {{1.contact}}\\nIntent: {{1.intent}}\\nSource: {{1.source}}\\n\\nMessage: {{left(1.message; 200)}}\\n\\nAI matched {{length(1.matches)}} helper(s). Login to dashboard to review and reply.\"}}"
+                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{1.agencyPhone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"📋 *New Inquiry — Action Needed*\\n\\nFrom: {{1.name}}\\nContact: {{1.contact}}\\nIntent: {{1.intent}}\\nSource: {{1.source}}\\n\\nMessage: {{left(1.message; 200)}}\\n\\nAI matched {{length(1.matches)}} helper(s). Login to dashboard to review and reply.\"}}"
               },
-              "metadata": {
-                "designer": { "x": 400, "y": -120 }
-              }
+              "metadata": { "designer": { "x": 150, "y": 100 } }
             }
           ],
           "metadata": {
-            "name": "🔔 Inquiry Notify Admin",
+            "name": "🔔 Inquiry → Admin",
             "color": "#F59E0B",
             "conditions": [
               { "a": "{{1.scenario}}", "b": "inquiry_pipeline", "o": "text:equal" }
@@ -193,13 +208,10 @@
         {
           "flow": [
             {
-              "id": 7,
+              "id": 8,
               "module": "http:ActionSendData",
               "version": 3,
-              "parameters": {
-                "handleErrors": true,
-                "useNewZLibDecompress": true
-              },
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
               "mapper": {
                 "url": "https://graph.facebook.com/v18.0/REPLACE_WITH_PHONE_NUMBER_ID/messages",
                 "serializeUrl": false,
@@ -220,20 +232,15 @@
                 "followRedirect": true,
                 "useQuerystring": false,
                 "gzip": true,
-                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.notifyPhone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"🆕 *New Lead — {{1.source}}*\\n\\nName: {{1.leadName}}\\nContact: {{1.contact}}\\n\\nRespond within 1 hour for best conversion. Login to your dashboard to follow up.\"}}"
+                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{1.agencyPhone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"🆕 *New Lead — {{1.source}}*\\n\\nName: {{1.leadName}}\\nContact: {{1.contact}}\\n\\nRespond within 1 hour for best conversion. Login to dashboard to follow up.\"}}"
               },
-              "metadata": {
-                "designer": { "x": 400, "y": 120 }
-              }
+              "metadata": { "designer": { "x": 150, "y": 400 } }
             },
             {
-              "id": 8,
+              "id": 9,
               "module": "http:ActionSendData",
               "version": 3,
-              "parameters": {
-                "handleErrors": true,
-                "useNewZLibDecompress": true
-              },
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
               "mapper": {
                 "url": "https://api.resend.com/emails",
                 "serializeUrl": false,
@@ -254,15 +261,13 @@
                 "followRedirect": true,
                 "useQuerystring": false,
                 "gzip": true,
-                "body": "{\"from\":\"REPLACE_WITH_FROM_EMAIL\",\"to\":[\"REPLACE_WITH_AGENCY_ADMIN_EMAIL\"],\"subject\":\"New {{1.source}} lead: {{1.leadName}}\",\"text\":\"New lead received\\n\\nName: {{1.leadName}}\\nContact: {{1.contact}}\\nSource: {{1.source}}\\n\\nLog in to follow up.\",\"html\":\"<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px'><h2 style='color:#1a1a1a'>New {{1.source}} Lead</h2><table style='width:100%;border-collapse:collapse'><tr><td style='padding:8px;border-bottom:1px solid #eee;color:#666;width:120px'>Name</td><td style='padding:8px;border-bottom:1px solid #eee;font-weight:600'>{{1.leadName}}</td></tr><tr><td style='padding:8px;border-bottom:1px solid #eee;color:#666'>Contact</td><td style='padding:8px;border-bottom:1px solid #eee;font-weight:600'>{{1.contact}}</td></tr><tr><td style='padding:8px;color:#666'>Source</td><td style='padding:8px;font-weight:600'>{{1.source}}</td></tr></table><br/><a href='REPLACE_WITH_DASHBOARD_URL' style='display:inline-block;background:#4F46E5;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600'>Open Dashboard</a></div>\"}"
+                "body": "{\"from\":\"REPLACE_WITH_FROM_EMAIL\",\"to\":[\"REPLACE_WITH_AGENCY_ADMIN_EMAIL\"],\"subject\":\"New {{1.source}} lead: {{1.leadName}}\",\"text\":\"New lead received\\n\\nName: {{1.leadName}}\\nContact: {{1.contact}}\\nSource: {{1.source}}\\n\\nLog in to follow up.\",\"html\":\"<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px'><h2 style='color:#1a1a1a'>New {{1.source}} Lead</h2><table style='width:100%;border-collapse:collapse'><tr><td style='padding:8px;border-bottom:1px solid #eee;color:#666;width:100px'>Name</td><td style='padding:8px;border-bottom:1px solid #eee;font-weight:600'>{{1.leadName}}</td></tr><tr><td style='padding:8px;border-bottom:1px solid #eee;color:#666'>Contact</td><td style='padding:8px;border-bottom:1px solid #eee;font-weight:600'>{{1.contact}}</td></tr><tr><td style='padding:8px;color:#666'>Source</td><td style='padding:8px;font-weight:600'>{{1.source}}</td></tr></table><br/><a href='REPLACE_WITH_DASHBOARD_URL' style='display:inline-block;background:#4F46E5;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600'>Open Dashboard</a></div>\"}"
               },
-              "metadata": {
-                "designer": { "x": 700, "y": 120 }
-              }
+              "metadata": { "designer": { "x": 450, "y": 400 } }
             }
           ],
           "metadata": {
-            "name": "🆕 New Lead Alert",
+            "name": "🆕 Lead → Admin",
             "color": "#EF4444",
             "conditions": [
               { "a": "{{1.scenario}}", "b": "lead_pipeline", "o": "text:equal" }
@@ -272,13 +277,10 @@
         {
           "flow": [
             {
-              "id": 9,
+              "id": 10,
               "module": "http:ActionSendData",
               "version": 3,
-              "parameters": {
-                "handleErrors": true,
-                "useNewZLibDecompress": true
-              },
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
               "mapper": {
                 "url": "https://graph.facebook.com/v18.0/REPLACE_WITH_PHONE_NUMBER_ID/messages",
                 "serializeUrl": false,
@@ -299,15 +301,13 @@
                 "followRedirect": true,
                 "useQuerystring": false,
                 "gzip": true,
-                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.notifyPhone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"🤖 *AI Autopilot Update — {{1.agencyName}}*\\n\\n{{1.actionCount}} action(s) drafted | {{1.highPriorityCount}} high priority\\n\\n{{1.summaryText}}\\n\\nLogin to review and approve AI drafts.\"}}"
+                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{1.agencyPhone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"🤖 *AI Autopilot Update — {{1.agencyName}}*\\n\\n{{1.actionCount}} action(s) drafted | {{1.highPriorityCount}} high priority\\n\\n{{1.summaryText}}\\n\\nLogin to review and approve AI drafts.\"}}"
               },
-              "metadata": {
-                "designer": { "x": 400, "y": 360 }
-              }
+              "metadata": { "designer": { "x": 150, "y": 700 } }
             }
           ],
           "metadata": {
-            "name": "🤖 Autopilot Notify Admin",
+            "name": "🤖 Autopilot → Admin",
             "color": "#7C3AED",
             "conditions": [
               { "a": "{{1.scenario}}", "b": "autopilot_notification", "o": "text:equal" },
@@ -317,11 +317,7 @@
         },
         {
           "flow": [],
-          "metadata": {
-            "name": "⬛ Fallback",
-            "color": "#9CA3AF",
-            "conditions": []
-          }
+          "metadata": { "name": "⬛ Fallback", "color": "#9CA3AF", "conditions": [] }
         }
       ]
     }
@@ -340,9 +336,7 @@
       "dlq": false,
       "freshVariables": false
     },
-    "designer": {
-      "orphans": []
-    },
+    "designer": { "orphans": [] },
     "zone": "eu1.make.com"
   }
 }

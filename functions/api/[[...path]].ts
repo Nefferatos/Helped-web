@@ -9093,6 +9093,12 @@ const detectMarketingOpportunities = (data: AppData) => {
   return ops;
 };
 
+const cleanPhoneForMake = (phone: string): string => {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  return digits.length === 8 ? "65" + digits : digits;
+};
+
 const buildAudienceMarketing = (data: AppData, audience: string) => {
   type Contact = { name: string; phone: string; email: string };
   const contacts: Contact[] = [];
@@ -9122,7 +9128,7 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
   const data = await loadData(env);
   const scannedAt = new Date().toISOString();
   const makeUrl = env.MAKE_WEBHOOK_URL?.trim();
-  const agencyPhone = data.companyProfile?.social_whatsapp_number?.trim() ?? data.companyProfile?.contact_phone?.trim() ?? "";
+  const agencyPhone = cleanPhoneForMake(data.companyProfile?.social_whatsapp_number?.trim() ?? data.companyProfile?.contact_phone?.trim() ?? "");
   const agencyName = data.companyProfile?.company_name?.trim() ?? data.companyProfile?.short_name?.trim() ?? "Our Agency";
 
   const opportunities = detectMarketingOpportunities(data);
@@ -9139,45 +9145,39 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
     return result;
   }
 
-  const featuredMaids = (data.maids ?? []).filter((m) => m.isPublic).slice(0, 3);
-  const featuredNames = featuredMaids.map((m) => m.fullName).filter(Boolean);
+  const featuredMaids = data.maids.filter((m) => m.isPublic).slice(0, 2);
+  const maidHighlights = featuredMaids.map((m) => `${m.fullName} (${m.nationality})`).filter(Boolean).join(", ") || "experienced helpers";
 
   for (const opp of opportunities) {
     const contacts = buildAudienceMarketing(data, opp.audience);
     if (contacts.length === 0) continue;
 
-    const template = await generateMarketingTemplate(opp.goal, opp.tone, agencyName, agencyPhone, featuredNames, env.GROQ_API_KEY);
     const meta = goalMetaMarketing(opp.goal);
     let emailsSent = 0, whatsappQueued = 0, skipped = 0;
 
     for (const contact of contacts) {
-      const personalized = template
-        .replace(/\{\{name\}\}/g, contact.name || "there")
-        .replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
-
       if (contact.phone && makeUrl) {
-        // Dispatch via Make.com for WhatsApp
+        // Send raw context to Make.com — Groq generates the WhatsApp message there
         try {
           await fetch(makeUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               scenario: "whatsapp_marketing",
-              to: contact.phone,
-              message: personalized,
+              to: cleanPhoneForMake(contact.phone),
+              contactName: contact.name,
               goal: opp.goal,
               agencyName,
+              agencyPhone,
+              maidHighlights,
             }),
             signal: AbortSignal.timeout(5000),
           });
           whatsappQueued++;
         } catch { skipped++; }
       } else if (contact.email) {
-        // Primary: Resend API. Fallback: Make.com email_marketing scenario.
-        const emailResult = await sendEmailViaResend(env, contact.email, meta.subject, personalized);
-        if (emailResult.ok) {
-          emailsSent++;
-        } else if (makeUrl) {
+        if (makeUrl) {
+          // Send raw context to Make.com — Claude generates the email there
           try {
             await fetch(makeUrl, {
               method: "POST",
@@ -9185,29 +9185,35 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
               body: JSON.stringify({
                 scenario: "email_marketing",
                 to: contact.email,
+                contactName: contact.name,
                 subject: meta.subject,
-                message: personalized,
                 goal: opp.goal,
                 agencyName,
+                agencyPhone,
+                maidHighlights,
               }),
               signal: AbortSignal.timeout(5000),
             });
             emailsSent++;
           } catch { skipped++; }
         } else {
-          skipped++;
+          // Direct Resend fallback when Make.com not configured
+          const template = await generateMarketingTemplate(opp.goal, opp.tone, agencyName, agencyPhone, featuredMaids.map((m) => m.fullName), env.GROQ_API_KEY);
+          const personalized = template.replace(/\{\{name\}\}/g, contact.name).replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
+          const emailResult = await sendEmailViaResend(env, contact.email, meta.subject, personalized);
+          if (emailResult.ok) emailsSent++;
+          else skipped++;
         }
       } else {
         skipped++;
       }
+
+      await new Promise((r) => setTimeout(r, 300));
     }
 
     result.campaigns.push({ goal: opp.goal, audience: opp.audience, totalContacts: contacts.length, emailsSent, whatsappQueued, skipped });
     result.emailsTotal += emailsSent;
     result.whatsappTotal += whatsappQueued;
-
-    // Stagger requests to avoid rate limits
-    await new Promise((r) => setTimeout(r, 800));
   }
 
   if (env.APP_DATA) await env.APP_DATA.put(MARKETING_LOG_KEY, JSON.stringify(result), { expirationTtl: 7 * 86400 });
