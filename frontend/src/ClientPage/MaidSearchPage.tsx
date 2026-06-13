@@ -13,122 +13,23 @@ import "./ClientTheme.css";
 
 // ── Theme tokens ──────────────────────────────────────────────────────────────
 const C = {
-  primary:      "#0E4E5E",
-  primaryMid:   "#156070",
-  primaryLight: "#1d7a8f",
-  primaryPale:  "#e8f4f7",
-  primaryBorder:"rgba(14,78,94,0.22)",
-  gold:         "#FCD34D",
-  goldWarm:     "#FFE080",
-  goldPale:     "#FFFBEA",
-  goldBorder:   "rgba(252,211,77,0.40)",
-  dark:         "#07232C",
-  darkMid:      "#0a303d",
-  text:         "#07232C",
-  textMuted:    "#3a6070",
-  border:       "#C8DDE3",
-  surface:      "#F0F7F9",
-  white:        "#FFFFFF",
-  slate:        "#EDF4F7",
-};
-
-// ── Global animation styles (injected once) ───────────────────────────────────
-const GLOBAL_STYLES = `
-  @keyframes msOrb {
-    0%,100% { transform: translate(0,0) scale(1); }
-    33%      { transform: translate(28px,-18px) scale(1.07); }
-    66%      { transform: translate(-18px,14px) scale(0.95); }
-  }
-  @keyframes msFadeUp {
-    from { opacity:0; transform:translateY(16px); }
-    to   { opacity:1; transform:translateY(0); }
-  }
-  @keyframes msSlideRight {
-    from { opacity:0; transform:translateX(-14px); }
-    to   { opacity:1; transform:translateX(0); }
-  }
-  @keyframes msCardIn {
-    from { opacity:0; transform:translateY(20px) scale(0.97); }
-    to   { opacity:1; transform:translateY(0) scale(1); }
-  }
-  @keyframes msPulse {
-    0%   { box-shadow: 0 0 0 0 rgba(252,211,77,0.55); }
-    70%  { box-shadow: 0 0 0 10px rgba(252,211,77,0); }
-    100% { box-shadow: 0 0 0 0 rgba(252,211,77,0); }
-  }
-  @keyframes msSpin { to { transform: rotate(360deg); } }
-  @keyframes msPing {
-    75%,100% { transform: scale(2); opacity: 0; }
-  }
-  @keyframes msShimmer {
-    0%   { background-position: -400px 0; }
-    100% { background-position: 400px 0; }
-  }
-
-  .ms-fade-up      { animation: msFadeUp      0.48s cubic-bezier(.22,.68,0,1.18) both; }
-  .ms-slide-right  { animation: msSlideRight  0.4s  cubic-bezier(.22,.68,0,1.18) both; }
-  .ms-card-in      { animation: msCardIn      0.42s cubic-bezier(.22,.68,0,1.18) both; }
-
-  .ms-card {
-    transition: transform 0.2s cubic-bezier(.22,.68,0,1.18), box-shadow 0.2s ease, border-color 0.2s ease;
-  }
-  .ms-card:hover {
-    transform: translateY(-5px) scale(1.015);
-    box-shadow: 0 18px 36px -6px rgba(14,78,94,0.20);
-    border-color: #0E4E5E !important;
-  }
-
-  .ms-btn-primary {
-    position: relative; overflow: hidden;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-  }
-  .ms-btn-primary::after {
-    content: "";
-    position: absolute; inset: 0;
-    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
-    transform: translateX(-100%);
-    transition: transform 0.45s ease;
-  }
-  .ms-btn-primary:hover::after { transform: translateX(100%); }
-  .ms-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px -4px rgba(14,78,94,0.4); }
-  .ms-btn-primary:active { transform: scale(0.98); }
-
-  .ms-btn-gold {
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  }
-  .ms-btn-gold:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px -4px rgba(252,211,77,0.55);
-    background: #FFE080 !important;
-  }
-  .ms-btn-gold:active { transform: scale(0.97); }
-
-  .ms-nav-link {
-    transition: background 0.15s ease, color 0.15s ease, padding-left 0.15s ease;
-  }
-  .ms-nav-link:hover { padding-left: 18px !important; }
-
-  .ms-shimmer {
-    background: linear-gradient(90deg, #e8f4f7 25%, #d4eaf0 50%, #e8f4f7 75%);
-    background-size: 800px 100%;
-    animation: msShimmer 1.4s infinite linear;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ms-fade-up, .ms-slide-right, .ms-card-in { animation: none !important; }
-    .ms-btn-primary::after { display: none; }
-    .ms-card:hover { transform: none; }
-    .ms-nav-link:hover { padding-left: 12px !important; }
-  }
-`;
-
-let msStylesInjected = false;
-const injectMsStyles = () => {
-  if (msStylesInjected || typeof document === "undefined") return;
-  const el = document.createElement("style");
-  el.textContent = GLOBAL_STYLES;
-  document.head.appendChild(el);
-  msStylesInjected = true;
+  green:       "#16653A",
+  greenMid:    "#1E8A4C",
+  greenLight:  "#25B060",
+  greenPale:   "#EAF7EF",
+  greenBorder: "rgba(30,138,76,0.25)",
+  yellow:      "#F5C400",
+  yellowWarm:  "#FFD53E",
+  yellowPale:  "#FFFBE6",
+  yellowBorder:"rgba(245,196,0,0.35)",
+  dark:        "#0C1E12",
+  darkMid:     "#163322",
+  text:        "#0C1E12",
+  textMuted:   "#3C6652",
+  border:      "#C8E2D4",
+  surface:     "#F3FAF6",
+  white:       "#FFFFFF",
+  slate:       "#F1F5F2",
 };
 
 // ── Nationality → ISO 3166-1 alpha-2 ─────────────────────────────────────────
@@ -164,7 +65,7 @@ const FlagCircle = ({ code }: { code: string }) => {
       display:"inline-flex", alignItems:"center", justifyContent:"center",
       width:14, height:14, borderRadius:"50%", overflow:"hidden",
       border:"1px solid rgba(0,0,0,0.13)", flexShrink:0,
-      verticalAlign:"middle", background:C.primaryPale,
+      verticalAlign:"middle", background:C.greenPale,
     }}>
       <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={code}
         style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
@@ -235,7 +136,7 @@ const getWorkAreaRows = (maid: MaidProfile): WorkAreaRow[] => {
 const StarRating = ({ count }: { count: number }) => (
   <span className="inline-flex items-center gap-px">
     {Array.from({ length: 5 }).map((_, i) => (
-      <svg key={i} viewBox="0 0 16 16" style={{ height:12, width:12, color: i < count ? C.gold : C.border }} fill="currentColor">
+      <svg key={i} viewBox="0 0 16 16" style={{ height:12, width:12, color: i < count ? C.yellow : "#D1E8DA" }} fill="currentColor">
         <path d="M8 1l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 10.8l-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
       </svg>
     ))}
@@ -308,23 +209,19 @@ const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: Rea
 
   return (
     <div ref={popupRef} style={style} className="pointer-events-none relative">
-      <div
-        className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${pointerSide === "right" ? "-left-4" : "-right-4"}`}
+      <div className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${pointerSide === "right" ? "-left-4" : "-right-4"}`}
         style={{ borderWidth:"8px", borderStyle:"solid",
-          borderColor: pointerSide === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }}
-      />
+          borderColor: pointerSide === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
       <div className="bg-white overflow-hidden flex flex-col max-h-[500px]"
-        style={{ border:`1.5px solid ${C.border}`, boxShadow:"0 24px 64px rgba(14,78,94,0.20)", borderRadius:16 }}>
-        {/* Popup header */}
-        <div className="px-3 py-2.5" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.primary} 100%)`, position:"relative", overflow:"hidden" }}>
-          <div style={{ position:"absolute", right:-20, top:-20, width:80, height:80, borderRadius:"50%", background:"rgba(252,211,77,0.10)" }} />
+        style={{ border:`1.5px solid ${C.border}`, boxShadow:"0 20px 60px rgba(12,30,18,0.18)" }}>
+        <div className="px-3 py-2.5" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)` }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div style={{ width:3, height:32, background:`linear-gradient(180deg, ${C.gold}, ${C.goldWarm})`, borderRadius:2, flexShrink:0 }} />
+            <div style={{ width:3, height:32, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})`, borderRadius:2, flexShrink:0 }} />
             <div>
               <p className="text-xs font-bold text-white leading-tight line-clamp-1">
                 {maid.nationality ? `${maid.nationality} maid` : "Maid"}{maid.fullName ? `: ${maid.fullName}` : ""}
               </p>
-              {maid.referenceCode && <p style={{ fontSize:10, color:C.goldWarm, fontFamily:"monospace", marginTop:2 }}>{maid.referenceCode}</p>}
+              {maid.referenceCode && <p style={{ fontSize:10, color:C.yellowWarm, fontFamily:"monospace", marginTop:2 }}>{maid.referenceCode}</p>}
             </div>
           </div>
         </div>
@@ -346,7 +243,7 @@ const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: Rea
             {maid.maritalStatus && <PopupRow label="Status" value={maid.maritalStatus} />}
             {maid.religion && <PopupRow label="Religion" value={maid.religion} />}
             {maid.educationLevel && <PopupRow label="Education" value={maid.educationLevel} />}
-            {details.willingOffDays && <PopupRow label="Off-days" value="Willing ✓" valueClass="font-semibold" valueStyle={{ color:C.primaryMid }} />}
+            {details.willingOffDays && <PopupRow label="Off-days" value="Willing ✓" valueClass="font-semibold" valueStyle={{ color:C.greenMid }} />}
           </div>
           {details.langs.length > 0 && (
             <><div style={{ borderTop:`1px solid ${C.border}` }} />
@@ -439,10 +336,8 @@ const LockedMaidHoverModal = ({
     hasWorkAreaData ? workAreaRows : skillRows.map((s) => ({ name:s.name, willing:s.willing, evaluation:s.evaluation }));
 
   return (
-    <div
-      ref={modalRef}
-      style={{ ...pos, overflowY:"auto", overflowX:"hidden", border:`1.5px solid ${C.border}`, borderRadius:16, background:C.white, boxShadow:"0 24px 64px rgba(14,78,94,0.22)" }}
-      className="relative ms-fade-up"
+    <div ref={modalRef} style={{ ...pos, overflowY:"auto", overflowX:"hidden", border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 20px 60px rgba(12,30,18,0.20)" }}
+      className="relative"
       onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
     >
       <div className="pointer-events-none absolute top-1/2 -translate-y-1/2"
@@ -450,22 +345,20 @@ const LockedMaidHoverModal = ({
           borderColor: side === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
 
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-start justify-between gap-3 px-4 py-3" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.primary} 100%)`, position:"relative", overflow:"hidden" }}>
-        <div style={{ position:"absolute", right:-20, top:-20, width:80, height:80, borderRadius:"50%", background:"rgba(252,211,77,0.10)" }} />
-        <div style={{ position:"absolute", left:0, top:0, bottom:0, width:4, background:`linear-gradient(180deg, ${C.gold}, ${C.goldWarm})` }} />
-        <div className="flex items-start gap-2 flex-1 min-w-0 pl-3">
-          <div className="mt-0.5 flex-shrink-0 p-1.5" style={{ background:C.gold, borderRadius:6 }}>
+      <div className="sticky top-0 z-10 flex items-start justify-between gap-3 px-4 py-3"
+        style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)` }}>
+        <div style={{ position:"absolute", left:0, top:0, bottom:0, width:4, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})` }} />
+        <div className="flex items-start gap-2 flex-1 min-w-0 pl-2">
+          <div className="mt-0.5 flex-shrink-0 p-1.5" style={{ background:C.yellow }}>
             <span style={{ color:C.dark, display:"flex" }}>
-              <LockIcon className="h-4 w-4" />
-            </span>
+            <LockIcon className="h-4 w-4" />
+          </span>
           </div>
           <p className="text-sm font-semibold text-white leading-snug">
             Login / Register to see full bio-data and photos
           </p>
         </div>
-        <button type="button" onClick={onClose} className="flex-shrink-0 p-1.5 transition-colors" style={{ color:"rgba(255,255,255,0.5)", background:"rgba(255,255,255,0.08)", borderRadius:8 }}
-          onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.9)")}
-          onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}>
+        <button type="button" onClick={onClose} className="flex-shrink-0 p-1.5 text-white/60 hover:text-white transition-colors">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -473,8 +366,10 @@ const LockedMaidHoverModal = ({
       {/* Login button */}
       <div className="px-4 py-3 border-b" style={{ background:C.white, borderColor:C.border }}>
         <Link to={loginPath}
-          className="ms-btn-gold flex w-full items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors"
-          style={{ background:`linear-gradient(135deg, ${C.gold}, ${C.goldWarm})`, color:C.dark, borderRadius:10 }}>
+          className="flex w-full items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors"
+          style={{ background:`linear-gradient(135deg, ${C.yellow}, ${C.yellowWarm})`, color:C.dark }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = "0.92")}
+          onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
           <LockIcon className="h-3.5 w-3.5" />
           Login / Register
         </Link>
@@ -487,13 +382,13 @@ const LockedMaidHoverModal = ({
           <span style={{ fontWeight:600, color:C.textMuted }}>{maid.fullName || "—"}</span>
         </p>
         {agencyName && <p><span style={{ fontWeight:800 }}>Agency:</span> <span style={{ color:C.textMuted }}>{agencyName}</span></p>}
-        {maid.type && <p><span className={`inline-block px-1.5 py-px text-[9px] font-bold border ${getMaidTypeBadgeClass(maid.type)}`} style={{ borderRadius:4 }}>{getTypeLabel(maid.type)}</span></p>}
+        {maid.type && <p><span className={`inline-block px-1.5 py-px text-[9px] font-bold border ${getMaidTypeBadgeClass(maid.type)}`}>{getTypeLabel(maid.type)}</span></p>}
         {englishLevel && <p><span style={{ fontWeight:800 }}>English:</span> <span style={{ color:C.textMuted }}>{englishLevel}</span></p>}
         {age !== null && <p><span style={{ fontWeight:800 }}>Age:</span> <span style={{ color:C.textMuted }}>{age} yrs</span></p>}
         {maid.maritalStatus && <p><span style={{ fontWeight:800 }}>Status:</span> <span style={{ color:C.textMuted }}>{maid.maritalStatus}</span></p>}
         {maid.religion && <p><span style={{ fontWeight:800 }}>Religion:</span> <span style={{ color:C.textMuted }}>{maid.religion}</span></p>}
         {publicIntro && (
-          <div className="mt-2 p-3" style={{ border:`1px solid ${C.goldBorder}`, background:C.goldPale, borderRadius:8 }}>
+          <div className="mt-2 p-3" style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale }}>
             <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:"#92680A", marginBottom:4 }}>Public Introduction</p>
             <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color:"#78560A" }}>{publicIntro}</p>
           </div>
@@ -524,8 +419,8 @@ const LockedMaidHoverModal = ({
                   const e = emp as Record<string, unknown>;
                   return (
                     <tr key={idx} style={{ background: idx % 2 === 0 ? C.white : C.surface }}>
-                      <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["from"]||e["From"]||e["startYear"]||e["startDate"]||"—")}</td>
-                      <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["to"]||e["To"]||e["endYear"]||e["endDate"]||"—")}</td>
+                      <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>{String(e["from"]||e["From"]||e["startYear"]||e["startDate"]||"—")}</td>
+                      <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>{String(e["to"]||e["To"]||e["endYear"]||e["endDate"]||"—")}</td>
                       <td className="px-2 py-1.5 blur-[3px] select-none" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["country"]||e["Country"]||e["location"]||"—")}</td>
                       <td className="px-2 py-1.5 blur-[3px] select-none max-w-[70px] truncate" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["duties"]||e["Duties"]||e["employer"]||"—")}</td>
                     </tr>
@@ -555,11 +450,11 @@ const LockedMaidHoverModal = ({
                   <tr key={idx} style={{ background: idx % 2 === 0 ? C.white : C.surface }}>
                     <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.text }}>{row.name}</td>
                     <td className="px-2 py-1.5 text-center" style={{ border:`1px solid ${C.border}` }}>
-                      {row.willing ? <span style={{ color:C.primaryMid, fontWeight:800 }}>✓</span> : <span style={{ color:"#EF4444", fontWeight:800 }}>✗</span>}
+                      {row.willing ? <span style={{ color:C.greenMid, fontWeight:800 }}>✓</span> : <span style={{ color:"#EF4444", fontWeight:800 }}>✗</span>}
                     </td>
                     <td className="px-2 py-1.5 text-center" style={{ border:`1px solid ${C.border}` }}>
                       {"experience" in row
-                        ? (row.experience ? <span style={{ color:C.primaryMid, fontWeight:800 }}>✓</span> : <span style={{ color:C.border }}>—</span>)
+                        ? (row.experience ? <span style={{ color:C.greenMid, fontWeight:800 }}>✓</span> : <span style={{ color:C.border }}>—</span>)
                         : <span style={{ color:C.border }}>—</span>}
                     </td>
                     <td className="px-2 py-1.5 text-center" style={{ border:`1px solid ${C.border}` }}>
@@ -618,8 +513,8 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
     <>
       <article
         ref={cardRef as React.RefObject<HTMLElement>}
-        className="ms-card group relative flex flex-col overflow-visible cursor-pointer"
-        style={{ border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 2px 10px rgba(14,78,94,0.08)", borderRadius:14 }}
+        className="group relative flex flex-col overflow-visible cursor-pointer transition-all"
+        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}
         onMouseEnter={disableHoverModal ? undefined : () => { cardHovered.current = true; openModal(); }}
         onMouseLeave={disableHoverModal ? undefined : () => { cardHovered.current = false; scheduleClose(); }}
       >
@@ -627,13 +522,12 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
           <div className="absolute top-1/2 -translate-y-1/2 z-10"
             style={{ [arrowSide === "right" ? "right" : "left"]:-6 }}>
             <span className="relative flex h-3 w-3">
-              <span style={{ background:C.gold, animation:"msPing 1s cubic-bezier(0,0,0.2,1) infinite" }}
-                className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3" style={{ background:C.gold }} />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background:C.yellow }} />
+              <span className="relative inline-flex rounded-full h-3 w-3" style={{ background:C.yellow }} />
             </span>
           </div>
         )}
-        <div className="relative w-full select-none pointer-events-none overflow-hidden" style={{ borderRadius:"12px 12px 0 0" }}>
+        <div className="relative w-full select-none pointer-events-none overflow-hidden">
           {photo ? (
             <img src={photo} alt="Maid profile" loading="lazy" decoding="async"
               className="block w-full h-auto"
@@ -648,28 +542,28 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
             </div>
           )}
           {maid.type && (
-            <div className="absolute top-1.5 left-1.5">
-              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 ${typeColorClass}`} style={{ borderRadius:4, filter:"blur(2px)" }}>{getTypeLabel(maid.type)}</span>
+            <div className="absolute top-0 left-0" style={{ filter:"blur(3px)" }}>
+              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 ${typeColorClass}`}>{getTypeLabel(maid.type)}</span>
             </div>
           )}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-            <div className="p-2" style={{ background:"rgba(14,78,94,0.55)", backdropFilter:"blur(2px)", borderRadius:8 }}>
+            <div className="p-2" style={{ background:"rgba(12,30,18,0.50)", backdropFilter:"blur(2px)" }}>
               <LockIcon className="h-4 w-4 text-white" />
             </div>
           </div>
         </div>
         <div className="flex flex-col gap-1 p-2.5 flex-1" style={{ background:C.white }}>
-          <div className="h-2.5 w-3/4 blur-[3px] select-none" style={{ background:C.border, borderRadius:4 }} />
-          <div className="mt-1 h-2 w-1/2 blur-[3px] select-none" style={{ background:C.border, borderRadius:4 }} />
+          <div className="h-2.5 w-3/4 blur-[3px] select-none" style={{ background:C.border }} />
+          <div className="mt-1 h-2 w-1/2 blur-[3px] select-none" style={{ background:C.border }} />
           <div className="mt-1 flex gap-1">
-            <div className="h-4 w-12 blur-[3px] select-none" style={{ background:C.border, borderRadius:4 }} />
-            <div className="h-4 w-8 blur-[3px] select-none" style={{ background:C.border, borderRadius:4 }} />
+            <div className="h-4 w-12 blur-[3px] select-none" style={{ background:C.border }} />
+            <div className="h-4 w-8 blur-[3px] select-none" style={{ background:C.border }} />
           </div>
         </div>
         <div className="px-2 pb-2 pt-0 pointer-events-auto">
           <Link to={loginPath}
-            className="ms-btn-primary flex w-full items-center justify-center gap-1.5 px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-white transition-colors"
-            style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.primary} 100%)`, borderRadius:8 }}>
+            className="flex w-full items-center justify-center gap-1.5 px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-white transition-colors"
+            style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)` }}>
             <LockIcon className="h-3 w-3" />Log in to view
           </Link>
         </div>
@@ -688,10 +582,10 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
 
 // ── Real maid card ────────────────────────────────────────────────────────────
 const MaidCard = ({
-  maid, isShortlisted, onToggleShortlist, onNavigate, isLoggedIn, loginPath, showCategory, disableHoverPopup = false, index = 0,
+  maid, isShortlisted, onToggleShortlist, onNavigate, isLoggedIn, loginPath, showCategory, disableHoverPopup = false,
 }: {
   maid: MaidProfile; isShortlisted: boolean; onToggleShortlist: (ref: string) => void;
-  onNavigate?: () => void; isLoggedIn: boolean; loginPath: string; showCategory?: boolean; disableHoverPopup?: boolean; index?: number;
+  onNavigate?: () => void; isLoggedIn: boolean; loginPath: string; showCategory?: boolean; disableHoverPopup?: boolean;
 }) => {
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -727,16 +621,16 @@ const MaidCard = ({
     <>
       <article
         ref={cardRef}
-        className="ms-card ms-card-in group flex flex-col overflow-hidden cursor-pointer"
-        style={{ border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 2px 10px rgba(14,78,94,0.08)", borderRadius:14, animationDelay:`${index * 0.04}s` }}
+        className="group flex flex-col overflow-hidden cursor-pointer transition-all"
+        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <div className="relative w-full overflow-hidden" style={{ background:C.white, borderRadius:"12px 12px 0 0" }}>
+        <div className="relative w-full overflow-hidden" style={{ background:C.white }}>
           <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
             {photo ? (
               <img src={photo} alt={maid.fullName}
-                className="block w-full h-auto transition-transform duration-300 group-hover:scale-[1.04]"
+                className="block w-full h-auto transition-transform duration-300 group-hover:scale-[1.03]"
                 style={{ aspectRatio:"3/4", objectFit:"contain", objectPosition:"top center", minHeight:130, background:C.white }}
                 loading="lazy" decoding="async"
               />
@@ -749,20 +643,20 @@ const MaidCard = ({
             )}
           </Link>
           {maid.type && (
-            <div className="absolute top-1.5 left-1.5">
-              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`} style={{ borderRadius:4 }}>{getTypeLabel(maid.type)}</span>
+            <div className="absolute top-0 left-0">
+              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>{getTypeLabel(maid.type)}</span>
             </div>
           )}
           <button
             onClick={(e) => { e.preventDefault(); onToggleShortlist(maid.referenceCode); }}
-            className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide transition-all ${
+            className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
               isShortlisted ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
-            style={{ background: isShortlisted ? C.gold : "rgba(14,78,94,0.80)", color: isShortlisted ? C.dark : C.white }}
+            style={{ background: isShortlisted ? C.yellow : "rgba(12,30,18,0.75)" }}
           >
             <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-current" : ""}`}
               style={{ color: isShortlisted ? C.dark : C.white }} />
-            <span>{isShortlisted ? "Shortlisted" : "Shortlist"}</span>
+            <span style={{ color: isShortlisted ? C.dark : C.white }}>{isShortlisted ? "Shortlisted" : "Shortlist"}</span>
           </button>
         </div>
 
@@ -793,7 +687,7 @@ const MaidCard = ({
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Shortlist Dialog
+//  Improved Shortlist Dialog
 // ════════════════════════════════════════════════════════════════════════════
 const ShortlistDialog = ({
   open, onOpenChange, shortlistRefs, shortlistedMaids, missingShortlistRefs,
@@ -821,27 +715,26 @@ const ShortlistDialog = ({
           maxWidth:860,
           border:`1.5px solid ${C.border}`,
           borderRadius:20,
-          boxShadow:`0 32px 80px rgba(14,78,94,0.24), 0 4px 20px rgba(14,78,94,0.12)`,
+          boxShadow:`0 32px 80px rgba(12,30,18,0.22), 0 4px 20px rgba(12,30,18,0.10)`,
           background:C.white,
         }}
       >
-        {/* Header */}
-        <div style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.primary} 100%)`, position:"relative", overflow:"hidden" }}>
-          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:5, background:`linear-gradient(180deg, ${C.gold}, ${C.goldWarm})` }} />
-          <div style={{ position:"absolute", right:-30, top:-30, width:130, height:130, borderRadius:"50%", background:"rgba(252,211,77,0.08)" }} />
-          <div style={{ position:"absolute", right:50, bottom:-50, width:100, height:100, borderRadius:"50%", background:"rgba(14,78,94,0.25)" }} />
-          {/* Subtle grid */}
-          <div style={{ position:"absolute", inset:0, backgroundImage:"linear-gradient(rgba(252,211,77,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(252,211,77,0.04) 1px, transparent 1px)", backgroundSize:"24px 24px" }} />
+        {/* ── Modal header ── */}
+        <div style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)`, position:"relative", overflow:"hidden" }}>
+          {/* Yellow left accent */}
+          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:5, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})` }} />
+          {/* Decorative circles */}
+          <div style={{ position:"absolute", right:-30, top:-30, width:130, height:130, borderRadius:"50%", background:"rgba(245,196,0,0.07)" }} />
+          <div style={{ position:"absolute", right:50, bottom:-50, width:100, height:100, borderRadius:"50%", background:"rgba(30,138,76,0.10)" }} />
 
           <div className="flex items-center justify-between px-6 py-4 pl-8" style={{ position:"relative" }}>
             <div className="flex items-center gap-4">
               <div style={{
                 width:46, height:46, borderRadius:13, flexShrink:0,
-                background:"rgba(252,211,77,0.15)", border:`1.5px solid rgba(252,211,77,0.30)`,
+                background:"rgba(245,196,0,0.18)", border:`1.5px solid rgba(245,196,0,0.32)`,
                 display:"flex", alignItems:"center", justifyContent:"center",
-                animation: open ? "msPulse 2s ease infinite" : "none",
               }}>
-                <Star className="h-5 w-5" style={{ color:C.gold, fill:C.gold }} />
+                <Star className="h-5 w-5" style={{ color:C.yellowWarm, fill:C.yellowWarm }} />
               </div>
               <div>
                 <DialogTitle className="text-white font-bold text-lg leading-tight m-0" style={{ letterSpacing:"-0.2px" }}>
@@ -859,15 +752,14 @@ const ShortlistDialog = ({
               {shortlistRefs.length > 0 && (
                 <div style={{
                   padding:"4px 14px", borderRadius:30,
-                  background:`linear-gradient(135deg, ${C.gold}, ${C.goldWarm})`,
+                  background:`linear-gradient(135deg, ${C.yellow}, ${C.yellowWarm})`,
                   color:C.dark, fontSize:13, fontWeight:900,
                 }}>
                   {shortlistRefs.length}
                 </div>
               )}
               <DialogClose asChild>
-                <button className="p-1.5 transition-colors"
-                  style={{ color:"rgba(255,255,255,0.5)", background:"rgba(255,255,255,0.08)", borderRadius:8, border:"none", cursor:"pointer" }}
+                <button className="p-1.5 transition-colors" style={{ color:"rgba(255,255,255,0.5)", background:"rgba(255,255,255,0.08)", borderRadius:8, border:"none", cursor:"pointer" }}
                   onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.9)")}
                   onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}>
                   <X className="h-4 w-4" />
@@ -877,40 +769,40 @@ const ShortlistDialog = ({
           </div>
         </div>
 
-        {/* Empty state */}
+        {/* ── Empty state ── */}
         {shortlistRefs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
             <div style={{
               width:72, height:72, borderRadius:20, marginBottom:16,
-              background:C.primaryPale, border:`1.5px solid ${C.primaryBorder}`,
+              background:C.greenPale, border:`1.5px solid ${C.greenBorder}`,
               display:"flex", alignItems:"center", justifyContent:"center",
             }}>
-              <Star className="h-8 w-8" style={{ color:C.primaryMid }} />
+              <Star className="h-8 w-8" style={{ color:C.greenMid }} />
             </div>
             <p className="font-bold text-lg mb-2" style={{ color:C.text }}>Your shortlist is empty</p>
             <p className="text-sm mb-6 max-w-sm" style={{ color:C.textMuted }}>
-              Hover over any maid profile and tap the <strong style={{ color:C.gold }}>★ Shortlist</strong> button to save them here for easy comparison.
+              Hover over any maid profile and tap the <strong style={{ color:C.yellow }}>★ Shortlist</strong> button to save them here for easy comparison.
             </p>
             <button type="button" onClick={() => onOpenChange(false)}
-              className="ms-btn-primary font-bold text-sm px-6 py-2.5"
-              style={{ background:`linear-gradient(135deg, ${C.primary}, ${C.primaryLight})`, color:C.white, borderRadius:10, border:"none", cursor:"pointer", boxShadow:`0 4px 16px rgba(14,78,94,0.35)` }}>
+              className="font-bold text-sm px-6 py-2.5 transition-all"
+              style={{ background:`linear-gradient(135deg, ${C.green}, ${C.greenMid})`, color:C.white, borderRadius:10, border:"none", cursor:"pointer", boxShadow:`0 4px 16px rgba(22,101,58,0.35)` }}>
               Browse Profiles
             </button>
           </div>
         ) : (
           <>
-            {/* Card grid */}
+            {/* ── Card grid ── */}
             <div style={{ maxHeight:"62vh", overflowY:"auto", padding:"20px 24px 0" }}>
               {missingShortlistRefs.length > 0 && (
                 <div className="mb-4 flex items-center gap-2 px-3 py-2 text-sm"
-                  style={{ background:C.goldPale, border:`1px solid ${C.goldBorder}`, borderRadius:10, color:"#92680A" }}>
-                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.gold, flexShrink:0, display:"inline-block" }} />
+                  style={{ background:C.yellowPale, border:`1px solid ${C.yellowBorder}`, borderRadius:10, color:"#92680A" }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.yellow, flexShrink:0, display:"inline-block" }} />
                   {missingShortlistRefs.length} profile{missingShortlistRefs.length !== 1 ? "s" : ""} in your list could not be found
                 </div>
               )}
 
               <div className="grid gap-3" style={{ gridTemplateColumns:"repeat(auto-fill, minmax(140px, 1fr))" }}>
-                {shortlistedMaids.map((maid, i) => (
+                {shortlistedMaids.map((maid) => (
                   <div key={`sl-${maid.referenceCode}`} className="relative group/card">
                     <MaidCard
                       maid={maid}
@@ -921,9 +813,8 @@ const ShortlistDialog = ({
                       loginPath={loginPath}
                       showCategory={isIndianSubcategoryActive}
                       disableHoverPopup={true}
-                      index={i}
                     />
-                    {/* Quick-remove */}
+                    {/* Quick-remove overlay */}
                     <button
                       onClick={() => onToggleShortlist(maid.referenceCode)}
                       title="Remove from shortlist"
@@ -940,11 +831,16 @@ const ShortlistDialog = ({
                   </div>
                 ))}
 
+                {/* Missing refs */}
                 {missingShortlistRefs.map((ref) => (
                   <div key={`missing-${ref}`}
                     className="flex flex-col items-center justify-center gap-2 text-center p-4"
-                    style={{ border:`1.5px dashed ${C.goldBorder}`, background:C.goldPale, borderRadius:12, minHeight:160 }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:"rgba(252,211,77,0.20)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    style={{
+                      border:`1.5px dashed ${C.yellowBorder}`,
+                      background:C.yellowPale, borderRadius:12,
+                      minHeight:160,
+                    }}>
+                    <div style={{ width:34, height:34, borderRadius:10, background:"rgba(245,196,0,0.20)", display:"flex", alignItems:"center", justifyContent:"center" }}>
                       <svg style={{ width:16, height:16, color:"#B45309" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
                       </svg>
@@ -960,17 +856,18 @@ const ShortlistDialog = ({
               </div>
             </div>
 
-            {/* Footer */}
+            {/* ── Footer ── */}
             <div style={{
               padding:"16px 24px", borderTop:`1px solid ${C.border}`,
               background:C.surface,
               display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap",
             }}>
+              {/* Left: count info */}
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <div style={{
                   padding:"4px 12px", borderRadius:30, fontSize:12, fontWeight:800,
-                  background:C.primaryPale, border:`1px solid ${C.primaryBorder}`,
-                  color:C.primary, display:"flex", alignItems:"center", gap:6,
+                  background:C.greenPale, border:`1px solid ${C.greenBorder}`,
+                  color:C.green, display:"flex", alignItems:"center", gap:6,
                 }}>
                   <CheckCircle2 style={{ width:13, height:13 }} />
                   {shortlistedMaids.length} saved
@@ -980,19 +877,23 @@ const ShortlistDialog = ({
                 )}
               </div>
 
+              {/* Right: actions */}
               <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                 <button type="button" onClick={() => onOpenChange(false)}
                   className="font-semibold text-sm px-4 py-2 transition-colors"
-                  style={{ border:`1.5px solid ${C.border}`, background:C.white, color:C.text, borderRadius:9, cursor:"pointer" }}
+                  style={{
+                    border:`1.5px solid ${C.border}`, background:C.white, color:C.text,
+                    borderRadius:9, cursor:"pointer",
+                  }}
                   onMouseEnter={e => (e.currentTarget.style.background = C.surface)}
                   onMouseLeave={e => (e.currentTarget.style.background = C.white)}>
                   Continue browsing
                 </button>
                 <button type="button" onClick={handleClearAll}
-                  className="font-bold text-sm px-4 py-2 flex items-center gap-2"
+                  className="font-bold text-sm px-4 py-2 transition-all flex items-center gap-2"
                   style={{
-                    borderRadius:9, border:"none", cursor:"pointer", transition:"all 0.2s ease",
-                    background: confirmClear ? "#EF4444" : C.goldPale,
+                    borderRadius:9, border:"none", cursor:"pointer",
+                    background: confirmClear ? "#EF4444" : C.yellowPale,
                     color: confirmClear ? C.white : "#92680A",
                     boxShadow: confirmClear ? "0 4px 16px rgba(239,68,68,0.35)" : "none",
                   }}>
@@ -1014,8 +915,6 @@ const MaidSearchPage = ({
   loginPath = "/employer-login",
   embedded = false,
 }: MaidSearchPageProps) => {
-  injectMsStyles();
-
   const [searchParams, setSearchParams] = useSearchParams();
   const advancedFiltersRaw = searchParams.get("filters") || "";
   const advancedFilters = useMemo(() => parseAdvancedFilters(searchParams), [searchParams]);
@@ -1180,7 +1079,9 @@ const MaidSearchPage = ({
   const handleQuickLink = (label: string) => {
     const quickLinkKey = QUICK_LINKS_BY_LABEL[label] ?? "";
     const next = new URLSearchParams();
-    if (quickLinkKey && quickLinkKey !== quickLink) next.set("quick", quickLinkKey);
+    if (quickLinkKey && quickLinkKey !== quickLink) {
+      next.set("quick", quickLinkKey);
+    }
     setFilters(defaultSidebarFilters);
     setCommittedFilters(defaultSidebarFilters);
     setPage(1);
@@ -1197,46 +1098,41 @@ const MaidSearchPage = ({
   // ── Sidebar ──────────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <div className="space-y-0">
-      {/* Search box */}
-      <div className="overflow-hidden" style={{ border:`1.5px solid ${C.border}`, borderRadius:14, boxShadow:"0 2px 16px rgba(14,78,94,0.10)" }}>
+      <div className="overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 12px rgba(12,30,18,0.08)" }}>
         {/* Header */}
-        <div className="px-4 py-3" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.primary} 100%)`, position:"relative", overflow:"hidden" }}>
-          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:4, background:`linear-gradient(180deg, ${C.gold}, ${C.goldWarm})` }} />
-          <div style={{ position:"absolute", right:-16, top:-16, width:60, height:60, borderRadius:"50%", background:"rgba(252,211,77,0.10)" }} />
-          <div className="flex items-center gap-2 pl-2" style={{ position:"relative" }}>
-            <Search className="h-3.5 w-3.5" style={{ color:C.gold }} />
+        <div className="px-4 py-3" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)`, position:"relative" }}>
+          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:4, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})` }} />
+          <div className="flex items-center gap-2 pl-2">
+            <Search className="h-3.5 w-3.5" style={{ color:C.yellow }} />
             <p className="text-sm font-black tracking-wide" style={{ color:C.white, letterSpacing:"0.05em" }}>
-              MAID <span style={{ color:C.goldWarm }}>SEARCH</span>
+              MAID <span style={{ color:C.yellowWarm }}>SEARCH</span>
             </p>
           </div>
-          <p className="text-[10px] mt-0.5 pl-2" style={{ color:"rgba(255,255,255,0.50)", position:"relative" }}>Find your perfect household helper</p>
+          <p className="text-[10px] mt-0.5 pl-2" style={{ color:"rgba(255,255,255,0.55)" }}>Find your perfect household helper</p>
         </div>
 
         <div className="space-y-3 p-3" style={{ background:C.white }}>
           {/* Keyword */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none" style={{ color:C.textMuted }} />
-            <input
-              value={filters.keyword}
+            <input value={filters.keyword}
               onChange={(e) => setFilters((p) => ({ ...p, keyword:e.target.value }))}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="Filipino maid, baby sitter…"
-              className="w-full pl-8 pr-3 py-2 text-sm focus:outline-none transition-all"
-              style={{ border:`1.5px solid ${C.border}`, background:C.surface, color:C.text, borderRadius:8 }}
-              onFocus={e => { e.currentTarget.style.borderColor = C.primary; e.currentTarget.style.boxShadow = `0 0 0 3px rgba(14,78,94,0.12)`; }}
-              onBlur={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = "none"; }}
+              className="w-full pl-8 pr-3 py-2 text-sm focus:outline-none transition-colors"
+              style={{ border:`1.5px solid ${C.border}`, background:C.surface, color:C.text }}
             />
           </div>
 
           {/* Maid Type */}
           <div>
             <p className="mb-2 text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Maid Type</p>
-            <div className="space-y-0 overflow-hidden" style={{ border:`1.5px solid ${C.border}`, borderRadius:8 }}>
+            <div className="space-y-0 overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
               {MAID_TYPES.map((type, i) => (
                 <label key={type}
-                  className="flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-all"
+                  className="flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors"
                   style={{
-                    background: filters.maidType === type ? `linear-gradient(135deg, ${C.dark}, ${C.primary})` : C.white,
+                    background: filters.maidType === type ? C.dark : C.white,
                     color: filters.maidType === type ? C.white : C.text,
                     borderTop: i > 0 ? `1px solid ${C.border}` : "none",
                   }}>
@@ -1245,12 +1141,11 @@ const MaidSearchPage = ({
                     onChange={() => setFilters((p) => ({ ...p, maidType:p.maidType===type ? "" : type }))}
                     className="sr-only" />
                   <span style={{
-                    width:14, height:14, borderRadius:4,
-                    border:`2px solid ${filters.maidType===type ? C.gold : C.border}`,
-                    background: filters.maidType===type ? C.gold : C.white,
+                    width:14, height:14, border:`2px solid ${filters.maidType===type ? C.yellow : C.border}`,
+                    background: filters.maidType===type ? C.yellow : C.white,
                     display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, transition:"all .15s",
                   }}>
-                    {filters.maidType === type && <span style={{ display:"block", width:6, height:6, background:C.dark, borderRadius:2 }} />}
+                    {filters.maidType === type && <span style={{ display:"block", width:6, height:6, background:C.dark }} />}
                   </span>
                   <span className="text-sm font-medium">{type}</span>
                 </label>
@@ -1263,13 +1158,12 @@ const MaidSearchPage = ({
             <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Nationality</label>
             <div className="relative">
               <select
-                className="w-full appearance-none px-3 py-2 text-sm pr-8 focus:outline-none transition-all"
+                className="w-full appearance-none px-3 py-2 text-sm pr-8 focus:outline-none transition-colors"
                 style={{
-                  border:`1.5px solid ${filters.nationality!=="No Preference" ? C.primary : C.border}`,
-                  background: filters.nationality!=="No Preference" ? `linear-gradient(135deg, ${C.dark}, ${C.primary})` : C.white,
+                  border:`1.5px solid ${filters.nationality!=="No Preference" ? C.green : C.border}`,
+                  background: filters.nationality!=="No Preference" ? C.dark : C.white,
                   color: filters.nationality!=="No Preference" ? C.white : C.text,
                   fontWeight: filters.nationality!=="No Preference" ? 700 : 400,
-                  borderRadius:8,
                 }}
                 value={filters.nationality}
                 onChange={(e) => setFilters((p) => ({ ...p, nationality:e.target.value }))}>
@@ -1279,7 +1173,7 @@ const MaidSearchPage = ({
                 <option>Bangladeshi</option><option>Others</option>
               </select>
               <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 rotate-90 pointer-events-none"
-                style={{ color: filters.nationality!=="No Preference" ? C.goldWarm : C.textMuted }} />
+                style={{ color: filters.nationality!=="No Preference" ? C.yellowWarm : C.textMuted }} />
             </div>
           </div>
 
@@ -1288,13 +1182,12 @@ const MaidSearchPage = ({
             <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Language</label>
             <div className="relative">
               <select
-                className="w-full appearance-none px-3 py-2 text-sm pr-8 focus:outline-none transition-all"
+                className="w-full appearance-none px-3 py-2 text-sm pr-8 focus:outline-none transition-colors"
                 style={{
-                  border:`1.5px solid ${filters.language!=="No Preference" ? C.primary : C.border}`,
-                  background: filters.language!=="No Preference" ? `linear-gradient(135deg, ${C.dark}, ${C.primary})` : C.white,
+                  border:`1.5px solid ${filters.language!=="No Preference" ? C.green : C.border}`,
+                  background: filters.language!=="No Preference" ? C.dark : C.white,
                   color: filters.language!=="No Preference" ? C.white : C.text,
                   fontWeight: filters.language!=="No Preference" ? 700 : 400,
-                  borderRadius:8,
                 }}
                 value={filters.language}
                 onChange={(e) => setFilters((p) => ({ ...p, language:e.target.value }))}>
@@ -1304,19 +1197,19 @@ const MaidSearchPage = ({
                 <option>Hindi</option><option>Tamil</option>
               </select>
               <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 rotate-90 pointer-events-none"
-                style={{ color: filters.language!=="No Preference" ? C.goldWarm : C.textMuted }} />
+                style={{ color: filters.language!=="No Preference" ? C.yellowWarm : C.textMuted }} />
             </div>
           </div>
 
           {/* Search button */}
           <button type="button" onClick={handleSearch}
-            className="ms-btn-primary flex w-full items-center justify-center gap-2 py-2.5 text-sm font-black uppercase tracking-widest"
-            style={{ background:`linear-gradient(135deg, ${C.gold}, ${C.goldWarm})`, color:C.dark, borderRadius:9 }}>
+            className="flex w-full items-center justify-center gap-2 py-2.5 text-sm font-black uppercase tracking-widest transition-all hover:opacity-90 active:scale-[0.99]"
+            style={{ background:`linear-gradient(135deg, ${C.yellow}, ${C.yellowWarm})`, color:C.dark }}>
             <Search className="h-3.5 w-3.5" />
             Search Maids
             {activeFilterCount > 0 && (
               <span className="ml-1 inline-flex h-4 min-w-[16px] items-center justify-center px-1 text-[10px] font-black"
-                style={{ background:C.dark, color:C.gold, borderRadius:4 }}>
+                style={{ background:C.dark, color:C.yellow }}>
                 {activeFilterCount}
               </span>
             )}
@@ -1325,7 +1218,7 @@ const MaidSearchPage = ({
           {activeFilterCount > 0 && (
             <button type="button" onClick={handleReset}
               className="flex w-full items-center justify-center gap-1.5 py-1.5 text-xs font-medium transition-colors"
-              style={{ border:`1px solid ${C.border}`, color:C.textMuted, background:C.white, borderRadius:7 }}>
+              style={{ border:`1px solid ${C.border}`, color:C.textMuted, background:C.white }}>
               <X className="h-3 w-3" />Clear all filters
             </button>
           )}
@@ -1333,7 +1226,7 @@ const MaidSearchPage = ({
       </div>
 
       {/* Quick links */}
-      <div className="mt-3 overflow-hidden" style={{ border:`1.5px solid ${C.border}`, borderRadius:14, boxShadow:"0 2px 10px rgba(14,78,94,0.08)" }}>
+      <div className="mt-3 overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}>
         <div className="px-3 py-2" style={{ borderBottom:`1px solid ${C.border}`, background:C.surface }}>
           <p className="text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Browse by Category</p>
         </div>
@@ -1343,17 +1236,16 @@ const MaidSearchPage = ({
             const isActive = !!quickLink && quickLink === linkKey;
             return (
               <button key={label} onClick={() => handleQuickLink(label)}
-                className="ms-nav-link flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-all"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors"
                 style={{
-                  paddingLeft: isActive ? 16 : 12,
-                  background: isActive ? `linear-gradient(135deg, ${C.dark}, ${C.primary})` : C.white,
+                  background: isActive ? `linear-gradient(135deg, ${C.dark}, ${C.darkMid})` : C.white,
                   color: isActive ? C.white : C.textMuted,
                   fontWeight: isActive ? 800 : 500,
                   borderTop: i > 0 ? `1px solid ${C.border}` : "none",
                 }}>
-                <span style={{ color: isActive ? C.gold : C.border, fontSize:13 }}>›</span>
+                <span style={{ color: isActive ? C.yellow : C.border, fontSize:13 }}>›</span>
                 {label}
-                {isActive && <span className="ml-auto" style={{ width:6, height:6, borderRadius:"50%", background:C.gold, display:"inline-block" }} />}
+                {isActive && <span className="ml-auto" style={{ width:6, height:6, borderRadius:"50%", background:C.yellow, display:"inline-block" }} />}
               </button>
             );
           })}
@@ -1366,8 +1258,8 @@ const MaidSearchPage = ({
   const PaginationBar = () => (
     <div className="flex flex-wrap items-center gap-1">
       <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-        className="flex h-7 w-7 items-center justify-center transition-all disabled:cursor-not-allowed disabled:opacity-40"
-        style={{ border:`1.5px solid ${C.border}`, background:C.white, color:C.text, borderRadius:7 }}>
+        className="flex h-7 w-7 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ border:`1px solid ${C.border}`, background:C.white, color:C.text }}>
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
       {pages.map((item, index) =>
@@ -1375,21 +1267,19 @@ const MaidSearchPage = ({
           <span key={`el-${index}`} className="px-1 text-xs" style={{ color:C.textMuted }}>…</span>
         ) : (
           <button key={item} onClick={() => setPage(item as number)}
-            className="flex h-7 min-w-[1.75rem] items-center justify-center px-2 text-xs font-bold transition-all"
+            className="flex h-7 min-w-[1.75rem] items-center justify-center border px-2 text-xs font-bold transition-colors"
             style={{
-              border: item === page ? "none" : `1.5px solid ${C.border}`,
-              borderRadius:7,
-              background: item === page ? `linear-gradient(135deg, ${C.primary}, ${C.primaryLight})` : C.white,
+              border: item === page ? "none" : `1px solid ${C.border}`,
+              background: item === page ? `linear-gradient(135deg, ${C.green}, ${C.greenMid})` : C.white,
               color: item === page ? C.white : C.text,
-              boxShadow: item === page ? `0 2px 8px rgba(14,78,94,0.30)` : "none",
             }}>
             {item}
           </button>
         )
       )}
       <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-        className="flex h-7 w-7 items-center justify-center transition-all disabled:cursor-not-allowed disabled:opacity-40"
-        style={{ border:`1.5px solid ${C.border}`, background:C.white, color:C.text, borderRadius:7 }}>
+        className="flex h-7 w-7 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ border:`1px solid ${C.border}`, background:C.white, color:C.text }}>
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -1401,26 +1291,19 @@ const MaidSearchPage = ({
 
       {/* Hero strip */}
       {!embedded && (
-        <div className="hidden md:block" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.primary} 100%)`, borderBottom:`1px solid ${C.primaryBorder}`, position:"relative", overflow:"hidden" }}>
-          {/* Background orbs */}
-          <div style={{ position:"absolute", right:-40, top:-40, width:120, height:120, borderRadius:"50%", background:"rgba(252,211,77,0.08)", filter:"blur(20px)", animation:"msOrb 14s ease-in-out infinite" }} />
-          <div style={{ position:"absolute", left:100, bottom:-30, width:80, height:80, borderRadius:"50%", background:"rgba(252,211,77,0.06)", filter:"blur(16px)", animation:"msOrb 10s ease-in-out infinite reverse" }} />
-          {/* Diagonal lines */}
-          <div style={{ position:"absolute", inset:0, backgroundImage:"repeating-linear-gradient(45deg, rgba(252,211,77,0.025) 0, rgba(252,211,77,0.025) 1px, transparent 0, transparent 50%)", backgroundSize:"16px 16px" }} />
-
-          <div className="container mx-auto px-4 py-3 flex items-center justify-between" style={{ position:"relative" }}>
+        <div className="hidden md:block" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)`, borderBottom:`1px solid ${C.greenBorder}` }}>
+          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div style={{ width:4, height:20, background:`linear-gradient(180deg, ${C.gold}, ${C.goldWarm})`, borderRadius:2, flexShrink:0 }} />
-              <Sparkles className="h-4 w-4" style={{ color:C.gold }} />
+              <Sparkles className="h-4 w-4" style={{ color:C.yellow }} />
               <span className="text-sm font-semibold text-white">Browse verified domestic helper profiles</span>
-              <span style={{ color:"rgba(255,255,255,0.25)" }}>·</span>
+              <span style={{ color:"rgba(255,255,255,0.3)" }}>·</span>
               <span className="text-xs" style={{ color:"rgba(255,255,255,0.5)" }}>
-                {isLoading ? "Loading…" : <><span style={{ color:C.goldWarm, fontWeight:800 }}>{filteredMaids.length}</span> profiles available</>}
+                {isLoading ? "Loading…" : <><span style={{ color:C.yellowWarm, fontWeight:800 }}>{filteredMaids.length}</span> profiles available</>}
               </span>
             </div>
             {!isLoggedIn && (
-              <Link to={loginPath} className="ms-btn-gold text-xs font-bold uppercase tracking-wide px-3 py-1.5 transition-colors"
-                style={{ background:C.gold, color:C.dark, borderRadius:7 }}>
+              <Link to={loginPath} className="text-xs font-bold uppercase tracking-wide transition-colors"
+                style={{ color:C.yellowWarm }}>
                 Login to view full profiles →
               </Link>
             )}
@@ -1430,18 +1313,18 @@ const MaidSearchPage = ({
 
       {/* Mobile top bar */}
       <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2.5 md:hidden"
-        style={{ borderBottom:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 12px rgba(14,78,94,0.10)" }}>
+        style={{ borderBottom:`1px solid ${C.border}`, background:C.white, boxShadow:"0 1px 8px rgba(12,30,18,0.08)" }}>
         <p className="text-sm font-semibold" style={{ color:C.text }}>
           {isLoading ? "Loading…" : <><span style={{ color:C.text, fontWeight:800 }}>{filteredMaids.length}</span> results</>}
         </p>
         <button type="button" onClick={() => setMobileSidebarOpen((v) => !v)}
-          className="ms-btn-primary flex items-center gap-2 px-3 py-1.5 text-sm font-semibold"
-          style={{ border:`1.5px solid ${C.primary}`, background:C.white, color:C.primary, borderRadius:8 }}>
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold transition-colors"
+          style={{ border:`1px solid ${C.border}`, background:C.white, color:C.text }}>
           <Filter className="h-3.5 w-3.5" />
           Filters
           {activeFilterCount > 0 && (
             <span className="inline-flex h-4 min-w-[16px] items-center justify-center px-1 text-[10px] font-bold"
-              style={{ background:C.gold, color:C.dark, borderRadius:4 }}>
+              style={{ background:C.yellow, color:C.dark }}>
               {activeFilterCount}
             </span>
           )}
@@ -1452,13 +1335,13 @@ const MaidSearchPage = ({
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-30 md:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
-          <div className="ms-slide-right absolute bottom-0 left-0 right-0 max-h-[88vh] overflow-y-auto p-4"
-            style={{ background:C.surface, boxShadow:"0 -10px 48px rgba(14,78,94,0.22)", borderRadius:"20px 20px 0 0" }}>
+          <div className="absolute bottom-0 left-0 right-0 max-h-[88vh] overflow-y-auto p-4"
+            style={{ background:C.surface, boxShadow:"0 -8px 40px rgba(12,30,18,0.20)" }}>
             <div className="mb-4 flex items-center justify-between">
               <p className="font-black text-sm uppercase tracking-wide" style={{ color:C.text }}>Filters</p>
               <button type="button" onClick={() => setMobileSidebarOpen(false)}
                 className="p-1.5 transition-colors"
-                style={{ border:`1.5px solid ${C.border}`, background:C.white, color:C.textMuted, borderRadius:7 }}>
+                style={{ border:`1px solid ${C.border}`, background:C.white, color:C.textMuted }}>
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1470,7 +1353,7 @@ const MaidSearchPage = ({
       <div className="container mx-auto flex flex-col gap-4 px-3 py-4 sm:px-4 md:flex-row md:gap-5 md:py-5">
         {/* Sidebar */}
         <aside className="hidden w-60 shrink-0 md:block">
-          <div className="sticky top-4 ms-fade-up"><SidebarContent /></div>
+          <div className="sticky top-4"><SidebarContent /></div>
         </aside>
 
         {/* Main content */}
@@ -1478,8 +1361,8 @@ const MaidSearchPage = ({
 
           {/* Advanced filters banner */}
           {advancedFilters && advancedFilterSummary.length > 0 && (
-            <div className="ms-fade-up mb-3 px-4 py-3"
-              style={{ borderLeft:`4px solid ${C.gold}`, background:C.white, boxShadow:"0 2px 10px rgba(14,78,94,0.08)", borderRadius:10 }}>
+            <div className="mb-3 px-4 py-3"
+              style={{ borderLeft:`4px solid ${C.yellow}`, background:C.white, boxShadow:"0 1px 6px rgba(12,30,18,0.06)" }}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-black uppercase tracking-widest mb-2" style={{ color:C.textMuted }}>Advanced Filters Active</p>
@@ -1500,15 +1383,10 @@ const MaidSearchPage = ({
           )}
 
           {/* Shortlist bar */}
-          <div className="ms-fade-up mb-3 flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"
-            style={{ border:`1.5px solid ${C.goldBorder}`, background:C.goldPale, borderRadius:12 }}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"
+            style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale }}>
             <div className="flex items-center gap-2.5">
-              <div style={{
-                width:28, height:28, background:C.gold,
-                display:"flex", alignItems:"center", justifyContent:"center",
-                borderRadius:8, flexShrink:0,
-                animation: shortlistRefs.length > 0 ? "msPulse 2.5s ease infinite" : "none",
-              }}>
+              <div style={{ width:28, height:28, background:C.yellow, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, flexShrink:0 }}>
                 <Star className="h-3.5 w-3.5" style={{ fill:C.dark, color:C.dark }} />
               </div>
               <span className="text-sm" style={{ color:"#78560A" }}>
@@ -1517,20 +1395,20 @@ const MaidSearchPage = ({
               </span>
             </div>
             <button type="button" onClick={() => setIsShortlistOpen(true)}
-              className="ms-btn-primary text-xs font-black uppercase tracking-wider px-3 py-1.5"
-              style={{ background:`linear-gradient(135deg, ${C.primary}, ${C.primaryLight})`, color:C.white, borderRadius:7, border:"none", cursor:"pointer" }}>
+              className="text-xs font-black uppercase tracking-wider transition-colors"
+              style={{ color:C.green, borderBottom:`1.5px solid ${C.green}`, paddingBottom:1, background:"none", border:"none", cursor:"pointer" }}>
               View Shortlist →
             </button>
           </div>
 
           {/* Results header */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5"
-            style={{ background:C.white, border:`1.5px solid ${C.border}`, boxShadow:"0 1px 6px rgba(14,78,94,0.06)", borderRadius:12 }}>
+            style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(12,30,18,0.04)" }}>
             <p className="text-sm" style={{ color:C.textMuted }}>
               {isLoading ? (
                 <span className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 border-2 border-t-transparent rounded-full"
-                    style={{ borderColor:`${C.border} ${C.border} ${C.border} ${C.primary}`, animation:"msSpin 0.7s linear infinite" }} />
+                  <span className="inline-block h-3 w-3 border-2 border-t-transparent animate-spin"
+                    style={{ borderColor:`${C.border} ${C.border} ${C.border} ${C.greenMid}` }} />
                   Loading profiles…
                 </span>
               ) : (
@@ -1539,7 +1417,7 @@ const MaidSearchPage = ({
                   {filteredMaids.length !== 1 ? "profiles" : "profile"} found
                   {quickLink && (
                     <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider"
-                      style={{ border:`1px solid ${C.primaryBorder}`, background:C.primaryPale, color:C.primary, borderRadius:5 }}>
+                      style={{ border:`1px solid ${C.border}`, background:C.surface, color:C.textMuted }}>
                       {QUICK_LINKS[quickLink as QuickLinkKey]}
                     </span>
                   )}
@@ -1553,35 +1431,35 @@ const MaidSearchPage = ({
           {isLoading ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                <div key={i} className="overflow-hidden" style={{ border:`1.5px solid ${C.border}`, background:C.white, borderRadius:14 }}>
-                  <div className="aspect-[3/4] ms-shimmer" />
+                <div key={i} className="overflow-hidden animate-pulse" style={{ border:`1px solid ${C.border}`, background:C.white }}>
+                  <div className="aspect-[3/4]" style={{ background:C.surface }} />
                   <div className="space-y-1.5 p-2.5">
-                    <div className="h-2 w-3/4 ms-shimmer" style={{ borderRadius:4 }} />
-                    <div className="h-2 w-1/2 ms-shimmer" style={{ borderRadius:4 }} />
-                    <div className="h-2 w-2/3 ms-shimmer" style={{ borderRadius:4 }} />
+                    <div className="h-2 w-3/4" style={{ background:C.border }} />
+                    <div className="h-2 w-1/2" style={{ background:C.border }} />
+                    <div className="h-2 w-2/3" style={{ background:C.border }} />
                   </div>
                 </div>
               ))}
             </div>
           ) : filteredMaids.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center"
-              style={{ border:`1.5px dashed ${C.border}`, background:C.white, borderRadius:16 }}>
-              <div style={{ width:64, height:64, background:C.surface, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:16, borderRadius:16 }}>
+              style={{ border:`1px dashed ${C.border}`, background:C.white }}>
+              <div style={{ width:64, height:64, background:C.surface, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:16 }}>
                 <Search className="h-7 w-7" style={{ color:C.border }} />
               </div>
               <p className="text-base font-bold" style={{ color:C.text }}>No profiles found</p>
               <p className="mt-1 text-sm" style={{ color:C.textMuted }}>Try adjusting your filters or search keywords.</p>
               {activeFilterCount > 0 && (
                 <button type="button" onClick={handleReset}
-                  className="ms-btn-primary mt-4 px-5 py-2 text-sm font-semibold"
-                  style={{ border:`1.5px solid ${C.border}`, background:C.white, color:C.text, borderRadius:8 }}>
+                  className="mt-4 px-5 py-2 text-sm font-semibold transition-colors"
+                  style={{ border:`1px solid ${C.border}`, background:C.white, color:C.text }}>
                   Clear all filters
                 </button>
               )}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {pagedMaids.map((maid, i) => (
+              {pagedMaids.map((maid) => (
                 <MaidCard
                   key={maid.referenceCode}
                   maid={maid}
@@ -1590,7 +1468,6 @@ const MaidSearchPage = ({
                   isLoggedIn={isLoggedIn}
                   loginPath={loginPath}
                   showCategory={isIndianSubcategoryActive}
-                  index={i}
                 />
               ))}
             </div>
@@ -1599,7 +1476,7 @@ const MaidSearchPage = ({
           {/* Bottom pagination */}
           {!isLoading && filteredMaids.length > 0 && (
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-              style={{ background:C.white, border:`1.5px solid ${C.border}`, boxShadow:"0 1px 6px rgba(14,78,94,0.06)", borderRadius:12 }}>
+              style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(12,30,18,0.04)" }}>
               <p className="text-sm" style={{ color:C.textMuted }}>
                 Page <span style={{ fontWeight:800, color:C.text }}>{page}</span> of{" "}
                 <span style={{ fontWeight:800, color:C.text }}>{totalPages}</span>
@@ -1608,7 +1485,7 @@ const MaidSearchPage = ({
             </div>
           )}
 
-          {/* Shortlist Dialog */}
+          {/* ── Improved Shortlist Dialog ── */}
           <ShortlistDialog
             open={isShortlistOpen}
             onOpenChange={setIsShortlistOpen}
@@ -1682,7 +1559,7 @@ const defaultSidebarFilters: SidebarFilters = {
   keyword:"", maidType:"", willingOffDays:false, nationality:"No Preference", language:"No Preference",
 };
 
-// ── Filter helpers (unchanged logic, identical to original) ───────────────────
+// ── Filter helpers ─────────────────────────────────────────────────────────────
 const parseAdvancedFilters = (searchParams: URLSearchParams): ClientDraft | null => {
   const raw = searchParams.get("filters");
   if (!raw) return null;
@@ -1980,7 +1857,7 @@ const pageNumbers = (current: number, total: number): (number|"...")[] => {
 
 const ActiveFilterPill = ({ label, onRemove }: { label:string; onRemove?:()=>void }) => (
   <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide"
-    style={{ border:`1px solid ${C.goldBorder}`, background:C.goldPale, color:"#92680A", borderRadius:5 }}>
+    style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale, color:"#92680A" }}>
     {label}
     {onRemove && (
       <button type="button" onClick={onRemove} className="ml-0.5 hover:text-red-500">

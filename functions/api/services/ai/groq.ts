@@ -60,6 +60,7 @@ export const groqChat = async (options: GroqChatOptions) => {
         headers: {
           authorization: `Bearer ${options.apiKey}`,
           "content-type": "application/json",
+          "user-agent": "helped-web-worker/1.0",
         },
         body: JSON.stringify({
           model: options.model,
@@ -118,6 +119,7 @@ export const groqChatStream = async (options: GroqChatOptions) => {
     headers: {
       authorization: `Bearer ${options.apiKey}`,
       "content-type": "application/json",
+      "user-agent": "helped-web-worker/1.0",
     },
     body: JSON.stringify({
       model: options.model,

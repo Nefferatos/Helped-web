@@ -9029,7 +9029,7 @@ const generateMarketingTemplate = async (
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${groqApiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${groqApiKey}`, "Content-Type": "application/json", "User-Agent": "helped-web-worker/1.0" },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         temperature: 0.4,
