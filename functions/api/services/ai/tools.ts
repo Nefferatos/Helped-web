@@ -425,13 +425,26 @@ export const runAgentTools = (context: AiToolContext) => {
   }
 
   if (agentId === "maid_recommendation") {
+    const semanticRefs = Array.isArray(input.semanticReferences)
+      ? (input.semanticReferences as string[])
+      : [];
+
+    const rankedMatches = list(data.maids)
+      .filter((maid) => maid.isPublic)
+      .map((maid) => {
+        const base = scoreMaid(maid, input);
+        // Boost score by semantic similarity rank: top match +20, diminishing by 2 per rank.
+        const semRank = semanticRefs.indexOf(text(maid.referenceCode));
+        const semBoost = semRank >= 0 ? Math.max(0, 20 - semRank * 2) : 0;
+        return { ...base, score: Math.min(100, base.score + semBoost) };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+
     return {
-      rankedMatches: list(data.maids)
-        .filter((maid) => maid.isPublic)
-        .map((maid) => scoreMaid(maid, input))
-        .sort((left, right) => right.score - left.score)
-        .slice(0, 8),
+      rankedMatches,
       preferences: input,
+      semanticSearchUsed: semanticRefs.length > 0,
     };
   }
 

@@ -5,6 +5,11 @@ import { classifyFallback } from "./fallbackClassifier";
 import { runAiAutopilot } from "./services/ai/autopilot";
 import { runAIAgent, streamAIAgent } from "./services/ai/agents";
 import type { AiAgentId } from "./services/ai/prompts";
+import {
+  upsertMaidEmbedding,
+  searchSimilarMaids,
+  buildRecommendationQuery,
+} from "./services/ai/embeddings";
 
 type AssetsBinding = {
   fetch: (request: Request) => Promise<Response>;
@@ -119,7 +124,10 @@ interface ClientSessionRecord {
   token: string;
   clientId: number;
   createdAt: string;
+  expiresAt?: string;
 }
+
+const CLIENT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface AgencyAdminRecord {
   id: number;
@@ -437,6 +445,7 @@ interface AppData {
 type Bindings = {
   APP_DATA?: KVNamespace;
   ASSETS: AssetsBinding;
+  AI?: { run(model: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> };
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
@@ -460,7 +469,33 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-app.use("/api/*", cors());
+app.use(
+  "/api/*",
+  cors({
+    origin: (origin) => {
+      const allowed = [
+        "https://helped-web-v2.pages.dev",
+        "http://localhost:5173",
+        "http://localhost:3000",
+      ];
+      return allowed.includes(origin) ? origin : null;
+    },
+    credentials: true,
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  }),
+);
+
+app.use("/api/*", async (c, next) => {
+  await next();
+  c.res.headers.set("X-Content-Type-Options", "nosniff");
+  c.res.headers.set("X-Frame-Options", "DENY");
+  c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.res.headers.set(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains",
+  );
+});
 
 const now = () => new Date().toISOString();
 
@@ -509,58 +544,7 @@ const defaultData = (): AppData => ({
   momPersonnel: [],
   testimonials: [],
   maids: [],
-  enquiries: [
-    {
-      id: 1,
-      username: "Rajni",
-      date: "23 March 2026, 12:58",
-      email: "rajnirose305@gmail.com",
-      phone: "+918872486884",
-      message:
-        "M best in cooking.\n\nEmployer Requirement:\nNationality: Indian\nType: Ex-Singapore Maid\nAge: 41 and above\nDuty: Taking care of infant\nLanguage: English",
-      createdAt: now(),
-    },
-    {
-      id: 2,
-      username: "Devina",
-      date: "23 March 2026, 12:57",
-      email: "devinachew@gmail.com",
-      phone: "81381569",
-      message:
-        "Employer Requirement:\nNationality: Indonesian\nType: Transfer Maid\nAge: 31 to 35",
-      createdAt: now(),
-    },
-    {
-      id: 3,
-      username: "Shaiful",
-      date: "23 March 2026, 12:00",
-      email: "hirqa@yahoo.com.sg",
-      phone: "98214800",
-      message:
-        "urgently need a helper who is above 1.65m tall. must be strong & hygienic. can take care of elderly & disabled.",
-      createdAt: now(),
-    },
-    {
-      id: 4,
-      username: "Jit",
-      date: "22 March 2026, 3:59",
-      email: "jitchu@yahoo.com",
-      phone: "90275978",
-      message:
-        "Employer Requirement:\nNationality: Indonesian\nAge: 31 to 35\nDuty: Taking care of elderly / bedridden\nLanguage: English",
-      createdAt: now(),
-    },
-    {
-      id: 5,
-      username: "William Lawton",
-      date: "22 March 2026, 3:59",
-      email: "William.Lawton100@gmail.com",
-      phone: "19107283080",
-      message:
-        "Live in Spain, will have own apartment, cook, clean, market, massage therapist background as well would be amazing.\n\nEmployer Requirement:\nNationality: Filipino\nAge: 41 and above\nDuty: General Housekeeping\nLanguage: English\nOff-day: No Off-day",
-      createdAt: now(),
-    },
-  ],
+  enquiries: [],
   clients: [],
   clientSessions: [],
   agencyAdmins: [
@@ -891,7 +875,7 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
   );
   if (!hasMainAgency) {
     agencyAdmins = agencyAdmins.map((admin) =>
-      admin.username === "admin" && admin.password === "admin123"
+      admin.username === "admin"
         ? { ...admin, username: "attheagency" }
         : admin,
     );
@@ -1200,38 +1184,7 @@ const decodeSupabaseJwtClaims = (jwt: string) => {
   }
 };
 
-const logSupabaseConfigDebug = (env: Bindings) => {
-  if (env.DEV_EXPOSE_CONFIRMATION_CODE !== "true") return;
-
-  const url = env.SUPABASE_URL?.trim() ?? "";
-  const anon = env.SUPABASE_ANON_KEY?.trim() ?? "";
-  const service = env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
-
-  const anonClaims = anon ? decodeSupabaseJwtClaims(anon) : null;
-  const serviceClaims = service ? decodeSupabaseJwtClaims(service) : null;
-
-  console.log("Supabase config debug", {
-    supabaseUrl: url || null,
-    anonKey: anonClaims
-      ? {
-          ref: anonClaims.ref ?? null,
-          role: anonClaims.role ?? null,
-          iss: anonClaims.iss ?? null,
-        }
-      : anon
-        ? { type: "non-jwt", length: anon.length }
-        : null,
-    serviceRoleKey: serviceClaims
-      ? {
-          ref: serviceClaims.ref ?? null,
-          role: serviceClaims.role ?? null,
-          iss: serviceClaims.iss ?? null,
-        }
-      : service
-        ? { type: "non-jwt", length: service.length }
-        : null,
-  });
-};
+const logSupabaseConfigDebug = (_env: Bindings) => {};
 
 const getSupabaseAppDataConfig = (
   env: Bindings,
@@ -3047,18 +3000,16 @@ const safeApi =
       const message =
         error instanceof Error ? error.message : "Internal Server Error";
       // Propagate upstream rate-limit as 429 so clients can retry correctly.
-      if (/rate.?limit|429/i.test(message)) return jsonError(message, 429);
+      if (/rate.?limit|429/i.test(message)) return jsonError("Rate limit exceeded, please try again later", 429);
       // Propagate upstream AI daily-limit as 503.
-      if (/tokens per day|daily.?limit/i.test(message)) return jsonError(message, 503);
-      return jsonError(message, 500);
+      if (/tokens per day|daily.?limit/i.test(message)) return jsonError("AI service temporarily unavailable", 503);
+      return jsonError("Internal Server Error", 500);
     }
   };
 
 app.onError((error, c) => {
   console.error("Unhandled API error", c.req.method, c.req.path, error);
-  const message =
-    error instanceof Error ? error.message : "Internal Server Error";
-  return jsonError(message, 500);
+  return jsonError("Internal Server Error", 500);
 });
 
 const parseAuthorizationToken = (request: Request) => {
@@ -3070,18 +3021,18 @@ const parseAuthorizationToken = (request: Request) => {
 const requireClientAuth = async (c: any, next: () => Promise<void>) => {
   const token = parseAuthorizationToken(c.req.raw);
   if (!token) {
-    console.log("requireClientAuth: no token");
     return c.json({ error: "Unauthorized" }, 401);
   }
 
   try {
     const data = await loadData(c.env);
-    console.log("requireClientAuth: data loaded");
     const session = data.clientSessions.find((item) => item.token === token);
     if (session) {
+      if (session.expiresAt && Date.now() > new Date(session.expiresAt).getTime()) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
       const client = data.clients.find((item) => item.id === session.clientId);
       if (!client) {
-        console.log("requireClientAuth: session client not found");
         return c.json({ error: "Unauthorized" }, 401);
       }
       c.set("client", client);
@@ -3090,10 +3041,8 @@ const requireClientAuth = async (c: any, next: () => Promise<void>) => {
     }
 
     // Supabase Auth JWT support (Google/Facebook/Phone).
-    console.log("requireClientAuth: trying Supabase");
     const supabaseUser = await getSupabaseAuthUser(c.env, token);
     if (!supabaseUser) {
-      console.log("requireClientAuth: Supabase auth failed");
       return c.json({ error: "Unauthorized" }, 401);
     }
 
@@ -3126,8 +3075,7 @@ const requireClientAuth = async (c: any, next: () => Promise<void>) => {
       return;
     }
 
-    // First-time Supabase login: create an app client record.
-    console.log("requireClientAuth: creating new client");
+    // First-time Supabase login: create an app client record.;
     const nameFromMeta =
       (supabaseUser.user_metadata?.full_name as string | undefined) ??
       (supabaseUser.user_metadata?.name as string | undefined) ??
@@ -3160,7 +3108,6 @@ const requireClientAuth = async (c: any, next: () => Promise<void>) => {
 const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
   const token = parseAuthorizationToken(c.req.raw);
   if (!token) {
-    console.log("requireAgencyAdminAuth: no token");
     return c.json({ error: "Unauthorized" }, 401);
   }
 
@@ -3192,7 +3139,6 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
         (item) => item.id === session.adminId,
       );
       if (!matchedAdmin) {
-        console.log("requireAgencyAdminAuth: session admin not found");
         return c.json({ error: "Unauthorized" }, 401);
       }
       c.set("agencyAdmin", matchedAdmin);
@@ -3202,10 +3148,8 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
 
     // Supabase Auth JWT support (optional).
     // Security: we only allow JWT auth for agency admins that already exist in app data.
-    console.log("requireAgencyAdminAuth: trying Supabase");
     const supabaseUser = await getSupabaseAuthUser(c.env, token);
     if (!supabaseUser) {
-      console.log("requireAgencyAdminAuth: Supabase auth failed");
       return c.json({ error: "Unauthorized" }, 401);
     }
 
@@ -3225,7 +3169,6 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
         : null);
 
     if (!admin) {
-      console.log("requireAgencyAdminAuth: admin not found");
       return c.json({ error: "Unauthorized" }, 401);
     }
 
@@ -4272,6 +4215,53 @@ const sha256Hex = async (value: string) => {
     .join("");
 };
 
+const hashPassword = async (password: string): Promise<string> => {
+  const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: new TextEncoder().encode(salt), iterations: 100_000, hash: "SHA-256" },
+    keyMaterial,
+    256,
+  );
+  const hash = Array.from(new Uint8Array(bits))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `pbkdf2:${salt}:${hash}`;
+};
+
+const verifyPassword = async (password: string, stored: string): Promise<boolean> => {
+  if (!stored.startsWith("pbkdf2:")) {
+    return password.trim() === stored;
+  }
+  const parts = stored.split(":");
+  if (parts.length !== 3) return false;
+  const [, salt, expectedHash] = parts;
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: new TextEncoder().encode(salt), iterations: 100_000, hash: "SHA-256" },
+    keyMaterial,
+    256,
+  );
+  const hash = Array.from(new Uint8Array(bits))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return hash === expectedHash;
+};
+
 const shouldExposeDevConfirmationCode = (env: Bindings) =>
   env.DEV_EXPOSE_CONFIRMATION_CODE?.trim().toLowerCase() === "true";
 
@@ -4340,7 +4330,6 @@ const supabaseUserCache = new Map<
 >();
 
 const getSupabaseAuthUser = async (env: Bindings, accessToken: string) => {
-  console.log("getSupabaseAuthUser: token length", accessToken.length);
 
   const cached = supabaseUserCache.get(accessToken);
   if (cached && cached.expiresAt > Date.now()) return cached.user;
@@ -5546,7 +5535,7 @@ app.get("/api/health", (c) =>
   c.json({ status: "Server is running", storage: getStorageMode(c.env) }),
 );
 
-app.get("/api/diagnostics", (c) => {
+app.get("/api/diagnostics", requireAgencyAdminAuth, (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   return c.json({
     storage: getStorageMode(c.env),
@@ -6347,6 +6336,7 @@ app.post(
     };
     data.maids.unshift(maid);
     await saveData(c.env, data);
+    upsertMaidEmbedding(c.env, maid as unknown as Record<string, unknown>).catch(() => {});
     return c.json({ maid }, 201);
   }),
 );
@@ -6446,6 +6436,7 @@ app.put(
       updatedAt: now(),
     };
     await saveData(c.env, data);
+    upsertMaidEmbedding(c.env, data.maids[index] as unknown as Record<string, unknown>).catch(() => {});
     return c.json({ maid: data.maids[index] });
   }),
 );
@@ -8158,7 +8149,6 @@ app.post(
       message?: string;
       employerId?: number | null;
       makeScenario?: string;
-      makeUrl?: string;
       source?: string;
       channel?: string;
       conversationId?: string;
@@ -8210,7 +8200,7 @@ app.post(
     data.enquiries.unshift(enquiry);
     await saveData(c.env, data);
 
-    const webhookUrl = toTrimmedString(body?.makeUrl) || toTrimmedString(c.env.MAKE_WEBHOOK_URL);
+    const webhookUrl = toTrimmedString(c.env.MAKE_WEBHOOK_URL);
     let makeTriggered = false;
     let makeDelivery: Record<string, unknown> | null = null;
 
@@ -8415,13 +8405,27 @@ const runAiEndpoint = async (
   data: AppData,
   body: Record<string, unknown>,
 ) => {
-  const input = {
+  const baseInput = {
     ...body,
     message:
       toTrimmedString(body.message) ||
       toTrimmedString(body.prompt) ||
       toTrimmedString(body.task),
   };
+
+  // Semantic search: enrich maid_recommendation input with vector-ranked reference codes.
+  let semanticReferences: string[] = [];
+  if (agentId === "maid_recommendation") {
+    const query = buildRecommendationQuery(baseInput);
+    if (query) {
+      semanticReferences = await searchSimilarMaids(c.env, query).catch(() => []);
+    }
+  }
+
+  const input =
+    semanticReferences.length > 0
+      ? { ...baseInput, semanticReferences }
+      : baseInput;
 
   if (!input.message && agentId !== "maid_recommendation" && agentId !== "admin_analytics") {
     return c.json({ error: "message, prompt, or task is required" }, 400);
@@ -9665,7 +9669,7 @@ app.post("/api/client-auth/register", async (c) => {
     company: body.company?.trim() ?? "",
     phone: body.phone?.trim() ?? "",
     email,
-    password: body.password.trim(),
+    password: await hashPassword(body.password.trim()),
     profileImageUrl: "",
     createdAt: now(),
     emailVerified: false,
@@ -9720,6 +9724,7 @@ app.post("/api/client-auth/confirm", async (c) => {
       token: crypto.randomUUID(),
       clientId: client.id,
       createdAt: now(),
+      expiresAt: new Date(Date.now() + CLIENT_SESSION_TTL_MS).toISOString(),
     };
     data.clientSessions = data.clientSessions.filter(
       (item) => item.clientId !== client.id,
@@ -9814,14 +9819,17 @@ app.post("/api/client-auth/login", async (c) => {
 
   const data = await loadData(c.env);
   const normalizedEmail = normalizeEmail(body.email);
-  const client = data.clients.find(
-    (item) =>
-      normalizeEmail(item.email) === normalizedEmail &&
-      item.password === body.password!.trim(),
+  const clientMatch = data.clients.find(
+    (item) => normalizeEmail(item.email) === normalizedEmail,
   );
-  if (!client) {
+  if (!clientMatch || !(await verifyPassword(body.password!.trim(), clientMatch.password))) {
     return c.json({ error: "Invalid email or password" }, 401);
   }
+  if (!clientMatch.password.startsWith("pbkdf2:")) {
+    clientMatch.password = await hashPassword(body.password!.trim());
+    await saveData(c.env, data);
+  }
+  const client = clientMatch;
 
   if (client.emailVerified === false) {
     return c.json(
@@ -10205,7 +10213,7 @@ app.post("/api/agency-auth/register", async (c) => {
     agencyId: 1,
     username: body.username.trim(),
     email,
-    password: body.password.trim(),
+    password: await hashPassword(body.password.trim()),
     agencyName: body.agencyName.trim(),
     createdAt: now(),
     emailVerified: false,
@@ -10337,7 +10345,6 @@ app.post("/api/agency-auth/resend", async (c) => {
 app.post(
   "/api/agency-auth/login",
   safeApi(async (c) => {
-    console.log("/api/agency-auth/login called");
     const body = await parseBody<{ username?: string; password?: string }>(
       c.req.raw,
     );
@@ -10355,7 +10362,6 @@ app.post(
       console.error("/api/agency-auth/login loadData error:", error);
       return c.json({ error: "Storage unavailable" }, 500);
     }
-    console.log("/api/agency-auth/login auth data loaded");
     const usernameOrEmail = body.username.trim();
     const normalizedIdentifier = usernameOrEmail.toLowerCase();
     const normalizedEmail = isEmailLike(usernameOrEmail)
@@ -10363,21 +10369,31 @@ app.post(
       : "";
     const password = body.password.trim();
 
-    const admin = agencyAdmins.find((item) => {
+    const adminMatch = agencyAdmins.find((item) => {
       const username =
         typeof item.username === "string"
           ? item.username.trim().toLowerCase()
           : "";
       const email =
         typeof item.email === "string" ? normalizeEmail(item.email) : "";
-      const matchesIdentifier =
+      return (
         username === normalizedIdentifier ||
-        (normalizedEmail && email === normalizedEmail);
-      return matchesIdentifier && item.password === password;
+        (normalizedEmail && email === normalizedEmail)
+      );
     });
-    if (!admin) {
+    if (!adminMatch || !(await verifyPassword(password, adminMatch.password))) {
       return c.json({ error: "Invalid username or password" }, 401);
     }
+    if (!adminMatch.password.startsWith("pbkdf2:")) {
+      const newHash = await hashPassword(password);
+      const fullData = await loadData(c.env);
+      const storedAdmin = fullData.agencyAdmins.find((a) => a.id === adminMatch.id);
+      if (storedAdmin) {
+        storedAdmin.password = newHash;
+        await saveData(c.env, fullData);
+      }
+    }
+    const admin = adminMatch;
 
     if (admin.email && admin.emailVerified === false) {
       return c.json(
@@ -10391,7 +10407,6 @@ app.post(
     }
 
     const session = await createAgencyAdminSession(c.env, admin);
-    console.log("/api/agency-auth/login success");
     return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) });
   }),
 );
@@ -10539,7 +10554,7 @@ app.get("/api/direct-sales/clients", requireAgencyAdminAuth, async (c) => {
   return c.json({ clients });
 });
 
-app.post("/api/direct-sales", async (c) => {
+app.post("/api/direct-sales", requireAgencyAdminAuth, async (c) => {
   const body = await parseBody<{
     referenceCode?: string;
     clientId?: number;
@@ -10578,7 +10593,7 @@ app.post("/api/direct-sales", async (c) => {
   return app.fetch(request, c.env);
 });
 
-app.post("/api/direct-sales/:referenceCode", async (c) => {
+app.post("/api/direct-sales/:referenceCode", requireAgencyAdminAuth, async (c) => {
   const body = await parseBody<{
     clientId?: number;
     status?: string;
@@ -12073,6 +12088,18 @@ app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
 
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
+const purgeExpiredClientSessions = async (env: Bindings): Promise<void> => {
+  const data = await loadData(env);
+  const now = Date.now();
+  const before = data.clientSessions.length;
+  data.clientSessions = data.clientSessions.filter(
+    (s) => !s.expiresAt || new Date(s.expiresAt).getTime() > now,
+  );
+  if (data.clientSessions.length < before) {
+    await saveData(env, data);
+  }
+};
+
 export default {
   async scheduled(
     _controller: unknown,
@@ -12133,6 +12160,11 @@ export default {
       runScheduledMarketing(env).catch((error) => {
         console.error("Autonomous marketing scheduled run failed", error);
       }),
+    );
+
+    // Purge expired client sessions from KV blob
+    executionContext.waitUntil(
+      purgeExpiredClientSessions(env).catch(() => {}),
     );
   },
 

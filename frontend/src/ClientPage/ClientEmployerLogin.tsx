@@ -93,7 +93,6 @@ const ClientEmployerLogin = () => {
       });
 
       if (error) throw error;
-      console.log("Signup success:", data);
 
       toast({
         title: "Check your Gmail for verification",
