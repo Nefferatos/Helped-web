@@ -18,8 +18,12 @@ import {
   Heart,
   Shield,
   Clock,
+  Mail,
+  Phone,
+  MessageCircle,
+  Facebook,
 } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
@@ -397,10 +401,21 @@ const GLOBAL_CSS = `
 @keyframes panelIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
 .cm-panel-header {
-  display:flex;align-items:center;justify-content:space-between;gap:0.75rem;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:0.75rem;
   padding:0.85rem 1.25rem;
-  background:linear-gradient(90deg,rgba(14,78,94,0.04),rgba(252,211,77,0.03));
+  background:linear-gradient(
+    90deg,
+    rgba(14,78,94,0.04),
+    rgba(252,211,77,0.03)
+  );
   border-bottom:1px solid var(--rule-2);
+
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 .cm-panel-title {
   display:flex;align-items:center;gap:0.6rem;
@@ -1023,6 +1038,109 @@ const GLOBAL_CSS = `
   border:2px solid rgba(255,255,255,0.25);border-top-color:#fff;
   animation:spin 0.65s linear infinite;
 }
+
+/* ── Footer ── */
+.cm-footer {
+  background: var(--ink);
+  padding: 64px 0 0;
+  position: relative;
+  z-index: 1;
+}
+.cm-footer-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 36px;
+  margin-bottom: 48px;
+}
+@media(min-width:640px) { .cm-footer-grid { grid-template-columns: 1fr 1fr; } }
+@media(min-width:960px) { .cm-footer-grid { grid-template-columns: 1.4fr 1fr 1.2fr 1.2fr 0.8fr; } }
+.cm-footer-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+.cm-footer-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0 0 16px;
+  font-family: 'Inter', sans-serif;
+}
+.cm-footer-link-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cm-footer-link {
+  color: #fff;
+  font-size: 13px;
+  text-decoration: none;
+  transition: color 0.15s;
+  font-family: 'Inter', sans-serif;
+}
+.cm-footer-link:hover { color: var(--amber); }
+.cm-footer-contact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.6;
+}
+.cm-footer-social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(255,255,255,0.18);
+  color: #1877F2;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+.cm-footer-social-btn:hover {
+  color: var(--ink);
+  background: #1877F2;
+  border-color: #1877F2;
+}
+.cm-footer-bottom {
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding: 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.cm-footer-copyright {
+  font-size: 12px;
+  color: #fff;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+}
+.cm-footer-legal {
+  display: flex;
+  gap: 6px;
+}
+.cm-footer-legal-link {
+  font-size: 12px;
+  color: #fff;
+  text-decoration: none;
+  padding: 0 8px;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.15s;
+}
+.cm-footer-legal-link:hover { color: var(--amber); }
 `;
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1433,6 +1551,105 @@ const RequestForm = ({ prefillFilters, onBack }:{ prefillFilters:Filters; onBack
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════════════════════════════ */
+const SiteFooter = () => (
+  <footer className="cm-footer">
+    <div className="cm-footer-inner">
+      <div className="cm-footer-grid">
+
+        {/* Brand */}
+        <div>
+          <h4 style={{ fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 12px", fontFamily: "'Syne', sans-serif" }}>
+            "Find Maids" At The Agency
+          </h4>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7, margin: 0, fontFamily: "'Inter', sans-serif" }}>
+            Matching trusted domestic professionals with families since 2009.
+          </p>
+        </div>
+
+        {/* Quick Links */}
+        <div>
+          <h5 className="cm-footer-heading">Quick Links</h5>
+          <ul className="cm-footer-link-list">
+            {[
+              { label: "Home",         to: "/"             },
+              { label: "Search Maids", to: "/search-maids" },
+              { label: "About Us",     to: "/about"        },
+              { label: "Agency",       to: "/agency"       },
+              { label: "Enquiry",      to: "/enquiry2"     },
+              { label: "FAQ",          to: "/faq"          },
+            ].map((item) => (
+              <li key={item.to}>
+                <Link to={item.to} className="cm-footer-link">{item.label}</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Contact Us */}
+        <div>
+          <h5 className="cm-footer-heading">Contact Us</h5>
+          <ul className="cm-footer-contact-list">
+            <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <MapPin size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>3 Jalan Kukoh, #01-115<br />Singapore 161003</span>
+            </li>
+            <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <Mail size={16} color="var(--amber)" style={{ flexShrink: 0 }} />
+              <a href="mailto:enquiries.j1@gmail.com" className="cm-footer-link">
+                enquiries.j1@gmail.com
+              </a>
+            </li>
+            <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <Phone size={16} color="var(--amber)" style={{ flexShrink: 0 }} />
+              <a href="tel:+6580730757" className="cm-footer-link">8073 0757</a>
+            </li>
+          </ul>
+        </div>
+
+        {/* Opening Hours */}
+        <div>
+          <h5 className="cm-footer-heading">Opening Hours</h5>
+          <ul className="cm-footer-contact-list">
+            <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <Clock size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>Mon to Sun: 11:00am to 11:00pm</span>
+            </li>
+            <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <MessageCircle size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>Other hours: by mobile. If unable to reach us urgently, please SMS.</span>
+            </li>
+          </ul>
+        </div>
+
+        {/* Follow Us */}
+        <div>
+          <h5 className="cm-footer-heading">Follow Us</h5>
+          <div style={{ display: "flex", gap: 10 }}>
+            <a href="#" aria-label="Facebook" className="cm-footer-social-btn">
+              <Facebook size={18} />
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom bar */}
+      <div className="cm-footer-bottom">
+        <p className="cm-footer-copyright">
+          © 2026 "Find Maids" At The Agency. All rights reserved.
+        </p>
+        <div className="cm-footer-legal">
+          {["Privacy", "Terms", "Contact"].map((item) => (
+            <Link key={item} to="/contact" className="cm-footer-legal-link">{item}</Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  </footer>
+);
+
+/* ═══════════════════════════════════════════════════════════════════════════
    MAIN PAGE
 ═══════════════════════════════════════════════════════════════════════════ */
 const ClientMaidsPage = ({
@@ -1547,6 +1764,8 @@ const ClientMaidsPage = ({
   const handleLoginClick=()=>navigate(loginPath);
 
   return (
+    <>
+      {!embedded && (isLoggedIn?<ClientPortalNavbar/>:<PublicSiteNavbar/>)}
     <div className="cm-root">
       <style>{GLOBAL_CSS}</style>
 
@@ -1556,8 +1775,6 @@ const ClientMaidsPage = ({
 
       {/* Top shimmer bar */}
       <div className="cm-shimmer-bar"/>
-
-      {!embedded && (isLoggedIn?<ClientPortalNavbar/>:<PublicSiteNavbar/>)}
 
       {/* ── Hero ── */}
       <div className="cm-hero">
@@ -1864,7 +2081,11 @@ const ClientMaidsPage = ({
           </div>
         )}
       </div>
+
+      {/* ── Footer ── */}
+      {!embedded && <SiteFooter />}
     </div>
+    </>
   );
 };
 

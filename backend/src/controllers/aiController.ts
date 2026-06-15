@@ -131,17 +131,36 @@ const COMPANY_KEYWORDS = [
 ]
 
 const ABOUT_US_PAGE_CONTEXT = [
-  'Rinzin Agency has been trusted since 2005 and places domestic helpers with families in Singapore and internationally.',
-  "The agency specialises in carefully selected domestic helpers from North East India, the Philippines, Myanmar, and beyond, matched to each family's needs.",
-  'In 2005, as a Singaporean Chinese who had travelled India widely, the agency became the first to introduce helpers from Lahaul and Spiti, Himachal Pradesh, and Ladakh to Singapore families.',
-  'RINZIN has been providing quality Indian, Filipino, and Myanmar domestic helpers to Singapore families for many years, building a wider choice of helper origins and backgrounds.',
-  'The agency deals with real people from different cultures and aims to face and solve problems swiftly.',
-  'Its policy line is: The right worker, delivered on time.',
-  'Core expertise includes North East Indian helpers such as Darjeeling and Sikkim maids, Nepalese Hindu helpers, Tibetan Buddhist helpers, Manipur English-speaking helpers, plus Filipino helpers with video interviews available and Myanmar helpers.',
-  'Placement origins include North East Indian, Filipino, Myanmar, South Indian, Indonesian, Punjabi, Lahaul and Spiti, Himachal Pradesh, and Ladakh helpers.',
-  'The agency highlights verified and screened helpers, cultural matching for language, diet, and religious background, SMS crisis support, and pioneer experience since 2005.',
-  'The agency also serves international clients by relocating fresh and experienced helpers to reputable clients in Europe and the UK.',
-].join('\n')
+  // Paragraph 1 — Who we are
+  [
+    'At The Agency (formerly Rinzin Agency Pte. Ltd.), we have been a trusted name in domestic helper placement since 2005.',
+    "We place carefully selected helpers with families in Singapore and internationally, matching each helper to the family's language, dietary, and cultural needs.",
+  ].join(' '),
+
+  // Paragraph 2 — Our origin story
+  [
+    'Our story began in 2005 when, as a Singaporean Chinese with deep ties to India, we became the first agency in Singapore to introduce domestic helpers from Lahaul and Spiti, Himachal Pradesh, and Ladakh.',
+    'Since then, we have steadily expanded our network to include a wider range of origins and backgrounds, giving families more choice than ever before.',
+  ].join(' '),
+
+  // Paragraph 3 — Our philosophy
+  [
+    'We believe in dealing with real people from different cultures — and in facing and solving problems swiftly.',
+    'Our guiding policy is simple: The right worker, delivered on time.',
+  ].join(' '),
+
+  // Paragraph 4 — Our expertise
+  [
+    'Our core expertise covers North East Indian helpers (including Darjeeling, Sikkim, Manipur, Nepalese Hindu, and Tibetan Buddhist backgrounds), Filipino helpers with video interviews available, and Myanmar helpers.',
+    'We also place South Indian, Indonesian, Punjabi, Lahaul and Spiti, Himachal Pradesh, and Ladakh helpers.',
+  ].join(' '),
+
+  // Paragraph 5 — What sets us apart
+  [
+    'Every helper we present is verified, screened, and culturally matched.',
+    'We also offer SMS crisis support throughout the placement and, for international clients, we assist with relocating fresh and experienced helpers to reputable employers in Europe and the UK.',
+  ].join(' '),
+].join('\n\n')
 
 const GENERIC_SEARCH_TERMS = new Set([
   'available',
@@ -186,6 +205,7 @@ const GENERIC_SEARCH_TERMS = new Set([
 
 const FEATURED_MAID_CARD_LIMIT = 10
 const GENERIC_MAID_LIST_CARD_LIMIT = 5
+const ALL_MAIDS_OVERVIEW_LIMIT = 60
 
 const CARD_REQUEST_PATTERN =
   /\b(show|find|recommend|match|shortlist|available|availability|who|which|suitable|helper|helpers|maid|maids|fdw|filipino|indonesian|myanmar|burmese|indian|sri lankan|bangladeshi|transfer|elderly|childcare|infant|disabled|housework|cooking)\b/i
@@ -194,7 +214,7 @@ const CARD_LIST_REQUEST_PATTERN =
   /\b(top|best|show|find|recommend|match|shortlist|list|available|availability|who|which|suitable)\b/i
 
 const MAID_PROFILE_REQUEST_PATTERN =
-  /\b(background|profile|bio|biodata|experience|history|introduction|intro|details|tell me about|information|info)\b/i
+  /\b(background|profile|bio|biodata|experience|history|introduction|intro|details|tell me about|information|info|who is|who's|about|show me|describe|more about|can you tell)\b/i
 
 const MAID_TOPIC_PATTERN =
   /\b(maid|maids|helper|helpers|fdw|filipino|indonesian|myanmar|burmese|indian|sri lankan|bangladeshi|transfer|elderly|childcare|infant|disabled|housework|cooking|cook)\b/i
@@ -204,12 +224,16 @@ const FEE_QUESTION_PATTERN = /\b(fee|fees|cost|costs|price|pricing|salary|salari
 const OFF_TOPIC_PATTERN =
   /\b(weather|sports|football|basketball|movie|movies|song|joke|recipe|coding|programming|homework|math|bitcoin|crypto|stock|stocks|politics|president|news)\b/i
 
+// Pronoun pattern used to detect follow-up questions that refer back to a
+// previously-discussed maid (e.g. "what is the rating of her english?",
+// "is he available next month?", "how old is she?")
+const PRONOUN_REFERENCE_PATTERN = /\b(her|him|he|she|his|hers|their|they|them|that maid|that helper|this maid|this helper)\b/i
+
 const isDisplayablePublicMaid = (maid: MaidRecord) => {
   const status = String(maid.status ?? '').trim().toLowerCase()
   if (!status) return true
   return !/\b(unavailable|inactive|rejected|blacklist|blacklisted|hidden|archived|deleted)\b/.test(status)
 }
-
 
 const normalizeTerms = (text: string) =>
   text
@@ -272,6 +296,17 @@ const isMaidProfileQuestion = (message: string) =>
 const isOffTopicQuestion = (message: string) =>
   OFF_TOPIC_PATTERN.test(message) && !isCompanyQuestion(message) && !isMaidSearchQuestion(message)
 
+const isFeeOrPricingQuestion = (message: string) => FEE_QUESTION_PATTERN.test(message)
+
+/**
+ * Detects "follow-up" questions that use a pronoun ("her", "she", "his",
+ * "he", "their") to refer back to a maid discussed earlier in the
+ * conversation, without naming the maid or matching any maid-topic keyword.
+ * e.g. "what is the rating of her english?"
+ */
+const isPronounFollowUpQuestion = (message: string) =>
+  PRONOUN_REFERENCE_PATTERN.test(message)
+
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 
@@ -287,6 +322,18 @@ const compactList = (value: unknown) => {
 }
 
 const formatMoneyText = (value: string) => value.replace(/\bS\$/g, '$')
+
+/** Strip HTML tags and decode basic entities from rich-text fields */
+const stripHtml = (value: string): string =>
+  value
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 
 const normalizeComparableText = (value: string) =>
   value
@@ -308,6 +355,97 @@ const extractMaidReferenceFromPath = (value: unknown) => {
   return match ? decodeURIComponent(match[1] ?? '').trim() : ''
 }
 
+// ---------------------------------------------------------------------------
+// Conversation state cache (for pronoun follow-up resolution)
+// ---------------------------------------------------------------------------
+
+const CONVERSATION_STATE_TTL_MS = 30 * 60 * 1000 // 30 minutes
+const CONVERSATION_STATE_SWEEP_INTERVAL_MS = 10 * 60 * 1000 // 10 minutes
+const CONVERSATION_STATE_MAX_ENTRIES = 5000
+
+type ConversationState = {
+  lastMaidReferenceCode: string
+  updatedAt: number
+}
+
+const conversationStateStore = new Map<string, ConversationState>()
+
+const sweepConversationStateStore = () => {
+  const now = Date.now()
+  for (const [key, state] of conversationStateStore.entries()) {
+    if (now - state.updatedAt > CONVERSATION_STATE_TTL_MS) {
+      conversationStateStore.delete(key)
+    }
+  }
+  if (conversationStateStore.size > CONVERSATION_STATE_MAX_ENTRIES) {
+    const entries = [...conversationStateStore.entries()].sort(
+      (a, b) => a[1].updatedAt - b[1].updatedAt
+    )
+    const excess = entries.length - CONVERSATION_STATE_MAX_ENTRIES
+    for (let i = 0; i < excess; i++) {
+      conversationStateStore.delete(entries[i]![0])
+    }
+  }
+}
+
+let conversationStateSweepTimer: NodeJS.Timeout | null = null
+const ensureConversationStateSweepScheduled = () => {
+  if (conversationStateSweepTimer) return
+  conversationStateSweepTimer = setInterval(
+    sweepConversationStateStore,
+    CONVERSATION_STATE_SWEEP_INTERVAL_MS
+  )
+  conversationStateSweepTimer.unref?.()
+}
+ensureConversationStateSweepScheduled()
+
+const getLastDiscussedMaidReference = (conversationId: string): string => {
+  const state = conversationStateStore.get(conversationId)
+  if (!state) return ''
+  if (Date.now() - state.updatedAt > CONVERSATION_STATE_TTL_MS) {
+    conversationStateStore.delete(conversationId)
+    return ''
+  }
+  return state.lastMaidReferenceCode
+}
+
+const setLastDiscussedMaidReference = (conversationId: string, referenceCode: string) => {
+  if (!conversationId || !referenceCode) return
+  conversationStateStore.set(conversationId, {
+    lastMaidReferenceCode: referenceCode,
+    updatedAt: Date.now(),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Skill / language rating helpers
+// ---------------------------------------------------------------------------
+
+const ratingLabel = (raw: unknown): string => {
+  const str = String(raw ?? '').trim()
+  const numeric = parseFloat(str.replace(/\/.*$/, '').trim())
+  if (isNaN(numeric)) return ''
+  if (numeric >= 5) return 'excellent'
+  if (numeric >= 4) return 'good'
+  if (numeric >= 3) return 'adequate'
+  if (numeric >= 2) return 'basic'
+  return 'limited'
+}
+
+const languageLevelLabel = (raw: unknown): string => {
+  const level = String(raw ?? '').trim().toLowerCase()
+  if (!level) return ''
+  if (/\b(excellent|fluent|native|very\s*good)\b/.test(level)) return 'fluently'
+  if (/\bgood\b/.test(level)) return 'well'
+  if (/\bconversational\b/.test(level)) return 'conversationally'
+  if (/\b(little|basic|poor|fair|limited|some)\b/.test(level)) return 'a little'
+  return level
+}
+
+// ---------------------------------------------------------------------------
+// Work area / skill descriptions
+// ---------------------------------------------------------------------------
+
 const describeWorkAreas = (maid: MaidRecord) =>
   Object.entries(asRecord(maid.workAreas))
     .map(([area, raw]) => {
@@ -325,6 +463,102 @@ const describeWorkAreas = (maid: MaidRecord) =>
     .slice(0, 8)
     .join('; ')
 
+/**
+ * Returns a natural-language sentence describing language ability,
+ * e.g. "She speaks English well and understands a little Mandarin."
+ */
+const describeLanguagesSentence = (maid: MaidRecord): string => {
+  const entries = Object.entries(maid.languageSkills ?? {})
+    .filter(([, level]) => String(level ?? '').trim())
+    .slice(0, 5)
+
+  if (entries.length === 0) return ''
+
+  const fluent: string[] = []
+  const basic: string[] = []
+
+  for (const [lang, level] of entries) {
+    const label = languageLevelLabel(level)
+    const cleanLang = lang.replace(/\s*\/\s*/g, '/')
+    if (/fluently|well|conversationally/.test(label)) {
+      fluent.push(cleanLang)
+    } else {
+      basic.push(cleanLang)
+    }
+  }
+
+  const joinList = (items: string[]): string => {
+    if (items.length === 1) return items[0]!
+    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+  }
+
+  const parts: string[] = []
+  if (fluent.length > 0) parts.push(`communicates well in ${joinList(fluent)}`)
+  if (basic.length > 0) parts.push(`has a working knowledge of ${joinList(basic)}`)
+
+  if (parts.length === 0) return ''
+  const sentence = parts.join(', and ')
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1) + '.'
+}
+
+/**
+ * Returns a natural-language sentence for the top 3 skills,
+ * e.g. "She is particularly good at cooking and has experience with elderly care."
+ */
+const describeTopSkillsSentence = (maid: MaidRecord): string => {
+  const scored = Object.entries(asRecord(maid.workAreas))
+    .map(([area, raw]) => {
+      const config = asRecord(raw)
+      const evaluation = compactList(config.evaluation)
+      const experience = Boolean(config.experience)
+      const willing = Boolean(config.willing)
+      const years = compactList(config.yearsOfExperience)
+
+      const ratingMatch = evaluation.match(/^(\d(?:\.\d)?)\s*\/\s*5/)
+      const numericRating = ratingMatch ? parseFloat(ratingMatch[1] ?? '0') : 0
+      const label = numericRating ? ratingLabel(numericRating) : ''
+
+      const score =
+        numericRating >= 4 ? 4 :
+        experience ? 3 :
+        willing ? 2 :
+        numericRating >= 3 ? 1 :
+        0
+
+      return { area, score, label, years, experience }
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+
+  if (scored.length === 0) return ''
+
+  const verbPhrase = (score: number): string => {
+    if (score >= 4) return 'excels at'
+    if (score === 3) return 'is capable in'
+    return 'is willing to assist with'
+  }
+
+  const byVerb: Record<string, string[]> = {}
+  for (const item of scored) {
+    const verb = verbPhrase(item.score)
+    if (!byVerb[verb]) byVerb[verb] = []
+    byVerb[verb]!.push(item.area.toLowerCase())
+  }
+
+  const clauses = Object.entries(byVerb).map(([verb, areas]) => {
+    const list = areas.length === 1
+      ? areas[0]!
+      : `${areas.slice(0, -1).join(', ')} and ${areas[areas.length - 1]}`
+    return `${verb} ${list}`
+  })
+
+  if (clauses.length === 1) return `She ${clauses[0]}.`
+  const last = clauses.pop()
+  return `She ${clauses.join(', ')}, and ${last}.`
+}
+
+// Legacy helpers kept for the Groq prompt context
 const describeLanguages = (maid: MaidRecord) =>
   Object.entries(maid.languageSkills ?? {})
     .filter(([, level]) => String(level ?? '').trim())
@@ -393,7 +627,7 @@ const describeMaidForPrompt = (maid: MaidRecord) => {
     `Expected salary: ${compactList(intro.expectedSalary) || 'N/A'}`,
     `Present salary: ${compactList(intro.presentSalary) || 'N/A'}`,
     `Availability: ${compactList(intro.availability) || compactList(skills.availabilityRemark) || 'N/A'}`,
-    `Public intro: ${compactList(intro.publicIntro) || 'N/A'}`,
+    `Public intro: ${stripHtml(compactList(intro.publicIntro)) || 'N/A'}`,
     `Languages: ${languageSkills || 'N/A'}`,
     `Work skills: ${describeWorkAreas(maid) || 'N/A'}`,
     `Employment: ${employmentSummary || 'N/A'}`,
@@ -444,10 +678,18 @@ const toFeaturedMaid = (maid: MaidRecord) => ({
     null,
 })
 
+const extractRequestedCount = (message: string): number | null => {
+  const match = message.match(/\b(?:list|show|top|give\s+me|find|recommend|shortlist)?\s*(\d+)\s*(?:maid|helper|fdw|filipino|myanmar|indonesian|indian|profile)?s?\b/i)
+  if (!match) return null
+  const n = parseInt(match[1] ?? '0', 10)
+  return n >= 1 && n <= 20 ? n : null
+}
+
 const pickFeaturedMaidRecords = (message: string, maids: MaidRecord[]) => {
   const terms = normalizeTerms(message)
   const genericListRequest = isGenericMaidListRequest(message, terms)
-  const limit = genericListRequest ? GENERIC_MAID_LIST_CARD_LIMIT : FEATURED_MAID_CARD_LIMIT
+  const requestedCount = extractRequestedCount(message)
+  const limit = requestedCount ?? (genericListRequest ? GENERIC_MAID_LIST_CARD_LIMIT : FEATURED_MAID_CARD_LIMIT)
 
   const publicMaids = maids.filter((maid) => maid.isPublic && isDisplayablePublicMaid(maid))
   const scored = publicMaids.map((maid) => {
@@ -472,54 +714,167 @@ const pickFeaturedMaidRecords = (message: string, maids: MaidRecord[]) => {
 const pickFeaturedMaids = (message: string, maids: MaidRecord[]) =>
   pickFeaturedMaidRecords(message, maids).map(toFeaturedMaid)
 
-const buildMaidCardIntro = (maids: MaidRecord[]) => {
-  if (maids.length === 0) return ''
-  if (maids.length === 1) {
-    const maid = maids[0]
-    const intro = asRecord(maid.introduction)
-    const expectedSalary = compactList(intro.expectedSalary)
-    const availability = compactList(intro.availability)
-    const publicIntro = compactList(intro.publicIntro)
-    const languages = describeLanguages(maid)
-    const bestSkills = describeBestSkills(maid) || describeWorkAreas(maid)
-    const category = [maid.nationality, maid.type].filter(Boolean).join(' ')
+/**
+ * Builds a compact, full-database overview of every public, displayable maid
+ * so the AI is aware of the entire available pool.
+ */
+const buildAllMaidsOverview = (maids: MaidRecord[]) => {
+  const publicMaids = maids.filter((maid) => maid.isPublic && isDisplayablePublicMaid(maid))
 
-    return formatMoneyText(
-      [
-        `Sure. ${maid.fullName} (${maid.referenceCode}) is ${category ? `a ${category}` : 'one of our public helper profiles'}${
-          maid.status ? ` with status ${maid.status}` : ''
-        }.`,
-        bestSkills ? `This helper is strong in ${bestSkills}.` : '',
-        languages ? `This helper can speak ${languages}.` : '',
-        availability ? `Availability: ${availability}.` : '',
-        expectedSalary ? `Expected salary: ${expectedSalary}.` : '',
-        publicIntro ? `Background note: ${publicIntro}.` : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    )
+  if (publicMaids.length === 0) {
+    return 'No public helper profiles are currently available in the database.'
   }
 
-  const heading =
-    maids.length === GENERIC_MAID_LIST_CARD_LIMIT && maids.every(isNewMaid)
-      ? `Certainly, here are ${maids.length} New Maid profiles you may review:`
-      : `Certainly, here are ${maids.length} public helper profiles you may review:`
-
-  const lines = maids.map((maid, index) => {
-    const languages = describeLanguages(maid)
-    const bestSkills = describeBestSkills(maid)
+  const lines = publicMaids.slice(0, ALL_MAIDS_OVERVIEW_LIMIT).map((maid) => {
     const category = [maid.nationality, maid.type].filter(Boolean).join(', ')
-    const highlights = [
-      `${maid.fullName} (${maid.referenceCode}) is ${category ? `${category}` : 'a helper profile'}`,
-      bestSkills ? `best suited for ${bestSkills}` : '',
-      languages ? `speaks ${languages}` : '',
-    ].filter(Boolean)
-
-    return `${index + 1}. ${highlights.join(', ')}.`
+    const status = maid.status ? `, status: ${maid.status}` : ''
+    return `- ${maid.fullName} (${maid.referenceCode})${category ? ` - ${category}` : ''}${status}`
   })
 
-  return formatMoneyText([heading, ...lines].join('\n'))
+  const remaining = publicMaids.length - lines.length
+  if (remaining > 0) {
+    lines.push(`...and ${remaining} more public helper profile(s) in the database.`)
+  }
+
+  return [`Total public helper profiles available: ${publicMaids.length}`, ...lines].join('\n')
 }
+
+// ---------------------------------------------------------------------------
+// buildMaidCardIntro — plain-text, no markdown syntax
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a polished, readable introduction for a single maid.
+ * Output is plain text — no markdown bold, italic, or underscore syntax.
+ */
+const buildSingleMaidIntro = (maid: MaidRecord): string => {
+  const intro = asRecord(maid.introduction)
+  const skills = asRecord(maid.skillsPreferences)
+  const expectedSalary = compactList(intro.expectedSalary)
+  const availability = compactList(intro.availability) || compactList(skills.availabilityRemark)
+  const publicIntro = stripHtml(compactList(intro.publicIntro))
+  const nationality = maid.nationality || ''
+  const type = maid.type || ''
+  const firstName = maid.fullName.split(' ')[0] ?? maid.fullName
+
+  // Paragraph 1 — Opening
+  const typeLabel = type ? type.replace(/maid/i, '').trim() : ''
+  const categoryPhrase = [typeLabel, nationality, 'domestic helper'].filter(Boolean).join(' ')
+  const firstSentenceOfIntro = publicIntro ? publicIntro.split('.')[0]?.trim() : ''
+  const backgroundHint = firstSentenceOfIntro ? ` — ${firstSentenceOfIntro.charAt(0).toLowerCase()}${firstSentenceOfIntro.slice(1)}` : ''
+  const opening = `Meet ${maid.fullName} (${maid.referenceCode}), a ${categoryPhrase}${backgroundHint}.`
+
+  // Paragraph 2 — Skills & duties
+  const skillsSentence = describeTopSkillsSentence(maid)
+  const duties = Object.entries(asRecord(maid.workAreas))
+    .filter(([, raw]) => {
+      const c = asRecord(raw)
+      return c.willing || c.experience
+    })
+    .map(([area]) => area.toLowerCase())
+    .slice(0, 6)
+  const dutiesLine = duties.length > 0
+    ? `She is confident handling ${duties.slice(0, -1).join(', ')}${duties.length > 1 ? ', and ' : ''}${duties[duties.length - 1]}.`
+    : ''
+  const skillsPara = [skillsSentence, dutiesLine].filter(Boolean).join(' ')
+
+  // Paragraph 3 — Languages & dietary
+  const languageSentence = describeLanguagesSentence(maid)
+  const dietary = compactList((asRecord(maid.skillsPreferences)).dietaryHandling)
+  const dietaryLine = dietary ? `She is also comfortable ${dietary.toLowerCase()}.` : ''
+  const langPara = [languageSentence, dietaryLine].filter(Boolean).join(' ')
+
+  // Paragraph 4 — Availability & salary (plain-text labels, no markdown)
+  const availSalaryLines = [
+    availability ? `Availability: ${availability}` : '',
+    expectedSalary ? `Expected Salary: ${expectedSalary}` : '',
+  ].filter(Boolean).join('\n')
+
+  // Paragraph 5 — Closing
+  const closing = `With her dedication and professional attitude, ${firstName} is ready to support your household with genuine care and commitment.`
+
+  return formatMoneyText(
+    [opening, skillsPara, langPara, availSalaryLines, closing]
+      .filter(Boolean)
+      .join('\n\n')
+  )
+}
+
+/**
+ * Helper type label for multi-maid cards.
+ */
+const getMaidTypeLabel = (maid: MaidRecord): string => {
+  const type = (maid.type || '').toLowerCase()
+  if (/new|fresh/.test(type)) return 'New to Singapore'
+  if (/transfer/.test(type)) return 'Transfer'
+  if (/ex-sing|ex sing/.test(type)) return 'Ex-Singapore'
+  if (/ex-mw|myanmar/.test(type)) return 'Ex-Overseas'
+  return maid.type || ''
+}
+
+/**
+ * Builds a numbered recommendation list with a warm, plain-text intro per maid.
+ * No markdown underscores, asterisks, or raw syntax — just clean readable text.
+ */
+const buildMultiMaidIntro = (maids: MaidRecord[]): string => {
+  const allNew = maids.every(isNewMaid)
+  const heading = allNew
+    ? `We are pleased to present ${maids.length} new helper profile${maids.length > 1 ? 's' : ''} for your consideration:`
+    : `Here are our top ${maids.length} recommended helper${maids.length > 1 ? 's' : ''} based on your request:`
+
+  const entries = maids.map((maid, index) => {
+    const intro = asRecord(maid.introduction)
+    const typeLabel = getMaidTypeLabel(maid)
+    const category = [typeLabel, maid.nationality, 'helper'].filter(Boolean).join(' ')
+
+    // Hook from public intro — first sentence only, stripped of HTML
+    const rawIntro = stripHtml(compactList(intro.publicIntro))
+    const hook = rawIntro
+      ? rawIntro.split('.')[0]?.trim() + '.'
+      : ''
+
+    // Skills in plain natural English — no raw ratings
+    const skillsSentence = describeTopSkillsSentence(maid)
+
+    // Language in plain, grouped English
+    const languageSentence = describeLanguagesSentence(maid)
+
+    const availability = compactList(intro.availability)
+    const expectedSalary = compactList(intro.expectedSalary)
+
+    // Availability & salary — plain-text labels, no markdown pipes
+    const availLine = availability ? `Availability: ${availability}` : ''
+    const salaryLine = expectedSalary ? `Expected Salary: ${expectedSalary}` : ''
+
+    // Entry header — name and reference as plain text (no bold markdown sent to raw chat)
+    const header = `${index + 1}. ${maid.fullName} (${maid.referenceCode})`
+    const subHeader = category
+
+    // Body: hook, then skills, then languages, then availability/salary
+    const bodyLines = [
+      hook,
+      skillsSentence,
+      languageSentence,
+      availLine,
+      salaryLine,
+    ].filter(Boolean)
+
+    return [header, subHeader, ...bodyLines].join('\n')
+  })
+
+  const closing = 'Tap any profile card below for full details, or ask me about a specific helper by name.'
+
+  return formatMoneyText([heading, ...entries, closing].join('\n\n'))
+}
+
+const buildMaidCardIntro = (maids: MaidRecord[]): string => {
+  if (!Array.isArray(maids) || maids.length === 0) return ''
+  const first = maids[0]
+  if (maids.length === 1 && first) return buildSingleMaidIntro(first)
+  return buildMultiMaidIntro(maids)
+}
+
+// ---------------------------------------------------------------------------
 
 const shouldShowMaidCards = (message: string) => {
   return isMaidCardListQuestion(message) && !isCompanyQuestion(message)
@@ -533,54 +888,72 @@ const fallbackReceptionistResponse = (
   companyProfile: CompanyProfileRecord | null
 ) => {
   if (isOffTopicQuestion(message)) {
-    return "I'm sorry, I can only help with our maid agency services, company details, hiring questions, and available public maid profiles."
+    return "I'm sorry, but I'm only able to help with our maid agency services, company details, hiring questions, and available helper profiles."
   }
 
   if (isCompanyQuestion(message) && companyProfile) {
-    const lines = isAgencyBackgroundQuestion(message)
-      ? [
-          companyProfile.company_name || companyProfile.short_name,
-          ABOUT_US_PAGE_CONTEXT,
-          companyProfile.about_us ? `Additional company note: ${companyProfile.about_us}` : '',
-        ]
-      : [
+    if (isAgencyBackgroundQuestion(message)) {
+      const sections = [
+        companyProfile.company_name || companyProfile.short_name,
+        ABOUT_US_PAGE_CONTEXT,
+        companyProfile.about_us ? `Additional company note: ${companyProfile.about_us}` : '',
+      ].filter(Boolean)
+
+      return formatMoneyText(sections.join('\n\n'))
+    }
+
+    const sections = [
       companyProfile.company_name || companyProfile.short_name,
       companyProfile.license_no ? `License: ${companyProfile.license_no}` : '',
       [companyProfile.address_line1, companyProfile.address_line2, companyProfile.postal_code, companyProfile.country]
         .filter(Boolean)
         .join(', '),
-      companyProfile.contact_phone ? `Phone: ${companyProfile.contact_phone}` : '',
-      companyProfile.contact_email ? `Email: ${companyProfile.contact_email}` : '',
-      companyProfile.contact_website ? `Website: ${companyProfile.contact_website}` : '',
+      [
+        companyProfile.contact_phone ? `Phone: ${companyProfile.contact_phone}` : '',
+        companyProfile.contact_email ? `Email: ${companyProfile.contact_email}` : '',
+        companyProfile.contact_website ? `Website: ${companyProfile.contact_website}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
       companyProfile.office_hours_regular ? `Office hours: ${companyProfile.office_hours_regular}` : '',
       companyProfile.about_us ? companyProfile.about_us : '',
-        ]
-    .filter(Boolean)
+    ].filter(Boolean)
 
-    return formatMoneyText(lines.join('\n'))
+    return formatMoneyText(sections.join('\n\n'))
   }
 
-  if (relevantFaqs.length > 0) {
-    return formatMoneyText(relevantFaqs
-      .map((faq) => `${faq.a}`)
-      .join('\n\n')
-      .slice(0, 900))
+  if (isFeeOrPricingQuestion(message) && relevantFaqs.length > 0) {
+    return formatMoneyText(
+      relevantFaqs
+        .map((faq) => faq.a)
+        .join('\n\n')
+        .slice(0, 900)
+    )
   }
 
   if (relevantMaids.length > 0) {
     return buildMaidCardIntro(relevantMaids).slice(0, 1400)
   }
 
+  if (relevantFaqs.length > 0) {
+    return formatMoneyText(
+      relevantFaqs
+        .map((faq) => faq.a)
+        .join('\n\n')
+        .slice(0, 900)
+    )
+  }
+
   if (isMaidProfileQuestion(message)) {
-    return 'Sure, I can help with a maid profile background. Please share the maid name or reference code, or open the maid profile page and ask me again from there.'
+    return 'Sure, I can help with a helper profile background.\n\nPlease share the helper name or reference code, or open the profile page and ask me again from there.'
   }
 
   if (featuredMaids.length > 0) {
     const names = featuredMaids.map((maid) => `${maid.fullName} (${maid.referenceCode})`).join(', ')
-    return `I found the top ${featuredMaids.length} available public helpers that may fit: ${names}. You can review their profile cards below.`
+    return `I found the top ${featuredMaids.length} available helpers that may be a great fit:\n\n${names}\n\nYou can review their profile cards below.`
   }
 
-  return "I can help with helper recommendations, maid skills, company details, salary ranges, levy, fees, documents, insurance, MOM obligations, and hiring questions. Tell me what you need and I'll answer from our available information."
+  return "I can help with helper recommendations, skills, company details, salary ranges, levy, fees, documents, insurance, and hiring questions.\n\nLet me know what you need and I'll be happy to assist."
 }
 
 const callGroqReceptionist = async (params: {
@@ -589,6 +962,8 @@ const callGroqReceptionist = async (params: {
   relevantMaids: MaidRecord[]
   featuredMaids: ReturnType<typeof pickFeaturedMaids>
   companyProfile: CompanyProfileRecord | null
+  allMaids: MaidRecord[]
+  isPronounFollowUp: boolean
 }) => {
   const apiKey = process.env.GROQ_API_KEY?.trim() || process.env.AI_RECEPTIONIST_API_KEY?.trim()
   if (!apiKey) return null
@@ -601,6 +976,7 @@ const callGroqReceptionist = async (params: {
     params.relevantMaids.length > 0
       ? params.relevantMaids.map(describeMaidForPrompt).join('\n\n---\n\n')
       : 'No matching public maid profiles.'
+  const allMaidsOverview = buildAllMaidsOverview(params.allMaids)
   const whatsappLink = buildWhatsAppLink(params.companyProfile)
   const companyContext = params.companyProfile
     ? [
@@ -634,20 +1010,73 @@ const callGroqReceptionist = async (params: {
     body: JSON.stringify({
       model: GROQ_MODEL,
       temperature: 0.35,
-      max_tokens: 450,
+      max_tokens: 1200,
       messages: [
         {
           role: 'system',
-          content:
-            'You are the AI Receptionist for a Singapore maid agency. Answer naturally using only the supplied FAQ, company, and maid profile context.\n\nHIRING INTENT: Treat ANY of these as hiring intent and respond by showcasing available maids: "looking for a maid", "need help at home", "help around the house", "need a helper", "domestic helper", "someone to cook/clean", "need childcare help", "someone for elderly care", "how much does it cost", "what maids do you have". Never refuse these as off-topic.\n\nFEES: Never state any specific dollar amount, MOM levy figure, insurance cost, or placement fee — even if you know them from general knowledge, because rates change and the agency must quote accurately. Always say "Contact us for an accurate fee breakdown."\n\nWHATSAPP: When asked for WhatsApp, output the full WhatsApp link URL from the company context AND the human-readable number. Never show just the number alone.\n\nURGENT: For anything described as urgent, give the phone number and WhatsApp link URL in your FIRST sentence before asking follow-up questions.\n\nPROFILE CARDS: Mention profile cards only when the profile cards section lists specific maids. If profile cards are available, introduce every listed maid by name and reference code, in the same order, without skipping any card.\n\nMAID BACKGROUND: When the user asks about a maid by name or reference code, summarize the supplied maid profile context: nationality, type/status, salary if present, availability, languages, skills, employment history, and public introduction. Do not invent missing biodata.\n\nOFF-TOPIC: If the question is truly unrelated to maids, hiring, or the agency, politely redirect. Keep answers concise and helpful.',
+          content: [
+            'You are the AI Receptionist for a Singapore maid agency. Always be warm, polite, professional, and helpful. Answer naturally using only the supplied FAQ, company, and maid profile context.',
+
+            'CRITICAL — PLAIN TEXT ONLY: This is a chat widget. Do NOT use any markdown syntax in your replies. That means no asterisks (**bold**), no underscores (_italic_), no backticks, no hash headers. Write only plain conversational text. Use line breaks between paragraphs to aid readability.',
+
+            'FORMATTING & SPACING: Write in short, well-spaced paragraphs. Separate distinct points with a blank line so the message is easy to read. Avoid long unbroken walls of text. Keep sentences clear and concise.',
+
+            'MAID INTRODUCTIONS: When introducing maid profiles, always write in warm, natural sentences. Do not dump raw data. Instead:\n- Describe their key strengths in plain English (e.g. "She is particularly good at cooking and elderly care").\n- Mention languages they speak naturally (e.g. "She communicates well in English and understands a little Mandarin").\n- Keep each profile introduction to 2-3 sentences.\n- Use their name and reference code as a plain-text header like: "1. Jane Doe (REF-001)".\n- Skill ratings (1-5 scale): 5 = excellent, 4 = good, 3 = adequate, 2 = basic, 1 = limited. Translate these into natural phrases — do NOT print the numbers.',
+
+            'HIRING INTENT: Treat ANY of these as hiring intent and respond by showcasing available maids: "looking for a maid", "need help at home", "help around the house", "need a helper", "domestic helper", "someone to cook/clean", "need childcare help", "someone for elderly care", "what maids do you have", "show me available helpers". Never refuse these as off-topic.',
+
+            `MAID RECOMMENDATION LIST: When listing multiple helpers, write a clean plain-text card for EACH maid in the "Profile cards available" list — never skip any. Use this EXACT plain-text format (no markdown symbols):
+
+[Number]. [Full Name] ([Reference Code])
+[Type and nationality, e.g. "New to Singapore Filipino helper"]
+[OPTIONAL: One short hook sentence from their background — only if publicIntro is available. Strip any HTML. First sentence only.]
+[Skills in plain natural English — e.g. "She excels at cooking and elderly care." NO numbers, NO rating labels like "(good)" or "(adequate)".]
+[Language sentence — e.g. "She communicates well in English and Tagalog, and has a working knowledge of Mandarin."]
+Availability: [value]
+Expected Salary: [value]
+
+After ALL profiles, close with this plain line: "Tap any profile card below for full details, or ask me about a specific helper by name."`,
+
+            'FEES & PRICING QUESTIONS: If the customer is asking about fees, costs, pricing, salary ranges, the maid levy, loans, or insurance, answer ONLY in clear, polite text using the FAQ context. Do NOT suggest, list, mention, or showcase any specific maid profiles in your reply for these questions.',
+
+            'FEES (amounts): Never state any specific dollar amount, MOM levy figure, insurance cost, or placement fee. Always say "Contact us for an accurate fee breakdown."',
+
+            'FULL DATABASE AWARENESS: The "All available helper profiles" section lists every public helper currently in the database. Use this to answer general questions accurately. Do not dump this entire list to the customer unless they explicitly ask.',
+
+            'WHATSAPP: When asked for WhatsApp, output the full WhatsApp link URL from the company context AND the human-readable number.',
+
+            'URGENT: For anything described as urgent, give the phone number and WhatsApp link URL in your FIRST sentence.',
+
+            'PROFILE CARDS: Mention profile cards only when the profile cards section lists specific maids AND the question is a hiring/availability question. Introduce every listed maid by name and reference code.',
+
+            `MAID BACKGROUND (single profile): When the user asks about a specific maid by name or reference code, write a warm, professional introduction in this EXACT plain-text structure — each section as its own paragraph:
+
+PARAGRAPH 1 — Opening: "Meet [Full Name] ([Reference Code]), a/an [type] [nationality] domestic helper[, add one compelling detail from their background if available]."
+
+PARAGRAPH 2 — Skills and duties: Describe their top 2-3 work skills in plain, confident English. Then list the specific household tasks they can handle in flowing sentences. Use skill ratings as a guide (4-5 = skilled/experienced, 3 = capable) but DO NOT write ratings or numbers — translate them into natural phrases like "skilled in", "experienced with", "capable of", "provides attentive care for".
+
+PARAGRAPH 3 — Languages and dietary: State how they communicate (e.g. "She communicates well in English and Tagalog"). If dietary or religious preferences are known, mention them here.
+
+PARAGRAPH 4 — Availability and salary: State availability and expected salary clearly as plain lines. If multiple salary options exist, list each on its own line with a dash prefix.
+
+PARAGRAPH 5 — Closing: End with one warm sentence about their attitude and readiness to support a household. Do NOT invent details not present in the profile context.`,
+
+            'FOLLOW-UP QUESTIONS ABOUT A SPECIFIC HELPER: The "Currently discussed helper" context below identifies the helper the customer is asking about. When the customer asks a short follow-up question — e.g. "what is her English like?", "is she available next month?", "what is her expected salary?" — answer ONLY that specific question about THAT helper. Translate raw ratings/levels into plain English (e.g. a language level of "Good" means "Her English is good — she communicates well."). Keep the answer brief — 1 to 3 sentences.',
+
+            'OFF-TOPIC: If the question is truly unrelated to maids, hiring, or the agency, politely redirect.',
+          ].join('\n\n'),
         },
         {
           role: 'user',
           content: [
             `Customer question: ${params.message}`,
+            params.isPronounFollowUp
+              ? 'NOTE: This is a pronoun follow-up question about the "Currently discussed helper" below. Answer only the specific question asked about that helper, using their profile data. Do not use the FAQ context for this reply.'
+              : '',
             `FAQ context:\n${faqContext}`,
             `Company context:\n${companyContext}`,
-            `Public maid profile context:\n${maidContext}`,
+            `All available helper profiles (full database overview):\n${allMaidsOverview}`,
+            `Currently discussed helper / matched profile context:\n${maidContext}`,
             `Profile cards available: ${
               params.featuredMaids.length > 0
                 ? params.featuredMaids
@@ -655,18 +1084,60 @@ const callGroqReceptionist = async (params: {
                     .join(', ')
                 : 'none'
             }`,
-          ].join('\n\n'),
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
         },
       ],
     }),
   })
 
-  if (!response.ok) return null
+  if (!response.ok) {
+    console.error(`[callGroqReceptionist] Groq API error: ${response.status} ${response.statusText}`)
+    try {
+      const errBody = await response.text()
+      console.error('[callGroqReceptionist] Groq error body:', errBody)
+    } catch (_) { /* ignore */ }
+    return null
+  }
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>
   }
-  return data.choices?.[0]?.message?.content?.trim() || null
+
+  // Strip any residual markdown syntax the model may have produced despite instructions
+  const raw = data.choices?.[0]?.message?.content?.trim() || null
+  return raw ? stripMarkdownSyntax(raw) : null
 }
+
+/**
+ * Strips common markdown formatting characters from AI-generated text so the
+ * output renders cleanly in a plain-text chat widget.
+ *
+ * Rules applied (in order):
+ *   1. **bold** / __bold__  → bold (content preserved, symbols removed)
+ *   2. *italic* / _italic_  → italic (content preserved, symbols removed)
+ *   3. `code`               → code (backticks removed)
+ *   4. Leading # headers    → plain line (# symbols and trailing space removed)
+ *   5. Markdown table pipes → replaced with spaces / dashes for readability
+ *   6. Trailing whitespace per line cleaned up
+ */
+const stripMarkdownSyntax = (text: string): string =>
+  text
+    // Bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    // Italic: *text* or _text_ — use word-boundary approach to avoid mangling normal underscores in codes like REF_001
+    .replace(/(?<!\w)\*([^*\n]+?)\*(?!\w)/g, '$1')
+    .replace(/(?<!\w)_([^_\n]+?)_(?!\w)/g, '$1')
+    // Inline code
+    .replace(/`([^`]+)`/g, '$1')
+    // ATX headers (# Heading)
+    .replace(/^#{1,6}\s+/gm, '')
+    // Horizontal rules
+    .replace(/^[-*_]{3,}\s*$/gm, '')
+    // Clean up any leftover leading/trailing spaces per line
+    .replace(/[ \t]+$/gm, '')
+    .trim()
 
 const pickRelevantMaidRecords = (message: string, maids: MaidRecord[], limit = 8) => {
   const terms = normalizeTerms(message)
@@ -714,25 +1185,46 @@ const findMaidFromReference = (referenceCode: string, maids: MaidRecord[]) => {
   )
 }
 
+type RelevantMaidResolution = {
+  maids: MaidRecord[]
+  isPronounFollowUp: boolean
+}
+
 const pickRelevantMaidRecordsForMessage = (
   message: string,
   maids: MaidRecord[],
-  currentMaidReference: string
-) => {
+  currentMaidReference: string,
+  conversationId: string
+): RelevantMaidResolution => {
+  if (FEE_QUESTION_PATTERN.test(message)) return { maids: [], isPronounFollowUp: false }
+
+  if (isMaidCardListQuestion(message)) {
+    return { maids: pickRelevantMaidRecords(message, maids), isPronounFollowUp: false }
+  }
+
   const currentMaid = findMaidFromReference(currentMaidReference, maids)
-  if (currentMaid && MAID_PROFILE_REQUEST_PATTERN.test(message) && !FEE_QUESTION_PATTERN.test(message)) {
-    return [currentMaid]
-  }
+  if (currentMaid) return { maids: [currentMaid], isPronounFollowUp: false }
+
   const mentionedMaid = findMaidMentionedInMessage(message, maids)
-  if (mentionedMaid && MAID_PROFILE_REQUEST_PATTERN.test(message) && !FEE_QUESTION_PATTERN.test(message)) {
-    return [mentionedMaid]
+  if (mentionedMaid) return { maids: [mentionedMaid], isPronounFollowUp: false }
+
+  if (isPronounFollowUpQuestion(message) && conversationId) {
+    const lastReference = getLastDiscussedMaidReference(conversationId)
+    if (lastReference) {
+      const lastDiscussed = findMaidFromReference(lastReference, maids)
+      if (lastDiscussed) return { maids: [lastDiscussed], isPronounFollowUp: true }
+    }
   }
-  if (isMaidCardListQuestion(message) || isMaidProfileQuestion(message)) return pickRelevantMaidRecords(message, maids)
-  return []
+
+  if (isMaidProfileQuestion(message)) {
+    return { maids: pickRelevantMaidRecords(message, maids), isPronounFollowUp: false }
+  }
+  return { maids: [], isPronounFollowUp: false }
 }
 
 const shouldAnswerWithProfiles = (message: string) =>
   !isCompanyQuestion(message) &&
+  !isFeeOrPricingQuestion(message) &&
   (isMaidCardListQuestion(message) || isMaidProfileQuestion(message) || MAID_PROFILE_REQUEST_PATTERN.test(message))
 
 export const receptionist = async (req: Request, res: Response) => {
@@ -746,15 +1238,29 @@ export const receptionist = async (req: Request, res: Response) => {
     ])
     const companyProfile = companyBundle?.companyProfile ?? null
     const relevantFaqs = isOffTopicQuestion(message) ? [] : findRelevantFaqs(message)
-    const featuredMaidRecords = shouldShowMaidCards(message) ? pickFeaturedMaidRecords(message, maids) : []
-    const featuredMaids = featuredMaidRecords.map(toFeaturedMaid)
-    const relevantMaids = featuredMaidRecords.length > 0
-      ? featuredMaidRecords
-      : shouldAnswerWithProfiles(message)
-      ? pickRelevantMaidRecordsForMessage(message, maids, currentMaidReference)
-      : []
 
-    const canUseAiResponse = !(isMaidProfileQuestion(message) && relevantMaids.length === 0)
+    const isFeeQuestion = isFeeOrPricingQuestion(message)
+
+    const featuredMaidRecords =
+      !isFeeQuestion && shouldShowMaidCards(message) ? pickFeaturedMaidRecords(message, maids) : []
+    const featuredMaids = featuredMaidRecords.map(toFeaturedMaid)
+
+    const namedMaidResolution = !isFeeQuestion
+      ? pickRelevantMaidRecordsForMessage(message, maids, currentMaidReference, conversationId)
+      : { maids: [], isPronounFollowUp: false }
+    const namedMaid = namedMaidResolution.maids
+    const isResolvedPronounFollowUp = namedMaidResolution.isPronounFollowUp
+
+    const relevantMaids = isFeeQuestion
+      ? []
+      : featuredMaidRecords.length > 0 && namedMaid.length === 0
+      ? featuredMaidRecords
+      : namedMaid
+
+    const canUseAiResponse =
+      relevantMaids.length > 0 ||
+      isResolvedPronounFollowUp ||
+      !(isMaidProfileQuestion(message) && relevantMaids.length === 0)
     const aiResponse = canUseAiResponse
       ? await callGroqReceptionist({
           message,
@@ -762,25 +1268,50 @@ export const receptionist = async (req: Request, res: Response) => {
           relevantMaids,
           featuredMaids,
           companyProfile,
+          allMaids: maids,
+          isPronounFollowUp: isResolvedPronounFollowUp,
         }).catch(() => null)
       : null
-    const synchronizedMaidResponse =
-      relevantMaids.length === 1 && MAID_PROFILE_REQUEST_PATTERN.test(message) && !FEE_QUESTION_PATTERN.test(message)
-        ? buildMaidCardIntro(relevantMaids)
-        : featuredMaidRecords.length > 0 &&
-          (!aiResponse || featuredMaidRecords.some((maid) => !aiResponse.includes(maid.referenceCode)))
-        ? buildMaidCardIntro(featuredMaidRecords)
-        : aiResponse
+
+    const isSingleProfileQuestion =
+      !isFeeQuestion &&
+      relevantMaids.length === 1 &&
+      !FEE_QUESTION_PATTERN.test(message)
+
+    const isCardListMissingMaids =
+      !isFeeQuestion &&
+      featuredMaidRecords.length > 0 &&
+      !isSingleProfileQuestion &&
+      (!aiResponse || featuredMaidRecords.some((maid) => !aiResponse.includes(maid.referenceCode)))
+
+    if (isSingleProfileQuestion && !aiResponse) {
+      console.warn('[receptionist] Groq returned null for single profile question — using buildSingleMaidIntro fallback')
+    }
+
+    const synchronizedMaidResponse = isSingleProfileQuestion
+      ? aiResponse || (isResolvedPronounFollowUp ? null : buildMaidCardIntro(relevantMaids))
+      : isCardListMissingMaids
+      ? buildMaidCardIntro(featuredMaidRecords)
+      : aiResponse
+
     const response =
       synchronizedMaidResponse ||
-      fallbackReceptionistResponse(message, relevantFaqs, featuredMaids, relevantMaids, companyProfile)
+      fallbackReceptionistResponse(message, relevantFaqs, featuredMaids, relevantMaids, companyProfile) ||
+      "I'm here to help with helper recommendations, hiring questions, and company details. How can I assist you?"
+
+    if (relevantMaids.length === 1) {
+      setLastDiscussedMaidReference(conversationId, relevantMaids[0]!.referenceCode)
+    } else if (featuredMaids.length === 1) {
+      setLastDiscussedMaidReference(conversationId, featuredMaids[0]!.referenceCode)
+    }
 
     res.status(200).json({
       conversationId,
-      response: formatMoneyText(response),
+      response: formatMoneyText(String(response)),
       featuredMaids,
     })
   } catch (error) {
+    console.error('[receptionist] handler error:', error)
     const message =
       error instanceof Error ? error.message : 'The receptionist is unavailable right now.'
     const status = /required/i.test(message) ? 400 : 500

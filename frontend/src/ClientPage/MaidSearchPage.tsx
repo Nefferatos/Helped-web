@@ -13,23 +13,23 @@ import "./ClientTheme.css";
 
 // ── Theme tokens ──────────────────────────────────────────────────────────────
 const C = {
-  green:       "#16653A",
-  greenMid:    "#1E8A4C",
-  greenLight:  "#25B060",
-  greenPale:   "#EAF7EF",
-  greenBorder: "rgba(30,138,76,0.25)",
-  yellow:      "#F5C400",
-  yellowWarm:  "#FFD53E",
-  yellowPale:  "#FFFBE6",
-  yellowBorder:"rgba(245,196,0,0.35)",
-  dark:        "#0C1E12",
-  darkMid:     "#163322",
-  text:        "#0C1E12",
-  textMuted:   "#3C6652",
-  border:      "#C8E2D4",
-  surface:     "#F3FAF6",
+  green:       "#0E4E5E",
+  greenMid:    "#1A6F82",
+  greenLight:  "#2196A8",
+  greenPale:   "#E6F4F7",
+  greenBorder: "rgba(14,78,94,0.25)",
+  yellow:      "#FCD34D",
+  yellowWarm:  "#FBBF24",
+  yellowPale:  "#FFFBEB",
+  yellowBorder:"rgba(252,211,77,0.35)",
+  dark:        "#072B35",
+  darkMid:     "#0A3D4A",
+  text:        "#072B35",
+  textMuted:   "#1A5568",
+  border:      "#B2D8E0",
+  surface:     "#EEF8FA",
   white:       "#FFFFFF",
-  slate:       "#F1F5F2",
+  slate:       "#EBF5F8",
 };
 
 // ── Nationality → ISO 3166-1 alpha-2 ─────────────────────────────────────────
@@ -136,7 +136,7 @@ const getWorkAreaRows = (maid: MaidProfile): WorkAreaRow[] => {
 const StarRating = ({ count }: { count: number }) => (
   <span className="inline-flex items-center gap-px">
     {Array.from({ length: 5 }).map((_, i) => (
-      <svg key={i} viewBox="0 0 16 16" style={{ height:12, width:12, color: i < count ? C.yellow : "#D1E8DA" }} fill="currentColor">
+      <svg key={i} viewBox="0 0 16 16" style={{ height:12, width:12, color: i < count ? C.yellow : "#B2D8E0" }} fill="currentColor">
         <path d="M8 1l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 10.8l-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
       </svg>
     ))}
@@ -213,7 +213,7 @@ const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: Rea
         style={{ borderWidth:"8px", borderStyle:"solid",
           borderColor: pointerSide === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
       <div className="bg-white overflow-hidden flex flex-col max-h-[500px]"
-        style={{ border:`1.5px solid ${C.border}`, boxShadow:"0 20px 60px rgba(12,30,18,0.18)" }}>
+        style={{ border:`1.5px solid ${C.border}`, boxShadow:"0 20px 60px rgba(7,43,53,0.18)" }}>
         <div className="px-3 py-2.5" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)` }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <div style={{ width:3, height:32, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})`, borderRadius:2, flexShrink:0 }} />
@@ -336,7 +336,7 @@ const LockedMaidHoverModal = ({
     hasWorkAreaData ? workAreaRows : skillRows.map((s) => ({ name:s.name, willing:s.willing, evaluation:s.evaluation }));
 
   return (
-    <div ref={modalRef} style={{ ...pos, overflowY:"auto", overflowX:"hidden", border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 20px 60px rgba(12,30,18,0.20)" }}
+    <div ref={modalRef} style={{ ...pos, overflowY:"auto", overflowX:"hidden", border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 20px 60px rgba(7,43,53,0.20)" }}
       className="relative"
       onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
     >
@@ -389,8 +389,8 @@ const LockedMaidHoverModal = ({
         {maid.religion && <p><span style={{ fontWeight:800 }}>Religion:</span> <span style={{ color:C.textMuted }}>{maid.religion}</span></p>}
         {publicIntro && (
           <div className="mt-2 p-3" style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale }}>
-            <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:"#92680A", marginBottom:4 }}>Public Introduction</p>
-            <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color:"#78560A" }}>{publicIntro}</p>
+            <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:"#92580A", marginBottom:4 }}>Public Introduction</p>
+            <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color:"#78480A" }}>{publicIntro}</p>
           </div>
         )}
       </div>
@@ -514,7 +514,7 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
       <article
         ref={cardRef as React.RefObject<HTMLElement>}
         className="group relative flex flex-col overflow-visible cursor-pointer transition-all"
-        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}
+        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}
         onMouseEnter={disableHoverModal ? undefined : () => { cardHovered.current = true; openModal(); }}
         onMouseLeave={disableHoverModal ? undefined : () => { cardHovered.current = false; scheduleClose(); }}
       >
@@ -547,7 +547,7 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
             </div>
           )}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-            <div className="p-2" style={{ background:"rgba(12,30,18,0.50)", backdropFilter:"blur(2px)" }}>
+            <div className="p-2" style={{ background:"rgba(7,43,53,0.50)", backdropFilter:"blur(2px)" }}>
               <LockIcon className="h-4 w-4 text-white" />
             </div>
           </div>
@@ -622,7 +622,7 @@ const MaidCard = ({
       <article
         ref={cardRef}
         className="group flex flex-col overflow-hidden cursor-pointer transition-all"
-        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}
+        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -652,7 +652,7 @@ const MaidCard = ({
             className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
               isShortlisted ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
-            style={{ background: isShortlisted ? C.yellow : "rgba(12,30,18,0.75)" }}
+            style={{ background: isShortlisted ? C.yellow : "rgba(7,43,53,0.75)" }}
           >
             <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-current" : ""}`}
               style={{ color: isShortlisted ? C.dark : C.white }} />
@@ -715,23 +715,23 @@ const ShortlistDialog = ({
           maxWidth:860,
           border:`1.5px solid ${C.border}`,
           borderRadius:20,
-          boxShadow:`0 32px 80px rgba(12,30,18,0.22), 0 4px 20px rgba(12,30,18,0.10)`,
+          boxShadow:`0 32px 80px rgba(7,43,53,0.22), 0 4px 20px rgba(7,43,53,0.10)`,
           background:C.white,
         }}
       >
         {/* ── Modal header ── */}
         <div style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)`, position:"relative", overflow:"hidden" }}>
-          {/* Yellow left accent */}
+          {/* Amber left accent */}
           <div style={{ position:"absolute", left:0, top:0, bottom:0, width:5, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})` }} />
           {/* Decorative circles */}
-          <div style={{ position:"absolute", right:-30, top:-30, width:130, height:130, borderRadius:"50%", background:"rgba(245,196,0,0.07)" }} />
-          <div style={{ position:"absolute", right:50, bottom:-50, width:100, height:100, borderRadius:"50%", background:"rgba(30,138,76,0.10)" }} />
+          <div style={{ position:"absolute", right:-30, top:-30, width:130, height:130, borderRadius:"50%", background:"rgba(252,211,77,0.07)" }} />
+          <div style={{ position:"absolute", right:50, bottom:-50, width:100, height:100, borderRadius:"50%", background:"rgba(26,111,130,0.10)" }} />
 
           <div className="flex items-center justify-between px-6 py-4 pl-8" style={{ position:"relative" }}>
             <div className="flex items-center gap-4">
               <div style={{
                 width:46, height:46, borderRadius:13, flexShrink:0,
-                background:"rgba(245,196,0,0.18)", border:`1.5px solid rgba(245,196,0,0.32)`,
+                background:"rgba(252,211,77,0.18)", border:`1.5px solid rgba(252,211,77,0.32)`,
                 display:"flex", alignItems:"center", justifyContent:"center",
               }}>
                 <Star className="h-5 w-5" style={{ color:C.yellowWarm, fill:C.yellowWarm }} />
@@ -785,7 +785,7 @@ const ShortlistDialog = ({
             </p>
             <button type="button" onClick={() => onOpenChange(false)}
               className="font-bold text-sm px-6 py-2.5 transition-all"
-              style={{ background:`linear-gradient(135deg, ${C.green}, ${C.greenMid})`, color:C.white, borderRadius:10, border:"none", cursor:"pointer", boxShadow:`0 4px 16px rgba(22,101,58,0.35)` }}>
+              style={{ background:`linear-gradient(135deg, ${C.green}, ${C.greenMid})`, color:C.white, borderRadius:10, border:"none", cursor:"pointer", boxShadow:`0 4px 16px rgba(14,78,94,0.35)` }}>
               Browse Profiles
             </button>
           </div>
@@ -795,7 +795,7 @@ const ShortlistDialog = ({
             <div style={{ maxHeight:"62vh", overflowY:"auto", padding:"20px 24px 0" }}>
               {missingShortlistRefs.length > 0 && (
                 <div className="mb-4 flex items-center gap-2 px-3 py-2 text-sm"
-                  style={{ background:C.yellowPale, border:`1px solid ${C.yellowBorder}`, borderRadius:10, color:"#92680A" }}>
+                  style={{ background:C.yellowPale, border:`1px solid ${C.yellowBorder}`, borderRadius:10, color:"#92580A" }}>
                   <span style={{ width:8, height:8, borderRadius:"50%", background:C.yellow, flexShrink:0, display:"inline-block" }} />
                   {missingShortlistRefs.length} profile{missingShortlistRefs.length !== 1 ? "s" : ""} in your list could not be found
                 </div>
@@ -840,15 +840,15 @@ const ShortlistDialog = ({
                       background:C.yellowPale, borderRadius:12,
                       minHeight:160,
                     }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:"rgba(245,196,0,0.20)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                      <svg style={{ width:16, height:16, color:"#B45309" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <div style={{ width:34, height:34, borderRadius:10, background:"rgba(252,211,77,0.20)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg style={{ width:16, height:16, color:"#B25209" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
                       </svg>
                     </div>
-                    <p className="font-mono text-[10px] break-all" style={{ color:"#92680A" }}>{ref}</p>
-                    <p style={{ fontSize:11, color:"#B45309" }}>Not found</p>
+                    <p className="font-mono text-[10px] break-all" style={{ color:"#92580A" }}>{ref}</p>
+                    <p style={{ fontSize:11, color:"#B25209" }}>Not found</p>
                     <button type="button" onClick={() => onToggleShortlist(ref)}
-                      style={{ fontSize:11, fontWeight:700, color:"#B45309", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
+                      style={{ fontSize:11, fontWeight:700, color:"#B25209", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
                       Remove
                     </button>
                   </div>
@@ -894,7 +894,7 @@ const ShortlistDialog = ({
                   style={{
                     borderRadius:9, border:"none", cursor:"pointer",
                     background: confirmClear ? "#EF4444" : C.yellowPale,
-                    color: confirmClear ? C.white : "#92680A",
+                    color: confirmClear ? C.white : "#92580A",
                     boxShadow: confirmClear ? "0 4px 16px rgba(239,68,68,0.35)" : "none",
                   }}>
                   <Trash2 style={{ width:14, height:14 }} />
@@ -1098,7 +1098,7 @@ const MaidSearchPage = ({
   // ── Sidebar ──────────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <div className="space-y-0">
-      <div className="overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 12px rgba(12,30,18,0.08)" }}>
+      <div className="overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 12px rgba(7,43,53,0.08)" }}>
         {/* Header */}
         <div className="px-4 py-3" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)`, position:"relative" }}>
           <div style={{ position:"absolute", left:0, top:0, bottom:0, width:4, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})` }} />
@@ -1226,7 +1226,7 @@ const MaidSearchPage = ({
       </div>
 
       {/* Quick links */}
-      <div className="mt-3 overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(12,30,18,0.06)" }}>
+      <div className="mt-3 overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}>
         <div className="px-3 py-2" style={{ borderBottom:`1px solid ${C.border}`, background:C.surface }}>
           <p className="text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Browse by Category</p>
         </div>
@@ -1313,7 +1313,7 @@ const MaidSearchPage = ({
 
       {/* Mobile top bar */}
       <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2.5 md:hidden"
-        style={{ borderBottom:`1px solid ${C.border}`, background:C.white, boxShadow:"0 1px 8px rgba(12,30,18,0.08)" }}>
+        style={{ borderBottom:`1px solid ${C.border}`, background:C.white, boxShadow:"0 1px 8px rgba(7,43,53,0.08)" }}>
         <p className="text-sm font-semibold" style={{ color:C.text }}>
           {isLoading ? "Loading…" : <><span style={{ color:C.text, fontWeight:800 }}>{filteredMaids.length}</span> results</>}
         </p>
@@ -1336,7 +1336,7 @@ const MaidSearchPage = ({
         <div className="fixed inset-0 z-30 md:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
           <div className="absolute bottom-0 left-0 right-0 max-h-[88vh] overflow-y-auto p-4"
-            style={{ background:C.surface, boxShadow:"0 -8px 40px rgba(12,30,18,0.20)" }}>
+            style={{ background:C.surface, boxShadow:"0 -8px 40px rgba(7,43,53,0.20)" }}>
             <div className="mb-4 flex items-center justify-between">
               <p className="font-black text-sm uppercase tracking-wide" style={{ color:C.text }}>Filters</p>
               <button type="button" onClick={() => setMobileSidebarOpen(false)}
@@ -1362,7 +1362,7 @@ const MaidSearchPage = ({
           {/* Advanced filters banner */}
           {advancedFilters && advancedFilterSummary.length > 0 && (
             <div className="mb-3 px-4 py-3"
-              style={{ borderLeft:`4px solid ${C.yellow}`, background:C.white, boxShadow:"0 1px 6px rgba(12,30,18,0.06)" }}>
+              style={{ borderLeft:`4px solid ${C.yellow}`, background:C.white, boxShadow:"0 1px 6px rgba(7,43,53,0.06)" }}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-black uppercase tracking-widest mb-2" style={{ color:C.textMuted }}>Advanced Filters Active</p>
@@ -1389,8 +1389,8 @@ const MaidSearchPage = ({
               <div style={{ width:28, height:28, background:C.yellow, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, flexShrink:0 }}>
                 <Star className="h-3.5 w-3.5" style={{ fill:C.dark, color:C.dark }} />
               </div>
-              <span className="text-sm" style={{ color:"#78560A" }}>
-                <span style={{ fontWeight:900, color:"#5A3E08" }}>{shortlistRefs.length}</span>{" "}
+              <span className="text-sm" style={{ color:"#78480A" }}>
+                <span style={{ fontWeight:900, color:"#5A3608" }}>{shortlistRefs.length}</span>{" "}
                 {shortlistRefs.length === 1 ? "maid" : "maids"} shortlisted
               </span>
             </div>
@@ -1403,7 +1403,7 @@ const MaidSearchPage = ({
 
           {/* Results header */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5"
-            style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(12,30,18,0.04)" }}>
+            style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(7,43,53,0.04)" }}>
             <p className="text-sm" style={{ color:C.textMuted }}>
               {isLoading ? (
                 <span className="flex items-center gap-2">
@@ -1476,7 +1476,7 @@ const MaidSearchPage = ({
           {/* Bottom pagination */}
           {!isLoading && filteredMaids.length > 0 && (
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-              style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(12,30,18,0.04)" }}>
+              style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(7,43,53,0.04)" }}>
               <p className="text-sm" style={{ color:C.textMuted }}>
                 Page <span style={{ fontWeight:800, color:C.text }}>{page}</span> of{" "}
                 <span style={{ fontWeight:800, color:C.text }}>{totalPages}</span>
@@ -1857,7 +1857,7 @@ const pageNumbers = (current: number, total: number): (number|"...")[] => {
 
 const ActiveFilterPill = ({ label, onRemove }: { label:string; onRemove?:()=>void }) => (
   <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide"
-    style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale, color:"#92680A" }}>
+    style={{ border:`1px solid ${C.yellowBorder}`, background:C.yellowPale, color:"#92580A" }}>
     {label}
     {onRemove && (
       <button type="button" onClick={onRemove} className="ml-0.5 hover:text-red-500">

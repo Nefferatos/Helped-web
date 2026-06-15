@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import { getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
@@ -17,6 +18,9 @@ import {
   CalendarClock,
   Inbox,
   Loader2,
+  MapPin,
+  Mail,
+  Facebook,
 } from "lucide-react";
 
 // ─── Inline styles injected once ────────────────────────────────────────────
@@ -288,6 +292,14 @@ const GLOBAL_CSS = `
     .enq-shimmer-text { animation: none; -webkit-text-fill-color: #FCD34D; }
     .enq-pulse-dot { animation: none; }
     .enq-submit-btn::after { display: none; }
+  }
+
+  /* ── Footer responsive grid ── */
+  @media (max-width: 900px) {
+    .enq-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+  }
+  @media (max-width: 520px) {
+    .enq-footer-grid { grid-template-columns: 1fr !important; }
   }
 `;
 
@@ -1284,6 +1296,267 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
             )}
           </div>
         </main>
+
+        {/* ── FOOTER ── */}
+        {!embedded && (
+          <footer style={{ background: "#061D26", padding: "64px 0 0", fontFamily: "'Inter', sans-serif" }}>
+            <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+              <div
+                className="enq-footer-grid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.4fr 1fr 1.2fr 1.2fr 0.8fr",
+                  gap: 36,
+                  marginBottom: 48,
+                }}
+              >
+                {/* Brand */}
+                <div>
+                  <h4
+                    style={{
+                      fontFamily: "'Playfair Display', Georgia, serif",
+                      fontSize: 17,
+                      fontWeight: 700,
+                      color: "#fff",
+                      margin: "0 0 12px",
+                    }}
+                  >
+                    "Find Maids" At The Agency
+                  </h4>
+                  <p style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7, margin: 0 }}>
+                    Matching trusted domestic professionals with families since 2009.
+                  </p>
+                </div>
+
+                {/* Quick Links */}
+                <div>
+                  <h5
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#fff",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      margin: "0 0 16px",
+                      fontFamily: "'Inter',sans-serif",
+                    }}
+                  >
+                    Quick Links
+                  </h5>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[
+                      { label: "Home",         to: "/"             },
+                      { label: "Search Maids", to: "/search-maids" },
+                      { label: "About Us",     to: "/about"        },
+                      { label: "Agency",       to: "/agency"       },
+                      { label: "Enquiry",      to: "/enquiry2"     },
+                      { label: "FAQ",          to: "/faq"          },
+                    ].map((item) => (
+                      <li key={item.to}>
+                        <Link
+                          to={item.to}
+                          style={{
+                            color: "rgba(255,255,255,0.65)",
+                            fontSize: 13,
+                            textDecoration: "none",
+                            transition: "color 0.15s",
+                            fontFamily: "'Inter',sans-serif",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
+                        >
+                          {item.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Contact Us */}
+                <div>
+                  <h5
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#fff",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      margin: "0 0 16px",
+                      fontFamily: "'Inter',sans-serif",
+                    }}
+                  >
+                    Contact Us
+                  </h5>
+                  <ul
+                    style={{
+                      listStyle: "none",
+                      margin: 0,
+                      padding: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      fontSize: 13,
+                      color: "rgba(255,255,255,0.7)",
+                      fontFamily: "'Inter',sans-serif",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <MapPin size={16} color="#FCD34D" style={{ flexShrink: 0, marginTop: 2 }} />
+                      <span>3 Jalan Kukoh, #01-115<br />Singapore 161003</span>
+                    </li>
+                    <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <Mail size={16} color="#FCD34D" style={{ flexShrink: 0 }} />
+                      <a
+                        href="mailto:enquiries.j1@gmail.com"
+                        style={{ color: "rgba(255,255,255,0.7)", textDecoration: "none", transition: "color 0.15s" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}
+                      >
+                        enquiries.j1@gmail.com
+                      </a>
+                    </li>
+                    <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <Phone size={16} color="#FCD34D" style={{ flexShrink: 0 }} />
+                      <a
+                        href="tel:+6580730757"
+                        style={{ color: "rgba(255,255,255,0.7)", textDecoration: "none", transition: "color 0.15s" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}
+                      >
+                        8073 0757
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Opening Hours */}
+                <div>
+                  <h5
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#fff",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      margin: "0 0 16px",
+                      fontFamily: "'Inter',sans-serif",
+                    }}
+                  >
+                    Opening Hours
+                  </h5>
+                  <ul
+                    style={{
+                      listStyle: "none",
+                      margin: 0,
+                      padding: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      fontSize: 13,
+                      color: "rgba(255,255,255,0.7)",
+                      fontFamily: "'Inter',sans-serif",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <Clock size={16} color="#FCD34D" style={{ flexShrink: 0, marginTop: 2 }} />
+                      <span>Mon to Sun: 11:00am to 11:00pm</span>
+                    </li>
+                    <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <MessageSquare size={16} color="#FCD34D" style={{ flexShrink: 0, marginTop: 2 }} />
+                      <span>Other hours: by mobile. If unable to reach us urgently, please SMS.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Follow Us */}
+                <div>
+                  <h5
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#fff",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      margin: "0 0 16px",
+                      fontFamily: "'Inter',sans-serif",
+                    }}
+                  >
+                    Follow Us
+                  </h5>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <a
+                      href="#"
+                      aria-label="Facebook"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        border: "1.5px solid rgba(255,255,255,0.18)",
+                        color: "#1877F2",
+                        transition: "all 0.15s",
+                        textDecoration: "none",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "#0E4E5E";
+                        e.currentTarget.style.background = "#1877F2";
+                        e.currentTarget.style.borderColor = "#1877F2";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "#1877F2";
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
+                      }}
+                    >
+                      <Facebook size={18} />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom bar */}
+              <div
+                style={{
+                  borderTop: "1px solid rgba(255,255,255,0.1)",
+                  padding: "20px 0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", margin: 0, fontFamily: "'Inter',sans-serif" }}>
+                  © 2026 "Find Maids" At The Agency. All rights reserved.
+                </p>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["Privacy", "Terms", "Contact"].map((item) => (
+                    <Link
+                      key={item}
+                      to="/contact"
+                      style={{
+                        fontSize: 12,
+                        color: "rgba(255,255,255,0.45)",
+                        textDecoration: "none",
+                        padding: "0 8px",
+                        fontFamily: "'Inter',sans-serif",
+                        transition: "color 0.15s",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.45)")}
+                    >
+                      {item}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </footer>
+        )}
       </div>
     </>
   );

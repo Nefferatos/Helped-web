@@ -14,6 +14,10 @@ import {
   CreditCard,
   MessageCircle,
   Phone,
+  MapPin,
+  Mail,
+  Clock,
+  Facebook,
 } from "lucide-react";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 
@@ -306,8 +310,6 @@ function useInView(threshold = 0.06) {
 }
 
 // ─── Accordion Item ───────────────────────────────────────────────────────────
-// SIGNATURE ELEMENT: split-field layout — large teal question number in its own
-// left column, question text full-width beside it. When open, gold left-rule floods in.
 
 function AccordionItem({
   item,
@@ -324,27 +326,20 @@ function AccordionItem({
 
   return (
     <div className={`fq-item${isOpen ? " fq-item--open" : ""}`}>
-      {/* Trigger: three-zone grid — number | question | chevron */}
       <button
         onClick={onToggle}
         aria-expanded={isOpen}
         className="fq-trigger"
       >
-        {/* Zone 1: large index number — the signature column */}
         <span className="fq-num" aria-hidden="true">
           {numStr}
         </span>
-
-        {/* Zone 2: question text */}
         <span className="fq-q">{item.q}</span>
-
-        {/* Zone 3: animated chevron badge */}
         <span className="fq-chevron-badge" aria-hidden="true">
           <ChevronDown className="fq-chevron-icon" />
         </span>
       </button>
 
-      {/* Answer panel */}
       <div
         className={`fq-panel${isOpen ? " fq-panel--open" : ""}`}
         role="region"
@@ -431,20 +426,13 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
           ref={heroRef}
           className={`fq-hero${heroReady ? " fq-hero--ready" : ""}`}
         >
-          {/* Architectural background grid lines */}
           <div className="fq-hero-grid" aria-hidden="true" />
-
-          {/* Top gold bar — draws in on load */}
           <div className="fq-hero-topbar" aria-hidden="true" />
-
-          {/* Big watermark number */}
           <div className="fq-hero-wm" aria-hidden="true">FAQ</div>
 
           <div className="fq-hero-inner">
-            {/* Left column: all hero text */}
+            {/* Left column */}
             <div className="fq-hero-copy">
-
-              {/* Eyebrow */}
               <div className="fq-hero-eyebrow">
                 <span className="fq-hero-tag">
                   <Shield size={9} />
@@ -454,7 +442,6 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
                 <span className="fq-hero-eyebrow-text">Singapore Employer Guide</span>
               </div>
 
-              {/* Headline: each word on its own line, third word in gold */}
               <h1 className="fq-hero-h1">
                 <span className="fq-hero-h1-word">Frequently</span>
                 <span className="fq-hero-h1-word">Asked</span>
@@ -468,7 +455,6 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
                 workers in Singapore — from levy rates to legal obligations.
               </p>
 
-              {/* Search */}
               <div className="fq-search-shell">
                 <Search className="fq-search-icon" />
                 <input
@@ -490,7 +476,6 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
                 )}
               </div>
 
-              {/* Stat bar */}
               <div className="fq-hero-stats">
                 {[
                   { val: faqItems.length, label: "Questions" },
@@ -555,7 +540,7 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
           ref={bodyRef}
           className={`fq-body${bodyInView ? " fq-body--visible" : ""}`}
         >
-          {/* ── Sidebar ── */}
+          {/* Sidebar */}
           <aside className="fq-sidebar" aria-label="FAQ categories">
             <span className="fq-sidebar-label">Filter by topic</span>
             {CATEGORIES.map(({ id, label, Icon }) => (
@@ -574,7 +559,7 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
             ))}
           </aside>
 
-          {/* ── Main ── */}
+          {/* Main */}
           <div className="fq-main">
             {/* Toolbar */}
             <div className="fq-toolbar">
@@ -646,57 +631,217 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
         </div>
 
         {/* ══════════════════════════════════════════════════════
-            FOOTER
+            FOOTER  (matches ClientLandingPage footer)
         ══════════════════════════════════════════════════════ */}
-        <footer className="fq-footer">
-          <div className="fq-footer-grid">
-            <div>
-              <p className="fq-footer-brand">
-                Find Maids <span>At The Agency</span>
-              </p>
-              <p className="fq-footer-tagline">
-                Matching trusted domestic professionals with families since 2009.
-              </p>
-              <span className="fq-footer-badge">
-                <Shield size={9} />
-                MOM Licensed
-              </span>
-            </div>
-            <div>
-              <p className="fq-footer-col-head">Company</p>
-              <ul>
-                <li><a href="#why">About Us</a></li>
-                <li><a href="#services">Our Services</a></li>
-                <li><a href="#contact">Contact</a></li>
-              </ul>
-            </div>
-            <div>
-              <p className="fq-footer-col-head">Legal</p>
-              <ul>
-                <li><a href="#contact">Legal Information</a></li>
-                <li><a href="#contact">Privacy Policy</a></li>
-                <li><a href="#contact">Terms of Service</a></li>
-              </ul>
-            </div>
-            <div>
-              <p className="fq-footer-col-head">Newsletter</p>
-              <p className="fq-footer-nl-desc">
-                Stay updated on care tips, industry news, and agency updates.
-              </p>
-              <div className="fq-footer-nl-row">
-                <input
-                  className="fq-footer-nl-input"
-                  placeholder="Your email"
-                  type="email"
-                />
-                <button className="fq-footer-nl-btn">Join</button>
+        <footer style={{ background: "var(--teal-deep)", padding: "64px 0 0", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+
+            {/* 5-column grid */}
+            <div
+              className="fq-footer-grid"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.4fr 1fr 1.2fr 1.2fr 0.8fr",
+                gap: 36,
+                marginBottom: 48,
+              }}
+            >
+              {/* Brand */}
+              <div>
+                <h4
+                  style={{
+                    fontFamily: "'Playfair Display', Georgia, serif",
+                    fontSize: 17,
+                    fontWeight: 700,
+                    color: "#fff",
+                    margin: "0 0 12px",
+                  }}
+                >
+                  "Find Maids" At The Agency
+                </h4>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7, margin: 0 }}>
+                  Matching trusted domestic professionals with families since 2009.
+                </p>
+              </div>
+
+              {/* Quick Links */}
+              <div>
+                <h5 className="fq-footer-col-head">Quick Links</h5>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    { label: "Home",         to: "/"             },
+                    { label: "Search Maids", to: "/search-maids" },
+                    { label: "About Us",     to: "/about"        },
+                    { label: "Agency",       to: "/agency"       },
+                    { label: "Enquiry",      to: "/enquiry2"     },
+                    { label: "FAQ",          to: "/faq"          },
+                  ].map((item) => (
+                    <li key={item.to}>
+                      <Link
+                        to={item.to}
+                        style={{
+                          color: "rgba(255,255,255,0.65)",
+                          fontSize: 13,
+                          textDecoration: "none",
+                          transition: "color 0.15s",
+                          fontFamily: "'Inter',sans-serif",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--gold)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
+                      >
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Contact Us */}
+              <div>
+                <h5 className="fq-footer-col-head">Contact Us</h5>
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    fontSize: 13,
+                    color: "rgba(255,255,255,0.7)",
+                    fontFamily: "'Inter',sans-serif",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <MapPin size={16} color="var(--gold)" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>3 Jalan Kukoh, #01-115<br />Singapore 161003</span>
+                  </li>
+                  <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <Mail size={16} color="var(--gold)" style={{ flexShrink: 0 }} />
+                    <a
+                      href="mailto:enquiries.j1@gmail.com"
+                      style={{ color: "rgba(255,255,255,0.7)", textDecoration: "none", transition: "color 0.15s" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--gold)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}
+                    >
+                      enquiries.j1@gmail.com
+                    </a>
+                  </li>
+                  <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <Phone size={16} color="var(--gold)" style={{ flexShrink: 0 }} />
+                    <a
+                      href="tel:+6580730757"
+                      style={{ color: "rgba(255,255,255,0.7)", textDecoration: "none", transition: "color 0.15s" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--gold)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}
+                    >
+                      8073 0757
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Opening Hours */}
+              <div>
+                <h5 className="fq-footer-col-head">Opening Hours</h5>
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    fontSize: 13,
+                    color: "rgba(255,255,255,0.7)",
+                    fontFamily: "'Inter',sans-serif",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <Clock size={16} color="var(--gold)" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>Mon to Sun: 11:00am to 11:00pm</span>
+                  </li>
+                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <MessageCircle size={16} color="var(--gold)" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>Other hours: by mobile. If unable to reach us urgently, please SMS.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Follow Us */}
+              <div>
+                <h5 className="fq-footer-col-head">Follow Us</h5>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <a
+                    href="#"
+                    aria-label="Facebook"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      border: "1.5px solid rgba(255,255,255,0.18)",
+                      color: "#1877F2",
+                      transition: "all 0.15s",
+                      textDecoration: "none",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--teal-deep)";
+                      e.currentTarget.style.background = "#1877F2";
+                      e.currentTarget.style.borderColor = "#1877F2";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "#1877F2";
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
+                    }}
+                  >
+                    <Facebook size={18} />
+                  </a>
+                </div>
               </div>
             </div>
-          </div>
-          <hr className="fq-footer-rule" />
-          <div className="fq-footer-bottom">
-            <span>© 2026 Find Maids At The Agency. All rights reserved.</span>
-            <span>Singapore · MOM Compliant · Est. 2009</span>
+
+            {/* Bottom bar */}
+            <div
+              style={{
+                borderTop: "1px solid rgba(255,255,255,0.1)",
+                padding: "20px 0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", margin: 0, fontFamily: "'Inter',sans-serif" }}>
+                © 2026 "Find Maids" At The Agency. All rights reserved.
+              </p>
+              <div style={{ display: "flex", gap: 6 }}>
+                {["Privacy", "Terms", "Contact"].map((item) => (
+                  <Link
+                    key={item}
+                    to="/contact"
+                    style={{
+                      fontSize: 12,
+                      color: "rgba(255,255,255,0.45)",
+                      textDecoration: "none",
+                      padding: "0 8px",
+                      fontFamily: "'Inter',sans-serif",
+                      transition: "color 0.15s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--gold)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.45)")}
+                  >
+                    {item}
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
         </footer>
       </div>
@@ -705,11 +850,9 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
 };
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
-// All tokens, animations, and component styles in one block.
-// Naming prefix: fq- (FAQ page)
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* ── Tokens ── */
 .fq-page {
@@ -723,14 +866,14 @@ const CSS = `
   --gold-dk:     #d4a000;
   --gold-warm:   #fde68a;
   --gold-pale:   #fffbeb;
-  --ink:         #0b1c22;
+  --ink:         #0A2830;
   --mid:         #3d5c66;
   --soft:        #6e8f9a;
   --border:      #c8e4ec;
   --bg:          #f2f9fb;
   --surface:     #ffffff;
   --sans:        'Inter', system-ui, -apple-system, sans-serif;
-  --serif:       Georgia, 'Times New Roman', serif;
+  --serif:       'Playfair Display', Georgia, 'Times New Roman', serif;
   --mono:        'SF Mono', 'Fira Mono', Consolas, monospace;
   --r:           14px;
   --r-lg:        22px;
@@ -756,7 +899,6 @@ const CSS = `
   isolation: isolate;
 }
 
-/* Subtle crosshatch grid — architectural, not decorative */
 .fq-hero-grid {
   position: absolute;
   inset: 0;
@@ -768,7 +910,6 @@ const CSS = `
   z-index: 0;
 }
 
-/* Top gold bar — animates in on load */
 .fq-hero-topbar {
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -781,7 +922,6 @@ const CSS = `
 }
 .fq-hero--ready .fq-hero-topbar { transform: scaleX(1); }
 
-/* Giant watermark — right-aligned, bleeds off edge */
 .fq-hero-wm {
   position: absolute;
   right: -3%;
@@ -798,7 +938,6 @@ const CSS = `
   z-index: 0;
 }
 
-/* ── Hero inner: two-column ── */
 .fq-hero-inner {
   position: relative;
   z-index: 2;
@@ -812,7 +951,6 @@ const CSS = `
 }
 .fq-hero-copy { padding-bottom: 60px; }
 
-/* ── Entrance: each element slides up sequentially ── */
 .fq-hero-eyebrow,
 .fq-hero-h1,
 .fq-hero-sub,
@@ -828,7 +966,6 @@ const CSS = `
 .fq-hero--ready .fq-search-shell  { opacity:1; transform:none; transition-delay:.40s; }
 .fq-hero--ready .fq-hero-stats    { opacity:1; transform:none; transition-delay:.50s; }
 
-/* Eyebrow row */
 .fq-hero-eyebrow {
   display: inline-flex;
   align-items: center;
@@ -864,7 +1001,6 @@ const CSS = `
   color: rgba(255,255,255,.3);
 }
 
-/* Headline — each word stacks, third word is gold with underline draw-in */
 .fq-hero-h1 {
   font-family: var(--serif);
   font-size: clamp(38px, 5.2vw, 66px);
@@ -904,7 +1040,6 @@ const CSS = `
   max-width: 480px;
 }
 
-/* Search */
 .fq-search-shell {
   position: relative;
   max-width: 480px;
@@ -953,7 +1088,6 @@ const CSS = `
 }
 .fq-search-clear:hover { background: rgba(255,255,255,.2); }
 
-/* Stat bar */
 .fq-hero-stats {
   display: flex;
   align-items: center;
@@ -992,7 +1126,6 @@ const CSS = `
   line-height: 1.4;
 }
 
-/* Right card */
 .fq-hero-card {
   margin-bottom: 44px;
   background: rgba(255,255,255,.055);
@@ -1108,7 +1241,6 @@ const CSS = `
   align-items: start;
 }
 
-/* Entrance */
 .fq-body > * {
   opacity: 0;
   transform: translateY(16px);
@@ -1148,7 +1280,6 @@ const CSS = `
   margin-bottom: 2px;
   position: relative;
 }
-/* Animated left indicator */
 .fq-cat-btn::before {
   content: '';
   position: absolute;
@@ -1255,10 +1386,6 @@ const CSS = `
 
 /* ══════════════════════════════════════════
    FAQ LIST & ACCORDION
-   SIGNATURE ELEMENT: split-field layout.
-   The number lives in its own left column
-   at large size — creates a magazine-index
-   vertical rhythm unique to this page.
 ══════════════════════════════════════════ */
 .fq-list {
   background: var(--surface);
@@ -1268,14 +1395,12 @@ const CSS = `
   box-shadow: var(--shadow);
 }
 
-/* Individual item */
 .fq-item {
   border-bottom: 1px solid var(--border);
   position: relative;
 }
 .fq-item:last-child { border-bottom: none; }
 
-/* ── Gold tape: left border peels down on open ── */
 .fq-item::before {
   content: '';
   position: absolute;
@@ -1290,7 +1415,6 @@ const CSS = `
 }
 .fq-item--open::before { transform: scaleY(1); }
 
-/* Trigger: three columns */
 .fq-trigger {
   display: grid;
   grid-template-columns: 52px 1fr 34px;
@@ -1307,7 +1431,6 @@ const CSS = `
 .fq-trigger:hover { background: var(--teal-pale); }
 .fq-item--open .fq-trigger { background: #eef8fb; }
 
-/* Large index number — THE signature column */
 .fq-num {
   font-family: var(--serif);
   font-size: 28px;
@@ -1321,7 +1444,6 @@ const CSS = `
 }
 .fq-item--open .fq-num { color: var(--teal); }
 
-/* Question text */
 .fq-q {
   font-family: var(--serif);
   font-size: 15.5px;
@@ -1333,7 +1455,6 @@ const CSS = `
 }
 .fq-item--open .fq-q { color: var(--teal-dk); font-weight: 600; }
 
-/* Chevron badge */
 .fq-chevron-badge {
   width: 28px; height: 28px;
   border-radius: 8px;
@@ -1357,7 +1478,6 @@ const CSS = `
   color: #fff;
 }
 
-/* Answer slide-open panel */
 .fq-panel {
   max-height: 0;
   overflow: hidden;
@@ -1371,7 +1491,6 @@ const CSS = `
   background: linear-gradient(135deg, #fafeff 0%, #f4fafc 100%);
   position: relative;
 }
-/* Gold left rule — the answer's own accent */
 .fq-answer::before {
   content: '';
   position: absolute;
@@ -1392,7 +1511,6 @@ const CSS = `
 .fq-answer-inner p:last-child { margin: 0; }
 .fq-answer-inner strong { color: var(--ink); font-weight: 700; }
 
-/* Rich content */
 .fq-rich { display: flex; flex-direction: column; gap: 14px; }
 .fq-rich ul, .fq-rich ol {
   margin: 4px 0 0; padding: 0;
@@ -1481,7 +1599,6 @@ const CSS = `
   position: relative;
   overflow: hidden;
 }
-/* Gold left edge rule */
 .fq-contact::before {
   content: '';
   position: absolute;
@@ -1489,7 +1606,6 @@ const CSS = `
   width: 4px;
   background: linear-gradient(180deg, var(--gold-dk), var(--gold), var(--gold-warm));
 }
-/* Decorative circle */
 .fq-contact::after {
   content: '';
   position: absolute;
@@ -1548,95 +1664,24 @@ const CSS = `
 }
 
 /* ══════════════════════════════════════════
-   FOOTER
+   FOOTER (matches ClientLandingPage)
 ══════════════════════════════════════════ */
-.fq-footer {
-  background: var(--teal-deep);
-  padding: 60px 40px 32px;
-  border-top: 1px solid rgba(252,211,77,.10);
-}
-.fq-footer-grid {
-  max-width: 1240px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr 1.5fr;
-  gap: 48px;
-  padding-bottom: 40px;
-}
-.fq-footer-brand {
-  font-family: var(--serif);
-  font-size: 17px; font-weight: 700;
-  color: #fff; line-height: 1.35;
-  margin: 0 0 8px;
-}
-.fq-footer-brand span { color: var(--gold); }
-.fq-footer-tagline {
-  font-size: 12px; font-family: var(--sans);
-  color: rgba(255,255,255,.35); line-height: 1.7;
-  margin: 0 0 18px;
-}
-.fq-footer-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--mono); font-size: 9px; font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase;
-  color: var(--gold);
-  background: rgba(252,211,77,.10);
-  border: 1px solid rgba(252,211,77,.2);
-  padding: 5px 11px; border-radius: 5px;
-}
 .fq-footer-col-head {
-  font-family: var(--mono); font-size: 9px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .14em;
-  color: var(--gold); margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0 0 16px;
+  font-family: 'Inter', sans-serif;
 }
-.fq-footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-.fq-footer ul li a {
-  font-size: 13px; font-family: var(--sans);
-  color: rgba(255,255,255,.38); text-decoration: none;
-  display: inline-block;
-  transition: color .15s, padding-left .15s;
+
+/* Responsive footer grid */
+@media (max-width: 900px) {
+  .fq-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
 }
-.fq-footer ul li a:hover { color: rgba(255,255,255,.82); padding-left: 4px; }
-.fq-footer-nl-desc {
-  font-size: 12px; font-family: var(--sans);
-  color: rgba(255,255,255,.35); line-height: 1.7; margin: 0 0 14px;
-}
-.fq-footer-nl-row { display: flex; gap: 8px; }
-.fq-footer-nl-input {
-  flex: 1; min-width: 0;
-  padding: 10px 14px;
-  background: rgba(255,255,255,.07);
-  border: 1.5px solid rgba(255,255,255,.1);
-  border-radius: 9px;
-  color: #fff; font-size: 13px; font-family: var(--sans);
-  outline: none;
-  transition: border-color .18s;
-}
-.fq-footer-nl-input::placeholder { color: rgba(255,255,255,.24); }
-.fq-footer-nl-input:focus { border-color: var(--gold); }
-.fq-footer-nl-btn {
-  padding: 10px 18px;
-  background: var(--gold);
-  color: var(--teal-deep);
-  font-size: 11px; font-weight: 800;
-  font-family: var(--mono);
-  text-transform: uppercase; letter-spacing: .08em;
-  border: none; border-radius: 9px;
-  cursor: pointer; flex-shrink: 0;
-  transition: background .16s, transform .16s;
-}
-.fq-footer-nl-btn:hover { background: var(--gold-warm); transform: translateY(-1px); }
-.fq-footer-rule {
-  max-width: 1240px; margin: 0 auto 24px;
-  border: none; border-top: 1px solid rgba(255,255,255,.07);
-  display: block;
-}
-.fq-footer-bottom {
-  max-width: 1240px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  font-family: var(--mono); font-size: 11px; letter-spacing: .06em;
-  color: rgba(255,255,255,.2);
-  gap: 20px; flex-wrap: wrap;
+@media (max-width: 520px) {
+  .fq-footer-grid { grid-template-columns: 1fr !important; }
 }
 
 /* ══════════════════════════════════════════
@@ -1652,7 +1697,6 @@ const CSS = `
   .fq-cat-btn { width: auto; padding: 7px 10px; }
   .fq-cat-btn::before { display: none; }
   .fq-cat-name { display: none; }
-  .fq-footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
 }
 @media (max-width: 600px) {
   .fq-hero-inner { padding: 44px 20px 0; }
@@ -1664,10 +1708,6 @@ const CSS = `
   .fq-answer::before { left: 36px; }
   .fq-answer-inner { padding-left: 12px; }
   .fq-contact { flex-direction: column; align-items: flex-start; padding: 22px 22px 22px 28px; }
-  .fq-footer-grid { grid-template-columns: 1fr; gap: 28px; }
-  .fq-footer { padding: 44px 24px 28px; }
-  .fq-footer-bottom { flex-direction: column; gap: 8px; text-align: center; }
-  .fq-footer-rule { margin: 0 0 24px; }
 }
 
 /* ══════════════════════════════════════════

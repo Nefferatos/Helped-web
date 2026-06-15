@@ -242,6 +242,29 @@ const writeAdminNotificationCache = (cache: AdminNotificationCache) => {
   }
 };
 
+const ADMIN_NOTIFICATION_DISMISSED_KEY = "helped-admin-notification-dismissed-total";
+
+const readDismissedNotificationTotal = (): number => {
+  if (typeof window === "undefined") return 0;
+
+  try {
+    const raw = window.localStorage.getItem(ADMIN_NOTIFICATION_DISMISSED_KEY);
+    return raw ? Number(raw) || 0 : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const writeDismissedNotificationTotal = (total: number) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(ADMIN_NOTIFICATION_DISMISSED_KEY, String(total));
+  } catch {
+    // Storage can be unavailable in private sessions; notifications still work in memory.
+  }
+};
+
 const formatNotificationTime = (iso: string) => {
   if (!iso) return "";
   const date = new Date(iso);
@@ -935,6 +958,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>(
     () => readAdminNotificationCache()?.chatNotifications ?? []
   );
+  const [dismissedNotificationTotal, setDismissedNotificationTotal] = useState<number>(
+    () => readDismissedNotificationTotal()
+  );
 
   const [agencyAdmin, setAgencyAdmin] = useState<AgencyAdminUser | null>(
     getStoredAgencyAdmin()
@@ -1074,7 +1100,16 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     badgeCounts.unreadChats +
     badgeCounts.unreadEnquiries +
     badgeCounts.unreadRequests;
+  // Hide the bell badge once the admin has opened the notification list, until
+  // the underlying unread total grows again (i.e. new notifications arrive).
+  const visibleUnread = totalUnread > dismissedNotificationTotal ? totalUnread : 0;
   const visibleChatNotifications = chatNotifications.slice(0, 6);
+
+  const handleNotificationsOpenChange = (open: boolean) => {
+    if (!open) return;
+    setDismissedNotificationTotal(totalUnread);
+    writeDismissedNotificationTotal(totalUnread);
+  };
 
   const sharedSidebarProps = {
     location,
@@ -1317,10 +1352,10 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               gap: 6,
             }}
           >
-            <DropdownMenu>
+            <DropdownMenu onOpenChange={handleNotificationsOpenChange}>
               <DropdownMenuTrigger asChild>
                 <button
-                  aria-label={`Notifications${totalUnread > 0 ? ` (${totalUnread} unread)` : ""}`}
+                  aria-label={`Notifications${visibleUnread > 0 ? ` (${visibleUnread} unread)` : ""}`}
                   style={{
                     width: 38,
                     height: 38,
@@ -1350,7 +1385,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                   }}
                 >
                   <Bell style={{ width: 17, height: 17 }} />
-                  {totalUnread > 0 && (
+                  {visibleUnread > 0 && (
                     <span
                       style={{
                         position: "absolute",
@@ -1371,7 +1406,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                         lineHeight: 1,
                       }}
                     >
-                      {totalUnread > 99 ? "99+" : totalUnread}
+                      {visibleUnread > 99 ? "99+" : visibleUnread}
                     </span>
                   )}
                 </button>

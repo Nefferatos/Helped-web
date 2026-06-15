@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
-import { ChevronRight, MapPin, Mail, Phone } from "lucide-react";
+import { ChevronRight, MapPin, Mail, Phone, Clock, MessageCircle, PhoneCall, Facebook, } from "lucide-react";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+
+
 
 type AboutUsProps = {
   embedded?: boolean;
@@ -1202,48 +1204,154 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
       </main>
 
       {/* ── FOOTER ── */}
-      <footer className="au-footer">
-        <div className="au-wrap">
-          <div className="au-footer-grid">
-            <div>
-              <div className="au-footer-brand">Rinzin Agency</div>
-              <p className="au-footer-tagline">Matching trusted domestic professionals with families since 2005.</p>
-              <span className="au-footer-accent" />
+        <footer style={{ background: "var(--ink)", padding: "64px 0 0" }}>
+          <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+            <div className="footer-grid" style={{
+              display: "grid",
+              gridTemplateColumns: "1.4fr 1fr 1.2fr 1.2fr 0.8fr",
+              gap: 36,
+              marginBottom: 48,
+            }}>
+
+              {/* Brand */}
+              <div>
+                <h4 className="playfair" style={{ fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 12px" }}>
+                  "Find Maids" At The Agency
+                </h4>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7, margin: 0 }}>
+                  Matching trusted domestic professionals with families since 2009.
+                </p>
+              </div>
+
+              {/* Quick Links */}
+              <div>
+                <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em",
+                  textTransform: "uppercase", margin: "0 0 16px", fontFamily: "'Inter',sans-serif" }}>
+                  Quick Links
+                </h5>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    { label: "Home",         to: "/"             },
+                    { label: "Search Maids", to: "/search-maids" },
+                    { label: "About Us",     to: "/about"        },
+                    { label: "Agency",       to: "/agency"       },
+                    { label: "Enquiry",      to: "/enquiry2"     },
+                    { label: "FAQ",          to: "/faq"          },
+                  ].map((item) => (
+                    <li key={item.to}>
+                      <Link to={item.to}
+                        style={{ color: "#fff", fontSize: 13, textDecoration: "none",
+                          transition: "color 0.15s", fontFamily: "'Inter',sans-serif" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Contact Us */}
+              <div>
+                <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em",
+                  textTransform: "uppercase", margin: "0 0 16px", fontFamily: "'Inter',sans-serif" }}>
+                  Contact Us
+                </h5>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10,
+                  fontSize: 13, color: "#fff", fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
+                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <MapPin size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>3 Jalan Kukoh, #01-115<br />Singapore 161003</span>
+                  </li>
+                  <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <Mail size={16} color="var(--amber)" style={{ flexShrink: 0 }} />
+                    <a href="mailto:enquiries.j1@gmail.com"
+                      style={{ color: "#fff", textDecoration: "none", transition: "color 0.15s" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
+                      enquiries.j1@gmail.com
+                    </a>
+                  </li>
+                  <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <Phone size={16} color="var(--amber)" style={{ flexShrink: 0 }} />
+                    <a href="tel:+6580730757"
+                      style={{ color: "#fff", textDecoration: "none", transition: "color 0.15s" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
+                      8073 0757
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Opening Hours */}
+              <div>
+                <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em",
+                  textTransform: "uppercase", margin: "0 0 16px", fontFamily: "'Inter',sans-serif" }}>
+                  Opening Hours
+                </h5>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10,
+                  fontSize: 13, color: "#fff", fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
+                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <Clock size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>Mon to Sun: 11:00am to 11:00pm</span>
+                  </li>
+                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <MessageCircle size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>Other hours: by mobile. If unable to reach us urgently, please SMS.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Follow Us */}
+              <div>
+                <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em",
+                  textTransform: "uppercase", margin: "0 0 16px", fontFamily: "'Inter',sans-serif" }}>
+                  Follow Us
+                </h5>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <a href="#" aria-label="Facebook"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 36, height: 36, borderRadius: 8,
+                      border: "1.5px solid rgba(255,255,255,0.18)",
+                      color: "#1877F2", transition: "all 0.15s" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--ink)";
+                      e.currentTarget.style.background = "#1877F2";
+                      e.currentTarget.style.borderColor = "#1877F2";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "#1877F2";
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
+                    }}>
+                    <Facebook size={18} />
+                  </a>
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="au-footer-col-h">Company</div>
-              <ul className="au-footer-links">
-                <li><a href="#about-story">About Us</a></li>
-                <li><a href="#services">Our Services</a></li>
-                <li><a href="#contact">Contact</a></li>
-              </ul>
-            </div>
-            <div>
-              <div className="au-footer-col-h">Legal</div>
-              <ul className="au-footer-links">
-                <li><a href="#contact">Legal Info</a></li>
-                <li><a href="#contact">Privacy Policy</a></li>
-                <li><a href="#contact">Terms of Service</a></li>
-              </ul>
-            </div>
-            <div>
-              <div className="au-footer-col-h">Newsletter</div>
-              <p style={{ fontSize: "0.82rem", lineHeight: 1.65, marginBottom: "0.875rem" }}>
-                Care tips, industry news, and agency updates.
+
+            {/* Bottom bar */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", padding: "20px 0",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              flexWrap: "wrap", gap: 12 }}>
+              <p style={{ fontSize: 12, color: "#fff", margin: 0, fontFamily: "'Inter',sans-serif" }}>
+                © 2026 "Find Maids" At The Agency. All rights reserved.
               </p>
-              <div className="au-nl-row">
-                <input placeholder="your@email.com" />
-                <button>Join</button>
+              <div style={{ display: "flex", gap: 6 }}>
+                {["Privacy", "Terms", "Contact"].map((item) => (
+                  <Link key={item} to="/contact"
+                    style={{ fontSize: 12, color: "#fff", textDecoration: "none",
+                      padding: "0 8px", fontFamily: "'Inter',sans-serif", transition: "color 0.15s" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
+                    {item}
+                  </Link>
+                ))}
               </div>
             </div>
           </div>
-          <div className="au-footer-bottom">
-            <span className="au-footer-copy">© 2026 Rinzin Agency. All rights reserved.</span>
-            <span className="au-footer-copy">enquiry@rinzinagency.com</span>
-            <span className="au-footer-badge">✦ Licensed &amp; Accredited</span>
-          </div>
-        </div>
-      </footer>
+        </footer>
 
     </div>
   );

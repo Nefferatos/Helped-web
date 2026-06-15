@@ -6,17 +6,19 @@ import {
   User,
   Check,
   ArrowRight,
-  Star,
   Sparkles,
   Shield,
   Eye,
   EyeOff,
   ChevronRight,
-  Quote,
   Building2,
   Zap,
   FileText,
   Globe,
+  Bot,
+  Megaphone,
+  MessageSquare,
+  BrainCircuit,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import {
@@ -44,24 +46,7 @@ interface AgencyAuthResponse {
   };
 }
 
-const testimonials = [
-  {
-    agency: "Grace Home Services",
-    quote:
-      "We were one of the first agencies to join. Getting our profile live and listings published took less than a day — much easier than we expected.",
-    author: "Ms. Patricia",
-    tag: "Early Access",
-  },
-  {
-    agency: "Comfort Care Agency",
-    quote:
-      "The auto-filled MOM documents alone made it worth signing up. We used to do these by hand. Now it takes seconds.",
-    author: "Mr. Dennis",
-    tag: "Early Access",
-  },
-];
-
-const benefits = [
+const coreFeatures = [
   { text: "Publish unlimited maid listings", icon: "📋" },
   { text: "Upload up to 2 photos per maid", icon: "🖼️" },
   { text: "Upload 1 introduction video clip per maid", icon: "🎥" },
@@ -69,6 +54,29 @@ const benefits = [
   { text: "Manage agency profile & branch addresses", icon: "🏢" },
   { text: "Auto-fill employment contracts and MOM documents", icon: "✍️" },
   { text: "Get a customised agency micro-site", icon: "🌐" },
+];
+
+const aiFeatures = [
+  {
+    icon: BrainCircuit,
+    label: "AI Biodata Autofill",
+    desc: "Instantly populate maid bio-data fields from uploaded documents",
+  },
+  {
+    icon: Bot,
+    label: "AI Agents",
+    desc: "Autonomous agents that handle repetitive admin tasks 24/7",
+  },
+  {
+    icon: Megaphone,
+    label: "AI Marketing",
+    desc: "Auto-generate listing copy and social posts for each maid profile",
+  },
+  {
+    icon: MessageSquare,
+    label: "Messaging",
+    desc: "Built-in employer chat with smart reply suggestions",
+  },
 ];
 
 const highlights = [
@@ -123,8 +131,9 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
   };
 
   return (
-    <div className="ap-root">
+    <>
       {!isEmbedded && <PublicSiteNavbar />}
+    <div className="ap-root">
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap');
@@ -526,7 +535,6 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           overflow: hidden;
           margin-top: 0.2rem;
         }
-        /* amber shimmer sweep */
         .ap-btn::before {
           content: '';
           position: absolute; inset: 0;
@@ -567,60 +575,49 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           color: var(--ink-4);
         }
 
-        /* ── Testimonials ── */
-        .ap-tcard {
-          background: var(--surface);
-          border: 1px solid var(--rule-2);
-          border-radius: var(--r-md);
-          padding: 1rem 1.1rem 1rem 1.35rem;
-          position: relative;
-          overflow: hidden;
-          transition: border-color 0.22s, box-shadow 0.22s, transform 0.22s;
+        /* ── AI feature cards ── */
+        .ap-ai-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.5rem;
         }
-        .ap-tcard:hover {
-          border-color: rgba(14,78,94,0.18);
-          box-shadow: 0 6px 22px rgba(14,78,94,0.08);
-          transform: translateY(-3px);
-        }
-        /* Amber left bar */
-        .ap-tcard::before {
-          content: '';
-          position: absolute;
-          left: 0; top: 14px; bottom: 14px; width: 3px;
-          background: linear-gradient(to bottom, var(--amber), rgba(252,211,77,0.25));
-          border-radius: 0 3px 3px 0;
-          transition: top 0.2s, bottom 0.2s;
-        }
-        .ap-tcard:hover::before { top: 8px; bottom: 8px; }
 
-        .ap-tcard-top {
-          display: flex; align-items: center;
-          justify-content: space-between;
-          margin-bottom: 0.6rem;
+        .ap-ai-card {
+          display: flex;
+          flex-direction: column;
+          gap: 0.42rem;
+          padding: 0.8rem 0.85rem;
+          border-radius: var(--r-md);
+          border: 1px solid var(--rule-2);
+          background: var(--white);
+          transition: background 0.18s, border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+          cursor: default;
         }
-        .ap-tcard-tag {
-          padding: 0.16rem 0.55rem;
-          background: rgba(14,78,94,0.07);
-          border: 1px solid rgba(14,78,94,0.1);
-          border-radius: 100px;
-          font-size: 0.6rem;
+        .ap-ai-card:hover {
+          background: var(--teal-pale);
+          border-color: rgba(14,78,94,0.18);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 16px rgba(14,78,94,0.08);
+        }
+        .ap-ai-card-icon {
+          width: 28px; height: 28px;
+          border-radius: var(--r-sm);
+          background: linear-gradient(135deg, var(--teal), var(--teal-2));
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 2px 6px rgba(14,78,94,0.22);
+        }
+        .ap-ai-card-label {
+          font-size: 0.76rem;
           font-weight: 700;
-          color: var(--teal-2);
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+          color: var(--ink-2);
+          line-height: 1.2;
         }
-        .ap-tcard-quote-icon { color: rgba(14,78,94,0.18); }
-        .ap-tcard-quote {
-          font-size: 0.845rem;
-          line-height: 1.75;
-          color: var(--ink-3);
-          font-style: italic;
-          margin-bottom: 0.7rem;
+        .ap-ai-card-desc {
+          font-size: 0.70rem;
+          color: var(--ink-4);
+          line-height: 1.4;
         }
-        .ap-tcard-meta { display: flex; align-items: center; gap: 0.4rem; }
-        .ap-tcard-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--rule); }
-        .ap-tcard-agency { font-size: 0.82rem; font-weight: 600; color: var(--teal); }
-        .ap-tcard-by { font-size: 0.78rem; color: var(--ink-4); }
 
         /* ── "Why join" highlight cards ── */
         .ap-highlights { display: flex; flex-direction: column; gap: 0.45rem; }
@@ -769,7 +766,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         .ap-footer-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--rule); }
       `}</style>
 
-      {/* Ambient orbs outside the card */}
+      {/* Ambient orbs */}
       <div className="ap-orb ap-orb-1" />
       <div className="ap-orb ap-orb-2" />
       <div className="ap-orb ap-orb-3" />
@@ -805,27 +802,24 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           {/* ── Body ── */}
           <div className="ap-body">
 
-            {/* Col 1 — Testimonials + highlights */}
+            {/* Col 1 — AI features + highlights */}
             <div className="ap-col ap-col-1">
               <div className="ap-section-label">
-                <Star size={8} strokeWidth={2.5} />
-                Early agency feedback
+                <BrainCircuit size={8} strokeWidth={2.5} />
+                AI-powered tools
               </div>
 
-              {testimonials.map((t) => (
-                <div key={t.agency} className="ap-tcard">
-                  <div className="ap-tcard-top">
-                    <span className="ap-tcard-tag">{t.tag}</span>
-                    <Quote size={14} className="ap-tcard-quote-icon" strokeWidth={1.5} />
+              <div className="ap-ai-grid">
+                {aiFeatures.map((f) => (
+                  <div key={f.label} className="ap-ai-card">
+                    <div className="ap-ai-card-icon">
+                      <f.icon size={13} color="#FCD34D" strokeWidth={1.75} />
+                    </div>
+                    <div className="ap-ai-card-label">{f.label}</div>
+                    <div className="ap-ai-card-desc">{f.desc}</div>
                   </div>
-                  <p className="ap-tcard-quote">{t.quote}</p>
-                  <div className="ap-tcard-meta">
-                    <span className="ap-tcard-agency">{t.agency}</span>
-                    <span className="ap-tcard-dot" />
-                    <span className="ap-tcard-by">{t.author}</span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
 
               <div className="ap-section-label" style={{ marginTop: "0.25rem" }}>
                 <Zap size={8} strokeWidth={2.5} />
@@ -938,7 +932,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
 
             <div className="ap-divider" />
 
-            {/* Col 3 — Benefits */}
+            {/* Col 3 — Core platform features */}
             <div className="ap-col ap-col-3">
               <div className="ap-section-label">
                 <Sparkles size={8} strokeWidth={2.5} />
@@ -960,12 +954,12 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
               </p>
 
               <div className="ap-benefits">
-                {benefits.map((b) => (
+                {coreFeatures.map((b) => (
                   <div key={b.text} className="ap-benefit">
                     <span className="ap-benefit-emoji">{b.icon}</span>
                     <span style={{ flex: 1 }}>{b.text}</span>
                     <div className="ap-benefit-check">
-                      <Check size={8} color={`var(--teal)`} strokeWidth={3} />
+                      <Check size={8} color="var(--teal)" strokeWidth={3} />
                     </div>
                   </div>
                 ))}
@@ -991,5 +985,6 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         </div>
       </main>
     </div>
+    </>
   );
 }

@@ -226,7 +226,7 @@ const FloatingAiReceptionist = () => {
   const location = useLocation();
   const pathname = location.pathname.replace(/\/+$/, "");
 
-  if (pathname === "/client/support-chat") return null;
+  if (pathname === "/client/support-chat" || pathname === "/employer-login") return null;
 
   return <PublicAiReceptionist />;
 };
