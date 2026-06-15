@@ -3080,14 +3080,18 @@ const requireClientAuth = async (c: any, next: () => Promise<void>) => {
       (supabaseUser.user_metadata?.full_name as string | undefined) ??
       (supabaseUser.user_metadata?.name as string | undefined) ??
       "";
+    const companyFromMeta =
+      (supabaseUser.user_metadata?.company as string | undefined) ?? "";
+    const phoneFromMeta =
+      (supabaseUser.user_metadata?.phone as string | undefined) ?? "";
     const created: ClientRecord = {
       id: data.counters.clients++,
       supabaseUserId: supabaseUser.id,
       name:
         nameFromMeta ||
         (supabaseUser.email ? supabaseUser.email.split("@")[0] : "Client"),
-      company: "",
-      phone: supabaseUser.phone ?? "",
+      company: companyFromMeta.trim(),
+      phone: (supabaseUser.phone || phoneFromMeta).trim(),
       email: supabaseUser.email ?? "",
       password: "",
       profileImageUrl: "",

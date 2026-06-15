@@ -12,7 +12,6 @@ const ClientEmployerLogin = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
-  const [step, setStep] = useState<"auth" | "confirm">("auth");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -21,10 +20,7 @@ const ClientEmployerLogin = () => {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
-  const [confirmationEmail, setConfirmationEmail] = useState("");
-  const [confirmationCode, setConfirmationCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
   const { toast } = useToast();
   const redirectTo = getClientPostLoginPath(searchParams.get("redirectTo"));
 
@@ -35,6 +31,15 @@ const ClientEmployerLogin = () => {
       toast({
         title: "Passwords do not match",
         description: "Please make sure both passwords are the same.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isLogin && password.length < 6) {
+      toast({
+        title: "Password too short",
+        description: "Password must be at least 6 characters.",
         variant: "destructive",
       });
       return;
@@ -112,36 +117,6 @@ const ClientEmployerLogin = () => {
     }
   };
 
-  const handleConfirm = async (event: React.FormEvent) => {
-    event.preventDefault();
-    toast({
-      title: "Email verification",
-      description: "Please verify via the email link from Supabase, then log in.",
-    });
-    setStep("auth");
-    setIsLogin(true);
-  };
-
-  const handleResend = async () => {
-    if (!confirmationEmail.trim()) return;
-    try {
-      const { error } = await requireSupabase().auth.resend({
-        type: "signup",
-        email: confirmationEmail.trim(),
-      });
-      if (error) throw error;
-      toast({
-        title: "Verification email resent",
-        description: `We resent the verification email to ${confirmationEmail.trim()}.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Resend failed",
-        description: error instanceof Error ? error.message : "Unable to resend",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <>
@@ -479,53 +454,93 @@ const ClientEmployerLogin = () => {
             <ArrowLeft size={14} /> Back to Home
           </Link>
 
-          {step === "auth" && (
-            <div className="cel-tabs">
-              <button
-                className={`cel-tab${isLogin ? " cel-tab--active" : ""}`}
-                onClick={() => { setIsLogin(true); setStep("auth"); setConfirmPassword(""); }}
-              >
-                Sign In
-              </button>
-              <button
-                className={`cel-tab${!isLogin ? " cel-tab--active" : ""}`}
-                onClick={() => { setIsLogin(false); setStep("auth"); setConfirmPassword(""); }}
-              >
-                Create Account
-              </button>
-            </div>
-          )}
+          <div className="cel-tabs">
+            <button
+              className={`cel-tab${isLogin ? " cel-tab--active" : ""}`}
+              onClick={() => { setIsLogin(true); setConfirmPassword(""); }}
+            >
+              Sign In
+            </button>
+            <button
+              className={`cel-tab${!isLogin ? " cel-tab--active" : ""}`}
+              onClick={() => { setIsLogin(false); setConfirmPassword(""); }}
+            >
+              Create Account
+            </button>
+          </div>
 
           <div className="cel-panel">
             <div style={{ marginBottom: "1.75rem" }}>
               <div className="cel-badge">
                 <Sparkles size={10} />
-                {step === "confirm" ? "Verify Email" : isLogin ? "Employer Portal" : "Join Us"}
+                {isLogin ? "Employer Portal" : "Join Us"}
               </div>
               <h1 className="cel-title">
-                {step === "confirm"
-                  ? "Confirm your email"
-                  : isLogin
-                    ? "Welcome back"
-                    : "Create your account"}
+                {isLogin ? "Welcome back" : "Create your account"}
               </h1>
               <p className="cel-subtitle">
-                {step === "confirm"
-                  ? "Check your inbox for the verification link we sent you."
-                  : isLogin
-                    ? "Sign in to view the maids assigned to you."
-                    : "Register to receive maid profiles from our team."}
+                {isLogin
+                  ? "Sign in to view the maids assigned to you."
+                  : "Register to receive maid profiles from our team."}
               </p>
             </div>
 
-            {step === "confirm" ? (
-              <form onSubmit={(event) => void handleConfirm(event)}>
+            <div>
+              <SocialOAuthButtons disabled={isSubmitting} enableFacebook redirectTo={redirectTo} />
+
+              <div className="cel-divider">
+                <div className="cel-divider-line" />
+                <span className="cel-divider-text">or continue with email</span>
+                <div className="cel-divider-line" />
+              </div>
+
+              <form onSubmit={(event) => void handleSubmit(event)}>
+                {!isLogin && (
+                  <>
+                    <div className="cel-field">
+                      <label className="cel-label">Full Name</label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="cel-input"
+                        placeholder="John Dela Cruz"
+                        required
+                      />
+                    </div>
+
+                    <div className="cel-field">
+                      <label className="cel-label">Phone Number</label>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="cel-input"
+                        placeholder="+65 9123 4567"
+                      />
+                    </div>
+
+                    <div className="cel-field">
+                      <label className="cel-label">
+                        Company <span className="cel-optional">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={company}
+                        onChange={(e) => setCompany(e.target.value)}
+                        className="cel-input"
+                        placeholder="Your company name"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div className="cel-field">
                   <label className="cel-label">Email Address</label>
                   <input
                     type="email"
-                    value={confirmationEmail}
-                    onChange={(e) => setConfirmationEmail(e.target.value)}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="cel-input"
                     placeholder="employer@company.com"
                     required
@@ -533,137 +548,54 @@ const ClientEmployerLogin = () => {
                 </div>
 
                 <div className="cel-field">
-                  <label className="cel-label">Confirmation Code</label>
-                  <input
-                    inputMode="numeric"
-                    value={confirmationCode}
-                    onChange={(e) => setConfirmationCode(e.target.value)}
-                    className="cel-input"
-                    placeholder="6-digit code"
-                    required
-                  />
-                </div>
-
-                <button type="submit" className="cel-submit-btn" disabled={isConfirming}>
-                  {isConfirming ? "Verifying…" : "Confirm & Sign In"}
-                </button>
-                <button type="button" className="cel-ghost-btn" onClick={() => void handleResend()}>
-                  Resend Code
-                </button>
-                <button type="button" className="cel-ghost-btn" onClick={() => setStep("auth")}>
-                  ← Back
-                </button>
-              </form>
-            ) : (
-              <div>
-                <SocialOAuthButtons disabled={isSubmitting} enableFacebook redirectTo={redirectTo} />
-
-                <div className="cel-divider">
-                  <div className="cel-divider-line" />
-                  <span className="cel-divider-text">or continue with email</span>
-                  <div className="cel-divider-line" />
-                </div>
-
-                <form onSubmit={(event) => void handleSubmit(event)}>
-                  {!isLogin && (
-                    <>
-                      <div className="cel-field">
-                        <label className="cel-label">Full Name</label>
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="cel-input"
-                          placeholder="John Dela Cruz"
-                          required
-                        />
-                      </div>
-
-                      <div className="cel-field">
-                        <label className="cel-label">Phone Number</label>
-                        <input
-                          type="tel"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          className="cel-input"
-                          placeholder="+65 9123 4567"
-                        />
-                      </div>
-
-                      <div className="cel-field">
-                        <label className="cel-label">
-                          Company <span className="cel-optional">(optional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={company}
-                          onChange={(e) => setCompany(e.target.value)}
-                          className="cel-input"
-                          placeholder="Your company name"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <div className="cel-field">
-                    <label className="cel-label">Email Address</label>
+                  <label className="cel-label">Password</label>
+                  <div className="cel-input-wrap">
                     <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="cel-input"
-                      placeholder="employer@company.com"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className={`cel-input${!isLogin && password && password.length < 6 ? " cel-input--error" : ""}`}
+                      style={{ paddingRight: "2.75rem" }}
+                      placeholder="••••••••"
                       required
                     />
+                    <button type="button" className="cel-eye-btn" onClick={() => setShowPassword((v) => !v)}>
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
+                  {!isLogin && password && password.length < 6 && (
+                    <p className="cel-error-msg">Password must be at least 6 characters.</p>
+                  )}
+                </div>
 
+                {!isLogin && (
                   <div className="cel-field">
-                    <label className="cel-label">Password</label>
+                    <label className="cel-label">Confirm Password</label>
                     <div className="cel-input-wrap">
                       <input
-                        type={showPassword ? "text" : "password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="cel-input"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className={`cel-input${confirmPassword && password !== confirmPassword ? " cel-input--error" : ""}`}
                         style={{ paddingRight: "2.75rem" }}
                         placeholder="••••••••"
                         required
                       />
-                      <button type="button" className="cel-eye-btn" onClick={() => setShowPassword((v) => !v)}>
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      <button type="button" className="cel-eye-btn" onClick={() => setShowConfirmPassword((v) => !v)}>
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
+                    {confirmPassword && password !== confirmPassword && (
+                      <p className="cel-error-msg">Passwords do not match.</p>
+                    )}
                   </div>
+                )}
 
-                  {!isLogin && (
-                    <div className="cel-field">
-                      <label className="cel-label">Confirm Password</label>
-                      <div className="cel-input-wrap">
-                        <input
-                          type={showConfirmPassword ? "text" : "password"}
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className={`cel-input${confirmPassword && password !== confirmPassword ? " cel-input--error" : ""}`}
-                          style={{ paddingRight: "2.75rem" }}
-                          placeholder="••••••••"
-                          required
-                        />
-                        <button type="button" className="cel-eye-btn" onClick={() => setShowConfirmPassword((v) => !v)}>
-                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                      {confirmPassword && password !== confirmPassword && (
-                        <p className="cel-error-msg">Passwords do not match.</p>
-                      )}
-                    </div>
-                  )}
-
-                  <button type="submit" className="cel-submit-btn" disabled={isSubmitting}>
-                    {isSubmitting ? "Please wait…" : isLogin ? "Sign In" : "Create Account"}
-                  </button>
-                </form>
-              </div>
-            )}
+                <button type="submit" className="cel-submit-btn" disabled={isSubmitting}>
+                  {isSubmitting ? "Please wait…" : isLogin ? "Sign In" : "Create Account"}
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </div>

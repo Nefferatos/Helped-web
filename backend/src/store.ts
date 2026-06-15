@@ -2953,13 +2953,15 @@ export const getOrCreateClientBySupabaseUserStore = async (user: {
     (user.user_metadata?.full_name as string | undefined) ??
     (user.user_metadata?.name as string | undefined) ??
     ''
+  const companyFromMeta = (user.user_metadata?.company as string | undefined) ?? ''
+  const phoneFromMeta = (user.user_metadata?.phone as string | undefined) ?? ''
 
   const client: ClientRecord = {
     id: data.counters.clients++,
     supabaseUserId: user.id,
     name: nameFromMeta || (user.email ? user.email.split('@')[0] : 'Client'),
-    company: '',
-    phone: user.phone ?? '',
+    company: companyFromMeta.trim(),
+    phone: (user.phone || phoneFromMeta).trim(),
     email: user.email ?? '',
     password: '',
     profileImageUrl: '',
