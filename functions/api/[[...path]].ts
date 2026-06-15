@@ -3315,7 +3315,11 @@ const sanitizeStoragePathSegment = (value: string, fallback: string) => {
   return normalized || fallback;
 };
 
+const ensuredStorageBuckets = new Set<string>();
+
 const ensureSupabaseStorageBucket = async (config: SupabaseStorageConfig) => {
+  if (ensuredStorageBuckets.has(config.bucket)) return;
+
   const response = await fetch(`${config.baseUrl}/storage/v1/bucket`, {
     method: "POST",
     headers: supabaseStorageHeaders(config, {
@@ -3329,11 +3333,38 @@ const ensureSupabaseStorageBucket = async (config: SupabaseStorageConfig) => {
     }),
   });
 
-  if (response.ok || response.status === 409) return;
+  if (!response.ok && response.status !== 409) {
+    const message = await readSupabaseError(response);
+    if (!message.toLowerCase().includes("duplicate")) {
+      throw new Error(`Supabase storage bucket error: ${message}`);
+    }
+  }
 
-  const message = await readSupabaseError(response);
-  if (message.toLowerCase().includes("duplicate")) return;
-  throw new Error(`Supabase storage bucket error: ${message}`);
+  // Existing buckets may have been created with a restrictive MIME-type
+  // allowlist (e.g. only images/PDFs), which rejects maid intro videos and
+  // other file types. Clear that restriction so all upload kinds work.
+  const updateResponse = await fetch(
+    `${config.baseUrl}/storage/v1/bucket/${encodeURIComponent(config.bucket)}`,
+    {
+      method: "PUT",
+      headers: supabaseStorageHeaders(config, {
+        "content-type": "application/json",
+      }),
+      body: JSON.stringify({
+        public: true,
+        file_size_limit: "52428800",
+        allowed_mime_types: null,
+      }),
+    },
+  );
+
+  if (!updateResponse.ok) {
+    console.warn(
+      `Supabase storage bucket update warning: ${await readSupabaseError(updateResponse)}`,
+    );
+  }
+
+  ensuredStorageBuckets.add(config.bucket);
 };
 
 const buildSupabasePublicFileUrl = (
