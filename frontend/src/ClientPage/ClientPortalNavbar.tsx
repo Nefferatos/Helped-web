@@ -199,7 +199,7 @@ const ClientPortalNavbar = () => {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[360px] max-w-[calc(100vw-24px)]">
+            <DropdownMenuContent align="end" className="client-page-theme w-[360px] max-w-[calc(100vw-24px)]">
               <DropdownMenuLabel className="flex items-center justify-between gap-3">
                 <span>Notifications</span>
                 <span className="text-xs font-medium text-muted-foreground">
@@ -263,7 +263,7 @@ const ClientPortalNavbar = () => {
                 </span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="client-page-theme w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>

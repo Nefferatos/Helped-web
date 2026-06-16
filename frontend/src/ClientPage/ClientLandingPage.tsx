@@ -565,12 +565,15 @@ const GLOBAL_STYLES = `
     .pagination-btn { min-width: 38px; height: 38px; padding: 0 8px; font-size: 12px; }
     .back-to-top-btn { bottom: 20px; left: 20px; width: 42px; height: 42px; }
   }
+  .hero-grid { grid-template-columns: 1fr 1fr; }
+  .why-grid  { grid-template-columns: 1fr 1fr; }
+
   @media (max-width: 900px) {
-    .hero-grid  { grid-template-columns: 1fr !important; }
-    .hero-img-col { display: none !important; }
+    .hero-grid  { grid-template-columns: 1fr; }
+    .hero-img-col { display: none; }
     .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
-    .why-grid   { grid-template-columns: 1fr !important; }
-    .why-img-col { display: none !important; }
+    .why-grid   { grid-template-columns: 1fr; }
+    .why-img-col { display: none; }
   }
   @media (max-width: 768px) {
     .filter-row  { flex-direction: column !important; gap: 10px !important; }
@@ -1133,7 +1136,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           pointerEvents:"none", zIndex:0 }} />
 
         <div style={{ position:"relative", zIndex:1, maxWidth:1280, margin:"0 auto", padding:"64px 24px 0" }}>
-          <div className="hero-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:52, alignItems:"center" }}>
+          <div className="hero-grid" style={{ display:"grid", gap:52, alignItems:"center" }}>
 
             {/* Left */}
             <div style={{ animation:"fadeUp 0.65s ease both" }}>
@@ -1607,7 +1610,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </p>
           </div>
 
-          <div className="why-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:52, alignItems:"center" }}>
+          <div className="why-grid" style={{ display:"grid", gap:52, alignItems:"center" }}>
             {/* Image */}
             <div className="why-img-col" style={{ position:"relative" }}>
               <div className="why-frame" style={{ zIndex:1 }}>

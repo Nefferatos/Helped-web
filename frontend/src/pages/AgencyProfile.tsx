@@ -4,7 +4,7 @@ import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import {
   Edit, MessageCircle, Building2, Phone, Globe, MapPin, Clock,
   Users, Star, Image as ImageIcon, Mail, Printer, Facebook, X,
-  Shield, Camera, Eye, EyeOff, TrendingUp, ChevronRight,
+  Shield, Camera, Eye, EyeOff, TrendingUp, ChevronRight, FileText,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
@@ -42,385 +42,408 @@ const useWindowWidth = () => {
   return w;
 };
 
-/* ─── Design Tokens ──────────────────────────────────────────────────── */
-const C = {
-  primary:       "#0D6E56",
-  primaryDark:   "#085041",
-  primaryLight:  "#E8F7F2",
-  primaryMid:    "#C3EBE0",
-  bg:            "#F5F7FA",
-  card:          "#FFFFFF",
-  border:        "#E4E9F0",
-  borderLight:   "#EEF2F7",
-  text:          "#0D1117",
-  textMid:       "#2D3748",
-  textSoft:      "#64748B",
-  textMuted:     "#94A3B8",
-  headerFrom:    "#0a2540",
-  headerTo:      "#0D6E56",
-  accent:        "#F59E0B",
-  danger:        "#EF4444",
-};
-
-/* ─── Stat Config ────────────────────────────────────────────────────── */
-const statConfig = [
-  { label: "Total Maids",   icon: Users,         color: "#3730A3", bg: "#EEF2FF", border: "#C7D2FE", key: "totalMaids"      },
-  { label: "Public",        icon: Eye,           color: "#065F46", bg: "#ECFDF5", border: "#6EE7B7", key: "publicMaids"    },
-  { label: "Hidden",        icon: EyeOff,        color: "#9A3412", bg: "#FFF7ED", border: "#FDBA74", key: "hiddenMaids"    },
-  { label: "With Photos",   icon: Camera,        color: "#6B21A8", bg: "#FAF5FF", border: "#D8B4FE", key: "maidsWithPhotos"},
-  { label: "Enquiries",     icon: MessageCircle, color: "#9F1239", bg: "#FFF1F2", border: "#FECDD3", key: "enquiries"      },
-  { label: "MOM Staff",     icon: Shield,        color: "#0C4A6E", bg: "#F0F9FF", border: "#BAE6FD", key: "momPersonnel"   },
-  { label: "Testimonials",  icon: Star,          color: "#78350F", bg: "#FFFBEB", border: "#FDE68A", key: "testimonials"   },
-  { label: "Gallery",       icon: ImageIcon,     color: "#14532D", bg: "#F0FDF4", border: "#86EFAC", key: "galleryImages"  },
-] as const;
-
 /* ─── Global CSS ─────────────────────────────────────────────────────── */
 const GLOBAL_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
-
-  * { box-sizing: border-box; }
-
-  .ap-root { font-family: 'Plus Jakarta Sans', sans-serif; }
-
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
+  :root {
+    --teal:        #0E4E5E;
+    --teal-dark:   #093845;
+    --teal-deeper: #061d26;
+    --teal-mid:    #155f72;
+    --teal-light:  #1a7a91;
+    --teal-mist:   #dff0f4;
+    --teal-pale:   #eef8fb;
+    --gold:        #FCD34D;
+    --gold-deep:   #e8b800;
+    --gold-warm:   #fde68a;
+    --gold-pale:   #fffbeb;
+    --ink:         #0b1c22;
+    --mid:         #3d5c66;
+    --soft:        #7a9daa;
+    --border:      #cbe6ed;
+    --surface:     #ffffff;
+    --bg:          #f4fafc;
+    --font-serif:  Georgia, 'Times New Roman', serif;
+    --font-mono:   'SF Mono', 'Fira Mono', 'Consolas', monospace;
+    --font-sans:   system-ui, -apple-system, sans-serif;
+    --radius:      12px;
+    --radius-lg:   18px;
+    --shadow-sm:   0 1px 4px rgba(14,78,94,.06);
+    --shadow:      0 3px 14px rgba(14,78,94,.09);
+    --shadow-lg:   0 10px 36px rgba(14,78,94,.14);
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
 
-  .ap-fadein { animation: fadeUp 0.35s ease both; }
+  .ap2 * { box-sizing: border-box; }
 
-  .ap-card {
-    background: #fff;
-    border-radius: 16px;
-    border: 1.5px solid ${C.border};
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.04);
+  @keyframes ap2-fadeup {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes ap2-spin { to { transform: rotate(360deg); } }
+  @keyframes ap2-pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .5; transform: scale(.65); }
+  }
+
+  .ap2-fadein { animation: ap2-fadeup .38s ease both; }
+
+  /* ── Card ── */
+  .ap2-card {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border);
+    box-shadow: var(--shadow-sm);
     overflow: hidden;
   }
 
-  .ap-card-header {
+  /* ── Section header ── */
+  .ap2-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 20px;
-    border-bottom: 1.5px solid ${C.borderLight};
-    background: linear-gradient(135deg, #FAFBFD 0%, #F4F7FB 100%);
+    padding: 13px 20px;
+    border-bottom: 1.5px solid var(--border);
+    background: linear-gradient(135deg, #fafeff 0%, #f0f8fb 100%);
   }
-
-  .ap-card-header-left {
+  .ap2-section-head-left {
     display: flex;
     align-items: center;
     gap: 10px;
   }
-
-  .ap-card-header-icon {
-    width: 34px;
-    height: 34px;
+  .ap2-section-icon {
+    width: 32px; height: 32px;
     border-radius: 9px;
-    background: ${C.primaryLight};
-    border: 1.5px solid ${C.primaryMid};
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: var(--teal-pale);
+    border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
   }
-
-  .ap-card-header-title {
+  .ap2-section-title {
+    font-family: var(--font-serif);
     font-size: 15px;
-    font-weight: 800;
-    color: ${C.text};
-    letter-spacing: -0.01em;
-  }
-
-  .ap-badge {
-    font-size: 12px;
     font-weight: 700;
-    padding: 3px 11px;
-    border-radius: 20px;
-    background: ${C.primaryLight};
-    color: ${C.primaryDark};
-    border: 1.5px solid ${C.primaryMid};
-    line-height: 1;
+    color: var(--ink);
+    letter-spacing: -.015em;
+  }
+  .ap2-count-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 100px;
+    background: var(--teal-mist);
+    color: var(--teal);
+    border: 1px solid var(--border);
   }
 
-  .ap-stat-chip {
-    border-radius: 14px;
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    border-width: 1.5px;
-    border-style: solid;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-  }
-  .ap-stat-chip:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-  }
-
-  .ap-stat-chip-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .ap-stat-label {
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .ap-stat-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.65);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .ap-stat-value {
-    font-size: 30px;
-    font-weight: 900;
-    line-height: 1;
-    letter-spacing: -0.03em;
-  }
-
-  .ap-contact-row {
+  /* ── Contact rows ── */
+  .ap2-info-row {
     display: flex;
     align-items: flex-start;
     gap: 12px;
     padding: 10px 0;
-    border-bottom: 1px solid ${C.borderLight};
+    border-bottom: 1px solid var(--teal-pale);
   }
-  .ap-contact-row:last-child { border-bottom: none; }
-
-  .ap-contact-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
+  .ap2-info-row:last-child { border-bottom: none; }
+  .ap2-info-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: var(--teal-pale);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
-    background: ${C.primaryLight};
-    border: 1.5px solid ${C.primaryMid};
-    display: flex;
-    align-items: center;
-    justify-content: center;
     margin-top: 1px;
   }
-
-  .ap-contact-label {
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.1em;
+  .ap2-info-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .12em;
     text-transform: uppercase;
-    color: ${C.textMuted};
-    margin: 0 0 3px;
+    color: var(--soft);
+    margin: 0 0 2px;
     line-height: 1;
   }
-
-  .ap-contact-value {
-    font-size: 14px;
-    color: ${C.textMid};
+  .ap2-info-value {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--mid);
     font-weight: 600;
-    word-break: break-all;
     margin: 0;
-    line-height: 1.5;
+    line-height: 1.55;
+    word-break: break-word;
   }
-
-  .ap-contact-link {
-    font-size: 14px;
-    color: ${C.primary};
+  .ap2-info-link {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--teal);
     font-weight: 600;
-    word-break: break-all;
     text-decoration: none;
-    line-height: 1.5;
+    line-height: 1.55;
+    word-break: break-word;
+    transition: color .15s;
   }
-  .ap-contact-link:hover { text-decoration: underline; }
+  .ap2-info-link:hover { color: var(--teal-mid); text-decoration: underline; }
 
-  .ap-action-btn {
+  /* ── Action buttons ── */
+  .ap2-btn {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    font-size: 14px;
+    font-family: var(--font-sans);
+    font-size: 13px;
     font-weight: 700;
     padding: 9px 17px;
     border-radius: 10px;
     text-decoration: none;
-    transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
     cursor: pointer;
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    border: none;
+    transition: transform .14s ease, box-shadow .14s ease, background .14s ease;
     line-height: 1;
+    white-space: nowrap;
   }
-  .ap-action-btn:hover { transform: translateY(-1px); opacity: 0.9; }
+  .ap2-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(14,78,94,.18); }
 
-  .ap-gallery-thumb {
-    aspect-ratio: 1/1;
+  .ap2-btn--ghost {
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,.25);
+  }
+  .ap2-btn--ghost:hover { background: rgba(255,255,255,.2); box-shadow: none; }
+
+  .ap2-btn--gold {
+    background: var(--gold);
+    color: var(--teal-deeper);
+  }
+  .ap2-btn--gold:hover { background: var(--gold-warm); box-shadow: 0 6px 20px rgba(252,211,77,.3); }
+
+  .ap2-btn--teal {
+    background: var(--teal);
+    color: #fff;
+  }
+  .ap2-btn--teal:hover { background: var(--teal-dark); }
+
+  .ap2-btn--outline {
+    background: var(--teal-pale);
+    color: var(--teal);
+    border: 1.5px solid var(--border);
+  }
+  .ap2-btn--outline:hover { background: var(--teal-mist); box-shadow: var(--shadow-sm); }
+
+  /* ── Gallery ── */
+  .ap2-gallery-thumb {
+    aspect-ratio: 1;
     overflow: hidden;
     border-radius: 10px;
-    border: 1.5px solid ${C.border};
-    background: ${C.bg};
+    border: 1.5px solid var(--border);
+    background: var(--bg);
     cursor: pointer;
     padding: 0;
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
   }
-  .ap-gallery-thumb:hover {
-    transform: scale(1.04);
-    box-shadow: 0 8px 24px rgba(13,110,86,0.18);
-    border-color: ${C.primaryMid};
+  .ap2-gallery-thumb:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 28px rgba(14,78,94,.2);
+    border-color: var(--teal-light);
   }
 
-  .ap-testimonial-item:nth-child(odd)  { background: #fff; }
-  .ap-testimonial-item:nth-child(even) { background: #FAFBFD; }
+  /* ── Table ── */
+  .ap2-table-row:hover { background: var(--teal-pale) !important; }
 
-  .ap-table-row:hover { background: #F5F8FC !important; }
+  /* ── Testimonials ── */
+  .ap2-testimonial:nth-child(even) { background: var(--bg); }
+  .ap2-testimonial:nth-child(odd)  { background: var(--surface); }
 
-  .ap-empty {
+  /* ── Empty state ── */
+  .ap2-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 40px 20px;
     gap: 10px;
-    padding: 36px 20px;
-  }
-  .ap-empty-icon {
-    width: 50px;
-    height: 50px;
-    border-radius: 13px;
-    background: ${C.primaryLight};
-    border: 1.5px solid ${C.primaryMid};
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .ap-empty-text {
-    font-size: 14px;
-    color: ${C.textSoft};
-    font-weight: 600;
     text-align: center;
+  }
+  .ap2-empty-icon {
+    width: 48px; height: 48px;
+    border-radius: 13px;
+    background: var(--teal-pale);
+    border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ap2-empty-text {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--soft);
+    font-weight: 600;
     margin: 0;
   }
 
-  .ap-lightbox-overlay {
+  /* ── Lightbox ── */
+  .ap2-lightbox {
     position: fixed; inset: 0; z-index: 9999;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.92);
-    animation: fadeUp 0.2s ease both;
+    background: rgba(6,29,38,.93);
+    animation: ap2-fadeup .2s ease both;
   }
 
-  .ap-section-divider {
-    height: 1px;
-    background: linear-gradient(90deg, transparent, ${C.border} 20%, ${C.border} 80%, transparent);
-    margin: 2px 0;
+  /* ── Ledger stat strip ── */
+  .ap2-ledger {
+    display: flex;
+    align-items: stretch;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .ap2-ledger-cell {
+    flex: 1;
+    padding: 18px 14px 16px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: background .15s;
+    min-width: 0;
+  }
+  .ap2-ledger-cell:last-child { border-right: none; }
+  .ap2-ledger-cell:hover { background: var(--teal-pale); }
+  .ap2-ledger-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--soft);
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ap2-ledger-value {
+    font-family: var(--font-serif);
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -.03em;
+    color: var(--teal);
+  }
+  .ap2-ledger-icon {
+    width: 20px; height: 20px;
+    color: var(--soft);
+    flex-shrink: 0;
+  }
+  .ap2-ledger-icon-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* ── Gold dot indicator ── */
+  .ap2-live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--gold);
+    animation: ap2-pulse 2.2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  /* ── Star rating ── */
+  .ap2-stars { display: flex; gap: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ap2-fadein { animation: none; }
+    .ap2-live-dot { animation: none; }
   }
 `;
 
 /* ─── Sub-components ─────────────────────────────────────────────────── */
 
-const SectionCard = ({
-  children, style,
-}: { children: React.ReactNode; style?: React.CSSProperties }) => (
-  <div className="ap-card" style={style}>{children}</div>
+const SectionCard = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
+  <div className="ap2-card" style={style}>{children}</div>
 );
 
-const SectionHeader = ({
-  icon: Icon, title, count,
-}: { icon: React.ElementType; title: string; count?: number }) => (
-  <div className="ap-card-header">
-    <div className="ap-card-header-left">
-      <div className="ap-card-header-icon">
-        <Icon size={16} color={C.primary} />
-      </div>
-      <span className="ap-card-header-title">{title}</span>
+const SectionHead = ({ icon: Icon, title, count }: { icon: React.ElementType; title: string; count?: number }) => (
+  <div className="ap2-section-head">
+    <div className="ap2-section-head-left">
+      <div className="ap2-section-icon"><Icon size={15} color="var(--teal)" /></div>
+      <span className="ap2-section-title">{title}</span>
     </div>
-    {count !== undefined && (
-      <span className="ap-badge">{count}</span>
-    )}
+    {count !== undefined && <span className="ap2-count-badge">{count}</span>}
   </div>
 );
 
-const StatChip = ({
-  label, value, color, bg, border, icon: Icon,
-}: { label: string; value: number; color: string; bg: string; border: string; icon: React.ElementType }) => (
-  <div className="ap-stat-chip" style={{ background: bg, borderColor: border }}>
-    <div className="ap-stat-chip-top">
-      <span className="ap-stat-label" style={{ color }}>{label}</span>
-      <div className="ap-stat-icon">
-        <Icon size={14} color={color} />
-      </div>
-    </div>
-    <span className="ap-stat-value" style={{ color }}>{value}</span>
-  </div>
-);
-
-const ContactRow = ({
-  icon: Icon, label, value, href,
-}: { icon: React.ElementType; label: string; value?: string; href?: string }) => {
+const InfoRow = ({ icon: Icon, label, value, href }: { icon: React.ElementType; label: string; value?: string; href?: string }) => {
   if (!value) return null;
   return (
-    <div className="ap-contact-row">
-      <div className="ap-contact-icon"><Icon size={15} color={C.primary} /></div>
+    <div className="ap2-info-row">
+      <div className="ap2-info-icon"><Icon size={14} color="var(--teal)" /></div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p className="ap-contact-label">{label}</p>
+        <p className="ap2-info-label">{label}</p>
         {href
-          ? <a href={href} target="_blank" rel="noreferrer" className="ap-contact-link">{value}</a>
-          : <p className="ap-contact-value">{value}</p>
-        }
+          ? <a href={href} target="_blank" rel="noreferrer" className="ap2-info-link">{value}</a>
+          : <p className="ap2-info-value">{value}</p>}
       </div>
     </div>
   );
 };
 
-const EmptyState = ({ icon: Icon, message }: { icon: React.ElementType; message: string }) => (
-  <div className="ap-empty">
-    <div className="ap-empty-icon"><Icon size={22} color={C.primary} /></div>
-    <p className="ap-empty-text">{message}</p>
+const Empty = ({ icon: Icon, message }: { icon: React.ElementType; message: string }) => (
+  <div className="ap2-empty">
+    <div className="ap2-empty-icon"><Icon size={20} color="var(--teal)" /></div>
+    <p className="ap2-empty-text">{message}</p>
   </div>
 );
 
 /* ─── Sidebar ────────────────────────────────────────────────────────── */
 const Sidebar = ({ company }: { company: CompanyProfileApi }) => (
   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-    {/* Contact Details */}
     <SectionCard>
-      <SectionHeader icon={Phone} title="Contact Details" />
-      <div style={{ padding: "6px 18px 14px" }}>
-        <ContactRow icon={Building2} label="Company"       value={company.company_name} />
-        <ContactRow icon={Users}     label="Contact Person" value={company.contact_person} />
-        <ContactRow icon={Phone}     label="Phone"         value={company.contact_phone}   href={`tel:${company.contact_phone}`} />
-        <ContactRow icon={Mail}      label="Email"         value={company.contact_email}   href={`mailto:${company.contact_email}`} />
-        <ContactRow icon={Printer}   label="Fax"           value={company.contact_fax} />
-        <ContactRow icon={Globe}     label="Website"       value={company.contact_website} href={company.contact_website} />
-        <ContactRow icon={Facebook}  label="Facebook"      value={company.social_facebook} href={company.social_facebook} />
-        <ContactRow icon={MessageCircle} label="WhatsApp"  value={company.social_whatsapp_number}
+      <SectionHead icon={Phone} title="Contact Details" />
+      <div style={{ padding: "6px 18px 12px" }}>
+        <InfoRow icon={Building2} label="Company"        value={company.company_name} />
+        <InfoRow icon={Users}     label="Contact Person" value={company.contact_person} />
+        <InfoRow icon={Phone}     label="Phone"          value={company.contact_phone} href={`tel:${company.contact_phone}`} />
+        <InfoRow icon={Mail}      label="Email"          value={company.contact_email} href={`mailto:${company.contact_email}`} />
+        <InfoRow icon={Printer}   label="Fax"            value={company.contact_fax} />
+        <InfoRow icon={Globe}     label="Website"        value={company.contact_website} href={company.contact_website} />
+        <InfoRow icon={Facebook}  label="Facebook"       value={company.social_facebook} href={company.social_facebook} />
+        <InfoRow icon={MessageCircle} label="WhatsApp"   value={company.social_whatsapp_number}
           href={`https://wa.me/${company.social_whatsapp_number?.replace(/\D/g, "")}`} />
       </div>
     </SectionCard>
 
-    {/* Location */}
     <SectionCard>
-      <SectionHeader icon={MapPin} title="Location" />
-      <div style={{ padding: "6px 18px 14px" }}>
-        <ContactRow icon={MapPin} label="Address"
-          value={[company.address_line1, company.address_line2, company.postal_code, company.country]
-            .filter(Boolean).join(", ") || undefined} />
-        <ContactRow icon={Clock} label="Office Hours" value={company.office_hours_regular} />
-        <ContactRow icon={Clock} label="Other Hours"  value={company.office_hours_other} />
+      <SectionHead icon={MapPin} title="Location" />
+      <div style={{ padding: "6px 18px 12px" }}>
+        <InfoRow icon={MapPin} label="Address"
+          value={[company.address_line1, company.address_line2, company.postal_code, company.country].filter(Boolean).join(", ") || undefined} />
+        <InfoRow icon={Clock} label="Office Hours" value={company.office_hours_regular} />
+        <InfoRow icon={Clock} label="Other Hours"  value={company.office_hours_other} />
       </div>
     </SectionCard>
 
-    {/* Registration */}
     <SectionCard>
-      <SectionHeader icon={Shield} title="Registration" />
-      <div style={{ padding: "6px 18px 14px" }}>
-        <ContactRow icon={Shield}    label="License No." value={company.license_no} />
-        <ContactRow icon={Building2} label="Short Name"  value={company.short_name} />
+      <SectionHead icon={Shield} title="Registration" />
+      <div style={{ padding: "6px 18px 12px" }}>
+        <InfoRow icon={Shield}    label="License No." value={company.license_no} />
+        <InfoRow icon={Building2} label="Short Name"  value={company.short_name} />
       </div>
     </SectionCard>
   </div>
 );
+
+/* ─── Ledger stats ───────────────────────────────────────────────────── */
+const statDef = [
+  { key: "totalMaids",     label: "Total Maids",  icon: Users },
+  { key: "publicMaids",    label: "Public",        icon: Eye },
+  { key: "hiddenMaids",    label: "Hidden",        icon: EyeOff },
+  { key: "maidsWithPhotos",label: "With Photos",  icon: Camera },
+  { key: "enquiries",      label: "Enquiries",    icon: MessageCircle },
+  { key: "momPersonnel",   label: "MOM Staff",    icon: Shield },
+  { key: "testimonials",   label: "Reviews",      icon: Star },
+  { key: "galleryImages",  label: "Gallery",      icon: ImageIcon },
+] as const;
 
 /* ─── Main ───────────────────────────────────────────────────────────── */
 const AgencyProfile = () => {
@@ -436,46 +459,46 @@ const AgencyProfile = () => {
   const isMobile = width < 768;
   const isTablet = width < 1100;
 
-  const loadCompanyProfile = async () => {
+  const load = async () => {
     try {
       setIsLoading(true); setLoadError(null);
-      const [response, summaryResponse] = await Promise.all([
-        fetch("/api/company",         { headers: { ...getAgencyAdminAuthHeaders() } }),
-        fetch("/api/company/summary", { headers: { ...getAgencyAdminAuthHeaders() } }),
+      const [r, rs] = await Promise.all([
+        fetch("/api/company",         { headers: getAgencyAdminAuthHeaders() }),
+        fetch("/api/company/summary", { headers: getAgencyAdminAuthHeaders() }),
       ]);
-      const data = (await response.json().catch(() => ({}))) as Partial<CompanyResponse> & { error?: string };
-      if (!response.ok || !data.companyProfile) throw new Error(data.error || "Failed to load");
+      const data = (await r.json().catch(() => ({}))) as Partial<CompanyResponse> & { error?: string };
+      if (!r.ok || !data.companyProfile) throw new Error(data.error || "Failed to load profile");
       setCompany(data.companyProfile);
       setMomPersonnel(data.momPersonnel ?? []);
       setTestimonials(data.testimonials ?? []);
-      if (summaryResponse.ok) {
-        const s = (await summaryResponse.json().catch(() => ({}))) as Partial<AgencySummary>;
+      if (rs.ok) {
+        const s = (await rs.json().catch(() => ({}))) as Partial<AgencySummary>;
         setSummary({
           publicMaids: s.publicMaids ?? 0, hiddenMaids: s.hiddenMaids ?? 0,
-          totalMaids: s.totalMaids ?? 0,   maidsWithPhotos: s.maidsWithPhotos ?? 0,
-          enquiries: s.enquiries ?? 0,     momPersonnel: s.momPersonnel ?? 0,
+          totalMaids: s.totalMaids ?? 0, maidsWithPhotos: s.maidsWithPhotos ?? 0,
+          enquiries: s.enquiries ?? 0, momPersonnel: s.momPersonnel ?? 0,
           testimonials: s.testimonials ?? 0, galleryImages: s.galleryImages ?? 0,
         });
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Failed to load";
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load";
       setLoadError(msg); toast.error(msg);
     } finally { setIsLoading(false); }
   };
 
-  useEffect(() => { void loadCompanyProfile(); }, []);
+  useEffect(() => { void load(); }, []);
 
   /* ── Loading ── */
   if (isLoading) return (
-    <div style={{ display: "flex", height: "18rem", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ display: "flex", height: "20rem", alignItems: "center", justifyContent: "center" }}>
       <style>{GLOBAL_CSS}</style>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
         <div style={{
-          width: 44, height: 44, borderRadius: "50%",
-          border: `4px solid ${C.primaryLight}`, borderTopColor: C.primary,
-          animation: "spin 0.8s linear infinite",
+          width: 40, height: 40, borderRadius: "50%",
+          border: "3.5px solid var(--teal-mist)", borderTopColor: "var(--teal)",
+          animation: "ap2-spin .75s linear infinite",
         }} />
-        <span style={{ fontSize: 15, color: C.textMid, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <span style={{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--mid)", fontWeight: 600 }}>
           Loading profile…
         </span>
       </div>
@@ -484,98 +507,181 @@ const AgencyProfile = () => {
 
   /* ── Error ── */
   if (loadError || !company) return (
-    <div style={{ display: "flex", height: "18rem", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+    <div style={{ display: "flex", height: "20rem", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
       <style>{GLOBAL_CSS}</style>
-      <p style={{ fontSize: 15, color: C.danger, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", margin: 0 }}>
-        {loadError || "Failed to load"}
+      <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, color: "#dc2626", fontWeight: 700, margin: 0 }}>
+        {loadError || "Failed to load profile"}
       </p>
-      <button onClick={() => void loadCompanyProfile()} style={{
-        fontSize: 14, padding: "10px 22px", borderRadius: 10, border: `1.5px solid ${C.border}`,
-        background: "#fff", color: C.text, cursor: "pointer", fontWeight: 700,
-        fontFamily: "'Plus Jakarta Sans', sans-serif",
-      }}>🔄 Retry</button>
+      <button onClick={() => void load()} className="ap2-btn ap2-btn--outline" style={{ fontSize: 13 }}>
+        Retry
+      </button>
     </div>
   );
 
   const gallery = company.gallery_image_data_urls ?? [];
 
   return (
-    <div className="ap-root ap-fadein" style={{ display: "flex", flexDirection: "column", gap: 16, color: C.text, lineHeight: 1.7 }}>
+    <div className="ap2 ap2-fadein" style={{
+      display: "flex", flexDirection: "column", gap: 14,
+      color: "var(--ink)", lineHeight: 1.7,
+      fontFamily: "var(--font-sans)",
+      background: "var(--bg)",
+    }}>
       <style>{GLOBAL_CSS}</style>
 
-      {/* ── Lightbox ─────────────────────────────────────────────── */}
+      {/* ── Lightbox ── */}
       {lightboxImage && (
-        <div className="ap-lightbox-overlay" onClick={() => setLightboxImage(null)}>
+        <div className="ap2-lightbox" onClick={() => setLightboxImage(null)}>
           <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
             <img
-              src={lightboxImage} alt="Gallery preview"
-              style={{ maxHeight: "90vh", maxWidth: "92vw", borderRadius: 14, objectFit: "contain", boxShadow: "0 30px 80px rgba(0,0,0,0.5)" }}
+              src={lightboxImage}
+              alt="Gallery preview"
+              style={{ maxHeight: "90vh", maxWidth: "92vw", borderRadius: 14, objectFit: "contain", display: "block" }}
             />
             <button
               onClick={() => setLightboxImage(null)}
               style={{
                 position: "absolute", top: -14, right: -14,
-                width: 36, height: 36, borderRadius: "50%",
+                width: 34, height: 34, borderRadius: "50%",
                 background: "#fff", border: "none", cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
+                boxShadow: "0 2px 10px rgba(0,0,0,.3)",
               }}>
-              <X size={16} color="#111" />
+              <X size={15} color="#111" />
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Hero Banner ──────────────────────────────────────────── */}
+      {/* ── Hero Identity Card ── */}
       <div style={{
-        background: `linear-gradient(135deg, ${C.headerFrom} 0%, ${C.headerTo} 100%)`,
-        borderRadius: 18,
-        padding: isMobile ? "20px 18px" : "28px 32px",
-        boxShadow: "0 8px 32px rgba(13,110,86,0.22)",
-        position: "relative",
+        background: "var(--teal-deeper)",
+        borderRadius: "var(--radius-lg)",
         overflow: "hidden",
+        position: "relative",
+        boxShadow: "var(--shadow-lg)",
       }}>
-        {/* Decorative orbs */}
-        <div style={{ position: "absolute", top: -60, right: -60, width: 220, height: 220, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", bottom: -40, left: "40%", width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.03)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", top: "30%", right: "25%", width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.02)", pointerEvents: "none" }} />
-
-        {/* Top row: logo + name + actions */}
+        {/* Background texture: dot grid */}
         <div style={{
-          display: "flex", flexWrap: "wrap", alignItems: "center",
-          justifyContent: "space-between", gap: 16, position: "relative", zIndex: 1,
+          position: "absolute", inset: 0,
+          backgroundImage: "radial-gradient(circle, rgba(255,255,255,.055) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+          pointerEvents: "none",
+          zIndex: 0,
+        }} />
+
+        {/* Top gold streak */}
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, height: "3px",
+          background: "linear-gradient(90deg, transparent 0%, var(--gold) 30%, #fde68a 60%, transparent 100%)",
+          zIndex: 2,
+        }} />
+
+        {/* Right diagonal panel */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(155deg, transparent 50%, rgba(14,78,94,.35) 100%)",
+          zIndex: 0, pointerEvents: "none",
+        }} />
+
+        {/* Large watermark */}
+        <div style={{
+          position: "absolute", right: "-1%", bottom: "-18%",
+          fontSize: "clamp(120px, 14vw, 200px)",
+          fontFamily: "var(--font-serif)",
+          fontWeight: 900,
+          color: "transparent",
+          WebkitTextStroke: "1.5px rgba(255,255,255,.05)",
+          lineHeight: 1,
+          userSelect: "none",
+          pointerEvents: "none",
+          zIndex: 0,
+          letterSpacing: "-.04em",
+        }} aria-hidden="true">
+          {company.short_name || "AG"}
+        </div>
+
+        {/* Content */}
+        <div style={{
+          position: "relative", zIndex: 1,
+          padding: isMobile ? "22px 18px 24px" : "28px 32px 30px",
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "flex-start" : "center",
+          justifyContent: "space-between",
+          gap: 20,
         }}>
-          {/* Logo + Identity */}
-          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          {/* Left: logo + identity */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 14 : 20 }}>
+            {/* Logo container */}
             <div style={{
-              width: isMobile ? 64 : 80, height: isMobile ? 64 : 80, flexShrink: 0,
-              borderRadius: 16, border: "2px solid rgba(255,255,255,0.25)",
-              background: "rgba(255,255,255,0.12)", overflow: "hidden",
+              width: isMobile ? 64 : 80, height: isMobile ? 64 : 80,
+              borderRadius: 16,
+              border: "2px solid rgba(252,211,77,.35)",
+              background: "rgba(255,255,255,.1)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+              overflow: "hidden", flexShrink: 0,
+              boxShadow: "0 4px 20px rgba(0,0,0,.25)",
             }}>
               {company.logo_data_url
-                ? <img src={company.logo_data_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                : <Building2 size={isMobile ? 26 : 34} color="rgba(255,255,255,0.5)" />}
+                ? <img src={company.logo_data_url} alt="Agency logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                : <Building2 size={isMobile ? 26 : 34} color="rgba(255,255,255,.4)" />}
             </div>
+
+            {/* Name block */}
             <div>
+              {/* Eyebrow */}
+              <div style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: ".14em",
+                textTransform: "uppercase",
+                color: "var(--gold)",
+                marginBottom: 6,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}>
+                <span className="ap2-live-dot" />
+                MOM Licensed Agency
+              </div>
+
               <h1 style={{
-                fontSize: isMobile ? 20 : 26, fontWeight: 900, color: "#fff",
-                margin: "0 0 7px", lineHeight: 1.15, letterSpacing: "-0.02em",
+                fontFamily: "var(--font-serif)",
+                fontSize: isMobile ? 20 : 26,
+                fontWeight: 800,
+                color: "#fff",
+                margin: "0 0 10px",
+                lineHeight: 1.12,
+                letterSpacing: "-.025em",
               }}>
                 {company.company_name || "Agency Profile"}
               </h1>
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+
+              {/* License + shortname chips */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                 <span style={{
-                  fontSize: 12, fontWeight: 800, padding: "3px 11px", borderRadius: 6,
-                  background: "rgba(255,255,255,0.15)", color: "#a7f3d0",
-                  letterSpacing: "0.06em", textTransform: "uppercase",
-                  border: "1px solid rgba(255,255,255,0.18)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "4px 12px",
+                  borderRadius: 6,
+                  background: "rgba(252,211,77,.15)",
+                  color: "var(--gold-warm)",
+                  border: "1px solid rgba(252,211,77,.3)",
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
                 }}>
                   Lic. {company.license_no || "N/A"}
                 </span>
                 {company.short_name && (
-                  <span style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>
+                  <span style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 13,
+                    color: "rgba(255,255,255,.55)",
+                    fontWeight: 600,
+                  }}>
                     {company.short_name}
                   </span>
                 )}
@@ -583,99 +689,113 @@ const AgencyProfile = () => {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <Link to={adminPath("/agency-profile/edit")} className="ap-action-btn" style={{
-              background: "rgba(255,255,255,0.13)",
-              color: "#fff",
-              border: "1.5px solid rgba(255,255,255,0.3)",
-            }}>
-              <Edit size={14} /> Edit Profile
+          {/* Right: action buttons */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <Link to={adminPath("/agency-profile/edit")} className="ap2-btn ap2-btn--ghost">
+              <Edit size={13} /> Edit Profile
             </Link>
-            <Link to={adminPath("/employment-contracts")} className="ap-action-btn" style={{
-              background: "rgba(255,255,255,0.13)",
-              color: "#fff",
-              border: "1.5px solid rgba(255,255,255,0.3)",
-            }}>
-              <Shield size={14} /> Contracts
+            <Link to={adminPath("/employment-contracts")} className="ap2-btn ap2-btn--ghost">
+              <FileText size={13} /> Contracts
             </Link>
-            <Link to={adminPath("/chat-support")} className="ap-action-btn" style={{
-              background: "#fff",
-              color: C.primary,
-              border: "none",
-              boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
-            }}>
-              <MessageCircle size={14} /> Chat
+            <Link to={adminPath("/chat-support")} className="ap2-btn ap2-btn--gold">
+              <MessageCircle size={13} /> Chat
             </Link>
           </div>
         </div>
       </div>
 
-      {/* ── Stat Grid ────────────────────────────────────────────── */}
+      {/* ── Ledger stats strip ── */}
       {summary && (
-        <div style={{
+        <div className="ap2-ledger" style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "repeat(2,1fr)" : isTablet ? "repeat(4,1fr)" : "repeat(8,1fr)",
-          gap: 10,
+          gridTemplateColumns: isMobile
+            ? "repeat(4, 1fr)"
+            : "repeat(8, 1fr)",
+          gap: 0,
         }}>
-          {statConfig.map(({ label, color, bg, border, key, icon }) => (
-            <StatChip key={label} label={label} value={summary[key as keyof AgencySummary]}
-              color={color} bg={bg} border={border} icon={icon} />
+          {statDef.map(({ key, label, icon: Icon }) => (
+            <div key={key} className="ap2-ledger-cell">
+              <div className="ap2-ledger-icon-row">
+                <span className="ap2-ledger-label">{label}</span>
+                <Icon className="ap2-ledger-icon" size={14} />
+              </div>
+              <span className="ap2-ledger-value">{summary[key as keyof AgencySummary]}</span>
+            </div>
           ))}
         </div>
       )}
 
-      {/* ── Body: Left + Right ───────────────────────────────────── */}
+      {/* ── Body ── */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: isMobile || isTablet ? "1fr" : "1fr 300px",
-        gap: 16,
+        gridTemplateColumns: isMobile || isTablet ? "1fr" : "1fr 290px",
+        gap: 14,
         alignItems: "start",
       }}>
-
-        {/* ── Left Column ─────────────────────────────────────────── */}
+        {/* Left column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
           {/* Intro Video */}
           <SectionCard>
-            <SectionHeader icon={Camera} title="Introduction Video" />
+            <SectionHead icon={Camera} title="Introduction Video" />
             <div style={{ padding: 16 }}>
               {company.intro_video_data_url ? (
-                <div style={{ borderRadius: 12, overflow: "hidden", background: "#0f172a", border: `1.5px solid ${C.border}` }}>
+                <div style={{ borderRadius: 12, overflow: "hidden", border: "1.5px solid var(--border)" }}>
+                  {/* Video header */}
                   <div style={{
-                    background: "linear-gradient(90deg, #1e3a5f, #0D6E56)",
-                    padding: "9px 16px",
+                    padding: "10px 16px",
+                    background: "var(--teal-deeper)",
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                   }}>
-                    <span style={{ fontSize: 14, color: "#fff", fontWeight: 700 }}>🎬 Agency Introduction</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Camera size={14} color="var(--gold)" />
+                      <span style={{
+                        fontFamily: "var(--font-sans)", fontSize: 13,
+                        fontWeight: 700, color: "#fff",
+                      }}>Agency Introduction</span>
+                    </div>
                     <span style={{
-                      fontSize: 11, background: "rgba(255,255,255,0.16)", color: "#a7f3d0",
-                      padding: "2px 10px", borderRadius: 20, fontWeight: 700, letterSpacing: "0.06em",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9, fontWeight: 700, letterSpacing: ".1em",
+                      textTransform: "uppercase",
+                      background: "rgba(252,211,77,.15)",
+                      color: "var(--gold)",
+                      border: "1px solid rgba(252,211,77,.28)",
+                      padding: "3px 9px", borderRadius: 4,
                     }}>PREVIEW</span>
                   </div>
                   <video controls style={{ display: "block", width: "100%", maxHeight: 300, background: "#000" }}
                     src={company.intro_video_data_url} />
                 </div>
               ) : (
-                <EmptyState icon={Camera} message="No introduction video uploaded yet" />
+                <Empty icon={Camera} message="No introduction video uploaded yet" />
               )}
             </div>
           </SectionCard>
 
           {/* About Us */}
           <SectionCard>
-            <SectionHeader icon={Building2} title="About Us" />
-            <div style={{ padding: "16px 20px" }}>
+            <SectionHead icon={Building2} title="About Us" />
+            <div style={{ padding: "18px 22px" }}>
               {company.about_us ? (
                 <p style={{
-                  margin: 0, fontSize: 15, lineHeight: 1.85,
-                  color: C.textMid, whiteSpace: "pre-wrap", fontWeight: 500,
+                  margin: 0,
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 14,
+                  lineHeight: 1.85,
+                  color: "var(--mid)",
+                  whiteSpace: "pre-wrap",
+                  fontWeight: 500,
                 }}>
                   {company.about_us}
                 </p>
               ) : (
-                <p style={{ margin: 0, fontSize: 15, color: C.textMuted, fontStyle: "italic", fontWeight: 500 }}>
-                  No about us content yet.
+                <p style={{
+                  margin: 0, fontSize: 14,
+                  color: "var(--soft)", fontStyle: "italic",
+                  fontFamily: "var(--font-sans)",
+                }}>
+                  No about us content has been added yet.
                 </p>
               )}
             </div>
@@ -683,19 +803,23 @@ const AgencyProfile = () => {
 
           {/* Gallery */}
           <SectionCard>
-            <SectionHeader icon={ImageIcon} title="Gallery" count={gallery.length} />
+            <SectionHead icon={ImageIcon} title="Gallery" count={gallery.length} />
             {gallery.length === 0 ? (
-              <EmptyState icon={ImageIcon} message="No gallery images uploaded yet" />
+              <Empty icon={ImageIcon} message="No gallery images uploaded yet" />
             ) : (
               <div style={{
                 display: "grid",
-                gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 88 : 108}px, 1fr))`,
-                gap: 8, padding: 14,
+                gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 80 : 100}px, 1fr))`,
+                gap: 8,
+                padding: 14,
               }}>
                 {gallery.map((img, idx) => (
                   <button
-                    key={`${img.slice(-10)}-${idx}`} type="button" className="ap-gallery-thumb"
-                    onClick={() => setLightboxImage(img)}>
+                    key={`${img.slice(-10)}-${idx}`}
+                    type="button"
+                    className="ap2-gallery-thumb"
+                    onClick={() => setLightboxImage(img)}
+                  >
                     <img src={img} alt={`Gallery ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   </button>
                 ))}
@@ -703,39 +827,45 @@ const AgencyProfile = () => {
             )}
           </SectionCard>
 
-          {/* MOM + Testimonials side by side */}
+          {/* MOM Personnel + Testimonials */}
           <div style={{
             display: "grid",
             gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-            gap: 14, alignItems: "start",
+            gap: 14,
+            alignItems: "start",
           }}>
-
             {/* MOM Personnel */}
             <SectionCard>
-              <SectionHeader icon={Shield} title="MOM Personnel" count={momPersonnel.length} />
+              <SectionHead icon={Shield} title="MOM Personnel" count={momPersonnel.length} />
               {momPersonnel.length === 0 ? (
-                <EmptyState icon={Users} message="No MOM personnel added yet" />
+                <Empty icon={Users} message="No MOM personnel added yet" />
               ) : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
-                      <tr style={{ background: "#F4F7FB", borderBottom: `1.5px solid ${C.borderLight}` }}>
+                      <tr style={{ background: "var(--teal-pale)", borderBottom: "1.5px solid var(--border)" }}>
                         {["#", "Name", "Reg. No."].map(h => (
                           <th key={h} style={{
-                            padding: "10px 14px", textAlign: "left",
-                            fontSize: 11, fontWeight: 800,
-                            letterSpacing: "0.08em", textTransform: "uppercase", color: C.textSoft,
-                            whiteSpace: "nowrap",
+                            padding: "9px 14px", textAlign: "left",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 9, fontWeight: 700,
+                            letterSpacing: ".1em", textTransform: "uppercase",
+                            color: "var(--soft)", whiteSpace: "nowrap",
                           }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {momPersonnel.map((p, i) => (
-                        <tr key={p.id} className="ap-table-row" style={{ borderBottom: `1px solid ${C.borderLight}` }}>
-                          <td style={{ padding: "11px 14px", fontSize: 13, color: C.textMuted, fontWeight: 700 }}>{i + 1}</td>
-                          <td style={{ padding: "11px 14px", fontSize: 14, fontWeight: 700, color: C.text }}>{p.name}</td>
-                          <td style={{ padding: "11px 14px", fontSize: 13, fontFamily: "monospace", color: C.textMid, fontWeight: 600 }}>
+                        <tr key={p.id} className="ap2-table-row"
+                          style={{ borderBottom: "1px solid var(--teal-pale)" }}>
+                          <td style={{ padding: "11px 14px", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--soft)", fontWeight: 700 }}>
+                            {String(i + 1).padStart(2, "0")}
+                          </td>
+                          <td style={{ padding: "11px 14px", fontSize: 13, fontWeight: 700, color: "var(--ink)", fontFamily: "var(--font-sans)" }}>
+                            {p.name}
+                          </td>
+                          <td style={{ padding: "11px 14px", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--mid)", fontWeight: 600 }}>
                             {p.registration_number}
                           </td>
                         </tr>
@@ -748,23 +878,30 @@ const AgencyProfile = () => {
 
             {/* Testimonials */}
             <SectionCard>
-              <SectionHeader icon={Star} title="Testimonials" count={testimonials.length} />
+              <SectionHead icon={Star} title="Testimonials" count={testimonials.length} />
               {testimonials.length === 0 ? (
-                <EmptyState icon={Star} message="No testimonials added yet" />
+                <Empty icon={Star} message="No testimonials added yet" />
               ) : (
                 <div style={{ maxHeight: 340, overflowY: "auto" }}>
-                  {testimonials.map((t, i) => (
-                    <div key={t.id} className="ap-testimonial-item"
-                      style={{ padding: "14px 18px", borderBottom: `1px solid ${C.borderLight}` }}>
+                  {testimonials.map((t) => (
+                    <div key={t.id} className="ap2-testimonial"
+                      style={{ padding: "14px 18px", borderBottom: "1px solid var(--teal-pale)" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <div style={{ display: "flex", gap: 2 }}>
+                        <div className="ap2-stars">
                           {[...Array(5)].map((_, j) => (
-                            <Star key={j} size={12} fill={C.accent} color={C.accent} />
+                            <Star key={j} size={11} fill="var(--gold-deep)" color="var(--gold-deep)" />
                           ))}
                         </div>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{t.author}</span>
+                        <span style={{
+                          fontFamily: "var(--font-sans)",
+                          fontSize: 13, fontWeight: 800, color: "var(--ink)",
+                        }}>{t.author}</span>
                       </div>
-                      <p style={{ margin: 0, fontSize: 14, color: C.textMid, lineHeight: 1.75, fontWeight: 500 }}>
+                      <p style={{
+                        margin: 0,
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 13, color: "var(--mid)", lineHeight: 1.75, fontWeight: 500,
+                      }}>
                         {t.message}
                       </p>
                     </div>
@@ -778,7 +915,7 @@ const AgencyProfile = () => {
           {(isMobile || isTablet) && <Sidebar company={company} />}
         </div>
 
-        {/* ── Right Sidebar — desktop only ───────────────────────── */}
+        {/* Right sidebar — desktop only */}
         {!isMobile && !isTablet && <Sidebar company={company} />}
       </div>
     </div>
