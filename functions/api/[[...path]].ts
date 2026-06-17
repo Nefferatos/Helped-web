@@ -8011,15 +8011,15 @@ const buildInquiryReply = (
   matchesCount: number,
 ) => {
   if (intent === "hiring" && matchesCount > 0) {
-    return `Thanks for reaching out. We shortlisted ${matchesCount} maid profile${matchesCount === 1 ? "" : "s"} for follow-up.`;
+    return `Thank you for reaching out to Helped Maids. Our system has identified ${matchesCount} suitable helper profile${matchesCount === 1 ? "" : "s"} based on your requirements. A member of our team will contact you shortly with the full details. We look forward to finding the perfect match for your household.`;
   }
   if (intent === "hiring") {
-    return "Thanks for reaching out. We have logged your hiring request and our team will follow up with suitable profiles shortly.";
+    return "Thank you for your enquiry. We have received your hiring request and our placement team will reach out to you shortly with profiles tailored to your needs. We appreciate your interest in our services.";
   }
   if (intent === "complaint") {
-    return "Thanks for letting us know. We have logged your concern and a team member will follow up shortly.";
+    return "Thank you for bringing this matter to our attention. We sincerely apologise for any inconvenience caused. Your feedback has been logged and a dedicated team member will follow up with you within 24 hours to resolve this promptly.";
   }
-  return "Thanks for reaching out. We have logged your inquiry and our team will get back to you shortly.";
+  return "Thank you for contacting Helped Maids. We have received your message and our team will respond within 24 hours. We appreciate your patience and look forward to assisting you.";
 };
 
 const inferLeadEnrichment = (message: string) => {
@@ -9004,6 +9004,8 @@ app.post(
 // ─── Autonomous marketing cron ────────────────────────────────────────────────
 
 const MARKETING_LOG_KEY = "marketing-last-run.json";
+const MARKETING_CONTACTS_KEY = "marketing-contacts-sent.json";
+const MARKETING_COOLDOWN_MS = 7 * 86_400_000; // 7 days between messages per contact
 
 type MarketingDispatchResult = {
   scannedAt: string;
@@ -9032,13 +9034,13 @@ const buildWhatsAppLinkMarketing = (phone: string, message: string): string => {
 
 const goalMetaMarketing = (goal: string) =>
   ({
-    new_arrivals: { subject: "New Helpers Available", hook: "New helpers just arrived!", emoji: "✨" },
-    re_engage: { subject: "Still Looking for a Helper?", hook: "We still have excellent helpers ready.", emoji: "👋" },
-    follow_up: { subject: "Following Up on Your Enquiry", hook: "Just following up — we'd love to help!", emoji: "🔔" },
-    holiday: { subject: "Festive Greetings & Availability", hook: "Season's greetings from our team!", emoji: "🎊" },
-    promotion: { subject: "Special Offer for You", hook: "Limited slots — special offer!", emoji: "🎉" },
-    custom: { subject: "Message from Our Agency", hook: "We have something for you.", emoji: "💬" },
-  }[goal] ?? { subject: "Helper Update", hook: "Hello!", emoji: "" });
+    new_arrivals: { subject: "New Domestic Helpers Now Available – Helped Maids", hook: "We are pleased to inform you that new domestic helpers have recently joined our agency and are ready for placement.", emoji: "✨" },
+    re_engage:   { subject: "We Are Here to Help – Qualified Helpers Available", hook: "We wanted to follow up and let you know that we still have highly qualified domestic helpers ready for placement.", emoji: "👋" },
+    follow_up:   { subject: "Following Up on Your Enquiry – Helped Maids", hook: "We hope this message finds you well. We would like to follow up on your recent enquiry and ensure all your questions have been addressed.", emoji: "📋" },
+    holiday:     { subject: "Season's Greetings from Helped Maids", hook: "On behalf of our entire team, we wish you and your family a joyful and restful celebration.", emoji: "🎊" },
+    promotion:   { subject: "Priority Placement Opportunity – Limited Availability", hook: "We have a limited number of placement slots available and would like to offer you priority access.", emoji: "⭐" },
+    custom:      { subject: "An Update from Helped Maids", hook: "We have an important update we would like to share with you.", emoji: "💬" },
+  }[goal] ?? { subject: "Update from Helped Maids", hook: "We have something we would like to share with you.", emoji: "" });
 
 const generateMarketingTemplate = async (
   goal: string,
@@ -9062,8 +9064,8 @@ const generateMarketingTemplate = async (
     urgent: "direct and action-oriented, 1 emoji",
   };
 
-  const systemPrompt = `You are a WhatsApp marketing expert for a Singapore domestic helper agency. Write ONE outreach message template. FORMAT: Open with "Hi {{name}},", blank line, 2-3 short sentences, CTA with {{agencyPhone}}. Max 280 characters total. Respond with ONLY the message text, nothing else.`;
-  const userPrompt = `Goal: ${meta.subject}. Tone: ${toneMap[tone] ?? toneMap.warm}. Agency: ${agencyName}. Phone: ${agencyPhone || "our number"}.${highlight ? ` Feature: ${highlight}.` : ""}`;
+  const systemPrompt = `You are a professional client relations specialist for a licensed Singapore domestic helper placement agency. Write ONE polished outreach message. FORMAT: Open with "Dear {{name}}," on its own line, blank line, 2-3 professional sentences that are warm but formal, closing with "Please do not hesitate to contact us at {{agencyPhone}}.", blank line, "Warm regards," then the agency name. Max 320 characters total. Respond with ONLY the message text, nothing else.`;
+  const userPrompt = `Goal: ${meta.subject}. Tone: ${toneMap[tone] ?? toneMap.warm}. Agency: ${agencyName}. Phone: ${agencyPhone || "our number"}.${highlight ? ` Available helpers: ${highlight}.` : ""}`;
 
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -9166,9 +9168,19 @@ const buildAudienceMarketing = (data: AppData, audience: string) => {
 const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchResult> => {
   const data = await loadData(env);
   const scannedAt = new Date().toISOString();
+  const nowMs = Date.now();
   const makeUrl = env.MAKE_WEBHOOK_URL?.trim();
   const agencyPhone = cleanPhoneForMake(data.companyProfile?.social_whatsapp_number?.trim() ?? data.companyProfile?.contact_phone?.trim() ?? "");
   const agencyName = data.companyProfile?.company_name?.trim() ?? data.companyProfile?.short_name?.trim() ?? "Our Agency";
+
+  // Load per-contact cooldown log — prevents re-messaging the same person within 7 days
+  let sentLog: Record<string, number> = {};
+  if (env.APP_DATA) {
+    try {
+      const raw = await env.APP_DATA.get(MARKETING_CONTACTS_KEY);
+      if (raw) sentLog = JSON.parse(raw);
+    } catch {}
+  }
 
   const opportunities = detectMarketingOpportunities(data);
   const result: MarketingDispatchResult = {
@@ -9195,8 +9207,16 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
     let emailsSent = 0, whatsappQueued = 0, skipped = 0;
 
     for (const contact of contacts) {
+      // Per-contact 7-day cooldown — skip if messaged recently
+      const contactKey = (contact.phone?.replace(/\D/g, "") || contact.email?.toLowerCase() || "").trim();
+      if (contactKey && sentLog[contactKey] && nowMs - sentLog[contactKey] < MARKETING_COOLDOWN_MS) {
+        skipped++;
+        continue;
+      }
+
+      let sent = false;
+
       if (contact.phone && makeUrl) {
-        // Send raw context to Make.com — Groq generates the WhatsApp message there
         try {
           await fetch(makeUrl, {
             method: "POST",
@@ -9213,10 +9233,10 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
             signal: AbortSignal.timeout(5000),
           });
           whatsappQueued++;
+          sent = true;
         } catch { skipped++; }
       } else if (contact.email) {
         if (makeUrl) {
-          // Send raw context to Make.com — Claude generates the email there
           try {
             await fetch(makeUrl, {
               method: "POST",
@@ -9234,20 +9254,24 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
               signal: AbortSignal.timeout(5000),
             });
             emailsSent++;
+            sent = true;
           } catch { skipped++; }
         } else {
-          // Direct Resend fallback when Make.com not configured
           const template = await generateMarketingTemplate(opp.goal, opp.tone, agencyName, agencyPhone, featuredMaids.map((m) => m.fullName), env.GROQ_API_KEY);
           const personalized = template.replace(/\{\{name\}\}/g, contact.name).replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
           const emailResult = await sendEmailViaResend(env, contact.email, meta.subject, personalized);
-          if (emailResult.ok) emailsSent++;
+          if (emailResult.ok) { emailsSent++; sent = true; }
           else skipped++;
         }
       } else {
         skipped++;
       }
 
-      await new Promise((r) => setTimeout(r, 300));
+      // Record send timestamp so this contact is skipped for the next 7 days
+      if (sent && contactKey) sentLog[contactKey] = nowMs;
+
+      // 1-second delay between contacts — avoids burst sending flagged as spam
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
     result.campaigns.push({ goal: opp.goal, audience: opp.audience, totalContacts: contacts.length, emailsSent, whatsappQueued, skipped });
@@ -9255,7 +9279,16 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
     result.whatsappTotal += whatsappQueued;
   }
 
-  if (env.APP_DATA) await env.APP_DATA.put(MARKETING_LOG_KEY, JSON.stringify(result), { expirationTtl: 7 * 86400 });
+  // Persist updated cooldown log, pruning entries older than 30 days
+  if (env.APP_DATA) {
+    const cutoff = nowMs - 30 * 86_400_000;
+    for (const key of Object.keys(sentLog)) {
+      if (sentLog[key] < cutoff) delete sentLog[key];
+    }
+    await env.APP_DATA.put(MARKETING_CONTACTS_KEY, JSON.stringify(sentLog), { expirationTtl: 30 * 86400 });
+    await env.APP_DATA.put(MARKETING_LOG_KEY, JSON.stringify(result), { expirationTtl: 7 * 86400 });
+  }
+
   return result;
 };
 

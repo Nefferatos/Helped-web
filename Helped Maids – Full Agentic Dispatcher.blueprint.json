@@ -64,8 +64,8 @@
                             },
                             "mapper": {
                                 "to": "wow.aisolution@gmail.com",
-                                "subject": "New {{1.source}} lead: {{1.leadName}}",
-                                "html": "New lead received<br><br>Name: {{1.leadName}}<br>Contact: {{1.contact}}<br>Source: {{1.source}}<br><br>Log in to follow up."
+                                "subject": "New {{1.source}} Lead: {{1.leadName}} – Action Required",
+                                "html": "<p><strong>New Lead Received</strong></p><p><strong>Name:</strong> {{1.leadName}}<br><strong>Contact:</strong> {{1.contact}}<br><strong>Source:</strong> {{1.source}}</p><p>Please log in to your dashboard and follow up within the hour for the best conversion rate.</p><p>Regards,<br>Helped Maids AI System</p>"
                             },
                             "metadata": {
                                 "designer": {
