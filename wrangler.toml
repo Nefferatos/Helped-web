@@ -20,7 +20,7 @@ STORAGE_BACKEND = "kv"
 SUPABASE_URL = "https://etdbexgrsenjznxbbnbd.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0ZGJleGdyc2VuanpueGJibmJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjY3MjAsImV4cCI6MjA5MDcwMjcyMH0.vtop8R2up7ItNoGXoU1Bx1VAVq23gimj-21nBX4LAg4"
 
-MAKE_WEBHOOK_URL = "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig"
+MAKE_WEBHOOK_URL = "https://hook.eu1.make.com/z1fo3dlpxri9w2w2wj3ls9442wcki6o5"
 AI_AUTOPILOT_ENABLED = "true"
 
 # Email confirmations — requires Resend account + verified domain.
