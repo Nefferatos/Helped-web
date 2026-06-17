@@ -3,10 +3,8 @@ import {
   ArrowRight, CheckCircle, HeartHandshake, Users, X, Star,
   Shield, ChevronRight, Search, Home, Heart, Baby, Backpack,
   BadgeCheck, Sparkles, Lock, UserCheck, TrendingUp,
-  Award, SlidersHorizontal, LayoutGrid, ArrowUp, Phone,
-  MapPin, Mail, Clock, MessageCircle, PhoneCall, Facebook,
+  Award, SlidersHorizontal, LayoutGrid, ArrowUp,
 } from "lucide-react";
-
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
@@ -24,31 +22,43 @@ import housekeepingImg from "./assets/housekeeping.png";
 import infantImg from "./assets/infant-care.png";
 import "./ClientTheme.css";
 
-
 /* ─────────────────────────────────────────────────────────────────────────────
    GLOBAL STYLES
 ───────────────────────────────────────────────────────────────────────────── */
 const GLOBAL_STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700;1,800&family=Inter:wght@300;400;500;600;700&display=swap');
 
   :root {
     --teal:        #0E4E5E;
-    --teal-light:  #165F72;
-    --teal-mid:    #1A7A8A;
-    --teal-pale:   #E8F4F6;
-    --teal-ghost:  #F0F8FA;
+    --teal-deep:   #0B3340;
+    --teal-mid:    #1A6678;
+    --teal-light:  #2A8FA6;
+    --teal-pale:   #E0F4F7;
+    --teal-frost:  #F0F9FF;
     --amber:       #FCD34D;
-    --amber-light: #FDE68A;
-    --amber-dark:  #D4A017;
-    --amber-deep:  #92700A;
-    --ink:         #0A2830;
-    --mist:        #F5FBFC;
-    --border:      #C8E4EA;
+    --amber-dark:  #E8B800;
+    --amber-deep:  #C49A00;
+    --amber-light: #FEF3C7;
+    --ink:         #0B1F25;
+    --mist:        #F7FBFC;
+    --border:      #C8E8EF;
   }
 
   *, *::before, *::after { box-sizing: border-box; }
 
-  /* ── Keyframes ── */
+  @keyframes morphOrb {
+    0%,100% { border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; transform: scale(1) rotate(0deg); }
+    33%      { border-radius: 40% 60% 45% 55% / 60% 40% 60% 40%; transform: scale(1.05) rotate(3deg); }
+    66%      { border-radius: 55% 45% 60% 40% / 40% 55% 45% 55%; transform: scale(0.97) rotate(-2deg); }
+  }
+  @keyframes floatY {
+    0%,100% { transform: translateY(0); }
+    50%      { transform: translateY(-10px); }
+  }
+  @keyframes ticker {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(28px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -57,60 +67,48 @@ const GLOBAL_STYLES = `
     from { opacity: 0; }
     to   { opacity: 1; }
   }
-  @keyframes floatBob {
-    0%, 100% { transform: translateY(0px) rotate(0deg); }
-    33%       { transform: translateY(-8px) rotate(0.5deg); }
-    66%       { transform: translateY(-4px) rotate(-0.3deg); }
-  }
-  @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.88); }
-    to   { opacity: 1; transform: scale(1); }
-  }
-  @keyframes ticker {
-    0%   { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-  }
   @keyframes shimmer {
     0%   { background-position: -600px 0; }
     100% { background-position:  600px 0; }
   }
-  @keyframes spinSlow {
+  @keyframes pulseAmber {
+    0%,100% { box-shadow: 0 0 0 0 rgba(252,211,77,0.5); }
+    50%      { box-shadow: 0 0 0 10px rgba(252,211,77,0); }
+  }
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-32px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(32px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes rotateSlow {
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
   }
-  @keyframes pulseGlow {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(252, 211, 77, 0.5); }
-    50%       { box-shadow: 0 0 0 12px rgba(252, 211, 77, 0); }
+  @keyframes backToTopIn {
+    from { opacity: 0; transform: translateY(14px) scale(0.85); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes backToTopOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
   }
   @keyframes drawLine {
     from { width: 0; }
     to   { width: 100%; }
   }
-  @keyframes bttIn {
-    from { opacity: 0; transform: translateY(12px) scale(0.8); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  @keyframes bttOut {
-    from { opacity: 1; transform: translateY(0) scale(1); }
-    to   { opacity: 0; transform: translateY(12px) scale(0.8); }
-  }
-  @keyframes waveUnderline {
-    0%   { background-position: 0% 50%; }
-    100% { background-position: 200% 50%; }
-  }
-  @keyframes cardReveal {
-    from { opacity: 0; transform: translateY(20px); }
+  @keyframes countUp {
+    from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  @keyframes borderTrace {
-    0%   { clip-path: inset(0 100% 0 0); }
-    100% { clip-path: inset(0 0% 0 0); }
-  }
 
-  .playfair { font-family: 'Playfair Display', Georgia, serif; }
-  .inter    { font-family: 'Inter', system-ui, sans-serif; }
+  /* ── Fonts ── */
+  .pf  { font-family: 'Playfair Display', Georgia, serif; }
+  .int { font-family: 'Inter', system-ui, sans-serif; }
 
-  /* ── Primary Button ── */
+  /* ── Buttons ── */
   .btn-amber {
     background: var(--amber);
     color: var(--ink);
@@ -119,14 +117,14 @@ const GLOBAL_STYLES = `
     font-weight: 700;
     letter-spacing: 0.01em;
     padding: 13px 26px;
-    border-radius: 8px;
+    border-radius: 6px;
     border: none;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
-    box-shadow: 0 2px 0 var(--amber-deep), 0 8px 24px rgba(252,211,77,0.3);
+    transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+    box-shadow: 0 3px 0 var(--amber-deep), 0 6px 20px rgba(252,211,77,0.3);
     text-decoration: none;
     white-space: nowrap;
     position: relative;
@@ -136,28 +134,28 @@ const GLOBAL_STYLES = `
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%);
+    background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
     transform: translateX(-100%);
-    transition: transform 0.45s;
+    transition: transform 0.45s ease;
   }
   .btn-amber:hover::after { transform: translateX(100%); }
   .btn-amber:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 0 var(--amber-deep), 0 16px 36px rgba(252,211,77,0.38);
-    background: var(--amber-light);
+    box-shadow: 0 5px 0 var(--amber-deep), 0 12px 32px rgba(252,211,77,0.4);
+    background: #fdd96a;
   }
-  .btn-amber:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--amber-deep); }
+  .btn-amber:active { transform: translateY(1px); box-shadow: 0 2px 0 var(--amber-deep); }
 
-  /* ── Ghost Button ── */
-  .btn-ghost {
+  .btn-outline-teal {
     background: transparent;
-    color: rgba(255,255,255,0.82);
+    color: var(--teal-pale);
     font-family: 'Inter', sans-serif;
     font-size: 13px;
     font-weight: 600;
+    letter-spacing: 0.01em;
     padding: 13px 24px;
-    border-radius: 8px;
-    border: 1.5px solid rgba(255,255,255,0.22);
+    border-radius: 6px;
+    border: 1.5px solid rgba(224,244,247,0.35);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -166,67 +164,139 @@ const GLOBAL_STYLES = `
     text-decoration: none;
     white-space: nowrap;
   }
-  .btn-ghost:hover {
+  .btn-outline-teal:hover {
     border-color: var(--amber);
     color: var(--amber);
-    background: rgba(252,211,77,0.07);
+    background: rgba(252,211,77,0.08);
   }
 
-  /* ── Teal outline button ── */
-  .btn-teal-outline {
+  .btn-ghost-teal {
     background: transparent;
     color: var(--teal);
     font-family: 'Inter', sans-serif;
     font-size: 13px;
-    font-weight: 700;
-    padding: 11px 22px;
-    border-radius: 8px;
-    border: 2px solid var(--teal-mid);
+    font-weight: 600;
+    padding: 12px 22px;
+    border-radius: 6px;
+    border: 1.5px solid var(--teal-light);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.2s;
-    text-decoration: none;
+    transition: all 0.18s;
     white-space: nowrap;
   }
-  .btn-teal-outline:hover {
+  .btn-ghost-teal:hover {
     background: var(--teal);
     color: #fff;
     border-color: var(--teal);
   }
 
-  /* ── Maid Cards ── */
-  .maid-card {
-    background: #fff;
-    border: 1.5px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
-    cursor: pointer;
+  /* ── Ticker ── */
+  .ticker-track {
     display: flex;
-    flex-direction: column;
+    gap: 0;
+    width: max-content;
+    animation: ticker 32s linear infinite;
   }
-  .maid-card:hover {
-    border-color: var(--amber-dark);
-    transform: translateY(-6px) scale(1.02);
-    box-shadow: 0 20px 50px rgba(14,78,94,0.18), 0 3px 0 var(--amber-dark);
-  }
-  .maid-card img {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 3/4;
-    object-fit: contain;
-    display: block;
-    background: var(--teal-ghost);
+  .ticker-track:hover { animation-play-state: paused; }
+
+  /* ── Search card ── */
+  .search-card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    box-shadow: 0 6px 0 var(--teal-pale), 0 20px 60px rgba(14,78,94,0.1);
+    overflow: hidden;
   }
 
-  /* ── Feature Cards ── */
+  /* ── Tag pill ── */
+  .tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1.5px solid var(--border);
+    background: var(--teal-frost);
+    color: var(--teal);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+  .tag-pill.active {
+    background: var(--teal);
+    border-color: var(--teal-deep);
+    color: #fff;
+    box-shadow: 0 2px 0 var(--teal-deep);
+  }
+  .tag-pill:hover:not(.active) {
+    border-color: var(--teal-light);
+    background: var(--teal-pale);
+  }
+
+  /* ── Inputs ── */
+  .select-styled {
+    appearance: none;
+    width: 100%;
+    padding: 11px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--teal-deep);
+    background: var(--teal-frost);
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .select-styled:focus {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 3px rgba(14,78,94,0.12);
+  }
+
+  .input-styled {
+    width: 100%;
+    padding: 11px 40px 11px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--teal-deep);
+    background: var(--teal-frost);
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-styled::placeholder { color: #9BBFC8; }
+  .input-styled:focus {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 3px rgba(14,78,94,0.12);
+  }
+
+  /* ── Section chip ── */
+  .section-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ── Feature card ── */
   .feature-card {
     background: #fff;
     border: 1.5px solid var(--border);
-    border-radius: 16px;
-    padding: 26px;
+    border-radius: 10px;
+    padding: 24px;
     display: flex;
     gap: 18px;
     align-items: flex-start;
@@ -238,43 +308,35 @@ const GLOBAL_STYLES = `
     content: '';
     position: absolute;
     left: 0; top: 0; bottom: 0;
-    width: 4px;
+    width: 3px;
     background: var(--amber);
     transform: scaleY(0);
     transform-origin: bottom;
     transition: transform 0.3s ease;
-    border-radius: 0 2px 2px 0;
   }
   .feature-card:hover::before { transform: scaleY(1); }
   .feature-card:hover {
-    border-color: rgba(14,78,94,0.3);
+    border-color: var(--teal-light);
     box-shadow: 0 12px 40px rgba(14,78,94,0.12);
-    transform: translateX(4px);
+    transform: translateY(-3px);
   }
 
-  /* ── Service Cards ── */
+  /* ── Service card ── */
   .service-card {
-    border-radius: 16px;
+    border-radius: 10px;
     overflow: hidden;
     position: relative;
-    height: 320px;
+    height: 340px;
     transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s;
   }
-  .service-card:hover {
-    transform: translateY(-8px) scale(1.02);
-    box-shadow: 0 32px 60px rgba(0,0,0,0.32);
-  }
-  .service-card img {
-    width: 100%; height: 100%;
-    object-fit: cover;
-    transition: transform 0.55s;
-  }
+  .service-card:hover { transform: translateY(-6px); box-shadow: 0 28px 60px rgba(11,51,64,0.35); }
+  .service-card img { width:100%; height:100%; object-fit:cover; transition: transform 0.6s ease; }
   .service-card:hover img { transform: scale(1.07); }
   .service-overlay {
     position: absolute; inset: 0;
-    background: linear-gradient(to top, rgba(10,40,48,0.92) 0%, rgba(10,40,48,0.35) 50%, transparent 100%);
+    background: linear-gradient(to top, rgba(11,51,64,0.95) 0%, rgba(11,51,64,0.4) 50%, transparent 100%);
   }
-  .service-badge {
+  .service-card-badge {
     position: absolute;
     top: 14px; right: 14px;
     background: var(--amber);
@@ -283,137 +345,65 @@ const GLOBAL_STYLES = `
     font-size: 10px;
     font-weight: 700;
     padding: 4px 10px;
-    border-radius: 4px;
+    border-radius: 3px;
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
-  /* ── Stat Card ── */
+  /* ── Stat card ── */
   .stat-card {
     background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.13);
-    border-radius: 12px;
-    padding: 16px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 18px 16px;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    transition: background 0.2s, border-color 0.2s;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+    animation: countUp 0.6s ease both;
   }
   .stat-card:hover {
     background: rgba(252,211,77,0.1);
     border-color: rgba(252,211,77,0.35);
+    transform: translateY(-2px);
   }
 
-  /* ── Tag Pills ── */
-  .tag-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 12.5px;
-    font-weight: 600;
-    border: 1.5px solid var(--border);
-    background: var(--teal-ghost);
-    color: var(--teal);
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: 'Inter', sans-serif;
+  /* ── Maid grid: 6 cols × 2 rows ── */
+  .maid-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(6, 1fr);
   }
-  .tag-pill.active {
-    background: var(--teal);
-    border-color: var(--teal);
-    color: var(--amber);
-    box-shadow: 0 2px 0 rgba(14,78,94,0.4);
-  }
-  .tag-pill:hover:not(.active) {
-    border-color: var(--teal-mid);
-    background: var(--teal-pale);
-    color: var(--teal);
-  }
+  @media (max-width: 1100px) { .maid-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; } }
+  @media (max-width: 700px)  { .maid-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; } }
+  @media (max-width: 480px)  { .maid-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } }
 
-  /* ── Search Card ── */
-  .search-card {
+  /* ── Maid card (unchanged structure) ── */
+  .maid-card {
     background: #fff;
-    border-radius: 16px;
-    border: 1.5px solid var(--border);
-    box-shadow: 0 6px 0 rgba(14,78,94,0.12), 0 24px 60px rgba(14,78,94,0.1);
+    border: 2px solid var(--border);
+    border-radius: 0;
     overflow: hidden;
-  }
-
-  /* ── Select / Input ── */
-  .select-styled {
-    appearance: none;
-    width: 100%;
-    padding: 11px 14px;
-    border: 1.5px solid var(--border);
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink);
-    background: var(--teal-ghost);
-    font-family: 'Inter', sans-serif;
-    outline: none;
+    transition: all 0.22s cubic-bezier(0.34,1.56,0.64,1);
     cursor: pointer;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
   }
-  .select-styled:focus {
-    border-color: var(--teal-mid);
-    box-shadow: 0 0 0 3px rgba(14,78,94,0.12);
+  .maid-card:hover {
+    border-color: var(--amber-dark);
+    transform: translateY(-5px) scale(1.025);
+    box-shadow: 0 20px 50px rgba(14,78,94,0.18), 0 3px 0 var(--amber-dark);
   }
-  .input-styled {
+  .maid-card img {
     width: 100%;
-    padding: 11px 40px 11px 14px;
-    border: 1.5px solid var(--border);
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink);
-    background: var(--teal-ghost);
-    font-family: 'Inter', sans-serif;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    height: auto;
+    aspect-ratio: 3/4;
+    object-fit: contain;
+    display: block;
+    background: #f5f9fa;
   }
-  .input-styled::placeholder { color: #8FB8C2; }
-  .input-styled:focus {
-    border-color: var(--teal-mid);
-    box-shadow: 0 0 0 3px rgba(14,78,94,0.12);
-  }
-
-  /* ── Section chip ── */
-  .section-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 14px;
-    border-radius: 4px;
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    font-family: 'Inter', sans-serif;
-  }
-
-  /* ── Ticker ── */
-  .ticker-track {
-    display: flex;
-    gap: 0;
-    width: max-content;
-    animation: ticker 30s linear infinite;
-  }
-  .ticker-track:hover { animation-play-state: paused; }
-
-  /* ── Floating badge ── */
-  .float-badge {
-    background: #fff;
-    border-radius: 12px;
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    box-shadow: 0 16px 40px rgba(14,78,94,0.2);
-    border: 1.5px solid var(--border);
-  }
+  .maid-card-info { padding: 10px 12px 12px; }
+  @media (max-width: 480px) { .maid-card-info { padding: 8px 10px 10px; } }
 
   /* ── Pagination ── */
   .pagination-wrap {
@@ -428,7 +418,7 @@ const GLOBAL_STYLES = `
     min-width: 40px;
     height: 40px;
     padding: 0 12px;
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1.5px solid var(--border);
     background: #fff;
     font-family: 'Inter', sans-serif;
@@ -445,153 +435,117 @@ const GLOBAL_STYLES = `
   .pagination-btn:hover:not(:disabled) {
     border-color: var(--teal);
     background: var(--teal);
-    color: var(--amber);
+    color: #fff;
   }
   .pagination-btn.active {
     background: var(--teal);
-    border-color: var(--teal);
-    color: var(--amber);
+    border-color: var(--teal-deep);
+    color: #fff;
+    box-shadow: 0 2px 0 var(--teal-deep);
   }
   .pagination-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .pag-icon  { display: none; font-size: 22px; line-height: 1; }
   .pag-label { display: inline; }
+  @media (max-width: 480px) {
+    .pagination-btn { min-width: 38px; height: 38px; padding: 0 8px; font-size: 12px; border-radius: 5px; }
+    .pag-icon  { display: inline; }
+    .pag-label { display: none; }
+  }
 
-  /* ── Back to Top ── */
+  /* ── Back to top ── */
   .back-to-top-btn {
     position: fixed;
-    bottom: 32px;
-    left: 32px;
+    bottom: 28px;
+    left: 28px;
     z-index: 9999;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--amber);
-    box-shadow: 0 4px 0 var(--amber-deep), 0 8px 28px rgba(252,211,77,0.4);
+    box-shadow: 0 3px 0 var(--amber-deep), 0 8px 24px rgba(252,211,77,0.4);
     transition: transform 0.18s, box-shadow 0.18s;
     outline: none;
   }
   .back-to-top-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 7px 0 var(--amber-deep), 0 14px 38px rgba(252,211,77,0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 0 var(--amber-deep), 0 14px 36px rgba(252,211,77,0.5);
   }
   .back-to-top-btn:active { transform: translateY(1px); box-shadow: 0 2px 0 var(--amber-deep); }
-  .back-to-top-btn.visible { animation: bttIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both; pointer-events: auto; opacity: 1; }
-  .back-to-top-btn.hidden  { animation: bttOut 0.22s ease both; pointer-events: none; opacity: 0; }
+  .back-to-top-btn.visible { animation: backToTopIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both; pointer-events: auto; opacity: 1; }
+  .back-to-top-btn.hidden  { animation: backToTopOut 0.2s ease both; pointer-events: none; opacity: 0; }
 
-  /* ── Maid Grid ── */
-  .maid-grid {
-    display: grid;
-    gap: 16px;
-    grid-template-columns: repeat(6, 1fr);
+  /* ── Floating badge ── */
+  .floating-badge {
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 12px 40px rgba(11,51,64,0.18);
+    border: 1.5px solid var(--teal-pale);
   }
-  .maid-card-info { padding: 10px 12px 12px; }
 
-  /* ── Decorative underline for headings ── */
-  .amber-underline {
-    position: relative;
-    display: inline-block;
+  /* ── Scroll reveal ── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
   }
-  .amber-underline::after {
-    content: '';
-    position: absolute;
-    left: 0; bottom: -4px;
-    height: 4px;
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* ── Decorative rule ── */
+  .amber-rule {
+    display: block;
+    width: 48px;
+    height: 3px;
     background: var(--amber);
     border-radius: 2px;
-    animation: drawLine 0.8s 0.4s ease both;
-    width: 100%;
+    margin: 12px 0 0;
   }
 
-  /* ── Animated counter highlight ── */
-  .stat-value {
-    font-family: 'Playfair Display', serif;
-    font-size: clamp(20px, 2.8vw, 30px);
-    font-weight: 900;
-    color: var(--amber);
-    line-height: 1;
-  }
-
-  /* ── Hero diagonal accent ── */
-  .hero-diagonal {
-    position: absolute;
-    bottom: 0; right: 0;
-    width: 55%;
-    height: 100%;
-    background: rgba(255,255,255,0.03);
-    clip-path: polygon(18% 0%, 100% 0%, 100% 100%, 0% 100%);
-    pointer-events: none;
-  }
-
-  /* ── Dot grid pattern ── */
-  .dot-pattern {
-    background-image: radial-gradient(circle, rgba(252,211,77,0.12) 1px, transparent 1px);
-    background-size: 28px 28px;
-  }
-
-  /* ── Animated entry for maid cards (staggered) ── */
-  .maid-card-anim {
-    animation: cardReveal 0.4s ease both;
-  }
-
-  /* ── Why us image frame ── */
-  .why-frame {
-    position: relative;
-    border-radius: 20px;
-    overflow: hidden;
-    box-shadow: 0 30px 70px rgba(14,78,94,0.25);
-  }
-  .why-frame::before {
-    content: '';
-    position: absolute;
-    inset: -3px;
-    background: linear-gradient(135deg, var(--amber), var(--teal-mid));
-    border-radius: 22px;
-    z-index: -1;
-  }
-
-  /* Responsive */
-  @media (max-width: 1100px) { .maid-grid { grid-template-columns: repeat(4,1fr); gap: 12px; } }
-  @media (max-width: 700px)  { .maid-grid { grid-template-columns: repeat(3,1fr); gap: 10px; } }
-  @media (max-width: 480px)  {
-    .maid-grid { grid-template-columns: repeat(2,1fr); gap: 8px; }
-    .maid-card-info { padding: 8px 10px 10px; }
-    .pag-icon  { display: inline; }
-    .pag-label { display: none; }
-    .pagination-btn { min-width: 38px; height: 38px; padding: 0 8px; font-size: 12px; }
-    .back-to-top-btn { bottom: 20px; left: 20px; width: 42px; height: 42px; }
-  }
-  .hero-grid { grid-template-columns: 1fr 1fr; }
-  .why-grid  { grid-template-columns: 1fr 1fr; }
-
+  /* ── Responsive ── */
   @media (max-width: 900px) {
-    .hero-grid  { grid-template-columns: 1fr; }
-    .hero-img-col { display: none; }
-    .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
-    .why-grid   { grid-template-columns: 1fr; }
-    .why-img-col { display: none; }
+    .hero-grid     { grid-template-columns: 1fr !important; }
+    .hero-image-col { display: none !important; }
+    .stats-grid    { grid-template-columns: repeat(2,1fr) !important; }
+    .hero-h1       { font-size: clamp(2rem, 8vw, 3rem) !important; }
+    .why-grid      { grid-template-columns: 1fr !important; }
+    .why-image-col { display: none !important; }
+    .footer-grid   { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
   }
   @media (max-width: 768px) {
-    .filter-row  { flex-direction: column !important; gap: 10px !important; }
-    .filter-label { width: auto !important; }
-    .nat-lang-row { flex-direction: column !important; gap: 12px !important; }
-    .search-body  { padding: 16px 18px !important; }
-    .search-actions { flex-direction: column !important; align-items: stretch !important; }
+    .filter-row        { flex-direction: column !important; gap: 10px !important; }
+    .filter-label      { width: auto !important; }
+    .nat-lang-row      { flex-direction: column !important; gap: 12px !important; }
+    .search-body       { padding: 16px 18px !important; }
+    .search-actions    { flex-direction: column !important; align-items: stretch !important; }
     .search-actions .btn-amber,
-    .search-actions .btn-teal-outline { width: 100%; justify-content: center; }
+    .search-actions .btn-ghost-teal { width: 100%; justify-content: center; }
   }
   @media (max-width: 600px) {
     .services-grid { grid-template-columns: 1fr !important; }
-  }
-  @media (max-width: 900px) {
-    .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+    .section-pad   { padding: 48px 0 !important; }
+    .section-pad-lg { padding: 56px 0 !important; }
+    .hero-section  { padding: 40px 16px 0 !important; }
   }
   @media (max-width: 520px) {
     .footer-grid { grid-template-columns: 1fr !important; }
+  }
+  @media (max-width: 480px) {
+    .back-to-top-btn { bottom: 18px; left: 18px; width: 40px; height: 40px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 `;
 
@@ -617,7 +571,7 @@ const LockIconSvg = () => (
 );
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   BLURRED CANVAS (for locked cards)
+   BLURRED CANVAS (unchanged logic)
 ───────────────────────────────────────────────────────────────────────────── */
 const BlurredCanvas = ({ src }: { src: string }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -636,46 +590,44 @@ const BlurredCanvas = ({ src }: { src: string }) => {
       const h = Math.round(w * (4 / 3));
       canvas.width = w; canvas.height = h;
       const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-      const sw = img.naturalWidth * scale;
-      const sh = img.naturalHeight * scale;
-      const ox = (w - sw) / 2;
-      const oy = (h - sh) / 2;
-      ctx.filter = "blur(10px) brightness(0.8)";
+      const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
+      ctx.filter = "blur(10px) brightness(0.85)";
       ctx.globalAlpha = 0.9;
-      ctx.drawImage(img, ox, oy, sw, sh);
+      ctx.drawImage(img, (w - sw) / 2, (h - sh) / 2, sw, sh);
       if (!revoked && blobUrl) { URL.revokeObjectURL(blobUrl); revoked = true; }
     };
 
     const img = new Image();
     img.crossOrigin = "anonymous";
-
     fetch(src, { credentials: "same-origin" })
-      .then((r) => { if (!r.ok) throw new Error("fetch failed"); return r.blob(); })
-      .then((blob) => {
+      .then(r => { if (!r.ok) throw new Error(); return r.blob(); })
+      .then(blob => {
         blobUrl = URL.createObjectURL(blob);
         img.onload = () => draw(img);
-        img.onerror = () => { if (!revoked && blobUrl) { URL.revokeObjectURL(blobUrl); revoked = true; } drawFallback(); };
+        img.onerror = drawFallback;
         img.src = blobUrl;
       })
-      .catch(() => drawFallback());
+      .catch(drawFallback);
 
-    const drawFallback = () => {
+    function drawFallback() {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const w = canvas.offsetWidth || 240;
       canvas.width = w; canvas.height = Math.round(w * (4 / 3));
-      ctx.fillStyle = "#D0EAF0";
+      ctx.fillStyle = "#d8edf2";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-    };
+    }
 
     return () => { if (!revoked && blobUrl) { URL.revokeObjectURL(blobUrl); revoked = true; } };
   }, [src]);
 
   return (
-    <canvas ref={canvasRef} style={{ width:"100%", aspectRatio:"3/4", display:"block", background:"#D0EAF0",
-      userSelect:"none", pointerEvents:"none", filter:"blur(2px)" }} />
+    <canvas ref={canvasRef} style={{
+      width: "100%", aspectRatio: "3/4", display: "block",
+      background: "#f0f9fa", userSelect: "none", pointerEvents: "none", filter: "blur(2px)",
+    }} />
   );
 };
 
@@ -683,39 +635,34 @@ const BlurredCanvas = ({ src }: { src: string }) => {
    NATIONALITY FLAGS
 ───────────────────────────────────────────────────────────────────────────── */
 const NATIONALITY_FLAGS: Record<string, string> = {
-  filipino:"ph", philippines:"ph", indonesian:"id", indonesia:"id",
-  myanmar:"mm", burmese:"mm", cambodian:"kh", cambodia:"kh",
-  vietnamese:"vn", vietnam:"vn", thai:"th", thailand:"th",
-  malaysian:"my", malaysia:"my", singaporean:"sg", singapore:"sg",
-  indian:"in", india:"in", "sri lankan":"lk", "sri lanka":"lk",
-  bangladeshi:"bd", bangladesh:"bd", nepali:"np", nepalese:"np", nepal:"np",
-  pakistani:"pk", pakistan:"pk", chinese:"cn", china:"cn",
-  hongkong:"hk", "hong kong":"hk", taiwanese:"tw", taiwan:"tw",
-  korean:"kr", "south korea":"kr", japanese:"jp", japan:"jp",
-  ethiopian:"et", ethiopia:"et", kenyan:"ke", kenya:"ke",
-  ugandan:"ug", uganda:"ug", ghanaian:"gh", ghana:"gh",
-  nigerian:"ng", nigeria:"ng",
+  filipino: "ph", philippines: "ph", indonesian: "id", indonesia: "id",
+  myanmar: "mm", burmese: "mm", cambodian: "kh", cambodia: "kh",
+  vietnamese: "vn", vietnam: "vn", thai: "th", thailand: "th",
+  malaysian: "my", malaysia: "my", singaporean: "sg", singapore: "sg",
+  indian: "in", india: "in", "sri lankan": "lk", "sri lanka": "lk",
+  bangladeshi: "bd", bangladesh: "bd", nepali: "np", nepalese: "np", nepal: "np",
+  pakistani: "pk", pakistan: "pk", chinese: "cn", china: "cn",
+  hongkong: "hk", "hong kong": "hk", taiwanese: "tw", taiwan: "tw",
+  korean: "kr", "south korea": "kr", japanese: "jp", japan: "jp",
+  ethiopian: "et", ethiopia: "et", kenyan: "ke", kenya: "ke",
+  ugandan: "ug", uganda: "ug", ghanaian: "gh", ghana: "gh",
+  nigerian: "ng", nigeria: "ng",
 };
 
 const getNationalityCode = (nationality?: string): string => {
   if (!nationality) return "";
   const key = nationality.toLowerCase().trim();
   if (NATIONALITY_FLAGS[key]) return NATIONALITY_FLAGS[key];
-  for (const [k, code] of Object.entries(NATIONALITY_FLAGS)) {
+  for (const [k, code] of Object.entries(NATIONALITY_FLAGS))
     if (key.includes(k)) return code;
-  }
   return "";
 };
 
 const FlagCircle = ({ code }: { code: string }) => {
   if (!code) return null;
   return (
-    <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center",
-      width:14, height:14, borderRadius:"50%", overflow:"hidden",
-      border:"1px solid rgba(0,0,0,0.1)", background:"#e5e7eb",
-      flexShrink:0, verticalAlign:"middle" }}>
-      <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={code}
-        style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+    <span style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",width:14,height:14,borderRadius:"50%",overflow:"hidden",border:"1px solid rgba(0,0,0,0.12)",background:"#e5e7eb",flexShrink:0,verticalAlign:"middle" }}>
+      <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={code} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }} />
     </span>
   );
 };
@@ -731,12 +678,28 @@ const getTypeLabel = (type: string) => {
 const getTypeBadgeStyle = (type?: string): { bg: string; color: string } => {
   const t = (type || "").toLowerCase();
   if (t.includes("new"))      return { bg: "#E0F4F7", color: "#0E4E5E" };
-  if (t.includes("transfer")) return { bg: "#FEF3C7", color: "#92400E" };
-  return { bg: "#F0F9E8", color: "#2D6A4F" };
+  if (t.includes("transfer")) return { bg: "#E0EEFF", color: "#1A4A8E" };
+  return { bg: "#FEF3C7", color: "#92400E" };
 };
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   MAID CARDS
+   SCROLL REVEAL HOOK
+───────────────────────────────────────────────────────────────────────────── */
+const useReveal = () => {
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add("visible"); observer.unobserve(e.target); }
+      }),
+      { threshold: 0.12 }
+    );
+    document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+};
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MAID CARDS (structure unchanged, colors updated)
 ───────────────────────────────────────────────────────────────────────────── */
 const LockedMaidCard = ({
   maid,
@@ -750,47 +713,43 @@ const LockedMaidCard = ({
 
   return (
     <div className="maid-card">
-      <div style={{ position:"relative", width:"100%", overflow:"hidden" }}>
+      <div style={{ position: "relative", width: "100%", overflow: "hidden" }}>
         {photo ? (
           <BlurredCanvas src={photo} />
         ) : (
-          <div style={{ aspectRatio:"3/4", background:"#D0EAF0", display:"flex",
-            alignItems:"center", justifyContent:"center" }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#8FBBC8" strokeWidth={1}>
+          <div style={{ aspectRatio:"3/4", background:"#e8f4f7", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#aacccc" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round"
-                d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+              />
             </svg>
           </div>
         )}
         {maid.type && (
           <div style={{ position:"absolute", top:10, left:10, filter:"blur(3px)", pointerEvents:"none" }}>
-            <span style={{ background:typeBg, color:typeColor, fontSize:9, fontWeight:700,
-              padding:"4px 10px", borderRadius:4, fontFamily:"'Inter',sans-serif", letterSpacing:"0.04em" }}>
+            <span style={{ background:typeBg, color:typeColor, fontSize:9, fontWeight:700, padding:"4px 10px", borderRadius:3, fontFamily:"'Inter',sans-serif", letterSpacing:"0.04em", textTransform:"uppercase" as const }}>
               {getTypeLabel(maid.type)}
             </span>
           </div>
         )}
-        <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column",
-          alignItems:"center", justifyContent:"center", gap:6, pointerEvents:"none" }}>
-          <div style={{ borderRadius:"50%", background:"rgba(14,78,94,0.5)", padding:10,
-            backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, pointerEvents:"none" }}>
+          <div style={{ borderRadius:"50%", background:"rgba(11,51,64,0.5)", padding:10, backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }}>
             <LockIconSvg />
           </div>
         </div>
       </div>
-      <div className="maid-card-info" style={{ background:"#fff", display:"flex",
-        flexDirection:"column", gap:6, flex:1 }}>
-        <div style={{ height:10, width:"75%", background:"#E0EEF2", borderRadius:4, filter:"blur(2px)" }} />
-        <div style={{ height:8,  width:"50%", background:"#E0EEF2", borderRadius:4, filter:"blur(2px)" }} />
-        <div style={{ height:8,  width:"60%", background:"#E0EEF2", borderRadius:4, filter:"blur(2px)" }} />
+      <div className="maid-card-info" style={{ background:"#fff", display:"flex", flexDirection:"column", gap:6, flex:1 }}>
+        <div style={{ height:10, width:"75%", background:"#d8edf2", borderRadius:3, filter:"blur(2px)" }} />
+        <div style={{ height:8,  width:"50%", background:"#d8edf2", borderRadius:3, filter:"blur(2px)" }} />
+        <div style={{ height:8,  width:"60%", background:"#d8edf2", borderRadius:3, filter:"blur(2px)" }} />
       </div>
       <div style={{ padding:"0 10px 10px" }}>
         <Link to={loginPath} style={{
-          display:"flex", width:"100%", alignItems:"center", justifyContent:"center",
-          gap:6, borderRadius:6, background:"var(--teal)",
+          display:"flex", width:"100%", alignItems:"center", justifyContent:"center", gap:6,
+          borderRadius:4, background:"linear-gradient(105deg,#0B3340 0%,#0E4E5E 60%,#1A6678 100%)",
           padding:"8px 10px", fontSize:9, fontWeight:700, letterSpacing:"0.05em",
-          textTransform:"uppercase" as const, color:"var(--amber)",
-          fontFamily:"'Inter',sans-serif", textDecoration:"none", boxSizing:"border-box" as const,
+          textTransform:"uppercase" as const, color:"#FCD34D", fontFamily:"'Inter',sans-serif",
+          textDecoration:"none", transition:"opacity 0.15s", boxSizing:"border-box" as const,
         }}>
           <LockIconSvg />
           Log in to view
@@ -800,59 +759,61 @@ const LockedMaidCard = ({
   );
 };
 
-const MaidCardFull = ({ maid, searchMaidsHref }: { maid: MaidProfile; searchMaidsHref: string }) => {
+const MaidCardFull = ({
+  maid,
+  searchMaidsHref,
+}: {
+  maid: MaidProfile;
+  searchMaidsHref: string;
+}) => {
   const photo = getPrimaryPhoto(maid);
   const age = calculateAge(maid.dateOfBirth);
   const flagCode = getNationalityCode(maid.nationality);
   const { bg: typeBg, color: typeColor } = getTypeBadgeStyle(maid.type);
 
   const langs = Object.entries(maid.languageSkills || {})
-    .filter(([, level]) => { const l = String(level||"").trim().toLowerCase(); return l && l!=="zero" && l!=="none"; })
+    .filter(([, level]) => { const l = String(level||"").trim().toLowerCase(); return l && l !== "zero" && l !== "none"; })
     .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
     .slice(0, 3);
 
   return (
     <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} className="maid-card" style={{ textDecoration:"none" }}>
-      <div style={{ position:"relative", width:"100%", background:"var(--teal-ghost)" }}>
+      <div style={{ position:"relative", width:"100%", background:"#f5f9fa" }}>
         <img src={photo} alt={maid.fullName} loading="lazy" decoding="async" />
         {maid.type && (
-          <span style={{ position:"absolute", top:10, left:10, background:typeBg, color:typeColor,
-            fontSize:9, fontWeight:700, padding:"4px 10px", borderRadius:4,
-            fontFamily:"'Inter',sans-serif", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+          <span style={{ position:"absolute", top:10, left:10, background:typeBg, color:typeColor, fontSize:9, fontWeight:700, padding:"4px 10px", borderRadius:3, fontFamily:"'Inter',sans-serif", letterSpacing:"0.04em", textTransform:"uppercase" as const }}>
             {getTypeLabel(maid.type)}
           </span>
         )}
       </div>
       <div className="maid-card-info" style={{ background:"#fff", display:"flex", flexDirection:"column", gap:3, flex:1 }}>
-        <h3 style={{ margin:0, fontSize:12, fontWeight:700, color:"var(--ink)", lineHeight:1.3,
-          fontFamily:"'Inter',sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+        <h3 style={{ margin:0, fontSize:12, fontWeight:700, color:"#0B3340", lineHeight:1.3, fontFamily:"'Inter',sans-serif", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
           {maid.fullName}
         </h3>
-        <p style={{ margin:0, fontSize:9, color:"#8FB8C2", fontFamily:"monospace", lineHeight:1.4 }}>
+        <p style={{ margin:0, fontSize:9, color:"#7AAABB", fontFamily:"monospace", lineHeight:1.4 }}>
           {maid.referenceCode}
         </p>
         {maid.nationality && (
-          <p style={{ margin:0, display:"inline-flex", alignItems:"center", gap:5,
-            fontSize:10, color:"var(--teal)", fontWeight:600, lineHeight:1.4 }}>
+          <p style={{ margin:0, display:"inline-flex", alignItems:"center", gap:5, fontSize:10, color:"#0E4E5E", fontWeight:600, lineHeight:1.4 }}>
             <FlagCircle code={flagCode} />
             {maid.nationality}
           </p>
         )}
         <div style={{ borderTop:"1px solid var(--border)", margin:"4px 0" }} />
         {(age || maid.maritalStatus) && (
-          <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:"#3A7080", lineHeight:1.4 }}>
-            {age && <span style={{ fontWeight:700, color:"var(--teal)" }}>{age} yrs</span>}
-            {age && maid.maritalStatus && <span style={{ color:"var(--border)" }}>·</span>}
+          <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:"#3A7A8A", lineHeight:1.4 }}>
+            {age && <span style={{ fontWeight:700, color:"#0E4E5E" }}>{age} yrs</span>}
+            {age && maid.maritalStatus && <span style={{ color:"#b0d8e0" }}>·</span>}
             {maid.maritalStatus && <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{maid.maritalStatus}</span>}
           </div>
         )}
         {maid.religion && (
-          <p style={{ margin:0, fontSize:9, color:"#7AABB8", lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+          <p style={{ margin:0, fontSize:9, color:"#6AAABB", lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
             {maid.religion}
           </p>
         )}
         {langs.length > 0 && (
-          <p style={{ margin:0, fontSize:9, color:"#9ABBC4", lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+          <p style={{ margin:0, fontSize:9, color:"#8ABBC8", lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
             {langs.join(" · ")}
           </p>
         )}
@@ -873,9 +834,9 @@ const BackToTopButton = () => {
   }, []);
   return (
     <button className={`back-to-top-btn ${visible ? "visible" : "hidden"}`}
-      onClick={() => window.scrollTo({ top:0, behavior:"smooth" })}
-      aria-label="Back to top" title="Back to top">
-      <ArrowUp size={20} color={`var(--ink)`} strokeWidth={2.5} />
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      aria-label="Back to top">
+      <ArrowUp size={19} color="#0B3340" strokeWidth={2.5} />
     </button>
   );
 };
@@ -884,23 +845,23 @@ const BackToTopButton = () => {
    STATIC DATA
 ───────────────────────────────────────────────────────────────────────────── */
 const services = [
-  { title:"Housekeeping",  slug:"housekeeping", description:"Meticulous daily cleaning and organization — a home that always feels fresh.",        image:housekeepingImg, Icon:Home,    badge:"Most Popular" },
-  { title:"Elderly Care",  slug:"elderly-care", description:"Compassionate, professional support for aging loved ones.",                           image:elderlyImg,      Icon:Heart,   badge:"Specialist"   },
-  { title:"Infant Care",   slug:"infant-care",  description:"Nurturing expert caregivers for newborns and toddlers.",                              image:infantImg,       Icon:Baby,    badge:"Certified"    },
-  { title:"Kid Care",      slug:"kid-care",     description:"Safe, engaging developmental care as your children grow.",                             image:culinaryImg,     Icon:Backpack,badge:"Top Rated"    },
+  { title: "Housekeeping",  slug: "housekeeping", description: "Meticulous cleaning & organization — your home, immaculate.",   image: housekeepingImg, Icon: Home,    badge: "Most Popular" },
+  { title: "Elderly Care",  slug: "elderly-care", description: "Compassionate professional support for your loved ones.",        image: elderlyImg,      Icon: Heart,   badge: "Specialist"   },
+  { title: "Infant Care",   slug: "infant-care",  description: "Expert caregivers providing nurturing support for newborns.",   image: infantImg,       Icon: Baby,    badge: "Certified"    },
+  { title: "Kid Care",      slug: "kid-care",     description: "Safe, engaging, developmental care for growing children.",      image: culinaryImg,     Icon: Backpack, badge: "Top Rated"   },
 ];
 
 const features = [
-  { Icon:BadgeCheck,     title:"Rigorously Vetted",  description:"Multi-stage screening and background checks — only the most trustworthy helpers join our network.", stat:"100%", statLabel:"Background Checked" },
-  { Icon:Sparkles,       title:"Smart Matching",     description:"We analyse your household's needs and find helpers who genuinely fit your lifestyle.",              stat:"98%",  statLabel:"Match Satisfaction"  },
-  { Icon:HeartHandshake, title:"Ongoing Support",    description:"Post-placement mediation, check-ins, and support — because placement is just the beginning.",       stat:"24/7", statLabel:"Support Available"   },
+  { Icon: BadgeCheck,     title: "Rigorously Vetted",  description: "Multi-stage screening — only the most trustworthy candidates join our network.", stat: "100%", statLabel: "Background Checked" },
+  { Icon: Sparkles,       title: "Smart Matching",      description: "Advanced compatibility matching finds helpers precisely tailored to your household.", stat: "98%",  statLabel: "Match Satisfaction"  },
+  { Icon: HeartHandshake, title: "Ongoing Support",     description: "Continued mediation and after-placement care — service that doesn't end at signing.", stat: "24/7", statLabel: "Support Available"   },
 ];
 
 const stats = [
-  { value:"2,500+", label:"Families Served",     Icon:TrendingUp },
-  { value:"15+",    label:"Years of Experience", Icon:Award      },
-  { value:"98%",    label:"Client Satisfaction", Icon:Star       },
-  { value:"500+",   label:"Active Helpers",      Icon:Users      },
+  { value: "2,500+", label: "Placements Made",     Icon: TrendingUp, delay: "0s"    },
+  { value: "15+",    label: "Years Experience",    Icon: Award,      delay: "0.1s"  },
+  { value: "98%",    label: "Client Satisfaction", Icon: Star,       delay: "0.2s"  },
+  { value: "500+",   label: "Active Helpers",      Icon: Users,      delay: "0.3s"  },
 ];
 
 const TICKER_ITEMS = [
@@ -948,11 +909,13 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const isLoggedIn = !!getClientToken();
   const searchMaidsHref = isLoggedIn ? "/client/maids" : "/search-maids";
 
+  useReveal();
+
   const location = useLocation();
   useEffect(() => {
     if (location.hash === "#services") {
       const el = document.getElementById("services");
-      if (el) setTimeout(() => el.scrollIntoView({ behavior:"smooth" }), 100);
+      if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 100);
     }
   }, [location]);
 
@@ -964,15 +927,13 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         if (cached) {
           const { data, ts } = JSON.parse(cached) as { data: MaidProfile[]; ts: number };
           if (Date.now() - ts < MAIDS_CACHE_TTL) {
-            setAllPublicMaids(data);
-            setIsLoading(false);
-            return;
+            setAllPublicMaids(data); setIsLoading(false); return;
           }
         }
         const mr = await fetch("/api/maids?visibility=public");
         const md = (await mr.json().catch(() => ({}))) as { error?: string; maids?: MaidProfile[] };
-        if (!mr.ok || !md.maids) throw new Error(md.error || "Failed to load public maids");
-        const filtered = md.maids.filter((m) => m.isPublic && hasPhoto(m));
+        if (!mr.ok || !md.maids) throw new Error(md.error || "Failed to load");
+        const filtered = md.maids.filter(m => m.isPublic && hasPhoto(m));
         setAllPublicMaids(filtered);
         sessionStorage.setItem(MAIDS_CACHE_KEY, JSON.stringify({ data: filtered, ts: Date.now() }));
       } catch (e) {
@@ -986,37 +947,24 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
   useEffect(() => {
     if (!isLoggedIn) return;
-    const syncInBackground = async () => {
-      try {
-        const c = await syncClientProfileFromSession();
-        if (c) setClientUser(c);
-      } catch { /* silent */ }
+    const sync = async () => {
+      try { const c = await syncClientProfileFromSession(); if (c) setClientUser(c); } catch {}
     };
-    void syncInBackground();
+    void sync();
   }, [isLoggedIn]);
 
   const nationalityOptions = useMemo(() => {
-    const vals = Array.from(
-      new Set(allPublicMaids.map((m) => m.nationality?.trim()).filter(Boolean) as string[])
-    ).sort();
+    const vals = Array.from(new Set(allPublicMaids.map(m => m.nationality?.trim()).filter(Boolean) as string[])).sort();
     return ["No Preference", ...vals];
   }, [allPublicMaids]);
 
-  const languageOptions = [
-    "No Preference", "English", "Mandarin/Chinese-Dialect",
-    "Bahasa Indonesia/Malaysia", "Hindi", "Tamil",
-  ];
+  const languageOptions = ["No Preference","English","Mandarin/Chinese-Dialect","Bahasa Indonesia/Malaysia","Hindi","Tamil"];
 
   const toggleMaidType = (t: string) =>
-    setMaidTypes((p) => p.includes(t) ? p.filter((x) => x !== t) : [...p, t]);
+    setMaidTypes(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
 
   const filteredMaids = useMemo(() =>
-    filterMaids(allPublicMaids, {
-      keyword,
-      nationality: nationality === "No Preference" ? [] : [nationality],
-      maidTypes,
-      language,
-    }),
+    filterMaids(allPublicMaids, { keyword, nationality: nationality === "No Preference" ? [] : [nationality], maidTypes, language }),
     [allPublicMaids, keyword, maidTypes, nationality, language],
   );
 
@@ -1029,8 +977,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: (number | "...")[] = [1];
     if (currentPage > 3) pages.push("...");
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++)
-      pages.push(i);
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
     if (currentPage < totalPages - 2) pages.push("...");
     pages.push(totalPages);
     return pages;
@@ -1068,11 +1015,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     const params = buildParams();
     params.set("intent", "request");
     const target = `/client/maids?${params.toString()}`;
-    if (!isLoggedIn) {
-      setPendingLoginPath(buildEmployerLoginPath(target));
-      setLoginPromptOpen(true);
-      return;
-    }
+    if (!isLoggedIn) { setPendingLoginPath(buildEmployerLoginPath(target)); setLoginPromptOpen(true); return; }
     navigate(target);
   };
   const clearFilters = () => {
@@ -1080,197 +1023,198 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   };
   const hasFilters = keyword || maidTypes.length > 0 || nationality !== "No Preference" || language !== "No Preference";
 
+  /* ── RENDER ── */
   return (
-    <div className="inter" style={{ minHeight:"100vh", background:"#fff", fontFamily:"'Inter',sans-serif" }}>
+    <div className="int" style={{ minHeight: "100vh", background: "#fff", fontFamily: "'Inter', sans-serif" }}>
       <style>{GLOBAL_STYLES}</style>
-
       <BackToTopButton />
 
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
-      {/* ── RECRUITMENT BANNER ── */}
+      {/* ── MAID JOB SEEKER BANNER ── */}
       {!isLoggedIn && (
-        <div style={{
-          background: "var(--teal)",
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
-        }}>
-          <div style={{ maxWidth:1280, margin:"0 auto", padding:"12px 24px",
-            display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-              <div style={{ width:32, height:32, borderRadius:8, background:"rgba(252,211,77,0.15)",
-                display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <Phone size={15} color="var(--amber)" />
-              </div>
+        <div style={{ background: "linear-gradient(90deg, #0B3340 0%, #0E4E5E 100%)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ maxWidth: 1280, margin: "0 auto", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "rgba(252,211,77,0.15)", border: "1px solid rgba(252,211,77,0.3)" }}>
+                <Users size={15} color="#FCD34D" />
+              </span>
               <div>
-                <p className="playfair" style={{ margin:0, fontSize:15, fontWeight:700, color:"#fff" }}>
-                  Looking for maid work?
-                </p>
-                <p style={{ margin:"2px 0 0", fontSize:12, color:"rgba(255,255,255,0.62)" }}>
-                  Apply directly through our recruitment portal.
-                </p>
+                <p className="pf" style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#fff", fontStyle: "italic" }}>Looking for maid work?</p>
+                <p style={{ margin: 0, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Apply through our recruitment portal — send your documents online.</p>
               </div>
             </div>
-            <Link to="/apply-as-maid" className="btn-amber" style={{ fontSize:12, padding:"10px 20px" }}>
+            <Link to="/apply-as-maid" className="btn-amber" style={{ flexShrink: 0, fontSize: 12 }}>
               Apply Now <ArrowRight size={14} />
             </Link>
           </div>
         </div>
       )}
 
-      {/* ── HERO ── */}
-      <section style={{
-        background: "linear-gradient(140deg, var(--ink) 0%, var(--teal) 55%, #1A7A8A 100%)",
-        position: "relative",
-        overflow: "hidden",
-      }}>
-        {/* Dot background */}
-        <div className="dot-pattern" style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:0 }} />
-        {/* Diagonal accent */}
-        <div className="hero-diagonal" />
-        {/* Ambient glow */}
-        <div style={{ position:"absolute", top:"-100px", right:"-80px", width:480, height:480,
-          borderRadius:"50%", background:"radial-gradient(circle, rgba(252,211,77,0.14) 0%, transparent 68%)",
-          pointerEvents:"none", zIndex:0 }} />
-        <div style={{ position:"absolute", bottom:"-80px", left:"-60px", width:320, height:320,
-          borderRadius:"50%", background:"radial-gradient(circle, rgba(26,122,138,0.3) 0%, transparent 70%)",
-          pointerEvents:"none", zIndex:0 }} />
+      {/* ─────────────────────────────────────────────────────────────────────
+          HERO
+      ───────────────────────────────────────────────────────────────────────── */}
+      <section style={{ background: "linear-gradient(150deg, #0B2A35 0%, #0E4E5E 55%, #1A6678 100%)", position: "relative", overflow: "hidden" }}>
 
-        <div style={{ position:"relative", zIndex:1, maxWidth:1280, margin:"0 auto", padding:"64px 24px 0" }}>
-          <div className="hero-grid" style={{ display:"grid", gap:52, alignItems:"center" }}>
+        {/* Morphing orb — the page's signature ambient element */}
+        <div style={{
+          position: "absolute", top: "-120px", right: "-80px",
+          width: 580, height: 580,
+          background: "radial-gradient(circle at 40% 40%, rgba(252,211,77,0.22) 0%, rgba(26,102,120,0.15) 50%, transparent 75%)",
+          animation: "morphOrb 14s ease-in-out infinite",
+          pointerEvents: "none", zIndex: 0,
+        }} />
+        <div style={{
+          position: "absolute", bottom: "-60px", left: "-80px",
+          width: 360, height: 360,
+          background: "radial-gradient(circle, rgba(252,211,77,0.1) 0%, transparent 70%)",
+          animation: "morphOrb 18s 4s ease-in-out infinite",
+          pointerEvents: "none", zIndex: 0,
+        }} />
+        {/* Subtle grid texture */}
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)", backgroundSize: "48px 48px", pointerEvents: "none", zIndex: 0 }} />
 
-            {/* Left */}
-            <div style={{ animation:"fadeUp 0.65s ease both" }}>
+        <div className="hero-section" style={{ position: "relative", zIndex: 1, maxWidth: 1280, margin: "0 auto", padding: "72px 24px 0" }}>
+          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center" }}>
+
+            {/* ── Left copy ── */}
+            <div style={{ animation: "slideInLeft 0.75s ease both" }}>
               {/* Trust badges */}
-              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:30 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 32 }}>
                 {[
-                  { Icon:Shield,     label:"Licensed Agency", accent:"var(--amber)" },
-                  { Icon:Award,      label:"15+ Years",        accent:"#6FD4E4" },
-                  { Icon:BadgeCheck, label:"MOM Approved",     accent:"var(--amber)" },
-                ].map(({ Icon, label, accent }) => (
-                  <span key={label} style={{ display:"inline-flex", alignItems:"center", gap:6,
-                    padding:"6px 14px", borderRadius:6,
-                    background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.14)",
-                    color:"rgba(255,255,255,0.82)", fontSize:11, fontWeight:600, letterSpacing:"0.02em" }}>
-                    <Icon size={11} color={accent} /> {label}
+                  { Icon: Shield,     label: "Licensed Agency" },
+                  { Icon: Award,      label: "15+ Years"        },
+                  { Icon: BadgeCheck, label: "MOM Approved"     },
+                ].map(({ Icon, label }) => (
+                  <span key={label} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "7px 14px", borderRadius: 4,
+                    background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.13)",
+                    color: "rgba(255,255,255,0.8)", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em",
+                  }}>
+                    <Icon size={11} color="#FCD34D" /> {label}
                   </span>
                 ))}
               </div>
 
-              <h1 className="playfair" style={{ fontSize:"clamp(2rem,4vw,3.4rem)", lineHeight:1.08,
-                fontWeight:900, color:"#fff", margin:"0 0 10px", letterSpacing:"-0.02em" }}>
-                Hiring a Helper<br />
-                <span className="amber-underline" style={{ color:"var(--amber)" }}>
-                  Now More Accessible
-                </span><br />
-                <span style={{ color:"rgba(255,255,255,0.45)", fontSize:"0.68em", fontWeight:700,
-                  fontFamily:"'Inter',sans-serif", letterSpacing:"0" }}>
-                  Than You Think.
+              {/* Headline */}
+              <h1 className="pf hero-h1" style={{
+                fontSize: "clamp(2.2rem,4.2vw,3.8rem)", lineHeight: 1.08,
+                fontWeight: 900, color: "#fff", margin: "0 0 6px",
+                letterSpacing: "-0.02em",
+              }}>
+                Find a Helper<br />
+                <em style={{ color: "#FCD34D", fontStyle: "italic" }}>You Can Trust,</em><br />
+                <span style={{ color: "rgba(255,255,255,0.45)", fontWeight: 700, fontSize: "0.62em" }}>
+                  at a Price You'll Love.
                 </span>
               </h1>
 
-              <p style={{ color:"rgba(255,255,255,0.55)", fontSize:15, lineHeight:1.8,
-                maxWidth:440, margin:"20px 0 32px" }}>
-                Transparent fees, no hidden costs. More families can access reliable, professional domestic help without financial stress.
+              {/* Amber rule — signature decorative motif */}
+              <span className="amber-rule" style={{ marginBottom: 20 }} />
+
+              <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 15, lineHeight: 1.8, maxWidth: 420, margin: "0 0 32px" }}>
+                Transparent fees. Verified professionals. A placement process built around your family's real needs — not just paperwork.
               </p>
 
               {clientUser && (
-                <div style={{ display:"inline-flex", alignItems:"center", gap:10,
-                  padding:"10px 18px", borderRadius:10,
-                  background:"rgba(252,211,77,0.12)", border:"1px solid rgba(252,211,77,0.28)",
-                  marginBottom:24 }}>
-                  <UserCheck size={16} color="var(--amber)" />
-                  <span style={{ color:"#fff", fontWeight:600, fontSize:14 }}>
-                    Welcome back, {clientUser.name}
-                  </span>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 18px", borderRadius: 8, background: "rgba(252,211,77,0.12)", border: "1px solid rgba(252,211,77,0.3)", marginBottom: 24 }}>
+                  <UserCheck size={16} color="#FCD34D" />
+                  <span style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>Welcome back, {clientUser.name}</span>
                 </div>
               )}
 
-              <div style={{ display:"flex", flexWrap:"wrap", gap:12, marginBottom:52 }}>
-                <button className="btn-amber"
-                  onClick={() => document.getElementById("search")?.scrollIntoView({ behavior:"smooth" })}>
-                  Search Maids <ArrowRight size={15} />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 52 }}>
+                <button className="btn-amber" onClick={() => document.getElementById("search")?.scrollIntoView({ behavior: "smooth" })}>
+                  Browse Available Maids <ArrowRight size={15} />
                 </button>
-                <Link to="/employer-login" className="btn-ghost">
+                <Link to="/employer-login" className="btn-outline-teal">
                   Employer Login <ChevronRight size={15} />
                 </Link>
               </div>
 
               {/* Stats */}
-              <div className="stats-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-                {stats.map(({ value, label, Icon }) => (
-                  <div key={label} className="stat-card">
-                    <div style={{ width:30, height:30, borderRadius:8,
-                      background:"rgba(252,211,77,0.14)", display:"flex",
-                      alignItems:"center", justifyContent:"center", marginBottom:8 }}>
-                      <Icon size={14} color="var(--amber)" />
+              <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+                {stats.map(({ value, label, Icon, delay }) => (
+                  <div key={label} className="stat-card" style={{ animationDelay: delay }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(252,211,77,0.14)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+                      <Icon size={15} color="#FCD34D" />
                     </div>
-                    <span className="stat-value">{value}</span>
-                    <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginTop:4, lineHeight:1.4 }}>
-                      {label}
-                    </span>
+                    <span className="pf" style={{ color: "#FCD34D", fontSize: "clamp(18px,2.4vw,26px)", fontWeight: 900, lineHeight: 1 }}>{value}</span>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 4, lineHeight: 1.4 }}>{label}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Right image */}
-            <div className="hero-img-col" style={{ position:"relative", animation:"fadeUp 0.65s 0.18s ease both" }}>
-              {/* Spinning orbit ring */}
-              <div style={{ position:"absolute", inset:-16, borderRadius:32,
-                border:"1.5px dashed rgba(252,211,77,0.22)", zIndex:0,
-                animation:"spinSlow 45s linear infinite" }} />
-              <div style={{ position:"relative", borderRadius:24, overflow:"hidden",
-                border:"3px solid rgba(252,211,77,0.28)",
-                boxShadow:"0 40px 100px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)", zIndex:1 }}>
+            {/* ── Right image ── */}
+            <div className="hero-image-col" style={{ position: "relative", animation: "slideInRight 0.75s 0.1s ease both" }}>
+              {/* Rotating amber ring */}
+              <div style={{
+                position: "absolute", inset: -16, borderRadius: 20,
+                border: "1.5px dashed rgba(252,211,77,0.25)",
+                animation: "rotateSlow 50s linear infinite",
+                zIndex: 0, pointerEvents: "none",
+              }} />
+              {/* Amber corner accent */}
+              <div style={{
+                position: "absolute", top: -6, left: -6, width: 60, height: 60,
+                border: "3px solid var(--amber)", borderRight: "none", borderBottom: "none",
+                borderRadius: "12px 0 0 0", zIndex: 2, pointerEvents: "none",
+              }} />
+              <div style={{
+                position: "absolute", bottom: -6, right: -6, width: 60, height: 60,
+                border: "3px solid var(--amber)", borderLeft: "none", borderTop: "none",
+                borderRadius: "0 0 12px 0", zIndex: 2, pointerEvents: "none",
+              }} />
+
+              <div style={{
+                position: "relative", borderRadius: 12, overflow: "hidden",
+                border: "2px solid rgba(252,211,77,0.2)",
+                boxShadow: "0 40px 90px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)",
+                zIndex: 1,
+              }}>
                 <img src={heroImage} alt="Professional domestic helper" fetchPriority="high" decoding="async"
-                  style={{ display:"block", width:"100%", objectFit:"cover", height:"clamp(280px,42vw,510px)" }} />
-                <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"40%",
-                  background:"linear-gradient(to top, rgba(10,40,48,0.82) 0%, transparent 100%)" }} />
-                {/* Amber left stripe */}
-                <div style={{ position:"absolute", top:0, left:0, bottom:0, width:5,
-                  background:"linear-gradient(to bottom, var(--amber), var(--teal-mid))" }} />
+                  style={{ display: "block", width: "100%", objectFit: "cover", height: "clamp(280px,42vw,520px)" }} />
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: "linear-gradient(to top, rgba(11,51,64,0.85) 0%, transparent 100%)" }} />
+                {/* Teal left-edge accent */}
+                <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 4, background: "linear-gradient(to bottom, #FCD34D, #0E4E5E)" }} />
               </div>
 
-              {/* Floating badge: Verified */}
-              <div className="float-badge" style={{ position:"absolute", bottom:52, left:-28,
-                animation:"floatBob 4s ease-in-out infinite", zIndex:2 }}>
-                <div style={{ width:38, height:38, borderRadius:10,
-                  background:"linear-gradient(135deg, var(--amber), var(--amber-dark))",
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  flexShrink:0, animation:"pulseGlow 2.5s ease infinite" }}>
-                  <BadgeCheck size={18} color="var(--ink)" />
+              {/* Floating badges */}
+              <div className="floating-badge" style={{ position: "absolute", bottom: 52, left: -28, animation: "floatY 3.8s ease-in-out infinite", zIndex: 3 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: "linear-gradient(135deg, #FCD34D, #E8B800)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, animation: "pulseAmber 2.5s ease infinite" }}>
+                  <BadgeCheck size={18} color="#0B3340" />
                 </div>
                 <div>
-                  <p style={{ fontFamily:"'Inter',sans-serif", fontWeight:700, fontSize:12,
-                    color:"var(--ink)", margin:0 }}>Fully Verified</p>
-                  <p style={{ fontSize:10, color:"#6A9BAA", margin:"3px 0 0" }}>Background checked</p>
+                  <p className="int" style={{ fontWeight: 700, fontSize: 12, color: "#0B3340", margin: 0 }}>Fully Verified</p>
+                  <p style={{ fontSize: 10, color: "#5A8A98", margin: "3px 0 0" }}>Background checked</p>
                 </div>
               </div>
 
-              {/* Floating badge: Top Rated */}
-              <div className="float-badge" style={{ position:"absolute", top:16, right:-22,
-                animation:"floatBob 4s 2s ease-in-out infinite", zIndex:2 }}>
-                <div style={{ width:38, height:38, borderRadius:10,
-                  background:"linear-gradient(135deg, var(--teal-mid), var(--teal))",
-                  display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <Star size={18} color="var(--amber)" fill="var(--amber)" />
+              <div className="floating-badge" style={{ position: "absolute", top: 20, right: -24, animation: "floatY 3.8s 2s ease-in-out infinite", zIndex: 3 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: "linear-gradient(135deg, #0E4E5E, #1A6678)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Star size={18} color="#FCD34D" fill="#FCD34D" />
                 </div>
                 <div>
-                  <p style={{ fontFamily:"'Inter',sans-serif", fontWeight:700, fontSize:12,
-                    color:"var(--ink)", margin:0 }}>Top Rated</p>
-                  <p style={{ fontSize:10, color:"#6A9BAA", margin:"3px 0 0" }}>4.9 / 5 stars</p>
+                  <p className="int" style={{ fontWeight: 700, fontSize: 12, color: "#0B3340", margin: 0 }}>Top Rated</p>
+                  <p style={{ fontSize: 10, color: "#5A8A98", margin: "3px 0 0" }}>4.9 / 5 stars</p>
                 </div>
               </div>
             </div>
+
           </div>
         </div>
 
-        {/* Ticker */}
-        <div style={{ marginTop:56, background:"var(--amber)", padding:"11px 0", overflow:"hidden" }}>
+        {/* ── Ticker ── */}
+        <div style={{ marginTop: 60, background: "#FCD34D", padding: "11px 0", overflow: "hidden" }}>
           <div className="ticker-track">
             {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-              <span key={i} style={{ fontFamily:"'Inter',sans-serif", fontSize:10, fontWeight:700,
-                color:"var(--ink)", padding:"0 28px", whiteSpace:"nowrap", letterSpacing:"0.05em" }}>
+              <span key={i} style={{
+                fontFamily: "'Inter', sans-serif", fontSize: 10, fontWeight: 700,
+                color: "#0B3340", padding: "0 32px", whiteSpace: "nowrap", letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}>
                 {item}
               </span>
             ))}
@@ -1278,78 +1222,65 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* ── SEARCH ── */}
-      <section id="search" style={{ background:"var(--teal-ghost)", padding:"72px 0" }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 24px" }}>
-          <div style={{ textAlign:"center", marginBottom:44 }}>
-            <span className="section-chip" style={{ background:"var(--teal)", color:"var(--amber)",
-              marginBottom:14, display:"inline-flex" }}>
-              <SlidersHorizontal size={11} /> Maid Search
+      {/* ─────────────────────────────────────────────────────────────────────
+          SEARCH
+      ───────────────────────────────────────────────────────────────────────── */}
+      <section id="search" className="section-pad" style={{ background: "#F0F9FF", padding: "72px 0" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+
+          <div className="reveal" style={{ textAlign: "center", marginBottom: 44 }}>
+            <span className="section-chip" style={{ background: "#FCD34D", color: "#0B3340", marginBottom: 14, display: "inline-flex" }}>
+              <SlidersHorizontal size={10} /> Smart Maid Search
             </span>
-            <h2 className="playfair" style={{ fontSize:"clamp(1.6rem,3.5vw,2.4rem)", color:"var(--ink)",
-              margin:"0 0 10px", letterSpacing:"-0.02em" }}>
+            <h2 className="pf" style={{ fontSize: "clamp(1.6rem,3.5vw,2.6rem)", color: "#0B3340", margin: "0 0 10px", fontStyle: "italic", letterSpacing: "-0.01em" }}>
               Find the Right Helper<br />for Your Home
             </h2>
-            <p style={{ color:"#5A8C9A", fontSize:14, margin:0 }}>
-              Use the smart filters below to narrow down your perfect match.
-            </p>
+            <span className="amber-rule" style={{ margin: "0 auto 16px", display: "block", width: 40 }} />
+            <p style={{ color: "#3A7A8A", fontSize: 14, margin: 0 }}>Use the filters below to narrow down your perfect match.</p>
           </div>
 
-          <div className="search-card" style={{ maxWidth:960, margin:"0 auto" }}>
-            {/* Header */}
-            <div style={{ background:"var(--teal)", padding:"16px 24px",
-              display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-              <span style={{ display:"flex", alignItems:"center", gap:10, color:"#fff",
-                fontFamily:"'Inter',sans-serif", fontSize:13, fontWeight:700 }}>
-                <Search size={15} color="rgba(255,255,255,0.55)" /> Maid Search Filter
+          <div className="reveal search-card" style={{ maxWidth: 960, margin: "0 auto" }}>
+            {/* Card header */}
+            <div style={{
+              background: "linear-gradient(105deg, #0B3340 0%, #0E4E5E 55%, #1A6678 100%)",
+              padding: "16px 24px",
+              display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10,
+            }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, color: "#fff", fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700 }}>
+                <Search size={14} color="rgba(255,255,255,0.55)" /> Helper Search Filter
               </span>
-              <span style={{ padding:"5px 14px", borderRadius:4,
-                background:"rgba(252,211,77,0.18)", border:"1px solid rgba(252,211,77,0.38)",
-                color:"var(--amber)", fontSize:11, fontWeight:700, fontFamily:"'Inter',sans-serif" }}>
+              <span style={{ padding: "5px 14px", borderRadius: 4, background: "rgba(252,211,77,0.18)", border: "1px solid rgba(252,211,77,0.4)", color: "#FCD34D", fontSize: 11, fontWeight: 700, letterSpacing: "0.03em" }}>
                 {isLoading ? "Loading…" : `${filteredMaids.length} matches`}
               </span>
             </div>
 
-            {/* Body */}
-            <div className="search-body" style={{ padding:"26px 28px", display:"flex", flexDirection:"column", gap:22 }}>
+            {/* Card body */}
+            <div className="search-body" style={{ padding: "26px 30px", display: "flex", flexDirection: "column", gap: 22 }}>
               {/* Keywords */}
-              <div className="filter-row" style={{ display:"flex", alignItems:"center", gap:16 }}>
-                <label className="filter-label" style={{ flexShrink:0, fontFamily:"'Inter',sans-serif",
-                  fontSize:10, fontWeight:700, color:"var(--teal)", width:100, letterSpacing:"0.05em",
-                  textTransform:"uppercase" }}>
-                  Keywords
-                </label>
-                <div style={{ position:"relative", flex:1 }}>
-                  <input className="input-styled" value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    placeholder="e.g. Filipino maid, baby sitter, elderly care…" />
+              <div className="filter-row" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <label className="filter-label" style={{ flexShrink: 0, fontFamily: "'Inter',sans-serif", fontSize: 10, fontWeight: 700, color: "#0E4E5E", width: 100, letterSpacing: "0.06em", textTransform: "uppercase" as const }}>Keywords</label>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <input className="input-styled" value={keyword} onChange={e => setKeyword(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSearch()}
+                    placeholder="e.g. Filipino, baby sitter, elderly care…" />
                   {keyword ? (
-                    <button onClick={() => setKeyword("")} style={{ position:"absolute", right:12,
-                      top:"50%", transform:"translateY(-50%)", background:"none", border:"none",
-                      cursor:"pointer", color:"#8FB8C2", display:"flex", padding:2 }}>
+                    <button onClick={() => setKeyword("")} style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#888",display:"flex",padding:2 }}>
                       <X size={14} />
                     </button>
                   ) : (
-                    <Search size={14} color="#8FB8C2" style={{ position:"absolute", right:14,
-                      top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }} />
+                    <Search size={14} color="#9BBFC8" style={{ position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none" }} />
                   )}
                 </div>
               </div>
 
               {/* Maid Type */}
-              <div className="filter-row" style={{ display:"flex", alignItems:"flex-start", gap:16 }}>
-                <label className="filter-label" style={{ flexShrink:0, fontFamily:"'Inter',sans-serif",
-                  fontSize:10, fontWeight:700, color:"var(--teal)", width:100,
-                  letterSpacing:"0.05em", textTransform:"uppercase", paddingTop:8 }}>
-                  Maid Type
-                </label>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                  {MAID_TYPES.map((t) => {
+              <div className="filter-row" style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+                <label className="filter-label" style={{ flexShrink:0,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:700,color:"#0E4E5E",width:100,letterSpacing:"0.06em",textTransform:"uppercase" as const,paddingTop:8 }}>Maid Type</label>
+                <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
+                  {MAID_TYPES.map(t => {
                     const active = maidTypes.includes(t);
                     return (
-                      <button key={t} type="button" onClick={() => toggleMaidType(t)}
-                        className={`tag-pill${active ? " active" : ""}`}>
+                      <button key={t} type="button" onClick={() => toggleMaidType(t)} className={`tag-pill${active?" active":""}`}>
                         {active && <CheckCircle size={11} />} {t}
                       </button>
                     );
@@ -1358,47 +1289,31 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               </div>
 
               {/* Nationality + Language */}
-              <div className="nat-lang-row" style={{ display:"flex", gap:20 }}>
-                <div style={{ flex:1, display:"flex", alignItems:"center", gap:16 }}>
-                  <label className="filter-label" style={{ flexShrink:0, fontFamily:"'Inter',sans-serif",
-                    fontSize:10, fontWeight:700, color:"var(--teal)", width:100,
-                    letterSpacing:"0.05em", textTransform:"uppercase" }}>
-                    Nationality
-                  </label>
-                  <select className="select-styled" value={nationality}
-                    onChange={(e) => setNationality(e.target.value)}>
-                    {nationalityOptions.map((o) => <option key={o}>{o}</option>)}
+              <div className="nat-lang-row" style={{ display:"flex",gap:20 }}>
+                <div style={{ flex:1,display:"flex",alignItems:"center",gap:16 }}>
+                  <label className="filter-label" style={{ flexShrink:0,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:700,color:"#0E4E5E",width:100,letterSpacing:"0.06em",textTransform:"uppercase" as const }}>Nationality</label>
+                  <select className="select-styled" value={nationality} onChange={e => setNationality(e.target.value)}>
+                    {nationalityOptions.map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
-                <div style={{ flex:1, display:"flex", alignItems:"center", gap:16 }}>
-                  <label className="filter-label" style={{ flexShrink:0, fontFamily:"'Inter',sans-serif",
-                    fontSize:10, fontWeight:700, color:"var(--teal)", width:80,
-                    letterSpacing:"0.05em", textTransform:"uppercase" }}>
-                    Language
-                  </label>
-                  <select className="select-styled" value={language}
-                    onChange={(e) => setLanguage(e.target.value)}>
-                    {languageOptions.map((o) => <option key={o}>{o}</option>)}
+                <div style={{ flex:1,display:"flex",alignItems:"center",gap:16 }}>
+                  <label className="filter-label" style={{ flexShrink:0,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:700,color:"#0E4E5E",width:80,letterSpacing:"0.06em",textTransform:"uppercase" as const }}>Language</label>
+                  <select className="select-styled" value={language} onChange={e => setLanguage(e.target.value)}>
+                    {languageOptions.map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="search-actions" style={{ display:"flex", flexWrap:"wrap",
-                alignItems:"center", gap:12, paddingTop:18,
-                borderTop:"1.5px solid var(--border)" }}>
+              <div className="search-actions" style={{ display:"flex",flexWrap:"wrap",alignItems:"center",gap:12,paddingTop:16,borderTop:"1.5px solid var(--border)" }}>
                 <button type="button" onClick={handleRequestMaid} className="btn-amber">
-                  <ClipboardList size={14} /> Request Maid
+                  <ClipboardList size={14} /> Request a Maid
                 </button>
-                <button type="button" className="btn-teal-outline"
-                  onClick={() => navigate(searchMaidsHref)}>
-                  <Search size={14} /> Browse All Maids
+                <button type="button" className="btn-ghost-teal" onClick={() => navigate(searchMaidsHref)}>
+                  <Search size={14} /> Browse All
                 </button>
                 {hasFilters && (
-                  <button type="button" onClick={clearFilters}
-                    style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:12,
-                      color:"#8FB8C2", textDecoration:"underline", background:"none",
-                      border:"none", cursor:"pointer", fontFamily:"'Inter',sans-serif" }}>
+                  <button type="button" onClick={clearFilters} style={{ display:"inline-flex",alignItems:"center",gap:4,fontSize:12,color:"#6AAABB",textDecoration:"underline",background:"none",border:"none",cursor:"pointer" }}>
                     <X size={13} /> Clear filters
                   </button>
                 )}
@@ -1406,79 +1321,62 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </div>
           </div>
 
-          <p style={{ textAlign:"center", marginTop:16, fontSize:12, color:"#7AABB8" }}>
-            {isLoading ? "Loading available maids…"
-              : `${filteredMaids.length} public maid${filteredMaids.length !== 1 ? "s" : ""} matching your criteria`}
+          <p style={{ textAlign:"center",marginTop:16,fontSize:12,color:"#7AAABB" }}>
+            {isLoading ? "Loading available maids…" : `${filteredMaids.length} public maid${filteredMaids.length!==1?"s":""} matching your criteria`}
           </p>
         </div>
       </section>
 
-      {/* ── MAID RESULTS ── */}
-      <section id="maid-results" style={{ background:"#fff", padding:"72px 0" }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 24px" }}>
-          <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between",
-            marginBottom:32, gap:16, flexWrap:"wrap" }}>
+      {/* ─────────────────────────────────────────────────────────────────────
+          MAID RESULTS
+      ───────────────────────────────────────────────────────────────────────── */}
+      <section id="maid-results" className="section-pad" style={{ background: "#fff", padding: "72px 0" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+
+          <div className="reveal" style={{ display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:32,gap:16,flexWrap:"wrap" }}>
             <div>
-              <span className="section-chip" style={{ background:"var(--teal-pale)", color:"var(--teal)",
-                border:"1px solid var(--border)", marginBottom:10, display:"inline-flex" }}>
-                <LayoutGrid size={11} /> Available Now
+              <span className="section-chip" style={{ background:var_tealPale, color:"#0E4E5E", border:"1px solid var(--border)", marginBottom:10, display:"inline-flex" }}>
+                <LayoutGrid size={10} /> Available Now
               </span>
-              <h2 className="playfair" style={{ fontSize:"clamp(1.3rem,2.8vw,2rem)", color:"var(--ink)",
-                margin:"0 0 6px", letterSpacing:"-0.02em" }}>
-                Available Public Maids
+              <h2 className="pf" style={{ fontSize:"clamp(1.4rem,2.8vw,2.1rem)",color:"#0B3340",margin:"0 0 6px",fontStyle:"italic" }}>
+                Available Public Profiles
               </h2>
-              <p style={{ fontSize:13, color:"#7AABB8", margin:0 }}>
-                Browse currently available profiles matching your filters.
-              </p>
+              <span className="amber-rule" />
+              <p style={{ fontSize:13,color:"#6AAABB",margin:"8px 0 0" }}>Browse currently available profiles matching your filters.</p>
             </div>
             {totalPages > 1 && (
-              <p style={{ fontSize:13, color:"#aaa", flexShrink:0 }}>
-                Page {currentPage} of {totalPages}
-              </p>
+              <p style={{ fontSize:13,color:"#aaa",flexShrink:0 }}>Page {currentPage} of {totalPages}</p>
             )}
           </div>
 
           {isLoading ? (
             <div className="maid-grid">
               {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} style={{ borderRadius:12, overflow:"hidden",
-                  border:"1.5px solid var(--border)", background:"#fff" }}>
-                  <div style={{ aspectRatio:"3/4",
-                    background:"linear-gradient(90deg, #f0f0f0 25%, #e0eff3 50%, #f0f0f0 75%)",
-                    backgroundSize:"600px 100%", animation:"shimmer 1.5s infinite" }} />
-                  <div style={{ padding:"10px 12px 12px", display:"flex", flexDirection:"column", gap:6 }}>
-                    <div style={{ height:10, width:"75%", borderRadius:4, background:"#e0eff3" }} />
-                    <div style={{ height:8,  width:"50%", borderRadius:4, background:"#e0eff3" }} />
-                    <div style={{ height:8,  width:"60%", borderRadius:4, background:"#e0eff3" }} />
+                <div key={i} style={{ borderRadius:0,overflow:"hidden",border:"2px solid var(--teal-pale)",background:"#fff" }}>
+                  <div style={{ aspectRatio:"3/4",background:"linear-gradient(90deg,#e8f4f7 25%,#c8e8ef 50%,#e8f4f7 75%)",backgroundSize:"600px 100%",animation:"shimmer 1.6s infinite" }} />
+                  <div style={{ padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:6 }}>
+                    <div style={{ height:10,width:"75%",borderRadius:3,background:"#e0f0f4" }} />
+                    <div style={{ height:8,width:"50%",borderRadius:3,background:"#e0f0f4" }} />
                   </div>
                 </div>
               ))}
             </div>
           ) : filteredMaids.length === 0 ? (
-            <div style={{ borderRadius:16, border:"1.5px dashed var(--border)",
-              background:"var(--teal-ghost)", padding:48, textAlign:"center" }}>
-              <div style={{ fontSize:48, marginBottom:12 }}>🔍</div>
-              <p className="playfair" style={{ fontSize:16, fontWeight:700, color:"var(--teal)", margin:"0 0 6px" }}>
-                No matching maids found
-              </p>
-              <p style={{ fontSize:13, color:"#7AABB8", margin:0 }}>
-                Try a different nationality, maid type, or a broader keyword.
-              </p>
+            <div style={{ borderRadius:12,border:"2px dashed var(--border)",background:"var(--teal-frost)",padding:48,textAlign:"center" }}>
+              <div style={{ fontSize:48,marginBottom:12 }}>🔍</div>
+              <p className="pf" style={{ fontSize:16,fontWeight:700,color:"#0E4E5E",margin:"0 0 6px",fontStyle:"italic" }}>No matching helpers found</p>
+              <p style={{ fontSize:13,color:"#6AAABB",margin:0 }}>Try a different nationality, maid type, or a broader keyword.</p>
             </div>
           ) : (
             <>
               {!isLoggedIn && (
-                <div style={{ marginBottom:24, borderRadius:14, padding:"18px 24px",
-                  display:"flex", flexWrap:"wrap", alignItems:"center",
-                  justifyContent:"space-between", gap:16,
-                  background:"var(--teal)", border:"1.5px solid rgba(252,211,77,0.2)" }}>
+                <div className="reveal" style={{ marginBottom:24,borderRadius:10,padding:"20px 24px",display:"flex",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:16,background:"linear-gradient(110deg,#0B3340 0%,#0E4E5E 55%,#1A6678 100%)",border:"1.5px solid rgba(252,211,77,0.2)" }}>
                   <div>
-                    <p style={{ color:"#fff", fontFamily:"'Inter',sans-serif", fontSize:13,
-                      fontWeight:700, display:"flex", alignItems:"center", gap:8, margin:"0 0 5px" }}>
-                      <Lock size={14} color="var(--amber)" /> Unlock Full Maid Profiles
+                    <p style={{ color:"#fff",fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:8,margin:"0 0 6px" }}>
+                      <Lock size={14} color="#FCD34D" /> Unlock Full Maid Profiles
                     </p>
-                    <p style={{ color:"rgba(255,255,255,0.58)", fontSize:13, margin:0, maxWidth:400 }}>
-                      Guests see blurred previews only. Login to view full biodata, photos and begin hiring.
+                    <p style={{ color:"rgba(255,255,255,0.58)",fontSize:13,margin:0,maxWidth:420 }}>
+                      Guests see blurred previews only. Log in to view full biodata, photos &amp; begin hiring.
                     </p>
                   </div>
                   <Link to="/employer-login" className="btn-amber">
@@ -1488,45 +1386,35 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               )}
 
               <div className="maid-grid">
-                {pagedMaids.map((maid, idx) =>
+                {pagedMaids.map(maid =>
                   isLoggedIn ? (
-                    <div key={maid.referenceCode} className="maid-card-anim"
-                      style={{ animationDelay:`${idx * 40}ms` }}>
-                      <MaidCardFull maid={maid} searchMaidsHref={searchMaidsHref} />
-                    </div>
+                    <MaidCardFull key={maid.referenceCode} maid={maid} searchMaidsHref={searchMaidsHref} />
                   ) : (
-                    <div key={maid.referenceCode} className="maid-card-anim"
-                      style={{ animationDelay:`${idx * 40}ms` }}>
-                      <LockedMaidCard maid={maid} loginPath="/employer-login" />
-                    </div>
+                    <LockedMaidCard key={maid.referenceCode} maid={maid} loginPath="/employer-login" />
                   )
                 )}
               </div>
 
               {totalPages > 1 && (
                 <div className="pagination-wrap">
-                  <button className="pagination-btn"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1} aria-label="Previous page">
+                  <button className="pagination-btn" onClick={() => setCurrentPage(p => Math.max(1,p-1))} disabled={currentPage===1} aria-label="Previous page">
                     <span className="pag-label">← Prev</span>
-                    <span className="pag-icon" aria-hidden="true">‹</span>
+                    <span className="pag-icon" aria-hidden>‹</span>
                   </button>
                   {pageNumbers.map((page, idx) =>
                     page === "..." ? (
-                      <span key={`e-${idx}`} style={{ padding:"0 2px", fontSize:13, color:"#aaa", userSelect:"none" }}>…</span>
+                      <span key={`e-${idx}`} style={{ padding:"0 2px",fontSize:13,color:"#aaa",userSelect:"none" }}>…</span>
                     ) : (
                       <button key={page} onClick={() => setCurrentPage(page as number)}
-                        className={`pagination-btn${page === currentPage ? " active" : ""}`}
-                        aria-label={`Page ${page}`} aria-current={page === currentPage ? "page" : undefined}>
+                        className={`pagination-btn${page===currentPage?" active":""}`}
+                        aria-label={`Page ${page}`} aria-current={page===currentPage?"page":undefined}>
                         {page}
                       </button>
                     )
                   )}
-                  <button className="pagination-btn"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages} aria-label="Next page">
+                  <button className="pagination-btn" onClick={() => setCurrentPage(p => Math.min(totalPages,p+1))} disabled={currentPage===totalPages} aria-label="Next page">
                     <span className="pag-label">Next →</span>
-                    <span className="pag-icon" aria-hidden="true">›</span>
+                    <span className="pag-icon" aria-hidden>›</span>
                   </button>
                 </div>
               )}
@@ -1535,54 +1423,42 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* ── SERVICES ── */}
-      <section id="services" style={{ background:"var(--ink)", padding:"88px 0", position:"relative", overflow:"hidden" }}>
-        <div className="dot-pattern" style={{ position:"absolute", inset:0, pointerEvents:"none" }} />
-        <div style={{ position:"absolute", top:-120, right:-120, width:500, height:500, borderRadius:"50%",
-          background:"radial-gradient(circle, rgba(14,78,94,0.4) 0%, transparent 70%)",
-          pointerEvents:"none" }} />
+      {/* ─────────────────────────────────────────────────────────────────────
+          SERVICES
+      ───────────────────────────────────────────────────────────────────────── */}
+      <section id="services" className="section-pad-lg" style={{ background: "#0B3340", padding: "88px 0", position: "relative", overflow: "hidden" }}>
+        {/* Subtle dot grid */}
+        <div style={{ position:"absolute",inset:0,backgroundImage:"radial-gradient(circle, rgba(252,211,77,0.07) 1px, transparent 1px)",backgroundSize:"30px 30px",pointerEvents:"none" }} />
+        <div style={{ position:"absolute",top:-80,right:-80,width:440,height:440,borderRadius:"50%",background:"radial-gradient(circle, rgba(252,211,77,0.1) 0%, transparent 70%)",pointerEvents:"none" }} />
 
-        <div style={{ position:"relative", maxWidth:1280, margin:"0 auto", padding:"0 24px" }}>
-          <div style={{ textAlign:"center", marginBottom:52 }}>
-            <span className="section-chip" style={{ background:"rgba(252,211,77,0.1)", color:"var(--amber)",
-              border:"1px solid rgba(252,211,77,0.28)", marginBottom:16, display:"inline-flex" }}>
-              <Home size={11} /> Our Services
+        <div style={{ position:"relative",maxWidth:1280,margin:"0 auto",padding:"0 24px" }}>
+          <div className="reveal" style={{ textAlign:"center",marginBottom:52 }}>
+            <span className="section-chip" style={{ background:"rgba(252,211,77,0.12)",color:"#FCD34D",border:"1px solid rgba(252,211,77,0.3)",marginBottom:14,display:"inline-flex" }}>
+              <Home size={10} /> Our Services
             </span>
-            <h2 className="playfair" style={{ fontSize:"clamp(1.5rem,3.5vw,2.4rem)", color:"#fff",
-              margin:"0 0 10px", letterSpacing:"-0.02em" }}>
+            <h2 className="pf" style={{ fontSize:"clamp(1.6rem,3.5vw,2.6rem)",color:"#fff",margin:"0 0 10px",fontStyle:"italic" }}>
               Specialized Care for{" "}
-              <span style={{ color:"var(--amber)" }}>Every Need</span>
+              <span style={{ color:"#FCD34D" }}>Every Need</span>
             </h2>
-            <p style={{ color:"rgba(255,255,255,0.45)", fontSize:14, margin:0,
-              maxWidth:400, marginInline:"auto" }}>
+            <span className="amber-rule" style={{ margin:"0 auto",display:"block",width:40 }} />
+            <p style={{ color:"rgba(255,255,255,0.45)",fontSize:14,margin:"16px auto 0",maxWidth:380 }}>
               From daily housekeeping to specialized elder care — the right professional for your home.
             </p>
           </div>
 
-          <div className="services-grid" style={{ display:"grid",
-            gridTemplateColumns:"repeat(auto-fill, minmax(260px,1fr))", gap:20 }}>
+          <div className="services-grid reveal" style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(260px,1fr))",gap:20 }}>
             {services.map(({ title, slug, description, image, Icon, badge }) => (
-              <Link key={title} to={`/services/${slug}`} className="service-card"
-                style={{ display:"block", textDecoration:"none" }}>
+              <Link key={title} to={`/services/${slug}`} className="service-card" style={{ display:"block",textDecoration:"none" }}>
                 <img src={image} alt={title} loading="lazy" decoding="async" />
                 <div className="service-overlay" />
-                <span className="service-badge">{badge}</span>
-                <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:22 }}>
-                  <div style={{ width:36, height:36, borderRadius:10,
-                    background:"rgba(252,211,77,0.16)", backdropFilter:"blur(10px)",
-                    border:"1px solid rgba(252,211,77,0.28)",
-                    display:"flex", alignItems:"center", justifyContent:"center", marginBottom:10 }}>
-                    <Icon size={18} color="var(--amber)" />
+                <span className="service-card-badge">{badge}</span>
+                <div style={{ position:"absolute",bottom:0,left:0,right:0,padding:20 }}>
+                  <div style={{ width:36,height:36,borderRadius:8,background:"rgba(252,211,77,0.18)",backdropFilter:"blur(8px)",border:"1px solid rgba(252,211,77,0.3)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10 }}>
+                    <Icon size={18} color="#FCD34D" />
                   </div>
-                  <h3 style={{ color:"#fff", fontFamily:"'Playfair Display',serif", fontSize:16,
-                    fontWeight:700, margin:"0 0 6px" }}>
-                    {title}
-                  </h3>
-                  <p style={{ color:"rgba(255,255,255,0.62)", fontSize:12, lineHeight:1.65, margin:"0 0 10px" }}>
-                    {description}
-                  </p>
-                  <span style={{ display:"inline-flex", alignItems:"center", gap:4,
-                    color:"var(--amber)", fontSize:12, fontWeight:600 }}>
+                  <h3 className="pf" style={{ color:"#fff",fontStyle:"italic",fontSize:16,fontWeight:700,margin:"0 0 6px" }}>{title}</h3>
+                  <p style={{ color:"rgba(255,255,255,0.65)",fontSize:12,lineHeight:1.6,margin:"0 0 10px" }}>{description}</p>
+                  <span style={{ display:"inline-flex",alignItems:"center",gap:4,color:"#FCD34D",fontSize:12,fontWeight:600 }}>
                     Learn More <ChevronRight size={13} />
                   </span>
                 </div>
@@ -1592,274 +1468,143 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* ── WHY US ── */}
-      <section id="why" style={{ background:"var(--teal-ghost)", padding:"88px 0" }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 24px" }}>
-          <div style={{ textAlign:"center", marginBottom:60 }}>
-            <span className="section-chip" style={{ background:"var(--teal)", color:"var(--amber)",
-              marginBottom:14, display:"inline-flex" }}>
-              <Award size={11} /> Why Choose Us
+      {/* ─────────────────────────────────────────────────────────────────────
+          WHY US
+      ───────────────────────────────────────────────────────────────────────── */}
+      <section id="why" className="section-pad-lg" style={{ background: "#F0F9FF", padding: "88px 0" }}>
+        <div style={{ maxWidth:1280,margin:"0 auto",padding:"0 24px" }}>
+          <div className="reveal" style={{ textAlign:"center",marginBottom:56 }}>
+            <span className="section-chip" style={{ background:"#FCD34D",color:"#0B3340",marginBottom:14,display:"inline-flex" }}>
+              <Award size={10} /> Why Choose Us
             </span>
-            <h2 className="playfair" style={{ fontSize:"clamp(1.5rem,3.5vw,2.4rem)", color:"var(--ink)",
-              margin:"0 0 10px", letterSpacing:"-0.02em" }}>
+            <h2 className="pf" style={{ fontSize:"clamp(1.6rem,3.5vw,2.6rem)",color:"#0B3340",margin:"0 0 8px",fontStyle:"italic" }}>
               Singapore's Most Trusted{" "}
-              <span style={{ color:"var(--teal)" }}>Maid Agency</span>
+              <span style={{ color:"#0E4E5E" }}>Maid Agency</span>
             </h2>
-            <p style={{ color:"#5A8C9A", fontSize:14, margin:0, maxWidth:400, marginInline:"auto" }}>
+            <span className="amber-rule" style={{ margin:"0 auto 16px",display:"block",width:40 }} />
+            <p style={{ color:"#3A7A8A",fontSize:14,margin:0,maxWidth:400,marginInline:"auto" }}>
               We go beyond placement — ensuring you and your helper thrive together.
             </p>
           </div>
 
-          <div className="why-grid" style={{ display:"grid", gap:52, alignItems:"center" }}>
-            {/* Image */}
-            <div className="why-img-col" style={{ position:"relative" }}>
-              <div className="why-frame" style={{ zIndex:1 }}>
+          <div className="why-grid" style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:52,alignItems:"center" }}>
+
+            {/* Image col */}
+            <div className="why-image-col reveal" style={{ position:"relative" }}>
+              {/* Amber bracket frame */}
+              <div style={{ position:"absolute",inset:-10,borderRadius:14,border:"2px solid var(--amber)",zIndex:0,transform:"rotate(-1.2deg)" }} />
+              <div style={{ position:"relative",borderRadius:12,overflow:"hidden",boxShadow:"0 24px 60px rgba(14,78,94,0.2)",zIndex:1 }}>
                 <img src={familyImg} alt="Happy family" loading="lazy" decoding="async"
-                  style={{ width:"100%", objectFit:"cover", display:"block",
-                    height:"clamp(280px,38vw,440px)" }} />
-                <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"45%",
-                  background:"linear-gradient(to top, rgba(10,40,48,0.78) 0%, transparent 100%)" }} />
-                <div style={{ position:"absolute", bottom:24, left:24, right:24 }}>
-                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                    {[...Array(5)].map((_,i) => (
-                      <Star key={i} size={14} fill="var(--amber)" color="var(--amber)" />
-                    ))}
-                    <span className="playfair" style={{ fontWeight:700, fontSize:13, color:"var(--amber)" }}>
-                      4.9
-                    </span>
+                  style={{ width:"100%",objectFit:"cover",display:"block",height:"clamp(280px,38vw,440px)" }} />
+                <div style={{ position:"absolute",bottom:0,left:0,right:0,height:"45%",background:"linear-gradient(to top,rgba(11,51,64,0.8) 0%,transparent 100%)" }} />
+                <div style={{ position:"absolute",bottom:24,left:24,right:24 }}>
+                  <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                    {[...Array(5)].map((_,i)=><Star key={i} size={13} fill="#FCD34D" color="#FCD34D" />)}
+                    <span className="pf" style={{ fontWeight:900,fontSize:14,color:"#FCD34D",fontStyle:"italic" }}>4.9</span>
                   </div>
-                  <p style={{ color:"rgba(255,255,255,0.68)", fontSize:12, margin:"4px 0 0" }}>
-                    2,500+ satisfied families
-                  </p>
+                  <p style={{ color:"rgba(255,255,255,0.65)",fontSize:12,margin:"4px 0 0" }}>2,500+ satisfied families</p>
                 </div>
               </div>
-              {/* Year badge */}
-              <div style={{ position:"absolute", top:-18, right:-22, borderRadius:14,
-                padding:"16px 20px",
-                background:"linear-gradient(135deg, var(--amber), var(--amber-dark))",
-                boxShadow:"0 12px 36px rgba(252,211,77,0.4), 0 4px 0 var(--amber-deep)", zIndex:2 }}>
-                <p className="playfair" style={{ fontSize:36, fontWeight:900, color:"var(--ink)",
-                  margin:0, lineHeight:1 }}>15+</p>
-                <p style={{ fontSize:10, color:"#4A3200", margin:"4px 0 0",
-                  fontWeight:700, lineHeight:1.3 }}>
-                  Years of Excellence<br />in Domestic Care
-                </p>
+              <div style={{ position:"absolute",top:-18,right:-22,borderRadius:10,padding:"16px 20px",background:"#FCD34D",boxShadow:"0 10px 32px rgba(252,211,77,0.45),0 3px 0 var(--amber-deep)",zIndex:2 }}>
+                <p className="pf" style={{ fontSize:34,fontWeight:900,color:"#0B3340",margin:0,lineHeight:1 }}>15+</p>
+                <p style={{ fontSize:10,color:"#6B4900",margin:"4px 0 0",fontWeight:700,lineHeight:1.3 }}>Years of Excellence<br/>in Domestic Care</p>
               </div>
             </div>
 
-            {/* Feature list */}
-            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            {/* Features */}
+            <div className="reveal" style={{ display:"flex",flexDirection:"column",gap:14 }}>
               {features.map(({ Icon, title, description, stat, statLabel }) => (
                 <div key={title} className="feature-card">
-                  <div style={{ width:48, height:48, borderRadius:14, flexShrink:0,
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    background:"var(--teal)", boxShadow:"0 4px 0 rgba(14,78,94,0.35)" }}>
-                    <Icon size={22} color="var(--amber)" />
+                  <div style={{ width:46,height:46,borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#FCD34D 0%,#E8B800 100%)",boxShadow:"0 3px 0 var(--amber-deep)" }}>
+                    <Icon size={20} color="#0B3340" />
                   </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:"flex", alignItems:"flex-start",
-                      justifyContent:"space-between", gap:12, marginBottom:8 }}>
-                      <h3 style={{ fontFamily:"'Inter',sans-serif", fontSize:14, fontWeight:700,
-                        color:"var(--ink)", margin:0 }}>
-                        {title}
-                      </h3>
-                      <div style={{ textAlign:"right", flexShrink:0 }}>
-                        <p className="playfair" style={{ fontSize:22, fontWeight:900,
-                          color:"var(--teal)", margin:0, lineHeight:1 }}>
-                          {stat}
-                        </p>
-                        <p style={{ fontSize:9, color:"#8FB8C2", margin:"3px 0 0",
-                          fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                          {statLabel}
-                        </p>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:6 }}>
+                      <h3 className="pf" style={{ fontStyle:"italic",fontSize:14,fontWeight:700,color:"#0B3340",margin:0 }}>{title}</h3>
+                      <div style={{ textAlign:"right",flexShrink:0 }}>
+                        <p className="pf" style={{ fontSize:22,fontWeight:900,color:"#0E4E5E",margin:0,lineHeight:1 }}>{stat}</p>
+                        <p style={{ fontSize:9,color:"#7AAABB",margin:"3px 0 0",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em" }}>{statLabel}</p>
                       </div>
                     </div>
-                    <p style={{ fontSize:13, color:"#5A8C9A", lineHeight:1.7, margin:0 }}>
-                      {description}
-                    </p>
+                    <p style={{ fontSize:12,color:"#3A7A8A",lineHeight:1.7,margin:0 }}>{description}</p>
                   </div>
                 </div>
               ))}
 
-              {/* CTA card */}
-              <div style={{ borderRadius:16, padding:26,
-                background:"linear-gradient(130deg, var(--teal) 0%, var(--teal-mid) 100%)",
-                border:"1.5px solid rgba(252,211,77,0.2)", position:"relative", overflow:"hidden" }}>
-                <div style={{ position:"absolute", top:-40, right:-40, width:140, height:140,
-                  borderRadius:"50%",
-                  background:"radial-gradient(circle, rgba(252,211,77,0.12) 0%, transparent 70%)",
-                  pointerEvents:"none" }} />
-                <p style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, fontSize:16,
-                  color:"#fff", margin:"0 0 8px" }}>
+              {/* CTA block */}
+              <div style={{ borderRadius:10,padding:24,background:"linear-gradient(110deg,#0B3340 0%,#0E4E5E 55%,#1A6678 100%)",border:"1.5px solid rgba(252,211,77,0.2)",position:"relative",overflow:"hidden" }}>
+                <div style={{ position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"radial-gradient(circle,rgba(252,211,77,0.18) 0%,transparent 70%)",pointerEvents:"none" }} />
+                <p className="pf" style={{ fontStyle:"italic",fontWeight:700,fontSize:15,color:"#fff",margin:"0 0 8px" }}>
                   Ready to find your perfect helper?
                 </p>
-                <p style={{ color:"rgba(255,255,255,0.55)", fontSize:13, lineHeight:1.7, margin:"0 0 18px" }}>
-                  Browse 500+ verified profiles or speak with our placement specialists today.
+                <p style={{ color:"rgba(255,255,255,0.55)",fontSize:13,lineHeight:1.7,margin:"0 0 18px" }}>
+                  Browse 500+ verified profiles or speak with our placement team today.
                 </p>
-                <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                  <button className="btn-amber" onClick={() => navigate(searchMaidsHref)}
-                    style={{ padding:"11px 20px", fontSize:12 }}>
-                    <Users size={13} /> Browse Helpers
-                  </button>
-                </div>
+                <button className="btn-amber" onClick={() => navigate(searchMaidsHref)} style={{ padding:"11px 20px",fontSize:12 }}>
+                  <Users size={14} /> Browse Helpers
+                </button>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-
-      {/* ── FOOTER ── */}
-        <footer style={{ background: "var(--ink)", padding: "64px 0 0" }}>
-          <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-            <div className="footer-grid" style={{
-              display: "grid",
-              gridTemplateColumns: "1.4fr 1fr 1.2fr 1.2fr 0.8fr",
-              gap: 36,
-              marginBottom: 48,
-            }}>
-
-              {/* Brand */}
-              <div>
-                <h4 className="playfair" style={{ fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 12px" }}>
-                  "Find Maids" At The Agency
-                </h4>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7, margin: 0 }}>
-                  Matching trusted domestic professionals with families since 2009.
-                </p>
-              </div>
-
-              {/* Quick Links */}
-              <div>
-                <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em",
-                  textTransform: "uppercase", margin: "0 0 16px", fontFamily: "'Inter',sans-serif" }}>
-                  Quick Links
-                </h5>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                  {[
-                    { label: "Home",         to: "/"             },
-                    { label: "Search Maids", to: "/search-maids" },
-                    { label: "About Us",     to: "/about"        },
-                    { label: "Agency",       to: "/agency"       },
-                    { label: "Enquiry",      to: "/enquiry2"     },
-                    { label: "FAQ",          to: "/faq"          },
-                  ].map((item) => (
-                    <li key={item.to}>
-                      <Link to={item.to}
-                        style={{ color: "#fff", fontSize: 13, textDecoration: "none",
-                          transition: "color 0.15s", fontFamily: "'Inter',sans-serif" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
-                        {item.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Contact Us */}
-              <div>
-                <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em",
-                  textTransform: "uppercase", margin: "0 0 16px", fontFamily: "'Inter',sans-serif" }}>
-                  Contact Us
-                </h5>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10,
-                  fontSize: 13, color: "#fff", fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
-                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <MapPin size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <span>3 Jalan Kukoh, #01-115<br />Singapore 161003</span>
-                  </li>
-                  <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <Mail size={16} color="var(--amber)" style={{ flexShrink: 0 }} />
-                    <a href="mailto:enquiries.j1@gmail.com"
-                      style={{ color: "#fff", textDecoration: "none", transition: "color 0.15s" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
-                      enquiries.j1@gmail.com
-                    </a>
-                  </li>
-                  <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <Phone size={16} color="var(--amber)" style={{ flexShrink: 0 }} />
-                    <a href="tel:+6580730757"
-                      style={{ color: "#fff", textDecoration: "none", transition: "color 0.15s" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
-                      8073 0757
-                    </a>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Opening Hours */}
-              <div>
-                <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em",
-                  textTransform: "uppercase", margin: "0 0 16px", fontFamily: "'Inter',sans-serif" }}>
-                  Opening Hours
-                </h5>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10,
-                  fontSize: 13, color: "#fff", fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
-                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <Clock size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <span>Mon to Sun: 11:00am to 11:00pm</span>
-                  </li>
-                  <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <MessageCircle size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <span>Other hours: by mobile. If unable to reach us urgently, please SMS.</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Follow Us */}
-              <div>
-                <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em",
-                  textTransform: "uppercase", margin: "0 0 16px", fontFamily: "'Inter',sans-serif" }}>
-                  Follow Us
-                </h5>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <a href="#" aria-label="Facebook"
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center",
-                      width: 36, height: 36, borderRadius: 8,
-                      border: "1.5px solid rgba(255,255,255,0.18)",
-                      color: "#1877F2", transition: "all 0.15s" }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.color = "var(--ink)";
-                      e.currentTarget.style.background = "#1877F2";
-                      e.currentTarget.style.borderColor = "#1877F2";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = "#1877F2";
-                      e.currentTarget.style.background = "transparent";
-                      e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
-                    }}>
-                    <Facebook size={18} />
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom bar */}
-            <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", padding: "20px 0",
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              flexWrap: "wrap", gap: 12 }}>
-              <p style={{ fontSize: 12, color: "#fff", margin: 0, fontFamily: "'Inter',sans-serif" }}>
-                © 2026 "Find Maids" At The Agency. All rights reserved.
+      {/* ─────────────────────────────────────────────────────────────────────
+          FOOTER
+      ───────────────────────────────────────────────────────────────────────── */}
+      <footer style={{ background: "#0B2A35", borderTop: "1px solid rgba(255,255,255,0.06)", padding: "56px 0 32px" }}>
+        <div style={{ maxWidth:1280,margin:"0 auto",padding:"0 24px" }}>
+          <div className="footer-grid" style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:36,marginBottom:40 }}>
+            <div>
+              <h4 className="pf" style={{ fontStyle:"italic",color:"#FCD34D",fontSize:17,fontWeight:700,margin:"0 0 12px" }}>
+                "Find Maids" At The Agency
+              </h4>
+              <p style={{ fontSize:13,color:"rgba(255,255,255,0.48)",lineHeight:1.7,margin:0 }}>
+                Matching trusted domestic professionals with families since 2009.
               </p>
-              <div style={{ display: "flex", gap: 6 }}>
-                {["Privacy", "Terms", "Contact"].map((item) => (
-                  <Link key={item} to="/contact"
-                    style={{ fontSize: 12, color: "#fff", textDecoration: "none",
-                      padding: "0 8px", fontFamily: "'Inter',sans-serif", transition: "color 0.15s" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
-                    {item}
-                  </Link>
+            </div>
+            <div>
+              <h5 style={{ color:"rgba(255,255,255,0.55)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",margin:"0 0 14px" }}>Company</h5>
+              <ul style={{ listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:8 }}>
+                {[["#why","About Us"],["#services","Our Services"],["#contact","Contact"]].map(([href,label])=>(
+                  <li key={label}><a href={href} style={{ color:"rgba(255,255,255,0.5)",fontSize:13,textDecoration:"none",transition:"color 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.color="#FCD34D")} onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,255,255,0.5)")}>{label}</a></li>
                 ))}
+              </ul>
+            </div>
+            <div>
+              <h5 style={{ color:"rgba(255,255,255,0.55)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",margin:"0 0 14px" }}>Legal</h5>
+              <ul style={{ listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:8 }}>
+                {[["#contact","Legal Information"],["#contact","Privacy Policy"],["#contact","Terms of Service"]].map(([href,label])=>(
+                  <li key={label}><a href={href} style={{ color:"rgba(255,255,255,0.5)",fontSize:13,textDecoration:"none",transition:"color 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.color="#FCD34D")} onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,255,255,0.5)")}>{label}</a></li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h5 style={{ color:"rgba(255,255,255,0.55)",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",margin:"0 0 14px" }}>Newsletter</h5>
+              <p style={{ fontSize:13,color:"rgba(255,255,255,0.45)",lineHeight:1.6,margin:"0 0 14px" }}>Care tips, industry news, and agency updates.</p>
+              <div style={{ display:"flex",gap:8 }}>
+                <input style={{ flex:1,padding:"9px 12px",borderRadius:6,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(255,255,255,0.07)",color:"#fff",fontSize:12,fontFamily:"'Inter',sans-serif",outline:"none" }} placeholder="Email address" />
+                <button className="btn-amber" style={{ padding:"9px 16px",fontSize:12 }}>Join</button>
               </div>
             </div>
           </div>
-        </footer>
+
+          {/* Divider + copyright */}
+          <div style={{ borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:24,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12 }}>
+            <p style={{ fontSize:12,color:"rgba(255,255,255,0.28)",margin:0 }}>
+              © 2026 "Find Maids" At The Agency. All rights reserved.
+            </p>
+            <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+              <div style={{ width:8,height:8,borderRadius:"50%",background:"#FCD34D",animation:"pulseAmber 2s ease infinite" }} />
+              <span style={{ fontSize:11,color:"rgba(255,255,255,0.35)",letterSpacing:"0.04em" }}>MOM Licensed Agency</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
 
 export default ClientLandingPage;
+
+const var_tealPale = "var(--teal-pale)";
