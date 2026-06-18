@@ -8,9 +8,6 @@ import * as pdfjsLib from "pdfjs-dist";
 import PdfWorker from "pdfjs-dist/build/pdf.worker?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorker;
 
-const GROQ_API_KEY  = import.meta.env.VITE_GROQ_API_KEY as string;
-const GROQ_BASE     = "https://api.groq.com/openai/v1/chat/completions";
-
 // Models ordered by preference — remove json_object mode so we handle parsing ourselves
 const GROQ_MODELS = [
   "meta-llama/llama-4-maverick-17b-128e-instruct",
@@ -534,65 +531,46 @@ ${pdfText}
 Remember: output ONLY the JSON object. Start with { end with }. Nothing else.`;
 }
 
-// ─── Groq API call ────────────────────────────────────────────────────────────
+// ─── Groq API call (proxied through /api/pdf-autofill) ───────────────────────
 async function callGroq(pdfText: string, model: string): Promise<ExtractedData> {
-  if (!GROQ_API_KEY?.trim()) {
-    throw new Error("Missing Groq API key for PDF autofill.");
-  }
-
-  const controller = new AbortController();
-  const timeoutId  = window.setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
-
-  const res = await fetch(GROQ_BASE, {
+  const res = await fetch("/api/pdf-autofill", {
     method:  "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROQ_API_KEY}`,
-    },
-    signal: controller.signal,
+    headers: { "Content-Type": "application/json" },
+    // NOTE: No response_format here — some Groq models fail with json_object mode
     body: JSON.stringify({
       model,
-      temperature: 0,
-      max_tokens:  8192,
-      // NOTE: No response_format here — some Groq models fail with json_object mode
-      // We handle JSON extraction ourselves via parseGroqJson
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user",   content: buildPrompt(pdfText) },
       ],
     }),
+    signal: AbortSignal.timeout(GROQ_TIMEOUT_MS),
   }).catch((error: unknown) => {
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) {
       throw new Error("PDF autofill timed out. Please try a smaller file.");
     }
     throw error;
-  }).finally(() => {
-    window.clearTimeout(timeoutId);
   });
 
-  if (!res.ok) {
-    const err    = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    const msg    = err.error?.message ?? `Groq error ${res.status}`;
-    const e      = new Error(msg) as Error & { status: number };
+  const data = (await res.json()) as {
+    content?:       string;
+    finish_reason?: string;
+    error?:         string;
+  };
+
+  if (!res.ok || data.error) {
+    const e      = new Error(data.error ?? `Server error ${res.status}`) as Error & { status: number };
     e.status     = res.status;
     throw e;
   }
 
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-    error?:   { message?: string };
-  };
-
-  if (data.error?.message) throw new Error(data.error.message);
-
-  const raw    = data.choices?.[0]?.message?.content ?? "";
-  const reason = data.choices?.[0]?.finish_reason ?? "unknown";
+  const raw    = data.content      ?? "";
+  const reason = data.finish_reason ?? "unknown";
 
   if (!raw.trim()) {
     throw new Error(`AI returned an empty response (finish_reason: ${reason})`);
   }
 
-  // Warn if truncated but still try to parse
   if (reason === "length") {
     console.warn("[PdfAutofill] Response truncated (finish_reason=length) — attempting partial parse");
   }

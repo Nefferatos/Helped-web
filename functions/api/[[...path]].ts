@@ -12154,6 +12154,65 @@ app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
   return c.json({ preset }, 201);
 });
 
+app.post("/api/pdf-autofill", async (c) => {
+  const groqKey = c.env.GROQ_API_KEY?.trim();
+  if (!groqKey) return c.json({ error: "PDF autofill is not configured" }, 503);
+
+  const body = await parseBody<{ model?: string; messages?: unknown[] }>(c.req.raw);
+  if (!body?.model || !Array.isArray(body.messages) || body.messages.length === 0) {
+    return c.json({ error: "model and messages are required" }, 400);
+  }
+
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${groqKey}`,
+    },
+    body: JSON.stringify({ model: body.model, temperature: 0, max_tokens: 8192, messages: body.messages }),
+    signal: AbortSignal.timeout(55_000),
+  });
+
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+    error?: { message?: string };
+  };
+
+  if (!res.ok || data.error?.message) {
+    return c.json(
+      { error: data.error?.message ?? `Groq error ${res.status}` },
+      (res.ok ? 500 : res.status) as 400 | 429 | 500 | 503,
+    );
+  }
+
+  return c.json({
+    content:       data.choices?.[0]?.message?.content ?? "",
+    finish_reason: data.choices?.[0]?.finish_reason   ?? "unknown",
+  });
+});
+
+app.post("/api/send-to-make", async (c) => {
+  const webhookUrl = c.env.MAKE_WEBHOOK_URL?.trim();
+  if (!webhookUrl) return c.json({ error: "Make webhook is not configured" }, 503);
+
+  const body = await parseBody<{ scenario?: string; payload?: Record<string, unknown> }>(c.req.raw);
+  if (!body?.scenario || typeof body.payload !== "object" || body.payload === null) {
+    return c.json({ error: "scenario and payload are required" }, 400);
+  }
+
+  const res = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenario: body.scenario, ...body.payload }),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  return c.json({
+    ok: res.ok,
+    delivery: { id: Date.now(), scenario: body.scenario, success: res.ok, statusCode: res.status },
+  });
+});
+
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
 const purgeExpiredClientSessions = async (env: Bindings): Promise<void> => {

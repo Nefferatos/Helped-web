@@ -7,8 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_CLAUDE_MODEL?: string;
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
-  readonly VITE_MAKE_WEBHOOK_URL_INQUIRY_PIPELINE?: string;
-  readonly VITE_MAKE_WEBHOOK_URL_LEAD_PIPELINE?: string;
 }
 
 interface ImportMeta {

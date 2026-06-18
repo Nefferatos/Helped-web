@@ -30,6 +30,7 @@ import {
   primeClientAuth,
   syncClientProfileFromSession,
 } from "@/lib/supabaseAuth";
+import { getBotReply } from "@/hooks/useChatbot";
 import "./ClientTheme.css";
 
 type TopicOption = AgencyChatbotTopicOption;
@@ -1263,12 +1264,32 @@ const ClientSupportChat = () => {
       }
       void loadConversations(true);
 
-      // Show AI typing indicator — the real reply arrives via SSE from the backend
+      // Trigger bot reply for support conversations
       if (chatbotEnabled && activeConv.conversationType === "support") {
         if (botReplyTimerRef.current !== null) window.clearTimeout(botReplyTimerRef.current);
         setIsBotTyping(true);
-        // Safety: auto-hide after 30s if AI reply never arrives
-        botReplyTimerRef.current = window.setTimeout(() => setIsBotTyping(false), 30_000);
+        const bot = getBotReply(text, chatbotConfig, {
+          clientName: client?.name,
+          agencyName: activeConv.agencyName || activeConv.title,
+          history: [...messages, data.message!],
+          selectedTopic,
+        });
+        if (bot) {
+          botReplyTimerRef.current = window.setTimeout(async () => {
+            setIsBotTyping(false);
+            try {
+              await clientFetch(`/api/chats/client/bot-reply?${qs}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: bot.text, senderName: chatbotConfig.botName }),
+              });
+            } catch {
+              // bot reply failure is non-fatal
+            }
+          }, bot.delay);
+        } else {
+          botReplyTimerRef.current = window.setTimeout(() => setIsBotTyping(false), 30_000);
+        }
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send");
