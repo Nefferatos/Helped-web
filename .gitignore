@@ -10,3 +10,4 @@ frontend/dist/
 backend/dist/
 .vercel
 .wrangler/
+.wrangler-dry/
