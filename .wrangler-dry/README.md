@@ -1,1 +1,0 @@
-This folder contains the built output assets for the worker "helped-web-v2" generated at 2026-06-18T20:54:52.950Z.
