@@ -533,6 +533,8 @@ const GLOBAL_STYLES = `
     .section-pad   { padding: 48px 0 !important; }
     .section-pad-lg { padding: 56px 0 !important; }
     .hero-section  { padding: 40px 16px 0 !important; }
+    .results-header { margin-bottom: 18px !important; }
+    .unlock-banner  { margin-bottom: 16px !important; padding: 16px 18px !important; }
   }
   @media (max-width: 520px) {
     .footer-grid { grid-template-columns: 1fr !important; }
@@ -693,8 +695,28 @@ const useReveal = () => {
       }),
       { threshold: 0.12 }
     );
-    document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
-    return () => observer.disconnect();
+
+    const observeAll = () => {
+      document.querySelectorAll(".reveal:not(.visible)").forEach(el => observer.observe(el));
+    };
+
+    // Initial pass for whatever .reveal elements already exist.
+    observeAll();
+
+    // IMPORTANT: some .reveal sections (e.g. the "unlock full profiles" banner
+    // in the maid results grid) only mount once an async fetch resolves —
+    // i.e. *after* this effect's first observeAll() call. Without watching
+    // for newly-added nodes, those elements never get observed, so they sit
+    // permanently at opacity:0 while still reserving their full height —
+    // which is what produces a large blank gap in the layout. A
+    // MutationObserver catches those late-arriving elements and observes them.
+    const mutationObserver = new MutationObserver(() => observeAll());
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      mutationObserver.disconnect();
+    };
   }, []);
 };
 
@@ -1333,9 +1355,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       <section id="maid-results" className="section-pad" style={{ background: "#fff", padding: "72px 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
-          <div className="reveal" style={{ display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:32,gap:16,flexWrap:"wrap" }}>
+          <div className="reveal results-header" style={{ display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:32,gap:16,flexWrap:"wrap" }}>
             <div>
-              <span className="section-chip" style={{ background:var_tealPale, color:"#0E4E5E", border:"1px solid var(--border)", marginBottom:10, display:"inline-flex" }}>
+              <span className="section-chip" style={{ background:"var(--teal-pale)", color:"#0E4E5E", border:"1px solid var(--border)", marginBottom:10, display:"inline-flex" }}>
                 <LayoutGrid size={10} /> Available Now
               </span>
               <h2 className="pf" style={{ fontSize:"clamp(1.4rem,2.8vw,2.1rem)",color:"#0B3340",margin:"0 0 6px",fontStyle:"italic" }}>
@@ -1370,7 +1392,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           ) : (
             <>
               {!isLoggedIn && (
-                <div className="reveal" style={{ marginBottom:24,borderRadius:10,padding:"20px 24px",display:"flex",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:16,background:"linear-gradient(110deg,#0B3340 0%,#0E4E5E 55%,#1A6678 100%)",border:"1.5px solid rgba(252,211,77,0.2)" }}>
+                <div className="reveal unlock-banner" style={{ marginBottom:24,borderRadius:10,padding:"20px 24px",display:"flex",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:16,background:"linear-gradient(110deg,#0B3340 0%,#0E4E5E 55%,#1A6678 100%)",border:"1.5px solid rgba(252,211,77,0.2)" }}>
                   <div>
                     <p style={{ color:"#fff",fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:8,margin:"0 0 6px" }}>
                       <Lock size={14} color="#FCD34D" /> Unlock Full Maid Profiles
@@ -1606,5 +1628,3 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 };
 
 export default ClientLandingPage;
-
-const var_tealPale = "var(--teal-pale)";
