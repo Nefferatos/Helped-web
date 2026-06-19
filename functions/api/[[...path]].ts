@@ -599,13 +599,19 @@ const nextCounter = (
 };
 
 const normalizeMaid = (maid: MaidRecord): MaidRecord => {
-  const photos = Array.isArray(maid.photoDataUrls)
-    ? maid.photoDataUrls.filter(
-        (item) => typeof item === "string" && item.trim(),
+  // Map each entry to a clean string or "" so internal empty slots are preserved.
+  // Only trailing empty slots are trimmed — this lets slot 1 be empty while
+  // slot 2 stays in slot 2 (the array index is the slot number).
+  const raw = Array.isArray(maid.photoDataUrls)
+    ? maid.photoDataUrls.map((item) =>
+        typeof item === "string" && item.trim() ? item.trim() : "",
       )
     : maid.photoDataUrl
       ? [maid.photoDataUrl]
       : [];
+  let len = raw.length;
+  while (len > 0 && !raw[len - 1]) len--;
+  const photos = raw.slice(0, Math.min(len, 5));
 
   return {
     ...maid,
@@ -615,10 +621,10 @@ const normalizeMaid = (maid: MaidRecord): MaidRecord => {
     weight: sanitizeInt(maid.weight),
     numberOfChildren: sanitizeInt(maid.numberOfChildren),
     numberOfSiblings: sanitizeInt(maid.numberOfSiblings),
-    photoDataUrls: photos.slice(0, 5),
-    photoDataUrl: photos[0] ?? maid.photoDataUrl ?? "",
+    photoDataUrls: photos,
+    photoDataUrl: photos.find(Boolean) ?? maid.photoDataUrl ?? "",
     videoDataUrl: maid.videoDataUrl ?? "",
-    hasPhoto: photos.length > 0,
+    hasPhoto: photos.some(Boolean),
   };
 };
 
@@ -3003,6 +3009,10 @@ const safeApi =
       if (/rate.?limit|429/i.test(message)) return jsonError("Rate limit exceeded, please try again later", 429);
       // Propagate upstream AI daily-limit as 503.
       if (/tokens per day|daily.?limit/i.test(message)) return jsonError("AI service temporarily unavailable", 503);
+      // Surface Groq/AI errors with a user-facing message so the chat widget can display them.
+      if (/groq|GROQ_API_KEY|model_not_found|context_length|invalid_api_key|decommissioned/i.test(message)) {
+        return jsonError(message, 502);
+      }
       return jsonError("Internal Server Error", 500);
     }
   };
@@ -3527,26 +3537,32 @@ const persistMaidMediaFields = async (
   env: Bindings,
   maid: Omit<MaidRecord, "id" | "createdAt" | "updatedAt">,
 ) => {
-  const normalizedPhotos = (
+  // Preserve slot positions — only trim trailing empty entries so that
+  // removing slot 1 does not shift slot 2 into slot 1.
+  const rawSlots = (
     Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
       ? maid.photoDataUrls
       : maid.photoDataUrl
         ? [maid.photoDataUrl]
         : []
-  )
-    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    .slice(0, 5);
+  ).slice(0, 5);
+  let slotLen = rawSlots.length;
+  while (slotLen > 0 && !rawSlots[slotLen - 1]) slotLen--;
+  const slottedPhotos = rawSlots.slice(0, slotLen);
 
+  // Upload filled slots; pass empty slots through unchanged.
   const photoDataUrls = await Promise.all(
-    normalizedPhotos.map((photo, index) =>
-      uploadMaidMediaToSupabaseStorage(
-        env,
-        photo,
-        maid.agencyId,
-        maid.referenceCode,
-        "photos",
-        index,
-      ),
+    slottedPhotos.map((photo, index) =>
+      typeof photo === "string" && photo.trim().length > 0
+        ? uploadMaidMediaToSupabaseStorage(
+            env,
+            photo,
+            maid.agencyId,
+            maid.referenceCode,
+            "photos",
+            index,
+          )
+        : Promise.resolve(""),
     ),
   );
 
@@ -3565,7 +3581,7 @@ const persistMaidMediaFields = async (
   return {
     ...maid,
     photoDataUrls,
-    photoDataUrl: photoDataUrls[0] ?? "",
+    photoDataUrl: photoDataUrls.find(Boolean) ?? "",
     videoDataUrl,
     hasPhoto: photoDataUrls.length > 0,
   };
@@ -4751,15 +4767,19 @@ const toMaidRecordPayload = (
 ): Omit<MaidRecord, "id" | "createdAt" | "updatedAt"> => {
   const rawPhotoDataUrl =
     typeof maid.photoDataUrl === "string" ? maid.photoDataUrl : "";
-  const photoDataUrls = Array.isArray(maid.photoDataUrls)
-    ? maid.photoDataUrls.filter(
-        (item): item is string =>
-          typeof item === "string" && item.trim().length > 0,
+  // Preserve internal empty slots (array index = slot number).
+  // Only trailing empty entries are trimmed.
+  const rawPhotos = Array.isArray(maid.photoDataUrls)
+    ? maid.photoDataUrls.map((item): string =>
+        typeof item === "string" && item.trim().length > 0 ? item.trim() : "",
       )
     : rawPhotoDataUrl
       ? [rawPhotoDataUrl]
       : [];
-  const photoDataUrl = photoDataUrls[0] ?? rawPhotoDataUrl;
+  let pLen = rawPhotos.length;
+  while (pLen > 0 && !rawPhotos[pLen - 1]) pLen--;
+  const photoDataUrls = rawPhotos.slice(0, Math.min(pLen, 5));
+  const photoDataUrl = photoDataUrls.find(Boolean) ?? rawPhotoDataUrl;
 
   return {
     agencyId:
@@ -4805,7 +4825,7 @@ const toMaidRecordPayload = (
       typeof maid.agencyContact === "object" && maid.agencyContact
         ? (maid.agencyContact as Record<string, unknown>)
         : {},
-    photoDataUrls: photoDataUrls.slice(0, 5),
+    photoDataUrls: photoDataUrls,
     photoDataUrl,
     videoDataUrl:
       typeof maid.videoDataUrl === "string" ? maid.videoDataUrl : "",
@@ -4813,7 +4833,7 @@ const toMaidRecordPayload = (
     hasPhoto:
       typeof maid.hasPhoto === "boolean"
         ? maid.hasPhoto
-        : photoDataUrls.length > 0 || Boolean(photoDataUrl),
+        : photoDataUrls.some(Boolean) || Boolean(photoDataUrl),
   };
 };
 

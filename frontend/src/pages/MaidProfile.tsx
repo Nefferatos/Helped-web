@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { FileDown, Check, AlertTriangle, Star, Search } from "lucide-react";
+import { FileDown, Check, AlertTriangle, Star, Search, RotateCcw, Camera, Sparkles, X, Plus } from "lucide-react";
 import { MaidProfile, formatDate } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,204 @@ import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 import WhatsAppConversationPanel from "@/components/whatsapp/WhatsAppConversationPanel";
 
 type LocationState = { fromView?: "public" | "hidden" };
+
+// ── Passport background presets ──────────────────────────────────────────────
+const PASSPORT_BACKGROUNDS = [
+  { id: "manipur-new",   label: "Manipur - NEW",    color: "#FFFFFF" },
+  { id: "myanmar-new",   label: "Myanmar - NEW",    color: "#EF0000" },
+  { id: "transfer-maid", label: "Transfer Maid",    color: "#00DD00" },
+  { id: "punjabi-maid",  label: "Punjabi Maid",     color: "#FFE600" },
+  { id: "darjeeling-new",label: "Darjeeling - NEW", color: "#000000" },
+] as const;
+
+type PassportBgId = typeof PASSPORT_BACKGROUNDS[number]["id"];
+
+// Proportions for the frame compositor — also used (in reverse) by
+// stripPassportFrame() to recover the original photo, so keep these in sync.
+const FRAME_BORDER_RATIO = 0.05;        // colored mat visible on each side & top (5% of photo width)
+const FRAME_LABEL_RATIO = 0.16;         // label strip height relative to photo height
+const FRAME_LABEL_BORDER_RATIO = 0.006; // label border thickness relative to photo width
+
+/**
+ * Composites a passport photo to match the agency's physical frame:
+ * solid colored background with the photo inset (5% mat on sides/top)
+ * and a white label strip at the bottom. For white frames the outer edge
+ * gets a purple stroke so the card is still visible on white backgrounds.
+ * Returns a new data-URL (PNG).
+ */
+const applyPassportBackground = (
+  photoDataUrl: string,
+  frameColor: string,
+  frameLabel: string
+): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const imgW = img.naturalWidth || 400;
+      const imgH = img.naturalHeight || 500;
+
+      const BORDER_W = Math.round(imgW * FRAME_BORDER_RATIO);
+      const LABEL_H = Math.round(imgH * FRAME_LABEL_RATIO);
+      const LABEL_BORDER_W = Math.max(2, Math.round(imgW * FRAME_LABEL_BORDER_RATIO));
+
+      // Canvas: left/right mat + photo + label at bottom (no mat below photo)
+      const FRAME_W = imgW + BORDER_W * 2;
+      const FRAME_H = BORDER_W + imgH + LABEL_H;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = FRAME_W;
+      canvas.height = FRAME_H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("Canvas not supported")); return; }
+
+      // 1. Solid color fill — the entire card background is the frame color
+      ctx.fillStyle = frameColor;
+      ctx.fillRect(0, 0, FRAME_W, FRAME_H);
+
+      // 2. Purple outer stroke for white frames so the card edge is visible
+      if (frameColor === "#FFFFFF") {
+        const outerW = Math.max(3, Math.round(imgW * 0.008));
+        ctx.strokeStyle = "#9333ea";
+        ctx.lineWidth = outerW;
+        ctx.strokeRect(outerW / 2, outerW / 2, FRAME_W - outerW, FRAME_H - outerW);
+      }
+
+      // 3. White backing + photo inset at (BORDER_W, BORDER_W)
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(BORDER_W, BORDER_W, imgW, imgH);
+      ctx.drawImage(img, BORDER_W, BORDER_W, imgW, imgH);
+
+      // 4. White label box at the very bottom, full width
+      const labelY = BORDER_W + imgH;
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, labelY, FRAME_W, LABEL_H);
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = LABEL_BORDER_W;
+      ctx.strokeRect(LABEL_BORDER_W / 2, labelY + LABEL_BORDER_W / 2, FRAME_W - LABEL_BORDER_W, LABEL_H - LABEL_BORDER_W);
+
+      // 5. Bold centered label text
+      const fontSize = LABEL_H * 0.50;
+      ctx.fillStyle = "#000000";
+      ctx.font = `bold ${Math.round(fontSize)}px Arial, Helvetica, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(frameLabel.toUpperCase(), FRAME_W / 2, labelY + LABEL_H / 2);
+
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = photoDataUrl;
+  });
+
+type FramePreset = typeof PASSPORT_BACKGROUNDS[number];
+
+const hexToRgb = (hex: string): [number, number, number] => {
+  const clean = hex.replace("#", "");
+  return [
+    parseInt(clean.substring(0, 2), 16),
+    parseInt(clean.substring(2, 4), 16),
+    parseInt(clean.substring(4, 6), 16),
+  ];
+};
+
+const colorDistance = (a: [number, number, number], b: [number, number, number]) =>
+  Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2);
+
+const FRAME_COLOR_TOLERANCE = 28;
+
+/**
+ * Inspects a photo for the solid-color margin + matching border stroke that
+ * applyPassportBackground() burns in, and reports which preset (if any) is
+ * currently applied. Pure pixel inspection — works even on photos that were
+ * framed before this detector existed, since it needs no stored metadata.
+ */
+const detectPassportFrame = (dataUrl: string): Promise<FramePreset | null> =>
+  new Promise((resolve) => {
+    if (!dataUrl) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const FW = img.naturalWidth;
+        const FH = img.naturalHeight;
+        const canvas = document.createElement("canvas");
+        canvas.width = FW; canvas.height = FH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+
+        const sample = (xFrac: number, yFrac: number): [number, number, number] => {
+          const x = Math.min(FW - 1, Math.max(0, Math.round(FW * xFrac)));
+          const y = Math.min(FH - 1, Math.max(0, Math.round(FH * yFrac)));
+          const d = ctx.getImageData(x, y, 1, 1).data;
+          return [d[0], d[1], d[2]];
+        };
+
+        // New design: solid fill mat (BORDER_W = 4.5 % of FW).
+        // mat1/mat2 are inside the left mat at 2.5 % — well within the solid fill.
+        // edge is at 0.3 % — inside the purple outer stroke for white frames.
+        const mat1 = sample(0.025, 0.25);
+        const mat2 = sample(0.025, 0.75);
+        const edge = sample(0.003, 0.5);
+
+        for (const preset of PASSPORT_BACKGROUNDS) {
+          const fillRgb = hexToRgb(preset.color);
+          // For white frames the outer stroke is purple; use that for the edge check.
+          const strokeRgb = hexToRgb(preset.color === "#FFFFFF" ? "#9333ea" : preset.color);
+          if (
+            colorDistance(mat1, fillRgb) < FRAME_COLOR_TOLERANCE &&
+            colorDistance(mat2, fillRgb) < FRAME_COLOR_TOLERANCE &&
+            colorDistance(edge, strokeRgb) < FRAME_COLOR_TOLERANCE
+          ) {
+            resolve(preset);
+            return;
+          }
+        }
+        resolve(null);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+
+/**
+ * Crops a frame burned in by applyPassportBackground() back off, recovering
+ * the original photo using the exact same proportions the compositor used
+ * (5% side/top padding, 9% bottom label strip). Returns the input unchanged
+ * if no frame is detected, so it's always safe to call.
+ */
+const stripPassportFrame = async (dataUrl: string): Promise<string> => {
+  const preset = await detectPassportFrame(dataUrl);
+  if (!preset) return dataUrl;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const FW = img.naturalWidth;
+        const FH = img.naturalHeight;
+        // Invert applyPassportBackground:
+        //   FRAME_W = imgW*(1+2*BORDER_RATIO)  →  imgW = FW/(1+2*ratio)
+        //   FRAME_H = BORDER_W + imgH*(1+LABEL_RATIO)  →  imgH = (FH-BORDER_W)/(1+LABEL_RATIO)
+        const imgW = FW / (1 + 2 * FRAME_BORDER_RATIO);
+        const BORDER_W = imgW * FRAME_BORDER_RATIO;
+        const imgH = (FH - BORDER_W) / (1 + FRAME_LABEL_RATIO);
+        const PAD = BORDER_W;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(imgW);
+        canvas.height = Math.round(imgH);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas not supported")); return; }
+        ctx.drawImage(img, PAD, PAD, imgW, imgH, 0, 0, imgW, imgH);
+        resolve(canvas.toDataURL("image/png"));
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error("Failed to strip frame"));
+      }
+    };
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = dataUrl;
+  });
+};
 
 const availabilityRemarkItems = [
   { label: "Able to handle pork", keys: ["Able to handle pork?"] },
@@ -73,6 +271,13 @@ const fileToDataUrl = (file: File) =>
     reader.onload = () => resolve(String(reader.result || ""));
     reader.readAsDataURL(file);
   });
+
+// Sentinel used to "reserve" a cleared fixed slot (Slot 1 / Slot 2) so the
+// position survives a save round-trip even if the backend strips plain
+// empty strings ("") from the photos array — which is what was causing
+// Slot 2's photo to slide into Slot 1 after Slot 1 was deleted.
+const EMPTY_SLOT = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+const isEmptySlot = (value?: string) => !value || value === EMPTY_SLOT;
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
   <div className="border-b bg-muted/30 px-4 py-2">
@@ -162,6 +367,31 @@ const MaidProfilePage = () => {
   const [showOtherLanguages, setShowOtherLanguages] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const [isBringingToTop, setIsBringingToTop] = useState(false);
+
+  // ── Passport background state ──
+  const [selectedPassportBg, setSelectedPassportBg] = useState<PassportBgId | null>(null);
+  const [isApplyingBg, setIsApplyingBg] = useState(false);
+  const [detectedFramePreset, setDetectedFramePreset] = useState<FramePreset | null>(null);
+  const [isDetectingFrame, setIsDetectingFrame] = useState(false);
+
+  const currentPassportPhoto = useMemo(() => {
+    const list = Array.isArray(maid?.photoDataUrls) && maid!.photoDataUrls.length > 0
+      ? maid!.photoDataUrls
+      : maid?.photoDataUrl ? [maid.photoDataUrl] : [];
+    const first = list[0] ?? "";
+    return isEmptySlot(first) ? "" : first;
+  }, [maid?.photoDataUrls, maid?.photoDataUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentPassportPhoto) { setDetectedFramePreset(null); return; }
+    setIsDetectingFrame(true);
+    detectPassportFrame(currentPassportPhoto)
+      .then((preset) => { if (!cancelled) setDetectedFramePreset(preset); })
+      .catch(() => { if (!cancelled) setDetectedFramePreset(null); })
+      .finally(() => { if (!cancelled) setIsDetectingFrame(false); });
+    return () => { cancelled = true; };
+  }, [currentPassportPhoto]);
 
   // ── Inline switch-maid search ──
   const [replaceSearch, setReplaceSearch] = useState("");
@@ -321,20 +551,38 @@ const MaidProfilePage = () => {
     .filter(Boolean) as Array<[string, string]>;
 
   const photos = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls : maid.photoDataUrl ? [maid.photoDataUrl] : [];
-  const passportOrTwoByTwoPhoto = photos[0] ?? "";
-  const fullBodyPhoto = photos[1] ?? "";
-  const extraPhotos = photos.slice(2);
+  const passportOrTwoByTwoPhoto = isEmptySlot(photos[0]) ? "" : photos[0];
+  const fullBodyPhoto = isEmptySlot(photos[1]) ? "" : photos[1];
+  const extraPhotos = photos.slice(2).filter((p) => !isEmptySlot(p));
   const youtubeEmbedUrl = getYouTubeEmbedUrl(maid.videoDataUrl);
   const storedClient = getStoredClient() as (ReturnType<typeof getStoredClient> & { emailVerified?: boolean }) | null;
   const canViewPrivateIntro = Boolean(getClientToken() && storedClient?.emailVerified === true);
 
+  // ── The raw, un-framed passport photo. Frames are always composited from
+  //    THIS, never from the previously-framed result — otherwise swapping
+  //    frames keeps stacking labels on top of each other. Falls back to the
+  //    current slot-1 photo for legacy maids that don't have this field yet
+  //    (their very next frame swap will still stack once, then self-heal).
+  const hasAppliedFrame = Boolean(detectedFramePreset);
+
   const savePhotos = async (nextPhotos: string[]) => {
-    const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
+    // Preserve slot positions — only trim trailing empty/sentinel entries so
+    // fixed slots (1 & 2) stay where they are when another slot is cleared.
+    let arr = nextPhotos.slice(0, 5);
+    while (arr.length > 0 && isEmptySlot(arr[arr.length - 1])) arr = arr.slice(0, arr.length - 1);
+    const cleaned = arr;
+    const filledCount = cleaned.filter((p) => !isEmptySlot(p)).length;
     try {
       setIsMediaSaving(true);
+      const payload: Record<string, unknown> = {
+        ...maid,
+        photoDataUrls: cleaned,
+        photoDataUrl: isEmptySlot(cleaned[0]) ? "" : cleaned[0],
+        hasPhoto: filledCount > 0,
+      };
       const response = await fetch(`/api/maids/${encodeURIComponent(maid.referenceCode)}`, {
         method: "PUT", headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-        body: JSON.stringify({ ...maid, photoDataUrls: cleaned, photoDataUrl: cleaned[0] || "", hasPhoto: cleaned.length > 0 } satisfies MaidProfile),
+        body: JSON.stringify(payload),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
       if (!response.ok || !data.maid) throw new Error(data.error || "Failed to update photos");
@@ -343,9 +591,93 @@ const MaidProfilePage = () => {
     finally { setIsMediaSaving(false); }
   };
 
-  const replacePhotoAt = async (index: number, file?: File) => { if (!file) return; try { const dataUrl = await fileToDataUrl(file); const next = [...photos]; next[index] = dataUrl; await savePhotos(next); } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); } };
-  const addExtraPhoto = async (file?: File) => { if (!file) return; try { const dataUrl = await fileToDataUrl(file); await savePhotos([...photos, dataUrl]); } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); } };
-  const removePhotoAt = async (index: number) => { await savePhotos(photos.filter((_, i) => i !== index)); };
+  const replacePhotoAt = async (index: number, file?: File) => {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const next = [...photos];
+      // Pad any earlier missing slots with the sentinel (not a real "hole")
+      // so e.g. uploading Slot 2 first never leaves Slot 1 as `undefined`/
+      // `null`, which would otherwise get stripped and let Slot 2's photo
+      // collapse into Slot 1's position.
+      while (next.length < index) next.push(EMPTY_SLOT);
+      next[index] = dataUrl;
+      await savePhotos(next);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+  };
+  const addExtraPhoto = async (file?: File) => {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      // Ensure Slot 1 and Slot 2 positions exist (as real or sentinel
+      // entries) before appending, so a new extra always lands at index
+      // 2+ instead of sliding into an unfilled fixed slot.
+      const next = [...photos];
+      while (next.length < 2) next.push(EMPTY_SLOT);
+      next.push(dataUrl);
+      await savePhotos(next);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+  };
+  const removePhotoAt = async (index: number) => {
+    let next: string[];
+    if (index <= 1) {
+      // Fixed slots: reserve with a sentinel placeholder (not "") so the
+      // position survives the save round-trip and Slot 2 never slides
+      // into Slot 1 just because Slot 1 was cleared.
+      next = [...photos];
+      while (next.length <= index) next.push(EMPTY_SLOT);
+      next[index] = EMPTY_SLOT;
+    } else {
+      // Extra slots: compact so there are no gaps within the extras section
+      next = photos.filter((_, i) => i !== index);
+    }
+    await savePhotos(next);
+  };
+
+  // ── Apply passport background ──────────────────────────────────────────────
+  const handleApplyPassportBg = async () => {
+    if (!selectedPassportBg || !passportOrTwoByTwoPhoto) return;
+    const preset = PASSPORT_BACKGROUNDS.find((b) => b.id === selectedPassportBg);
+    if (!preset) return;
+    try {
+      setIsApplyingBg(true);
+      // Always strip any existing frame first (a safe no-op if the photo
+      // isn't currently framed) so the new frame replaces cleanly instead
+      // of stacking on top of whatever was already there.
+      const cleanBase = await stripPassportFrame(passportOrTwoByTwoPhoto);
+      const composited = await applyPassportBackground(cleanBase, preset.color, preset.label);
+      const next = [...photos];
+      next[0] = composited;
+      await savePhotos(next);
+      setSelectedPassportBg(null);
+      toast.success(`Frame color set to "${preset.label}"`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to apply background");
+    } finally {
+      setIsApplyingBg(false);
+    }
+  };
+
+  // ── Strip whatever frame is currently detected on slot 1 ──
+  const handleResetPassportFrame = async () => {
+    if (!passportOrTwoByTwoPhoto) return;
+    try {
+      setIsApplyingBg(true);
+      const stripped = await stripPassportFrame(passportOrTwoByTwoPhoto);
+      if (stripped === passportOrTwoByTwoPhoto) {
+        toast("No frame detected on this photo");
+        return;
+      }
+      const next = [...photos];
+      next[0] = stripped;
+      await savePhotos(next);
+      toast.success("Frame removed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to remove frame");
+    } finally {
+      setIsApplyingBg(false);
+    }
+  };
 
   const saveVideoLink = async () => {
     try {
@@ -629,18 +961,18 @@ const MaidProfilePage = () => {
               Download Maid Bio-data in PDF
             </button>
 
-            <p className="text-sm font-bold text-black">{photos.length}/5 photos</p>
+            <p className="text-sm font-bold text-black">{photos.filter((p) => !isEmptySlot(p)).length}/5 photos</p>
 
             {/* ── Photo pair: passport + full body ── */}
             <div className="flex flex-row gap-2 items-start">
 
-              {/* Slot 1: Passport/2x2 */}
+              {/* Slot 1: Passport Size */}
               <div className="flex flex-col items-center gap-1">
                 <button
                   type="button"
                   disabled={!passportOrTwoByTwoPhoto}
                   onClick={() => passportOrTwoByTwoPhoto && setLightboxPhoto(passportOrTwoByTwoPhoto)}
-                  className="group relative flex h-36 w-28 items-center justify-center overflow-hidden rounded border-2 border-gray-400 bg-gray-100 transition hover:border-blue-400 disabled:cursor-default"
+                  className="group relative flex h-36 w-28 items-center justify-center overflow-hidden border-2 border-gray-400 bg-gray-100 transition hover:border-blue-400 disabled:cursor-default"
                 >
                   {passportOrTwoByTwoPhoto ? (
                     <>
@@ -669,7 +1001,7 @@ const MaidProfilePage = () => {
                   type="button"
                   disabled={!fullBodyPhoto}
                   onClick={() => fullBodyPhoto && setLightboxPhoto(fullBodyPhoto)}
-                  className="group relative flex h-52 w-28 items-center justify-center overflow-hidden rounded border-2 border-gray-400 bg-gray-100 transition hover:border-blue-400 disabled:cursor-default"
+                  className="group relative flex h-52 w-28 items-center justify-center overflow-hidden border-2 border-gray-400 bg-gray-100 transition hover:border-blue-400 disabled:cursor-default"
                 >
                   {fullBodyPhoto ? (
                     <>
@@ -702,7 +1034,7 @@ const MaidProfilePage = () => {
                     key={`${photo}-${index}`}
                     type="button"
                     onClick={() => setLightboxPhoto(photo)}
-                    className="group relative h-16 w-16 overflow-hidden rounded border border-gray-400 bg-gray-100 transition hover:border-blue-400"
+                    className="group relative h-16 w-16 overflow-hidden border border-gray-400 bg-gray-100 transition hover:border-blue-400"
                   >
                     <img src={photo} alt={`extra ${index + 1}`} className="h-full w-full object-contain" />
                     <span className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -987,157 +1319,401 @@ const MaidProfilePage = () => {
       <SendMaidToClientDialog maid={maid} open={isDirectHireDialogOpen} onOpenChange={setIsDirectHireDialogOpen} actionType="direct_hire" onSuccess={(u) => setMaid(u)} />
       <SendMaidToClientDialog maid={maid} open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen} actionType="rejected" onSuccess={(u) => setMaid(u)} />
 
-      {/* ── Manage Photos Dialog ── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          MANAGE PHOTOS DIALOG — redesigned
+          - wider canvas, two-column working area on desktop
+          - image containers hug the photo's own aspect ratio (no dead box space)
+          - dark, readable text throughout (slate-800/900 instead of light grays)
+          - punchier header + frame-picker cards with a teal/amber accent
+      ══════════════════════════════════════════════════════════════════════ */}
       <Dialog open={isManagePhotosOpen} onOpenChange={setIsManagePhotosOpen}>
-        <DialogContent className="max-w-2xl rounded-3xl p-0 overflow-hidden">
-          <div className="bg-white px-7 py-5 border-b border-slate-200">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold tracking-tight text-black">
-                📷 Manage Photos
-              </DialogTitle>
-              <DialogDescription className="text-slate-600 text-xs mt-0.5 font-medium">
-                Slot 1 → passport size · Slot 2 → full body · Slots 3–5 → extras
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent
+          className="p-0 overflow-hidden gap-0 [&>button]:hidden"
+          style={{ borderRadius: 16, maxWidth: "min(96vw, 1100px)", width: "96vw" }}
+        >
+          {/* Custom close button — high contrast, always visible against the
+              dark gradient header (the default Radix close button is hidden
+              above via [&>button]:hidden since it was low-contrast here). */}
+          <button
+            type="button"
+            onClick={() => setIsManagePhotosOpen(false)}
+            aria-label="Close manage photos dialog"
+            className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-900 shadow-lg ring-2 ring-white/40 transition-transform hover:scale-105 hover:bg-amber-300 active:scale-95"
+          >
+            <X className="h-5 w-5" strokeWidth={2.75} />
+          </button>
+
+          {/* Header */}
+          <div
+            className="flex items-center justify-between gap-4 px-7 py-5 pr-16"
+            style={{ background: "linear-gradient(120deg, #0E4E5E 0%, #115a6b 55%, #0a3c48 100%)" }}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                <Camera className="h-5.5 w-5.5 text-amber-300" />
+              </span>
+              <div className="min-w-0">
+                <DialogTitle className="text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
+                  Manage Photos
+                  <Sparkles className="h-4 w-4 text-amber-300" />
+                </DialogTitle>
+                <DialogDescription className="text-[12px] text-teal-50/90 mt-0.5 font-medium">
+                  Slot 1 = passport &nbsp;·&nbsp; Slot 2 = full body &nbsp;·&nbsp; Slots 3–5 = extras
+                </DialogDescription>
+              </div>
+            </div>
+
+            {/* photo count pill */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <span className="text-[11px] font-bold text-white/90 tabular-nums">
+                {photos.filter((p) => !isEmptySlot(p)).length}/5 photos
+              </span>
+              <div className="flex gap-1 items-center">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-2 w-6 rounded-full transition-colors"
+                    style={{ background: i < photos.filter((p) => !isEmptySlot(p)).length ? "#FCD34D" : "rgba(255,255,255,0.18)" }}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="px-7 py-6 flex gap-6 items-start flex-wrap bg-white">
+          <div className="overflow-y-auto bg-slate-50" style={{ maxHeight: "calc(90vh - 88px)" }}>
+            <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 p-6">
 
-            {/* Slot 1 — Passport */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-black">Passport</span>
-              </div>
-              <div
-                className="group relative overflow-hidden border-2 border-dashed border-slate-300 bg-slate-100 hover:border-indigo-400 hover:bg-indigo-50/40 transition-all duration-200 flex flex-col items-center justify-center gap-2"
-                style={{ width: 100, height: 125, borderRadius: 0 }}
-              >
-                {passportOrTwoByTwoPhoto ? (
-                  <>
-                    <img src={passportOrTwoByTwoPhoto} alt="passport" className="w-full h-full object-contain" style={{ borderRadius: 0 }} />
-                    <button type="button" disabled={isMediaSaving} onClick={() => void removePhotoAt(0)}
-                      className="absolute top-1.5 right-1.5 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 hover:bg-red-500"
-                      aria-label="Remove passport photo">✕</button>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                      </svg>
+              {/* ══ LEFT COLUMN: fixed photo slots (passport + full body) ══ */}
+              <div className="flex flex-col gap-5">
+
+                {/* Slot 1 — Passport preview */}
+                <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4">
+                  <p className="text-[11px] font-extrabold uppercase tracking-widest text-teal-700 mb-3">
+                    Slot 1 · Passport Size
+                  </p>
+                  <div className="flex items-center gap-4">
+                    {/* Image container hugs the photo's own aspect ratio */}
+                    <div
+                      className="group relative shrink-0 overflow-hidden rounded-xl bg-slate-900/5"
+                      style={{
+                        width: 128,
+                        aspectRatio: "100 / 125",
+                        border: passportOrTwoByTwoPhoto ? "1px solid #e2e8f0" : "2px dashed #cbd5e1",
+                        boxShadow: passportOrTwoByTwoPhoto ? "0 2px 8px rgba(15,23,42,0.10)" : "none",
+                      }}
+                    >
+                      {passportOrTwoByTwoPhoto ? (
+                        <>
+                          <img src={passportOrTwoByTwoPhoto} alt="passport" className="absolute inset-0 h-full w-full object-contain" />
+                          <button
+                            type="button"
+                            disabled={isMediaSaving}
+                            onClick={() => void removePhotoAt(0)}
+                            className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                            aria-label="Remove passport photo"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-slate-400">
+                          <Camera className="h-7 w-7" />
+                          <span className="text-[10px] font-bold">No photo</span>
+                        </div>
+                      )}
                     </div>
-                    <span className="text-[10px] text-slate-600 font-semibold">No photo</span>
-                  </>
-                )}
-              </div>
-              <span className="text-[10px] text-black font-bold">100 × 125 px</span>
-              <label className="cursor-pointer">
-                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 transition-all duration-150 ${passportOrTwoByTwoPhoto ? "bg-slate-200 text-black hover:bg-slate-300" : "bg-amber-400 text-black hover:bg-amber-500 shadow-sm shadow-amber-200"}`} style={{ borderRadius: 0 }}>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                  </svg>
-                  {passportOrTwoByTwoPhoto ? "Replace" : "Upload"}
-                </span>
-                <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
-              </label>
-              <p className="text-[10px] text-slate-500 font-medium">JPG / PNG · max 2 MB</p>
-            </div>
 
-            <div className="w-px self-stretch bg-slate-200" />
-
-            {/* Slot 2 — Full body */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-black">Full body</span>
-              </div>
-              <div
-                className="group relative overflow-hidden border-2 border-dashed border-slate-300 bg-slate-100 hover:border-indigo-400 hover:bg-indigo-50/40 transition-all duration-200 flex flex-col items-center justify-center gap-2"
-                style={{ width: 110, height: 190, borderRadius: 0 }}
-              >
-                {fullBodyPhoto ? (
-                  <>
-                    <img src={fullBodyPhoto} alt="full body" className="w-full h-full object-contain" style={{ borderRadius: 0 }} />
-                    <button type="button" disabled={isMediaSaving} onClick={() => void removePhotoAt(1)}
-                      className="absolute top-1.5 right-1.5 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 hover:bg-red-500"
-                      aria-label="Remove full body photo">✕</button>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                      </svg>
+                    <div className="flex flex-col gap-2 flex-1 min-w-0">
+                      <label className="cursor-pointer">
+                        <span
+                          className={`flex items-center justify-center gap-1.5 text-[12px] font-bold py-2 rounded-lg transition-colors ${
+                            passportOrTwoByTwoPhoto
+                              ? "bg-slate-100 text-slate-800 hover:bg-slate-200"
+                              : "bg-amber-400 text-slate-900 hover:bg-amber-500"
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                          </svg>
+                          {passportOrTwoByTwoPhoto ? "Replace photo" : "Upload photo"}
+                        </span>
+                        <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(0, e.target.files?.[0])} />
+                      </label>
+                      <span className="text-[11px] font-medium text-slate-500">100 × 125 px · JPG/PNG</span>
+                      {detectedFramePreset && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1 w-fit">
+                          <Check className="h-3 w-3" /> {detectedFramePreset.label} applied
+                        </span>
+                      )}
                     </div>
-                    <span className="text-[10px] text-slate-600 font-semibold">No photo</span>
-                  </>
-                )}
-              </div>
-              <span className="text-[10px] text-black font-bold">240 × 400 px</span>
-              <label className="cursor-pointer">
-                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 transition-all duration-150 ${fullBodyPhoto ? "bg-slate-200 text-black hover:bg-slate-300" : "bg-amber-400 text-black hover:bg-amber-500 shadow-sm shadow-amber-200"}`} style={{ borderRadius: 0 }}>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                  </svg>
-                  {fullBodyPhoto ? "Replace" : "Upload"}
-                </span>
-                <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
-              </label>
-              <p className="text-[10px] text-slate-500 font-medium">JPG / PNG · max 2 MB</p>
-            </div>
-
-            <div className="w-px self-stretch bg-slate-200" />
-
-            {/* Slots 3–5 — Extras */}
-            <div className="flex flex-col gap-3 flex-1 min-w-[180px]">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-black">Extras</span>
-                <span className="text-[10px] font-semibold bg-slate-200 text-black border border-slate-300 px-2 py-0.5 rounded-full">
-                  {extraPhotos.length} / 3
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {extraPhotos.map((photo, index) => (
-                  <div key={`${photo}-${index}`} className="group relative overflow-hidden border border-slate-300 bg-slate-100" style={{ width: 78, height: 78, borderRadius: 0 }}>
-                    <img src={photo} alt={`extra ${index + 1}`} className="w-full h-full object-contain" style={{ borderRadius: 0 }} />
-                    <button type="button" disabled={isMediaSaving} onClick={() => void removePhotoAt(index + 2)}
-                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 hover:bg-red-500"
-                      aria-label={`Remove extra photo ${index + 1}`}>✕</button>
                   </div>
-                ))}
-                {extraPhotos.length < 3 && (
-                  <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-300 bg-slate-100 cursor-pointer hover:border-amber-400 hover:bg-amber-50/50 transition-all duration-200" style={{ width: 78, height: 78, borderRadius: 0 }}>
-                    <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center">
-                      <span className="text-black text-base font-bold leading-none">+</span>
-                    </div>
-                    <span className="text-[10px] text-black font-semibold">Add</span>
-                    <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving || photos.length >= 5} onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
-                  </label>
-                )}
-                {Array.from({ length: Math.max(0, 2 - extraPhotos.length) }).map((_, i) => (
-                  <div key={`placeholder-${i}`} className="border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center" style={{ width: 78, height: 78, borderRadius: 0 }}>
-                    <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909" />
-                    </svg>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[10px] text-slate-500 font-medium">Max 3 extras · JPG / PNG</p>
-              <div className="mt-1 flex items-center gap-2">
-                <div className="flex gap-1">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className={`w-4 h-1.5 transition-colors ${i < photos.length ? "bg-amber-400" : "bg-slate-200"}`} style={{ borderRadius: 0 }} />
-                  ))}
                 </div>
-                <p className="text-[10px] text-black font-bold">{photos.length} / 5 used</p>
+
+                {/* Slot 2 — Full body preview */}
+                <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4">
+                  <p className="text-[11px] font-extrabold uppercase tracking-widest text-teal-700 mb-3">
+                    Slot 2 · Full Body
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="group relative shrink-0 overflow-hidden rounded-xl bg-slate-900/5"
+                      style={{
+                        width: 100,
+                        aspectRatio: "240 / 400",
+                        border: fullBodyPhoto ? "1px solid #e2e8f0" : "2px dashed #cbd5e1",
+                        boxShadow: fullBodyPhoto ? "0 2px 8px rgba(15,23,42,0.10)" : "none",
+                      }}
+                    >
+                      {fullBodyPhoto ? (
+                        <>
+                          <img src={fullBodyPhoto} alt="full body" className="absolute inset-0 h-full w-full object-contain" />
+                          <button
+                            type="button"
+                            disabled={isMediaSaving}
+                            onClick={() => void removePhotoAt(1)}
+                            className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                            aria-label="Remove full body photo"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-slate-400">
+                          <Camera className="h-7 w-7" />
+                          <span className="text-[10px] font-bold">No photo</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 flex-1 min-w-0">
+                      <label className="cursor-pointer">
+                        <span
+                          className={`flex items-center justify-center gap-1.5 text-[12px] font-bold py-2 rounded-lg transition-colors ${
+                            fullBodyPhoto
+                              ? "bg-slate-100 text-slate-800 hover:bg-slate-200"
+                              : "bg-amber-400 text-slate-900 hover:bg-amber-500"
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                          </svg>
+                          {fullBodyPhoto ? "Replace photo" : "Upload photo"}
+                        </span>
+                        <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving} onChange={(e) => void replacePhotoAt(1, e.target.files?.[0])} />
+                      </label>
+                      <span className="text-[11px] font-medium text-slate-500">240×400 px · JPG/PNG</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Extras */}
+                <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[11px] font-extrabold uppercase tracking-widest text-teal-700">Slots 3–5 · Extras</p>
+                    <span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                      {extraPhotos.length}/3
+                    </span>
+                  </div>
+                  <div className="flex gap-2.5 flex-wrap">
+                    {extraPhotos.map((photo, index) => (
+                      <div key={`${photo}-${index}`} className="group relative overflow-hidden rounded-lg bg-slate-900/5 border border-slate-200" style={{ width: 76, height: 76 }}>
+                        <img src={photo} alt={`extra ${index + 1}`} className="absolute inset-0 h-full w-full object-contain" />
+                        <button
+                          type="button"
+                          disabled={isMediaSaving}
+                          onClick={() => void removePhotoAt(index + 2)}
+                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-slate-900/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                          aria-label={`Remove extra ${index + 1}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {extraPhotos.length < 3 && (
+                      <label
+                        className="cursor-pointer flex flex-col items-center justify-center gap-1 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors border-2 border-dashed border-amber-300"
+                        style={{ width: 76, height: 76 }}
+                      >
+                        <span className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center text-slate-900">
+                          <Plus className="h-4 w-4" />
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-700">Add</span>
+                        <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving || photos.length >= 5} onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
+                      </label>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-medium text-slate-500 mt-2.5">Max 3 extras · JPG / PNG</p>
+                </div>
+              </div>
+
+              {/* ══ RIGHT COLUMN: frame picker, maximized ══ */}
+              <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[13px] font-extrabold text-slate-900">Passport Frame</p>
+                  {!passportOrTwoByTwoPhoto && (
+                    <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5">
+                      Upload a passport photo first
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12px] font-medium text-slate-500 mb-4">
+                  Pick a frame color to composite onto the passport photo, matching the agency's physical card.
+                </p>
+
+                {/* Frame cards — larger, punchier grid */}
+                <div className="grid gap-4 mb-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
+                  {PASSPORT_BACKGROUNDS.map((bg) => {
+                    const isSelected = selectedPassportBg === bg.id;
+                    const isCurrentlyApplied = detectedFramePreset?.id === bg.id;
+                    const textColor = bg.color === "#000000" || bg.color === "#EF0000"
+                      ? "#ffffff"
+                      : bg.color === "#FFFFFF" ? "#1e293b" : "#0f172a";
+                    return (
+                      <button
+                        key={bg.id}
+                        type="button"
+                        disabled={!passportOrTwoByTwoPhoto || isApplyingBg || isMediaSaving}
+                        onClick={() => setSelectedPassportBg(isSelected ? null : bg.id)}
+                        className="flex flex-col items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed group"
+                        title={bg.label}
+                      >
+                        <div
+                          style={{
+                            width: "100%",
+                            aspectRatio: "100 / 125",
+                            background: bg.color,
+                            border: isSelected ? "3px solid #0E4E5E" : "1.5px solid #cbd5e1",
+                            outline: isSelected ? "3px solid #FCD34D" : "none",
+                            outlineOffset: "2px",
+                            position: "relative",
+                            borderRadius: 10,
+                            boxShadow: isSelected
+                              ? "0 6px 16px rgba(14,78,94,0.25)"
+                              : "0 1px 3px rgba(0,0,0,0.12)",
+                            transition: "all 0.15s",
+                            overflow: "hidden",
+                          }}
+                          className="group-hover:-translate-y-0.5 group-hover:shadow-lg"
+                        >
+                          <div
+                            style={{
+                              position: "absolute",
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              height: "24%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: bg.color === "#FFFFFF" ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.22)",
+                              borderTop: `1px solid ${bg.color === "#FFFFFF" ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.25)"}`,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 800,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.03em",
+                                color: textColor,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                textAlign: "center",
+                                fontFamily: "Tahoma, Arial, sans-serif",
+                                lineHeight: 1,
+                                padding: "0 4px",
+                              }}
+                            >
+                              {bg.label}
+                            </span>
+                          </div>
+                          {isSelected && (
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-teal-700 flex items-center justify-center shadow">
+                              <Check className="w-3 h-3 text-white" />
+                            </div>
+                          )}
+                          {isCurrentlyApplied && !isSelected && (
+                            <div className="absolute top-1.5 right-1.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white" />
+                          )}
+                        </div>
+                        <span className={`text-[11px] font-bold text-center leading-tight ${isSelected ? "text-teal-700" : "text-slate-700 group-hover:text-slate-900"}`}>
+                          {bg.id}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Apply / Remove + status */}
+                <div className="mt-auto flex flex-col gap-3 pt-4 border-t border-slate-100">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <button
+                      type="button"
+                      disabled={!selectedPassportBg || !passportOrTwoByTwoPhoto || isApplyingBg || isMediaSaving}
+                      onClick={() => void handleApplyPassportBg()}
+                      className="inline-flex items-center gap-2 text-[13px] font-bold px-5 py-2.5 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        background: selectedPassportBg ? "#0E4E5E" : "#e2e8f0",
+                        color: selectedPassportBg ? "#fff" : "#94a3b8",
+                        boxShadow: selectedPassportBg ? "0 4px 12px rgba(14,78,94,0.3)" : "none",
+                        minWidth: 140,
+                      }}
+                    >
+                      {isApplyingBg ? (
+                        <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />Applying…</>
+                      ) : (
+                        <><Check className="w-4 h-4" />Apply Frame</>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!hasAppliedFrame || isApplyingBg || isMediaSaving || isDetectingFrame}
+                      onClick={() => void handleResetPassportFrame()}
+                      className="inline-flex items-center gap-2 text-[13px] font-bold px-5 py-2.5 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed border-2"
+                      style={{
+                        background: "#fff",
+                        borderColor: hasAppliedFrame ? "#dc2626" : "#e2e8f0",
+                        color: hasAppliedFrame ? "#dc2626" : "#94a3b8",
+                        minWidth: 140,
+                      }}
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Remove Frame
+                    </button>
+                  </div>
+
+                  {selectedPassportBg && (
+                    <p className="text-[12px] font-semibold text-slate-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Will apply the{" "}
+                      <span className="font-extrabold text-teal-700">
+                        {PASSPORT_BACKGROUNDS.find((b) => b.id === selectedPassportBg)?.label}
+                      </span>{" "}
+                      frame and save automatically.
+                    </p>
+                  )}
+                  {!selectedPassportBg && hasAppliedFrame && (
+                    <p className="text-[12px] font-medium text-slate-500">
+                      Currently applied:{" "}
+                      <span className="font-bold text-emerald-700">{detectedFramePreset?.label}</span>.
+                      Picking another frame replaces it — frames never stack.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-
           </div>
 
-          <div className="px-7 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-            <Button type="button" variant="outline" onClick={() => setIsManagePhotosOpen(false)} disabled={isMediaSaving}
-              className="text-sm font-bold text-black border-slate-400 hover:bg-slate-100 px-5" style={{ borderRadius: 0 }}>
-              {isMediaSaving ? "Saving…" : "Close"}
+          {/* Footer */}
+          <div className="px-6 py-4 bg-white border-t border-slate-200 flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsManagePhotosOpen(false)}
+              disabled={isMediaSaving || isApplyingBg}
+              className="text-sm font-bold text-slate-800 border-slate-300 hover:bg-slate-100 px-7 rounded-xl"
+            >
+              {isMediaSaving || isApplyingBg ? "Saving…" : "Close"}
             </Button>
           </div>
         </DialogContent>

@@ -1,6 +1,49 @@
 {
   "conversations": [
     {
+      "id": "e46b4dab-e485-4bfa-919a-ddb2073d988a",
+      "agencyId": 1,
+      "candidateReferenceCode": "IND-MP-9720",
+      "candidateId": 128,
+      "candidateName": "Linghawikim Vaiphei",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-06-04T15:56:41.250Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-06-19T01:15:54.138Z",
+      "updatedAt": "2026-06-19T01:20:36.519Z"
+    },
+    {
       "id": "e173d30e-84a0-4cf0-834d-6a3bb54af1d0",
       "agencyId": 1,
       "candidateReferenceCode": "IND-DAR-NEP-7226",
@@ -41,7 +84,7 @@
         }
       ],
       "createdAt": "2026-06-04T16:13:53.037Z",
-      "updatedAt": "2026-06-06T15:34:37.195Z"
+      "updatedAt": "2026-06-19T03:24:04.319Z"
     },
     {
       "id": "49fedb3a-a35e-4af3-82c0-963330f04f3f",
@@ -84,7 +127,7 @@
         }
       ],
       "createdAt": "2026-06-04T15:35:21.185Z",
-      "updatedAt": "2026-06-04T15:35:21.185Z"
+      "updatedAt": "2026-06-19T01:43:05.419Z"
     },
     {
       "id": "5be0fe01-4c0a-455f-826e-5e740dab22d8",
@@ -170,7 +213,7 @@
         }
       ],
       "createdAt": "2026-06-04T13:31:08.203Z",
-      "updatedAt": "2026-06-05T13:17:32.376Z"
+      "updatedAt": "2026-06-19T03:29:20.967Z"
     },
     {
       "id": "ebdbadee-e0c0-4f71-b086-a6ea9a022f16",
