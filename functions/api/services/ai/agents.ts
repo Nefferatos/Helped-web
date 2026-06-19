@@ -189,10 +189,32 @@ export const buildAgentMessages = async (options: AiRunOptions) => {
   return { definition, conversationId, messages, toolResults };
 };
 
+const runWithCfAi = async (
+  cfAi: NonNullable<AiRunOptions["cfAi"]>,
+  messages: GroqMessage[],
+) => {
+  // Merge multiple system messages into one — some CF AI models reject duplicates
+  const systemContent = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+  const nonSystem = messages.filter((m) => m.role !== "system");
+  const cfMessages = systemContent
+    ? [{ role: "system" as const, content: systemContent }, ...nonSystem]
+    : nonSystem;
+  const cfResult = (await cfAi.run("@cf/meta/llama-3.1-8b-instruct", {
+    messages: cfMessages,
+  })) as { response?: string };
+  return cfResult.response ?? "";
+};
+
 export const runAIAgent = async (options: AiRunOptions) => {
-  if (!options.groqApiKey?.trim()) {
-    throw new Error("GROQ_API_KEY is not configured.");
+  const hasGroq = Boolean(options.groqApiKey?.trim());
+  const hasCfAi = Boolean(options.cfAi);
+  if (!hasGroq && !hasCfAi) {
+    throw new Error("AI service is not configured. Please contact support.");
   }
+
   const startedAt = Date.now();
   const rateKey = `${options.actor.role}:${options.actor.userId ?? options.actor.ip ?? "anonymous"}:${options.agentId}`;
   assertAiRateLimit(rateKey);
@@ -203,71 +225,69 @@ export const runAIAgent = async (options: AiRunOptions) => {
     input: options.input,
   });
 
-  try {
-    const result = await groqChat({
-      apiKey: options.groqApiKey,
-      model: definition.model,
-      messages,
-      temperature: definition.temperature,
-      maxTokens: definition.maxTokens,
-      responseFormat: options.input.structured === true ? "json_object" : undefined,
-      signal: options.request?.signal,
-    });
-    await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "assistant", result.content, {
-      groqId: result.id,
-      usage: result.usage,
-    });
-    await writeLog(options, "success", {
-      conversationId,
-      latencyMs: Date.now() - startedAt,
-      output: result.content,
-    });
+  const buildResult = (content: string, extra?: Record<string, unknown>) => ({
+    agent: { id: definition.id, name: definition.name },
+    conversationId,
+    response: content,
+    structured:
+      options.input.structured === true
+        ? parseJsonObject<Record<string, unknown>>(content, {})
+        : undefined,
+    toolResults,
+    usage: extra ?? {},
+  });
 
-    return {
-      agent: { id: definition.id, name: definition.name },
-      conversationId,
-      response: result.content,
-      structured:
-        options.input.structured === true
-          ? parseJsonObject<Record<string, unknown>>(result.content, {})
-          : undefined,
-      toolResults,
-      usage: result.usage,
-    };
-  } catch (error) {
-    // Groq unavailable (403 blocked, 429 rate-limited) — try Cloudflare Workers AI as fallback
-    if (options.cfAi && error instanceof Error && /403|429|Forbidden|rate.?limit/i.test(error.message)) {
-      try {
-        const cfResult = await options.cfAi.run("@cf/meta/llama-3.1-8b-instruct", {
-          messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        }) as { response?: string };
-        const content = cfResult.response ?? "";
-        await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "assistant", content, { fallback: "cf-ai" });
-        await writeLog(options, "success", { conversationId, latencyMs: Date.now() - startedAt, output: content });
-        return {
-          agent: { id: definition.id, name: definition.name },
-          conversationId,
-          response: content,
-          structured: options.input.structured === true ? parseJsonObject<Record<string, unknown>>(content, {}) : undefined,
-          toolResults,
-          usage: {},
-        };
-      } catch {
-        // CF AI also failed — fall through to original error
-      }
+  // ── Try Groq first (higher quality) ──────────────────────────────────────
+  let groqError: Error | null = null;
+  if (hasGroq) {
+    try {
+      const result = await groqChat({
+        apiKey: options.groqApiKey!,
+        model: definition.model,
+        messages,
+        temperature: definition.temperature,
+        maxTokens: definition.maxTokens,
+        responseFormat: options.input.structured === true ? "json_object" : undefined,
+        signal: options.request?.signal,
+      });
+      await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "assistant", result.content, {
+        groqId: result.id,
+        usage: result.usage,
+      });
+      await writeLog(options, "success", {
+        conversationId,
+        latencyMs: Date.now() - startedAt,
+        output: result.content,
+      });
+      return buildResult(result.content, result.usage);
+    } catch (error) {
+      groqError = error instanceof Error ? error : new Error("Groq request failed");
     }
-    await writeLog(options, "error", {
-      conversationId,
-      latencyMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message : "AI agent failed",
-    });
-    throw error;
   }
+
+  // ── Fall back to Cloudflare Workers AI ───────────────────────────────────
+  if (hasCfAi) {
+    try {
+      const content = await runWithCfAi(options.cfAi!, messages);
+      await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "assistant", content, { fallback: "cf-ai" });
+      await writeLog(options, "success", { conversationId, latencyMs: Date.now() - startedAt, output: content });
+      return buildResult(content);
+    } catch {
+      // CF AI also failed — fall through
+    }
+  }
+
+  await writeLog(options, "error", {
+    conversationId,
+    latencyMs: Date.now() - startedAt,
+    error: groqError?.message ?? "AI agent failed",
+  });
+  throw new Error("The AI receptionist is temporarily unavailable. Please try again in a moment.");
 };
 
 export const streamAIAgent = async (options: AiRunOptions) => {
   if (!options.groqApiKey?.trim()) {
-    throw new Error("GROQ_API_KEY is not configured.");
+    throw new Error("AI service is not configured. Please contact support.");
   }
   const { definition, conversationId, messages } = await buildAgentMessages(options);
   await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "user", messages[messages.length - 1]?.content ?? "");

@@ -3009,9 +3009,12 @@ const safeApi =
       if (/rate.?limit|429/i.test(message)) return jsonError("Rate limit exceeded, please try again later", 429);
       // Propagate upstream AI daily-limit as 503.
       if (/tokens per day|daily.?limit/i.test(message)) return jsonError("AI service temporarily unavailable", 503);
-      // Surface Groq/AI errors with a user-facing message so the chat widget can display them.
-      if (/groq|GROQ_API_KEY|model_not_found|context_length|invalid_api_key|decommissioned/i.test(message)) {
-        return jsonError(message, 502);
+      // Surface AI errors with a friendly user-facing message.
+      if (/groq|GROQ_API_KEY|model_not_found|context_length|invalid_api_key|decommissioned|AI service|AI receptionist/i.test(message)) {
+        const friendly = /temporarily unavailable|not configured|contact support/i.test(message)
+          ? message
+          : "The AI receptionist is temporarily unavailable. Please try again in a moment.";
+        return jsonError(friendly, 502);
       }
       return jsonError("Internal Server Error", 500);
     }
