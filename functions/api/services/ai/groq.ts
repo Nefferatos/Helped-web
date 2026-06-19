@@ -58,7 +58,7 @@ export const groqChat = async (options: GroqChatOptions) => {
         method: "POST",
         signal: options.signal,
         headers: {
-          authorization: `Bearer ${options.apiKey}`,
+          authorization: `Bearer ${options.apiKey.trim()}`,
           "content-type": "application/json",
           "user-agent": "helped-web-worker/1.0",
         },
@@ -117,7 +117,7 @@ export const groqChatStream = async (options: GroqChatOptions) => {
     method: "POST",
     signal: options.signal,
     headers: {
-      authorization: `Bearer ${options.apiKey}`,
+      authorization: `Bearer ${options.apiKey.trim()}`,
       "content-type": "application/json",
       "user-agent": "helped-web-worker/1.0",
     },

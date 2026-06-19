@@ -540,6 +540,37 @@ export default function PublicAiReceptionist() {
               </div>
             </div>
 
+            {!isLoggedIn ? (
+              <div
+                className="flex flex-1 flex-col items-center justify-center gap-6 px-8"
+                style={{ background: "linear-gradient(180deg, #E8F4F7 0%, #F2FAFC 60%, #F8FDFE 100%)" }}
+              >
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div
+                    className="flex h-14 w-14 items-center justify-center rounded-full"
+                    style={{ background: "rgba(14,78,94,0.08)", border: "1.5px solid rgba(14,78,94,0.15)" }}
+                  >
+                    <Lock className="h-6 w-6" style={{ color: "#0E4E5E" }} />
+                  </div>
+                  <p className="text-[15px] font-bold" style={{ color: "#0f172a" }}>
+                    Login required
+                  </p>
+                  <p className="text-[12.5px] leading-relaxed" style={{ color: "#64748b" }}>
+                    Please log in as an employer or client to use the AI receptionist.
+                  </p>
+                </div>
+                <Link
+                  to="/employer-login"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, #0a3845, #0E4E5E)" }}
+                  onClick={() => setOpen(false)}
+                >
+                  <User className="h-4 w-4" />
+                  Log in to continue
+                </Link>
+              </div>
+            ) : (
+              <>
             {/* ── Messages area ── */}
             <div
               ref={scrollContainerRef}
@@ -828,6 +859,8 @@ export default function PublicAiReceptionist() {
                 Enter to send · Shift+Enter for new line
               </p>
             </div>
+              </>
+            )}
 
             {/* ── Clear chat modal overlay ── */}
             {showClearConfirm && (

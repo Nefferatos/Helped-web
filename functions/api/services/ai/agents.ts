@@ -7,12 +7,15 @@ type SupabaseAiConfig = {
   serviceRoleKey: string;
 };
 
+type CfAiBinding = { run(model: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> };
+
 export type AiRunOptions = {
   agentId: AiAgentId;
   input: Record<string, unknown>;
   actor: AiActorContext;
   appData: Record<string, unknown>;
   groqApiKey?: string;
+  cfAi?: CfAiBinding | null;
   supabase?: SupabaseAiConfig | null;
   conversationId?: string;
   stream?: boolean;
@@ -232,6 +235,27 @@ export const runAIAgent = async (options: AiRunOptions) => {
       usage: result.usage,
     };
   } catch (error) {
+    // Groq unavailable (403 blocked, 429 rate-limited) — try Cloudflare Workers AI as fallback
+    if (options.cfAi && error instanceof Error && /403|429|Forbidden|rate.?limit/i.test(error.message)) {
+      try {
+        const cfResult = await options.cfAi.run("@cf/meta/llama-3.1-8b-instruct", {
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        }) as { response?: string };
+        const content = cfResult.response ?? "";
+        await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "assistant", content, { fallback: "cf-ai" });
+        await writeLog(options, "success", { conversationId, latencyMs: Date.now() - startedAt, output: content });
+        return {
+          agent: { id: definition.id, name: definition.name },
+          conversationId,
+          response: content,
+          structured: options.input.structured === true ? parseJsonObject<Record<string, unknown>>(content, {}) : undefined,
+          toolResults,
+          usage: {},
+        };
+      } catch {
+        // CF AI also failed — fall through to original error
+      }
+    }
     await writeLog(options, "error", {
       conversationId,
       latencyMs: Date.now() - startedAt,

@@ -8520,6 +8520,7 @@ const runAiEndpoint = async (
     actor: aiActor,
     appData: data as unknown as Record<string, unknown>,
     groqApiKey: c.env.GROQ_API_KEY,
+    cfAi: c.env.AI ?? null,
     supabase: getAiSupabaseConfig(c.env),
     conversationId: toTrimmedString(body.conversationId) || undefined,
     request: c.req.raw,
@@ -8573,6 +8574,7 @@ app.post(
       actor: aiActor,
       appData: data as unknown as Record<string, unknown>,
       groqApiKey: c.env.GROQ_API_KEY,
+      cfAi: c.env.AI ?? null,
       supabase: getAiSupabaseConfig(c.env),
       conversationId: toTrimmedString(body.conversationId) || undefined,
       request: c.req.raw,
@@ -11265,6 +11267,7 @@ const generateChatBotReply = async (
       actor: { role: "employer", userId: client.id, clientId: client.id, ip: "chat-bot" },
       appData: data as unknown as Record<string, unknown>,
       groqApiKey: env.GROQ_API_KEY,
+      cfAi: env.AI ?? null,
       supabase,
       conversationId: `chat:support:${client.id}`,
     });
