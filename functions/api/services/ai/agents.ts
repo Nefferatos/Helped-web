@@ -177,7 +177,7 @@ export const buildAgentMessages = async (options: AiRunOptions) => {
       content: `Actor context:\n${compactJson(options.actor)}\n\nTool results:\n${compactJson(toolResults)}`,
     },
     ...memory.map((item) => ({
-      role: item.role,
+      role: item.role as "user" | "assistant" | "system",
       content: item.content,
     })),
     {
@@ -202,7 +202,7 @@ const runWithCfAi = async (
   const cfMessages = systemContent
     ? [{ role: "system" as const, content: systemContent }, ...nonSystem]
     : nonSystem;
-  const cfResult = (await cfAi.run("@cf/meta/llama-3.1-8b-instruct", {
+  const cfResult = (await cfAi.run("@cf/meta/llama-3.2-3b-instruct", {
     messages: cfMessages,
   })) as { response?: string };
   return cfResult.response ?? "";
