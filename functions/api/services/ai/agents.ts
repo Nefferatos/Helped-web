@@ -262,6 +262,7 @@ export const runAIAgent = async (options: AiRunOptions) => {
       return buildResult(result.content, result.usage);
     } catch (error) {
       groqError = error instanceof Error ? error : new Error("Groq request failed");
+      console.error("[AI] Groq failed:", groqError.message, "| agentId:", options.agentId);
     }
   }
 
@@ -272,8 +273,8 @@ export const runAIAgent = async (options: AiRunOptions) => {
       await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "assistant", content, { fallback: "cf-ai" });
       await writeLog(options, "success", { conversationId, latencyMs: Date.now() - startedAt, output: content });
       return buildResult(content);
-    } catch {
-      // CF AI also failed — fall through
+    } catch (cfError) {
+      console.error("[AI] CF AI fallback failed:", cfError instanceof Error ? cfError.message : cfError);
     }
   }
 

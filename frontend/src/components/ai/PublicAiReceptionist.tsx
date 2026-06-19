@@ -290,15 +290,12 @@ export default function PublicAiReceptionist() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
       if (result.conversationId) setConversationId(result.conversationId);
-    } catch (error) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          text:
-            error instanceof Error
-              ? error.message
-              : "The receptionist is unavailable right now. Please try again shortly.",
+          text: "The AI receptionist is temporarily unavailable. Please try again in a moment or contact us directly.",
           timestamp: new Date(),
         },
       ]);
