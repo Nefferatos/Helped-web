@@ -54,6 +54,61 @@ const maidTier = (m: Record<string, unknown>) =>
   lower(m.status).includes("available") ? 0 :
   lower(m.type).includes("transfer") ? 1 : 2;
 
+type SkillKey = "elderlycare" | "childcare" | "cooking" | "disabled" | "general" | "pet";
+
+const SKILL_PATTERNS: Record<SkillKey, string[]> = {
+  elderlycare: ["elderly", "elder", "aged care", "aged", "dementia", "wheelchair", "senior", "bedridden", "stroke", "old folk"],
+  childcare: ["childcare", "child care", "infant", "newborn", "baby", "toddler", "kids", "children", "babysit"],
+  cooking: ["cook", "cooking", "chef", "bake", "baking", "meal", "food prep"],
+  disabled: ["disabled", "disability", "special needs", "wheelchair bound", "physically challenged"],
+  general: ["housework", "cleaning", "housekeeping", "general housework", "household chores"],
+  pet: ["dog", "cat", "pet", "animal"],
+};
+
+const detectSkills = (message: string): SkillKey[] => {
+  const msg = message.toLowerCase();
+  return (Object.keys(SKILL_PATTERNS) as SkillKey[]).filter((skill) =>
+    SKILL_PATTERNS[skill].some((kw) => msg.includes(kw)),
+  );
+};
+
+const extractRequestedCount = (message: string): number => {
+  const match = message.match(
+    /\b(?:top|list|show|suggest|recommend|find|give me|need|want|provide)\s+(\d+)\b|\b(\d+)\s+(?:maid|helper|fdw|candidate|suggestion|best)/i,
+  );
+  if (match) {
+    const n = parseInt(match[1] ?? match[2] ?? "5", 10);
+    return Number.isFinite(n) && n > 0 && n <= 20 ? n : 5;
+  }
+  return 5;
+};
+
+const maidSkillScore = (maid: Record<string, unknown>, skills: SkillKey[]): number => {
+  if (skills.length === 0) return 0;
+  const searchTarget = JSON.stringify({
+    s: maid.skillsPreferences,
+    w: maid.workAreas,
+    h: maid.employmentHistory,
+    i: maid.introduction,
+  }).toLowerCase();
+  let score = 0;
+  for (const skill of skills) {
+    for (const kw of SKILL_PATTERNS[skill]) {
+      if (searchTarget.includes(kw)) score += 8;
+    }
+  }
+  return score;
+};
+
+const findMaidByName = (
+  pool: Array<Record<string, unknown>>,
+  message: string,
+): Record<string, unknown> | undefined =>
+  pool.find((m) => {
+    const name = lower(text(m.fullName)).trim();
+    return name.length > 3 && message.toLowerCase().includes(name);
+  });
+
 const compactMaid = (maid: Record<string, unknown>) => ({
   id: maid.id,
   agencyId: maid.agencyId,
@@ -85,25 +140,44 @@ const calcAge = (dateOfBirth: unknown) => {
   return age >= 0 ? age : null;
 };
 
-const compactPublicMaid = (maid: Record<string, unknown>) => ({
-  // Omit id, agencyId, isPublic — internal DB fields with no value for public AI context.
-  referenceCode: maid.referenceCode,
-  fullName: maid.fullName,
-  status: maid.status,
-  type: maid.type,
-  nationality: maid.nationality,
-  languageSkills: maid.languageSkills,
-  skillsPreferences: maid.skillsPreferences,
-  workAreas: maid.workAreas,
-  employmentHistory: maid.employmentHistory,
-  introduction: maid.introduction,
-  hasPhoto: maid.hasPhoto,
-  age: calcAge(maid.dateOfBirth),
-  educationLevel: maid.educationLevel,
-  religion: maid.religion,
-  maritalStatus: maid.maritalStatus,
-  numberOfChildren: num(maid.numberOfChildren),
-});
+const compactPublicMaid = (maid: Record<string, unknown>) => {
+  const intro = (maid.introduction ?? {}) as Record<string, unknown>;
+  const sp = (maid.skillsPreferences ?? {}) as Record<string, unknown>;
+  const wa = (maid.workAreas ?? {}) as Record<string, Record<string, unknown>>;
+  const langs = (maid.languageSkills ?? {}) as Record<string, string>;
+
+  // Readable skill ratings (only rated areas, sorted best first)
+  const skillRatings = Object.entries(wa)
+    .filter(([, v]) => v && typeof v === "object" && num(v.rating) !== null)
+    .sort(([, a], [, b]) => (num(b.rating) ?? 0) - (num(a.rating) ?? 0))
+    .map(([area, v]) => `${area}: ${v.evaluation ?? `${v.rating}/5`}`)
+    .join("; ") || null;
+
+  // Non-poor language skills
+  const langSummary = Object.entries(langs)
+    .filter(([, level]) => level && !["poor", "none", ""].includes(String(level).toLowerCase()))
+    .map(([lang, level]) => `${lang} (${level})`)
+    .join(", ") || Object.entries(langs).map(([l, v]) => `${l} (${v})`).join(", ") || null;
+
+  return {
+    referenceCode: maid.referenceCode,
+    fullName: maid.fullName,
+    status: maid.status,
+    type: maid.type,
+    nationality: maid.nationality,
+    age: calcAge(maid.dateOfBirth),
+    educationLevel: maid.educationLevel,
+    religion: maid.religion,
+    maritalStatus: maid.maritalStatus,
+    numberOfChildren: num(maid.numberOfChildren),
+    expectedSalary: num(sp.expectedSalary) ?? null,
+    offDaysPerMonth: text(sp.offDaysPerMonth) || null,
+    languages: langSummary,
+    skillRatings,
+    // Full narrative profile — primary text the AI should read for introductions and skill matching
+    profile: text(intro.publicIntro) || text(intro.intro) || null,
+  };
+};
 
 // Normalises a phone number to E.164 digits (no +) for use in wa.me links.
 // Returns "" for invalid/non-digit input (e.g. "N/A", "TBD").
@@ -375,7 +449,8 @@ export const runAgentTools = (context: AiToolContext) => {
       licenseNo: text(profile.license_no),
       aboutUs: text(profile.about_us),
     };
-    const allPublicMaids = list(data.maids).filter((maid) => maid.isPublic);
+    // Only include public maids who have a profile photo — matches what the website search page shows.
+    const allPublicMaids = list(data.maids).filter((maid) => maid.isPublic && maid.hasPhoto);
 
     const agencyHighlights = {
       agencyName: text(profile.company_name),
@@ -398,7 +473,8 @@ export const runAgentTools = (context: AiToolContext) => {
         .filter((t) => t.review),
     };
 
-    const msgForNat = lower(text(input.message))
+    const rawMsg = lower(text(input.message));
+    const msgForNat = rawMsg
       .replace(/\bfilipina\b/g, "filipino")
       .replace(/\bphilippines?\b/g, "filipino")
       .replace(/\bburmese\b/g, "myanmar");
@@ -407,6 +483,27 @@ export const runAgentTools = (context: AiToolContext) => {
     const maidPool = requestedNat
       ? allPublicMaids.filter((m) => lower(text(m.nationality)).includes(requestedNat))
       : allPublicMaids;
+
+    const activePool = maidPool.length > 0 ? maidPool : allPublicMaids;
+    const requestedSkills = detectSkills(rawMsg);
+    const requestedCount = extractRequestedCount(rawMsg);
+    const namedMaid = findMaidByName(activePool, rawMsg);
+
+    // Sort: skill match score first (desc), then availability tier (asc)
+    const rankedPool = activePool
+      .map((m) => ({ m, skill: maidSkillScore(m, requestedSkills), tier: maidTier(m) }))
+      .sort((a, b) => b.skill - a.skill || a.tier - b.tier)
+      .map(({ m }) => m);
+
+    // Always surface the named maid at position 0 if the user asked about them
+    const finalPool = namedMaid
+      ? [namedMaid, ...rankedPool.filter((m) => m !== namedMaid)]
+      : rankedPool;
+
+    // Send exactly what was requested (or all available if fewer).
+    // The AI lists whatever it receives — it never needs to count itself.
+    const sendCount = Math.min(finalPool.length, requestedCount > 0 ? requestedCount : 5);
+
     return {
       contactInfo,
       momPersonnel: list(data.momPersonnel).map((p) => ({
@@ -414,13 +511,21 @@ export const runAgentTools = (context: AiToolContext) => {
         registrationNumber: text(p.registration_number),
       })),
       testimonials: list(data.testimonials).slice(-10),
-      publicMaids: (maidPool.length > 0 ? maidPool : allPublicMaids)
-        .sort((a, b) => maidTier(a) - maidTier(b))
-        .slice(0, 30)
-        .map(compactPublicMaid),
+      publicMaids: finalPool.slice(0, sendCount).map(compactPublicMaid),
       publicFaqs: buildPublicFaqs(profile),
       platformGuide: buildPlatformGuide(input),
       agencyHighlights,
+      queryHints: {
+        requestedCount,
+        sentCount: sendCount,
+        totalInPool: activePool.length,
+        requestedSkills,
+        namedMaid: namedMaid ? text(namedMaid.fullName) : null,
+        // Honest count flag: if totalInPool < requestedCount, we couldn't fulfil the full request
+        shortfall: requestedCount > 0 && activePool.length < requestedCount
+          ? { asked: requestedCount, available: activePool.length }
+          : null,
+      },
     };
   }
 

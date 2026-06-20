@@ -202,7 +202,7 @@ const runWithCfAi = async (
   const cfMessages = systemContent
     ? [{ role: "system" as const, content: systemContent }, ...nonSystem]
     : nonSystem;
-  const cfResult = (await cfAi.run("@cf/meta/llama-3.2-3b-instruct", {
+  const cfResult = (await cfAi.run("@cf/meta/llama-3.1-70b-instruct", {
     messages: cfMessages,
   })) as { response?: string };
   return cfResult.response ?? "";
