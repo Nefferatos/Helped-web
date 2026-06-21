@@ -21,7 +21,7 @@ type AppDataLike = {
 
 export type AiAutopilotOptions = {
   appData: AppDataLike;
-  groqApiKey?: string;
+  anthropicApiKey?: string;
   supabase?: SupabaseAiConfig | null;
   agencyId?: number;
   agencyName?: string;
@@ -160,9 +160,9 @@ const isOlderThan = (value: unknown, ms: number) => {
   return Number.isFinite(timestamp) && Date.now() - timestamp > ms;
 };
 
-const isGroqUnavailable = (error: unknown): boolean => {
+const isAiUnavailable = (error: unknown): boolean => {
   const msg = error instanceof Error ? error.message : String(error);
-  return msg.includes("429") || /rate.?limit/i.test(msg) || msg.includes("GROQ_API_KEY is not configured");
+  return msg.includes("429") || /rate.?limit/i.test(msg) || msg.includes("ANTHROPIC_API_KEY is not configured");
 };
 
 const offlineFallback = (candidate: AutopilotCandidate, data: AppDataLike): string => {
@@ -346,12 +346,12 @@ export const runAiAutopilot = async (options: AiAutopilotOptions) => {
         },
         actor,
         appData: options.appData as Record<string, unknown>,
-        groqApiKey: options.groqApiKey,
+        anthropicApiKey: options.anthropicApiKey,
         supabase: options.supabase,
         request: options.request,
       });
     } catch (err) {
-      if (!isGroqUnavailable(err)) throw err;
+      if (!isAiUnavailable(err)) throw err;
       const fallbackText = offlineFallback(candidate, options.appData);
       result = {
         agent: { id: candidate.agentId, name: candidate.agentId },

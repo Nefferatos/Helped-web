@@ -14,7 +14,7 @@ export type AiRunOptions = {
   input: Record<string, unknown>;
   actor: AiActorContext;
   appData: Record<string, unknown>;
-  groqApiKey?: string;
+  anthropicApiKey?: string;
   cfAi?: CfAiBinding | null;
   supabase?: SupabaseAiConfig | null;
   conversationId?: string;
@@ -209,7 +209,7 @@ const runWithCfAi = async (
 };
 
 export const runAIAgent = async (options: AiRunOptions) => {
-  const hasGroq = Boolean(options.groqApiKey?.trim());
+  const hasGroq = Boolean(options.anthropicApiKey?.trim());
   const hasCfAi = Boolean(options.cfAi);
   if (!hasGroq && !hasCfAi) {
     throw new Error("AI service is not configured. Please contact support.");
@@ -237,12 +237,12 @@ export const runAIAgent = async (options: AiRunOptions) => {
     usage: extra ?? {},
   });
 
-  // ── Try Groq first (higher quality) ──────────────────────────────────────
+  // ── Try Claude first ──────────────────────────────────────────────────────
   let groqError: Error | null = null;
   if (hasGroq) {
     try {
       const result = await groqChat({
-        apiKey: options.groqApiKey!,
+        apiKey: options.anthropicApiKey!,
         model: definition.model,
         messages,
         temperature: definition.temperature,
@@ -251,7 +251,7 @@ export const runAIAgent = async (options: AiRunOptions) => {
         signal: options.request?.signal,
       });
       await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "assistant", result.content, {
-        groqId: result.id,
+        messageId: result.id,
         usage: result.usage,
       });
       await writeLog(options, "success", {
@@ -261,8 +261,8 @@ export const runAIAgent = async (options: AiRunOptions) => {
       });
       return buildResult(result.content, result.usage);
     } catch (error) {
-      groqError = error instanceof Error ? error : new Error("Groq request failed");
-      console.error("[AI] Groq failed:", groqError.message, "| agentId:", options.agentId);
+      groqError = error instanceof Error ? error : new Error("Claude request failed");
+      console.error("[AI] Claude failed:", groqError.message, "| agentId:", options.agentId);
     }
   }
 
@@ -287,13 +287,13 @@ export const runAIAgent = async (options: AiRunOptions) => {
 };
 
 export const streamAIAgent = async (options: AiRunOptions) => {
-  if (!options.groqApiKey?.trim()) {
+  if (!options.anthropicApiKey?.trim()) {
     throw new Error("AI service is not configured. Please contact support.");
   }
   const { definition, conversationId, messages } = await buildAgentMessages(options);
   await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "user", messages[messages.length - 1]?.content ?? "");
   const body = await groqChatStream({
-    apiKey: options.groqApiKey,
+    apiKey: options.anthropicApiKey,
     model: definition.model,
     messages,
     temperature: definition.temperature,

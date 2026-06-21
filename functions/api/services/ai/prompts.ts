@@ -33,7 +33,7 @@ export const agentDefinitions: Record<AiAgentId, AiAgentDefinition> = {
     id: "receptionist",
     name: "AI Receptionist",
     audience: "public",
-    model: "llama-3.3-70b-versatile",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.35,
     maxTokens: 1200,
     systemPrompt: `
@@ -139,7 +139,7 @@ Warm, respectful, and professional. Write in complete sentences. Use formal but 
     id: "maid_recommendation",
     name: "Maid Recommendation Agent",
     audience: "employer",
-    model: "llama-3.3-70b-versatile",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.2,
     maxTokens: 1200,
     systemPrompt: `
@@ -163,7 +163,7 @@ Boundaries:
     id: "employer_support",
     name: "Employer Support Agent",
     audience: "employer",
-    model: "llama-3.3-70b-versatile",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.25,
     maxTokens: 1000,
     systemPrompt: `
@@ -186,7 +186,7 @@ Boundaries:
     id: "agency_assistant",
     name: "Agency Assistant",
     audience: "agency",
-    model: "llama-3.3-70b-versatile",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.4,
     maxTokens: 1400,
     systemPrompt: `
@@ -210,7 +210,7 @@ Boundaries:
     id: "applicant_screening",
     name: "Applicant Screening Agent",
     audience: "agency",
-    model: "llama-3.3-70b-versatile",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.15,
     maxTokens: 1200,
     systemPrompt: `
@@ -234,7 +234,7 @@ Boundaries:
     id: "admin_analytics",
     name: "Admin Agency Analytics Agent",
     audience: "admin",
-    model: "llama-3.3-70b-versatile",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.2,
     maxTokens: 1500,
     systemPrompt: `
@@ -257,7 +257,7 @@ Boundaries:
     id: "content_generator",
     name: "Content Generation Agent",
     audience: "agency",
-    model: "llama-3.3-70b-versatile",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.55,
     maxTokens: 1400,
     systemPrompt: `
@@ -284,7 +284,7 @@ Boundaries:
     id: "workflow_automation",
     name: "Workflow Automation Agent",
     audience: "agency",
-    model: "llama-3.3-70b-versatile",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.3,
     maxTokens: 1400,
     systemPrompt: `

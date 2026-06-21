@@ -21,7 +21,4 @@ env.ANTHROPIC_API_KEY ("(hidden)")                                       Environ
 ❓ Your types might be out of date. Re-run `wrangler types` to ensure your types are correct.
 ⎔ Starting local server...
 [wrangler:info] Ready on http://127.0.0.1:8788
-[wrangler:info] POST /api/ai/receptionist 200 OK (14241ms)
-[wrangler:info] POST /api/ai/receptionist 200 OK (15082ms)
-[wrangler:info] POST /api/ai/agent 404 Not Found (365ms)
-[wrangler:info] POST /api/ai/receptionist 400 Bad Request (375ms)
+[wrangler:info] POST /api/ai/receptionist 200 OK (18190ms)

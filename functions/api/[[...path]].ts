@@ -453,7 +453,7 @@ type Bindings = {
   SUPABASE_APP_DATA_ID?: string;
   SUPABASE_USE_NORMALIZED?: string;
   SUPABASE_STORAGE_BUCKET?: string;
-  GROQ_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
   AI_AUTOPILOT_ENABLED?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
@@ -3010,7 +3010,7 @@ const safeApi =
       // Propagate upstream AI daily-limit as 503.
       if (/tokens per day|daily.?limit/i.test(message)) return jsonError("AI service temporarily unavailable", 503);
       // Surface AI errors with a friendly user-facing message.
-      if (/groq|GROQ_API_KEY|model_not_found|context_length|invalid_api_key|decommissioned|AI service|AI receptionist/i.test(message)) {
+      if (/ANTHROPIC_API_KEY|model_not_found|context_length|invalid_api_key|decommissioned|AI service|AI receptionist/i.test(message)) {
         const friendly = /temporarily unavailable|not configured|contact support/i.test(message)
           ? message
           : "The AI receptionist is temporarily unavailable. Please try again in a moment.";
@@ -8503,7 +8503,7 @@ const runAiEndpoint = async (
       input,
       actor: aiActor,
       appData: data as unknown as Record<string, unknown>,
-      groqApiKey: c.env.GROQ_API_KEY,
+      anthropicApiKey: c.env.ANTHROPIC_API_KEY,
       supabase: getAiSupabaseConfig(c.env),
       conversationId: toTrimmedString(body.conversationId) || undefined,
       request: c.req.raw,
@@ -8522,7 +8522,7 @@ const runAiEndpoint = async (
     input,
     actor: aiActor,
     appData: data as unknown as Record<string, unknown>,
-    groqApiKey: c.env.GROQ_API_KEY,
+    anthropicApiKey: c.env.ANTHROPIC_API_KEY,
     cfAi: c.env.AI ?? null,
     supabase: getAiSupabaseConfig(c.env),
     conversationId: toTrimmedString(body.conversationId) || undefined,
@@ -8576,7 +8576,7 @@ app.post(
       input,
       actor: aiActor,
       appData: data as unknown as Record<string, unknown>,
-      groqApiKey: c.env.GROQ_API_KEY,
+      anthropicApiKey: c.env.ANTHROPIC_API_KEY,
       cfAi: c.env.AI ?? null,
       supabase: getAiSupabaseConfig(c.env),
       conversationId: toTrimmedString(body.conversationId) || undefined,
@@ -9013,7 +9013,7 @@ app.post(
     const data = await loadData(c.env, { readOnly: true });
     const result = await runAiAutopilot({
       appData: data as any,
-      groqApiKey: c.env.GROQ_API_KEY,
+      anthropicApiKey: c.env.ANTHROPIC_API_KEY,
       supabase: getAiSupabaseConfig(c.env),
       agencyId: admin.agencyId,
       agencyName: admin.agencyName,
@@ -9073,14 +9073,14 @@ const generateMarketingTemplate = async (
   agencyName: string,
   agencyPhone: string,
   featuredNames: string[],
-  groqApiKey: string | undefined,
+  anthropicApiKey: string | undefined,
 ): Promise<string> => {
   const meta = goalMetaMarketing(goal);
   const emojiPrefix = tone === "professional" ? "" : `${meta.emoji} `;
   const highlight = featuredNames.slice(0, 2).join(" and ");
   const fallback = `Hi {{name}},\n\n${emojiPrefix}${meta.hook}${highlight ? ` Meet ${highlight} — available now.` : ""}\n\nContact us at {{agencyPhone}} — ${agencyName}.`;
 
-  if (!groqApiKey) return fallback;
+  if (!anthropicApiKey) return fallback;
 
   const toneMap: Record<string, string> = {
     warm: "friendly and caring, 1-2 emojis",
@@ -9093,23 +9093,25 @@ const generateMarketingTemplate = async (
   const userPrompt = `Goal: ${meta.subject}. Tone: ${toneMap[tone] ?? toneMap.warm}. Agency: ${agencyName}. Phone: ${agencyPhone || "our number"}.${highlight ? ` Available helpers: ${highlight}.` : ""}`;
 
   try {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { Authorization: `Bearer ${groqApiKey}`, "Content-Type": "application/json", "User-Agent": "helped-web-worker/1.0" },
+      headers: {
+        "x-api-key": anthropicApiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        temperature: 0.4,
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 350,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
+        temperature: 0.4,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
       }),
       signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) return fallback;
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const text = data.choices?.[0]?.message?.content?.trim();
+    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+    const text = data.content?.find((c) => c.type === "text")?.text?.trim();
     if (text && text.includes("{{name}}")) return text;
     if (text) return text.replace(/^Hi there/i, "Hi {{name}}").includes("{{name}}") ? text.replace(/^Hi there/i, "Hi {{name}}") : `Hi {{name}},\n\n${text}\n\nContact us at {{agencyPhone}}.`;
     return fallback;
@@ -9282,7 +9284,7 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
             sent = true;
           } catch { skipped++; }
         } else {
-          const template = await generateMarketingTemplate(opp.goal, opp.tone, agencyName, agencyPhone, featuredMaids.map((m) => m.fullName), env.GROQ_API_KEY);
+          const template = await generateMarketingTemplate(opp.goal, opp.tone, agencyName, agencyPhone, featuredMaids.map((m) => m.fullName), env.ANTHROPIC_API_KEY);
           const personalized = template.replace(/\{\{name\}\}/g, contact.name).replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
           const emailResult = await sendEmailViaResend(env, contact.email, meta.subject, personalized);
           if (emailResult.ok) { emailsSent++; sent = true; }
@@ -9342,7 +9344,7 @@ const runScheduledAiAutopilot = async (env: Bindings) => {
   const data = await loadData(env);
   return await runAiAutopilot({
     appData: data as any,
-    groqApiKey: env.GROQ_API_KEY,
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
     supabase: getAiSupabaseConfig(env),
     maxActions: 8,
   });
@@ -11262,14 +11264,14 @@ const generateChatBotReply = async (
 ): Promise<void> => {
   try {
     const supabase = getAiSupabaseConfig(env);
-    if (!supabase || !env.GROQ_API_KEY) return;
+    if (!supabase || !env.ANTHROPIC_API_KEY) return;
     const data = await loadData(env, { readOnly: true });
     const result = await runAIAgent({
       agentId: "employer_support",
       input: { message: userMessage.message },
       actor: { role: "employer", userId: client.id, clientId: client.id, ip: "chat-bot" },
       appData: data as unknown as Record<string, unknown>,
-      groqApiKey: env.GROQ_API_KEY,
+      anthropicApiKey: env.ANTHROPIC_API_KEY,
       cfAi: env.AI ?? null,
       supabase,
       conversationId: `chat:support:${client.id}`,
@@ -12181,39 +12183,62 @@ app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
 });
 
 app.post("/api/pdf-autofill", async (c) => {
-  const groqKey = c.env.GROQ_API_KEY?.trim();
-  if (!groqKey) return c.json({ error: "PDF autofill is not configured" }, 503);
+  const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
+  if (!anthropicKey) return c.json({ error: "PDF autofill is not configured" }, 503);
 
   const body = await parseBody<{ model?: string; messages?: unknown[] }>(c.req.raw);
-  if (!body?.model || !Array.isArray(body.messages) || body.messages.length === 0) {
-    return c.json({ error: "model and messages are required" }, 400);
+  if (!Array.isArray(body?.messages) || body.messages.length === 0) {
+    return c.json({ error: "messages are required" }, 400);
   }
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  // Extract system messages and convert to Anthropic format
+  type MsgLike = { role?: string; content?: string };
+  const msgs = body.messages as MsgLike[];
+  const systemParts = msgs.filter((m) => m.role === "system").map((m) => m.content ?? "").filter(Boolean);
+  const nonSystem = msgs.filter((m) => m.role !== "system") as Array<{ role: "user" | "assistant"; content: string }>;
+  const sanitized: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const msg of nonSystem) {
+    const last = sanitized[sanitized.length - 1];
+    if (last?.role === msg.role) { last.content += "\n\n" + msg.content; }
+    else sanitized.push({ role: msg.role, content: msg.content ?? "" });
+  }
+  if (sanitized.length === 0 || sanitized[0].role === "assistant") {
+    sanitized.unshift({ role: "user", content: "Continue." });
+  }
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${groqKey}`,
+      "x-api-key": anthropicKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
     },
-    body: JSON.stringify({ model: body.model, temperature: 0, max_tokens: 8192, messages: body.messages }),
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      temperature: 0,
+      max_tokens: 8192,
+      ...(systemParts.length > 0 ? { system: systemParts.join("\n\n") } : {}),
+      messages: sanitized,
+    }),
     signal: AbortSignal.timeout(55_000),
   });
 
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+    content?: Array<{ type: string; text?: string }>;
+    stop_reason?: string;
     error?: { message?: string };
   };
 
   if (!res.ok || data.error?.message) {
     return c.json(
-      { error: data.error?.message ?? `Groq error ${res.status}` },
+      { error: data.error?.message ?? `Claude error ${res.status}` },
       (res.ok ? 500 : res.status) as 400 | 429 | 500 | 503,
     );
   }
 
   return c.json({
-    content:       data.choices?.[0]?.message?.content ?? "",
-    finish_reason: data.choices?.[0]?.finish_reason   ?? "unknown",
+    content:       data.content?.find((c) => c.type === "text")?.text ?? "",
+    finish_reason: data.stop_reason ?? "unknown",
   });
 });
 
