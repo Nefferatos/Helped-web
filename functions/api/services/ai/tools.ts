@@ -224,10 +224,26 @@ const buildPublicFaqs = (profile: Record<string, unknown>): string[] => {
       : hours
         ? `Office hours: ${hours}.`
         : null,
-    "Agency fees vary by maid type, nationality, and services required. Contact the agency directly for an accurate quote.",
-    "To enquire about a specific maid or general hiring, submit an enquiry form on the website or contact us directly.",
+
+    // Helper types — factual only, no invented timelines or costs
+    "Helper types explained: A new (fresh) helper is someone who has not yet worked in Singapore as a domestic worker. A transfer helper is someone who is currently working in Singapore and is transferring to a new employer. An Ex-Singapore helper has previously worked in Singapore and is now back in their home country. Contact the agency directly for processing timelines and placement costs as these vary by case.",
+
+    // Nationalities — intentionally left blank here; the AI must use agencyHighlights.nationalitiesOffered from live data only
+
+    // Skills available
+    "Skills and specialisations: Helpers are matched by skillset including childcare (infant, toddler, school-age children), elderly care (bedridden, dementia, wheelchair-bound seniors), cooking, general housework and cleaning, disabled care, and pet care. Mention your specific needs and the AI will shortlist the most relevant helpers.",
+
+    // Enquiry
+    "To enquire about a specific helper or general hiring, submit an enquiry form at /enquiry2 or contact the agency directly by phone or WhatsApp. Include your preferred nationality, required skills, budget, and start date for the fastest response.",
+
+    // Complaints
     "For complaints or urgent matters, contact the agency immediately via phone or WhatsApp for direct staff assistance.",
-    "FDW applicants can submit their application via the public application page on this website.",
+
+    // FDW applicants
+    "FDW applicants: If you are a domestic worker looking to register with the agency, submit your 4-step application at /apply-as-maid. You can check your application status anytime at /apply-as-maid/status/{your applicationId}.",
+
+    // Platform navigation
+    "Website guide: Browse and filter all helper profiles at /search-maids. View a helper's full biodata at /maids/{referenceCode}. Start the official hiring process for a specific helper at /hire/{referenceCode}. Submit a general hiring enquiry at /enquiry2. Log in to the employer portal at /employer-login.",
   ].filter((s): s is string => s !== null);
 };
 
@@ -480,9 +496,25 @@ export const runAgentTools = (context: AiToolContext) => {
       .replace(/\bburmese\b/g, "myanmar");
     const NATIONALITY_KEYS = ["filipino", "indonesian", "myanmar", "indian", "bangladeshi", "sri lankan"];
     const requestedNat = NATIONALITY_KEYS.find((n) => msgForNat.includes(n));
-    const maidPool = requestedNat
+
+    // Detect helper type keywords so "transfer maid" filters the pool correctly
+    const TYPE_PATTERNS: Record<string, string[]> = {
+      transfer: ["transfer maid", "transfer helper", "transfer fdw", "transfer candidate", "currently in singapore", "already in singapore"],
+      fresh: ["fresh maid", "fresh helper", "fresh fdw", "new helper", "new maid", "first time"],
+      exSingapore: ["ex-singapore", "ex singapore", "previously worked in singapore", "worked in singapore before"],
+    };
+    const requestedType = (Object.entries(TYPE_PATTERNS).find(([, patterns]) =>
+      patterns.some((p) => rawMsg.includes(p))
+    )?.[0]) ?? null;
+
+    // Apply nationality filter first, then type filter
+    let maidPool = requestedNat
       ? allPublicMaids.filter((m) => lower(text(m.nationality)).includes(requestedNat))
       : allPublicMaids;
+    if (requestedType) {
+      const typeFiltered = maidPool.filter((m) => lower(text(m.type)).includes(requestedType === "exSingapore" ? "ex-singapore" : requestedType));
+      if (typeFiltered.length > 0) maidPool = typeFiltered;
+    }
 
     const activePool = maidPool.length > 0 ? maidPool : allPublicMaids;
     const requestedSkills = detectSkills(rawMsg);
@@ -520,6 +552,7 @@ export const runAgentTools = (context: AiToolContext) => {
         sentCount: sendCount,
         totalInPool: activePool.length,
         requestedSkills,
+        requestedType,
         namedMaid: namedMaid ? text(namedMaid.fullName) : null,
         // Honest count flag: if totalInPool < requestedCount, we couldn't fulfil the full request
         shortfall: requestedCount > 0 && activePool.length < requestedCount

@@ -610,42 +610,52 @@ const CSS = `
 
 /* ── Guide modal ── */
 .sc-guide-backdrop {
-  position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:200;
+  position:fixed; inset:0; background:rgba(0,0,0,.60); z-index:200;
   display:flex; align-items:flex-end; justify-content:center;
-  padding:0; animation:sc-guide-fade .22s ease;
+  padding:0; animation:sc-guide-fade .22s ease; backdrop-filter:blur(3px);
 }
 @media (min-width:520px) { .sc-guide-backdrop { align-items:center; padding:20px; } }
 @keyframes sc-guide-fade { from{opacity:0} to{opacity:1} }
 .sc-guide-sheet {
-  background:var(--sc-surface); border-radius:24px 24px 0 0;
-  width:100%; max-width:460px; padding:28px 24px 32px;
+  background:var(--sc-surface); border-radius:28px 28px 0 0;
+  width:100%; max-width:440px; overflow:hidden;
   display:flex; flex-direction:column;
-  box-shadow:0 -8px 40px rgba(0,0,0,.18);
-  animation:sc-guide-up .30s cubic-bezier(.34,1.46,.64,1);
+  box-shadow:0 -12px 48px rgba(0,0,0,.22);
+  animation:sc-guide-up .32s cubic-bezier(.34,1.46,.64,1);
 }
 @media (min-width:520px) { .sc-guide-sheet { border-radius:24px; animation:sc-guide-pop .28s cubic-bezier(.34,1.46,.64,1); } }
 @keyframes sc-guide-up { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
 @keyframes sc-guide-pop { from{transform:scale(.92);opacity:0} to{transform:scale(1);opacity:1} }
+.sc-guide-accent { height:4px; background:linear-gradient(90deg,#27c48a,#0f8a64); flex-shrink:0; }
+.sc-guide-inner { padding:28px 24px 32px; display:flex; flex-direction:column; position:relative; }
 .sc-guide-close {
-  position:absolute; top:16px; right:16px; width:32px; height:32px;
-  border-radius:50%; border:none; background:#f3f5f4; color:var(--sc-text2);
-  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  position:absolute; top:0; right:0; width:34px; height:34px;
+  border-radius:50%; border:none; background:rgba(0,0,0,.06); color:#6b7280;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s;
 }
-.sc-guide-close:hover { background:#e8ecea; }
-.sc-guide-emoji { font-size:48px; line-height:1; margin-bottom:14px; display:block; text-align:center; }
-.sc-guide-title { font-size:20px; font-weight:800; color:var(--sc-text); text-align:center; margin-bottom:8px; letter-spacing:-.02em; }
-.sc-guide-body { font-size:15px; color:#4b5563; line-height:1.65; text-align:center; margin-bottom:24px; min-height:72px; }
-.sc-guide-dots { display:flex; justify-content:center; gap:7px; margin-bottom:22px; }
-.sc-guide-dot { width:8px; height:8px; border-radius:50%; background:#e5e7eb; transition:background .2s,transform .2s; }
-.sc-guide-dot.active { background:var(--sc-green); transform:scale(1.3); }
+.sc-guide-close:hover { background:rgba(0,0,0,.12); }
+.sc-guide-emoji-ring {
+  width:84px; height:84px; border-radius:26px; margin:0 auto 20px;
+  background:linear-gradient(135deg,#e0faf0,#c8f4e2);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 20px rgba(22,169,123,.18);
+}
+.sc-guide-emoji { font-size:42px; line-height:1; display:block; }
+.sc-guide-title { font-size:21px; font-weight:800; color:var(--sc-text); text-align:center; margin-bottom:10px; letter-spacing:-.02em; }
+.sc-guide-body { font-size:15px; color:#4b5563; line-height:1.7; text-align:center; margin-bottom:28px; min-height:72px; }
+.sc-guide-progress-wrap { margin-bottom:26px; }
+.sc-guide-progress-track { height:4px; background:#f0f0f0; border-radius:99px; overflow:hidden; }
+.sc-guide-progress-fill { height:100%; background:linear-gradient(90deg,#27c48a,#16a97b); border-radius:99px; transition:width .35s cubic-bezier(.4,0,.2,1); }
+.sc-guide-progress-meta { display:flex; justify-content:space-between; margin-top:8px; font-size:11px; color:var(--sc-text3); font-weight:600; }
 .sc-guide-actions { display:flex; gap:10px; }
-.sc-guide-btn-skip { flex:1; padding:13px; border-radius:12px; border:1.5px solid #e5e7eb; background:#fff; font-size:14px; font-weight:600; color:var(--sc-text2); cursor:pointer; transition:background .12s; }
-.sc-guide-btn-skip:hover { background:#f9fafb; }
-.sc-guide-btn-next { flex:2; padding:13px; border-radius:12px; border:none; background:linear-gradient(135deg,#27c48a,#16a97b); color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 2px 8px rgba(22,169,123,.30); }
-.sc-guide-btn-next:hover { background:linear-gradient(135deg,#1fb57f,#0f8a64); }
-.sc-guide-btn-done { flex:1; padding:13px; border-radius:12px; border:none; background:linear-gradient(135deg,#27c48a,#16a97b); color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 2px 8px rgba(22,169,123,.30); }
-.sc-guide-btn-done:hover { background:linear-gradient(135deg,#1fb57f,#0f8a64); }
-.sc-guide-progress { font-size:12px; color:var(--sc-text3); text-align:center; margin-top:14px; }
+.sc-guide-btn-skip { flex:1; padding:13px; border-radius:12px; border:1.5px solid #e5e7eb; background:#fff; font-size:14px; font-weight:600; color:var(--sc-text2); cursor:pointer; transition:background .12s,border-color .12s; }
+.sc-guide-btn-skip:hover { background:#f6f8f7; border-color:#d1d5db; }
+.sc-guide-btn-next { flex:2; padding:13px; border-radius:12px; border:none; background:linear-gradient(135deg,#27c48a,#16a97b); color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 2px 10px rgba(22,169,123,.32); transition:transform .12s,box-shadow .12s; }
+.sc-guide-btn-next:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(22,169,123,.40); }
+.sc-guide-btn-next:active { transform:translateY(0); }
+.sc-guide-btn-done { flex:1; padding:13px; border-radius:12px; border:none; background:linear-gradient(135deg,#27c48a,#16a97b); color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 2px 10px rgba(22,169,123,.32); transition:transform .12s,box-shadow .12s; }
+.sc-guide-btn-done:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(22,169,123,.40); }
+.sc-guide-btn-done:active { transform:translateY(0); }
 
 /* ── Responsive ── */
 @media (max-width:768px) {
@@ -668,43 +678,49 @@ function GuideModal({ onDismiss }: { onDismiss: () => void }) {
   const [step, setStep] = useState(0);
   const current = GUIDE_STEPS[step];
   const isLast = step === GUIDE_STEPS.length - 1;
+  const progress = Math.round(((step + 1) / GUIDE_STEPS.length) * 100);
 
   return (
     <div className="sc-guide-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}>
-      <div className="sc-guide-sheet" style={{ position: "relative" }}>
-        <button className="sc-guide-close" onClick={onDismiss} aria-label="Close guide">
-          <X size={15} />
-        </button>
+      <div className="sc-guide-sheet">
+        <div className="sc-guide-accent" />
+        <div className="sc-guide-inner">
+          <button className="sc-guide-close" onClick={onDismiss} aria-label="Close guide">
+            <X size={15} />
+          </button>
 
-        <span className="sc-guide-emoji">{current.emoji}</span>
-        <div className="sc-guide-title">{current.title}</div>
-        <div className="sc-guide-body">{current.body}</div>
+          <div className="sc-guide-emoji-ring">
+            <span className="sc-guide-emoji">{current.emoji}</span>
+          </div>
+          <div className="sc-guide-title">{current.title}</div>
+          <div className="sc-guide-body">{current.body}</div>
 
-        <div className="sc-guide-dots">
-          {GUIDE_STEPS.map((_, i) => (
-            <div key={i} className={`sc-guide-dot${i === step ? " active" : ""}`} />
-          ))}
-        </div>
+          <div className="sc-guide-progress-wrap">
+            <div className="sc-guide-progress-track">
+              <div className="sc-guide-progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="sc-guide-progress-meta">
+              <span>Step {step + 1} of {GUIDE_STEPS.length}</span>
+              <span>{progress}%</span>
+            </div>
+          </div>
 
-        <div className="sc-guide-actions">
-          {!isLast ? (
-            <>
-              <button className="sc-guide-btn-skip" onClick={onDismiss}>
-                Skip
+          <div className="sc-guide-actions">
+            {!isLast ? (
+              <>
+                <button className="sc-guide-btn-skip" onClick={onDismiss}>
+                  Skip
+                </button>
+                <button className="sc-guide-btn-next" onClick={() => setStep((s) => s + 1)}>
+                  Next →
+                </button>
+              </>
+            ) : (
+              <button className="sc-guide-btn-done" onClick={onDismiss} style={{ flex: 1 }}>
+                <CheckCircle size={17} /> Got it, let's start!
               </button>
-              <button className="sc-guide-btn-next" onClick={() => setStep((s) => s + 1)}>
-                Next →
-              </button>
-            </>
-          ) : (
-            <button className="sc-guide-btn-done" onClick={onDismiss} style={{ flex: 1 }}>
-              <CheckCircle size={17} /> Got it, let's start!
-            </button>
-          )}
-        </div>
-
-        <div className="sc-guide-progress">
-          Step {step + 1} of {GUIDE_STEPS.length}
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -887,6 +903,14 @@ const ClientSupportChat = () => {
     setShowGuide(false);
   };
 
+  // Persist "seen" on mount so navigating away without dismissing won't re-show it
+  useEffect(() => {
+    if (showGuide) {
+      try { localStorage.setItem(GUIDE_STORAGE_KEY, "1"); } catch { /* ignore */ }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const lastSigRef = useRef("");
@@ -901,6 +925,22 @@ const ClientSupportChat = () => {
 
   const selectedType: ConversationType = searchParams.get("type") === "agency" ? "agency" : "support";
   const selectedAgencyId = selectedType === "agency" ? Number(searchParams.get("agencyId")) : undefined;
+
+  // Pre-fill draft when arriving from a maid profile "Contact Agency" click
+  useEffect(() => {
+    const maidRef = searchParams.get("maidRef");
+    const maidName = searchParams.get("maidName");
+    if (maidRef && maidName) {
+      setDraft(`Hi, I'm interested in ${maidName} (${maidRef}). I'd like to enquire about hiring this helper.`);
+      // Clean params from URL without re-navigating
+      setSearchParams((prev) => {
+        prev.delete("maidRef");
+        prev.delete("maidName");
+        return prev;
+      }, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const activeConv =
     conversations.find(

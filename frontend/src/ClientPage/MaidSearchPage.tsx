@@ -176,15 +176,23 @@ const getMaidPopupDetails = (maid: MaidProfile) => {
 };
 
 // ── Maid Hover Popup (logged-in) ──────────────────────────────────────────────
-const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: React.RefObject<HTMLElement> }) => {
+const MaidHoverPopup = ({ maid, anchorRef, onDismiss }: { maid: MaidProfile; anchorRef: React.RefObject<HTMLElement>; onDismiss?: () => void }) => {
   const popupRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>({ visibility:"hidden" });
   const [pointerSide, setPointerSide] = useState<"left"|"right">("right");
+  const [isMobile, setIsMobile] = useState(false);
   const details = useMemo(() => getMaidPopupDetails(maid), [maid]);
   const age = calculateAge(maid.dateOfBirth);
   const flagCode = getNationalityCode(maid.nationality);
 
   useEffect(() => {
+    const mobile = window.innerWidth < 640;
+    setIsMobile(mobile);
+    if (mobile) {
+      const w = Math.min(window.innerWidth - 32, 360);
+      setStyle({ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%, -50%)", width:w, zIndex:9999, visibility:"visible", maxHeight:"80vh", overflowY:"auto" });
+      return;
+    }
     const anchor = anchorRef.current;
     const popup = popupRef.current;
     if (!anchor || !popup) return;
@@ -208,21 +216,36 @@ const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: Rea
   }, [anchorRef]);
 
   return (
-    <div ref={popupRef} style={style} className="pointer-events-none relative">
-      <div className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${pointerSide === "right" ? "-left-4" : "-right-4"}`}
-        style={{ borderWidth:"8px", borderStyle:"solid",
-          borderColor: pointerSide === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
+    <>
+      {isMobile && onDismiss && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:9998 }} onClick={onDismiss} />
+      )}
+    <div ref={popupRef} style={style} className="relative">
+      {!isMobile && (
+        <div className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${pointerSide === "right" ? "-left-4" : "-right-4"}`}
+          style={{ borderWidth:"8px", borderStyle:"solid",
+            borderColor: pointerSide === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
+      )}
       <div className="bg-white overflow-hidden flex flex-col max-h-[500px]"
         style={{ border:`1.5px solid ${C.border}`, boxShadow:"0 20px 60px rgba(7,43,53,0.18)" }}>
         <div className="px-3 py-2.5" style={{ background:`linear-gradient(135deg, ${C.dark} 0%, ${C.darkMid} 100%)` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div style={{ width:3, height:32, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})`, borderRadius:2, flexShrink:0 }} />
-            <div>
-              <p className="text-xs font-bold text-white leading-tight line-clamp-1">
-                {maid.nationality ? `${maid.nationality} maid` : "Maid"}{maid.fullName ? `: ${maid.fullName}` : ""}
-              </p>
-              {maid.referenceCode && <p style={{ fontSize:10, color:C.yellowWarm, fontFamily:"monospace", marginTop:2 }}>{maid.referenceCode}</p>}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0, flex:1 }}>
+              <div style={{ width:3, height:32, background:`linear-gradient(180deg, ${C.yellowWarm}, ${C.yellow})`, borderRadius:2, flexShrink:0 }} />
+              <div style={{ minWidth:0 }}>
+                <p className="text-xs font-bold text-white leading-tight line-clamp-1">
+                  {maid.nationality ? `${maid.nationality} maid` : "Maid"}{maid.fullName ? `: ${maid.fullName}` : ""}
+                </p>
+                {maid.referenceCode && <p style={{ fontSize:10, color:C.yellowWarm, fontFamily:"monospace", marginTop:2 }}>{maid.referenceCode}</p>}
+              </div>
             </div>
+            {onDismiss && (
+              <button type="button" onClick={onDismiss} style={{ flexShrink:0, padding:4, background:"rgba(255,255,255,0.12)", border:"none", borderRadius:6, cursor:"pointer", color:"rgba(255,255,255,0.7)", display:"flex", alignItems:"center", justifyContent:"center" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.22)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}>
+                <X style={{ width:14, height:14 }} />
+              </button>
+            )}
           </div>
         </div>
         <div className="p-3 space-y-2 overflow-y-auto flex-1">
@@ -277,6 +300,7 @@ const MaidHoverPopup = ({ maid, anchorRef }: { maid: MaidProfile; anchorRef: Rea
         </div>
       </div>
     </div>
+    </>
   );
 };
 
@@ -308,6 +332,11 @@ const LockedMaidHoverModal = ({
     const viewportH = window.innerHeight;
     const viewportW = window.innerWidth;
     const fixedHeight = 480;
+    if (viewportW < 640) {
+      const w = Math.min(viewportW - 32, 360);
+      setPos({ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%, -50%)", width:w, height:fixedHeight, zIndex:9999, visibility:"visible" } as React.CSSProperties);
+      return;
+    }
     let left = anchorRect.right + LOCKED_MODAL_GAP;
     let chosenSide: "right"|"left" = "right";
     if (left + LOCKED_MODAL_WIDTH > viewportW - 8) { left = anchorRect.left - LOCKED_MODAL_WIDTH - LOCKED_MODAL_GAP; chosenSide = "left"; }
@@ -335,14 +364,22 @@ const LockedMaidHoverModal = ({
   const displayRows: Array<{ name: string; willing: boolean; experience?: boolean; evaluation: number; years?: string }> =
     hasWorkAreaData ? workAreaRows : skillRows.map((s) => ({ name:s.name, willing:s.willing, evaluation:s.evaluation }));
 
+  const isMobileModal = typeof pos.top === "string";
+
   return (
+    <>
+      {isMobileModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:9998 }} onClick={onClose} />
+      )}
     <div ref={modalRef} style={{ ...pos, overflowY:"auto", overflowX:"hidden", border:`1.5px solid ${C.border}`, background:C.white, boxShadow:"0 20px 60px rgba(7,43,53,0.20)" }}
       className="relative"
-      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
+      onMouseEnter={isMobileModal ? undefined : onMouseEnter} onMouseLeave={isMobileModal ? undefined : onMouseLeave}
     >
-      <div className="pointer-events-none absolute top-1/2 -translate-y-1/2"
-        style={{ [side === "right" ? "left" : "right"]:-8, width:0, height:0, borderWidth:"8px", borderStyle:"solid",
-          borderColor: side === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
+      {!isMobileModal && (
+        <div className="pointer-events-none absolute top-1/2 -translate-y-1/2"
+          style={{ [side === "right" ? "left" : "right"]:-8, width:0, height:0, borderWidth:"8px", borderStyle:"solid",
+            borderColor: side === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
+      )}
 
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-start justify-between gap-3 px-4 py-3"
@@ -468,6 +505,7 @@ const LockedMaidHoverModal = ({
         </div>
       )}
     </div>
+    </>
   );
 };
 
@@ -499,6 +537,12 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
     }, 120);
   }, [disableHoverModal]);
 
+  const handleLockedCardClick = (e: React.MouseEvent) => {
+    if (disableHoverModal || window.innerWidth >= 640) return;
+    if ((e.target as HTMLElement).closest("a, button")) return;
+    if (isOpen) { setIsOpen(false); } else { openModal(); }
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     const update = () => { if (cardRef.current) setAnchorRect(cardRef.current.getBoundingClientRect()); };
@@ -515,8 +559,9 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
         ref={cardRef as React.RefObject<HTMLElement>}
         className="group relative flex flex-col overflow-visible cursor-pointer transition-all"
         style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}
-        onMouseEnter={disableHoverModal ? undefined : () => { cardHovered.current = true; openModal(); }}
-        onMouseLeave={disableHoverModal ? undefined : () => { cardHovered.current = false; scheduleClose(); }}
+        onClick={handleLockedCardClick}
+        onMouseEnter={disableHoverModal ? undefined : () => { if (window.innerWidth < 640) return; cardHovered.current = true; openModal(); }}
+        onMouseLeave={disableHoverModal ? undefined : () => { if (window.innerWidth < 640) return; cardHovered.current = false; scheduleClose(); }}
       >
         {isOpen && (
           <div className="absolute top-1/2 -translate-y-1/2 z-10"
@@ -588,6 +633,7 @@ const MaidCard = ({
   onNavigate?: () => void; isLoggedIn: boolean; loginPath: string; showCategory?: boolean; disableHoverPopup?: boolean;
 }) => {
   const [hovered, setHovered] = useState(false);
+  const [clickedOpen, setClickedOpen] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRef = useRef<HTMLElement>(null);
 
@@ -608,14 +654,20 @@ const MaidCard = ({
   const displayLabel = showCategory && category ? category : (maid.nationality || "");
 
   const handleMouseEnter = () => {
-    if (disableHoverPopup) return;
+    if (disableHoverPopup || window.innerWidth < 640) return;
     hoverTimerRef.current = setTimeout(() => setHovered(true), 300);
   };
   const handleMouseLeave = () => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    if (disableHoverPopup) return;
+    if (disableHoverPopup || window.innerWidth < 640) return;
     setHovered(false);
   };
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (disableHoverPopup || window.innerWidth >= 640) return;
+    if ((e.target as HTMLElement).closest("a, button")) return;
+    setClickedOpen((v) => !v);
+  };
+  const dismissPopup = () => { setHovered(false); setClickedOpen(false); };
 
   return (
     <>
@@ -625,6 +677,7 @@ const MaidCard = ({
         style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onClick={handleCardClick}
       >
         <div className="relative w-full overflow-hidden" style={{ background:C.white }}>
           <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
@@ -679,8 +732,8 @@ const MaidCard = ({
           {experienceBucket && <p className="text-[9px] leading-tight mt-0.5 line-clamp-1" style={{ color:C.text }}>{experienceBucket}</p>}
         </div>
       </article>
-      {hovered && cardRef.current && !disableHoverPopup && (
-        <MaidHoverPopup maid={maid} anchorRef={cardRef as React.RefObject<HTMLElement>} />
+      {(hovered || clickedOpen) && cardRef.current && !disableHoverPopup && (
+        <MaidHoverPopup maid={maid} anchorRef={cardRef as React.RefObject<HTMLElement>} onDismiss={dismissPopup} />
       )}
     </>
   );

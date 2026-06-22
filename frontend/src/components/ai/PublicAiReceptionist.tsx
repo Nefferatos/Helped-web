@@ -9,9 +9,9 @@ import {
   Trash2,
   Lock,
   User,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { callAiAgent } from "@/lib/aiAgents";
 import { getClientToken } from "@/lib/clientAuth";
@@ -162,6 +162,7 @@ const PROMPTS = [
   "Show me your available helpers",
   "I need a transfer maid — who's available now?",
   "Find a helper with childcare experience",
+  "Do you have helpers with elderly care experience?",
 ];
 
 const normalizePath = (path: string) => path.replace(/\/+$/, "") || "/";
@@ -223,19 +224,75 @@ function MaidAvatar({ size = "md" }: { size?: "sm" | "md" | "fab" }) {
   );
 }
 
+/* ── FAQ data ─────────────────────────────────────────────────────────────── */
+
+const FAQS = [
+  {
+    id: "services",
+    question: "What services do you offer?",
+    answer:
+      "We connect employers with trusted domestic helpers and link them to licensed maid agencies. Our platform covers helper placement (new and transfer maids), employment contract management, agency verification, AI-powered matching, and ongoing support throughout the hiring process.",
+    link: { label: "Search Helpers", to: "/search-maids" },
+  },
+  {
+    id: "employer-account",
+    question: "How do I create an employer account?",
+    answer:
+      'Click "Sign Up" on the homepage and choose "Employer". Fill in your name, email, and contact details, then verify your email. Once verified you can log in, browse helper profiles, and submit hiring requests.',
+    link: { label: "Sign Up as Employer", to: "/employer-login" },
+  },
+  {
+    id: "agency-account",
+    question: "How do I create an agency portal account?",
+    answer:
+      "Agencies register through the Agency Portal. Submit your agency credentials and business information for review. Once approved you'll receive access to list and manage helpers, process contracts, and receive client inquiries.",
+    link: { label: "Go to Agency Portal", to: "/agency" },
+  },
+  {
+    id: "hire-helper",
+    question: "How do I hire a helper?",
+    answer:
+      "Browse available helpers, then pick one you like and start the hiring process from their profile. You can also submit a general enquiry and our team will shortlist helpers based on your needs. An employer account is required to proceed.",
+    link: { label: "Submit an Enquiry", to: "/enquiry2" },
+  },
+  // {
+  //   id: "view-profiles",
+  //   question: "Can I browse helper profiles without an account?",
+  //   answer:
+  //     "Yes — you can search and browse helper profiles on our website without logging in. However, viewing full biodata, contact details, and initiating the hiring process requires an employer account.",
+  //   link: { label: "Browse Helpers", to: "/search-maids" },
+  // },
+  {
+    id: "apply-as-fdw",
+    question: "I'm a domestic worker — how do I apply?",
+    answer:
+      "Domestic workers can apply directly through our public application page. Complete the 4-step form with your biodata, health details, skills, and documents. After submitting you'll receive an application ID to track your status.",
+    link: { label: "Apply as Helper", to: "/apply-as-maid" },
+  },
+];
+
 export default function PublicAiReceptionist() {
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [message, setMessage] = useState("");
-  const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const isLoggedIn = Boolean(getClientToken());
-  const [showForm, setShowForm] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [openFaq, setOpenFaq] = useState<string | null>(null);
+
+  const closePanel = () => {
+    setIsClosing(true);
+    setShowClearConfirm(false);
+    setMessage("");
+    setTimeout(() => {
+      setOpen(false);
+      setIsClosing(false);
+    }, 320);
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -244,6 +301,7 @@ export default function PublicAiReceptionist() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
 
   useEffect(() => {
     if (open) {
@@ -275,8 +333,6 @@ export default function PublicAiReceptionist() {
     try {
       const result = await callAiAgent("/api/ai/receptionist", {
         message: text,
-        name,
-        contact,
         conversationId,
         currentPath: location.pathname,
         history: messages.slice(-12).map((msg) => ({ role: msg.role, content: msg.text })),
@@ -326,12 +382,23 @@ export default function PublicAiReceptionist() {
 
         .air-panel { font-family: 'DM Sans', system-ui, sans-serif; }
 
-        .air-panel-slide {
-          animation: airPanelSlide 0.32s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+        .air-panel-morph-in {
+          animation: fabToPanel 0.38s cubic-bezier(0.34, 1.18, 0.64, 1) both;
         }
-        @keyframes airPanelSlide {
-          from { opacity: 0; transform: translateY(20px) scale(0.95); }
-          to   { opacity: 1; transform: translateY(0)    scale(1);    }
+        @keyframes fabToPanel {
+          0%   { opacity: 0; transform: scale(0.06); transform-origin: bottom right; border-radius: 50%; }
+          18%  { opacity: 1; border-radius: 44px; }
+          60%  { border-radius: 22px; }
+          100% { opacity: 1; transform: scale(1); transform-origin: bottom right; border-radius: 16px; }
+        }
+
+        .air-panel-morph-out {
+          animation: panelToFab 0.3s cubic-bezier(0.4, 0, 0.6, 1) both;
+        }
+        @keyframes panelToFab {
+          0%   { opacity: 1; transform: scale(1); transform-origin: bottom right; border-radius: 16px; }
+          50%  { border-radius: 36px; }
+          100% { opacity: 0; transform: scale(0.06); transform-origin: bottom right; border-radius: 50%; }
         }
 
         .air-bubble {
@@ -459,9 +526,9 @@ export default function PublicAiReceptionist() {
       <div className="air-panel fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
 
         {/* ── Chat panel ── */}
-        {open && (
+        {(open || isClosing) && (
           <div
-            className="air-panel-slide relative flex flex-col overflow-hidden rounded-2xl bg-white"
+            className={`${isClosing ? "air-panel-morph-out" : "air-panel-morph-in"} relative flex flex-col overflow-hidden rounded-2xl bg-white`}
             style={{
               width: "min(390px, calc(100vw - 28px))",
               height: "min(590px, calc(100vh - 100px))",
@@ -524,47 +591,119 @@ export default function PublicAiReceptionist() {
                   </button>
                 )}
                 <button
-                  onClick={() => {
-                    setOpen(false);
-                    setShowClearConfirm(false);
-                    setMessage("");
+                  onClick={closePanel}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl transition-all hover:bg-white/20"
+                  style={{
+                    color: "#fff",
+                    background: "rgba(255,255,255,0.12)",
+                    border: "1px solid rgba(255,255,255,0.18)",
                   }}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl transition-colors hover:bg-white/10"
-                  style={{ color: "rgba(255,255,255,0.38)" }}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" style={{ strokeWidth: 2.5 }} />
                 </button>
               </div>
             </div>
 
             {!isLoggedIn ? (
               <div
-                className="flex flex-1 flex-col items-center justify-center gap-6 px-8"
+                className="flex flex-1 flex-col overflow-y-auto air-scroll"
                 style={{ background: "linear-gradient(180deg, #E8F4F7 0%, #F2FAFC 60%, #F8FDFE 100%)" }}
               >
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <div
-                    className="flex h-14 w-14 items-center justify-center rounded-full"
-                    style={{ background: "rgba(14,78,94,0.08)", border: "1.5px solid rgba(14,78,94,0.15)" }}
-                  >
-                    <Lock className="h-6 w-6" style={{ color: "#0E4E5E" }} />
-                  </div>
-                  <p className="text-[15px] font-bold" style={{ color: "#0f172a" }}>
-                    Login required
+                {/* Intro */}
+                <div className="px-4 pt-4 pb-3">
+                  <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "#6b7280" }}>
+                    Common Questions
                   </p>
-                  <p className="text-[12.5px] leading-relaxed" style={{ color: "#64748b" }}>
-                    Please log in as an employer or client to use the AI receptionist.
+                  <p className="text-[12.5px] leading-relaxed" style={{ color: "#334155" }}>
+                    Here are some quick answers to help you get started.
                   </p>
                 </div>
-                <Link
-                  to="/employer-login"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, #0a3845, #0E4E5E)" }}
-                  onClick={() => setOpen(false)}
+
+                {/* FAQ accordion */}
+                <div className="flex flex-col gap-2 px-4">
+                  {FAQS.map((faq) => {
+                    const isOpen = openFaq === faq.id;
+                    return (
+                      <div
+                        key={faq.id}
+                        className="overflow-hidden rounded-xl border bg-white"
+                        style={{
+                          borderColor: isOpen ? "rgba(14,78,94,0.28)" : "rgba(14,78,94,0.13)",
+                          boxShadow: isOpen ? "0 4px 16px rgba(14,78,94,0.10)" : "0 1px 4px rgba(0,0,0,0.05)",
+                          transition: "border-color 0.18s, box-shadow 0.18s",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setOpenFaq(isOpen ? null : faq.id)}
+                          className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
+                          style={{ background: "transparent", border: "none", cursor: "pointer" }}
+                        >
+                          <span className="text-[12.5px] font-semibold leading-snug" style={{ color: "#0A2830" }}>
+                            {faq.question}
+                          </span>
+                          <ChevronDown
+                            className="h-3.5 w-3.5 shrink-0 transition-transform duration-200"
+                            style={{
+                              color: "#0E4E5E",
+                              transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            }}
+                          />
+                        </button>
+
+                        {isOpen && (
+                          <div
+                            style={{ borderTop: "1px solid rgba(14,78,94,0.09)" }}
+                            className="px-3.5 pb-3 pt-2.5"
+                          >
+                            <p className="text-[12px] leading-relaxed" style={{ color: "#475569" }}>
+                              {faq.answer}
+                            </p>
+                            {faq.link && (
+                              <Link
+                                to={faq.link.to}
+                                onClick={() => setOpen(false)}
+                                className="mt-2.5 inline-flex items-center gap-1 text-[11.5px] font-semibold transition-opacity hover:opacity-75"
+                                style={{ color: "#0E4E5E" }}
+                              >
+                                {faq.link.label}
+                                <ChevronRight className="h-3 w-3" />
+                              </Link>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Login CTA */}
+                <div
+                  className="mx-4 my-4 rounded-xl p-4"
+                  style={{
+                    background: "linear-gradient(135deg, #061D26 0%, #0a3845 50%, #0E4E5E 100%)",
+                    boxShadow: "0 4px 16px rgba(6,29,38,0.22)",
+                  }}
                 >
-                  <User className="h-4 w-4" />
-                  Log in to continue
-                </Link>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="h-3.5 w-3.5" style={{ color: "#FCD34D" }} />
+                    <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#FCD34D" }}>
+                      Get personalised help
+                    </p>
+                  </div>
+                  <p className="text-[12px] leading-relaxed mb-3" style={{ color: "rgba(255,255,255,0.75)" }}>
+                    Log in to unlock the full AI receptionist — get maid matches, live answers, and direct agency support.
+                  </p>
+                  <Link
+                    to="/employer-login"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-[13px] font-semibold transition-opacity hover:opacity-90"
+                    style={{ background: "rgba(252,211,77,0.15)", border: "1px solid rgba(252,211,77,0.35)", color: "#FCD34D" }}
+                    onClick={() => setOpen(false)}
+                  >
+                    <User className="h-3.5 w-3.5" />
+                    Log in to chat with AI
+                  </Link>
+                </div>
               </div>
             ) : (
               <>
@@ -637,7 +776,7 @@ export default function PublicAiReceptionist() {
                     <p className="mb-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#6b7280" }}>
                       Quick questions
                     </p>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {PROMPTS.map((prompt, idx) => (
                         <button
                           key={prompt}
@@ -646,16 +785,17 @@ export default function PublicAiReceptionist() {
                             setMessage(prompt);
                             textareaRef.current?.focus();
                           }}
-                          className="air-chip flex w-full items-center gap-2.5 rounded-xl border bg-white px-3.5 py-2.5 text-left text-[13px] font-semibold"
+                          className="air-chip flex w-full items-start gap-2 rounded-xl border bg-white px-3 py-2.5 text-left text-[11.5px] font-semibold"
                           style={{
                             borderColor: "rgba(252,211,77,0.30)",
                             boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
                             color: "#0A2830",
                             animationDelay: `${idx * 60}ms`,
+                            lineHeight: "1.35",
                           }}
                         >
                           <span
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold mt-0.5"
                             style={{ background: "#fffbeb", color: "#0E4E5E" }}
                           >
                             →
@@ -792,40 +932,6 @@ export default function PublicAiReceptionist() {
               className="shrink-0"
               style={{ background: "#fff", borderTop: "1px solid rgba(252,211,77,0.15)" }}
             >
-              {!hasConversation && (
-                <button
-                  type="button"
-                  onClick={() => setShowForm((v) => !v)}
-                  className="flex w-full items-center justify-between px-4 py-2 text-[11px] font-semibold text-[#0E4E5E] transition-colors hover:bg-[#E8F4F7]"
-                >
-                  <span>
-                    {showForm ? "Hide contact details" : "Add your name & contact (optional)"}
-                  </span>
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 transition-transform duration-200 ${
-                      showForm ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
-              )}
-
-              {showForm && !hasConversation && (
-                <div className="grid grid-cols-2 gap-2 px-4 pb-2">
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Your name"
-                    className="h-8 rounded-lg border-[#FCD34D]/50 bg-[#E8F4F7] text-[12px]"
-                  />
-                  <Input
-                    value={contact}
-                    onChange={(e) => setContact(e.target.value)}
-                    placeholder="Email or phone"
-                    className="h-8 rounded-lg border-[#FCD34D]/50 bg-[#E8F4F7] text-[12px]"
-                  />
-                </div>
-              )}
-
               <div className="flex items-end gap-2 px-3 pb-3 pt-2">
                 <Textarea
                   ref={textareaRef}
@@ -947,17 +1053,21 @@ export default function PublicAiReceptionist() {
           </div>
         )}
 
-        {/* ── FAB ── */}
+        {/* ── FAB — morphs into panel on open, reappears on close ── */}
         <button
-          onClick={() => {
-            setOpen((v) => !v);
-            setShowClearConfirm(false);
-          }}
-          aria-label={open ? "Close chat" : "Open AI Receptionist"}
-          className="air-fab air-fab-pulse relative flex h-16 w-16 items-center justify-center rounded-full border-2"
+          onClick={() => { setOpen(true); setShowClearConfirm(false); }}
+          aria-label="Open AI Receptionist"
+          disabled={open || isClosing}
+          className={`air-fab relative flex h-16 w-16 items-center justify-center rounded-full border-2 ${!open && !isClosing ? "air-fab-pulse" : ""}`}
           style={{
             background: "linear-gradient(145deg, #061D26 0%, #0a3845 60%, #0E4E5E 100%)",
             borderColor: "rgba(252,211,77,0.45)",
+            opacity: open && !isClosing ? 0 : 1,
+            transform: open && !isClosing ? "scale(0.3)" : "scale(1)",
+            pointerEvents: open && !isClosing ? "none" : "auto",
+            transition: isClosing
+              ? "opacity 0.18s ease 0.14s, transform 0.18s ease 0.14s"
+              : "opacity 0.18s ease, transform 0.18s ease",
           }}
         >
           <span
@@ -967,23 +1077,16 @@ export default function PublicAiReceptionist() {
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3)",
             }}
           >
-            {open ? (
-              <X className="h-5 w-5 text-[#061D26]" style={{ strokeWidth: 2.5 }} />
-            ) : (
-              <MaidAvatar size="fab" />
-            )}
+            <MaidAvatar size="fab" />
           </span>
-
-          {!open && (
-            <span
-              className="absolute bottom-0.5 right-0.5 h-[14px] w-[14px] rounded-full"
-              style={{
-                background: "#4ADE80",
-                border: "2.5px solid #061D26",
-                animation: "onlinePulse 2.2s ease-out infinite",
-              }}
-            />
-          )}
+          <span
+            className="absolute bottom-0.5 right-0.5 h-[14px] w-[14px] rounded-full"
+            style={{
+              background: "#4ADE80",
+              border: "2.5px solid #061D26",
+              animation: "onlinePulse 2.2s ease-out infinite",
+            }}
+          />
         </button>
       </div>
     </>
