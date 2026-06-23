@@ -1,4 +1,4 @@
-name = "helped-web-v2"
+name = "find-maid"
 main = "functions/api/[[...path]].ts"
 compatibility_date = "2024-10-01"
 
@@ -8,8 +8,8 @@ binding = "ASSETS"
 
 [[kv_namespaces]]
 binding = "APP_DATA"
-id = "9a6fc0298f484dffaa60904b991c40df"
-preview_id = "c67516e8b2b84599a140ced04dc0be16"
+id = "62a5ada5801547b5b0895fec94ab0b12"
+preview_id = "595830971f4f4125975ddcdeb627de67"
 
 [vars]
 # Storage: "kv" uses the APP_DATA KV namespace above. Remove to fall back to Supabase.
@@ -27,7 +27,7 @@ AI_AUTOPILOT_ENABLED = "true"
 #   npx wrangler secret put RESEND_API_KEY
 # Then update RESEND_FROM below with your verified domain.
 # Without RESEND_API_KEY, email features (client registration confirmation) return 503 gracefully.
-RESEND_FROM = "Helped <no-reply@helped-web-v2.pages.dev>"
+RESEND_FROM = "Find Maid <no-reply@find-maid.workers.dev>"
 DEV_EXPOSE_CONFIRMATION_CODE = "false"
 
 [ai]
