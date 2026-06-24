@@ -2508,17 +2508,18 @@ const isKvBackend = (env: Bindings) =>
   env.STORAGE_BACKEND?.trim().toLowerCase() === "kv";
 
 // Shared across requests within the same Worker isolate (15-second TTL).
-// structuredClone isolates each caller from the cached copy so mutations are safe.
-// Only applied to the normalized Supabase path (no tracking-property concerns).
+// Returns a direct reference (no clone) to avoid CPU-intensive structuredClone on large blobs.
+// Write paths always call bustAppDataCache() → saveData() → putAppDataCache() so the shared
+// reference is evicted before the caller's mutation is persisted.
 const APP_DATA_CACHE_TTL_MS = 15_000;
 let _appDataCache: { data: AppData; ts: number } | null = null;
 
 const getAppDataCache = (): AppData | null => {
   if (!_appDataCache) return null;
   if (Date.now() - _appDataCache.ts > APP_DATA_CACHE_TTL_MS) { _appDataCache = null; return null; }
-  return structuredClone(_appDataCache.data);
+  return _appDataCache.data;
 };
-const putAppDataCache = (data: AppData) => { _appDataCache = { data: structuredClone(data), ts: Date.now() }; };
+const putAppDataCache = (data: AppData) => { _appDataCache = { data, ts: Date.now() }; };
 const bustAppDataCache = () => { _appDataCache = null; };
 
 const loadData = async (
@@ -2546,7 +2547,14 @@ const loadData = async (
         console.warn("Normalized Supabase load failed; falling back to app_data", error);
       }
     }
-    return await loadDataFromSupabase(supabase, options);
+    // Hot path: serve from in-memory cache. Cached data retains Supabase updated_at tracking
+    // (non-enumerable property), so write paths still get a valid version for optimistic locking.
+    // saveDataToSupabase retry logic handles conflicts if the version is stale.
+    const hit = getAppDataCache();
+    if (hit && (options.readOnly || getSupabaseTrackedUpdatedAt(hit))) return hit;
+    const data = await loadDataFromSupabase(supabase, options);
+    putAppDataCache(data);
+    return data;
   }
 
   if (!env.APP_DATA) {
@@ -2577,6 +2585,7 @@ const saveData = async (env: Bindings, data: AppData) => {
       }
     }
     await saveDataToSupabase(supabase, data);
+    putAppDataCache(data); // re-prime with saved data (includes new updated_at)
     return;
   }
 

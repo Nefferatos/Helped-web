@@ -160,14 +160,19 @@ function DeleteButton({ onDelete, isBusy }: { onDelete: () => void; isBusy: bool
       onClick={handleClick}
       disabled={isBusy}
       title={confirming ? "Click again to confirm delete" : "Delete enquiry"}
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-default ${
+      className={`flex shrink-0 items-center justify-center rounded-xl border-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-default ${
         confirming
-          ? "border-red-400 bg-red-50 text-red-600 animate-pulse scale-110"
-          : "border-transparent bg-gray-100 text-gray-400 hover:border-red-300 hover:bg-red-50 hover:text-red-500 hover:scale-110"
+          ? "h-9 gap-1.5 px-3 border-red-400 bg-red-50 text-red-600 animate-pulse scale-105"
+          : "h-9 w-9 border-transparent bg-gray-100 text-gray-400 hover:border-red-300 hover:bg-red-50 hover:text-red-500 hover:scale-110"
       }`}
     >
       {isBusy ? (
         <div className="h-4 w-4 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
+      ) : confirming ? (
+        <>
+          <Trash2 className="h-4 w-4" />
+          <span className="text-[12px] font-bold">Confirm?</span>
+        </>
       ) : (
         <Trash2 className="h-4 w-4" />
       )}
