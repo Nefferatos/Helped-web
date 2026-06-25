@@ -617,14 +617,14 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
                 </p>
               </div>
               <div className="fq-contact-btns">
-                <Link to="/contact" className="fq-contact-btn fq-contact-btn--ghost">
+                <a href="tel:+6580730757" className="fq-contact-btn fq-contact-btn--ghost">
                   <Phone size={14} />
                   Call Us
-                </Link>
-                <Link to="/contact" className="fq-contact-btn fq-contact-btn--primary">
+                </a>
+                <a href="mailto:enquiries.j1@gmail.com" className="fq-contact-btn fq-contact-btn--primary">
                   <MessageCircle size={14} />
                   Send a message
-                </Link>
+                </a>
               </div>
             </div>
           </div>
@@ -1688,26 +1688,97 @@ const CSS = `
    RESPONSIVE
 ══════════════════════════════════════════ */
 @media (max-width: 980px) {
-  .fq-hero-inner { grid-template-columns: 1fr; padding: 52px 28px 0; gap: 0; }
-  .fq-hero-copy { padding-bottom: 40px; }
+  .fq-hero-inner {
+    grid-template-columns: 1fr;
+    padding: 48px 20px 0;
+    gap: 0;
+  }
+  .fq-hero-copy { padding-bottom: 36px; }
   .fq-hero-card { display: none; }
-  .fq-body { grid-template-columns: 1fr; padding: 24px 24px 56px; gap: 20px; }
-  .fq-sidebar { position: static; display: flex; flex-wrap: wrap; gap: 6px; }
+  .fq-hero-stats { flex-wrap: wrap; gap: 12px; padding-top: 20px; margin-top: 24px; }
+  .fq-hero-stat { padding: 0 16px 0 0; }
+  .fq-hero-stat-div { margin-right: 16px; }
+
+  .fq-body {
+    grid-template-columns: 1fr;
+    padding: 16px 16px 56px;
+    gap: 14px;
+  }
+
+  /* Horizontal scrollable pill bar */
+  .fq-sidebar {
+    position: static;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 6px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .fq-sidebar::-webkit-scrollbar { display: none; }
   .fq-sidebar-label { display: none; }
-  .fq-cat-btn { width: auto; padding: 7px 10px; }
+  .fq-cat-btn {
+    width: auto;
+    flex-shrink: 0;
+    padding: 7px 12px;
+    white-space: nowrap;
+  }
   .fq-cat-btn::before { display: none; }
-  .fq-cat-name { display: none; }
+  .fq-cat-name { display: block; font-size: 12px; }
+  .fq-cat-pill { display: none; }
+
+  .fq-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
 }
+
 @media (max-width: 600px) {
-  .fq-hero-inner { padding: 44px 20px 0; }
-  .fq-hero-h1 { font-size: 36px; }
-  .fq-trigger { grid-template-columns: 36px 1fr 30px; padding: 16px 14px 16px 14px; }
-  .fq-num { font-size: 18px; }
-  .fq-q { font-size: 14px; padding: 0 10px; }
-  .fq-answer { padding: 14px 16px 20px 56px; }
-  .fq-answer::before { left: 36px; }
-  .fq-answer-inner { padding-left: 12px; }
-  .fq-contact { flex-direction: column; align-items: flex-start; padding: 22px 22px 22px 28px; }
+  .fq-hero-inner { padding: 40px 16px 0; }
+  .fq-hero-h1 { font-size: 32px; }
+  .fq-hero-sub { font-size: 13px; }
+  .fq-hero-stat-val { font-size: 20px; }
+
+  .fq-body { padding: 12px 12px 48px; }
+
+  /* FAQ accordion – remove number column, shrink layout */
+  .fq-trigger {
+    grid-template-columns: 1fr 30px;
+    padding: 14px 14px 14px 16px;
+  }
+  .fq-num { display: none; }
+  .fq-q { font-size: 13.5px; padding: 0 10px 0 0; }
+  .fq-chevron-badge { width: 26px; height: 26px; }
+  .fq-chevron-icon { width: 12px; height: 12px; }
+
+  /* Answer panel – remove deep indent */
+  .fq-answer { padding: 14px 16px 18px 16px; }
+  .fq-answer::before { display: none; }
+  .fq-answer-inner { padding-left: 0; }
+
+  /* Contact strip */
+  .fq-contact {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px 18px 20px 24px;
+    gap: 16px;
+  }
+  .fq-contact-btns { flex-direction: column; width: 100%; }
+  .fq-contact-btn { justify-content: center; }
+  .fq-contact-h2 { font-size: 16px; }
+
+  /* Toolbar */
+  .fq-toolbar-actions { width: 100%; }
+  .fq-action-btn { flex: 1; text-align: center; justify-content: center; display: flex; }
+}
+
+@media (max-width: 400px) {
+  .fq-hero-h1 { font-size: 28px; }
+  .fq-hero-stats { gap: 8px; }
+  .fq-hero-stat-div { display: none; }
+  .fq-hero-stat { padding: 0 12px 0 0; }
 }
 
 /* ══════════════════════════════════════════

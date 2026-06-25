@@ -10,7 +10,6 @@ import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import { toast } from "@/components/ui/sonner";
 import { getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
-import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
 import { syncClientProfileFromSession } from "@/lib/supabaseAuth";
@@ -919,8 +918,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isLoading, setIsLoading] = useState(true);
-  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
-  const [pendingLoginPath, setPendingLoginPath] = useState("/employer-login");
 
   const [keyword, setKeyword] = useState("");
   const [maidTypes, setMaidTypes] = useState<string[]>([]);
@@ -983,7 +980,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const languageOptions = ["No Preference","English","Mandarin/Chinese-Dialect","Bahasa Indonesia/Malaysia","Hindi","Tamil"];
 
   const toggleMaidType = (t: string) =>
-    setMaidTypes(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
+    setMaidTypes(p => p.includes(t) ? [] : [t]);
 
   const filteredMaids = useMemo(() =>
     filterMaids(allPublicMaids, { keyword, nationality: nationality === "No Preference" ? [] : [nationality], maidTypes, language }),
@@ -1036,9 +1033,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const handleRequestMaid = () => {
     const params = buildParams();
     params.set("intent", "request");
-    const target = `/client/maids?${params.toString()}`;
-    if (!isLoggedIn) { setPendingLoginPath(buildEmployerLoginPath(target)); setLoginPromptOpen(true); return; }
-    navigate(target);
+    const base = isLoggedIn ? "/client/maids" : "/search-maids";
+    navigate(`${base}?${params.toString()}`);
   };
   const clearFilters = () => {
     setKeyword(""); setMaidTypes([]); setNationality("No Preference"); setLanguage("No Preference"); setCurrentPage(1);

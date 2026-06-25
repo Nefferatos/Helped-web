@@ -1560,7 +1560,7 @@ const SiteFooter = () => (
 
         {/* Brand */}
         <div>
-          <h4 style={{ fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 12px", fontFamily: "'Syne', sans-serif" }}>
+          <h4 style={{ fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 12px", fontFamily: "'Inter', sans-serif" }}>
             "Find Maids" At The Agency
           </h4>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7, margin: 0, fontFamily: "'Inter', sans-serif" }}>

@@ -221,7 +221,7 @@ const PublicSiteNavbar = () => {
     <header
       ref={headerRef}
       className={cn(
-        "sticky top-0 z-50 bg-white/96 backdrop-blur supports-[backdrop-filter]:bg-white/92",
+        "sticky top-0 z-50 bg-white",
         "transition-shadow duration-300",
         scrolled
           ? "shadow-[0_2px_20px_rgba(14,78,94,.13)]"
@@ -259,7 +259,7 @@ const PublicSiteNavbar = () => {
                   "relative px-3.5 py-2 text-[13.5px] font-medium rounded-lg transition-colors duration-150",
                   isActive
                     ? "font-semibold"
-                    : "text-gray-600 hover:bg-[#0E4E5E]/5 hover:text-[#0E4E5E]"
+                    : "text-[#0E4E5E] hover:bg-[#0E4E5E]/8 hover:text-[#0B3340]"
                 )
               }
               style={({ isActive }) =>
@@ -376,7 +376,7 @@ const PublicSiteNavbar = () => {
                       "border-b border-b-gray-50 border-l-[3px]",
                       isActive
                         ? "font-semibold bg-[#0E4E5E]/5"
-                        : "border-l-transparent text-gray-600 hover:bg-[#0E4E5E]/5"
+                        : "border-l-transparent text-[#0E4E5E] hover:bg-[#0E4E5E]/5"
                     )
                   }
                   style={({ isActive }) => ({
@@ -390,7 +390,7 @@ const PublicSiteNavbar = () => {
                     <>
                       <span>{link.label}</span>
                       <span
-                        style={{ color: isActive ? AMBER : "#d1d5db" }}
+                        style={{ color: isActive ? TEAL : "#d1d5db" }}
                         className="text-lg leading-none"
                       >
                         ›
