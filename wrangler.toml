@@ -1,4 +1,4 @@
-name = "find-maid"
+name = "findmaid"
 main = "functions/api/[[...path]].ts"
 compatibility_date = "2024-10-01"
 
@@ -27,7 +27,7 @@ AI_AUTOPILOT_ENABLED = "true"
 #   npx wrangler secret put RESEND_API_KEY
 # Then update RESEND_FROM below with your verified domain.
 # Without RESEND_API_KEY, email features (client registration confirmation) return 503 gracefully.
-RESEND_FROM = "Find Maid <no-reply@find-maid.workers.dev>"
+RESEND_FROM = "Find Maid <no-reply@findmaid.wow-aisolution.workers.dev>"
 DEV_EXPOSE_CONFIRMATION_CODE = "false"
 
 [ai]
