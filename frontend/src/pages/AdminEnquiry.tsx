@@ -630,7 +630,7 @@ const AdminEnquiry = () => {
               if (controller.signal.aborted || searchRef.current.trim()) return;
               try {
                 const res = await fetch("/api/enquiries?pageSize=500", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
-                const d = await readSafeJson<{ enquiries?: EnquiryRecord[] }>(res);
+                const d = await readSafeJson<{ enquiries?: EnquiryRecord[]; error?: string }>(res);
                 if (res.ok && d.enquiries) {
                   setEnquiries(enrichWithMeta([...d.enquiries].sort((a, b) => b.id - a.id)));
                   setPage(1);
@@ -676,11 +676,21 @@ const AdminEnquiry = () => {
     try {
       setBulkDeleting(true);
       const ids = Array.from(selectedIds);
-      await Promise.all(ids.map((id) => fetch(`/api/enquiries/${id}`, { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } })));
-      bulkDeleteMeta(ids);
-      setEnquiries((prev) => prev.filter((e) => !selectedIds.has(e.id)));
-      toast.success(`${ids.length} enqu${ids.length !== 1 ? "iries" : "iry"} deleted`);
-      setSelectedIds(new Set());
+      const results = await Promise.all(
+        ids.map((id) => fetch(`/api/enquiries/${id}`, { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } })),
+      );
+      const succeeded = ids.filter((_, i) => results[i].ok);
+      const failedCount = ids.length - succeeded.length;
+      if (succeeded.length > 0) {
+        const succeededSet = new Set(succeeded);
+        bulkDeleteMeta(succeeded);
+        setEnquiries((prev) => prev.filter((e) => !succeededSet.has(e.id)));
+        toast.success(`${succeeded.length} enqu${succeeded.length !== 1 ? "iries" : "iry"} deleted`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} enqu${failedCount !== 1 ? "iries" : "iry"} could not be deleted`);
+      }
+      setSelectedIds(new Set(ids.filter((_, i) => !results[i].ok)));
     } catch {
       toast.error("Some enquiries could not be deleted");
     } finally {

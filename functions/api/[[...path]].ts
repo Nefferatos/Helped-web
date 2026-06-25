@@ -5859,6 +5859,7 @@ app.delete(
   requireAgencyAdminAuth,
   safeApi(async (c) => {
     const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id)) return c.json({ error: "Valid id is required" }, 400);
     const data = await loadData(c.env);
     const existing = data.momPersonnel.find((item) => item.id === id);
     if (!existing) {
@@ -5907,6 +5908,7 @@ app.delete(
   requireAgencyAdminAuth,
   safeApi(async (c) => {
     const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id)) return c.json({ error: "Valid id is required" }, 400);
     const data = await loadData(c.env);
     const existing = data.testimonials.find((item) => item.id === id);
     if (!existing) {
@@ -7426,6 +7428,7 @@ function enrichEnquiryWithClient(enquiry: EnquiryRecord, clients: Array<{ id: nu
 
 app.delete("/api/enquiries/:id", requireAgencyAdminAuth, async (c) => {
   const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "Valid id is required" }, 400);
   const data = await loadData(c.env);
   const existing = data.enquiries.find((item) => item.id === id);
   if (!existing) {
