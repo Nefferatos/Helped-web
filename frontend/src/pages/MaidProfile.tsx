@@ -380,7 +380,7 @@ const MaidProfilePage = () => {
       : maid?.photoDataUrl ? [maid.photoDataUrl] : [];
     const first = list[0] ?? "";
     return isEmptySlot(first) ? "" : first;
-  }, [maid?.photoDataUrls, maid?.photoDataUrl]);
+  }, [maid]);
 
   useEffect(() => {
     let cancelled = false;
