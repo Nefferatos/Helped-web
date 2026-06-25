@@ -894,6 +894,8 @@ const MaidProfilePage = () => {
             {navSep}
             <span onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))} className={navLink}>Edit This Maid</span>
             {navSep}
+            <span onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))} className={navLink}>Full View</span>
+            {navSep}
             <span onClick={() => setIsManagePhotosOpen(true)} className={navLink}>Manage Photos</span>
             {navSep}
             <span onClick={() => setIsVideoModalOpen(true)} className={navLink}>YouTube Video</span>
