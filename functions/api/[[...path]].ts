@@ -7426,6 +7426,20 @@ function enrichEnquiryWithClient(enquiry: EnquiryRecord, clients: Array<{ id: nu
   };
 }
 
+app.delete("/api/enquiries/bulk", requireAgencyAdminAuth, async (c) => {
+  const body = await parseBody<{ ids?: unknown }>(c.req.raw);
+  const ids = body?.ids;
+  if (!Array.isArray(ids) || ids.length === 0) return c.json({ error: "ids array is required" }, 400);
+  if (!ids.every((x) => Number.isInteger(x))) return c.json({ error: "All ids must be integers" }, 400);
+  const idSet = new Set(ids as number[]);
+  const data = await loadData(c.env);
+  const before = data.enquiries.length;
+  data.enquiries = data.enquiries.filter((e) => !idSet.has(e.id));
+  const deleted = before - data.enquiries.length;
+  await saveData(c.env, data);
+  return c.json({ deleted });
+});
+
 app.delete("/api/enquiries/:id", requireAgencyAdminAuth, async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "Valid id is required" }, 400);
@@ -9344,6 +9358,185 @@ app.get(
   }),
 );
 
+// ─── Direct-marketing supporting types ───────────────────────────────────────
+
+type DmContact = { id: string; name: string; phone: string; email: string; source: string };
+type DmMessage = { contactId: string; contactName: string; contactPhone: string; contactEmail: string; contactSource: string; message: string; whatsappLink: string; charCount: number; whatsappReady: boolean };
+type DmCampaign = { id: string; goal: string; tone: string; audienceType: string; maidReferences: string[]; messageTemplate: string; subject: string; messages: DmMessage[]; contactCount: number; whatsappReadyCount: number; emailOnlyCount: number; generatedAt: string; aiUsed: boolean };
+type DmCampaignSummary = Omit<DmCampaign, "messages" | "messageTemplate">;
+type DmOpportunity = { id: string; triggerType: string; title: string; reasoning: string; goal: string; tone: string; audienceType: string; maidReferences: string[]; estimatedReach: number; priority: string; detectedAt: string };
+
+const MARKETING_CAMPAIGNS_KEY = "marketing-campaigns.json";
+
+const audienceTypeToInternal = (type: string) => {
+  if (type === "all_clients") return "clients";
+  if (type === "enquiry_leads") return "enquiries";
+  if (type === "direct_sale_leads") return "leads";
+  return "all";
+};
+
+const buildDetailedContacts = (data: AppData, audienceType: string): DmContact[] => {
+  const contacts: DmContact[] = [];
+  const seen = new Set<string>();
+  const add = (id: string, name: string, phone: string, email: string, source: string) => {
+    const key = phone?.replace(/\D/g, "") || email?.toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    contacts.push({ id, name: name || "there", phone: phone || "", email: email || "", source });
+  };
+  const internal = audienceTypeToInternal(audienceType);
+  if (internal === "all" || internal === "clients") {
+    for (const c of data.clients) add(`client-${c.id}`, c.name, c.phone ?? "", c.email, "client");
+  }
+  if (internal === "all" || internal === "enquiries") {
+    for (const e of data.enquiries) add(`enquiry-${e.id}`, e.username, e.phone, e.email, "enquiry");
+  }
+  if (internal === "all" || internal === "leads") {
+    for (const ds of data.directSales) add(`lead-${ds.id}`, ds.clientName, ds.clientPhone, ds.clientEmail, "direct_sale");
+  }
+  return contacts;
+};
+
+const buildDmCampaign = async (
+  env: Bindings,
+  data: AppData,
+  goal: string,
+  tone: string,
+  audienceType: string,
+  maidRefs: string[],
+): Promise<DmCampaign> => {
+  const agencyPhone = cleanPhoneForMake(data.companyProfile?.social_whatsapp_number?.trim() ?? data.companyProfile?.contact_phone?.trim() ?? "");
+  const agencyName = data.companyProfile?.company_name?.trim() ?? data.companyProfile?.short_name?.trim() ?? "Our Agency";
+  const featured = maidRefs.length > 0
+    ? data.maids.filter((m) => maidRefs.includes(m.referenceCode))
+    : data.maids.filter((m) => m.isPublic).slice(0, 2);
+  const template = await generateMarketingTemplate(goal, tone, agencyName, agencyPhone, featured.map((m) => m.fullName), env.ANTHROPIC_API_KEY);
+  const meta = goalMetaMarketing(goal);
+  const contacts = buildDetailedContacts(data, audienceType);
+  const messages: DmMessage[] = contacts.map((contact) => {
+    const msg = template.replace(/\{\{name\}\}/g, contact.name).replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
+    const waLink = buildWhatsAppLinkMarketing(contact.phone, msg);
+    return { contactId: contact.id, contactName: contact.name, contactPhone: contact.phone, contactEmail: contact.email, contactSource: contact.source, message: msg, whatsappLink: waLink, charCount: msg.length, whatsappReady: Boolean(contact.phone?.trim()) };
+  });
+  return {
+    id: crypto.randomUUID(),
+    goal, tone, audienceType,
+    maidReferences: featured.map((m) => m.referenceCode),
+    messageTemplate: template,
+    subject: meta.subject,
+    messages,
+    contactCount: messages.length,
+    whatsappReadyCount: messages.filter((m) => m.whatsappReady).length,
+    emailOnlyCount: messages.filter((m) => !m.whatsappReady && m.contactEmail).length,
+    generatedAt: new Date().toISOString(),
+    aiUsed: Boolean(env.ANTHROPIC_API_KEY),
+  };
+};
+
+const saveCampaignSummary = async (env: Bindings, campaign: DmCampaign) => {
+  if (!env.APP_DATA) return;
+  const raw = await env.APP_DATA.get(MARKETING_CAMPAIGNS_KEY);
+  const existing: DmCampaignSummary[] = raw ? (JSON.parse(raw) as DmCampaignSummary[]) : [];
+  const { messages: _m, messageTemplate: _t, ...summary } = campaign;
+  existing.unshift(summary);
+  if (existing.length > 50) existing.length = 50;
+  await env.APP_DATA.put(MARKETING_CAMPAIGNS_KEY, JSON.stringify(existing), { expirationTtl: 30 * 86400 });
+};
+
+// ─── GET /api/ai/direct-marketing/audience ───────────────────────────────────
+
+app.get(
+  "/api/ai/direct-marketing/audience",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const type = c.req.query("type") ?? "all_contacts";
+    const data = await loadData(c.env, { readOnly: true });
+    const contacts = buildDetailedContacts(data, type);
+    return c.json({ contacts, total: contacts.length });
+  }),
+);
+
+// ─── GET /api/ai/direct-marketing/campaigns ──────────────────────────────────
+
+app.get(
+  "/api/ai/direct-marketing/campaigns",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    if (!c.env.APP_DATA) return c.json({ campaigns: [] });
+    const raw = await c.env.APP_DATA.get(MARKETING_CAMPAIGNS_KEY);
+    const campaigns: DmCampaignSummary[] = raw ? (JSON.parse(raw) as DmCampaignSummary[]) : [];
+    return c.json({ campaigns });
+  }),
+);
+
+// ─── GET /api/ai/direct-marketing/autonomous/scan ────────────────────────────
+
+app.get(
+  "/api/ai/direct-marketing/autonomous/scan",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const data = await loadData(c.env, { readOnly: true });
+    const rawOps = detectMarketingOpportunities(data);
+    const goalToTrigger: Record<string, string> = { new_arrivals: "new_helpers", follow_up: "stale_enquiries", re_engage: "cold_leads", holiday: "upcoming_holiday" };
+    const goalToTitle: Record<string, string> = { new_arrivals: "New Helpers Available", follow_up: "Follow Up on Enquiries", re_engage: "Re-engage Cold Leads", holiday: "Holiday Greeting Campaign", promotion: "Promotion Campaign", custom: "Custom Campaign" };
+    const goalToPriority: Record<string, string> = { new_arrivals: "high", follow_up: "medium", re_engage: "medium", holiday: "high", promotion: "low", custom: "low" };
+    const audToType: Record<string, string> = { all: "all_contacts", clients: "all_clients", enquiries: "enquiry_leads", leads: "direct_sale_leads" };
+    const featured = data.maids.filter((m) => m.isPublic).slice(0, 3).map((m) => m.referenceCode);
+    const now = new Date().toISOString();
+    const opportunities: DmOpportunity[] = rawOps.map((op) => {
+      const audienceType = audToType[op.audience] ?? "all_contacts";
+      return {
+        id: crypto.randomUUID(),
+        triggerType: goalToTrigger[op.goal] ?? "new_helpers",
+        title: goalToTitle[op.goal] ?? op.goal,
+        reasoning: op.triggerReason,
+        goal: op.goal,
+        tone: op.tone,
+        audienceType,
+        maidReferences: featured,
+        estimatedReach: buildDetailedContacts(data, audienceType).length,
+        priority: goalToPriority[op.goal] ?? "low",
+        detectedAt: now,
+      };
+    });
+    return c.json({ scannedAt: now, agencyId: 0, opportunities });
+  }),
+);
+
+// ─── POST /api/ai/direct-marketing/autonomous/run ────────────────────────────
+
+app.post(
+  "/api/ai/direct-marketing/autonomous/run",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const body = await parseBody<{ opportunity?: DmOpportunity }>(c.req.raw);
+    if (!body?.opportunity) return c.json({ error: "opportunity is required" }, 400);
+    const opp = body.opportunity;
+    const data = await loadData(c.env, { readOnly: true });
+    const campaign = await buildDmCampaign(c.env, data, opp.goal, opp.tone, opp.audienceType, opp.maidReferences ?? []);
+    await saveCampaignSummary(c.env, campaign);
+    return c.json({ campaigns: [campaign] });
+  }),
+);
+
+// ─── POST /api/ai/direct-marketing/generate ──────────────────────────────────
+
+app.post(
+  "/api/ai/direct-marketing/generate",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const body = await parseBody<{ goal?: string; tone?: string; maidReferences?: string[]; audienceType?: string; customNote?: string }>(c.req.raw);
+    const goal = body?.goal ?? "new_arrivals";
+    const tone = body?.tone ?? "warm";
+    const audienceType = body?.audienceType ?? "all_contacts";
+    const maidRefs = body?.maidReferences ?? [];
+    const data = await loadData(c.env, { readOnly: true });
+    const campaign = await buildDmCampaign(c.env, data, goal, tone, audienceType, maidRefs);
+    await saveCampaignSummary(c.env, campaign);
+    return c.json({ campaign });
+  }),
+);
+
 const runScheduledAiAutopilot = async (env: Bindings) => {
   if (!isAiAutopilotEnabled(env)) {
     return {
@@ -10121,7 +10314,7 @@ app.get(
   "/api/whatsapp/candidates/:referenceCode",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
-    if (!c.env.APP_DATA || isKvBackend(c.env) === false) return c.json({ error: "WhatsApp feature requires KV storage (set STORAGE_BACKEND=kv and bind APP_DATA)" }, 503);
+    if (!c.env.APP_DATA) return c.json({ error: "WhatsApp feature requires KV storage (bind APP_DATA)" }, 503);
     const ref = normalizeReferenceCode(c.req.param("referenceCode"));
     const data = await loadData(c.env, { readOnly: true });
     const maid = data.maids.find((m) => m.referenceCode === ref);
@@ -10135,7 +10328,7 @@ app.post(
   "/api/whatsapp/candidates/:referenceCode/messages",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
-    if (!c.env.APP_DATA || isKvBackend(c.env) === false) return c.json({ error: "WhatsApp feature requires KV storage (set STORAGE_BACKEND=kv and bind APP_DATA)" }, 503);
+    if (!c.env.APP_DATA) return c.json({ error: "WhatsApp feature requires KV storage (bind APP_DATA)" }, 503);
     const ref = normalizeReferenceCode(c.req.param("referenceCode"));
     const body = await parseBody<{ text?: string; templateKey?: string; attachments?: unknown[] }>(c.req.raw);
     const data = await loadData(c.env, { readOnly: true });
@@ -10169,7 +10362,7 @@ app.patch(
   "/api/whatsapp/candidates/:referenceCode/stage",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
-    if (!c.env.APP_DATA || isKvBackend(c.env) === false) return c.json({ error: "WhatsApp feature requires KV storage (set STORAGE_BACKEND=kv and bind APP_DATA)" }, 503);
+    if (!c.env.APP_DATA) return c.json({ error: "WhatsApp feature requires KV storage (bind APP_DATA)" }, 503);
     const ref = normalizeReferenceCode(c.req.param("referenceCode"));
     const body = await parseBody<{ stage?: string; sendWorkflowTemplate?: boolean; interviewSchedule?: { date: string; time: string; status: string } }>(c.req.raw);
     const data = await loadData(c.env, { readOnly: true });

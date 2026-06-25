@@ -13,7 +13,7 @@ preview_id = "595830971f4f4125975ddcdeb627de67"
 
 [vars]
 # Storage: "kv" uses the APP_DATA KV namespace above. Remove to fall back to Supabase.
-STORAGE_BACKEND = "kv"
+STORAGE_BACKEND = "supabase"
 
 # Supabase — kept for client OAuth/phone JWT verification and AI conversation logs only.
 # Not used for app data when STORAGE_BACKEND=kv.

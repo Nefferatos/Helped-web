@@ -546,6 +546,7 @@ const AdminEnquiry = () => {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const enquiriesRef = useRef<EnquiryRecord[]>([]);
   const searchRef = useRef("");
 
@@ -673,26 +674,25 @@ const AdminEnquiry = () => {
   /* ── Bulk delete ── */
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
+    if (!confirmingDelete) { setConfirmingDelete(true); return; }
     try {
       setBulkDeleting(true);
+      setConfirmingDelete(false);
       const ids = Array.from(selectedIds);
-      const results = await Promise.all(
-        ids.map((id) => fetch(`/api/enquiries/${id}`, { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } })),
-      );
-      const succeeded = ids.filter((_, i) => results[i].ok);
-      const failedCount = ids.length - succeeded.length;
-      if (succeeded.length > 0) {
-        const succeededSet = new Set(succeeded);
-        bulkDeleteMeta(succeeded);
-        setEnquiries((prev) => prev.filter((e) => !succeededSet.has(e.id)));
-        toast.success(`${succeeded.length} enqu${succeeded.length !== 1 ? "iries" : "iry"} deleted`);
-      }
-      if (failedCount > 0) {
-        toast.error(`${failedCount} enqu${failedCount !== 1 ? "iries" : "iry"} could not be deleted`);
-      }
-      setSelectedIds(new Set(ids.filter((_, i) => !results[i].ok)));
-    } catch {
-      toast.error("Some enquiries could not be deleted");
+      const res = await fetch("/api/enquiries/bulk", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+        body: JSON.stringify({ ids }),
+      });
+      const d = await readSafeJson<{ deleted?: number; error?: string }>(res);
+      if (!res.ok) throw new Error(d.error ?? "Failed to delete enquiries");
+      const deleted = d.deleted ?? ids.length;
+      bulkDeleteMeta(ids);
+      setEnquiries((prev) => prev.filter((e) => !selectedIds.has(e.id)));
+      toast.success(`${deleted} enqu${deleted !== 1 ? "iries" : "iry"} deleted`);
+      setSelectedIds(new Set());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Some enquiries could not be deleted");
     } finally {
       setBulkDeleting(false);
     }
@@ -972,20 +972,42 @@ const AdminEnquiry = () => {
                     </button>
                   );
                 })}
+                {confirmingDelete ? (
+                  <div className="inline-flex items-center gap-1.5">
+                    <span className="text-[12px] font-bold text-red-700">Delete {selectedIds.size} enqu{selectedIds.size !== 1 ? "iries" : "iry"}?</span>
+                    <button
+                      type="button"
+                      onClick={handleBulkDelete}
+                      disabled={bulkDeleting}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-red-500 bg-red-600 px-3 py-1.5 text-[12px] font-bold text-white transition-all hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {bulkDeleting
+                        ? <div className="h-3 w-3 rounded-full border-2 border-red-300 border-t-white animate-spin" />
+                        : <Trash className="h-3 w-3" />}
+                      Yes, delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(false)}
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-[12px] font-bold text-red-700 transition-all hover:bg-red-100 disabled:opacity-50"
+                  >
+                    <Trash className="h-3 w-3" />
+                    Delete selected
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleBulkDelete}
-                  disabled={bulkDeleting}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-[12px] font-bold text-red-700 transition-all hover:bg-red-100 disabled:opacity-50"
-                >
-                  {bulkDeleting
-                    ? <div className="h-3 w-3 rounded-full border-2 border-red-300 border-t-red-600 animate-spin" />
-                    : <Trash className="h-3 w-3" />}
-                  Delete selected
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIds(new Set())}
+                  onClick={() => { setSelectedIds(new Set()); setConfirmingDelete(false); }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
                 >
                   Clear
