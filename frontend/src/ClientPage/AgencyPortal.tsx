@@ -28,6 +28,7 @@ import {
 } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import OtpInput from "@/components/OtpInput";
 import FindMaidImg from "./assets/maid_agency_logo_81.jpg";
 
 interface AgencyAuthResponse {
@@ -103,15 +104,35 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
   const [focused, setFocused] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [pendingVerification, setPendingVerification] = useState<{
+  const PENDING_KEY = "agency_pending_verification";
+  const [pendingVerification, setPendingVerificationRaw] = useState<{
     email: string;
     delivery?: string;
     devCode?: string;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(PENDING_KEY);
+      return raw ? (JSON.parse(raw) as { email: string; delivery?: string; devCode?: string }) : null;
+    } catch {
+      return null;
+    }
+  });
   const [verificationCode, setVerificationCode] = useState("");
+
+  const setPendingVerification = (
+    value: { email: string; delivery?: string; devCode?: string } | null,
+  ) => {
+    if (value) {
+      sessionStorage.setItem(PENDING_KEY, JSON.stringify(value));
+    } else {
+      sessionStorage.removeItem(PENDING_KEY);
+    }
+    setPendingVerificationRaw(value);
+  };
 
   useEffect(() => {
     if (getAgencyAdminToken()) {
+      sessionStorage.removeItem(PENDING_KEY);
       navigate(adminPath("/dashboard"));
     }
   }, [navigate]);
@@ -128,6 +149,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
       const data = (await response.json().catch(() => ({}))) as AgencyAuthResponse;
 
       if (response.status === 403 && data.requiresConfirmation && data.email) {
+        clearAgencyAdminAuth();
         setPendingVerification({
           email: data.email,
           delivery: data.delivery,
@@ -153,6 +175,10 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingVerification) return;
+    if (verificationCode.length < 6) {
+      toast.error("Please enter the full 6-digit code");
+      return;
+    }
     try {
       setIsSubmitting(true);
       const response = await fetch("/api/agency-auth/confirm", {
@@ -184,15 +210,20 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         body: JSON.stringify({ email: pendingVerification.email }),
       });
       const data = (await response.json().catch(() => ({}))) as AgencyAuthResponse;
-      if (data.delivery === "not_configured") {
-        toast.info("Email delivery is not configured. Please contact support to verify your account.");
-      } else if (!response.ok) {
-        toast.error(data.error || "Failed to resend code");
+      if (!response.ok) {
+        if (data.delivery === "not_configured") {
+          toast.info("Email delivery is not configured. Please contact support to verify your account.");
+        } else {
+          toast.error(data.error || "Failed to resend code");
+        }
       } else {
-        setPendingVerification((prev) =>
-          prev ? { ...prev, delivery: data.delivery, devCode: data.devConfirmationCode } : prev,
-        );
-        toast.success("Verification code resent — check your inbox");
+        setVerificationCode("");
+        setPendingVerification({ ...pendingVerification, delivery: data.delivery, devCode: data.devConfirmationCode });
+        if (data.delivery === "not_configured") {
+          toast.info("Email delivery is not configured. Please contact support to verify your account.");
+        } else {
+          toast.success("Verification code resent — check your inbox");
+        }
       }
     } catch {
       toast.error("Failed to resend code");
@@ -942,27 +973,12 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                   )}
 
                   <div>
-                    <label htmlFor="verification-code" className="ap-label">Verification Code</label>
-                    <div className="ap-field">
-                      <span className="ap-field-icon">
-                        <KeyRound size={13} color={focused === "code" ? "#1c7a93" : "#8aaab4"} strokeWidth={1.75} />
-                      </span>
-                      <input
-                        id="verification-code"
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={verificationCode}
-                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                        onFocus={() => setFocused("code")}
-                        onBlur={() => setFocused(null)}
-                        placeholder="Enter 6-digit code"
-                        required
-                        disabled={isSubmitting}
-                        className="ap-input"
-                        autoFocus
-                      />
-                    </div>
+                    <label className="ap-label">Verification Code</label>
+                    <OtpInput
+                      value={verificationCode}
+                      onChange={setVerificationCode}
+                      disabled={isSubmitting}
+                    />
                   </div>
 
                   <button type="submit" disabled={isSubmitting} className="ap-btn">
