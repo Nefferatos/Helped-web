@@ -32,6 +32,10 @@ import FindMaidImg from "./assets/maid_agency_logo_81.jpg";
 
 interface AgencyAuthResponse {
   error?: string;
+  requiresConfirmation?: boolean;
+  email?: string;
+  delivery?: "sent" | "not_configured";
+  devConfirmationCode?: string;
   token?: string;
   admin?: {
     id: number;
@@ -99,6 +103,12 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
   const [focused, setFocused] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingVerification, setPendingVerification] = useState<{
+    email: string;
+    delivery?: string;
+    devCode?: string;
+  } | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
 
   useEffect(() => {
     if (getAgencyAdminToken()) {
@@ -116,6 +126,16 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         body: JSON.stringify({ username, password }),
       });
       const data = (await response.json().catch(() => ({}))) as AgencyAuthResponse;
+
+      if (response.status === 403 && data.requiresConfirmation && data.email) {
+        setPendingVerification({
+          email: data.email,
+          delivery: data.delivery,
+          devCode: data.devConfirmationCode,
+        });
+        return;
+      }
+
       if (!response.ok || !data.token || !data.admin) {
         throw new Error(data.error || "Agency admin authentication failed");
       }
@@ -125,6 +145,57 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
     } catch (error) {
       clearAgencyAdminAuth();
       toast.error(error instanceof Error ? error.message : "Unable to continue");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingVerification) return;
+    try {
+      setIsSubmitting(true);
+      const response = await fetch("/api/agency-auth/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingVerification.email, code: verificationCode.trim() }),
+      });
+      const data = (await response.json().catch(() => ({}))) as AgencyAuthResponse;
+      if (!response.ok || !data.token || !data.admin) {
+        throw new Error(data.error || "Invalid or expired verification code");
+      }
+      saveAgencyAdminAuth(data.token, data.admin);
+      toast.success("Email verified — welcome to your dashboard!");
+      navigate(adminPath("/dashboard"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Verification failed");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!pendingVerification) return;
+    try {
+      setIsSubmitting(true);
+      const response = await fetch("/api/agency-auth/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingVerification.email }),
+      });
+      const data = (await response.json().catch(() => ({}))) as AgencyAuthResponse;
+      if (data.delivery === "not_configured") {
+        toast.info("Email delivery is not configured. Please contact support to verify your account.");
+      } else if (!response.ok) {
+        toast.error(data.error || "Failed to resend code");
+      } else {
+        setPendingVerification((prev) =>
+          prev ? { ...prev, delivery: data.delivery, devCode: data.devConfirmationCode } : prev,
+        );
+        toast.success("Verification code resent — check your inbox");
+      }
+    } catch {
+      toast.error("Failed to resend code");
     } finally {
       setIsSubmitting(false);
     }
@@ -854,80 +925,151 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                 <img src={FindMaidImg} alt="FindMaid" />
               </div>
 
-              <form onSubmit={(e) => void handleSubmit(e)} className="ap-form">
-                <div>
-                  <label htmlFor="username" className="ap-label">Username</label>
-                  <div className="ap-field">
-                    <span className="ap-field-icon">
-                      <User
-                        size={13}
-                        color={focused === "username" ? "#1c7a93" : "#8aaab4"}
-                        strokeWidth={1.75}
-                      />
-                    </span>
-                    <input
-                      id="username"
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      onFocus={() => setFocused("username")}
-                      onBlur={() => setFocused(null)}
-                      placeholder="Enter your username"
-                      required
-                      disabled={isSubmitting}
-                      className="ap-input"
-                    />
-                  </div>
-                </div>
+              {pendingVerification ? (
+                <form onSubmit={(e) => void handleVerifyCode(e)} className="ap-form">
+                  <p className="ap-label" style={{ marginBottom: 4 }}>
+                    A 6-digit verification code was{" "}
+                    {pendingVerification.delivery === "not_configured"
+                      ? "generated (email delivery not configured — contact support)"
+                      : `sent to ${pendingVerification.email}`}
+                    .
+                  </p>
 
-                <div>
-                  <label htmlFor="password" className="ap-label">Password</label>
-                  <div className="ap-field">
-                    <span className="ap-field-icon">
-                      <Lock
-                        size={13}
-                        color={focused === "password" ? "#1c7a93" : "#8aaab4"}
-                        strokeWidth={1.75}
+                  {pendingVerification.devCode && (
+                    <p className="ap-label" style={{ color: "#1c7a93", marginBottom: 4 }}>
+                      Dev code: <strong>{pendingVerification.devCode}</strong>
+                    </p>
+                  )}
+
+                  <div>
+                    <label htmlFor="verification-code" className="ap-label">Verification Code</label>
+                    <div className="ap-field">
+                      <span className="ap-field-icon">
+                        <KeyRound size={13} color={focused === "code" ? "#1c7a93" : "#8aaab4"} strokeWidth={1.75} />
+                      </span>
+                      <input
+                        id="verification-code"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                        onFocus={() => setFocused("code")}
+                        onBlur={() => setFocused(null)}
+                        placeholder="Enter 6-digit code"
+                        required
+                        disabled={isSubmitting}
+                        className="ap-input"
+                        autoFocus
                       />
-                    </span>
-                    <input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onFocus={() => setFocused("password")}
-                      onBlur={() => setFocused(null)}
-                      placeholder="Enter your password"
-                      required
-                      disabled={isSubmitting}
-                      className="ap-input ap-input-pr"
-                    />
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={isSubmitting} className="ap-btn">
+                    {isSubmitting
+                      ? <><span className="ap-spinner" />Verifying…</>
+                      : <>Verify & Sign In <ArrowRight size={14} strokeWidth={2.5} /></>
+                    }
+                  </button>
+
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 4 }}>
                     <button
                       type="button"
-                      className="ap-eye-btn"
-                      onClick={() => setShowPassword((v) => !v)}
-                      tabIndex={-1}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      disabled={isSubmitting}
+                      onClick={() => void handleResendCode()}
+                      className="ap-ssl"
+                      style={{ cursor: "pointer", textDecoration: "underline", background: "none", border: "none", padding: 0 }}
                     >
-                      {showPassword
-                        ? <EyeOff size={13} strokeWidth={1.75} />
-                        : <Eye size={13} strokeWidth={1.75} />}
+                      Resend code
+                    </button>
+                    <span className="ap-ssl" style={{ color: "#8aaab4" }}>·</span>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => { setPendingVerification(null); setVerificationCode(""); }}
+                      className="ap-ssl"
+                      style={{ cursor: "pointer", textDecoration: "underline", background: "none", border: "none", padding: 0 }}
+                    >
+                      Back to login
                     </button>
                   </div>
-                </div>
+                </form>
+              ) : (
+                <form onSubmit={(e) => void handleSubmit(e)} className="ap-form">
+                  <div>
+                    <label htmlFor="username" className="ap-label">Username</label>
+                    <div className="ap-field">
+                      <span className="ap-field-icon">
+                        <User
+                          size={13}
+                          color={focused === "username" ? "#1c7a93" : "#8aaab4"}
+                          strokeWidth={1.75}
+                        />
+                      </span>
+                      <input
+                        id="username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        onFocus={() => setFocused("username")}
+                        onBlur={() => setFocused(null)}
+                        placeholder="Enter your username"
+                        required
+                        disabled={isSubmitting}
+                        className="ap-input"
+                      />
+                    </div>
+                  </div>
 
-                <button type="submit" disabled={isSubmitting} className="ap-btn">
-                  {isSubmitting
-                    ? <><span className="ap-spinner" />Signing in…</>
-                    : <>Sign in to Dashboard <ArrowRight size={14} strokeWidth={2.5} /></>
-                  }
-                </button>
+                  <div>
+                    <label htmlFor="password" className="ap-label">Password</label>
+                    <div className="ap-field">
+                      <span className="ap-field-icon">
+                        <Lock
+                          size={13}
+                          color={focused === "password" ? "#1c7a93" : "#8aaab4"}
+                          strokeWidth={1.75}
+                        />
+                      </span>
+                      <input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onFocus={() => setFocused("password")}
+                        onBlur={() => setFocused(null)}
+                        placeholder="Enter your password"
+                        required
+                        disabled={isSubmitting}
+                        className="ap-input ap-input-pr"
+                      />
+                      <button
+                        type="button"
+                        className="ap-eye-btn"
+                        onClick={() => setShowPassword((v) => !v)}
+                        tabIndex={-1}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword
+                          ? <EyeOff size={13} strokeWidth={1.75} />
+                          : <Eye size={13} strokeWidth={1.75} />}
+                      </button>
+                    </div>
+                  </div>
 
-                <div className="ap-ssl">
-                  <Shield size={10} color="#8aaab4" strokeWidth={2} />
-                  <span>256-bit SSL encrypted</span>
-                </div>
-              </form>
+                  <button type="submit" disabled={isSubmitting} className="ap-btn">
+                    {isSubmitting
+                      ? <><span className="ap-spinner" />Signing in…</>
+                      : <>Sign in to Dashboard <ArrowRight size={14} strokeWidth={2.5} /></>
+                    }
+                  </button>
+
+                  <div className="ap-ssl">
+                    <Shield size={10} color="#8aaab4" strokeWidth={2} />
+                    <span>256-bit SSL encrypted</span>
+                  </div>
+                </form>
+              )}
             </div>
 
             <div className="ap-divider" />

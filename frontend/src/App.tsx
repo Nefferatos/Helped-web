@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { lazy, Suspense, useEffect, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -122,6 +122,11 @@ interface AgencyAdminMeResponse {
 const ProtectedAdminRoute = ({ children }: { children: ReactNode }) => {
   const token = getAgencyAdminToken();
   const storedAdmin = getStoredAgencyAdmin();
+  // Capture storedAdmin in a ref so the effect only depends on `token`.
+  // getStoredAgencyAdmin() returns a new object on every render (JSON.parse),
+  // which would cause the effect to re-run on every render if used directly
+  // in the deps array — leading to repeated /api/agency-auth/me calls.
+  const storedAdminRef = useRef(storedAdmin);
   const [status, setStatus] = useState<"checking" | "allowed" | "denied">(
     token ? (storedAdmin ? "allowed" : "checking") : "denied",
   );
@@ -134,7 +139,7 @@ const ProtectedAdminRoute = ({ children }: { children: ReactNode }) => {
 
     let cancelled = false;
 
-    if (storedAdmin) {
+    if (storedAdminRef.current) {
       setStatus("allowed");
     }
 
@@ -166,7 +171,7 @@ const ProtectedAdminRoute = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [token, storedAdmin]);
+  }, [token]);
 
   if (status === "checking") {
     return (
