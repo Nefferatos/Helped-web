@@ -278,6 +278,7 @@ type RecruitmentStage =
   | "Screening Interview"
   | "Background Check"
   | "Approved"
+  | "Ready to Configure Public Profile"
   | "Ready For Client Matching"
   | "Placed"
   | "Rejected";
@@ -3248,6 +3249,7 @@ const atsStageOrder: RecruitmentStage[] = [
   "Screening Interview",
   "Background Check",
   "Approved",
+  "Ready to Configure Public Profile",
   "Ready For Client Matching",
   "Placed",
   "Rejected",
@@ -3932,7 +3934,9 @@ const buildAtsDashboard = (data: AppData, agencyId: number) => {
     approvedCandidates: applications.filter((item) => item.status === "Approved").length,
     rejectedCandidates: applications.filter((item) => item.status === "Rejected").length,
     readyForMatching: applications.filter(
-      (item) => item.status === "Ready For Client Matching",
+      (item) =>
+        item.status === "Ready to Configure Public Profile" ||
+        item.status === "Ready For Client Matching",
     ).length,
     placedHelpers: applications.filter((item) => item.status === "Placed").length,
     averageQualificationScore,
