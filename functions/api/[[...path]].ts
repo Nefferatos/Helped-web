@@ -4306,7 +4306,9 @@ const hashPassword = async (password: string): Promise<string> => {
 
 const verifyPassword = async (password: string, stored: string): Promise<boolean> => {
   if (!stored.startsWith("pbkdf2:")) {
-    return password.trim() === stored;
+    // Legacy plaintext password — reject and force the user to reset their password.
+    // Direct string comparison was removed to prevent plaintext credential exposure.
+    return false;
   }
   const parts = stored.split(":");
   if (parts.length !== 3) return false;
@@ -5938,7 +5940,13 @@ app.get(
     }
 
     const search = c.req.query("search")?.trim().toLowerCase()
-    const visibility = c.req.query("visibility")
+    // Unauthenticated callers may only browse public maids.
+    // Validate the token against the admin session store so clients with
+    // a non-admin token cannot bypass this restriction.
+    const listToken = parseAuthorizationToken(c.req.raw);
+    const listAdminSessions = listToken ? await loadAgencyAdminSessions(c.env) : [];
+    const isAdminRequest = listAdminSessions.some((s) => s.token === listToken);
+    const visibility = isAdminRequest ? c.req.query("visibility") : "public"
     const noPhotos = c.req.query("noPhotos") === "1" || c.req.query("noPhotos") === "true"
     const agencyIdQuery = c.req.query("agencyId")
     const agencyId =
@@ -6344,6 +6352,13 @@ app.get(
         if (!maid) {
           return c.json({ error: "Maid not found" }, 404);
         }
+        if (!maid.isPublic) {
+          const tok = parseAuthorizationToken(c.req.raw);
+          const adSessions = tok ? await loadAgencyAdminSessions(c.env) : [];
+          if (!adSessions.some((s) => s.token === tok)) {
+            return c.json({ error: "Maid not found" }, 404);
+          }
+        }
         return c.json({ maid });
       } catch (error) {
         console.warn("Fast maid lookup path failed; falling back to app data", error);
@@ -6358,6 +6373,13 @@ app.get(
     );
     if (!maid) {
       return c.json({ error: "Maid not found" }, 404);
+    }
+    if (!maid.isPublic) {
+      const tok = parseAuthorizationToken(c.req.raw);
+      const adSessions = tok ? await loadAgencyAdminSessions(c.env) : [];
+      if (!adSessions.some((s) => s.token === tok)) {
+        return c.json({ error: "Maid not found" }, 404);
+      }
     }
     return c.json({ maid });
   }),
@@ -7334,7 +7356,7 @@ app.get("/api/enquiries/last-id", async (c) => {
   return c.json({ lastId });
 });
 
-app.get("/api/enquiries/stream", async (c) => {
+app.get("/api/enquiries/stream", requireAgencyAdminAuth, async (c) => {
   const url = new URL(c.req.url);
   const afterId = Number(url.searchParams.get("afterId") ?? 0);
   if (!Number.isFinite(afterId) || afterId < 0) {
@@ -10022,22 +10044,6 @@ app.post("/api/client-auth/confirm", async (c) => {
     return c.json({ error: "Client not found" }, 404);
   }
 
-  if (client.emailVerified !== false) {
-    // Already verified: issue a session.
-    const session: ClientSessionRecord = {
-      token: crypto.randomUUID(),
-      clientId: client.id,
-      createdAt: now(),
-      expiresAt: new Date(Date.now() + CLIENT_SESSION_TTL_MS).toISOString(),
-    };
-    data.clientSessions = data.clientSessions.filter(
-      (item) => item.clientId !== client.id,
-    );
-    data.clientSessions.unshift(session);
-    await saveData(c.env, data);
-    return c.json({ token: session.token, client: toSafeClient(client) }, 200);
-  }
-
   if (!client.emailVerificationCodeHash || !client.emailVerificationExpiresAt) {
     return c.json({ error: "No confirmation code requested yet" }, 400);
   }
@@ -10126,12 +10132,19 @@ app.post("/api/client-auth/login", async (c) => {
   const clientMatch = data.clients.find(
     (item) => normalizeEmail(item.email) === normalizedEmail,
   );
-  if (!clientMatch || !(await verifyPassword(body.password!.trim(), clientMatch.password))) {
+  if (!clientMatch) {
     return c.json({ error: "Invalid email or password" }, 401);
   }
   if (!clientMatch.password.startsWith("pbkdf2:")) {
+    // Legacy plaintext password: compare directly then migrate to PBKDF2 immediately.
+    // verifyPassword rejects non-PBKDF2 so this branch handles migration explicitly.
+    if (clientMatch.password.trim() !== body.password!.trim()) {
+      return c.json({ error: "Invalid email or password" }, 401);
+    }
     clientMatch.password = await hashPassword(body.password!.trim());
     await saveData(c.env, data);
+  } else if (!(await verifyPassword(body.password!.trim(), clientMatch.password))) {
+    return c.json({ error: "Invalid email or password" }, 401);
   }
   const client = clientMatch;
 
@@ -10566,14 +10579,6 @@ app.post("/api/agency-auth/confirm", async (c) => {
     return c.json({ error: "Agency admin not found" }, 404);
   }
 
-  if (admin.emailVerified !== false) {
-    const session = await createAgencyAdminSession(c.env, admin);
-    return c.json(
-      { token: session.token, admin: toSafeAgencyAdmin(admin) },
-      200,
-    );
-  }
-
   if (!admin.emailVerificationCodeHash || !admin.emailVerificationExpiresAt) {
     return c.json({ error: "No confirmation code requested yet" }, 400);
   }
@@ -10685,17 +10690,31 @@ app.post(
         (normalizedEmail && email === normalizedEmail)
       );
     });
-    if (!adminMatch || !(await verifyPassword(password, adminMatch.password))) {
+    if (!adminMatch) {
       return c.json({ error: "Invalid username or password" }, 401);
     }
     if (!adminMatch.password.startsWith("pbkdf2:")) {
+      // Legacy plaintext password OR empty password (unset / first-time activation).
+      // Empty password means the account was seeded without one; the first login sets it.
+      // Non-empty plaintext: must match exactly (then we migrate to PBKDF2).
+      if (adminMatch.password !== "" && adminMatch.password.trim() !== password) {
+        return c.json({ error: "Invalid username or password" }, 401);
+      }
       const newHash = await hashPassword(password);
       const fullData = await loadData(c.env);
       const storedAdmin = fullData.agencyAdmins.find((a) => a.id === adminMatch.id);
       if (storedAdmin) {
         storedAdmin.password = newHash;
         await saveData(c.env, fullData);
+        adminMatch.password = newHash;
+        // Refresh the auth-store cache so stale empty password is evicted.
+        const supabase = getSupabaseAppDataConfig(c.env);
+        if (supabase && !isNormalizedSupabaseEnabled(c.env)) {
+          void saveAgencyAdminAuthToSupabase(supabase, fullData.agencyAdmins).catch(() => {});
+        }
       }
+    } else if (!(await verifyPassword(password, adminMatch.password))) {
+      return c.json({ error: "Invalid username or password" }, 401);
     }
     const admin = adminMatch;
 
@@ -12391,7 +12410,7 @@ app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
   return c.json({ preset }, 201);
 });
 
-app.post("/api/pdf-autofill", async (c) => {
+app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
   const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
   if (!anthropicKey) return c.json({ error: "PDF autofill is not configured" }, 503);
 
