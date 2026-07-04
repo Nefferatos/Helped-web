@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
+import { getUserFacingError, logTechnicalError } from "@/lib/userFacingErrors";
 
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
@@ -136,6 +137,19 @@ type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
   const id = genId();
+  const visibleProps =
+    props.variant === "destructive"
+      ? (() => {
+          const rawError = props.description ?? props.title;
+          const userError = getUserFacingError(rawError);
+          logTechnicalError("user-facing-radix-toast", rawError);
+          return {
+            ...props,
+            title: userError.title,
+            description: userError.description,
+          };
+        })()
+      : props;
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -147,7 +161,7 @@ function toast({ ...props }: Toast) {
   dispatch({
     type: "ADD_TOAST",
     toast: {
-      ...props,
+      ...visibleProps,
       id,
       open: true,
       onOpenChange: (open) => {
