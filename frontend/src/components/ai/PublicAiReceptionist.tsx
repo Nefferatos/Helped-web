@@ -177,7 +177,12 @@ const formatTime = (date?: Date) => {
   return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(date);
 };
 
-function MaidAvatar({ size = "md" }: { size?: "sm" | "md" | "fab" }) {
+/**
+ * Idle-animated avatar:
+ * - "breathe" prop wraps the SVG in a gentle bob/scale loop so it never looks frozen.
+ * - Eyes blink on their own independent cycle (right eye slightly offset) for a natural feel.
+ */
+function MaidAvatar({ size = "md", breathe = true }: { size?: "sm" | "md" | "fab"; breathe?: boolean }) {
   const px = size === "sm" ? 24 : size === "fab" ? 46 : 36;
   return (
     <svg
@@ -185,6 +190,7 @@ function MaidAvatar({ size = "md" }: { size?: "sm" | "md" | "fab" }) {
       height={px}
       viewBox="0 0 100 100"
       xmlns="http://www.w3.org/2000/svg"
+      className={breathe ? "air-avatar-breathe" : ""}
       style={{ display: "block", flexShrink: 0 }}
     >
       <circle cx="50" cy="50" r="50" fill="#FCD34D" />
@@ -200,16 +206,25 @@ function MaidAvatar({ size = "md" }: { size?: "sm" | "md" | "fab" }) {
       <path d="M28 34 Q32 18 50 15 Q68 18 72 34 Q64 26 50 25 Q36 26 28 34Z" fill="#1a1a2e" />
       <path d="M26 36 Q22 52 26 68 Q30 72 34 70 Q30 55 31 38Z" fill="#1a1a2e" />
       <path d="M74 36 Q78 52 74 68 Q70 72 66 70 Q70 55 69 38Z" fill="#1a1a2e" />
-      <ellipse cx="41" cy="41" rx="7" ry="6" fill="#ffffff" />
-      <circle cx="41" cy="41" r="4.5" fill="#0ea5e9" />
-      <circle cx="41" cy="41" r="2.2" fill="#0369a1" />
-      <circle cx="41" cy="41" r="1.1" fill="#7dd3fc" />
-      <circle cx="38.5" cy="38.8" r="1.4" fill="#ffffff" opacity="0.9" />
-      <ellipse cx="59" cy="41" rx="7" ry="6" fill="#ffffff" />
-      <circle cx="59" cy="41" r="4.5" fill="#0ea5e9" />
-      <circle cx="59" cy="41" r="2.2" fill="#0369a1" />
-      <circle cx="59" cy="41" r="1.1" fill="#7dd3fc" />
-      <circle cx="56.5" cy="38.8" r="1.4" fill="#ffffff" opacity="0.9" />
+
+      {/* ── Left eye (independent blink cycle) ── */}
+      <g className="air-eye air-eye-left">
+        <ellipse cx="41" cy="41" rx="7" ry="6" fill="#ffffff" />
+        <circle cx="41" cy="41" r="4.5" fill="#0ea5e9" />
+        <circle cx="41" cy="41" r="2.2" fill="#0369a1" />
+        <circle cx="41" cy="41" r="1.1" fill="#7dd3fc" />
+        <circle cx="38.5" cy="38.8" r="1.4" fill="#ffffff" opacity="0.9" />
+      </g>
+
+      {/* ── Right eye (slightly offset blink so both don't blink in perfect unison) ── */}
+      <g className="air-eye air-eye-right">
+        <ellipse cx="59" cy="41" rx="7" ry="6" fill="#ffffff" />
+        <circle cx="59" cy="41" r="4.5" fill="#0ea5e9" />
+        <circle cx="59" cy="41" r="2.2" fill="#0369a1" />
+        <circle cx="59" cy="41" r="1.1" fill="#7dd3fc" />
+        <circle cx="56.5" cy="38.8" r="1.4" fill="#ffffff" opacity="0.9" />
+      </g>
+
       <path d="M34 37 Q37 33 41 34 Q45 33 48 37" fill="none" stroke="#1a1a2e" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M52 37 Q55 33 59 34 Q63 33 66 37" fill="none" stroke="#1a1a2e" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M44 52 Q50 57 56 52" fill="none" stroke="#d06060" strokeWidth="1.8" strokeLinecap="round" />
@@ -448,6 +463,31 @@ export default function PublicAiReceptionist() {
           65%      { transform: translateY(2px) rotate(2deg); }
         }
 
+        /* ── Idle "alive" avatar animation — gentle breathing bob, always running ── */
+        @keyframes avatarBreathe {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50%      { transform: translateY(-2.5px) scale(1.025); }
+        }
+        .air-avatar-breathe {
+          animation: avatarBreathe 3.4s ease-in-out infinite;
+          transform-origin: center;
+        }
+
+        /* ── Natural eye blink — each eye on its own slightly-offset cycle ── */
+        @keyframes eyeBlink {
+          0%, 90%, 100% { transform: scaleY(1); }
+          94%            { transform: scaleY(0.08); }
+          97%            { transform: scaleY(1); }
+        }
+        .air-eye {
+          transform-box: fill-box;
+          transform-origin: center;
+          animation: eyeBlink 4.6s ease-in-out infinite;
+        }
+        .air-eye-right {
+          animation-delay: 0.12s;
+        }
+
         @keyframes onlinePulse {
           0%   { box-shadow: 0 0 0 0   rgba(74,222,128,0.80); }
           65%  { box-shadow: 0 0 0 8px rgba(74,222,128,0.00); }
@@ -505,13 +545,28 @@ export default function PublicAiReceptionist() {
         }
 
         @keyframes waveHand {
-          0%,100% { transform: rotate(0deg); }
-          20%      { transform: rotate(20deg); }
-          40%      { transform: rotate(-10deg); }
-          60%      { transform: rotate(14deg); }
-          80%      { transform: rotate(-6deg); }
+          0%, 72%, 100% { transform: rotate(0deg); }
+          78%  { transform: rotate(22deg); }
+          84%  { transform: rotate(-12deg); }
+          90%  { transform: rotate(16deg); }
+          96%  { transform: rotate(-6deg); }
         }
-        .wave-hand { display: inline-block; animation: waveHand 1.5s ease 0.4s 2 both; }
+        .wave-hand {
+          display: inline-block;
+          transform-origin: 70% 70%;
+          animation: waveHand 3.8s ease-in-out infinite;
+        }
+
+        /* ── Waving hand badge on the FAB — greets visitors every few seconds ── */
+        .air-wave-badge {
+          animation: waveHand 3.8s ease-in-out infinite, waveBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+          animation-delay: 0.5s, 0s;
+        }
+        @keyframes waveBadgePop {
+          0%   { transform: scale(0) rotate(0deg); }
+          70%  { transform: scale(1.15) rotate(0deg); }
+          100% { transform: scale(1) rotate(0deg); }
+        }
 
         @keyframes modalIn {
           from { opacity: 0; }
@@ -1077,7 +1132,7 @@ export default function PublicAiReceptionist() {
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3)",
             }}
           >
-            <MaidAvatar size="fab" />
+            <MaidAvatar size="fab" breathe={false} />
           </span>
           <span
             className="absolute bottom-0.5 right-0.5 h-[14px] w-[14px] rounded-full"
@@ -1087,6 +1142,17 @@ export default function PublicAiReceptionist() {
               animation: "onlinePulse 2.2s ease-out infinite",
             }}
           />
+          {/* Waving hand badge — periodically waves to invite a click */}
+          <span
+            aria-hidden="true"
+            className="air-wave-badge absolute -top-1.5 -left-1.5 flex h-6 w-6 items-center justify-center rounded-full text-[13px] leading-none select-none"
+            style={{
+              background: "#fff",
+              boxShadow: "0 2px 6px rgba(6,29,38,0.28), 0 0 0 2px rgba(252,211,77,0.55)",
+            }}
+          >
+            👋
+          </span>
         </button>
       </div>
     </>
