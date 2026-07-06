@@ -15,6 +15,21 @@ preview_id = "595830971f4f4125975ddcdeb627de67"
 # Storage: "kv" uses the APP_DATA KV namespace above. Remove to fall back to Supabase.
 STORAGE_BACKEND = "supabase"
 
+# RECOMMENDED FOR PRODUCTION: collapse agency-admin auth to a single normalized
+# table (helped_agency_admins) so the login store cannot drift from main data —
+# the root cause of the recurring "Invalid username or password" 401s.
+#
+# ORDER MATTERS — enabling this before migrating locks every admin out (normalized
+# mode reads the table directly; an empty table means no admins can log in):
+#   1. Apply supabase/normalized_project_setup.sql to the prod Supabase project.
+#   2. Run the one-time migration RPC (populates the normalized tables from the
+#      existing app_data blob):
+#        select public.migrate_helped_blob_to_normalized('<app_id>');
+#   3. THEN uncomment the line below and deploy.
+# (loadAgencyAdminAuthData now falls back to main data if the table is empty, but
+#  treat that as a seatbelt, not the plan — migrate first.)
+# SUPABASE_USE_NORMALIZED = "true"
+
 # Supabase — kept for client OAuth/phone JWT verification and AI conversation logs only.
 # Not used for app data when STORAGE_BACKEND=kv.
 SUPABASE_URL = "https://etdbexgrsenjznxbbnbd.supabase.co"

@@ -461,6 +461,9 @@ type Bindings = {
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
   MAKE_WEBHOOK_URL?: string;
   STORAGE_BACKEND?: string;
+  // Server-only secret enabling POST /api/agency-auth/bootstrap-reset.
+  // Set via: npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
+  ADMIN_BOOTSTRAP_TOKEN?: string;
 };
 
 type Variables = {
@@ -482,7 +485,7 @@ app.use(
       return allowed.includes(origin) ? origin : null;
     },
     credentials: true,
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Bootstrap-Token"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
@@ -2586,6 +2589,11 @@ const saveData = async (env: Bindings, data: AppData) => {
       }
     }
     await saveDataToSupabase(supabase, data);
+    // Keep the separate agency-admin-auth cache blob in lock-step with main data.
+    // Login reads that blob first (see loadAgencyAdminAuthData); if it drifts from
+    // main data, valid passwords get rejected as 401. Awaited — not fire-and-forget —
+    // so the two stores can never diverge across a write.
+    await saveAgencyAdminAuthToSupabase(supabase, data.agencyAdmins);
     putAppDataCache(data); // re-prime with saved data (includes new updated_at)
     return;
   }
@@ -2851,7 +2859,21 @@ const loadAgencyAdminAuthData = async (env: Bindings) => {
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
     if (isNormalizedSupabaseEnabled(env)) {
-      return await loadAgencyAdminAuthFromSupabaseNormalized(supabase);
+      const normalized = await loadAgencyAdminAuthFromSupabaseNormalized(supabase);
+      if (normalized.length > 0) {
+        return normalized;
+      }
+      // Safety net: an empty normalized table means the one-time migration hasn't
+      // run yet (or the table was wiped). Fall back to the main app_data blob so
+      // flipping SUPABASE_USE_NORMALIZED on *before* migrating can't lock every
+      // admin out. Re-prime the normalized table from main data in the background.
+      const data = await loadData(env);
+      void saveAgencyAdminAuthToSupabaseNormalized(supabase, data.agencyAdmins).catch(
+        (error) => {
+          console.error("Failed to seed normalized agency admin table:", error);
+        },
+      );
+      return data.agencyAdmins;
     }
 
     const cached = loadAgencyAdminAuthFromSupabase(supabase);
@@ -10733,6 +10755,80 @@ app.post(
     return c.json({ token: session.token, admin: toSafeAgencyAdmin(admin) });
   }),
 );
+
+// Operator-only password reset, gated by the ADMIN_BOOTSTRAP_TOKEN secret.
+// Purpose: recover admin login without relying on email delivery. The write goes
+// through saveData, which now keeps both the main store and the agency-admin-auth
+// cache in sync, so the new password takes effect immediately in every mode.
+//
+// Usage:
+//   npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN   # set a strong random value
+//   curl -X POST https://<host>/api/agency-auth/bootstrap-reset \
+//     -H "X-Bootstrap-Token: <that value>" -H "Content-Type: application/json" \
+//     -d '{"username":"Jonriko Tan","password":"<new password>"}'
+app.post("/api/agency-auth/bootstrap-reset", async (c) => {
+  const configuredToken = c.env.ADMIN_BOOTSTRAP_TOKEN?.trim();
+  if (!configuredToken) {
+    return c.json(
+      { error: "Bootstrap reset is disabled. Set the ADMIN_BOOTSTRAP_TOKEN secret first." },
+      503,
+    );
+  }
+
+  const providedToken = (c.req.header("X-Bootstrap-Token") ?? "").trim();
+  // Compare SHA-256 digests so the check is constant-length regardless of input.
+  const [providedDigest, expectedDigest] = await Promise.all([
+    sha256Hex(providedToken),
+    sha256Hex(configuredToken),
+  ]);
+  if (!providedToken || providedDigest !== expectedDigest) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const body = await parseBody<{
+    username?: string;
+    email?: string;
+    password?: string;
+  }>(c.req.raw);
+  const identifier = (body?.username ?? body?.email ?? "").trim();
+  const newPassword = (body?.password ?? "").trim();
+  if (!identifier || !newPassword) {
+    return c.json({ error: "username (or email) and password are required" }, 400);
+  }
+  if (newPassword.length < 8) {
+    return c.json({ error: "password must be at least 8 characters" }, 400);
+  }
+
+  const data = await loadData(c.env);
+  const normalizedIdentifier = identifier.toLowerCase();
+  const normalizedEmail = isEmailLike(identifier) ? normalizeEmail(identifier) : "";
+  const admin = data.agencyAdmins.find((item) => {
+    const username =
+      typeof item.username === "string" ? item.username.trim().toLowerCase() : "";
+    const email = typeof item.email === "string" ? normalizeEmail(item.email) : "";
+    return (
+      username === normalizedIdentifier ||
+      (normalizedEmail && email === normalizedEmail)
+    );
+  });
+  if (!admin) {
+    return c.json({ error: "Agency admin not found" }, 404);
+  }
+
+  admin.password = await hashPassword(newPassword);
+  // Clear the email-verification gate so login isn't blocked by EMAIL_NOT_VERIFIED.
+  admin.emailVerified = true;
+  admin.emailVerificationCodeHash = undefined;
+  admin.emailVerificationExpiresAt = undefined;
+  admin.emailVerificationSentAt = undefined;
+  await saveData(c.env, data);
+
+  return c.json({
+    ok: true,
+    username: admin.username,
+    email: admin.email ?? null,
+  });
+});
 
 app.get("/api/agency-auth/me", requireAgencyAdminAuth, async (c) => {
   return c.json({ admin: toSafeAgencyAdmin(c.get("agencyAdmin")) });
