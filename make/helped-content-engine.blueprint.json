@@ -1,0 +1,177 @@
+{
+    "name": "Helped Maids – Content Engine (Scheduler → Claude → Channels)",
+    "flow": [
+        {
+            "id": 1,
+            "module": "http:ActionSendData",
+            "version": 3,
+            "parameters": {
+                "handleErrors": true,
+                "useNewZLIB": true
+            },
+            "mapper": {
+                "url": "https://api.anthropic.com/v1/messages",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [
+                    { "name": "x-api-key", "value": "ANTHROPIC_API_KEY" },
+                    { "name": "anthropic-version", "value": "2023-06-01" }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "rejectUnauthorized": true,
+                "followRedirect": true,
+                "gzip": true,
+                "useMtls": false,
+                "contentType": "application/json",
+                "data": "{\n  \"model\": \"claude-opus-4-8\",\n  \"max_tokens\": 900,\n  \"system\": \"You are the social marketing writer for Helped Maids, a Singapore foreign-domestic-worker (FDW) recruitment agency. Produce ONE recruitment post that drives helpers to apply. Return ONLY minified JSON with keys: hook (string, <=120 chars), body (string, 2-4 short paragraphs, no hashtags inside), hashtags (array of 5-8 strings without the # symbol), cta_url (string, use EXACTLY https://YOUR-DOMAIN/apply-as-maid?agencyId=1 and nothing else). No markdown, no commentary.\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Write today's applicant-recruitment post. Vary the angle from a typical post (career growth, fair pay, supportive placement, or success story). Audience: experienced domestic helpers considering Singapore.\" }\n  ]\n}"
+            },
+            "metadata": {
+                "designer": { "x": -600, "y": 0 },
+                "restore": {},
+                "notes": "Claude generates the content bundle as JSON. Model claude-opus-4-8 (best); swap to claude-sonnet-4-6 to cut cost."
+            }
+        },
+        {
+            "id": 2,
+            "module": "json:ParseJSON",
+            "version": 1,
+            "parameters": { "type": "" },
+            "mapper": {
+                "json": "{{1.data.content.1.text}}"
+            },
+            "metadata": {
+                "designer": { "x": -300, "y": 0 },
+                "restore": {},
+                "notes": "Parse Claude's returned JSON. Fields available downstream: hook, body, hashtags[], cta_url."
+            }
+        },
+        {
+            "id": 3,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "parameters": {},
+            "mapper": null,
+            "metadata": { "designer": { "x": 0, "y": 0 } },
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 10,
+                            "module": "http:ActionSendData",
+                            "version": 3,
+                            "parameters": { "handleErrors": true, "useNewZLIB": true },
+                            "mapper": {
+                                "url": "https://graph.facebook.com/v21.0/FACEBOOK_PAGE_ID/feed",
+                                "method": "post",
+                                "headers": [],
+                                "qs": [
+                                    { "name": "message", "value": "{{2.hook}}\n\n{{2.body}}\n\nApply: {{2.cta_url}}&utm_source=facebook&utm_medium=social&utm_campaign=recruit\n\n{{join(2.hashtags; \" #\")}}" },
+                                    { "name": "access_token", "value": "FACEBOOK_PAGE_ACCESS_TOKEN" }
+                                ],
+                                "bodyType": "raw", "parseResponse": true, "gzip": true, "contentType": "application/json"
+                            },
+                            "metadata": { "designer": { "x": 300, "y": -450 }, "notes": "Facebook Page feed. Same call works for Groups: use /{GROUP_ID}/feed." }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 12,
+                            "module": "http:ActionSendData",
+                            "version": 3,
+                            "parameters": { "handleErrors": true, "useNewZLIB": true },
+                            "mapper": {
+                                "url": "https://api.linkedin.com/v2/ugcPosts",
+                                "method": "post",
+                                "headers": [
+                                    { "name": "Authorization", "value": "Bearer LINKEDIN_ACCESS_TOKEN" },
+                                    { "name": "X-Restli-Protocol-Version", "value": "2.0.0" }
+                                ],
+                                "qs": [],
+                                "bodyType": "raw", "parseResponse": true, "gzip": true, "contentType": "application/json",
+                                "data": "{\n  \"author\": \"urn:li:organization:LINKEDIN_ORG_ID\",\n  \"lifecycleState\": \"PUBLISHED\",\n  \"specificContent\": { \"com.linkedin.ugc.ShareContent\": { \"shareCommentary\": { \"text\": \"{{2.hook}}\\n\\n{{2.body}}\\n\\nApply: {{2.cta_url}}&utm_source=linkedin&utm_medium=social&utm_campaign=recruit\" }, \"shareMediaCategory\": \"NONE\" } },\n  \"visibility\": { \"com.linkedin.ugc.MemberNetworkVisibility\": \"PUBLIC\" }\n}"
+                            },
+                            "metadata": { "designer": { "x": 300, "y": -150 }, "notes": "LinkedIn organization share." }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 17,
+                            "module": "http:ActionSendData",
+                            "version": 3,
+                            "parameters": { "handleErrors": true, "useNewZLIB": true },
+                            "mapper": {
+                                "url": "https://open.tiktokapis.com/v2/post/publish/content/init/",
+                                "method": "post",
+                                "headers": [ { "name": "Authorization", "value": "Bearer TIKTOK_ACCESS_TOKEN" } ],
+                                "qs": [],
+                                "bodyType": "raw", "parseResponse": true, "gzip": true, "contentType": "application/json",
+                                "data": "{\n  \"post_info\": { \"title\": \"{{2.hook}} — Apply: {{2.cta_url}}&utm_source=tiktok&utm_medium=social&utm_campaign=recruit\", \"privacy_level\": \"PUBLIC_TO_EVERYONE\" },\n  \"source_info\": { \"source\": \"PULL_FROM_URL\", \"video_url\": \"YOUR_VIDEO_URL\" }\n}"
+                            },
+                            "metadata": { "designer": { "x": 300, "y": 600 }, "notes": "TikTok requires a video URL. This inits the publish; TikTok processes async." }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 18,
+                            "module": "google-sheets:addRow",
+                            "version": 2,
+                            "parameters": { "__IMTCONN__": 0 },
+                            "mapper": {
+                                "mode": "select",
+                                "insertUnformatted": false,
+                                "valueInputOption": "USER_ENTERED",
+                                "insertDataOption": "INSERT_ROWS",
+                                "spreadsheetId": "YOUR_SPREADSHEET_ID",
+                                "sheetId": "Content Log",
+                                "includesHeaders": true,
+                                "values": {
+                                    "0": "{{now}}",
+                                    "1": "{{2.hook}}",
+                                    "2": "{{2.cta_url}}",
+                                    "3": "{{join(2.hashtags; \" \")}}"
+                                }
+                            },
+                            "metadata": {
+                                "designer": { "x": 300, "y": 750 },
+                                "restore": {},
+                                "notes": "Attribution log. On import: reconnect Google, pick your Spreadsheet, and set a sheet/tab named 'Content Log' with header row: posted_at | hook | cta_url | hashtags. Runs on every schedule tick so you can compare channels against applications by utm_source."
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "metadata": {
+        "instant": false,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": { "orphans": [] },
+        "zone": "eu1.make.com",
+        "notes": [
+            "SCHEDULE this scenario (e.g. daily at 09:00 / 14:00 / 19:00).",
+            "Channels: Facebook (module 10), LinkedIn (module 12), TikTok (module 17), plus a Google Sheets attribution log (module 18).",
+            "Every channel's CTA points to /apply-as-maid?agencyId=1 with a channel-specific utm_source, so the utm params land in the enquiry/application payload for attribution.",
+            "TikTok needs a video (fill YOUR_VIDEO_URL) and processes the publish asynchronously."
+        ]
+    }
+}

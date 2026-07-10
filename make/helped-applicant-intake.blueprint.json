@@ -1,0 +1,276 @@
+{
+    "name": "Helped Maids – Applicant Intake & Recruiter Handoff",
+    "flow": [
+        {
+            "id": 1,
+            "module": "http:ActionSendData",
+            "version": 3,
+            "parameters": {
+                "handleErrors": true,
+                "useNewZLIB": true
+            },
+            "mapper": {
+                "url": "https://YOUR-PROJECT-REF.supabase.co/rest/v1/helped_query_ats_applications",
+                "serializeUrl": false,
+                "method": "get",
+                "headers": [
+                    { "name": "apikey", "value": "SUPABASE_SERVICE_ROLE_KEY" },
+                    { "name": "Authorization", "value": "Bearer SUPABASE_SERVICE_ROLE_KEY" }
+                ],
+                "qs": [
+                    { "name": "select", "value": "application_id,agency_id,profile_id,application_code,status,source,applied_at,payload" },
+                    { "name": "status", "value": "eq.New Applicant" },
+                    { "name": "row_created_at", "value": "gt.{{formatDate(addMinutes(now; -20); \"YYYY-MM-DDTHH:mm:ss\")}}" },
+                    { "name": "order", "value": "applied_at.desc" }
+                ],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "authUser": "",
+                "authPass": "",
+                "timeout": "",
+                "shareCookies": false,
+                "ca": "",
+                "rejectUnauthorized": true,
+                "followRedirect": true,
+                "useQuerystring": false,
+                "gzip": true,
+                "useMtls": false,
+                "contentType": "application/json"
+            },
+            "metadata": {
+                "designer": { "x": -600, "y": 0 },
+                "restore": {},
+                "notes": "POLL: new applicants created in the last 20 min. Run this scenario every 15 min so windows overlap and nothing is missed. Filter matches helped_query_ats_applications columns (see supabase/helped_full_production_schema.sql:359)."
+            }
+        },
+        {
+            "id": 2,
+            "module": "builtin:BasicFeeder",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "array": "{{1.data}}"
+            },
+            "metadata": {
+                "designer": { "x": -300, "y": 0 },
+                "restore": {},
+                "notes": "Iterator: one bundle per new applicant row."
+            }
+        },
+        {
+            "id": 20,
+            "module": "datastore:GetRecord",
+            "version": 1,
+            "parameters": {
+                "datastore": ""
+            },
+            "mapper": {
+                "key": "{{2.application_id}}"
+            },
+            "metadata": {
+                "designer": { "x": -160, "y": 0 },
+                "restore": {},
+                "notes": "DEDUPE 1/2: look up this application_id in a Make Data Store. On import, create a Data Store (structure: key=application_id text, field processed_at text) and select it here. The onerror>Resume below makes a not-found return an empty bundle instead of stopping the flow."
+            },
+            "onerror": [
+                {
+                    "id": 22,
+                    "module": "builtin:Resume",
+                    "version": 1,
+                    "mapper": {
+                        "key": ""
+                    },
+                    "metadata": {
+                        "designer": { "x": -160, "y": 200 },
+                        "restore": {},
+                        "notes": "Not-found guard: resume with an empty key so new applicants (no stored record) pass the filter below."
+                    }
+                }
+            ]
+        },
+        {
+            "id": 21,
+            "module": "datastore:AddReplaceRecord",
+            "version": 1,
+            "parameters": {
+                "datastore": ""
+            },
+            "filter": {
+                "name": "Unprocessed only",
+                "conditions": [
+                    [
+                        { "a": "{{20.key}}", "o": "notexist" }
+                    ]
+                ]
+            },
+            "mapper": {
+                "key": "{{2.application_id}}",
+                "overwrite": true,
+                "record": {
+                    "processed_at": "{{now}}"
+                }
+            },
+            "metadata": {
+                "designer": { "x": -30, "y": 0 },
+                "restore": {},
+                "notes": "DEDUPE 2/2: the filter passes ONLY when no stored record exists for this application_id. Claiming the record here means every later module (profile fetch, Claude, alerts) runs exactly once per applicant, even with overlapping poll windows. Select the same Data Store as module 20."
+            }
+        },
+        {
+            "id": 9,
+            "module": "http:ActionSendData",
+            "version": 3,
+            "parameters": {
+                "handleErrors": true,
+                "useNewZLIB": true
+            },
+            "mapper": {
+                "url": "https://YOUR-PROJECT-REF.supabase.co/rest/v1/helped_query_ats_profiles",
+                "serializeUrl": false,
+                "method": "get",
+                "headers": [
+                    { "name": "apikey", "value": "SUPABASE_SERVICE_ROLE_KEY" },
+                    { "name": "Authorization", "value": "Bearer SUPABASE_SERVICE_ROLE_KEY" }
+                ],
+                "qs": [
+                    { "name": "select", "value": "full_name,email,contact_number,nationality,years_of_experience,expected_salary,payload" },
+                    { "name": "application_id", "value": "eq.{{2.application_id}}" },
+                    { "name": "limit", "value": "1" }
+                ],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "rejectUnauthorized": true,
+                "followRedirect": true,
+                "gzip": true,
+                "useMtls": false,
+                "contentType": "application/json"
+            },
+            "metadata": {
+                "designer": { "x": -30, "y": 0 },
+                "restore": {},
+                "notes": "Fetch the matching profile (helped_query_ats_profiles.application_id)."
+            }
+        },
+        {
+            "id": 4,
+            "module": "http:ActionSendData",
+            "version": 3,
+            "parameters": {
+                "handleErrors": true,
+                "useNewZLIB": true
+            },
+            "mapper": {
+                "url": "https://api.anthropic.com/v1/messages",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [
+                    { "name": "x-api-key", "value": "ANTHROPIC_API_KEY" },
+                    { "name": "anthropic-version", "value": "2023-06-01" }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "rejectUnauthorized": true,
+                "followRedirect": true,
+                "gzip": true,
+                "useMtls": false,
+                "contentType": "application/json",
+                "data": "{\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 600,\n  \"system\": \"You are a recruitment screener for Helped Maids, a Singapore foreign-domestic-worker (FDW) agency. Given an applicant profile, write a concise recruiter briefing: 2-line summary, top strengths, any red flags, and a recommended next stage from this exact ladder: Documents Submitted, Resume Parsed, Screening Interview, Rejected. Return plain text.\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Applicant: {{9.data.1.full_name}}\\nNationality: {{9.data.1.nationality}}\\nYears experience: {{9.data.1.years_of_experience}}\\nExpected salary: {{9.data.1.expected_salary}}\\nContact: {{9.data.1.contact_number}} / {{9.data.1.email}}\\nApplication code: {{2.application_code}}\\nFull payload: {{9.data.1.payload}}\" }\n  ]\n}"
+            },
+            "metadata": {
+                "designer": { "x": 260, "y": 0 },
+                "restore": {},
+                "notes": "AI screening summary (Claude). Model id claude-sonnet-4-6; use claude-opus-4-8 for higher quality."
+            }
+        },
+        {
+            "id": 3,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "parameters": {},
+            "mapper": null,
+            "metadata": {
+                "designer": { "x": 560, "y": 0 }
+            },
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 5,
+                            "module": "gmail:ActionSendEmail",
+                            "version": 1,
+                            "parameters": {
+                                "__IMTCONN__": 0
+                            },
+                            "mapper": {
+                                "to": "wow.aisolution@gmail.com",
+                                "subject": "New FDW Applicant: {{9.data.1.full_name}} ({{2.application_code}}) – Review in ATS",
+                                "html": "<p><strong>New applicant received via the public form.</strong></p><p><strong>Name:</strong> {{9.data.1.full_name}}<br><strong>Nationality:</strong> {{9.data.1.nationality}}<br><strong>Experience:</strong> {{9.data.1.years_of_experience}} yrs<br><strong>Expected salary:</strong> {{9.data.1.expected_salary}}<br><strong>Contact:</strong> {{9.data.1.contact_number}} / {{9.data.1.email}}<br><strong>Code:</strong> {{2.application_code}} &nbsp; <strong>Stage:</strong> {{2.status}}</p><hr><p><strong>AI screening briefing:</strong></p><p>{{replace(4.data.content.1.text; newline; \"<br>\")}}</p><hr><p>Open the recruiter dashboard to advance the stage. Applicant confirmation (WhatsApp + email) was already sent automatically by the web app.</p>"
+                            },
+                            "metadata": {
+                                "designer": { "x": 860, "y": -150 },
+                                "restore": {},
+                                "notes": "Recruiter alert. Reconnect your Gmail account on import. Do NOT email the applicant here – createPublicAtsApplication already queues their confirmation (backend/src/atsStore.ts:987)."
+                            }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 7,
+                            "module": "http:ActionSendData",
+                            "version": 3,
+                            "parameters": {
+                                "handleErrors": true,
+                                "useNewZLIB": true
+                            },
+                            "mapper": {
+                                "url": "https://api.telegram.org/botTELEGRAM_BOT_TOKEN/sendMessage",
+                                "serializeUrl": false,
+                                "method": "post",
+                                "headers": [],
+                                "qs": [],
+                                "bodyType": "raw",
+                                "parseResponse": true,
+                                "rejectUnauthorized": true,
+                                "gzip": true,
+                                "contentType": "application/json",
+                                "data": "{\n  \"chat_id\": \"RECRUITER_TELEGRAM_CHAT_ID\",\n  \"parse_mode\": \"HTML\",\n  \"text\": \"<b>New applicant</b> {{9.data.1.full_name}} ({{2.application_code}})\\n{{9.data.1.nationality}} · {{9.data.1.years_of_experience}}y · exp salary {{9.data.1.expected_salary}}\\n{{4.data.content.1.text}}\"\n}"
+                            },
+                            "metadata": {
+                                "designer": { "x": 860, "y": 150 },
+                                "restore": {},
+                                "notes": "Optional recruiter Telegram channel ping. Replace bot token + chat id."
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "metadata": {
+        "instant": false,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": { "orphans": [] },
+        "zone": "eu1.make.com",
+        "notes": [
+            "SCHEDULE this scenario every 15 minutes (module 1 polls a 20-min window; overlap is safe because of the dedupe below).",
+            "STRICT DEDUPE: modules 20/21 use a Make Data Store keyed on application_id. Create the Data Store once (key: application_id text; field: processed_at text) and select it in BOTH module 20 and module 21 after import. Each applicant is then alerted exactly once, even across overlapping poll windows.",
+            "Do not write applicant confirmations here – the web app (createPublicAtsApplication) already sends WhatsApp + email + internal notifications.",
+            "Stage ladder (backend/src/atsStore.ts:6): New Applicant -> Documents Submitted -> Resume Parsed -> Screening Interview -> Background Check -> Approved -> Ready to Configure Public Profile -> Placed / Rejected."
+        ]
+    }
+}
