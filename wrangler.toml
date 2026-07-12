@@ -45,6 +45,10 @@ AI_AUTOPILOT_ENABLED = "true"
 RESEND_FROM = "Find Maid <no-reply@findmaid.wow-aisolution.workers.dev>"
 DEV_EXPOSE_CONFIRMATION_CODE = "false"
 
+[observability.logs]
+enabled = false
+invocation_logs = true
+
 [ai]
 binding = "AI"
 
