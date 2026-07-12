@@ -77,10 +77,10 @@ const extractRequestedCount = (message: string): number => {
     /\b(?:top|list|show|suggest|recommend|find|give me|need|want|provide)\s+(\d+)\b|\b(\d+)\s+(?:maid|helper|fdw|candidate|suggestion|best)/i,
   );
   if (match) {
-    const n = parseInt(match[1] ?? match[2] ?? "5", 10);
-    return Number.isFinite(n) && n > 0 && n <= 20 ? n : 5;
+    const n = parseInt(match[1] ?? match[2] ?? "10", 10);
+    return Number.isFinite(n) && n > 0 && n <= 20 ? n : 10;
   }
-  return 5;
+  return 10;
 };
 
 const maidSkillScore = (maid: Record<string, unknown>, skills: SkillKey[]): number => {
@@ -524,7 +524,7 @@ export const runAgentTools = (context: AiToolContext) => {
     // Sort: skill match score first (desc), then availability tier (asc)
     const rankedPool = activePool
       .map((m) => ({ m, skill: maidSkillScore(m, requestedSkills), tier: maidTier(m) }))
-      .sort((a, b) => b.skill - a.skill || a.tier - b.tier)
+      .sort((a, b) => b.skill - a.skill || a.tier - b.tier || Number(b.m.id || 0) - Number(a.m.id || 0))
       .map(({ m }) => m);
 
     // Always surface the named maid at position 0 if the user asked about them
@@ -534,7 +534,7 @@ export const runAgentTools = (context: AiToolContext) => {
 
     // Send exactly what was requested (or all available if fewer).
     // The AI lists whatever it receives — it never needs to count itself.
-    const sendCount = Math.min(finalPool.length, requestedCount > 0 ? requestedCount : 5);
+    const sendCount = Math.min(finalPool.length, requestedCount > 0 ? requestedCount : 10);
 
     return {
       contactInfo,

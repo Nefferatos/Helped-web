@@ -8674,6 +8674,17 @@ app.post(
     const maidCardRequest =
       /\b(top|best|show|find|recommend|match|shortlist|list|available|availability|who|which|suitable|have|any|got|need|want|looking|do|can|hire|hiring)\b/i.test(input.message) &&
       /\b(maid|maids|helper|helpers|fdw|filipino|indonesian|myanmar|burmese|indian|sri\s+lankan|bangladeshi|transfer|elderly|childcare|infant|newborn|nanny|babysit|disabled|housework|housekeep|cleaning|cooking|cook|chef|care)\b/i.test(input.message);
+    const requestedCardCountMatch = input.message.match(
+      /\b(?:top|list|show|suggest|recommend|find|give\s+me|need|want|provide)\s+(\d+)\b|\b(\d+)\s+(?:maid|helper|fdw|candidate|suggestion|best)/i,
+    );
+    const parsedRequestedCardCount = Number.parseInt(
+      requestedCardCountMatch?.[1] ?? requestedCardCountMatch?.[2] ?? "10",
+      10,
+    );
+    const requestedCardCount =
+      Number.isFinite(parsedRequestedCardCount) && parsedRequestedCardCount >= 1 && parsedRequestedCardCount <= 20
+        ? parsedRequestedCardCount
+        : 10;
     const genericCardTerms = new Set([
       "available",
       "availability",
@@ -8820,7 +8831,7 @@ app.post(
       featured = featured.filter(matchesRequestedNat);
     }
 
-    if (maidCardRequest && featured.length < 10) {
+    if (maidCardRequest && featured.length < requestedCardCount) {
       const featuredRefs = new Set(
         featured.map((maid) => String((maid as unknown as Record<string, unknown>).referenceCode || "")),
       );
@@ -8843,10 +8854,10 @@ app.post(
           Number(right.maid.id || 0) - Number(left.maid.id || 0),
         )
         .map(({ maid }) => maid);
-      featured = [...featured, ...rankedTopUp].slice(0, 10);
+      featured = [...featured, ...rankedTopUp].slice(0, requestedCardCount);
     }
 
-    const featuredMaids = featured.slice(0, 10).map((maid) => {
+    const featuredMaids = featured.slice(0, requestedCardCount).map((maid) => {
       const r = maid as unknown as Record<string, unknown>;
       const photos = Array.isArray(r.photoDataUrls) ? (r.photoDataUrls as string[]) : [];
       return {
@@ -8862,7 +8873,12 @@ app.post(
     });
 
     // Remove markers from displayed text
-    const cleanedResponse = result.response.replace(/\s*\[MAID:[^\]]+\]/g, "");
+    const cleanedResponse = result.response
+      // Keep the reference code visible so the frontend can reliably pair each
+      // description with its corresponding profile card.
+      .replace(/\s*\[MAID:([^\]]+)\]/g, " ($1)")
+      .replace(/\s*\[MAID:[^\]]*$/g, "")
+      .trim();
 
     return c.json({
       ...result,

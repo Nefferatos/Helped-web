@@ -35,7 +35,7 @@ export const agentDefinitions: Record<AiAgentId, AiAgentDefinition> = {
     audience: "public",
     model: "claude-haiku-4-5-20251001",
     temperature: 0.35,
-    maxTokens: 1200,
+    maxTokens: 2200,
     systemPrompt: `
 ${sharedGuardrails}
 
