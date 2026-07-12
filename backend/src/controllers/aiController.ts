@@ -204,7 +204,7 @@ const GENERIC_SEARCH_TERMS = new Set([
 ])
 
 const FEATURED_MAID_CARD_LIMIT = 10
-const GENERIC_MAID_LIST_CARD_LIMIT = 5
+const GENERIC_MAID_LIST_CARD_LIMIT = 10
 const ALL_MAIDS_OVERVIEW_LIMIT = 60
 
 const CARD_REQUEST_PATTERN =
@@ -678,11 +678,47 @@ const toFeaturedMaid = (maid: MaidRecord) => ({
     null,
 })
 
+const NUMBER_WORD_VALUES: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+}
+
 const extractRequestedCount = (message: string): number | null => {
-  const match = message.match(/\b(?:list|show|top|give\s+me|find|recommend|shortlist)?\s*(\d+)\s*(?:maid|helper|fdw|filipino|myanmar|indonesian|indian|profile)?s?\b/i)
+  const match = message.match(
+    /\b(?:list|show|top|give\s+me|find|recommend|shortlist)?\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s*(?:maid|helper|fdw|filipino|filipina|myanmar|burmese|indonesian|indian|profile)?s?\b/i
+  )
   if (!match) return null
-  const n = parseInt(match[1] ?? '0', 10)
+  const countText = (match[1] ?? '').toLowerCase()
+  const n = /^\d+$/.test(countText) ? parseInt(countText, 10) : NUMBER_WORD_VALUES[countText] ?? 0
   return n >= 1 && n <= 20 ? n : null
+}
+
+const describeRequestedMaidGroup = (message: string): string => {
+  if (/\b(filipino|filipina|philippines?)s?\b/i.test(message)) return 'Filipino helper'
+  if (/\b(indonesian)s?\b/i.test(message)) return 'Indonesian helper'
+  if (/\b(myanmar|burmese)\b/i.test(message)) return 'Myanmar helper'
+  if (/\b(indian)s?\b/i.test(message)) return 'Indian helper'
+  if (/\bsri\s+lankan?s?\b/i.test(message)) return 'Sri Lankan helper'
+  if (/\bbangladeshi?s?\b/i.test(message)) return 'Bangladeshi helper'
+  return 'matching helper'
 }
 
 const pickFeaturedMaidRecords = (message: string, maids: MaidRecord[]) => {
@@ -701,12 +737,10 @@ const pickFeaturedMaidRecords = (message: string, maids: MaidRecord[]) => {
     .filter(({ score }) => terms.length === 0 || score > 0)
     .sort((left, right) => right.score - left.score || right.maid.id - left.maid.id)
 
-  const ordered = genericListRequest
-    ? [
-        ...candidates.filter(({ maid }) => isNewMaid(maid)),
-        ...candidates.filter(({ maid }) => !isNewMaid(maid)),
-      ]
-    : candidates
+  // A generic "list maids" request means recently added records, not maids
+  // whose employment type happens to be "New". The id tie-breaker above
+  // orders these newest-first. Filtered searches retain relevance ordering.
+  const ordered = candidates
 
   return ordered.slice(0, limit).map(({ maid }) => maid)
 }
@@ -1244,6 +1278,7 @@ export const receptionist = async (req: Request, res: Response) => {
     const featuredMaidRecords =
       !isFeeQuestion && shouldShowMaidCards(message) ? pickFeaturedMaidRecords(message, maids) : []
     const featuredMaids = featuredMaidRecords.map(toFeaturedMaid)
+    const requestedCount = extractRequestedCount(message)
 
     const namedMaidResolution = !isFeeQuestion
       ? pickRelevantMaidRecordsForMessage(message, maids, currentMaidReference, conversationId)
@@ -1251,9 +1286,12 @@ export const receptionist = async (req: Request, res: Response) => {
     const namedMaid = namedMaidResolution.maids
     const isResolvedPronounFollowUp = namedMaidResolution.isPronounFollowUp
 
+    // A list reply and its visual cards must always describe the exact same
+    // records. Previously this used a separate relevant-maid search (limit 8),
+    // while cards used their own limit (up to 10), allowing text/card mismatch.
     const relevantMaids = isFeeQuestion
       ? []
-      : featuredMaidRecords.length > 0 && namedMaid.length === 0
+      : featuredMaidRecords.length > 0
       ? featuredMaidRecords
       : namedMaid
 
@@ -1294,10 +1332,23 @@ export const receptionist = async (req: Request, res: Response) => {
       ? buildMaidCardIntro(featuredMaidRecords)
       : aiResponse
 
-    const response =
+    const baseResponse =
       synchronizedMaidResponse ||
       fallbackReceptionistResponse(message, relevantFaqs, featuredMaids, relevantMaids, companyProfile) ||
       "I'm here to help with helper recommendations, hiring questions, and company details. How can I assist you?"
+
+    const hasFewerThanRequested =
+      requestedCount !== null &&
+      shouldShowMaidCards(message) &&
+      featuredMaidRecords.length < requestedCount
+    const availabilityNotice = hasFewerThanRequested
+      ? featuredMaidRecords.length > 0
+        ? `We currently have only ${featuredMaidRecords.length} ${describeRequestedMaidGroup(message)}${featuredMaidRecords.length === 1 ? '' : 's'} available, so I have listed all of them below.`
+        : `We currently do not have any ${describeRequestedMaidGroup(message)}s available.`
+      : ''
+    const response = availabilityNotice
+      ? `${availabilityNotice}\n\n${baseResponse}`
+      : baseResponse
 
     if (relevantMaids.length === 1) {
       setLastDiscussedMaidReference(conversationId, relevantMaids[0]!.referenceCode)

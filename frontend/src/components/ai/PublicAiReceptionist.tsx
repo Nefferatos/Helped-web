@@ -36,6 +36,31 @@ type Message = {
   maids?: FeaturedMaid[];
 };
 
+const splitMaidDescriptions = (text: string, maids?: FeaturedMaid[]) => {
+  if (!maids || maids.length < 2) return null;
+
+  const blocks = text.split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean);
+  const descriptions = new Map<string, string>();
+  const general: string[] = [];
+  const closing: string[] = [];
+
+  blocks.forEach((block) => {
+    const maid = maids.find((item) => block.includes(item.referenceCode));
+    if (maid) {
+      descriptions.set(maid.referenceCode, block);
+    } else if (/tap any profile card|ask me about a specific helper/i.test(block)) {
+      closing.push(block);
+    } else {
+      general.push(block);
+    }
+  });
+
+  // Only switch to interleaved rendering when every card has a matching
+  // description. Otherwise retain the original safe text-then-cards layout.
+  if (maids.some((maid) => !descriptions.has(maid.referenceCode))) return null;
+  return { general: general.join("\n\n"), descriptions, closing: closing.join("\n\n") };
+};
+
 /* ── Nationality flags ─────────────────────────────────────────────────────── */
 
 const NAT_FLAGS: Record<string, string> = {
@@ -67,7 +92,7 @@ function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: bool
         borderColor: "rgba(14,78,94,0.18)",
         boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
         width: "100%",
-        maxWidth: 300,
+        maxWidth: "100%",
       }}
     >
       <div className="flex items-start gap-3 p-3">
@@ -76,17 +101,18 @@ function AiMaidCard({ maid, isLoggedIn }: { maid: FeaturedMaid; isLoggedIn: bool
           className="relative flex-shrink-0 overflow-hidden rounded-lg"
           style={{ width: 64, height: 80, background: "#edf8fb" }}
         >
+          <div className="absolute inset-0 flex h-full w-full items-center justify-center">
+            <User className="h-7 w-7" style={{ color: "#6e8f9a" }} />
+          </div>
           {photo ? (
             <img
               src={photo}
-              alt={maid.fullName}
+              alt=""
+              onError={(event) => { event.currentTarget.style.display = "none"; }}
+              className="absolute inset-0"
               style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }}
             />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <User className="h-7 w-7" style={{ color: "#6e8f9a" }} />
-            </div>
-          )}
+          ) : null}
           {!isLoggedIn && (
             <div
               className="absolute inset-0 flex items-center justify-center"
@@ -916,7 +942,7 @@ export default function PublicAiReceptionist() {
                                 }),
                           }}
                         >
-                          {msg.text}
+                          {splitMaidDescriptions(msg.text, msg.maids)?.general || msg.text}
                         </div>
                       </div>
 
@@ -926,9 +952,27 @@ export default function PublicAiReceptionist() {
                           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#6b7280" }}>
                             Available Helpers
                           </p>
-                          {msg.maids.map((maid) => (
-                            <AiMaidCard key={maid.referenceCode} maid={maid} isLoggedIn={isLoggedIn} />
-                          ))}
+                          {msg.maids.map((maid) => {
+                            const interleaved = splitMaidDescriptions(msg.text, msg.maids);
+                            return (
+                              <div key={maid.referenceCode} className="flex flex-col gap-2">
+                                {interleaved?.descriptions.get(maid.referenceCode) && (
+                                  <div
+                                    className="text-[13px] leading-relaxed whitespace-pre-wrap rounded-xl border px-3 py-2.5"
+                                    style={{ background: "#fff", color: "#0A2830", borderColor: "rgba(252,211,77,0.22)" }}
+                                  >
+                                    {interleaved.descriptions.get(maid.referenceCode)}
+                                  </div>
+                                )}
+                                <AiMaidCard maid={maid} isLoggedIn={isLoggedIn} />
+                              </div>
+                            );
+                          })}
+                          {splitMaidDescriptions(msg.text, msg.maids)?.closing && (
+                            <p className="text-[12px] leading-relaxed" style={{ color: "#3d5c66" }}>
+                              {splitMaidDescriptions(msg.text, msg.maids)?.closing}
+                            </p>
+                          )}
                           {!isLoggedIn && (
                             <p className="text-[11px]" style={{ color: "#9ca3af", paddingLeft: 2 }}>
                               🔒 Login to view full profiles and contact details

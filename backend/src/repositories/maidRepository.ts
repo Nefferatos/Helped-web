@@ -10,6 +10,31 @@ const sanitizeInt = (value: unknown): number => {
   return 0
 }
 
+const sanitizeDate = (value: unknown): string => {
+  if (typeof value !== 'string') {
+    return '2000-01-01'
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return '2000-01-01'
+  }
+
+  const maybeDate = new Date(trimmed)
+  if (Number.isNaN(maybeDate.getTime())) {
+    return '2000-01-01'
+  }
+
+  const iso = maybeDate.toISOString().slice(0, 10)
+  const [year, month, day] = iso.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return '2000-01-01'
+  }
+
+  return iso
+}
+
 export interface SqlMaidRecord {
   id: number
   agencyId: number
@@ -228,6 +253,23 @@ const buildMaidWhereClause = (filters: MaidListFilters) => {
   }
 }
 
+const serializeJsonbValue = (value: unknown) => {
+  if (value === undefined || value === null) {
+    return 'null'
+  }
+
+  if (typeof value === 'string') {
+    try {
+      JSON.parse(value)
+      return value
+    } catch {
+      return JSON.stringify(value)
+    }
+  }
+
+  return JSON.stringify(value)
+}
+
 const maidValues = (payload: SqlMaidPayload, agencyId: number) => [
   agencyId,
   payload.fullName,
@@ -235,7 +277,7 @@ const maidValues = (payload: SqlMaidPayload, agencyId: number) => [
   payload.status ?? 'available',
   payload.type,
   payload.nationality,
-  payload.dateOfBirth,
+  sanitizeDate(payload.dateOfBirth),
   payload.placeOfBirth,
   sanitizeInt(payload.height),
   sanitizeInt(payload.weight),
@@ -246,13 +288,13 @@ const maidValues = (payload: SqlMaidPayload, agencyId: number) => [
   payload.homeAddress,
   payload.airportRepatriation,
   payload.educationLevel,
-  JSON.stringify(payload.languageSkills ?? {}),
-  JSON.stringify(payload.skillsPreferences ?? {}),
-  JSON.stringify(payload.workAreas ?? {}),
-  JSON.stringify(payload.employmentHistory ?? []),
-  JSON.stringify(payload.introduction ?? {}),
-  JSON.stringify(payload.agencyContact ?? {}),
-  payload.photoDataUrls ?? [],
+  serializeJsonbValue(payload.languageSkills ?? {}),
+  serializeJsonbValue(payload.skillsPreferences ?? {}),
+  serializeJsonbValue(payload.workAreas ?? {}),
+  serializeJsonbValue(payload.employmentHistory ?? []),
+  serializeJsonbValue(payload.introduction ?? {}),
+  serializeJsonbValue(payload.agencyContact ?? {}),
+  serializeJsonbValue(payload.photoDataUrls ?? []),
   payload.photoDataUrl ?? '',
   payload.videoDataUrl ?? '',
   payload.isPublic ?? false,
@@ -425,7 +467,7 @@ export const updateMaidSql = async (
         payload.status ?? 'available',
         payload.type,
         payload.nationality,
-        payload.dateOfBirth,
+        sanitizeDate(payload.dateOfBirth),
         payload.placeOfBirth,
         payload.height,
         payload.weight,
@@ -566,7 +608,7 @@ export const upsertMaidRecordsSql = async (
         const baseIndex = params.length
         params.push(...values)
         placeholders.push(
-          `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}::date, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, $${baseIndex + 12}, $${baseIndex + 13}, $${baseIndex + 14}, $${baseIndex + 15}, $${baseIndex + 16}, $${baseIndex + 17}, $${baseIndex + 18}::jsonb, $${baseIndex + 19}::jsonb, $${baseIndex + 20}::jsonb, $${baseIndex + 21}::jsonb, $${baseIndex + 22}::jsonb, $${baseIndex + 23}::jsonb, $${baseIndex + 24}, $${baseIndex + 25}, $${baseIndex + 26}, $${baseIndex + 27}, $${baseIndex + 28})`
+          `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}::date, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, $${baseIndex + 12}, $${baseIndex + 13}, $${baseIndex + 14}, $${baseIndex + 15}, $${baseIndex + 16}, $${baseIndex + 17}, $${baseIndex + 18}::jsonb, $${baseIndex + 19}::jsonb, $${baseIndex + 20}::jsonb, $${baseIndex + 21}::jsonb, $${baseIndex + 22}::jsonb, $${baseIndex + 23}::jsonb, $${baseIndex + 24}::jsonb, $${baseIndex + 25}, $${baseIndex + 26}, $${baseIndex + 27}, $${baseIndex + 28})`
         )
       }
 
