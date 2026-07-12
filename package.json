@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
-    "build": "npm run build --prefix frontend",
+    "build": "npm ci --prefix frontend && npm run build --prefix frontend",
     "build:full": "npm run build --prefix backend && npm run build --prefix frontend",
     "test:ai": "node scripts/ai-integration-tests.mjs --target=both",
     "test:ai:local": "node scripts/ai-integration-tests.mjs --target=local",
