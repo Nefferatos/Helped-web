@@ -75,11 +75,14 @@ type DispatchCampaignLog = {
   emailsSent: number;
   whatsappQueued: number;
   skipped: number;
+  errors?: string[];
 };
 
 type AutonomousStatus = {
   scannedAt: string;
   opportunitiesFound: number;
+  aiUsed?: boolean;
+  model?: string;
   campaigns: DispatchCampaignLog[];
   emailsTotal: number;
   whatsappTotal: number;
@@ -599,7 +602,13 @@ export default function AiDirectMarketingPage() {
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-emerald-900">Last autonomous dispatch</p>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+                    Last autonomous dispatch
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${autonomousStatus.aiUsed ? "border-violet-200 bg-violet-50 text-violet-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                      <Sparkles className="h-3 w-3" />
+                      {autonomousStatus.aiUsed ? `AI copy · ${autonomousStatus.model ?? "Claude"}` : "Template copy (no API key)"}
+                    </span>
+                  </p>
                   <p className="text-xs text-emerald-700">
                     {timeAgo(autonomousStatus.scannedAt)} · {autonomousStatus.opportunitiesFound} opportunit{autonomousStatus.opportunitiesFound !== 1 ? "ies" : "y"} found
                     · <span className="font-medium">{autonomousStatus.emailsTotal} email{autonomousStatus.emailsTotal !== 1 ? "s" : ""} sent</span>
@@ -613,12 +622,21 @@ export default function AiDirectMarketingPage() {
               {autonomousStatus.campaigns.length > 0 && (
                 <div className="divide-y">
                   {autonomousStatus.campaigns.map((c, i) => (
-                    <div key={i} className="flex items-center gap-4 px-5 py-2.5 text-xs">
-                      <span className="w-24 shrink-0 font-semibold text-foreground capitalize">{c.goal.replace("_", " ")}</span>
-                      <span className="text-muted-foreground">{c.totalContacts} contacts</span>
-                      {c.emailsSent > 0 && <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-blue-700 font-medium">{c.emailsSent} emailed</span>}
-                      {c.whatsappQueued > 0 && <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-emerald-700 font-medium">{c.whatsappQueued} WA sent</span>}
-                      {c.skipped > 0 && <span className="text-muted-foreground/60">{c.skipped} skipped</span>}
+                    <div key={i} className="px-5 py-2.5 text-xs">
+                      <div className="flex items-center gap-4">
+                        <span className="w-24 shrink-0 font-semibold text-foreground capitalize">{c.goal.replace("_", " ")}</span>
+                        <span className="text-muted-foreground">{c.totalContacts} contacts</span>
+                        {c.emailsSent > 0 && <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-blue-700 font-medium">{c.emailsSent} emailed</span>}
+                        {c.whatsappQueued > 0 && <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-emerald-700 font-medium">{c.whatsappQueued} WA sent</span>}
+                        {c.skipped > 0 && <span className="text-muted-foreground/60">{c.skipped} skipped</span>}
+                      </div>
+                      {c.errors && c.errors.length > 0 && (
+                        <ul className="mt-1.5 space-y-0.5 pl-24">
+                          {c.errors.map((err, j) => (
+                            <li key={j} className="text-[11px] text-red-600">⚠ {err}</li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   ))}
                 </div>

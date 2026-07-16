@@ -455,6 +455,9 @@ type Bindings = {
   SUPABASE_USE_NORMALIZED?: string;
   SUPABASE_STORAGE_BUCKET?: string;
   ANTHROPIC_API_KEY?: string;
+  // Claude model used for marketing copy (and other Anthropic calls that read it).
+  // Defaults to claude-haiku-4-5 when unset — see marketingModel().
+  ANTHROPIC_MODEL?: string;
   AI_AUTOPILOT_ENABLED?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
@@ -9122,9 +9125,19 @@ const MARKETING_LOG_KEY = "marketing-last-run.json";
 const MARKETING_CONTACTS_KEY = "marketing-contacts-sent.json";
 const MARKETING_COOLDOWN_MS = 7 * 86_400_000; // 7 days between messages per contact
 
+// Claude model for marketing copy. Configurable via ANTHROPIC_MODEL; short
+// WhatsApp/email blurbs run fine on Haiku, so that's the default.
+const DEFAULT_MARKETING_MODEL = "claude-haiku-4-5";
+const marketingModel = (env: Bindings): string =>
+  env.ANTHROPIC_MODEL?.trim() || DEFAULT_MARKETING_MODEL;
+
+const errMsg = (e: unknown): string => (e instanceof Error ? e.message : "send failed");
+
 type MarketingDispatchResult = {
   scannedAt: string;
   opportunitiesFound: number;
+  aiUsed: boolean;
+  model: string;
   campaigns: Array<{
     goal: string;
     audience: string;
@@ -9132,6 +9145,7 @@ type MarketingDispatchResult = {
     emailsSent: number;
     whatsappQueued: number;
     skipped: number;
+    errors: string[];
   }>;
   emailsTotal: number;
   whatsappTotal: number;
@@ -9147,15 +9161,17 @@ const buildWhatsAppLinkMarketing = (phone: string, message: string): string => {
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 };
 
-const goalMetaMarketing = (goal: string) =>
-  ({
-    new_arrivals: { subject: "New Domestic Helpers Now Available – Helped Maids", hook: "We are pleased to inform you that new domestic helpers have recently joined our agency and are ready for placement.", emoji: "✨" },
+const goalMetaMarketing = (goal: string, agencyName: string) => {
+  const meta: Record<string, { subject: string; hook: string; emoji: string }> = {
+    new_arrivals: { subject: `New Domestic Helpers Now Available – ${agencyName}`, hook: "We are pleased to inform you that new domestic helpers have recently joined our agency and are ready for placement.", emoji: "✨" },
     re_engage:   { subject: "We Are Here to Help – Qualified Helpers Available", hook: "We wanted to follow up and let you know that we still have highly qualified domestic helpers ready for placement.", emoji: "👋" },
-    follow_up:   { subject: "Following Up on Your Enquiry – Helped Maids", hook: "We hope this message finds you well. We would like to follow up on your recent enquiry and ensure all your questions have been addressed.", emoji: "📋" },
-    holiday:     { subject: "Season's Greetings from Helped Maids", hook: "On behalf of our entire team, we wish you and your family a joyful and restful celebration.", emoji: "🎊" },
+    follow_up:   { subject: `Following Up on Your Enquiry – ${agencyName}`, hook: "We hope this message finds you well. We would like to follow up on your recent enquiry and ensure all your questions have been addressed.", emoji: "📋" },
+    holiday:     { subject: `Season's Greetings from ${agencyName}`, hook: "On behalf of our entire team, we wish you and your family a joyful and restful celebration.", emoji: "🎊" },
     promotion:   { subject: "Priority Placement Opportunity – Limited Availability", hook: "We have a limited number of placement slots available and would like to offer you priority access.", emoji: "⭐" },
-    custom:      { subject: "An Update from Helped Maids", hook: "We have an important update we would like to share with you.", emoji: "💬" },
-  }[goal] ?? { subject: "Update from Helped Maids", hook: "We have something we would like to share with you.", emoji: "" });
+    custom:      { subject: `An Update from ${agencyName}`, hook: "We have an important update we would like to share with you.", emoji: "💬" },
+  };
+  return meta[goal] ?? { subject: `Update from ${agencyName}`, hook: "We have something we would like to share with you.", emoji: "" };
+};
 
 const generateMarketingTemplate = async (
   goal: string,
@@ -9164,8 +9180,10 @@ const generateMarketingTemplate = async (
   agencyPhone: string,
   featuredNames: string[],
   anthropicApiKey: string | undefined,
+  model: string,
+  customNote?: string,
 ): Promise<string> => {
-  const meta = goalMetaMarketing(goal);
+  const meta = goalMetaMarketing(goal, agencyName);
   const emojiPrefix = tone === "professional" ? "" : `${meta.emoji} `;
   const highlight = featuredNames.slice(0, 2).join(" and ");
   const fallback = `Hi {{name}},\n\n${emojiPrefix}${meta.hook}${highlight ? ` Meet ${highlight} — available now.` : ""}\n\nContact us at {{agencyPhone}} — ${agencyName}.`;
@@ -9180,7 +9198,7 @@ const generateMarketingTemplate = async (
   };
 
   const systemPrompt = `You are a professional client relations specialist for a licensed Singapore domestic helper placement agency. Write ONE polished outreach message. FORMAT: Open with "Dear {{name}}," on its own line, blank line, 2-3 professional sentences that are warm but formal, closing with "Please do not hesitate to contact us at {{agencyPhone}}.", blank line, "Warm regards," then the agency name. Max 320 characters total. Respond with ONLY the message text, nothing else.`;
-  const userPrompt = `Goal: ${meta.subject}. Tone: ${toneMap[tone] ?? toneMap.warm}. Agency: ${agencyName}. Phone: ${agencyPhone || "our number"}.${highlight ? ` Available helpers: ${highlight}.` : ""}`;
+  const userPrompt = `Goal: ${meta.subject}. Tone: ${toneMap[tone] ?? toneMap.warm}. Agency: ${agencyName}. Phone: ${agencyPhone || "our number"}.${highlight ? ` Available helpers: ${highlight}.` : ""}${customNote?.trim() ? ` Additional instructions from the agency (follow these closely): ${customNote.trim()}` : ""}`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -9191,7 +9209,7 @@ const generateMarketingTemplate = async (
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model,
         max_tokens: 350,
         temperature: 0.4,
         system: systemPrompt,
@@ -9299,10 +9317,13 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
     } catch {}
   }
 
+  const model = marketingModel(env);
   const opportunities = detectMarketingOpportunities(data);
   const result: MarketingDispatchResult = {
     scannedAt,
     opportunitiesFound: opportunities.length,
+    aiUsed: Boolean(env.ANTHROPIC_API_KEY),
+    model,
     campaigns: [],
     emailsTotal: 0,
     whatsappTotal: 0,
@@ -9320,8 +9341,16 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
     const contacts = buildAudienceMarketing(data, opp.audience);
     if (contacts.length === 0) continue;
 
-    const meta = goalMetaMarketing(opp.goal);
+    const meta = goalMetaMarketing(opp.goal, agencyName);
+    // Generate the campaign copy with Claude ONCE per campaign, then personalise
+    // the {{name}}/{{agencyPhone}} placeholders per contact. Make/Resend just
+    // relay the finished text — Claude, not Groq, writes every message.
+    const template = await generateMarketingTemplate(
+      opp.goal, opp.tone, agencyName, agencyPhone,
+      featuredMaids.map((m) => m.fullName), env.ANTHROPIC_API_KEY, model,
+    );
     let emailsSent = 0, whatsappQueued = 0, skipped = 0;
+    const errorSet = new Set<string>();
 
     for (const contact of contacts) {
       // Per-contact 7-day cooldown — skip if messaged recently
@@ -9331,6 +9360,9 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
         continue;
       }
 
+      const message = template
+        .replace(/\{\{name\}\}/g, contact.name)
+        .replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
       let sent = false;
 
       if (contact.phone && makeUrl) {
@@ -9346,40 +9378,42 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
               agencyName,
               agencyPhone,
               maidHighlights,
+              message, // Claude-written copy — Make should relay this verbatim
             }),
             signal: AbortSignal.timeout(5000),
           });
           whatsappQueued++;
           sent = true;
-        } catch { skipped++; }
+        } catch (e) { skipped++; errorSet.add(`whatsapp: ${errMsg(e)}`); }
+      } else if (contact.email && makeUrl) {
+        try {
+          await fetch(makeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              scenario: "email_marketing",
+              to: contact.email,
+              contactName: contact.name,
+              subject: meta.subject,
+              goal: opp.goal,
+              agencyName,
+              agencyPhone,
+              maidHighlights,
+              message, // Claude-written copy — Make should relay this verbatim
+            }),
+            signal: AbortSignal.timeout(5000),
+          });
+          emailsSent++;
+          sent = true;
+        } catch (e) { skipped++; errorSet.add(`email: ${errMsg(e)}`); }
       } else if (contact.email) {
-        if (makeUrl) {
-          try {
-            await fetch(makeUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                scenario: "email_marketing",
-                to: contact.email,
-                contactName: contact.name,
-                subject: meta.subject,
-                goal: opp.goal,
-                agencyName,
-                agencyPhone,
-                maidHighlights,
-              }),
-              signal: AbortSignal.timeout(5000),
-            });
-            emailsSent++;
-            sent = true;
-          } catch { skipped++; }
-        } else {
-          const template = await generateMarketingTemplate(opp.goal, opp.tone, agencyName, agencyPhone, featuredMaids.map((m) => m.fullName), env.ANTHROPIC_API_KEY);
-          const personalized = template.replace(/\{\{name\}\}/g, contact.name).replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
-          const emailResult = await sendEmailViaResend(env, contact.email, meta.subject, personalized);
-          if (emailResult.ok) { emailsSent++; sent = true; }
-          else skipped++;
-        }
+        const emailResult = await sendEmailViaResend(env, contact.email, meta.subject, message);
+        if (emailResult.ok) { emailsSent++; sent = true; }
+        else { skipped++; errorSet.add(`resend: ${emailResult.error}`); }
+      } else if (contact.phone) {
+        // Phone-only contact but no Make webhook — nothing can dispatch it.
+        skipped++;
+        errorSet.add("WhatsApp contact skipped: MAKE_WEBHOOK_URL not configured");
       } else {
         skipped++;
       }
@@ -9391,7 +9425,7 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
       await new Promise((r) => setTimeout(r, 1000));
     }
 
-    result.campaigns.push({ goal: opp.goal, audience: opp.audience, totalContacts: contacts.length, emailsSent, whatsappQueued, skipped });
+    result.campaigns.push({ goal: opp.goal, audience: opp.audience, totalContacts: contacts.length, emailsSent, whatsappQueued, skipped, errors: [...errorSet].slice(0, 5) });
     result.emailsTotal += emailsSent;
     result.whatsappTotal += whatsappQueued;
   }
@@ -9468,14 +9502,15 @@ const buildDmCampaign = async (
   tone: string,
   audienceType: string,
   maidRefs: string[],
+  customNote?: string,
 ): Promise<DmCampaign> => {
   const agencyPhone = cleanPhoneForMake(data.companyProfile?.social_whatsapp_number?.trim() ?? data.companyProfile?.contact_phone?.trim() ?? "");
   const agencyName = data.companyProfile?.company_name?.trim() ?? data.companyProfile?.short_name?.trim() ?? "Our Agency";
   const featured = maidRefs.length > 0
     ? data.maids.filter((m) => maidRefs.includes(m.referenceCode))
     : data.maids.filter((m) => m.isPublic).slice(0, 2);
-  const template = await generateMarketingTemplate(goal, tone, agencyName, agencyPhone, featured.map((m) => m.fullName), env.ANTHROPIC_API_KEY);
-  const meta = goalMetaMarketing(goal);
+  const template = await generateMarketingTemplate(goal, tone, agencyName, agencyPhone, featured.map((m) => m.fullName), env.ANTHROPIC_API_KEY, marketingModel(env), customNote);
+  const meta = goalMetaMarketing(goal, agencyName);
   const contacts = buildDetailedContacts(data, audienceType);
   const messages: DmMessage[] = contacts.map((contact) => {
     const msg = template.replace(/\{\{name\}\}/g, contact.name).replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
@@ -9595,7 +9630,7 @@ app.post(
     const audienceType = body?.audienceType ?? "all_contacts";
     const maidRefs = body?.maidReferences ?? [];
     const data = await loadData(c.env, { readOnly: true });
-    const campaign = await buildDmCampaign(c.env, data, goal, tone, audienceType, maidRefs);
+    const campaign = await buildDmCampaign(c.env, data, goal, tone, audienceType, maidRefs, body?.customNote);
     await saveCampaignSummary(c.env, campaign);
     return c.json({ campaign });
   }),

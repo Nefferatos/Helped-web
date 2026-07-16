@@ -37,6 +37,12 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 AI_AUTOPILOT_ENABLED = "true"
 
+# Claude model for AI Marketing copy (and other Anthropic calls that read it).
+# Defaults to claude-haiku-4-5 in code when unset — cheap/fast, suited to short
+# WhatsApp/email blurbs. Bump to claude-sonnet-5 or claude-opus-4-8 for higher
+# writing quality. The ANTHROPIC_API_KEY itself is a secret: npx wrangler secret put ANTHROPIC_API_KEY
+ANTHROPIC_MODEL = "claude-haiku-4-5"
+
 # Email confirmations — requires Resend account + verified domain.
 # Steps: 1) Sign up at resend.com  2) Verify your domain  3) Run:
 #   npx wrangler secret put RESEND_API_KEY
