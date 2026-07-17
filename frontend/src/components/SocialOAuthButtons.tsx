@@ -54,7 +54,7 @@ const SocialOAuthButtons = ({ disabled, enableFacebook = false, redirectTo }: Pr
         Continue with Google
       </Button>
 
-      {/* {enableFacebook && (
+      {enableFacebook && (
         <Button
           type="button"
           variant="outline"
@@ -66,7 +66,7 @@ const SocialOAuthButtons = ({ disabled, enableFacebook = false, redirectTo }: Pr
           <FacebookIcon />
           Continue with Facebook
         </Button>
-      )} */}
+      )}
     </div>
   );
 };
