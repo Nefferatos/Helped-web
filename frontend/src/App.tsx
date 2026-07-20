@@ -22,6 +22,8 @@ import {
 } from "@/lib/supabaseAuth";
 import { adminPath } from "@/lib/routes";
 import ProtectedClientRoute from "@/components/ProtectedClientRoute";
+import SeoMetadata from "@/components/SeoMetadata";
+import ClientLandingPage from "@/ClientPage/ClientLandingPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,7 +82,6 @@ const ClientEmployerLogin = lazyRoute(() => import("@/ClientPage/ClientEmployerL
 const ClientSupportChat = lazyRoute(() => import("@/ClientPage/ClientSupportChat"));
 const ClientDashboard = lazyRoute(() => import("@/ClientPage/ClientDashboard"));
 const ClientHistoryPage = lazyRoute(() => import("@/ClientPage/ClientHistoryPage"));
-const ClientLandingPage = lazyRoute(() => import("@/ClientPage/ClientLandingPage"));
 const ClientMaidsPage = lazyRoute(() => import("@/ClientPage/ClientMaidsPage"));
 const MaidSearchPage = lazyRoute(() => import("@/ClientPage/MaidSearchPage"));
 const ClientProfilePage = lazyRoute(() => import("@/ClientPage/ClientProfilePage"));
@@ -188,9 +189,9 @@ const AdminIndexRedirect = () => {
 };
 
 const ClientHomeRedirect = () => {
-  const [status, setStatus] = useState<"checking" | "portal" | "landing">(
-    "checking",
-  );
+  // Public content should paint immediately. Session restoration can happen in
+  // the background and redirect authenticated clients once it resolves.
+  const [status, setStatus] = useState<"portal" | "landing">("landing");
 
   useEffect(() => {
     let cancelled = false;
@@ -212,18 +213,21 @@ const ClientHomeRedirect = () => {
     };
   }, []);
 
-  if (status === "checking") {
-    return <RouteLoader />;
-  }
-
   return status === "portal" ? <Navigate to="/client/home" replace /> : <ClientLandingPage />;
 };
 
 const FloatingAiReceptionist = () => {
   const location = useLocation();
   const pathname = location.pathname.replace(/\/+$/, "");
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setReady(true), 3_000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   if (
+    !ready ||
     pathname === "/client/support-chat" ||
     pathname === "/employer-login" ||
     pathname.startsWith("/apply-as-maid")
@@ -308,6 +312,7 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <SeoMetadata />
           <Routes>
             <Route path="/employer-login" element={withRouteLoader(<ClientEmployerLogin />)} />
             <Route path="/auth/callback" element={withRouteLoader(<AuthCallback />)} />

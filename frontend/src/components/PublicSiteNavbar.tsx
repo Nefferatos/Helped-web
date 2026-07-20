@@ -241,8 +241,10 @@ const PublicSiteNavbar = () => {
         {/* Logo */}
         <Link to="/" className="flex shrink-0 items-center group">
           <img
-            src="/FM_logo.png"
+            src="/FM_logo.webp"
             alt="Find Maids At The Agency"
+            width="300"
+            height="123"
             className="h-11 w-auto object-contain md:h-[58px] transition-transform duration-200 group-hover:scale-[1.03]"
           />
         </Link>

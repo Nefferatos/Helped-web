@@ -31,27 +31,33 @@ export default defineConfig(({ mode }) => ({
             return;
           }
 
-          if (id.includes("react") || id.includes("scheduler")) {
+          const normalizedId = id.replace(/\\/g, "/");
+
+          if (
+            normalizedId.includes("/node_modules/react/") ||
+            normalizedId.includes("/node_modules/react-dom/") ||
+            normalizedId.includes("/node_modules/scheduler/")
+          ) {
             return "react-vendor";
           }
 
-          if (id.includes("@supabase")) {
-            return "supabase";
-          }
-
-          if (id.includes("react-router")) {
+          if (normalizedId.includes("/node_modules/react-router")) {
             return "router";
           }
 
-          if (id.includes("@radix-ui")) {
-            return "radix";
-          }
-
-          if (id.includes("@tanstack")) {
+          if (normalizedId.includes("/node_modules/@tanstack/")) {
             return "query";
           }
 
-          if (id.includes("xlsx") || id.includes("jszip") || id.includes("pdf-lib")) {
+          if (normalizedId.includes("/node_modules/@supabase/")) {
+            return "supabase";
+          }
+
+          if (
+            normalizedId.includes("/node_modules/xlsx/") ||
+            normalizedId.includes("/node_modules/jszip/") ||
+            normalizedId.includes("/node_modules/pdf-lib/")
+          ) {
             return "document-tools";
           }
         },

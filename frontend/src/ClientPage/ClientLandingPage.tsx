@@ -506,10 +506,20 @@ const GLOBAL_STYLES = `
     margin: 12px 0 0;
   }
 
+  /* Skip layout and paint work for sections outside the initial viewport. */
+  #search,
+  #services,
+  #why,
+  footer {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 800px;
+  }
+
   /* ── Responsive ── */
   @media (max-width: 900px) {
     .hero-grid     { grid-template-columns: 1fr !important; }
     .hero-image-col { display: none !important; }
+    .hero-copy { animation: none !important; }
     .stats-grid    { grid-template-columns: repeat(2,1fr) !important; }
     .hero-h1       { font-size: clamp(2rem, 8vw, 3rem) !important; }
     .why-grid      { grid-template-columns: 1fr !important; }
@@ -1094,7 +1104,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center" }}>
 
             {/* ── Left copy ── */}
-            <div style={{ animation: "slideInLeft 0.75s ease both" }}>
+            <div className="hero-copy" style={{ animation: "slideInLeft 0.75s ease both" }}>
               {/* Trust badges */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 32 }}>
                 {[
