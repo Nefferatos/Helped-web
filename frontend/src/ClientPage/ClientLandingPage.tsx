@@ -13,20 +13,18 @@ import { getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAu
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
 import { syncClientProfileFromSession } from "@/lib/supabaseAuth";
-import culinaryImg from "./assets/culinary.png";
-import elderlyImg from "./assets/elderly-care.png";
+import culinaryImg from "./assets/culinary-optimized.webp";
+import elderlyImg from "./assets/elderly-care-optimized.webp";
 import familyImg from "./assets/family.jpg";
-import heroImage from "./assets/maid1.png";
-import housekeepingImg from "./assets/housekeeping.png";
-import infantImg from "./assets/infant-care.png";
+import heroImage from "./assets/maid1-optimized.webp";
+import housekeepingImg from "./assets/housekeeping-optimized.webp";
+import infantImg from "./assets/infant-care-optimized.webp";
 import "./ClientTheme.css";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    GLOBAL STYLES
 ───────────────────────────────────────────────────────────────────────────── */
 const GLOBAL_STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700;1,800&family=Inter:wght@300;400;500;600;700&display=swap');
-
   :root {
     --teal:        #0E4E5E;
     --teal-deep:   #0B3340;
@@ -1192,7 +1190,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 boxShadow: "0 40px 90px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)",
                 zIndex: 1,
               }}>
-                <img src={heroImage} alt="Professional domestic helper" fetchPriority="high" decoding="async"
+                <img src={heroImage} alt="Professional domestic helper" width="900" height="491"
+                  fetchPriority="high" decoding="async"
                   style={{ display: "block", width: "100%", objectFit: "cover", height: "clamp(280px,42vw,520px)" }} />
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: "linear-gradient(to top, rgba(11,51,64,0.85) 0%, transparent 100%)" }} />
                 {/* Teal left-edge accent */}

@@ -21,14 +21,7 @@ import {
   syncClientProfileFromSession,
 } from "@/lib/supabaseAuth";
 import { adminPath } from "@/lib/routes";
-import PublicAiReceptionist from "@/components/ai/PublicAiReceptionist";
 import ProtectedClientRoute from "@/components/ProtectedClientRoute";
-
-// FIX: Import ClientPortalLayout eagerly so it doesn't cause a second
-// sequential chunk fetch when the user first hits any /client/* route.
-// The layout is a lightweight shell that's always needed on the portal —
-// making it lazy only adds a waterfall without saving meaningful bytes.
-import ClientPortalLayout from "@/ClientPage/ClientPortalLayout";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -100,6 +93,8 @@ const Enquiry2 = lazyRoute(() => import("./ClientPage/Enquiry"));
 const ServiceDetail = lazyRoute(() => import("./ClientPage/ServiceDetails"));
 const FaqPage = lazyRoute(() => import("./ClientPage/FAQPage"));
 const AgencyPortal = lazyRoute(() => import("./ClientPage/AgencyPortal"));
+const ClientPortalLayout = lazyRoute(() => import("@/ClientPage/ClientPortalLayout"));
+const PublicAiReceptionist = lazyRoute(() => import("@/components/ai/PublicAiReceptionist"));
 ;
 
 const AdminShell = ({ children }: { children: ReactNode }) => <AppLayout>{children}</AppLayout>;
@@ -234,7 +229,11 @@ const FloatingAiReceptionist = () => {
     pathname.startsWith("/apply-as-maid")
   ) return null;
 
-  return <PublicAiReceptionist />;
+  return (
+    <Suspense fallback={null}>
+      <PublicAiReceptionist />
+    </Suspense>
+  );
 };
 
 const App = () => {
