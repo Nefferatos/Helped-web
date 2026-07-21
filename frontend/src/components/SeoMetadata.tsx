@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 
 const SITE_URL = "https://rinzinagency.com";
 const DEFAULT_DESCRIPTION =
-  "Find verified domestic helpers in Singapore for housekeeping, infant care, elderly care and family support.";
+  "Find North East Indian, Nepalese, Myanmar, Indonesian and Filipino domestic helpers in Singapore with Rinzin Agency, also known as At The Agency.";
 
 const pageMetadata: Record<string, { title: string; description: string }> = {
   "/": {
@@ -11,12 +11,12 @@ const pageMetadata: Record<string, { title: string; description: string }> = {
     description: DEFAULT_DESCRIPTION,
   },
   "/search-maids": {
-    title: "Search Verified Maids in Singapore | Rinzin Agency",
-    description: "Browse verified domestic helper profiles and find the right match for your household in Singapore.",
+    title: "Search Maids & Domestic Helpers Singapore | Rinzin Agency",
+    description: "Browse fresh, transfer and ex-Singapore domestic helpers from India, Nepal, Myanmar, Indonesia and the Philippines.",
   },
   "/about": {
-    title: "About Rinzin Agency | Singapore Maid Agency",
-    description: "Learn how Rinzin Agency matches Singapore families with trusted, carefully verified domestic helpers.",
+    title: "North East Indian Maid Specialists | Rinzin Agency",
+    description: "Rinzin Agency, also known as At The Agency, recruits domestic helpers from North East India, Nepal, Myanmar, Indonesia and the Philippines.",
   },
   "/agency": {
     title: "Maid Agency Services in Singapore | Rinzin Agency",

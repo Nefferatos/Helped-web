@@ -1140,7 +1140,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               <span className="amber-rule" style={{ marginBottom: 20 }} />
 
               <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 15, lineHeight: 1.8, maxWidth: 420, margin: "0 0 32px" }}>
-                Transparent fees. Verified professionals. A placement process built around your family's real needs — not just paperwork.
+                Rinzin Agency, also known as At The Agency, matches Singapore families with verified maids and migrant domestic workers from North East India, Nepal, Myanmar, Indonesia and the Philippines.
               </p>
 
               {clientUser && (

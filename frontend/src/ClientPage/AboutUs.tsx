@@ -148,11 +148,14 @@ const StampBadge = ({
 
 const ORIGIN_ENTRIES = [
   { code: "F-01", label: "Darjeeling & Sikkim Maids" },
+  { code: "F-01A", label: "Manipur, Mizoram, Arunachal & Assam" },
+  { code: "F-01B", label: "Indian Nepalese & Nepalese Helpers" },
   { code: "F-02", label: "Nepalese — Hindu (Veg & Non-veg)" },
   { code: "F-03", label: "Tibetan — Buddhist" },
   { code: "F-04", label: "Manipur — English Speaking" },
   { code: "F-05", label: "Filipino — Video Interview Available" },
   { code: "F-06", label: "Myanmar Helpers" },
+  { code: "F-07", label: "Indonesian Domestic Helpers" },
 ];
 
 const PLACEMENT_GROUPS = [
@@ -274,7 +277,7 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
                   mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
                 }`}
               >
-                Rinzin Agency specialises in carefully selected domestic helpers from North East India, the Philippines, Myanmar and beyond — matched to your family's unique needs.
+                Rinzin Agency, also known as At The Agency, specialises in carefully selected maids and migrant domestic workers from North East India, Nepal, Myanmar, Indonesia and the Philippines — matched to your family's unique needs.
               </p>
 
               <div
@@ -365,7 +368,8 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
                 </h2>
                 <div className="space-y-4 text-[0.9375rem] font-light leading-[1.9] text-[#54707A]">
                   <p>In 2005, as a Singaporean Chinese who had traveled India far and wide, we became the <strong className="font-semibold text-[#0B2024]">first agency</strong> to introduce helpers from Lahaul and Spiti, Himachal Pradesh, and Ladakh to Singapore families.</p>
-                  <p>RINZIN has been providing quality Indian, Filipino and Myanmar domestic helpers to Singapore families for over two decades, building a fresh team for an ever-wider choice of origin and background.</p>
+                  <p>RINZIN has been providing quality North East Indian, Indian Nepalese, Nepalese, Filipino, Myanmar and Indonesian domestic helpers to Singapore families for over two decades. We recruit from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam.</p>
+                  <p>Our candidates include fresh and transfer maids, as well as domestic helpers with previous experience in Singapore, the Middle East and Hong Kong.</p>
                   <p>We deal with real people from different cultures. When problems arise, we face and solve them swiftly — every challenge has made us a better agency.</p>
                 </div>
                 <div className="mt-7 border-l-[3px] border-[#FCD34D] py-1 pl-6">
