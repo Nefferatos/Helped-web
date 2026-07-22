@@ -3,51 +3,51 @@ import { useLocation } from "react-router-dom";
 
 const SITE_URL = "https://rinzinagency.com";
 const DEFAULT_DESCRIPTION =
-  "Find North East Indian, Nepalese, Myanmar, Indonesian and Filipino domestic helpers in Singapore with Rinzin Agency, also known as At The Agency.";
+  "Find North East Indian, Nepalese, Myanmar, Indonesian and Filipino domestic helpers in Singapore with AT The Agency (formerly Rinzin Agency).";
 
 const pageMetadata: Record<string, { title: string; description: string }> = {
   "/": {
-    title: "Find Trusted Maids in Singapore | Rinzin Agency",
+    title: "AT The Agency (formerly Rinzin Agency)",
     description: DEFAULT_DESCRIPTION,
   },
   "/search-maids": {
-    title: "Search Maids & Domestic Helpers Singapore | Rinzin Agency",
+    title: "Search Maids & Domestic Helpers Singapore | AT The Agency",
     description: "Browse fresh, transfer and ex-Singapore domestic helpers from India, Nepal, Myanmar, Indonesia and the Philippines.",
   },
   "/about": {
-    title: "North East Indian Maid Specialists | Rinzin Agency",
-    description: "Rinzin Agency, also known as At The Agency, recruits domestic helpers from North East India, Nepal, Myanmar, Indonesia and the Philippines.",
+    title: "North East Indian Maid Specialists | AT The Agency",
+    description: "AT The Agency (formerly Rinzin Agency) recruits domestic helpers from North East India, Nepal, Myanmar, Indonesia and the Philippines.",
   },
   "/agency": {
-    title: "Maid Agency Services in Singapore | Rinzin Agency",
-    description: "Explore domestic helper placement and support services from Rinzin Agency in Singapore.",
+    title: "Maid Agency Services in Singapore | AT The Agency",
+    description: "Explore domestic helper placement and support services from AT The Agency in Singapore.",
   },
   "/faq": {
-    title: "Maid Hiring FAQ | Rinzin Agency Singapore",
+    title: "Maid Hiring FAQ | AT The Agency Singapore",
     description: "Answers to common questions about finding, hiring and supporting a domestic helper in Singapore.",
   },
   "/contact": {
-    title: "Contact Rinzin Agency | Singapore Maid Agency",
-    description: "Contact Rinzin Agency for help finding a verified domestic helper in Singapore.",
+    title: "Contact AT The Agency | Singapore Maid Agency",
+    description: "Contact AT The Agency for help finding a verified domestic helper in Singapore.",
   },
   "/apply-as-maid": {
-    title: "Apply as a Domestic Helper | Rinzin Agency",
-    description: "Apply to join Rinzin Agency's domestic helper recruitment network.",
+    title: "Apply as a Domestic Helper | AT The Agency",
+    description: "Apply to join AT The Agency's domestic helper recruitment network.",
   },
   "/services/housekeeping": {
-    title: "Housekeeping Helpers in Singapore | Rinzin Agency",
+    title: "Housekeeping Helpers in Singapore | AT The Agency",
     description: "Find trained domestic helpers for cleaning, laundry, cooking and daily household care.",
   },
   "/services/elderly-care": {
-    title: "Elderly Care Helpers in Singapore | Rinzin Agency",
+    title: "Elderly Care Helpers in Singapore | AT The Agency",
     description: "Find compassionate domestic helpers experienced in elderly care and daily assistance.",
   },
   "/services/infant-care": {
-    title: "Infant Care Helpers in Singapore | Rinzin Agency",
+    title: "Infant Care Helpers in Singapore | AT The Agency",
     description: "Find verified domestic helpers experienced in newborn, infant and toddler care.",
   },
   "/services/kid-care": {
-    title: "Child Care Helpers in Singapore | Rinzin Agency",
+    title: "Child Care Helpers in Singapore | AT The Agency",
     description: "Find trusted domestic helpers experienced in child care, routines and family support.",
   },
 };
