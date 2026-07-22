@@ -15,6 +15,7 @@ import {
   Plane,
 } from "lucide-react";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import PublicSiteFooter from "@/components/PublicSiteFooter";
 
 type AboutUsProps = {
   embedded?: boolean;
@@ -578,7 +579,7 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
           .au-footer-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
-      <footer style={{ background: "#0B1F25", padding: "64px 0 0" }}>
+      {false && <footer style={{ background: "#0B1F25", padding: "64px 0 0" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
           <div className="au-footer-grid">
 
@@ -707,7 +708,8 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
             </div>
           </div>
         </div>
-      </footer>
+      </footer>}
+      <PublicSiteFooter />
 
     </div>
   );

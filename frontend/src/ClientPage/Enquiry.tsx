@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import PublicSiteFooter from "@/components/PublicSiteFooter";
 import { getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import {
@@ -1298,7 +1299,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
         </main>
 
         {/* ── FOOTER ── */}
-        {!embedded && (
+        {false && !embedded && (
           <footer style={{ background: "#061D26", padding: "64px 0 0", fontFamily: "'Inter', sans-serif" }}>
             <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
               <div
@@ -1557,6 +1558,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
             </div>
           </footer>
         )}
+        {!embedded && <PublicSiteFooter />}
       </div>
     </>
   );

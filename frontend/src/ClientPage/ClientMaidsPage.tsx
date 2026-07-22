@@ -29,6 +29,7 @@ import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/cli
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
 import { readSafeJson } from "@/lib/safeJson";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import PublicSiteFooter from "@/components/PublicSiteFooter";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
@@ -2083,7 +2084,7 @@ const ClientMaidsPage = ({
       </div>
 
       {/* ── Footer ── */}
-      {!embedded && <SiteFooter />}
+      {!embedded && <PublicSiteFooter />}
     </div>
     </>
   );

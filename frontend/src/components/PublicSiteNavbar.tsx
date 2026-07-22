@@ -412,6 +412,7 @@ const PublicSiteNavbar = () => {
               className="space-y-3 p-4"
               style={{ borderTop: `1px solid ${TEAL}15` }}
             >
+              <ApplyButton full onClick={() => setIsMobileMenuOpen(false)} />
               {clientUser ? (
                 <div className="space-y-2.5">
                   <div

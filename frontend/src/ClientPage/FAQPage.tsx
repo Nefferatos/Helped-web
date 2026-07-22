@@ -20,6 +20,7 @@ import {
   Facebook,
 } from "lucide-react";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import PublicSiteFooter from "@/components/PublicSiteFooter";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -633,7 +634,7 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
         {/* ══════════════════════════════════════════════════════
             FOOTER  (matches ClientLandingPage footer)
         ══════════════════════════════════════════════════════ */}
-        <footer style={{ background: "var(--teal-deep)", padding: "64px 0 0", fontFamily: "'Inter', sans-serif" }}>
+        {false && <footer style={{ background: "var(--teal-deep)", padding: "64px 0 0", fontFamily: "'Inter', sans-serif" }}>
           <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
             {/* 5-column grid */}
@@ -843,7 +844,8 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
               </div>
             </div>
           </div>
-        </footer>
+        </footer>}
+        <PublicSiteFooter />
       </div>
     </>
   );

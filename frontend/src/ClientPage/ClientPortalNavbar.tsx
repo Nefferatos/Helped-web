@@ -258,16 +258,17 @@ const ClientPortalNavbar = () => {
   return (
     <header
       className={cn(
-        "client-page-theme sticky top-0 z-50 border-b bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/75 transition-shadow",
-        isScrolled && "shadow-sm",
+        "client-page-theme sticky top-0 z-50 border-b border-[#0E4E5E]/10 bg-white transition-shadow duration-300",
+        isScrolled && "shadow-[0_2px_20px_rgba(14,78,94,.13)]",
       )}
     >
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-3 py-2 sm:px-6">
+      <div className="h-[3px] w-full bg-[linear-gradient(90deg,#0E4E5E_0%,#FCD34D_60%,#0E4E5E_100%)]" />
+      <div className="mx-auto flex h-14 w-full max-w-screen-xl items-center justify-between gap-2 px-4 sm:px-6 md:h-[76px]">
 
         {/* ── Left: hamburger (< lg) + logo ── */}
         <div className="flex items-center gap-2 shrink-0">
           <button
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border bg-background/60 hover:bg-muted transition lg:hidden"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-[#0E4E5E]/20 bg-[#0E4E5E]/5 text-[#0E4E5E] transition hover:bg-[#0E4E5E]/10 lg:hidden"
             onClick={() => setIsMobileMenuOpen((v) => !v)}
             aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMobileMenuOpen}
@@ -278,9 +279,15 @@ const ClientPortalNavbar = () => {
 
           <Link
             to="/client/home"
-            className="shrink-0 font-display text-sm font-bold tracking-tight text-foreground sm:text-base"
+            className="group flex shrink-0 items-center"
           >
-            Employer Portal
+            <img
+              src="/FM_logo.webp"
+              alt="Find Maids At The Agency — Employer Portal"
+              width="300"
+              height="123"
+              className="h-11 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.03] md:h-[58px]"
+            />
           </Link>
         </div>
 
@@ -290,7 +297,7 @@ const ClientPortalNavbar = () => {
               within 1024px without overflow or a scroll container.       ── */}
         <nav
           ref={navRef}
-          className="relative hidden lg:flex min-w-0 flex-1 items-center justify-center gap-0.5"
+          className="relative hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex"
         >
           {allTabs.map((tab) => {
             const active = isActive(tab.to);
@@ -302,10 +309,10 @@ const ClientPortalNavbar = () => {
                   tabRefs.current[tab.to] = el;
                 }}
                 className={cn(
-                  "relative rounded-xl px-2.5 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+                  "relative whitespace-nowrap rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors duration-150",
                   active
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "font-semibold text-[#0E4E5E]"
+                    : "text-[#0E4E5E] hover:bg-[#0E4E5E]/[.08] hover:text-[#0B3340]",
                 )}
                 aria-current={active ? "page" : undefined}
               >
@@ -314,7 +321,7 @@ const ClientPortalNavbar = () => {
             );
           })}
           <span
-            className="pointer-events-none absolute -bottom-0.5 h-0.5 rounded-full bg-primary transition-all duration-300 ease-out"
+            className="pointer-events-none absolute bottom-1 h-0.5 rounded-full bg-[#FCD34D] transition-all duration-300 ease-out"
             style={{
               left: underline?.left ?? 0,
               width: underline?.width ?? 0,
@@ -323,14 +330,12 @@ const ClientPortalNavbar = () => {
           />
         </nav>
 
-        {/* ── Right: CTA + avatar ──
-              Request Maid hidden on tablet (md–lg) — reappears at xl
-              where there's room alongside the full desktop nav.     ── */}
+        {/* ── Right: notifications + avatar ── */}
         <div className="flex items-center gap-2 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border bg-background/60 hover:bg-muted transition"
+                className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-[#0E4E5E]/15 bg-[#0E4E5E]/5 text-[#0E4E5E] transition hover:border-[#0E4E5E]/30 hover:bg-[#0E4E5E]/10"
                 aria-label={`Notifications${unreadChatCount > 0 ? ` (${unreadChatCount} unread)` : ""}`}
               >
                 <Bell className="h-4 w-4" />
@@ -403,10 +408,6 @@ const ClientPortalNavbar = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <Button asChild className="rounded-full hidden xl:inline-flex">
-            <Link to="/client/maids?intent=request">Request Maid</Link>
-          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

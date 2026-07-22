@@ -5,8 +5,10 @@ import {
   BadgeCheck, Sparkles, Lock, UserCheck, TrendingUp,
   Award, SlidersHorizontal, LayoutGrid, ArrowUp, MapPin, Mail, Phone, Clock, MessageCircle, PhoneCall, Facebook,
 } from "lucide-react";
+import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import PublicSiteFooter from "@/components/PublicSiteFooter";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import { toast } from "@/components/ui/sonner";
 import { getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
@@ -99,6 +101,27 @@ const GLOBAL_STYLES = `
   @keyframes countUp {
     from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes heroAuroraDrift {
+    0%, 100% { transform: translate3d(0,0,0) scale(1); opacity: .55; }
+    35% { transform: translate3d(-42px,28px,0) scale(1.12); opacity: .8; }
+    70% { transform: translate3d(28px,-18px,0) scale(.94); opacity: .62; }
+  }
+  @keyframes heroGridDrift {
+    from { background-position: 0 0; }
+    to { background-position: 52px 52px; }
+  }
+  @keyframes heroSparkFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); opacity: .25; }
+    50% { transform: translateY(-22px) rotate(12deg); opacity: .65; }
+  }
+  @keyframes heroTextReveal {
+    from { opacity: 0; transform: translate3d(0,14px,0); }
+    to { opacity: 1; transform: translate3d(0,0,0); }
+  }
+  @keyframes heroAccentSweep {
+    from { transform: scaleX(0); opacity: 0; }
+    to { transform: scaleX(1); opacity: 1; }
   }
 
   /* ── Fonts ── */
@@ -205,6 +228,165 @@ const GLOBAL_STYLES = `
     border: 1.5px solid var(--border);
     box-shadow: 0 6px 0 var(--teal-pale), 0 20px 60px rgba(14,78,94,0.1);
     overflow: hidden;
+  }
+
+  .hero-search-card {
+    margin: 42px auto 0;
+    max-width: 1120px;
+    padding: 18px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid rgba(252,211,77,0.45);
+    box-shadow: 0 18px 55px rgba(0,0,0,0.25), 0 4px 0 rgba(252,211,77,0.75);
+    backdrop-filter: blur(12px);
+  }
+  .hero-search-fields {
+    display: grid;
+    grid-template-columns: minmax(220px,1.5fr) repeat(3,minmax(150px,1fr)) auto;
+    gap: 10px;
+    align-items: end;
+  }
+  .hero-search-field label {
+    display: block;
+    margin: 0 0 6px;
+    color: #0E4E5E;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .search-hero::before,
+  .search-hero::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+  }
+  .search-hero::before {
+    width: 460px;
+    height: 460px;
+    top: -260px;
+    right: -90px;
+    background: radial-gradient(circle, rgba(252,211,77,.32), rgba(252,211,77,0) 70%);
+    animation: heroAuroraDrift 12s ease-in-out infinite;
+  }
+  .search-hero::after {
+    width: 380px;
+    height: 380px;
+    bottom: -260px;
+    left: -120px;
+    background: radial-gradient(circle, rgba(78,205,225,.2), rgba(78,205,225,0) 70%);
+    animation: heroAuroraDrift 15s 2s ease-in-out infinite reverse;
+  }
+  .search-hero-motion-grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: .42;
+    background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 52px 52px;
+    animation: heroGridDrift 18s linear infinite;
+  }
+  .search-hero-spark {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border: 2px solid rgba(252,211,77,.65);
+    border-radius: 3px;
+    pointer-events: none;
+    animation: heroSparkFloat 5s ease-in-out infinite;
+  }
+  .search-hero-spark--one { top: 18%; left: 4%; }
+  .search-hero-spark--two { top: 12%; right: 7%; width: 6px; height: 6px; animation-delay: 1.3s; }
+  .search-hero-spark--three { bottom: 22%; right: 3%; width: 12px; height: 12px; animation-delay: 2.6s; }
+  .search-hero-chip,
+  .search-hero-title-line,
+  .search-hero-description,
+  .search-hero-trust {
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: heroTextReveal .95s cubic-bezier(.16,1,.3,1) forwards;
+  }
+  .search-hero-chip { animation-delay: .06s; }
+  .search-hero-title-line { display: inline-block; }
+  .search-hero-title-line--one { animation-delay: .14s; }
+  .search-hero-title-line--two { animation-delay: .25s; position: relative; }
+  .search-hero-title-line--three { animation-delay: .36s; }
+  .search-hero-description { animation-delay: .48s; }
+  .search-hero-trust { animation-delay: .6s; }
+  .search-hero-title-line--two::after {
+    content: "";
+    position: absolute;
+    left: 2%;
+    right: 2%;
+    bottom: -3px;
+    height: 2px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #FCD34D, rgba(252,211,77,0));
+    transform-origin: left;
+    animation: heroAccentSweep 1s .76s cubic-bezier(.16,1,.3,1) both;
+  }
+  .search-hero-intro {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto 26px;
+    display: grid;
+    grid-template-columns: minmax(0,1.08fr) minmax(300px,.92fr);
+    align-items: center;
+    gap: 38px;
+  }
+  .search-hero-trust {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .search-hero-trust span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 5px;
+    color: rgba(255,255,255,.9);
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.17);
+    font-size: 10px;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+  .search-hero-image {
+    position: relative;
+    min-height: 270px;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 2px solid rgba(255,255,255,.8);
+    box-shadow: 0 22px 50px rgba(14,78,94,.2), 10px 10px 0 rgba(252,211,77,.6);
+  }
+  .search-hero-image img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .search-hero-image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 55%, rgba(11,51,64,.28));
+    pointer-events: none;
+  }
+  .search-hero .search-card {
+    position: relative;
+    z-index: 1;
+    border-color: rgba(252,211,77,.55);
+    box-shadow: 0 8px 0 rgba(252,211,77,.22), 0 30px 75px rgba(0,0,0,.3);
+  }
+  .search-hero .search-body {
+    background: linear-gradient(135deg, #ffffff 0%, #f6fcfd 60%, #fffaf0 100%);
   }
 
   /* ── Tag pill ── */
@@ -525,6 +707,8 @@ const GLOBAL_STYLES = `
     .why-grid      { grid-template-columns: 1fr !important; }
     .why-image-col { display: none !important; }
     .footer-grid   { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+    .hero-search-fields { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .hero-search-submit { width: 100%; justify-content: center; }
   }
   @media (max-width: 768px) {
     .filter-row        { flex-direction: column !important; gap: 10px !important; }
@@ -534,6 +718,9 @@ const GLOBAL_STYLES = `
     .search-actions    { flex-direction: column !important; align-items: stretch !important; }
     .search-actions .btn-amber,
     .search-actions .btn-ghost-teal { width: 100%; justify-content: center; }
+    .search-hero-intro { grid-template-columns: 1fr; gap: 22px; }
+    .search-hero-trust { justify-content: flex-start; }
+    .search-hero-image { display: none; }
   }
   @media (max-width: 600px) {
     .services-grid { grid-template-columns: 1fr !important; }
@@ -542,6 +729,8 @@ const GLOBAL_STYLES = `
     .hero-section  { padding: 40px 16px 0 !important; }
     .results-header { margin-bottom: 18px !important; }
     .unlock-banner  { margin-bottom: 16px !important; padding: 16px 18px !important; }
+    .hero-search-card { margin-top: 30px; padding: 14px; }
+    .hero-search-fields { grid-template-columns: 1fr; }
   }
   @media (max-width: 520px) {
     .footer-grid { grid-template-columns: 1fr !important; }
@@ -553,6 +742,7 @@ const GLOBAL_STYLES = `
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
       transition-duration: 0.01ms !important;
     }
   }
@@ -935,6 +1125,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
   const isLoggedIn = !!getClientToken();
   const searchMaidsHref = isLoggedIn ? "/client/maids" : "/search-maids";
+  const maidSearchResultsHref = isLoggedIn ? "/client/maids/search" : "/search-maids/results";
 
   useReveal();
 
@@ -1037,7 +1228,10 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     return params;
   };
 
-  const handleSearch = () => navigate(`${searchMaidsHref}?${buildParams().toString()}`);
+  const handleSearch = () => {
+    const query = buildParams().toString();
+    navigate(`${maidSearchResultsHref}${query ? `?${query}` : ""}`);
+  };
   const handleRequestMaid = () => {
     const params = buildParams();
     params.set("intent", "request");
@@ -1080,7 +1274,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       {/* ─────────────────────────────────────────────────────────────────────
           HERO
       ───────────────────────────────────────────────────────────────────────── */}
-      <section style={{ background: "linear-gradient(150deg, #0B2A35 0%, #0E4E5E 55%, #1A6678 100%)", position: "relative", overflow: "hidden" }}>
+      {false && <section style={{ background: "linear-gradient(150deg, #0B2A35 0%, #0E4E5E 55%, #1A6678 100%)", position: "relative", overflow: "hidden" }}>
 
         {/* Morphing orb — the page's signature ambient element */}
         <div style={{
@@ -1151,7 +1345,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               )}
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 52 }}>
-                <button className="btn-amber" onClick={() => document.getElementById("search")?.scrollIntoView({ behavior: "smooth" })}>
+                <button className="btn-amber" onClick={() => document.getElementById("hero-search")?.scrollIntoView({ behavior: "smooth", block: "center" })}>
                   Browse Available Maids <ArrowRight size={15} />
                 </button>
                 <Link to="/employer-login" className="btn-outline-teal">
@@ -1231,6 +1425,53 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </div>
 
           </div>
+
+          {/* Smart Maid Search — kept in the hero so visitors can start immediately. */}
+          <div id="hero-search" className="hero-search-card" style={{ animation: "slideInLeft 0.75s 0.18s ease both" }}>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap" }}>
+              <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                <span style={{ width:34,height:34,borderRadius:8,background:"#0E4E5E",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                  <SlidersHorizontal size={15} color="#FCD34D" />
+                </span>
+                <div>
+                  <p className="pf" style={{ margin:0,color:"#0B3340",fontSize:18,fontWeight:800,fontStyle:"italic" }}>Smart Maid Search</p>
+                  <p style={{ margin:"2px 0 0",color:"#5A8A98",fontSize:11 }}>Tell us what you need and view matching helpers.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="hero-search-fields">
+              <div className="hero-search-field">
+                <label htmlFor="hero-search-keyword">Keywords</label>
+                <div style={{ position:"relative" }}>
+                  <input id="hero-search-keyword" className="input-styled" value={keyword} onChange={e=>setKeyword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSearch()} placeholder="Skills, name or reference…" />
+                  <Search size={14} color="#9BBFC8" style={{ position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none" }} />
+                </div>
+              </div>
+              <div className="hero-search-field">
+                <label htmlFor="hero-search-type">Maid type</label>
+                <select id="hero-search-type" className="select-styled" value={maidTypes[0] || ""} onChange={e=>setMaidTypes(e.target.value?[e.target.value]:[])}>
+                  <option value="">No Preference</option>
+                  {MAID_TYPES.map(type=><option key={type} value={type}>{type}</option>)}
+                </select>
+              </div>
+              <div className="hero-search-field">
+                <label htmlFor="hero-search-nationality">Nationality</label>
+                <select id="hero-search-nationality" className="select-styled" value={nationality} onChange={e=>setNationality(e.target.value)}>
+                  {nationalityOptions.map(option=><option key={option}>{option}</option>)}
+                </select>
+              </div>
+              <div className="hero-search-field">
+                <label htmlFor="hero-search-language">Language</label>
+                <select id="hero-search-language" className="select-styled" value={language} onChange={e=>setLanguage(e.target.value)}>
+                  {languageOptions.map(option=><option key={option}>{option}</option>)}
+                </select>
+              </div>
+              <button type="button" className="btn-amber hero-search-submit" onClick={handleSearch} style={{ minHeight:42 }}>
+                <Search size={14} /> Search Maids
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* ── Ticker ── */}
@@ -1247,23 +1488,40 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             ))}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* ─────────────────────────────────────────────────────────────────────
           SEARCH
       ───────────────────────────────────────────────────────────────────────── */}
-      <section id="search" className="section-pad" style={{ background: "#F0F9FF", padding: "72px 0" }}>
+      <section id="search" className="search-hero" style={{ background: "linear-gradient(135deg, #061D26 0%, #0B3340 42%, #0E4E5E 76%, #176B7E 100%)", padding: "50px 0 66px", position:"relative", overflow:"hidden" }}>
+        <div className="search-hero-motion-grid" aria-hidden="true" />
+        <span className="search-hero-spark search-hero-spark--one" aria-hidden="true" />
+        <span className="search-hero-spark search-hero-spark--two" aria-hidden="true" />
+        <span className="search-hero-spark search-hero-spark--three" aria-hidden="true" />
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
-          <div className="reveal" style={{ textAlign: "center", marginBottom: 44 }}>
-            <span className="section-chip" style={{ background: "#FCD34D", color: "#0B3340", marginBottom: 14, display: "inline-flex" }}>
-              <SlidersHorizontal size={10} /> Smart Maid Search
-            </span>
-            <h2 className="pf" style={{ fontSize: "clamp(1.6rem,3.5vw,2.6rem)", color: "#0B3340", margin: "0 0 10px", fontStyle: "italic", letterSpacing: "-0.01em" }}>
-              Find the Right Helper<br />for Your Home
-            </h2>
-            <span className="amber-rule" style={{ margin: "0 auto 16px", display: "block", width: 40 }} />
-            <p style={{ color: "#3A7A8A", fontSize: 14, margin: 0 }}>Use the filters below to narrow down your perfect match.</p>
+          <div className="search-hero-intro">
+            <div style={{ maxWidth:620 }}>
+              <span className="section-chip search-hero-chip" style={{ background:"#FCD34D",color:"#0B3340",marginBottom:12 }}>
+                <SlidersHorizontal size={10} /> Smart Maid Search
+              </span>
+              <h1 className="pf" style={{ margin:"0 0 10px",fontSize:"clamp(2rem,4vw,3.4rem)",lineHeight:1.06,color:"#fff",fontWeight:900,fontStyle:"italic",letterSpacing:"-.025em" }}>
+                <span className="search-hero-title-line search-hero-title-line--one" style={{ fontStyle:"normal" }}>Find a Helper</span><br />
+                <span className="search-hero-title-line search-hero-title-line--two" style={{ color:"#FCD34D" }}>You Can Trust,</span><br />
+                <span className="search-hero-title-line search-hero-title-line--three" style={{ fontStyle:"normal",fontSize:".72em",color:"rgba(255,255,255,.72)" }}>at a Price You'll Love.</span>
+              </h1>
+              <p className="search-hero-description" style={{ margin:0,maxWidth:560,color:"rgba(255,255,255,.66)",fontSize:14,lineHeight:1.7 }}>
+                Rinzin Agency, also known as At The Agency, matches Singapore families with verified maids and migrant domestic workers from North East India, Nepal, Myanmar, Indonesia and the Philippines.
+              </p>
+              <div className="search-hero-trust" aria-label="Why families choose our helpers">
+                <span><Shield size={12} /> Verified profiles</span>
+                <span><BadgeCheck size={12} /> MOM approved</span>
+                <span><Users size={12} /> Personal matching</span>
+              </div>
+            </div>
+            <div className="search-hero-image">
+              <img src={heroImage} alt="Professional domestic helper" width="900" height="491" fetchPriority="high" decoding="async" />
+            </div>
           </div>
 
           <div className="reveal search-card" style={{ maxWidth: 960, margin: "0 auto" }}>
@@ -1275,9 +1533,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             }}>
               <span style={{ display: "flex", alignItems: "center", gap: 10, color: "#fff", fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700 }}>
                 <Search size={14} color="rgba(255,255,255,0.55)" /> Helper Search Filter
-              </span>
-              <span style={{ padding: "5px 14px", borderRadius: 4, background: "rgba(252,211,77,0.18)", border: "1px solid rgba(252,211,77,0.4)", color: "#FCD34D", fontSize: 11, fontWeight: 700, letterSpacing: "0.03em" }}>
-                {isLoading ? "Loading…" : `${filteredMaids.length} matches`}
               </span>
             </div>
 
@@ -1336,8 +1591,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 <button type="button" onClick={handleRequestMaid} className="btn-amber">
                   <ClipboardList size={14} /> Request a Maid
                 </button>
-                <button type="button" className="btn-ghost-teal" onClick={() => navigate(searchMaidsHref)}>
-                  <Search size={14} /> Browse All
+                <button type="button" className="btn-ghost-teal" onClick={handleSearch}>
+                  <Search size={14} /> Search Maid Now
                 </button>
                 {hasFilters && (
                   <button type="button" onClick={clearFilters} style={{ display:"inline-flex",alignItems:"center",gap:4,fontSize:12,color:"#6AAABB",textDecoration:"underline",background:"none",border:"none",cursor:"pointer" }}>
@@ -1348,16 +1603,13 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </div>
           </div>
 
-          <p style={{ textAlign:"center",marginTop:16,fontSize:12,color:"#7AAABB" }}>
-            {isLoading ? "Loading available maids…" : `${filteredMaids.length} public maid${filteredMaids.length!==1?"s":""} matching your criteria`}
-          </p>
         </div>
       </section>
 
       {/* ─────────────────────────────────────────────────────────────────────
           MAID RESULTS
       ───────────────────────────────────────────────────────────────────────── */}
-      <section id="maid-results" className="section-pad" style={{ background: "#fff", padding: "72px 0" }}>
+      <section id="maid-results" className="section-pad" style={{ background: "linear-gradient(180deg, #FFFDF5 0%, #FFFFFF 28%, #F1FAFC 100%)", padding: "72px 0", borderTop:"6px solid #FCD34D" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
           <div className="reveal results-header" style={{ display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:32,gap:16,flexWrap:"wrap" }}>
@@ -1498,7 +1750,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       {/* ─────────────────────────────────────────────────────────────────────
           WHY US
       ───────────────────────────────────────────────────────────────────────── */}
-      <section id="why" className="section-pad-lg" style={{ background: "#F0F9FF", padding: "88px 0" }}>
+      <section id="why" className="section-pad-lg" style={{ background: "linear-gradient(135deg, #E8F7FA 0%, #F8FDFF 48%, #FFF8DB 100%)", padding: "88px 0", borderTop:"1px solid #CBE8EE" }}>
         <div style={{ maxWidth:1280,margin:"0 auto",padding:"0 24px" }}>
           <div className="reveal" style={{ textAlign:"center",marginBottom:56 }}>
             <span className="section-chip" style={{ background:"#FCD34D",color:"#0B3340",marginBottom:14,display:"inline-flex" }}>
@@ -1580,7 +1832,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           FOOTER
       ───────────────────────────────────────────────────────────────────────── */}
       {/* ── FOOTER ── */}
-        <footer style={{ background: "var(--ink)", padding: "64px 0 0" }}>
+        {false && <footer style={{ background: "var(--ink)", padding: "64px 0 0" }}>
           <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
             <div className="footer-grid" style={{
               display: "grid",
@@ -1686,22 +1938,43 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                   Follow Us
                 </h5>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <a href="#" aria-label="Facebook"
+                  <a href="#" aria-label="Follow us on Facebook"
                     style={{ display: "flex", alignItems: "center", justifyContent: "center",
                       width: 36, height: 36, borderRadius: 8,
                       border: "1.5px solid rgba(255,255,255,0.18)",
-                      color: "#1877F2", transition: "all 0.15s" }}
+                      color: "#60A5FA", transition: "all 0.15s" }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.color = "var(--ink)";
+                      e.currentTarget.style.color = "#fff";
                       e.currentTarget.style.background = "#1877F2";
                       e.currentTarget.style.borderColor = "#1877F2";
+                      e.currentTarget.style.transform = "translateY(-2px)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.color = "#1877F2";
+                      e.currentTarget.style.color = "#60A5FA";
                       e.currentTarget.style.background = "transparent";
                       e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
+                      e.currentTarget.style.transform = "translateY(0)";
                     }}>
                     <Facebook size={18} />
+                  </a>
+                  <a href="https://www.tiktok.com/" target="_blank" rel="noopener noreferrer" aria-label="Follow us on TikTok"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 36, height: 36, borderRadius: 8,
+                      border: "1.5px solid rgba(255,255,255,0.18)",
+                      color: "#fff", transition: "all 0.15s" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "#061D26";
+                      e.currentTarget.style.background = "#FCD34D";
+                      e.currentTarget.style.borderColor = "#FCD34D";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "#fff";
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}>
+                    <FaTiktok size={17} />
                   </a>
                 </div>
               </div>
@@ -1727,7 +2000,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               </div>
             </div>
           </div>
-        </footer>
+        </footer>}
+        <PublicSiteFooter />
     </div>
   );
 };
