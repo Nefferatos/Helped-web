@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { getClientPostLoginPath } from "@/lib/clientNavigation";
+import { consumePostLoginRedirect } from "@/lib/clientNavigation";
 import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import { toast } from "@/components/ui/sonner";
 import { saveAgencyAdminAuth, type AgencyAdminUser } from "@/lib/agencyAdminAuth";
@@ -18,7 +18,9 @@ const AuthCallback = () => {
     let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const mode = params.get("mode");
-    const redirectTo = getClientPostLoginPath(params.get("redirectTo"));
+    // Destination is stashed in sessionStorage before OAuth starts; fall back to
+    // the query param for older links that still carry ?redirectTo=.
+    const redirectTo = consumePostLoginRedirect(params.get("redirectTo"));
 
     const run = async () => {
       try {

@@ -6,6 +6,7 @@ import {
   saveClientAuth,
   type ClientUser,
 } from "@/lib/clientAuth";
+import { stashPostLoginRedirect } from "@/lib/clientNavigation";
 
 const LEGACY_SUPABASE_TOKEN_KEY = "supabase.auth.token";
 const CLIENT_LOGOUT_MARKER_KEY = "client_portal_logout_pending";
@@ -267,10 +268,10 @@ export const logoutClientPortal = async (redirectTo = "/") => {
 };
 
 export const signInWithGoogle = async (redirectPath?: string) => {
+  // Keep the provider redirect short (Supabase rejects long redirect URLs).
+  // The real destination is stashed locally and read back on /auth/callback.
+  stashPostLoginRedirect(redirectPath);
   const callbackUrl = new URL("/auth/callback", window.location.origin);
-  if (redirectPath?.trim()) {
-    callbackUrl.searchParams.set("redirectTo", redirectPath.trim());
-  }
 
   const { error } = await requireSupabase().auth.signInWithOAuth({
     provider: "google",
@@ -280,10 +281,8 @@ export const signInWithGoogle = async (redirectPath?: string) => {
 };
 
 export const signInWithFacebook = async (redirectPath?: string) => {
+  stashPostLoginRedirect(redirectPath);
   const callbackUrl = new URL("/auth/callback", window.location.origin);
-  if (redirectPath?.trim()) {
-    callbackUrl.searchParams.set("redirectTo", redirectPath.trim());
-  }
 
   const { error } = await requireSupabase().auth.signInWithOAuth({
     provider: "facebook",
