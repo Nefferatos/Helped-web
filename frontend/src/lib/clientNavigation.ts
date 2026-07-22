@@ -1,4 +1,4 @@
-export const DEFAULT_CLIENT_POST_LOGIN_PATH = "/client/home";
+export const DEFAULT_CLIENT_POST_LOGIN_PATH = "/client/maids/search";
 
 export const buildEmployerLoginPath = (redirectTo?: string) => {
   const target = redirectTo?.trim();
