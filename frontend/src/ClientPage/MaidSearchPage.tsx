@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Search, Star, X, Sparkles, Filter, Trash2, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { calculateAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { getClientToken } from "@/lib/clientAuth";
+import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
@@ -965,10 +966,18 @@ const ShortlistDialog = ({
 // ─── Main page ────────────────────────────────────────────────────────────────
 const MaidSearchPage = ({
   basePath = "/client/maids",
-  loginPath = "/employer-login",
   embedded = false,
 }: MaidSearchPageProps) => {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Locked cards / "Log in to view" CTAs must return the visitor to the exact
+  // URL they were browsing — including the current filters query string — after
+  // they authenticate. buildEmployerLoginPath encodes it as ?redirectTo=…
+  const loginPath = useMemo(
+    () => buildEmployerLoginPath(`${location.pathname}${location.search}`),
+    [location.pathname, location.search],
+  );
   const advancedFiltersRaw = searchParams.get("filters") || "";
   const advancedFilters = useMemo(() => parseAdvancedFilters(searchParams), [searchParams]);
   const quickLink = (searchParams.get("quick") || "") as QuickLinkKey | "";

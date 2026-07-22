@@ -1,13 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import {
   clearSupabaseSessionStorage,
   hasActiveClientSession,
   isClientLogoutPending,
   syncClientProfileFromSession,
 } from "@/lib/supabaseAuth";
+import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 
 const ProtectedClientRoute = ({ children }: { children: ReactNode }) => {
+  const location = useLocation();
   const [status, setStatus] = useState<"checking" | "allowed" | "denied">("checking");
 
   useEffect(() => {
@@ -49,7 +51,11 @@ const ProtectedClientRoute = ({ children }: { children: ReactNode }) => {
   }
 
   if (status === "denied") {
-    return <Navigate to="/" replace />;
+    // Preserve the exact URL the user was trying to reach (path + filters) so
+    // that after they sign in they land back on it, instead of dumping them on
+    // the home page and losing their intended destination.
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={buildEmployerLoginPath(returnTo)} replace />;
   }
 
   return <>{children}</>;

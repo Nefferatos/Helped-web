@@ -13,8 +13,18 @@ export const getClientPostLoginPath = (redirectTo?: string | null) => {
   const target = redirectTo?.trim();
   if (!target) return DEFAULT_CLIENT_POST_LOGIN_PATH;
 
+  // Only accept in-app, absolute paths. Reject protocol-relative URLs (`//host`)
+  // and anything that isn't rooted at `/` to avoid open-redirects.
   if (!target.startsWith("/")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
   if (target.startsWith("//")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
+
+  // The home page and the auth pages themselves are never meaningful post-login
+  // destinations for an employer. Falling back to the default here guarantees a
+  // stray `redirectTo=/` (or a redirect loop through the login/callback pages)
+  // always lands the user on the maids search page instead of home.
+  if (target === "/") return DEFAULT_CLIENT_POST_LOGIN_PATH;
+  if (target.startsWith("/employer-login")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
+  if (target.startsWith("/auth/")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
 
   return target;
 };

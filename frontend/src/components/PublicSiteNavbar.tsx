@@ -126,7 +126,12 @@ const PublicSiteNavbar = () => {
     return () => { document.body.style.overflow = ""; };
   }, [isMobileMenuOpen]);
 
-  const loginPath = buildEmployerLoginPath("/");
+  // Bring the user back to whatever page they were browsing (including any
+  // active search filters) after they log in. On non-returnable pages (home,
+  // the auth pages) getClientPostLoginPath falls back to the maids search page.
+  const loginPath = buildEmployerLoginPath(
+    `${location.pathname}${location.search}${location.hash}`
+  );
 
   /* ── Login Button ── */
   const LoginButton = ({ full = false, onClick }: { full?: boolean; onClick?: () => void }) => (
