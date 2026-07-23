@@ -3,7 +3,7 @@ import {
   ArrowRight, CheckCircle, HeartHandshake, Users, X, Star,
   Shield, ChevronRight, Search, Home, Heart, Baby, Backpack,
   BadgeCheck, Sparkles, Lock, UserCheck, TrendingUp,
-  Award, SlidersHorizontal, LayoutGrid, ArrowUp, MapPin, Mail, Phone, Clock, MessageCircle, PhoneCall, Facebook,
+  Award, SlidersHorizontal, LayoutGrid, ArrowUp, MapPin, Mail, Phone, Clock, MessageCircle, PhoneCall, Facebook, Youtube,
 } from "lucide-react";
 import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -1122,6 +1122,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [nationality, setNationality] = useState("No Preference");
   const [language, setLanguage] = useState("No Preference");
   const [currentPage, setCurrentPage] = useState(1);
+  const [showSocialRail, setShowSocialRail] = useState(true);
 
   const isLoggedIn = !!getClientToken();
   const searchMaidsHref = isLoggedIn ? "/client/maids" : "/search-maids";
@@ -1249,6 +1250,90 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       <style>{GLOBAL_STYLES}</style>
       <BackToTopButton />
 
+      <aside
+        aria-label="Social media links"
+        style={{
+          position: "fixed",
+          right: 0,
+          top: "50%",
+          transform: "translateY(-50%)",
+          zIndex: 45,
+          display: "flex",
+          flexDirection: "column",
+          gap: showSocialRail ? 10 : 0,
+          paddingRight: showSocialRail ? 10 : 6,
+          minWidth: showSocialRail ? 52 : 38,
+          minHeight: showSocialRail ? undefined : 42,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setShowSocialRail((visible) => !visible)}
+          aria-label={showSocialRail ? "Collapse social media links" : "Expand social media links"}
+          title={showSocialRail ? "Hide social links" : "Show social links"}
+          style={{
+            position: "relative",
+            width: 42,
+            height: 32,
+            alignSelf: "center",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "none",
+            background: "transparent",
+            color: "#FCD34D",
+            boxShadow: "none",
+            cursor: "pointer",
+            transition: "all 0.18s ease",
+            filter: "drop-shadow(0 2px 3px rgba(7,43,53,0.55))",
+          }}
+        >
+          <ChevronRight
+            size={26}
+            strokeWidth={3}
+            style={{ transform: showSocialRail ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.18s ease" }}
+          />
+        </button>
+        {showSocialRail && [
+          { label: "Facebook", href: "https://www.facebook.com/", color: "#1877F2", icon: <Facebook size={20} /> },
+          { label: "TikTok", href: "https://www.tiktok.com/", color: "#111111", icon: <FaTiktok size={19} /> },
+          { label: "YouTube", href: "https://www.youtube.com/", color: "#FF0000", icon: <Youtube size={20} /> },
+        ].map((social) => (
+          <a
+            key={social.label}
+            href={social.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Follow us on ${social.label}`}
+            title={social.label}
+            style={{
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "50%",
+              color: social.color,
+              background: "#FFFFFF",
+              border: "1px solid rgba(7,43,53,0.14)",
+              boxShadow: "0 4px 14px rgba(7,43,53,0.22)",
+              textDecoration: "none",
+              transition: "transform 0.18s ease, box-shadow 0.18s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateX(-4px)";
+              e.currentTarget.style.boxShadow = "0 7px 20px rgba(7,43,53,0.3)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateX(0)";
+              e.currentTarget.style.boxShadow = "0 4px 14px rgba(7,43,53,0.22)";
+            }}
+          >
+            {social.icon}
+          </a>
+        ))}
+      </aside>
+
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
       {/* ── MAID JOB SEEKER BANNER ── */}
@@ -1334,7 +1419,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               <span className="amber-rule" style={{ marginBottom: 20 }} />
 
               <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 15, lineHeight: 1.8, maxWidth: 420, margin: "0 0 32px" }}>
-                Rinzin Agency, also known as At The Agency, matches Singapore families with verified maids and migrant domestic workers from North East India, Nepal, Myanmar, Indonesia and the Philippines.
+                AT The Agency (formerly Rinzin Agency) matches Singapore families with verified maids and migrant domestic workers from North East India, Nepal, Myanmar, Indonesia and the Philippines.
               </p>
 
               {clientUser && (
@@ -1511,7 +1596,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 <span className="search-hero-title-line search-hero-title-line--three" style={{ fontStyle:"normal",fontSize:".72em",color:"rgba(255,255,255,.72)" }}>at a Price You'll Love.</span>
               </h1>
               <p className="search-hero-description" style={{ margin:0,maxWidth:560,color:"rgba(255,255,255,.66)",fontSize:14,lineHeight:1.7 }}>
-                Rinzin Agency, also known as At The Agency, matches Singapore families with verified maids and migrant domestic workers from North East India, Nepal, Myanmar, Indonesia and the Philippines.
+                AT The Agency (formerly Rinzin Agency) matches Singapore families with verified maids and migrant domestic workers from North East India, Nepal, Myanmar, Indonesia and the Philippines.
               </p>
               <div className="search-hero-trust" aria-label="Why families choose our helpers">
                 <span><Shield size={12} /> Verified profiles</span>

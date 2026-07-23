@@ -9,6 +9,7 @@ import { getClientToken } from "@/lib/clientAuth";
 import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import PublicSiteFooter from "@/components/PublicSiteFooter";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
@@ -25,12 +26,12 @@ const C = {
   yellowBorder:"rgba(252,211,77,0.35)",
   dark:        "#072B35",
   darkMid:     "#0A3D4A",
-  text:        "#072B35",
-  textMuted:   "#1A5568",
+  text:        "#111111",
+  textMuted:   "#263238",
   border:      "#B2D8E0",
-  surface:     "#EEF8FA",
-  white:       "#FFFFFF",
-  slate:       "#EBF5F8",
+  surface:     "#EEF2ED",
+  white:       "#F8F8F4",
+  slate:       "#E7EDE8",
 };
 
 // ── Nationality → ISO 3166-1 alpha-2 ─────────────────────────────────────────
@@ -1170,7 +1171,7 @@ const MaidSearchPage = ({
               MAID <span style={{ color:C.yellowWarm }}>SEARCH</span>
             </p>
           </div>
-          <p className="text-[10px] mt-0.5 pl-2" style={{ color:"rgba(255,255,255,0.55)" }}>Find your perfect household helper</p>
+          <p className="text-[10px] mt-0.5 pl-2" style={{ color:"rgba(255,255,255,0.55)" }}>Find a suitable maid for your household</p>
         </div>
 
         <div className="space-y-3 p-3" style={{ background:C.white }}>
@@ -1348,7 +1349,10 @@ const MaidSearchPage = ({
   );
 
   return (
-    <div className="client-page-theme min-h-screen" style={{ background:C.slate }}>
+    <div
+      className="client-page-theme min-h-screen"
+      style={{ background:C.slate, color:C.text, fontWeight:600 }}
+    >
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
       {/* Hero strip */}
@@ -1464,28 +1468,8 @@ const MaidSearchPage = ({
           </div>
 
           {/* Results header */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5"
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-3 px-4 py-2.5"
             style={{ background:C.white, border:`1px solid ${C.border}`, boxShadow:"0 1px 4px rgba(7,43,53,0.04)" }}>
-            <p className="text-sm" style={{ color:C.textMuted }}>
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 border-2 border-t-transparent animate-spin"
-                    style={{ borderColor:`${C.border} ${C.border} ${C.border} ${C.greenMid}` }} />
-                  Loading profiles…
-                </span>
-              ) : (
-                <>
-                  <span style={{ fontWeight:800, color:C.text }}>{filteredMaids.length}</span>{" "}
-                  {filteredMaids.length !== 1 ? "profiles" : "profile"} found
-                  {quickLink && (
-                    <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider"
-                      style={{ border:`1px solid ${C.border}`, background:C.surface, color:C.textMuted }}>
-                      {QUICK_LINKS[quickLink as QuickLinkKey]}
-                    </span>
-                  )}
-                </>
-              )}
-            </p>
             <PaginationBar />
           </div>
 
@@ -1563,6 +1547,7 @@ const MaidSearchPage = ({
           />
         </main>
       </div>
+      {!embedded && <PublicSiteFooter />}
     </div>
   );
 };

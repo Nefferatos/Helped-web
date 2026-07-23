@@ -72,15 +72,27 @@ const detectSkills = (message: string): SkillKey[] => {
   );
 };
 
+const COUNT_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
+  sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20,
+  couple: 2, few: 3,
+};
+
 const extractRequestedCount = (message: string): number => {
+  const countToken = String.raw`(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|couple|few)`;
   const match = message.match(
-    /\b(?:top|list|show|suggest|recommend|find|give me|need|want|provide)\s+(\d+)\b|\b(\d+)\s+(?:maid|helper|fdw|candidate|suggestion|best)/i,
+    new RegExp(
+      String.raw`\b(?:top|list|show|suggest|recommend|find|give(?:\s+me)?|need|want|provide|see|looking\s+for)\s+(?:me\s+)?${countToken}\b|\b${countToken}\s+(?:maids?|helpers?|fdws?|candidates?|suggestions?|options?|best)\b`,
+      "i",
+    ),
   );
   if (match) {
-    const n = parseInt(match[1] ?? match[2] ?? "10", 10);
-    return Number.isFinite(n) && n > 0 && n <= 20 ? n : 10;
+    const token = (match[1] ?? match[2] ?? "").toLowerCase();
+    const n = /^\d+$/.test(token) ? parseInt(token, 10) : COUNT_WORDS[token];
+    return Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 0;
   }
-  return 10;
+  return 0;
 };
 
 const maidSkillScore = (maid: Record<string, unknown>, skills: SkillKey[]): number => {
@@ -276,6 +288,27 @@ const buildPlatformGuide = (input: Record<string, unknown>) => ({
     transfer: "Transfer helper — currently working in Singapore, changing employer. Faster deployment (1–2 weeks). Already familiar with Singapore environment.",
     exSingapore: "Ex-Singapore helper — previously worked in Singapore, now overseas. Experienced with local standards. Processing similar to fresh.",
   },
+});
+
+const buildPublicSiteKnowledge = () => ({
+  scope: "Public website only. Agency portal and agency administration content are intentionally excluded.",
+  excludedPaths: ["/agency", "/agencyadmin", "/agencyadmin/*"],
+  pages: [
+    { path: "/", purpose: "Homepage with agency introduction, featured helpers, services, testimonials, and smart maid search." },
+    { path: "/search-maids", purpose: "Advanced public helper search by keyword, profile age, maid type, nationality, experience, duties, language, age, marital status, education, height, and religion." },
+    { path: "/search-maids/results", purpose: "Public helper results, profile cards, filters, pagination, and shortlist." },
+    { path: "/maids/{referenceCode}", purpose: "Public helper profile and biodata for a selected helper." },
+    { path: "/hire/{referenceCode}", purpose: "Start the hiring process for a selected helper." },
+    { path: "/about", purpose: "Agency background, history, values, support, and international placements." },
+    { path: "/services", purpose: "Domestic helper placement and related agency services." },
+    { path: "/enquiry2", purpose: "Submit a general hiring enquiry and requirements." },
+    { path: "/faq", purpose: "Public answers about helper types, hiring, levy, medical checks, permits, and employment matters." },
+    { path: "/contact", purpose: "Agency contact information, address, opening hours, and map." },
+    { path: "/apply-as-maid", purpose: "Four-step public FDW application with biodata, preferences, skills, history, and documents." },
+    { path: "/apply-as-maid/status/{applicationId}", purpose: "Applicant status tracking." },
+    { path: "/employer-login", purpose: "Employer login and account access." },
+  ],
+  responseRule: "Answer navigation and website-content questions only from these public pages and the supplied public FAQ/contact context. Never describe, expose, or direct visitors into agency portal features.",
 });
 
 const scoreMaid = (maid: Record<string, unknown>, input: Record<string, unknown>) => {
@@ -507,17 +540,21 @@ export const runAgentTools = (context: AiToolContext) => {
       patterns.some((p) => rawMsg.includes(p))
     )?.[0]) ?? null;
 
-    // Apply nationality filter first, then type filter
+    // Apply requested filters strictly. Never fall back to unrelated helpers.
     let maidPool = requestedNat
       ? allPublicMaids.filter((m) => lower(text(m.nationality)).includes(requestedNat))
       : allPublicMaids;
     if (requestedType) {
-      const typeFiltered = maidPool.filter((m) => lower(text(m.type)).includes(requestedType === "exSingapore" ? "ex-singapore" : requestedType));
-      if (typeFiltered.length > 0) maidPool = typeFiltered;
+      maidPool = maidPool.filter((m) =>
+        lower(text(m.type)).includes(requestedType === "exSingapore" ? "ex-singapore" : requestedType),
+      );
     }
 
-    const activePool = maidPool.length > 0 ? maidPool : allPublicMaids;
     const requestedSkills = detectSkills(rawMsg);
+    if (requestedSkills.length > 0) {
+      maidPool = maidPool.filter((m) => maidSkillScore(m, requestedSkills) > 0);
+    }
+    const activePool = maidPool;
     const requestedCount = extractRequestedCount(rawMsg);
     const namedMaid = findMaidByName(activePool, rawMsg);
 
@@ -546,6 +583,7 @@ export const runAgentTools = (context: AiToolContext) => {
       publicMaids: finalPool.slice(0, sendCount).map(compactPublicMaid),
       publicFaqs: buildPublicFaqs(profile),
       platformGuide: buildPlatformGuide(input),
+      publicSiteKnowledge: buildPublicSiteKnowledge(),
       agencyHighlights,
       queryHints: {
         requestedCount,

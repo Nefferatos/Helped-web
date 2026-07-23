@@ -1,4 +1,4 @@
-import { Clock, Facebook, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { Clock, Facebook, Mail, MapPin, MessageCircle, Phone, Youtube } from "lucide-react";
 import { FaTiktok } from "react-icons/fa6";
 import { Link } from "react-router-dom";
 
@@ -14,7 +14,7 @@ const footerLinks = [
 const PublicSiteFooter = () => (
   <footer className="psf-footer">
     <style>{`
-      .psf-footer{background:#0B1F25;color:#fff;padding:58px 0 0;font-family:'Inter',sans-serif;border-top:4px solid #FCD34D}
+      .psf-footer{position:relative;z-index:2;isolation:isolate;background:#0B1F25!important;color:#fff;padding:58px 0 0;font-family:'Inter',sans-serif;border-top:4px solid #FCD34D}
       .psf-inner{max-width:1280px;margin:0 auto;padding:0 24px}
       .psf-grid{display:grid;grid-template-columns:1.4fr 1fr 1.2fr 1.2fr .8fr;gap:36px;margin-bottom:44px}
       .psf-brand{font-family:'Playfair Display',Georgia,serif;font-size:18px;margin:0 0 12px}
@@ -30,11 +30,10 @@ const PublicSiteFooter = () => (
       .psf-social--facebook{color:#60A5FA}
       .psf-social--facebook:hover{color:#fff;background:#1877F2;border-color:#1877F2;transform:translateY(-2px)}
       .psf-social--tiktok:hover{color:#061D26;background:#FCD34D;border-color:#FCD34D;transform:translateY(-2px)}
-      .psf-bottom{border-top:1px solid rgba(255,255,255,.1);padding:20px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-      .psf-bottom p{font-size:12px;color:rgba(255,255,255,.72);margin:0}
-      .psf-legal{display:flex;gap:4px}
-      .psf-legal a{font-size:12px;color:rgba(255,255,255,.72);text-decoration:none;padding:0 8px}
-      .psf-legal a:hover{color:#FCD34D}
+      .psf-social--youtube{color:#FF4D4D}
+      .psf-social--youtube:hover{color:#fff;background:#FF0000;border-color:#FF0000;transform:translateY(-2px)}
+      .psf-bottom{border-top:1px solid rgba(255,255,255,.1);padding:20px 0;text-align:center}
+      .psf-bottom p{font-size:12px;color:rgba(255,255,255,.72);margin:0;width:100%}
       @media(max-width:900px){.psf-grid{grid-template-columns:1fr 1fr 1fr;gap:30px}}
       @media(max-width:600px){.psf-footer{padding-top:44px}.psf-grid{grid-template-columns:1fr 1fr;gap:28px 20px}.psf-grid>div:first-child{grid-column:1/-1}.psf-bottom{align-items:flex-start;flex-direction:column}}
       @media(max-width:420px){.psf-grid{grid-template-columns:1fr}}
@@ -42,7 +41,7 @@ const PublicSiteFooter = () => (
     <div className="psf-inner">
       <div className="psf-grid">
         <div>
-          <h4 className="psf-brand">&quot;Find Maids&quot; At The Agency</h4>
+          <h4 className="psf-brand">AT The Agency <span style={{ fontSize: 13, fontFamily: "'Inter',sans-serif", fontWeight: 500 }}>(formerly Rinzin Agency)</span></h4>
           <p className="psf-copy">Matching trusted domestic professionals with Singapore families since 2009.</p>
         </div>
         <div>
@@ -71,12 +70,12 @@ const PublicSiteFooter = () => (
           <div className="psf-socials">
             <a href="#" className="psf-social psf-social--facebook" aria-label="Follow us on Facebook"><Facebook size={18}/></a>
             <a href="https://www.tiktok.com/" target="_blank" rel="noopener noreferrer" className="psf-social psf-social--tiktok" aria-label="Follow us on TikTok"><FaTiktok size={17}/></a>
+            <a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer" className="psf-social psf-social--youtube" aria-label="Follow us on YouTube"><Youtube size={18}/></a>
           </div>
         </div>
       </div>
       <div className="psf-bottom">
-        <p>© 2026 &quot;Find Maids&quot; At The Agency. All rights reserved.</p>
-        <div className="psf-legal"><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/contact">Contact</Link></div>
+        <p>© 2026 AT The Agency (formerly Rinzin Agency). All rights reserved.</p>
       </div>
     </div>
   </footer>

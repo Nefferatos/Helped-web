@@ -226,11 +226,32 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
           to   { transform: translateX(-50%); }
         }
         @keyframes rz-fly {
-          0%   { left: 2%;  top: 52%; opacity: 0; }
+          0%   { left: 6%;  top: 54%; opacity: 0; transform: translate(-50%,-50%) rotate(58deg) scale(.78); }
           10%  { opacity: 1; }
-          50%  { left: 50%; top: 18%; }
+          28%  { left: 29%; top: 24%; transform: translate(-50%,-50%) rotate(50deg) scale(1); }
+          50%  { left: 50%; top: 10%; transform: translate(-50%,-50%) rotate(45deg) scale(1.08); }
+          72%  { left: 71%; top: 24%; transform: translate(-50%,-50%) rotate(40deg) scale(1); }
           90%  { opacity: 1; }
-          100% { left: 98%; top: 52%; opacity: 0; }
+          100% { left: 94%; top: 54%; opacity: 0; transform: translate(-50%,-50%) rotate(32deg) scale(.78); }
+        }
+        .rz-flight {
+          position: absolute;
+          color: #FCD34D;
+          filter: drop-shadow(0 3px 5px rgba(252,211,77,.35));
+          animation: rz-fly 7s cubic-bezier(.45,.05,.55,.95) infinite;
+          will-change: left, top, transform, opacity;
+        }
+        .rz-flight-trail {
+          position: absolute;
+          right: 11px;
+          top: 50%;
+          width: 28px;
+          height: 1px;
+          transform: translateY(-50%);
+          background: linear-gradient(to left, rgba(252,211,77,.75), transparent);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .rz-flight { animation: none; left: 50%; top: 10%; transform: translate(-50%,-50%) rotate(45deg); }
         }
       `}</style>
 
@@ -519,8 +540,8 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
         <section className="bg-white pb-16 sm:pb-20 lg:pb-24">
           <div className="mx-auto max-w-[1180px] px-5 sm:px-8">
             <Reveal>
-              <div className="relative overflow-hidden rounded-xl bg-[#0E4E5E] px-6 py-10 sm:px-10 sm:py-12 lg:px-14">
-                <div className="relative z-10 grid grid-cols-1 items-center gap-8 sm:grid-cols-[1fr_auto]">
+              <div className="relative overflow-hidden rounded-xl bg-[#0E4E5E] px-6 py-10 shadow-[0_18px_45px_rgba(7,43,53,0.16)] sm:px-10 sm:py-12 lg:px-14">
+                <div className="relative z-10 grid grid-cols-1 items-center gap-7 md:grid-cols-[minmax(0,1fr)_auto] md:gap-12">
                   <div>
                     <div className={`${MONO} mb-3.5 flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-wide text-[#FCD34D]`}>
                       <MapPin size={11} />
@@ -533,29 +554,28 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
                       We relocate fresh and experienced helpers to reputable clients in <strong className="font-semibold text-white/90">Europe</strong> and the <strong className="font-semibold text-white/90">United Kingdom</strong>. Email your requirements and we'll shortlist the best candidates for you.
                     </p>
                   </div>
-                  <div>
-                    <a href="mailto:enquiry@rinzinagency.com" className={BTN_OUTLINE_AMBER}>
+                  <div className="md:justify-self-end">
+                    <a href="mailto:enquiry@rinzinagency.com" className={`${BTN_OUTLINE_AMBER} w-full justify-center sm:w-auto`}>
                       <Mail size={14} />
                       Email Requirements
                     </a>
                   </div>
                 </div>
 
-                <div className="relative mt-10 h-16">
-                  <div className="absolute left-[6%] right-[6%] top-1/2 h-px bg-[linear-gradient(to_right,rgba(255,255,255,0.3)_50%,transparent_50%)] bg-[length:10px_1px]" />
-                  <div className="absolute left-[6%] top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5">
+                <div className="relative mt-12 h-20 sm:mt-14">
+                  <div className="absolute left-[6%] right-[6%] top-[54%] h-px bg-[linear-gradient(to_right,rgba(255,255,255,0.32)_50%,transparent_50%)] bg-[length:10px_1px]" />
+                  <div className="absolute left-[6%] top-[54%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#FCD34D]" />
-                    <span className={`${MONO} text-[0.64rem] font-bold tracking-wide text-white/55`}>SINGAPORE</span>
+                    <span className={`${MONO} whitespace-nowrap text-[0.64rem] font-bold tracking-wide text-white/65`}>SINGAPORE</span>
                   </div>
-                  <div className="absolute left-[94%] top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5">
+                  <div className="absolute left-[94%] top-[54%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#FCD34D]" />
-                    <span className={`${MONO} text-[0.64rem] font-bold tracking-wide text-white/55`}>EUROPE / UK</span>
+                    <span className={`${MONO} whitespace-nowrap text-[0.64rem] font-bold tracking-wide text-white/65`}>EUROPE / UK</span>
                   </div>
-                  <Plane
-                    size={16}
-                    aria-hidden="true"
-                    className="absolute -translate-x-1/2 -translate-y-1/2 rotate-90 text-[#FCD34D] motion-safe:animate-[rz-fly_5s_ease-in-out_infinite]"
-                  />
+                  <div className="rz-flight" aria-hidden="true">
+                    <span className="rz-flight-trail" />
+                    <Plane size={19} strokeWidth={2.4} />
+                  </div>
                 </div>
               </div>
             </Reveal>

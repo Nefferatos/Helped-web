@@ -8677,17 +8677,33 @@ app.post(
     const maidCardRequest =
       /\b(top|best|show|find|recommend|match|shortlist|list|available|availability|who|which|suitable|have|any|got|need|want|looking|do|can|hire|hiring)\b/i.test(input.message) &&
       /\b(maid|maids|helper|helpers|fdw|filipino|indonesian|myanmar|burmese|indian|sri\s+lankan|bangladeshi|transfer|elderly|childcare|infant|newborn|nanny|babysit|disabled|housework|housekeep|cleaning|cooking|cook|chef|care)\b/i.test(input.message);
+    const countWords: Record<string, number> = {
+      one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+      ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
+      sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20,
+      couple: 2, few: 3,
+    };
     const requestedCardCountMatch = input.message.match(
-      /\b(?:top|list|show|suggest|recommend|find|give\s+me|need|want|provide)\s+(\d+)\b|\b(\d+)\s+(?:maid|helper|fdw|candidate|suggestion|best)/i,
+      /\b(?:top|list|show|suggest|recommend|find|give(?:\s+me)?|need|want|provide|see|looking\s+for)\s+(?:me\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|couple|few)\b|\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|couple|few)\s+(?:maids?|helpers?|fdws?|candidates?|suggestions?|options?|best)\b/i,
     );
-    const parsedRequestedCardCount = Number.parseInt(
-      requestedCardCountMatch?.[1] ?? requestedCardCountMatch?.[2] ?? "10",
-      10,
-    );
+    const requestedCardCountToken = (
+      requestedCardCountMatch?.[1] ?? requestedCardCountMatch?.[2] ?? "10"
+    ).toLowerCase();
+    const parsedRequestedCardCount = /^\d+$/.test(requestedCardCountToken)
+      ? Number.parseInt(requestedCardCountToken, 10)
+      : (countWords[requestedCardCountToken] ?? 10);
     const requestedCardCount =
       Number.isFinite(parsedRequestedCardCount) && parsedRequestedCardCount >= 1 && parsedRequestedCardCount <= 20
         ? parsedRequestedCardCount
         : 10;
+    const requestedTypeCard =
+      /\b(transfer maid|transfer helper|transfer fdw|currently in singapore|already in singapore)\b/i.test(input.message)
+        ? "transfer"
+        : /\b(fresh maid|fresh helper|fresh fdw|new maid|new helper|first time)\b/i.test(input.message)
+          ? "fresh"
+          : /\b(ex-singapore|ex singapore|previously worked in singapore|worked in singapore before)\b/i.test(input.message)
+            ? "ex-singapore"
+            : null;
     const genericCardTerms = new Set([
       "available",
       "availability",
@@ -8809,13 +8825,22 @@ app.post(
     };
 
     const publicMaids = (data.maids || []).filter(
-      (maid) => Boolean((maid as unknown as Record<string, unknown>).isPublic) && isDisplayablePublicMaid(maid),
+      (maid) =>
+        Boolean((maid as unknown as Record<string, unknown>).isPublic) &&
+        Boolean((maid as unknown as Record<string, unknown>).hasPhoto) &&
+        isDisplayablePublicMaid(maid),
     );
 
     const matchesRequestedNat = (maid: MaidRecord) => {
       if (!requestedNatCard) return true;
       const nat = String((maid as unknown as Record<string, unknown>).nationality || "").toLowerCase();
       return nat.includes(requestedNatCard);
+    };
+    const matchesRequestedType = (maid: MaidRecord) => {
+      if (!requestedTypeCard) return true;
+      return String((maid as unknown as Record<string, unknown>).type || "")
+        .toLowerCase()
+        .includes(requestedTypeCard);
     };
 
     // Primary: marker match. Fallback: name substring match.
@@ -8833,6 +8858,9 @@ app.post(
     if (requestedNatCard) {
       featured = featured.filter(matchesRequestedNat);
     }
+    if (requestedTypeCard) {
+      featured = featured.filter(matchesRequestedType);
+    }
 
     if (maidCardRequest && featured.length < requestedCardCount) {
       const featuredRefs = new Set(
@@ -8848,7 +8876,7 @@ app.post(
         .filter(({ maid, score }) => {
           const ref = String((maid as unknown as Record<string, unknown>).referenceCode || "");
           if (featuredRefs.has(ref)) return false;
-          if (requestedNatCard) return matchesRequestedNat(maid);
+          if (!matchesRequestedNat(maid) || !matchesRequestedType(maid)) return false;
           return cardTerms.length === 0 || score > 0;
         })
         .sort((left, right) =>
