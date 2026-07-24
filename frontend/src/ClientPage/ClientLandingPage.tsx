@@ -1596,7 +1596,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                 <span className="search-hero-title-line search-hero-title-line--three" style={{ fontStyle:"normal",fontSize:".72em",color:"rgba(255,255,255,.72)" }}>at a Price You'll Love.</span>
               </h1>
               <p className="search-hero-description" style={{ margin:0,maxWidth:560,color:"rgba(255,255,255,.66)",fontSize:14,lineHeight:1.7 }}>
-                AT The Agency (formerly Rinzin Agency) matches Singapore families with verified maids and migrant domestic workers from North East India, Nepal, Myanmar, Indonesia and the Philippines.
+                AT The Agency (formerly Rinzin Agency) matches Singapore families with verified North East Indian (NE Indian) and Indian Nepali maids from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam, alongside helpers from Nepal, Myanmar, Indonesia and the Philippines.
               </p>
               <div className="search-hero-trust" aria-label="Why families choose our helpers">
                 <span><Shield size={12} /> Verified profiles</span>

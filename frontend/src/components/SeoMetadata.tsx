@@ -3,7 +3,19 @@ import { useLocation } from "react-router-dom";
 
 const SITE_URL = "https://rinzinagency.com";
 const DEFAULT_DESCRIPTION =
-  "Find North East Indian, Nepalese, Myanmar, Indonesian and Filipino domestic helpers in Singapore with AT The Agency (formerly Rinzin Agency).";
+  "Find verified North East Indian and Indian Nepali domestic helpers from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam in Singapore.";
+const DEFAULT_KEYWORDS = [
+  "Darjeeling maid Singapore",
+  "Manipur maid Singapore",
+  "Sikkim maid Singapore",
+  "Mizoram maid Singapore",
+  "Arunachal Pradesh maid Singapore",
+  "Assam maid Singapore",
+  "North East Indian maid Singapore",
+  "NE Indian maid Singapore",
+  "Indian Nepali maid Singapore",
+  "domestic helper Singapore",
+].join(", ");
 
 const pageMetadata: Record<string, { title: string; description: string }> = {
   "/": {
@@ -11,12 +23,12 @@ const pageMetadata: Record<string, { title: string; description: string }> = {
     description: DEFAULT_DESCRIPTION,
   },
   "/search-maids": {
-    title: "Search Maids & Domestic Helpers Singapore | AT The Agency",
-    description: "Browse fresh, transfer and ex-Singapore domestic helpers from India, Nepal, Myanmar, Indonesia and the Philippines.",
+    title: "Search North East Indian Maids Singapore | AT The Agency",
+    description: "Browse verified NE Indian and Indian Nepali helpers from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam.",
   },
   "/about": {
     title: "North East Indian Maid Specialists | AT The Agency",
-    description: "AT The Agency (formerly Rinzin Agency) recruits domestic helpers from North East India, Nepal, Myanmar, Indonesia and the Philippines.",
+    description: "Meet Singapore's North East Indian maid specialists recruiting from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam.",
   },
   "/agency": {
     title: "Maid Agency Services in Singapore | AT The Agency",
@@ -88,6 +100,7 @@ const SeoMetadata = () => {
 
     document.title = metadata.title;
     upsertMeta('meta[name="description"]', "name", "description", metadata.description);
+    upsertMeta('meta[name="keywords"]', "name", "keywords", DEFAULT_KEYWORDS);
     upsertMeta(
       'meta[name="robots"]',
       "name",
