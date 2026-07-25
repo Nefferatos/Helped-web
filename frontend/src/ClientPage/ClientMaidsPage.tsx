@@ -401,6 +401,37 @@ const GLOBAL_CSS = `
 }
 @keyframes panelIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
+.cm-content > .cm-panel + .cm-panel { display:none; }
+.cm-classic-filter{padding:0;color:#132f37;font:12px Arial,Helvetica,sans-serif}
+.cm-classic-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;background:linear-gradient(135deg,#0e4e5e,#176b7e);border-bottom:3px solid #f2c94c}
+.cm-classic-title{margin:0;color:#fff;font-size:17px;font-weight:700}
+.cm-classic-subtitle{margin:3px 0 0;color:rgba(255,255,255,.72);font-size:11px}
+.cm-classic-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 7px;border-radius:4px;background:#f2c94c;color:#0e4e5e;font-weight:700}
+.cm-classic-body{padding:16px 18px 18px}
+.cm-classic-row{display:grid;grid-template-columns:145px minmax(0,420px);align-items:center;min-height:36px}
+.cm-classic-label,.cm-classic-heading{font-weight:700;color:#173b44}
+.cm-classic-input,.cm-classic-select{width:100%;height:30px;border:1px solid #a9bcc1;border-radius:3px;background:#fff;padding:4px 8px;box-sizing:border-box;color:#102e36;font:12px Arial,Helvetica,sans-serif;transition:border-color .15s,box-shadow .15s}
+.cm-classic-input:focus,.cm-classic-select:focus{outline:none;border-color:#167086;box-shadow:0 0 0 2px rgba(22,112,134,.12)}
+.cm-classic-input::placeholder{color:#80979d}
+.cm-classic-select{max-width:300px;padding:3px 6px}
+.cm-classic-radio-row,.cm-classic-check-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
+.cm-classic-option{display:inline-flex;align-items:center;gap:5px;min-height:20px;padding:1px 3px;border-radius:3px;white-space:nowrap;cursor:pointer;transition:background .15s,color .15s}
+.cm-classic-option:hover{background:#eaf4f7;color:#0e4e5e}
+.cm-classic-option:has(input:checked){color:#0b596b;font-weight:700;background:transparent}
+.cm-classic-option input{width:13px;height:13px;margin:0;accent-color:#087ff5}
+.cm-classic-quick{padding:7px 0 12px}
+.cm-classic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#cbdadd;border:1px solid #cbdadd}
+.cm-classic-group{padding:11px 10px 10px;min-width:0;background:#fff}
+.cm-classic-heading{margin:0 0 6px;padding-bottom:5px;border-bottom:1px solid #e2ecee;font-size:12px;color:#0e4e5e}
+.cm-classic-options{display:flex;flex-direction:column;align-items:flex-start}
+.cm-classic-actions{display:flex;align-items:center;gap:9px;padding-top:14px}
+.cm-classic-actions button{min-height:34px;padding:6px 19px;border-radius:4px;font:700 12px Arial,Helvetica,sans-serif;cursor:pointer;transition:transform .15s,box-shadow .15s,background .15s}
+.cm-classic-search{border:1px solid #0e4e5e;background:linear-gradient(135deg,#0e4e5e,#176b7e);color:#fff;box-shadow:0 3px 8px rgba(14,78,94,.18)}
+.cm-classic-search:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(14,78,94,.25)}
+.cm-classic-clear{border:1px solid #b7c8cc;background:#fff;color:#395860}.cm-classic-clear:hover{background:#f2f7f8}
+@media(max-width:640px){.cm-classic-head{padding:12px 14px}.cm-classic-body{padding:13px 14px 15px}.cm-classic-row{grid-template-columns:1fr;gap:4px;padding:4px 0}.cm-classic-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:420px){.cm-classic-grid{grid-template-columns:1fr}.cm-classic-count{display:none}.cm-classic-actions button{flex:1}}
+
 .cm-panel-header {
   display:flex;
   align-items:center;
@@ -1276,6 +1307,98 @@ const LoginGateBanner = ({ onLoginClick }:{onLoginClick:()=>void}) => (
   </div>
 );
 
+const ClassicFilterPanel = ({draft,set,toggle,chooseNoPreference,onSearch,onClear}:{
+  draft:Filters;
+  set:(key:keyof Filters,value:boolean|string)=>void;
+  toggle:(key:keyof Filters)=>void;
+  chooseNoPreference:(key:keyof Filters,specifics:readonly (keyof Filters)[])=>void;
+  onSearch:()=>void;
+  onClear:()=>void;
+}) => {
+  const groups:[string,[keyof Filters,string][],keyof Filters][] = [
+    ["Nationality",[["natFilipino","Filipino"],["natIndonesian","Indonesian"],["natMyanmar","Myanmar"],["natIndian","Indian"],["natSriLankan","Sri Lankan"],["natCambodian","Cambodian"],["natBangladeshi","Bangladeshi"],["natOthers","Others"]],"natNoPreference"],
+    ["Working Experience",[["expHomeCountry","Home Country"],["expSingapore","Singapore"],["expMalaysia","Malaysia"],["expHongKong","Hong Kong"],["expTaiwan","Taiwan"],["expMiddleEast","Middle East"],["expOtherCountries","Other Countries"]],"expNoPreference"],
+    ["Duty",[["dutyCareInfant","Care for Infant"],["dutyCareYoungChildren","Care for Young Children"],["dutyCareElderlyDisabled","Care for Elderly/Disabled"],["dutyCooking","Cooking"],["dutyGeneralHousekeeping","General Housekeeping"]],"dutyNoPreference"],
+    ["Language",[["langEnglish","English"],["langMandarin","Mandarin/Chinese-Dialect"],["langBahasaIndonesia","Bahasa Indonesia/Malaysia"],["langHindi","Hindi"],["langTamil","Tamil"]],"langNoPreference"],
+    ["Education",[["eduCollege","College"],["eduHighSchool","High School"],["eduSecondary","Secondary"],["eduPrimary","Primary"]],"eduNoPreference"],
+    ["Religion",[["relFreeThinker","Free Thinker"],["relChristian","Christian"],["relCatholic","Catholic"],["relBuddhist","Buddhist"],["relMuslim","Muslim"],["relHindu","Hindu"],["relSikh","Sikh"],["relOthers","Others"]],"relNoPreference"],
+  ];
+  return (
+    <div className="cm-panel">
+      <div className="cm-classic-filter">
+        <div className="cm-classic-head">
+          <div>
+            <h2 className="cm-classic-title">Search Maid Profiles</h2>
+            <p className="cm-classic-subtitle">Select one or more preferences to narrow your results.</p>
+          </div>
+          <span className="cm-classic-count" title="Active filters">
+            {Object.entries(draft).filter(([key,value])=>
+              key !== "agencyPreference" &&
+              ((typeof value==="boolean" && value && !key.endsWith("NoPreference")) ||
+                (typeof value==="string" && value!=="" && value!=="No Preference"))
+            ).length}
+          </span>
+        </div>
+        <div className="cm-classic-body">
+        <div className="cm-classic-row">
+          <label className="cm-classic-label" htmlFor="maid-keywords">Keywords</label>
+          <input id="maid-keywords" className="cm-classic-input"
+            placeholder="Enter search keywords such as: Filipino maid, baby sitter, etc."
+            value={draft.keyword} onChange={e=>set("keyword",e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&onSearch()}/>
+        </div>
+        <div className="cm-classic-row">
+          <label className="cm-classic-label" htmlFor="biodata-created">Bio-data Created within</label>
+          <select id="biodata-created" className="cm-classic-select" value={draft.biodataCreatedWithin}
+            onChange={e=>set("biodataCreatedWithin",e.target.value)}>
+            {["No Preference","Last 3 days","Last 7 days","Last 15 days"].map(o=><option key={o}>{o}</option>)}
+          </select>
+        </div>
+        <div className="cm-classic-row">
+          <span className="cm-classic-label">Maid Type</span>
+          <div className="cm-classic-radio-row">
+            {(["New Maid","Transfer Maid","Ex-Singapore Maid"] as const).map(type=>(
+              <label className="cm-classic-option" key={type}>
+                <input type="radio" name="maid-type" checked={draft.maidType===type} onChange={()=>set("maidType",type)}/>{type}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="cm-classic-check-row cm-classic-quick">
+          {([["willingOffDays","Willing to work on off-days"],["hasChildren","Has Children"],["withVideo","With Video"]] as [keyof Filters,string][]).map(([key,label])=>(
+            <label className="cm-classic-option" key={key}>
+              <input type="checkbox" checked={Boolean(draft[key])} onChange={()=>toggle(key)}/>{label}
+            </label>
+          ))}
+        </div>
+        <div className="cm-classic-grid">
+          {groups.map(([title,options,noPreference])=>(
+            <section className="cm-classic-group" key={title}>
+              <h3 className="cm-classic-heading">{title}</h3>
+              <div className="cm-classic-options">
+                {options.map(([key,label])=>(
+                  <label className="cm-classic-option" key={key}>
+                    <input type="checkbox" checked={Boolean(draft[key])} onChange={()=>toggle(key)}/>{label}
+                  </label>
+                ))}
+                <label className="cm-classic-option">
+                  <input type="checkbox" checked={Boolean(draft[noPreference])}
+                    onChange={()=>chooseNoPreference(noPreference,options.map(([key])=>key))}/>No Preference
+                </label>
+              </div>
+            </section>
+          ))}
+        </div>
+        <div className="cm-classic-actions">
+          <button type="button" className="cm-classic-search" onClick={onSearch}>Search Maids</button>
+          <button type="button" className="cm-classic-clear" onClick={onClear}>Clear</button>
+        </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* Search results */
 const SearchResults = ({ maids, isLoggedIn, isLoading, onLoginClick, onViewProfile }:{
   maids:MaidProfile[]; isLoggedIn:boolean; isLoading:boolean;
@@ -1716,6 +1839,13 @@ const ClientMaidsPage = ({
     if(allOff) n[grp.noPreference]=true;
     return n;
   });
+  const chooseNoPreference = (noPreference:keyof Filters,specifics:readonly (keyof Filters)[]) =>
+    setDraft(prev=>
+      specifics.reduce<Filters>(
+        (next,key)=>({...next,[key]:false}),
+        {...prev,[noPreference]:true},
+      )
+    );
   const countGroup = (keys:readonly (keyof Filters)[]) => keys.filter(k=>draft[k]===true).length;
 
   const removeTag = (k:keyof Filters) => {
@@ -1822,6 +1952,14 @@ const ClientMaidsPage = ({
       </div>
 
       <div className="cm-content">
+        <ClassicFilterPanel
+          draft={draft}
+          set={set}
+          toggle={toggle}
+          chooseNoPreference={chooseNoPreference}
+          onSearch={()=>void handleSearch()}
+          onClear={clearAllFilters}
+        />
 
         {/* ── Filter Panel ── */}
         <div className="cm-panel">

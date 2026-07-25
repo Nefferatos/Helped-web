@@ -142,7 +142,10 @@ const getRecencyCutoff = (label: string) => {
   const value = label.trim().toLowerCase();
   const cutoff = new Date();
 
-  if (value === "1 week") cutoff.setDate(cutoff.getDate() - 7);
+  if (value === "last 3 days") cutoff.setDate(cutoff.getDate() - 3);
+  else if (value === "last 7 days") cutoff.setDate(cutoff.getDate() - 7);
+  else if (value === "last 15 days") cutoff.setDate(cutoff.getDate() - 15);
+  else if (value === "1 week") cutoff.setDate(cutoff.getDate() - 7);
   else if (value === "2 weeks") cutoff.setDate(cutoff.getDate() - 14);
   else if (value === "1 month") cutoff.setMonth(cutoff.getMonth() - 1);
   else if (value === "3 months") cutoff.setMonth(cutoff.getMonth() - 3);
