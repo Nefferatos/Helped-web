@@ -178,21 +178,26 @@ const getMaidPopupDetails = (maid: MaidProfile) => {
 };
 
 // ── Maid Hover Popup (logged-in) ──────────────────────────────────────────────
-const MaidHoverPopup = ({ maid, anchorRef, onDismiss }: { maid: MaidProfile; anchorRef: React.RefObject<HTMLElement>; onDismiss?: () => void }) => {
+const MaidHoverPopup = ({
+  maid, anchorRef, onDismiss, onMouseEnter, onMouseLeave,
+}: {
+  maid: MaidProfile; anchorRef: React.RefObject<HTMLElement>; onDismiss?: () => void;
+  onMouseEnter?: () => void; onMouseLeave?: () => void;
+}) => {
   const popupRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>({ visibility:"hidden" });
   const [pointerSide, setPointerSide] = useState<"left"|"right">("right");
-  const [isMobile, setIsMobile] = useState(false);
+  const [isTouchLayout, setIsTouchLayout] = useState(false);
   const details = useMemo(() => getMaidPopupDetails(maid), [maid]);
   const age = calculateAge(maid.dateOfBirth);
   const flagCode = getNationalityCode(maid.nationality);
 
   useEffect(() => {
-    const mobile = window.innerWidth < 640;
-    setIsMobile(mobile);
-    if (mobile) {
-      const w = Math.min(window.innerWidth - 32, 360);
-      setStyle({ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%, -50%)", width:w, zIndex:9999, visibility:"visible", maxHeight:"80vh", overflowY:"auto" });
+    const touchLayout = window.innerWidth < 1024 || window.matchMedia("(pointer: coarse)").matches;
+    setIsTouchLayout(touchLayout);
+    if (touchLayout) {
+      const w = Math.min(window.innerWidth - 24, 420);
+      setStyle({ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%, -50%)", width:w, zIndex:9999, visibility:"visible", maxHeight:"calc(100dvh - 24px)", overflowY:"auto" });
       return;
     }
     const anchor = anchorRef.current;
@@ -219,11 +224,13 @@ const MaidHoverPopup = ({ maid, anchorRef, onDismiss }: { maid: MaidProfile; anc
 
   return (
     <>
-      {isMobile && onDismiss && (
+      {isTouchLayout && onDismiss && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:9998 }} onClick={onDismiss} />
       )}
-    <div ref={popupRef} style={style} className="relative">
-      {!isMobile && (
+    <div ref={popupRef} style={style} className="relative"
+      onMouseEnter={isTouchLayout ? undefined : onMouseEnter}
+      onMouseLeave={isTouchLayout ? undefined : onMouseLeave}>
+      {!isTouchLayout && (
         <div className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${pointerSide === "right" ? "-left-4" : "-right-4"}`}
           style={{ borderWidth:"8px", borderStyle:"solid",
             borderColor: pointerSide === "right" ? `transparent white transparent transparent` : `transparent transparent transparent white` }} />
@@ -637,11 +644,15 @@ const MaidCard = ({
   const [hovered, setHovered] = useState(false);
   const [clickedOpen, setClickedOpen] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRef = useRef<HTMLElement>(null);
+  const cardHoveredRef = useRef(false);
+  const popupHoveredRef = useRef(false);
 
   useEffect(() => {
     return () => {
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     };
   }, []);
 
@@ -654,22 +665,42 @@ const MaidCard = ({
   const experienceBucket = getExperienceBucket(maid);
   const category = getMaidCategory(maid);
   const displayLabel = showCategory && category ? category : (maid.nationality || "");
+  const schedulePopupClose = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      if (!cardHoveredRef.current && !popupHoveredRef.current) setHovered(false);
+    }, 120);
+  };
 
   const handleMouseEnter = () => {
-    if (disableHoverPopup || window.innerWidth < 640) return;
+    if (disableHoverPopup || window.matchMedia("(pointer: coarse)").matches) return;
+    cardHoveredRef.current = true;
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     hoverTimerRef.current = setTimeout(() => setHovered(true), 300);
   };
   const handleMouseLeave = () => {
+    cardHoveredRef.current = false;
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    if (disableHoverPopup || window.innerWidth < 640) return;
-    setHovered(false);
+    if (disableHoverPopup || window.matchMedia("(pointer: coarse)").matches) return;
+    schedulePopupClose();
   };
   const handleCardClick = (e: React.MouseEvent) => {
-    if (disableHoverPopup || window.innerWidth >= 640) return;
-    if ((e.target as HTMLElement).closest("a, button")) return;
-    setClickedOpen((v) => !v);
+    if (disableHoverPopup) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button")) return;
+    const touchLayout = window.innerWidth < 1024 || window.matchMedia("(pointer: coarse)").matches;
+    if (!touchLayout) return;
+    if (target.closest("a")) e.preventDefault();
+    setClickedOpen(true);
   };
-  const dismissPopup = () => { setHovered(false); setClickedOpen(false); };
+  const dismissPopup = () => {
+    cardHoveredRef.current = false;
+    popupHoveredRef.current = false;
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    setHovered(false);
+    setClickedOpen(false);
+  };
 
   return (
     <>
@@ -735,7 +766,19 @@ const MaidCard = ({
         </div>
       </article>
       {(hovered || clickedOpen) && cardRef.current && !disableHoverPopup && (
-        <MaidHoverPopup maid={maid} anchorRef={cardRef as React.RefObject<HTMLElement>} onDismiss={dismissPopup} />
+        <MaidHoverPopup
+          maid={maid}
+          anchorRef={cardRef as React.RefObject<HTMLElement>}
+          onDismiss={dismissPopup}
+          onMouseEnter={() => {
+            popupHoveredRef.current = true;
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+          }}
+          onMouseLeave={() => {
+            popupHoveredRef.current = false;
+            schedulePopupClose();
+          }}
+        />
       )}
     </>
   );
