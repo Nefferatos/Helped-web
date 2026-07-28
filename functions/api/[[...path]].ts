@@ -12681,6 +12681,125 @@ const purgeExpiredClientSessions = async (env: Bindings): Promise<void> => {
   }
 };
 
+const SEO_SITE_URL = "https://rinzinagency.com";
+const SEO_DEFAULT_DESCRIPTION =
+  "Find verified North East Indian and Indian Nepali domestic helpers from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam in Singapore.";
+
+const SEO_PUBLIC_PAGES: Record<string, { title: string; description: string }> = {
+  "/": {
+    title: "AT The Agency (formerly Rinzin Agency)",
+    description: SEO_DEFAULT_DESCRIPTION,
+  },
+  "/search-maids": {
+    title: "Search North East Indian Maids Singapore | AT The Agency",
+    description:
+      "Browse verified NE Indian and Indian Nepali helpers from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam.",
+  },
+  "/about": {
+    title: "North East Indian Maid Specialists | AT The Agency",
+    description:
+      "Meet Singapore's North East Indian maid specialists recruiting from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam.",
+  },
+  "/agency": {
+    title: "Maid Agency Services in Singapore | AT The Agency",
+    description:
+      "Explore domestic helper placement and support services from AT The Agency in Singapore.",
+  },
+  "/faq": {
+    title: "Maid Hiring FAQ | AT The Agency Singapore",
+    description:
+      "Answers to common questions about finding, hiring and supporting a domestic helper in Singapore.",
+  },
+  "/contact": {
+    title: "Contact AT The Agency | Singapore Maid Agency",
+    description:
+      "Contact AT The Agency for help finding a verified domestic helper in Singapore.",
+  },
+  "/apply-as-maid": {
+    title: "Apply as a Domestic Helper | AT The Agency",
+    description:
+      "Apply to join AT The Agency's domestic helper recruitment network.",
+  },
+  "/services/housekeeping": {
+    title: "Housekeeping Helpers in Singapore | AT The Agency",
+    description:
+      "Find trained domestic helpers for cleaning, laundry, cooking and daily household care.",
+  },
+  "/services/elderly-care": {
+    title: "Elderly Care Helpers in Singapore | AT The Agency",
+    description:
+      "Find compassionate domestic helpers experienced in elderly care and daily assistance.",
+  },
+  "/services/infant-care": {
+    title: "Infant Care Helpers in Singapore | AT The Agency",
+    description:
+      "Find verified domestic helpers experienced in newborn, infant and toddler care.",
+  },
+  "/services/kid-care": {
+    title: "Child Care Helpers in Singapore | AT The Agency",
+    description:
+      "Find trusted domestic helpers experienced in child care, routines and family support.",
+  },
+};
+
+const escapeHtmlAttribute = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+const withServerRenderedSeo = async (response: Response, pathname: string) => {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/html")) return response;
+
+  const normalizedPath =
+    pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  const metadata = SEO_PUBLIC_PAGES[normalizedPath];
+  const canonicalUrl = `${SEO_SITE_URL}${normalizedPath === "/" ? "/" : normalizedPath}`;
+  const title = metadata?.title ?? "AT The Agency";
+  const description = metadata?.description ?? SEO_DEFAULT_DESCRIPTION;
+  const robots = metadata ? "index, follow" : "noindex, follow";
+
+  let html = await response.text();
+  html = html
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtmlAttribute(title)}</title>`)
+    .replace(
+      /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
+      `<meta name="description" content="${escapeHtmlAttribute(description)}" />`,
+    )
+    .replace(
+      /<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/i,
+      `<meta name="robots" content="${robots}" />`,
+    )
+    .replace(
+      /<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i,
+      `<meta property="og:title" content="${escapeHtmlAttribute(title)}" />`,
+    )
+    .replace(
+      /<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i,
+      `<meta property="og:description" content="${escapeHtmlAttribute(description)}" />`,
+    )
+    .replace(
+      /<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/i,
+      `<meta property="og:url" content="${canonicalUrl}" />`,
+    )
+    .replace(
+      /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
+      `<link rel="canonical" href="${canonicalUrl}" />`,
+    );
+
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.set("X-Robots-Tag", robots);
+
+  return new Response(html, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+
 export default {
   async scheduled(
     _controller: unknown,
@@ -12775,22 +12894,22 @@ export default {
     }
 
     if (url.pathname === "/agencyadmin") {
-      return Response.redirect(new URL("/agencyadmin/login", url), 302);
+      return Response.redirect(new URL("/agencyadmin/login", url), 301);
     }
 
     if (
       url.pathname === "/agency-admin-portal" ||
       url.pathname === "/agencyadminportal"
     ) {
-      return Response.redirect(new URL("/agencyadmin/login", url), 302);
+      return Response.redirect(new URL("/agencyadmin/login", url), 301);
     }
 
     if (url.pathname === "/agency-portal" || url.pathname === "/agencyportal") {
-      return Response.redirect(new URL("/agencies", url), 302);
+      return Response.redirect(new URL("/agencies", url), 301);
     }
 
     if (url.pathname === "/user-portal" || url.pathname === "/userportal") {
-      return Response.redirect(new URL("/employer-login", url), 302);
+      return Response.redirect(new URL("/employer-login", url), 301);
     }
 
     const isAssetRequest =
@@ -12822,7 +12941,10 @@ export default {
     if (!isAssetRequest) {
       const spaRequest = new Request(new URL("/", url).toString(), request);
       const spaResponse = await env.ASSETS.fetch(spaRequest);
-      return withFreshHtmlCacheHeaders(spaResponse);
+      return withServerRenderedSeo(
+        withFreshHtmlCacheHeaders(spaResponse),
+        url.pathname,
+      );
     }
 
     const assetResponse = await env.ASSETS.fetch(request);
@@ -12832,6 +12954,9 @@ export default {
 
     const spaRequest = new Request(new URL("/", url).toString(), request);
     const spaResponse = await env.ASSETS.fetch(spaRequest);
-    return withFreshHtmlCacheHeaders(spaResponse);
+    return withServerRenderedSeo(
+      withFreshHtmlCacheHeaders(spaResponse),
+      url.pathname,
+    );
   },
 };
