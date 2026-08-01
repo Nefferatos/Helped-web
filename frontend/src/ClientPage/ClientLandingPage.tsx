@@ -4,6 +4,7 @@ import {
   Shield, ChevronRight, Search, Home, Heart, Baby, Backpack,
   BadgeCheck, Sparkles, Lock, UserCheck, TrendingUp,
   Award, SlidersHorizontal, LayoutGrid, ArrowUp, MapPin, Mail, Phone, Clock, MessageCircle, PhoneCall, Facebook, Youtube,
+  Building2, BriefcaseBusiness,
 } from "lucide-react";
 import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -19,6 +20,11 @@ import culinaryImg from "./assets/culinary-optimized.webp";
 import elderlyImg from "./assets/elderly-care-optimized.webp";
 import familyImg from "./assets/family.jpg";
 import heroImage from "./assets/maid1-optimized.webp";
+import indianMaidImage from "./assets/northeast-indian-maid-domestic-helper.png";
+import filipinoMaidImage from "./assets/filipino-maid-domestic-helper.png";
+import indonesianMaidImage from "./assets/indonesian-maid-domestic-helper.png";
+import myanmarMaidImage from "./assets/myanmar-maid-domestic-helper.png";
+import nepaleseMaidImage from "./assets/nepalese-maid-domestic-helper.png";
 import housekeepingImg from "./assets/housekeeping-optimized.webp";
 import infantImg from "./assets/infant-care-optimized.webp";
 import "./ClientTheme.css";
@@ -127,6 +133,31 @@ const GLOBAL_STYLES = `
   /* ── Fonts ── */
   .pf  { font-family: 'Playfair Display', Georgia, serif; }
   .int { font-family: 'Inter', system-ui, sans-serif; }
+
+  /* ── Responsive type scale ── */
+  .client-landing h1 { font-size: 48px !important; }
+  .client-landing :where(p, a, button, label, input, select, option) {
+    font-size: max(16px, 1em) !important;
+  }
+  .client-landing :where(.portal-access-title, .portal-access-description, .origin-card-note, .section-chip) {
+    font-size: max(16px, 1em) !important;
+  }
+  .client-landing .filter-label {
+    width: 140px !important;
+    flex: 0 0 140px !important;
+    color: #174F5D !important;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+  .client-landing .tag-pill { white-space: nowrap; }
+  .client-landing .nat-lang-row > div { min-width: 0; }
+  .client-landing .search-card :where(p, .portal-access-description) { color: #476F79 !important; }
+  .client-landing :where(.input-styled, .select-styled)::placeholder {
+    color: #668892 !important;
+    opacity: 1;
+  }
+  @media (max-width: 1024px) { .client-landing h1 { font-size: 40px !important; } }
+  @media (max-width: 640px) { .client-landing h1 { font-size: 32px !important; } }
 
   /* ── Buttons ── */
   .btn-amber {
@@ -279,6 +310,76 @@ const GLOBAL_STYLES = `
     background: radial-gradient(circle, rgba(78,205,225,.2), rgba(78,205,225,0) 70%);
     animation: heroAuroraDrift 15s 2s ease-in-out infinite reverse;
   }
+
+  /* ── Portal access bar ── */
+  .portal-access-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .portal-access-card {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 9px;
+    color: #fff;
+    background: rgba(255,255,255,.055);
+    text-decoration: none;
+    transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+  }
+  .portal-access-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(252,211,77,.55);
+    background: rgba(255,255,255,.1);
+    box-shadow: 0 8px 22px rgba(3,24,31,.22);
+  }
+  .portal-access-icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: #0B3340;
+    background: #FCD34D;
+    box-shadow: 0 3px 0 #C49A00;
+  }
+  .portal-access-copy { min-width: 0; flex: 1; }
+  .portal-access-title { display: block; font-size: 13px; font-weight: 800; line-height: 1.25; }
+  .portal-access-description { display: block; margin-top: 2px; color: rgba(255,255,255,.58); font-size: 10px; line-height: 1.35; }
+  .portal-access-arrow { flex: 0 0 auto; color: #FCD34D; transition: transform .2s ease; }
+  .portal-access-card:hover .portal-access-arrow { transform: translateX(3px); }
+
+  /* ── Helper origin gallery ── */
+  .origin-gallery {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .origin-card {
+    position: relative;
+    width: 100%;
+    height: 280px;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    color: #fff;
+    background: #0B3340;
+    text-decoration: none;
+    box-shadow: 0 10px 28px rgba(11,51,64,.12);
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .origin-card:hover { transform: translateY(-5px); box-shadow: 0 18px 38px rgba(11,51,64,.22); }
+  .origin-card img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .5s ease; }
+  .origin-card:hover img { transform: scale(1.045); }
+  .origin-card::after { content:""; position:absolute; inset:0; background:linear-gradient(to top, rgba(6,29,38,.94), rgba(6,29,38,.05) 68%); }
+  .origin-card-copy { position:absolute; z-index:1; left:16px; right:16px; bottom:15px; }
+  .origin-card-title { display:flex; align-items:center; justify-content:space-between; gap:8px; font-family:'Playfair Display',Georgia,serif; font-size:18px; font-weight:800; }
+  .origin-card-note { display:block; margin-top:3px; color:rgba(255,255,255,.67); font-size:10px; line-height:1.4; }
   .search-hero-motion-grid {
     position: absolute;
     inset: 0;
@@ -556,6 +657,20 @@ const GLOBAL_STYLES = `
   @media (max-width: 1100px) { .maid-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; } }
   @media (max-width: 700px)  { .maid-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; } }
   @media (max-width: 480px)  { .maid-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } }
+
+  @media (max-width: 760px) {
+    .portal-access-grid { grid-template-columns: 1fr; }
+    .portal-access-description { font-size: 11px; }
+    .origin-gallery { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .origin-card { height: 250px; }
+    .nat-lang-row { flex-direction: column !important; }
+    .nat-lang-row > div { width: 100%; }
+  }
+  @media (max-width: 540px) {
+    .filter-row, .nat-lang-row > div { align-items: stretch !important; flex-direction: column !important; gap: 8px !important; }
+    .client-landing .filter-label { width: auto !important; flex-basis: auto !important; padding-top: 0 !important; }
+  }
+  @media (max-width: 460px) { .origin-gallery { grid-template-columns: 1fr; } .origin-card { height: 280px; } }
 
   /* ── Maid card (unchanged structure) ── */
   .maid-card {
@@ -964,9 +1079,10 @@ const LockedMaidCard = ({
       </div>
       <div style={{ padding:"0 10px 10px" }}>
         <Link to={loginPath} style={{
-          display:"flex", width:"100%", alignItems:"center", justifyContent:"center", gap:6,
+          display:"flex", width:"100%", alignItems:"center", justifyContent:"center", gap:5,
+          flexWrap:"nowrap", whiteSpace:"nowrap",
           borderRadius:4, background:"linear-gradient(105deg,#0B3340 0%,#0E4E5E 60%,#1A6678 100%)",
-          padding:"8px 10px", fontSize:9, fontWeight:700, letterSpacing:"0.05em",
+          padding:"10px 6px", fontSize:16, fontWeight:700, letterSpacing:"0.02em",
           textTransform:"uppercase" as const, color:"#FCD34D", fontFamily:"'Inter',sans-serif",
           textDecoration:"none", transition:"opacity 0.15s", boxSizing:"border-box" as const,
         }}>
@@ -1246,7 +1362,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
   /* ── RENDER ── */
   return (
-    <div className="int" style={{ minHeight: "100vh", background: "#fff", fontFamily: "'Inter', sans-serif" }}>
+    <div className="int client-landing" style={{ minHeight: "100vh", background: "#fff", fontFamily: "'Inter', sans-serif" }}>
       <style>{GLOBAL_STYLES}</style>
       <BackToTopButton />
 
@@ -1336,22 +1452,39 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
       {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
 
-      {/* ── MAID JOB SEEKER BANNER ── */}
+      {/* ── QUICK ACCESS PORTALS ── */}
       {!isLoggedIn && (
         <div style={{ background: "linear-gradient(90deg, #0B3340 0%, #0E4E5E 100%)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ maxWidth: 1280, margin: "0 auto", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "rgba(252,211,77,0.15)", border: "1px solid rgba(252,211,77,0.3)" }}>
-                <Users size={15} color="#FCD34D" />
-              </span>
-              <div>
-                <p className="pf" style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#fff", fontStyle: "italic" }}>Looking for maid work?</p>
-                <p style={{ margin: 0, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Apply through our recruitment portal — send your documents online.</p>
-              </div>
+          <div style={{ maxWidth: 1280, margin: "0 auto", padding: "11px 24px 13px" }}>
+            <div style={{ marginBottom: 8, color: "rgba(255,255,255,.5)", fontSize: 9, fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase" }}>
+              Quick access — choose your portal
             </div>
-            <Link to="/apply-as-maid" className="btn-amber" style={{ flexShrink: 0, fontSize: 12 }}>
-              Apply Now <ArrowRight size={14} />
-            </Link>
+            <div className="portal-access-grid">
+              <Link to="/apply-as-maid" className="portal-access-card" aria-label="Register as a maid">
+                <span className="portal-access-icon"><BriefcaseBusiness size={18} /></span>
+                <span className="portal-access-copy">
+                  <span className="portal-access-title">Maid Registration</span>
+                  <span className="portal-access-description">Apply for job opportunities online</span>
+                </span>
+                <ArrowRight className="portal-access-arrow" size={17} />
+              </Link>
+              <Link to="/employer-login" className="portal-access-card" aria-label="Open employer portal">
+                <span className="portal-access-icon"><Home size={18} /></span>
+                <span className="portal-access-copy">
+                  <span className="portal-access-title">Employer Portal</span>
+                  <span className="portal-access-description">Sign in to shortlist and hire helpers</span>
+                </span>
+                <ArrowRight className="portal-access-arrow" size={17} />
+              </Link>
+              <Link to="/agency" className="portal-access-card" aria-label="Open agency portal">
+                <span className="portal-access-icon"><Building2 size={18} /></span>
+                <span className="portal-access-copy">
+                  <span className="portal-access-title">Agency Portal</span>
+                  <span className="portal-access-description">Manage your agency and maid listings</span>
+                </span>
+                <ArrowRight className="portal-access-arrow" size={17} />
+              </Link>
+            </div>
           </div>
         </div>
       )}
@@ -1609,7 +1742,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </div>
           </div>
 
-          <div className="reveal search-card" style={{ maxWidth: 960, margin: "0 auto" }}>
+          <div className="reveal search-card" style={{ maxWidth: 1120, margin: "0 auto" }}>
             {/* Card header */}
             <div style={{
               background: "linear-gradient(105deg, #0B3340 0%, #0E4E5E 55%, #1A6678 100%)",
@@ -1688,6 +1821,43 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
             </div>
           </div>
 
+        </div>
+      </section>
+
+      {/* ── BROWSE BY ORIGIN ── */}
+      <section aria-labelledby="origin-heading" style={{ background:"#fff",padding:"58px 0 64px",borderBottom:"1px solid var(--teal-pale)" }}>
+        <div style={{ maxWidth:1280,margin:"0 auto",padding:"0 24px" }}>
+          <div className="reveal" style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:18,marginBottom:24,flexWrap:"wrap" }}>
+            <div>
+              <span className="section-chip" style={{ background:"var(--teal-pale)",color:"var(--teal)",marginBottom:10 }}>Explore helpers</span>
+              <h2 id="origin-heading" className="pf" style={{ margin:0,color:"var(--teal-deep)",fontSize:"clamp(1.6rem,3vw,2.25rem)",fontStyle:"italic" }}>Browse by origin</h2>
+              <p style={{ margin:"7px 0 0",color:"#6A929C",fontSize:13 }}>Find the right cultural and language fit for your household.</p>
+            </div>
+            <Link to="/search-maids/results" className="btn-ghost-teal" style={{ textDecoration:"none" }}>View all helpers <ArrowRight size={14} /></Link>
+          </div>
+          <div className="origin-gallery reveal">
+            <Link to="/search-maids/results?quick=indian" className="origin-card">
+              <img src={indianMaidImage} alt="Indian and Indian Nepalese domestic helpers" loading="lazy" />
+              <span className="origin-card-copy">
+                <span className="origin-card-title">Indian Helpers <ArrowRight size={17} /></span>
+                <span className="origin-card-note">Skilled, adaptable household support</span>
+              </span>
+            </Link>
+            {[
+              { title:"Filipino", note:"Experienced, English-speaking helpers", image:filipinoMaidImage, href:"/search-maids/results?quick=filipino" },
+              { title:"Indonesian", note:"Warm, adaptable household support", image:indonesianMaidImage, href:"/search-maids/results?quick=indonesian" },
+              { title:"Myanmar", note:"Dependable helpers for family care", image:myanmarMaidImage, href:"/search-maids/results?quick=myanmar" },
+              { title:"Nepalese", note:"Caring helpers for modern families", image:nepaleseMaidImage, href:"/search-maids/results?nationality=Nepali" },
+            ].map(item => (
+              <Link key={item.title} to={item.href} className="origin-card">
+                <img src={item.image} alt={`${item.title} domestic helper`} loading="lazy" />
+                <span className="origin-card-copy">
+                  <span className="origin-card-title">{item.title} <ArrowRight size={15} /></span>
+                  <span className="origin-card-note">{item.note}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
