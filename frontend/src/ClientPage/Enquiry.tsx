@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import PublicSiteFooter from "@/components/PublicSiteFooter";
 import { getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
-import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import {
   CheckCircle2,
   Clock,
@@ -731,7 +730,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
           background: "#f4f7f8",
         }}
       >
-        {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
+        {!embedded && <PublicSiteNavbar />}
 
         <main style={{ flex: 1, paddingTop: 56, paddingBottom: 80 }}>
           <div

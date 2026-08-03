@@ -141,7 +141,7 @@ const PublicSiteNavbar = () => {
       style={{ background: TEAL, borderColor: TEAL_D, color: "#fff" }}
       className={cn(
         "inline-flex overflow-hidden rounded-[10px] border-b-[3px]",
-        "text-[13.5px] font-bold tracking-wide select-none",
+        "text-[16px] font-bold tracking-wide select-none",
         "transition-all duration-150 hover:brightness-110 active:translate-y-[2px] active:border-b-[1px]",
         full && "w-full h-11"
       )}
@@ -179,7 +179,7 @@ const PublicSiteNavbar = () => {
         "text-[#3d2800]",
         full    && "w-full h-11 justify-center text-[14px] px-4",
         compact && "h-[38px] px-3 text-[12px]",
-        !full && !compact && "px-4 py-[9px] text-[13.5px]"
+        !full && !compact && "px-4 py-[9px] text-[16px]"
       )}
     >
       <span className="_pnb_dot h-2 w-2 rounded-full bg-[#3d2800]/50 flex-shrink-0" />
@@ -263,7 +263,7 @@ const PublicSiteNavbar = () => {
               end={link.to === "/"}
               className={({ isActive }) =>
                 cn(
-                  "relative px-3.5 py-2 text-[13.5px] font-medium rounded-lg transition-colors duration-150",
+                  "relative px-3.5 py-2 text-[16px] font-medium rounded-lg transition-colors duration-150",
                   isActive
                     ? "font-semibold"
                     : "text-[#0E4E5E] hover:bg-[#0E4E5E]/8 hover:text-[#0B3340]"

@@ -10,7 +10,6 @@ import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import PublicSiteFooter from "@/components/PublicSiteFooter";
-import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import { toast } from "@/components/ui/sonner";
 import { getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { calculateAge, MaidProfile } from "@/lib/maids";
@@ -1460,7 +1459,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         ))}
       </aside>
 
-      {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
+      {!embedded && <PublicSiteNavbar />}
 
       {/* ── QUICK ACCESS PORTALS ── */}
       {!isLoggedIn && (

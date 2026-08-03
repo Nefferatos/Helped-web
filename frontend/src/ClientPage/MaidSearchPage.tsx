@@ -10,7 +10,6 @@ import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import PublicSiteFooter from "@/components/PublicSiteFooter";
-import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
 import "./ClientTheme.css";
 
 // ── Theme tokens ──────────────────────────────────────────────────────────────
@@ -1396,7 +1395,7 @@ const MaidSearchPage = ({
       className="client-page-theme min-h-screen"
       style={{ background:C.slate, color:C.text, fontWeight:600 }}
     >
-      {!embedded && (isLoggedIn ? <ClientPortalNavbar /> : <PublicSiteNavbar />)}
+      {!embedded && <PublicSiteNavbar />}
 
       {/* Hero strip */}
       {!embedded && (

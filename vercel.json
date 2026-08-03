@@ -19,6 +19,14 @@
       "dest": "backend/src/server.js"
     },
     {
+      "src": "/(search-maids|about|agency|faq|enquiry2|apply-as-maid)/?",
+      "dest": "frontend/dist/$1/index.html"
+    },
+    {
+      "src": "/services/(housekeeping|elderly-care|infant-care|kid-care)/?",
+      "dest": "frontend/dist/services/$1/index.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "frontend/dist/index.html"
     }
