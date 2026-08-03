@@ -1765,7 +1765,7 @@ const SiteFooter = () => (
         </p>
         <div className="cm-footer-legal">
           {["Privacy", "Terms", "Contact"].map((item) => (
-            <Link key={item} to="/contact" className="cm-footer-legal-link">{item}</Link>
+            <Link key={item} to="/enquiry2" className="cm-footer-legal-link">{item}</Link>
           ))}
         </div>
       </div>

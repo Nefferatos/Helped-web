@@ -38,10 +38,6 @@ const pageMetadata: Record<string, { title: string; description: string }> = {
     title: "Maid Hiring FAQ | AT The Agency Singapore",
     description: "Answers to common questions about finding, hiring and supporting a domestic helper in Singapore.",
   },
-  "/contact": {
-    title: "Contact AT The Agency | Singapore Maid Agency",
-    description: "Contact AT The Agency for help finding a verified domestic helper in Singapore.",
-  },
   "/apply-as-maid": {
     title: "Apply as a Domestic Helper | AT The Agency",
     description: "Apply to join AT The Agency's domestic helper recruitment network.",

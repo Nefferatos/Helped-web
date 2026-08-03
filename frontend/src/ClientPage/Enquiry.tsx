@@ -1538,7 +1538,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
                   {["Privacy", "Terms", "Contact"].map((item) => (
                     <Link
                       key={item}
-                      to="/contact"
+                      to="/enquiry2"
                       style={{
                         fontSize: 12,
                         color: "rgba(255,255,255,0.45)",

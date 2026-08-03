@@ -718,7 +718,7 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
             </p>
             <div style={{ display: "flex", gap: 6 }}>
               {["Privacy", "Terms", "Contact"].map((item) => (
-                <Link key={item} to="/contact"
+                <Link key={item} to="/enquiry2"
                   style={{ fontSize: 12, color: "#fff", textDecoration: "none", padding: "0 8px", fontFamily: "'Inter', sans-serif", transition: "color 0.15s" }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>

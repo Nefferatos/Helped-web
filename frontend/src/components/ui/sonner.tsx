@@ -46,7 +46,7 @@ const actionForError = (actionLabel: string) => {
     return {
       label: actionLabel,
       onClick: () => {
-        window.location.href = "/contact";
+        window.location.href = "mailto:enquiries.j1@gmail.com";
       },
     };
   }

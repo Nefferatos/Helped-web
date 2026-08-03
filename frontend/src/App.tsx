@@ -89,7 +89,6 @@ const ClientPortalHome = lazyRoute(() => import("@/ClientPage/ClientPortalHome")
 const ClientRequestsPage = lazyRoute(() => import("@/ClientPage/ClientRequestsPage"));
 const ClientChangePasswordPage = lazyRoute(() => import("@/ClientPage/ClientChangePasswordPage"));
 const AboutUs = lazyRoute(() => import("./ClientPage/AboutUs"));
-const ContactUS = lazyRoute(() => import("./ClientPage/ContactUs"));
 const Enquiry2 = lazyRoute(() => import("./ClientPage/Enquiry"));
 const ServiceDetail = lazyRoute(() => import("./ClientPage/ServiceDetails"));
 const FaqPage = lazyRoute(() => import("./ClientPage/FAQPage"));
@@ -349,7 +348,6 @@ const App = () => {
               <Route path="home" element={withRouteLoader(<ClientPortalHome />)} />
               <Route path="about" element={withRouteLoader(<AboutUs embedded />)} />
               <Route path="enquiry" element={withRouteLoader(<Enquiry2 embedded />)} />
-              <Route path="contact" element={withRouteLoader(<ContactUS embedded />)} />
               <Route path="maids" element={withRouteLoader(<ClientMaidsPage embedded />)} />
               <Route path="maids/search" element={withRouteLoader(<MaidSearchPage embedded />)} />
               <Route path="faq" element={withRouteLoader(<FaqPage />)} />
@@ -382,7 +380,6 @@ const App = () => {
             <Route path="/" element={withRouteLoader(<ClientHomeRedirect />)} />
             <Route path="*" element={withRouteLoader(<NotFound />)} />
             <Route path="/about" element={withRouteLoader(<AboutUs />)} />
-            <Route path="/contact" element={withRouteLoader(<ContactUS />)} />
             <Route path="/enquiry2" element={withRouteLoader(<Enquiry2 />)} />
             <Route path="/services/:slug" element={withRouteLoader(<ServiceDetail />)} />
             <Route path="/employer/new" element={<Navigate to="/agencyadmin/employment-contracts/new" replace />} />

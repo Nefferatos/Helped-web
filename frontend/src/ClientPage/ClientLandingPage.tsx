@@ -666,6 +666,11 @@ const GLOBAL_STYLES = `
     .nat-lang-row { flex-direction: column !important; }
     .nat-lang-row > div { width: 100%; }
   }
+  .feature-card-copy { flex: 1; min-width: 0; }
+  .feature-card-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:6px; min-width:0; }
+  .feature-card-title { min-width:0; overflow-wrap:anywhere; }
+  .feature-card-stat { text-align:right; flex-shrink:0; min-width:0; }
+  .feature-card-stat-label { overflow-wrap:anywhere; }
   @media (max-width: 540px) {
     .filter-row, .nat-lang-row > div { align-items: stretch !important; flex-direction: column !important; gap: 8px !important; }
     .client-landing .filter-label { width: auto !important; flex-basis: auto !important; padding-top: 0 !important; }
@@ -846,6 +851,11 @@ const GLOBAL_STYLES = `
     .unlock-banner  { margin-bottom: 16px !important; padding: 16px 18px !important; }
     .hero-search-card { margin-top: 30px; padding: 14px; }
     .hero-search-fields { grid-template-columns: 1fr; }
+    .feature-card { padding:20px; gap:14px; }
+    .feature-card-heading { flex-direction:column; align-items:flex-start; gap:8px; }
+    .feature-card-stat { display:flex; align-items:baseline; gap:8px; text-align:left; width:100%; }
+    .feature-card-stat .feature-card-stat-value { font-size:17px !important; flex:none; }
+    .feature-card-stat-label { margin:0 !important; font-size:9px !important; line-height:1.35; }
   }
   @media (max-width: 520px) {
     .footer-grid { grid-template-columns: 1fr !important; }
@@ -1791,14 +1801,14 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               {/* Nationality + Language */}
               <div className="nat-lang-row" style={{ display:"flex",gap:20 }}>
                 <div style={{ flex:1,display:"flex",alignItems:"center",gap:16 }}>
-                  <label className="filter-label" style={{ flexShrink:0,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:700,color:"#0E4E5E",width:100,letterSpacing:"0.06em",textTransform:"uppercase" as const }}>Nationality</label>
-                  <select className="select-styled" value={nationality} onChange={e => setNationality(e.target.value)}>
+                  <label htmlFor="maid-search-nationality" className="filter-label" style={{ flexShrink:0,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:700,color:"#0E4E5E",width:100,letterSpacing:"0.06em",textTransform:"uppercase" as const }}>Nationality</label>
+                  <select id="maid-search-nationality" className="select-styled" value={nationality} onChange={e => setNationality(e.target.value)}>
                     {nationalityOptions.map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
                 <div style={{ flex:1,display:"flex",alignItems:"center",gap:16 }}>
-                  <label className="filter-label" style={{ flexShrink:0,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:700,color:"#0E4E5E",width:80,letterSpacing:"0.06em",textTransform:"uppercase" as const }}>Language</label>
-                  <select className="select-styled" value={language} onChange={e => setLanguage(e.target.value)}>
+                  <label htmlFor="maid-search-language" className="filter-label" style={{ flexShrink:0,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:700,color:"#0E4E5E",width:80,letterSpacing:"0.06em",textTransform:"uppercase" as const }}>Language</label>
+                  <select id="maid-search-language" className="select-styled" value={language} onChange={e => setLanguage(e.target.value)}>
                     {languageOptions.map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
@@ -2052,12 +2062,12 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
                   <div style={{ width:46,height:46,borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#FCD34D 0%,#E8B800 100%)",boxShadow:"0 3px 0 var(--amber-deep)" }}>
                     <Icon size={20} color="#0B3340" />
                   </div>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:6 }}>
-                      <h3 className="pf" style={{ fontStyle:"italic",fontSize:14,fontWeight:700,color:"#0B3340",margin:0 }}>{title}</h3>
-                      <div style={{ textAlign:"right",flexShrink:0 }}>
-                        <p className="pf" style={{ fontSize:22,fontWeight:900,color:"#0E4E5E",margin:0,lineHeight:1 }}>{stat}</p>
-                        <p style={{ fontSize:9,color:"#7AAABB",margin:"3px 0 0",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em" }}>{statLabel}</p>
+                  <div className="feature-card-copy">
+                    <div className="feature-card-heading">
+                      <h3 className="pf feature-card-title" style={{ fontStyle:"italic",fontSize:14,fontWeight:700,color:"#0B3340",margin:0 }}>{title}</h3>
+                      <div className="feature-card-stat">
+                        <p className="pf feature-card-stat-value" style={{ fontSize:22,fontWeight:900,color:"#0E4E5E",margin:0,lineHeight:1 }}>{stat}</p>
+                        <p className="feature-card-stat-label" style={{ fontSize:9,color:"#7AAABB",margin:"3px 0 0",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em" }}>{statLabel}</p>
                       </div>
                     </div>
                     <p style={{ fontSize:12,color:"#3A7A8A",lineHeight:1.7,margin:0 }}>{description}</p>
@@ -2244,7 +2254,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
               </p>
               <div style={{ display: "flex", gap: 6 }}>
                 {["Privacy", "Terms", "Contact"].map((item) => (
-                  <Link key={item} to="/contact"
+                  <Link key={item} to="/enquiry2"
                     style={{ fontSize: 12, color: "#fff", textDecoration: "none",
                       padding: "0 8px", fontFamily: "'Inter',sans-serif", transition: "color 0.15s" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "var(--amber)")}

@@ -1,0 +1,18 @@
+# AT The Agency (formerly Rinzin Agency)
+
+AT The Agency is a Singapore employment agency helping employers find verified domestic helpers, with a focus on North East Indian and Indian Nepali candidates from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh, and Assam.
+
+## Main pages
+
+- [Home](https://rinzinagency.com/): Agency overview, featured helpers, and maid search.
+- [Search maids](https://rinzinagency.com/search-maids): Browse and filter available domestic-helper profiles.
+- [Services](https://rinzinagency.com/services): Domestic-helper placement and agency services.
+- [About us](https://rinzinagency.com/about-us): Information about the agency.
+- [Frequently asked questions](https://rinzinagency.com/faq): Answers for employers and applicants.
+
+## Guidance for agents
+
+- Public informational pages and publicly listed maid profiles may be read and summarized.
+- Use the canonical HTTPS URLs on rinzinagency.com.
+- Do not infer or expose private applicant, employer, or account information.
+- Interactive submissions require the user's review and consent.
