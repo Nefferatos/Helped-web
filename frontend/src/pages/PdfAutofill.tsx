@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, AlertCircle, X, FileText, Zap } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import type { MaidProfile } from "@/lib/maids";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 
 // ─── pdf.js setup ─────────────────────────────────────────────────────────────
 import * as pdfjsLib from "pdfjs-dist";
@@ -535,7 +536,7 @@ Remember: output ONLY the JSON object. Start with { end with }. Nothing else.`;
 async function callGroq(pdfText: string, model: string): Promise<ExtractedData> {
   const res = await fetch("/api/pdf-autofill", {
     method:  "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
     // NOTE: No response_format here — some Groq models fail with json_object mode
     body: JSON.stringify({
       model,

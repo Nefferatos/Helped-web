@@ -498,8 +498,9 @@ const ClientEmployerLogin = () => {
                 {!isLogin && (
                   <>
                     <div className="cel-field">
-                      <label className="cel-label">Full Name</label>
+                      <label className="cel-label" htmlFor="cel-name">Full Name</label>
                       <input
+                        id="cel-name"
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
@@ -510,8 +511,9 @@ const ClientEmployerLogin = () => {
                     </div>
 
                     <div className="cel-field">
-                      <label className="cel-label">Phone Number</label>
+                      <label className="cel-label" htmlFor="cel-phone">Phone Number</label>
                       <input
+                        id="cel-phone"
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
@@ -521,10 +523,11 @@ const ClientEmployerLogin = () => {
                     </div>
 
                     <div className="cel-field">
-                      <label className="cel-label">
+                      <label className="cel-label" htmlFor="cel-company">
                         Company <span className="cel-optional">(optional)</span>
                       </label>
                       <input
+                        id="cel-company"
                         type="text"
                         value={company}
                         onChange={(e) => setCompany(e.target.value)}
@@ -536,8 +539,9 @@ const ClientEmployerLogin = () => {
                 )}
 
                 <div className="cel-field">
-                  <label className="cel-label">Email Address</label>
+                  <label className="cel-label" htmlFor="cel-email">Email Address</label>
                   <input
+                    id="cel-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -548,9 +552,10 @@ const ClientEmployerLogin = () => {
                 </div>
 
                 <div className="cel-field">
-                  <label className="cel-label">Password</label>
+                  <label className="cel-label" htmlFor="cel-password">Password</label>
                   <div className="cel-input-wrap">
                     <input
+                      id="cel-password"
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -559,7 +564,12 @@ const ClientEmployerLogin = () => {
                       placeholder="••••••••"
                       required
                     />
-                    <button type="button" className="cel-eye-btn" onClick={() => setShowPassword((v) => !v)}>
+                    <button
+                      type="button"
+                      className="cel-eye-btn"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
@@ -570,9 +580,10 @@ const ClientEmployerLogin = () => {
 
                 {!isLogin && (
                   <div className="cel-field">
-                    <label className="cel-label">Confirm Password</label>
+                    <label className="cel-label" htmlFor="cel-confirm-password">Confirm Password</label>
                     <div className="cel-input-wrap">
                       <input
+                        id="cel-confirm-password"
                         type={showConfirmPassword ? "text" : "password"}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -581,7 +592,12 @@ const ClientEmployerLogin = () => {
                         placeholder="••••••••"
                         required
                       />
-                      <button type="button" className="cel-eye-btn" onClick={() => setShowConfirmPassword((v) => !v)}>
+                      <button
+                        type="button"
+                        className="cel-eye-btn"
+                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                        onClick={() => setShowConfirmPassword((v) => !v)}
+                      >
                         {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>

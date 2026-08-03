@@ -1234,7 +1234,16 @@ const maidBadgeCls = (mt?:string) => {
 
 /* Locked maid card */
 const LockedMaidCard = ({ onClick }: {onClick:()=>void}) => (
-  <div className="cm-locked-card" onClick={onClick}>
+  <div
+    className="cm-locked-card"
+    onClick={onClick}
+    role="button"
+    tabIndex={0}
+    aria-label="Log in to view maid profile"
+    onKeyDown={(e)=>{
+      if(e.key==="Enter"||e.key===" "){ if(e.key===" ") e.preventDefault(); onClick(); }
+    }}
+  >
     <div className="cm-locked-photo">
       <div className="cm-locked-icon"><Lock size={16} style={{color:"var(--teal-2)"}} /></div>
       <div className="cm-locked-lines">
@@ -1255,7 +1264,16 @@ const MaidCard = ({ maid, onViewProfile, locked, onLoginClick }:{
   const flagCode = getNationalityCode(maid.nationality);
   const badge = maidBadgeCls(maid.maidType);
   return (
-    <div className="cm-maid-card" onClick={()=>onViewProfile(maid)}>
+    <div
+      className="cm-maid-card"
+      onClick={()=>onViewProfile(maid)}
+      role="button"
+      tabIndex={0}
+      aria-label={`View ${maid.name}'s profile`}
+      onKeyDown={(e)=>{
+        if(e.key==="Enter"||e.key===" "){ if(e.key===" ") e.preventDefault(); onViewProfile(maid); }
+      }}
+    >
       <div className="cm-maid-photo">
         {maid.photoUrl
           ? <img src={maid.photoUrl} alt={maid.name} loading="lazy" decoding="async" />

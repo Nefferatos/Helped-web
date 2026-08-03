@@ -22,11 +22,14 @@ const ClientProfilePage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     const loadProfile = async () => {
       try {
         setIsLoading(true);
+        setLoadError(null);
         const isAuthenticated = await hasActiveClientSession();
         if (!isAuthenticated) {
           navigate("/employer-login");
@@ -52,7 +55,9 @@ const ClientProfilePage = () => {
           profileImageUrl: data.client.profileImageUrl || "",
         });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load profile");
+        const message = error instanceof Error ? error.message : "Failed to load profile";
+        setLoadError(message);
+        toast.error(message);
       } finally {
         setIsLoading(false);
         setTimeout(() => setMounted(true), 50);
@@ -60,7 +65,7 @@ const ClientProfilePage = () => {
     };
 
     void loadProfile();
-  }, [navigate]);
+  }, [navigate, reloadToken]);
 
   const handleSave = async () => {
     if (!(await hasActiveClientSession())) {
@@ -120,6 +125,25 @@ const ClientProfilePage = () => {
           <div className="cp-loader">
             <div className="cp-loader-ring" />
             <span>Loading your profile…</span>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <>
+        <style>{styles}</style>
+        <div className="cp-root">
+          <div className="cp-loader">
+            <span>{loadError || "We couldn't load your profile."}</span>
+            <button
+              className="cp-btn cp-btn--primary"
+              onClick={() => setReloadToken((t) => t + 1)}
+            >
+              Retry
+            </button>
           </div>
         </div>
       </>

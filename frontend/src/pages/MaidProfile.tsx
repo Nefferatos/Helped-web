@@ -444,6 +444,13 @@ const MaidProfilePage = () => {
 
   useEffect(() => { setShowOtherLanguages(false); }, [maid?.referenceCode]);
 
+  useEffect(() => {
+    if (!lightboxPhoto) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setLightboxPhoto(null); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxPhoto]);
+
   const handleBack = () => {
     if (fromView) navigate(adminPath("/edit-maids"), { state: { fromView } });
     else navigate(adminPath("/edit-maids"));
@@ -747,10 +754,10 @@ const MaidProfilePage = () => {
 
       {/* ── Lightbox ── */}
       {lightboxPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm" onClick={() => setLightboxPhoto(null)}>
+        <div role="dialog" aria-modal="true" aria-label="Photo viewer" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm" onClick={() => setLightboxPhoto(null)}>
           <div className="relative" onClick={(e) => e.stopPropagation()}>
             <img src={lightboxPhoto} alt="Full size" className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain" />
-            <button className="absolute -top-3 -right-3 flex h-7 w-7 items-center justify-center rounded-full bg-white text-black text-xs font-bold shadow" onClick={() => setLightboxPhoto(null)}>✕</button>
+            <button type="button" aria-label="Close" className="absolute -top-3 -right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black text-xs font-bold shadow" onClick={() => setLightboxPhoto(null)}>✕</button>
           </div>
         </div>
       )}
@@ -883,29 +890,31 @@ const MaidProfilePage = () => {
         {/* ── Top Navigation Bar ── */}
         <div className="mb-5 pb-2 border-b-2 border-gray-300">
           <div className="flex flex-wrap items-center gap-y-1.5">
-            <span
+            <button
+              type="button"
               onClick={() => void handleBringToTop()}
               className={`${navLink} ${isBringingToTop ? "opacity-60 cursor-wait" : ""}`}
             >
               {isBringingToTop ? "Moving to Top…" : "Bring this Maid to Top"}
-            </span>
+            </button>
             {navSep}
-            <span onClick={handleBack} className={navLink}>View All Maids</span>
+            <button type="button" onClick={handleBack} className={navLink}>View All Maids</button>
             {navSep}
-            <span onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))} className={navLink}>Edit This Maid</span>
+            <button type="button" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))} className={navLink}>Edit This Maid</button>
             {navSep}
-            <span onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))} className={navLink}>Full View</span>
+            <button type="button" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))} className={navLink}>Full View</button>
             {navSep}
-            <span onClick={() => setIsManagePhotosOpen(true)} className={navLink}>Manage Photos</span>
+            <button type="button" onClick={() => setIsManagePhotosOpen(true)} className={navLink}>Manage Photos</button>
             {navSep}
-            <span onClick={() => setIsVideoModalOpen(true)} className={navLink}>YouTube Video</span>
+            <button type="button" onClick={() => setIsVideoModalOpen(true)} className={navLink}>YouTube Video</button>
             {navSep}
-            <span
+            <button
+              type="button"
               onClick={() => setIsDeleteDialogOpen(true)}
               className="text-red-600 underline text-sm font-medium cursor-pointer hover:text-red-800 transition-colors whitespace-nowrap"
             >
               {isDeleting ? "Deleting…" : "Delete"}
-            </span>
+            </button>
           </div>
         </div>
 

@@ -45,51 +45,64 @@ const dmyToIso = (raw: string) => {
 const DateInput = ({ value, onChange, disabled, className, placeholder = "DD/MM/YYYY" }: Props) => {
   const formattedFromProp = useMemo(() => (value ? isoToDmy(value) : ""), [value]);
   const [displayValue, setDisplayValue] = useState(formattedFromProp);
+  const [invalid, setInvalid] = useState(false);
 
   useEffect(() => {
     setDisplayValue(formattedFromProp);
+    setInvalid(false);
   }, [formattedFromProp]);
 
   const handleBlur = () => {
     const raw = displayValue.trim();
     if (!raw) {
+      setInvalid(false);
       onChange("");
       return;
     }
 
     const iso = dmyToIso(raw);
     if (iso) {
+      setInvalid(false);
       onChange(iso);
       setDisplayValue(isoToDmy(iso));
       return;
     }
 
-    // Revert to last known good value.
-    setDisplayValue(formattedFromProp);
+    // Unparseable input: keep what the user typed and surface an inline error
+    // instead of silently discarding their entry.
+    setInvalid(true);
   };
 
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      placeholder={placeholder}
-      disabled={disabled}
-      value={displayValue}
-      onChange={(e) => {
-        const next = e.target.value
-          .replace(/[^\d/]/g, "")
-          .replace(/\/{2,}/g, "/")
-          .slice(0, 10);
-        setDisplayValue(next);
+    <div>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder={placeholder}
+        disabled={disabled}
+        value={displayValue}
+        aria-invalid={invalid || undefined}
+        onChange={(e) => {
+          const next = e.target.value
+            .replace(/[^\d/]/g, "")
+            .replace(/\/{2,}/g, "/")
+            .slice(0, 10);
+          setDisplayValue(next);
+          if (invalid) setInvalid(false);
 
-        const iso = dmyToIso(next);
-        if (iso) {
-          onChange(iso);
-        }
-      }}
-      onBlur={handleBlur}
-      className={className ?? "w-full rounded-md border bg-background px-3 py-2 text-sm"}
-    />
+          const iso = dmyToIso(next);
+          if (iso) {
+            onChange(iso);
+          }
+        }}
+        onBlur={handleBlur}
+        className={className ?? "w-full rounded-md border bg-background px-3 py-2 text-sm"}
+        style={invalid ? { borderColor: "#ef4444" } : undefined}
+      />
+      {invalid && (
+        <p className="mt-1 text-xs font-medium text-red-500">Enter a valid date (DD/MM/YYYY)</p>
+      )}
+    </div>
   );
 };
 

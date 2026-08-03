@@ -555,6 +555,10 @@ function SimpleEnquiryForm({
   const [message, setMessage] = useState(initialMessage);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  type FieldErrors = { name?: string; email?: string; phone?: string; message?: string };
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const clearFieldError = (field: keyof FieldErrors) =>
+    setFieldErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
 
   useEffect(() => { setName((c) => c || initialName); }, [initialName]);
   useEffect(() => { setEmail((c) => c || initialEmail); }, [initialEmail]);
@@ -563,19 +567,22 @@ function SimpleEnquiryForm({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!name.trim() || !email.trim() || !phone.trim() || !message.trim()) {
-      setError("Name, email, phone, and message are required.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(email.trim())) {
-      setError("Please enter a valid email address.");
-      return;
-    }
+
     const phoneDigits = phone.replace(/\D/g, "");
-    if (phoneDigits.length < 8) {
-      setError("Please enter a valid phone number including country code, e.g. +65 9123 4567.");
+    const nextErrors: FieldErrors = {};
+    if (!name.trim()) nextErrors.name = "Full name is required.";
+    if (!email.trim()) nextErrors.email = "Email address is required.";
+    else if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(email.trim())) nextErrors.email = "Please enter a valid email address.";
+    if (!phone.trim()) nextErrors.phone = "Phone number is required.";
+    else if (phoneDigits.length < 8) nextErrors.phone = "Enter a valid phone number including country code, e.g. +65 9123 4567.";
+    if (!message.trim()) nextErrors.message = "Message is required.";
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      setError("Please fix the highlighted fields below.");
       return;
     }
+    setFieldErrors({});
     try {
       setIsSubmitting(true);
       setError("");
@@ -606,55 +613,70 @@ function SimpleEnquiryForm({
       <div className="enq-name-email-grid">
         <div>
           <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Full Name
+            Full Name <span style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => { setName(e.target.value); clearFieldError("name"); }}
             placeholder="Your full name"
             className="enq-input"
+            style={fieldErrors.name ? { borderColor: "#fca5a5" } : undefined}
           />
+          {fieldErrors.name && (
+            <p style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#b91c1c" }}>{fieldErrors.name}</p>
+          )}
         </div>
         <div>
           <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Email Address
+            Email Address <span style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }}
             placeholder="you@example.com"
             className="enq-input"
+            style={fieldErrors.email ? { borderColor: "#fca5a5" } : undefined}
           />
+          {fieldErrors.email && (
+            <p style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#b91c1c" }}>{fieldErrors.email}</p>
+          )}
         </div>
       </div>
 
       <div>
         <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-          Phone Number
+          Phone Number <span style={{ color: "#ef4444" }}>*</span>
         </label>
         <input
           type="tel"
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => { setPhone(e.target.value); clearFieldError("phone"); }}
           placeholder="+65 9123 4567"
           className="enq-input"
+          style={fieldErrors.phone ? { borderColor: "#fca5a5" } : undefined}
         />
+        {fieldErrors.phone && (
+          <p style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#b91c1c" }}>{fieldErrors.phone}</p>
+        )}
         <p style={{ marginTop: 6, fontSize: 12, color: "#9ca3af" }}>Include country code, e.g. +65 for Singapore</p>
       </div>
 
       <div>
         <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-          Your Message
+          Your Message <span style={{ color: "#ef4444" }}>*</span>
         </label>
         <textarea
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => { setMessage(e.target.value); clearFieldError("message"); }}
           placeholder="Tell the agency what kind of help you need — the more detail, the faster they can match you."
           rows={8}
           className="enq-input"
-          style={{ resize: "vertical", lineHeight: 1.7 }}
+          style={{ resize: "vertical", lineHeight: 1.7, ...(fieldErrors.message ? { borderColor: "#fca5a5" } : {}) }}
         />
+        {fieldErrors.message && (
+          <p style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#b91c1c" }}>{fieldErrors.message}</p>
+        )}
       </div>
 
       {error && (

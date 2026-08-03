@@ -54,7 +54,7 @@ const AiLeadCaptureForm = () => {
           <div>
             <CardTitle className="font-display text-2xl text-foreground">AI Lead Capture</CardTitle>
             <CardDescription className="mt-2 max-w-2xl text-sm leading-6">
-              This localhost form tests `/api/leads/raw` and automatically relays the result to Make using the `lead_pipeline` scenario.
+              Add a lead manually. We'll capture their details and start following up automatically.
             </CardDescription>
           </div>
           <Badge className="gap-1 rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.2em]" variant="secondary">

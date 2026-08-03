@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Search, Star, X, Sparkles, Filter, Trash2, ExternalLink, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Star, X, Sparkles, Filter, Trash2, ExternalLink, CheckCircle2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { calculateAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
@@ -221,12 +221,21 @@ const MaidHoverPopup = ({
     setStyle({ position:"absolute", top, left, width:popupWidth, zIndex:9999, visibility:"visible" });
   }, [anchorRef]);
 
+  useEffect(() => {
+    if (!onDismiss) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onDismiss(); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onDismiss]);
+
   return (
     <>
       {isTouchLayout && onDismiss && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:9998 }} onClick={onDismiss} />
       )}
     <div ref={popupRef} style={style} className="relative"
+      role="dialog" aria-modal="true"
+      aria-label={`Details for ${maid.fullName || (maid.nationality ? `${maid.nationality} maid` : "maid")}`}
       onMouseEnter={isTouchLayout ? undefined : onMouseEnter}
       onMouseLeave={isTouchLayout ? undefined : onMouseLeave}>
       {!isTouchLayout && (
@@ -248,19 +257,19 @@ const MaidHoverPopup = ({
               </div>
             </div>
             {onDismiss && (
-              <button type="button" onClick={onDismiss} style={{ flexShrink:0, padding:4, background:"rgba(255,255,255,0.12)", border:"none", borderRadius:6, cursor:"pointer", color:"rgba(255,255,255,0.7)", display:"flex", alignItems:"center", justifyContent:"center" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.22)")}
+              <button type="button" onClick={onDismiss} aria-label="Close" style={{ flexShrink:0, width:40, height:40, background:"rgba(255,255,255,0.12)", border:"none", borderRadius:6, cursor:"pointer", color:"#FFFFFF", display:"flex", alignItems:"center", justifyContent:"center" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.28)")}
                 onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}>
-                <X style={{ width:14, height:14 }} />
+                <X style={{ width:18, height:18 }} />
               </button>
             )}
           </div>
         </div>
         <div className="p-3 space-y-2 overflow-y-auto flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
-            {maid.type && <span className={`inline-block px-1.5 py-px text-[9px] font-bold border ${getMaidTypeBadgeClass(maid.type)}`}>{getTypeLabel(maid.type)}</span>}
+            {maid.type && <span className={`inline-block px-1.5 py-px text-xs font-bold border ${getMaidTypeBadgeClass(maid.type)}`}>{getTypeLabel(maid.type)}</span>}
             {maid.nationality && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold" style={{ color:C.text }}>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color:C.text }}>
                 <FlagCircle code={flagCode} />{maid.nationality}
               </span>
             )}
@@ -315,7 +324,7 @@ const MaidHoverPopup = ({
 const PopupRow = ({ label, value, valueClass = "", valueStyle }: { label: string; value: string; valueClass?: string; valueStyle?: React.CSSProperties }) => (
   <div className="flex flex-col">
     <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted }}>{label}</span>
-    <span className={`text-[10px] leading-tight line-clamp-1 ${valueClass}`} style={{ color:C.text, ...valueStyle }}>{value}</span>
+    <span className={`text-xs leading-tight line-clamp-1 ${valueClass}`} style={{ color:C.text, ...valueStyle }}>{value}</span>
   </div>
 );
 
@@ -427,7 +436,7 @@ const LockedMaidHoverModal = ({
           <span style={{ fontWeight:600, color:C.textMuted }}>{maid.fullName || "—"}</span>
         </p>
         {agencyName && <p><span style={{ fontWeight:800 }}>Agency:</span> <span style={{ color:C.textMuted }}>{agencyName}</span></p>}
-        {maid.type && <p><span className={`inline-block px-1.5 py-px text-[9px] font-bold border ${getMaidTypeBadgeClass(maid.type)}`}>{getTypeLabel(maid.type)}</span></p>}
+        {maid.type && <p><span className={`inline-block px-1.5 py-px text-xs font-bold border ${getMaidTypeBadgeClass(maid.type)}`}>{getTypeLabel(maid.type)}</span></p>}
         {englishLevel && <p><span style={{ fontWeight:800 }}>English:</span> <span style={{ color:C.textMuted }}>{englishLevel}</span></p>}
         {age !== null && <p><span style={{ fontWeight:800 }}>Age:</span> <span style={{ color:C.textMuted }}>{age} yrs</span></p>}
         {maid.maritalStatus && <p><span style={{ fontWeight:800 }}>Status:</span> <span style={{ color:C.textMuted }}>{maid.maritalStatus}</span></p>}
@@ -466,8 +475,12 @@ const LockedMaidHoverModal = ({
                     <tr key={idx} style={{ background: idx % 2 === 0 ? C.white : C.surface }}>
                       <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>{String(e["from"]||e["From"]||e["startYear"]||e["startDate"]||"—")}</td>
                       <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>{String(e["to"]||e["To"]||e["endYear"]||e["endDate"]||"—")}</td>
-                      <td className="px-2 py-1.5 blur-[3px] select-none" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["country"]||e["Country"]||e["location"]||"—")}</td>
-                      <td className="px-2 py-1.5 blur-[3px] select-none max-w-[70px] truncate" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>{String(e["duties"]||e["Duties"]||e["employer"]||"—")}</td>
+                      <td className="px-2 py-1.5 select-none" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>
+                        <span className="inline-flex items-center gap-1" style={{ color:C.greenMid }}><Lock className="h-3 w-3 flex-shrink-0" />Sign in to view</span>
+                      </td>
+                      <td className="px-2 py-1.5 select-none" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>
+                        <span className="inline-flex items-center gap-1" style={{ color:C.greenMid }}><Lock className="h-3 w-3 flex-shrink-0" />Sign in to view</span>
+                      </td>
                     </tr>
                   );
                 })}
@@ -729,7 +742,7 @@ const MaidCard = ({
           </Link>
           {maid.type && (
             <div className="absolute top-0 left-0">
-              <span className={`inline-block px-1.5 py-px text-[9px] font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>{getTypeLabel(maid.type)}</span>
+              <span className={`inline-block px-1.5 py-px text-xs font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>{getTypeLabel(maid.type)}</span>
             </div>
           )}
           <button
@@ -746,22 +759,22 @@ const MaidCard = ({
         </div>
 
         <div className="flex flex-col gap-0.5 p-2.5 flex-1" style={{ background:C.white }}>
-          <h3 className="text-xs font-bold line-clamp-1 leading-tight" style={{ color:C.text }}>{maid.fullName || "Unnamed maid"}</h3>
-          {maid.referenceCode && <p className="text-[9px] font-mono leading-tight" style={{ color:C.textMuted }}>{maid.referenceCode}</p>}
+          <h3 className="text-sm font-bold line-clamp-1 leading-tight" style={{ color:C.text }}>{maid.fullName || "Unnamed maid"}</h3>
+          {maid.referenceCode && <p className="text-xs font-mono leading-tight" style={{ color:C.textMuted }}>{maid.referenceCode}</p>}
           {displayLabel && (
-            <p className="inline-flex items-center gap-1 text-[10px] leading-tight mt-0.5">
+            <p className="inline-flex items-center gap-1 text-xs leading-tight mt-0.5">
               <FlagCircle code={flagCode} />
               <span className="font-semibold" style={{ color:C.text }}>{displayLabel}</span>
             </p>
           )}
           <div className="my-1" style={{ borderTop:`1px solid ${C.border}` }} />
-          <div className="flex items-center gap-1.5 text-[10px] leading-tight" style={{ color:C.textMuted }}>
+          <div className="flex items-center gap-1.5 text-xs leading-tight" style={{ color:C.textMuted }}>
             {age !== null && <span className="font-medium" style={{ color:C.text }}>({age}) yrs</span>}
             {age !== null && maid.maritalStatus && <span style={{ color:C.border }}>·</span>}
             {maid.maritalStatus && <span className="truncate" style={{ color:C.text }}>{maid.maritalStatus}</span>}
           </div>
-          {maid.religion && <p className="text-[9px] leading-tight line-clamp-1" style={{ color:C.text }}>{maid.religion}</p>}
-          {experienceBucket && <p className="text-[9px] leading-tight mt-0.5 line-clamp-1" style={{ color:C.text }}>{experienceBucket}</p>}
+          {maid.religion && <p className="text-xs leading-tight line-clamp-1" style={{ color:C.text }}>{maid.religion}</p>}
+          {experienceBucket && <p className="text-xs leading-tight mt-0.5 line-clamp-1" style={{ color:C.text }}>{experienceBucket}</p>}
         </div>
       </article>
       {(hovered || clickedOpen) && cardRef.current && !disableHoverPopup && (
@@ -1213,7 +1226,7 @@ const MaidSearchPage = ({
               MAID <span style={{ color:C.yellowWarm }}>SEARCH</span>
             </p>
           </div>
-          <p className="text-[10px] mt-0.5 pl-2" style={{ color:"rgba(255,255,255,0.55)" }}>Find a suitable maid for your household</p>
+          <p className="text-xs mt-0.5 pl-2" style={{ color:"rgba(255,255,255,0.7)" }}>Find a suitable maid for your household</p>
         </div>
 
         <div className="space-y-3 p-3" style={{ background:C.white }}>
@@ -1221,6 +1234,7 @@ const MaidSearchPage = ({
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none" style={{ color:C.textMuted }} />
             <input value={filters.keyword}
+              aria-label="Search maids"
               onChange={(e) => setFilters((p) => ({ ...p, keyword:e.target.value }))}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="Filipino maid, baby sitter…"
@@ -1231,7 +1245,7 @@ const MaidSearchPage = ({
 
           {/* Maid Type */}
           <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Maid Type</p>
+            <p className="mb-2 text-xs font-black uppercase tracking-wide" style={{ color:C.textMuted }}>Maid Type</p>
             <div className="space-y-0 overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
               {MAID_TYPES.map((type, i) => (
                 <label key={type}
@@ -1260,7 +1274,7 @@ const MaidSearchPage = ({
 
           {/* Nationality */}
           <div>
-            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Nationality</label>
+            <label className="mb-1.5 block text-xs font-black uppercase tracking-wide" style={{ color:C.textMuted }}>Nationality</label>
             <div className="relative">
               <select
                 className="w-full appearance-none px-3 py-2 text-sm pr-8 focus:outline-none transition-colors"
@@ -1284,7 +1298,7 @@ const MaidSearchPage = ({
 
           {/* Language */}
           <div>
-            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Language</label>
+            <label className="mb-1.5 block text-xs font-black uppercase tracking-wide" style={{ color:C.textMuted }}>Language</label>
             <div className="relative">
               <select
                 className="w-full appearance-none px-3 py-2 text-sm pr-8 focus:outline-none transition-colors"
@@ -1333,7 +1347,7 @@ const MaidSearchPage = ({
       {/* Quick links */}
       <div className="mt-3 overflow-hidden" style={{ border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}>
         <div className="px-3 py-2" style={{ borderBottom:`1px solid ${C.border}`, background:C.surface }}>
-          <p className="text-[10px] font-black uppercase tracking-widest" style={{ color:C.textMuted }}>Browse by Category</p>
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color:C.textMuted }}>Browse by Category</p>
         </div>
         <div style={{ background:C.white }}>
           {NATIONALITY_LINKS.map((label, i) => {

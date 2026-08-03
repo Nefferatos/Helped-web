@@ -18,6 +18,14 @@ export default {
         display: ["'Playfair Display'", "serif"],
         body: ["'DM Sans'", "sans-serif"],
       },
+      // Readability floor for older users: the body-text tiers cannot render
+      // below ~18px. Larger tiers keep their Tailwind defaults; arbitrary
+      // values like text-[10px] are intentionally left small for micro UI.
+      fontSize: {
+        xs: ["0.9375rem", { lineHeight: "1.4rem" }], // 15px — gently raised
+        sm: ["1.125rem", { lineHeight: "1.6rem" }],  // 18px floor
+        base: ["1.125rem", { lineHeight: "1.6rem" }], // 18px floor
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

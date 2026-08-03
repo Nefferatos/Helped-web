@@ -420,6 +420,8 @@ const CSS = `
 .sc-topics-hdr {
   display:flex; align-items:center; justify-content:space-between;
   padding:10px 16px; cursor:pointer; user-select:none;
+  width:100%; background:none; border:none;
+  font-family:inherit; text-align:left; color:inherit;
 }
 .sc-topics-hdr-left {
   display:flex; align-items:center; gap:7px;
@@ -743,7 +745,12 @@ function TopicPicker({
 
   return (
     <div className="sc-topics">
-      <div className="sc-topics-hdr" onClick={() => setOpen((value) => !value)}>
+      <button
+        type="button"
+        className="sc-topics-hdr"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
         <div className="sc-topics-hdr-left">
           <Tag size={12} />
           What can we help you with?
@@ -756,7 +763,7 @@ function TopicPicker({
         <div className={`sc-topics-toggle${open ? " open" : ""}`}>
           <ChevronDown size={13} color="#6b7280" />
         </div>
-      </div>
+      </button>
 
       {open && (
         <div className="sc-topics-body">

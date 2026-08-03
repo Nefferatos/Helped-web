@@ -847,6 +847,10 @@ const AddMaid = () => {
   const [maxUnlockedTab, setMaxUnlockedTab] = useState(0);
   const [isCreated, setIsCreated] = useState(false);
 
+  // Unsaved-changes guard: becomes true once the user edits any form field.
+  const [dirty, setDirty] = useState(false);
+  const dirtyArmedRef = useRef(false);
+
   // ── Passport background state ──
   const [selectedPassportBg, setSelectedPassportBg] = useState<PassportBgId | null>(null);
   const [isApplyingBg, setIsApplyingBg] = useState(false);
@@ -860,6 +864,25 @@ const AddMaid = () => {
     const seedPrefill = buildAtsPrefill({ query: searchParams });
     setFormData((prev) => mergeAtsPrefillIntoMaid(prev, seedPrefill));
   }, [searchParams]);
+
+  // ── Unsaved-changes guard ──
+  // Flag the form dirty on any change to the maid profile after the first mount,
+  // so entered/imported data isn't silently lost on tab-close, refresh, or back.
+  useEffect(() => {
+    if (!dirtyArmedRef.current) { dirtyArmedRef.current = true; return; }
+    setDirty(true);
+  }, [formData]);
+
+  // Warn the user before a tab-close / refresh / navigation loses unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
 
   const fileToDataUrlLegacy = useCallback(
     (file: File) =>
@@ -1163,6 +1186,7 @@ const AddMaid = () => {
 
     void promise.catch(() => undefined);
 
+    setDirty(false);
     navigate("/agencyadmin/edit-maids", {
       state: {
         fromView: "public",

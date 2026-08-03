@@ -94,6 +94,8 @@ interface TestimonialRecord {
   created_at: string;
 }
 
+type EnquiryStatus = "new" | "in_progress" | "replied" | "resolved";
+
 interface EnquiryRecord {
   id: number;
   username: string;
@@ -102,6 +104,9 @@ interface EnquiryRecord {
   phone: string;
   message: string;
   createdAt: string;
+  status?: EnquiryStatus;
+  note?: string;
+  assignedTo?: string;
 }
 
 interface ClientRecord {
@@ -7489,6 +7494,39 @@ app.delete("/api/enquiries/bulk", requireAgencyAdminAuth, async (c) => {
   const deleted = before - data.enquiries.length;
   await saveData(c.env, data);
   return c.json({ deleted });
+});
+
+const VALID_ENQUIRY_STATUSES: EnquiryStatus[] = ["new", "in_progress", "replied", "resolved"];
+
+app.patch("/api/enquiries/:id", requireAgencyAdminAuth, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "Valid id is required" }, 400);
+  const body = await parseBody<{ status?: unknown; note?: unknown; assignedTo?: unknown }>(c.req.raw);
+  if (!body) return c.json({ error: "Invalid body" }, 400);
+
+  const data = await loadData(c.env);
+  const existing = data.enquiries.find((item) => item.id === id);
+  if (!existing) {
+    return c.json({ error: "Enquiry not found" }, 404);
+  }
+
+  if (body.status !== undefined) {
+    if (typeof body.status !== "string" || !VALID_ENQUIRY_STATUSES.includes(body.status as EnquiryStatus)) {
+      return c.json({ error: `status must be one of: ${VALID_ENQUIRY_STATUSES.join(", ")}` }, 400);
+    }
+    existing.status = body.status as EnquiryStatus;
+  }
+  if (body.note !== undefined) {
+    if (typeof body.note !== "string") return c.json({ error: "note must be a string" }, 400);
+    existing.note = body.note.slice(0, 5000);
+  }
+  if (body.assignedTo !== undefined) {
+    if (typeof body.assignedTo !== "string") return c.json({ error: "assignedTo must be a string" }, 400);
+    existing.assignedTo = body.assignedTo.slice(0, 200);
+  }
+
+  await saveData(c.env, data);
+  return c.json({ enquiry: enrichEnquiryWithClient(existing, data.clients) });
 });
 
 app.delete("/api/enquiries/:id", requireAgencyAdminAuth, async (c) => {

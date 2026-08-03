@@ -1,36 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, X } from "lucide-react";
 import {
   ArrowLeft,
-  Bell,
   BriefcaseBusiness,
   CheckCircle2,
-  Clock3,
   LogOut,
   Mail,
   MessageCircle,
   Phone,
   Search,
-  Settings,
   Sparkles,
-  UserRound,
   Users,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { calculateAge, MaidProfile } from "@/lib/maids";
-import { fetchClientUnreadChatCount, type SupportNotification } from "@/lib/chat";
+import { fetchClientUnreadChatCount } from "@/lib/chat";
 import {
   getStoredClient,
   type ClientUser,
@@ -93,36 +79,6 @@ const getAgencyName = (maid: MaidProfile, company: CompanyProfileApi | null) => 
   return String(
     agencyContact.companyName || company?.company_name || company?.short_name || "Agency"
   );
-};
-
-const navItems = [
-  { label: "Maids", href: "/client/maids", icon: Users },
-  { label: "Requests", href: "/client/dashboard#requests", icon: BriefcaseBusiness },
-  { label: "Messages", href: "/client/support-chat", icon: MessageCircle },
-  { label: "Profile", href: "/client/profile", icon: UserRound },
-  { label: "History", href: "/client/history", icon: Clock3 },
-];
-
-const formatNotificationTime = (iso: string) => {
-  if (!iso) return "";
-  const date = new Date(iso);
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / 60000);
-  if (diffMinutes < 1) return "Just now";
-  if (diffMinutes < 60) return `${diffMinutes} min ago`;
-  if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} hr ago`;
-  return date.toLocaleDateString([], { month: "short", day: "numeric" });
-};
-
-const getClientNotificationHref = (notification: SupportNotification) => {
-  const params = new URLSearchParams();
-  params.set("type", notification.conversationType === "agency" ? "agency" : "support");
-  if (notification.conversationType === "agency" && notification.agencyId) {
-    params.set("agencyId", String(notification.agencyId));
-    if (notification.agencyName) params.set("agencyName", notification.agencyName);
-  }
-  const query = params.toString();
-  return `/client/support-chat${query ? `?${query}` : ""}`;
 };
 
 const MaidCard = ({
@@ -218,13 +174,11 @@ const ClientDashboard = () => {
   const [nationality, setNationality] = useState("All Nationalities");
   const [maidType, setMaidType] = useState("All Types");
   const [unreadChatCount, setUnreadChatCount] = useState(0);
-  const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>([]);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
       void hasActiveClientSession().then((active) => {
         if (!active) {
-          navigate("/");
+          navigate("/employer-login");
         }
       });
 
@@ -233,7 +187,7 @@ const ClientDashboard = () => {
         setIsLoading(true);
 
         if (!(await hasActiveClientSession())) {
-          navigate("/");
+          navigate("/employer-login");
           return;
         }
 
@@ -244,10 +198,7 @@ const ClientDashboard = () => {
             fetch("/api/maids?visibility=public"),
             fetch("/api/company"),
             fetchClientUnreadChatCount()
-              .then((result) => {
-                setChatNotifications(result.notifications);
-                return result.unreadCount;
-              })
+              .then((result) => result.unreadCount)
               .catch(() => 0),
           ]);
 
@@ -280,7 +231,7 @@ const ClientDashboard = () => {
           description: error instanceof Error ? error.message : "Please sign in again",
           variant: "destructive",
         });
-        navigate("/");
+        navigate("/employer-login");
       }
       finally {
         setIsLoading(false);
@@ -293,11 +244,8 @@ const ClientDashboard = () => {
       void fetchClientUnreadChatCount()
         .then((result) => {
           setUnreadChatCount(result.unreadCount);
-          setChatNotifications(result.notifications);
         })
-        .catch(() => {
-          setChatNotifications([]);
-        });
+        .catch(() => {});
     }, 5000);
 
     return () => window.clearInterval(interval);
@@ -389,165 +337,6 @@ const ClientDashboard = () => {
   return (
     <div className="client-page-theme min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
 
-      {/* ── Header ── */}
-      <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3 md:gap-6">
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden rounded-xl border p-2 hover:bg-muted transition"
-              aria-label="Toggle menu"
-            >
-              {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-            <Link
-              to="/"
-              className="font-display text-lg sm:text-xl font-bold text-foreground whitespace-nowrap"
-            >
-              Find Maids
-            </Link>
-          </div>
-
-          <div className="flex-1 flex justify-center">
-            <nav className="hidden md:flex items-center gap-6 font-body text-sm font-medium">
-              {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  to={item.href}
-                  className="relative transition-colors hover:text-primary"
-                >
-                  {item.label}
-                  {item.href === "/client/support-chat" && unreadChatCount > 0 && (
-                    <span className="absolute -right-4 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                      {unreadChatCount}
-                    </span>
-                  )}
-                </Link>
-              ))}
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="relative rounded-2xl">
-                  <Bell className="h-5 w-5" />
-                  {unreadChatCount > 0 && (
-                    <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
-                    </span>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[360px] max-w-[calc(100vw-24px)]">
-                <DropdownMenuLabel className="flex items-center justify-between gap-3">
-                  <span>Notifications</span>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {unreadChatCount > 0 ? `${unreadChatCount} unread` : "All caught up"}
-                  </span>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {chatNotifications.slice(0, 6).map((notification) => (
-                  <DropdownMenuItem key={notification.id} asChild>
-                    <Link to={getClientNotificationHref(notification)} className="flex flex-col items-start gap-1">
-                      <div className="w-full flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-medium text-foreground">{notification.title}</div>
-                          <div className="text-xs text-muted-foreground">{notification.body}</div>
-                        </div>
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                          Message
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                        <span>{formatNotificationTime(notification.createdAt)}</span>
-                        {notification.status ? <span>{notification.status.replace(/_/g, " ")}</span> : null}
-                        {notification.agencyName ? <span>{notification.agencyName}</span> : null}
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-                {chatNotifications.length === 0 && (
-                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    No new notifications right now.
-                  </div>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/client/support-chat" className="justify-center font-medium text-primary">
-                    Open support chat
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 sm:gap-3 rounded-full border bg-background px-2 py-1 pr-2 sm:pr-3 transition hover:border-primary/40">
-                  <Avatar className="h-9 w-9 sm:h-10 sm:w-10">
-                    <AvatarImage src={client?.profileImageUrl} alt={client?.name || "Client"} />
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      {(client?.name || "C").slice(0, 1).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="hidden text-left md:block">
-                    <p className="text-sm font-semibold text-foreground">{client?.name || "Client"}</p>
-                    <p className="text-xs text-muted-foreground">{client?.email || ""}</p>
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/client/profile"><UserRound className="mr-2 h-4 w-4" />Profile</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/client/history"><Clock3 className="mr-2 h-4 w-4" />History</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/client/support-chat">
-                    <MessageCircle className="mr-2 h-4 w-4" />
-                    Messages {unreadChatCount > 0 ? `(${unreadChatCount})` : ""}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/client/profile"><Settings className="mr-2 h-4 w-4" />Settings</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => void handleLogout()}>
-                  <LogOut className="mr-2 h-4 w-4" />Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {/* Mobile nav drawer */}
-        {isMenuOpen && (
-          <div className="md:hidden border-t bg-background px-4 py-3 space-y-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.label}
-                to={item.href}
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-muted transition"
-              >
-                <span className="flex items-center gap-2">
-                  <item.icon className="h-4 w-4 text-muted-foreground" />
-                  {item.label}
-                </span>
-                {item.href === "/client/support-chat" && unreadChatCount > 0 && (
-                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                    {unreadChatCount}
-                  </span>
-                )}
-              </Link>
-            ))}
-          </div>
-        )}
-      </header>
-
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 md:py-8 space-y-8">
 
         {/* ── Hero / Welcome banner ── */}
@@ -556,7 +345,7 @@ const ClientDashboard = () => {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex-1 min-w-0">
                 <Link
-                  to="/"
+                  to="/client/home"
                   className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <ArrowLeft className="h-4 w-4" /> Back to Home
@@ -886,7 +675,11 @@ const ClientDashboard = () => {
                             variant="destructive"
                             className="h-11 rounded-2xl"
                             disabled={isBusy}
-                            onClick={() => void updateAssignmentStatus(directSale.id, "reject")}
+                            onClick={() => {
+                              if (window.confirm("Decline this maid suggestion? The agency will be notified.")) {
+                                void updateAssignmentStatus(directSale.id, "reject");
+                              }
+                            }}
                           >
                             Decline
                           </Button>

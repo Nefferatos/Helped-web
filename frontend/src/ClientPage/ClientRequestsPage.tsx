@@ -1077,6 +1077,34 @@ const ClientRequestsPage = () => {
                       <div key={i} className="h-[88px] rounded-[14px] crp-shimmer-bg" />
                     ))}
                   </div>
+                ) : requestsQuery.isError ? (
+                  <div
+                    className="p-10 text-center"
+                    style={{ borderRadius: 14, border: `2px dashed ${C.border}`, background: C.surface }}
+                  >
+                    <div
+                      className="mx-auto mb-3 flex h-12 w-12 items-center justify-center"
+                      style={{ borderRadius: 12, background: C.amberPale, border: `1.5px solid ${C.amberBorder}` }}
+                    >
+                      <X className="h-6 w-6" style={{ color: C.amberDeep }} />
+                    </div>
+                    <p className="font-bold" style={{ color: C.text }}>Couldn't load your requests</p>
+                    <p className="mt-1 text-sm" style={{ color: C.textMuted }}>
+                      {requestsQuery.error instanceof Error ? requestsQuery.error.message : "Something went wrong. Please try again."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void requestsQuery.refetch()}
+                      disabled={requestsQuery.isFetching}
+                      className="crp-btn-hover mx-auto mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold disabled:opacity-50"
+                      style={{ border: `1.5px solid ${C.border}`, background: C.white, color: C.teal, borderRadius: 999 }}
+                    >
+                      {requestsQuery.isFetching
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <RefreshCcw className="h-3.5 w-3.5" />}
+                      Retry
+                    </button>
+                  </div>
                 ) : requests.length === 0 ? (
                   <div
                     className="p-10 text-center"

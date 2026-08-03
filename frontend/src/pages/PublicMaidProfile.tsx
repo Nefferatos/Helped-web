@@ -659,6 +659,13 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
   useEffect(() => { setShowOtherLanguages(false); }, [maid?.referenceCode]);
 
   useEffect(() => {
+    if (!lightboxPhoto) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setLightboxPhoto(null); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxPhoto]);
+
+  useEffect(() => {
     void hasActiveClientSession()
       .then((active) => { setIsLoggedIn(active); if (active) void syncClientProfileFromSession(); })
       .catch(() => setIsLoggedIn(false));
@@ -816,10 +823,10 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
 
       {/* Lightbox */}
       {lightboxPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm" onClick={() => setLightboxPhoto(null)}>
+        <div role="dialog" aria-modal="true" aria-label="Photo viewer" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm" onClick={() => setLightboxPhoto(null)}>
           <div className="relative" onClick={(e) => e.stopPropagation()}>
             <img src={lightboxPhoto} alt="Full size" className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain" />
-            <button className="absolute -top-3 -right-3 flex h-7 w-7 items-center justify-center rounded-full bg-white text-black text-xs font-bold shadow" onClick={() => setLightboxPhoto(null)}>✕</button>
+            <button type="button" aria-label="Close" className="absolute -top-3 -right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black text-xs font-bold shadow" onClick={() => setLightboxPhoto(null)}>✕</button>
           </div>
         </div>
       )}

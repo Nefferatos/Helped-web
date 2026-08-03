@@ -97,6 +97,8 @@ export interface MaidRecord {
   updatedAt: string
 }
 
+export type EnquiryStatus = 'new' | 'in_progress' | 'replied' | 'resolved'
+
 export interface EnquiryRecord {
   id: number
   agencyId: number
@@ -108,6 +110,9 @@ export interface EnquiryRecord {
   clientId?: number
   clientName?: string
   createdAt: string
+  status?: EnquiryStatus
+  note?: string
+  assignedTo?: string
 }
 
 export interface ClientRecord {
@@ -4206,6 +4211,23 @@ export const deleteEnquiryStore = async (
   data.enquiries = data.enquiries.filter(
     (item) => item.id !== id || item.agencyId !== agencyId
   )
+  await saveData(data)
+  return existing
+}
+
+export const updateEnquiryStore = async (
+  id: number,
+  patch: Partial<Pick<EnquiryRecord, 'status' | 'note' | 'assignedTo'>>,
+  agencyId: number = DEFAULT_AGENCY_ID
+) => {
+  const data = await loadData()
+  const existing = data.enquiries.find(
+    (item) => item.id === id && item.agencyId === agencyId
+  )
+  if (!existing) return null
+  if (patch.status !== undefined) existing.status = patch.status
+  if (patch.note !== undefined) existing.note = patch.note
+  if (patch.assignedTo !== undefined) existing.assignedTo = patch.assignedTo
   await saveData(data)
   return existing
 }

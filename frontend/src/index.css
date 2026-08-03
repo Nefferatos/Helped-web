@@ -65,6 +65,11 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    /* Readability baseline for older users: larger, bolder default text.
+       Components with explicit font-size / font-weight utilities still win. */
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.6;
   }
 }
 

@@ -463,9 +463,13 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
   const [employer, setEmployer] = useState({ name: "", gender: "", dateOfBirthDay: "", dateOfBirthMonth: "", dateOfBirthYear: "", nationality: "", residentialStatus: "", nric: "", addressLine1: "", addressLine2: "", postalCode: "", typeOfResidence: "", occupation: "", company: "", email: "", residentialPhone: "", mobileNumber: "", monthlyCombinedIncome: "", existingEmployer: "", existingEmployerNric: "", monthlyContribution: "", dateOfEmployment: "" });
   const [notificationDate, setNotificationDate] = useState({ month: "", year: "" });
   const [spouse, setSpouse] = useState({ name: "", gender: "", dateOfBirthDay: "", dateOfBirthMonth: "", dateOfBirthYear: "", nationality: "", residentialStatus: "", nric: "", occupation: "", company: "" });
-  const emptyFamilyMember = () => ({ name: "", relationship: "", birthCertIcFin: "", dateOfBirthDay: "01", dateOfBirthMonth: "01", dateOfBirthYear: "1910" });
+  const emptyFamilyMember = () => ({ name: "", relationship: "", birthCertIcFin: "", dateOfBirthDay: "", dateOfBirthMonth: "", dateOfBirthYear: "" });
   const [familyMembers, setFamilyMembers] = useState([emptyFamilyMember()]);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
+
+  // Unsaved-changes guard: becomes true once the user edits any form field.
+  const [dirty, setDirty] = useState(false);
+  const dirtyArmedRef = useRef(false);
 
   const uploadedDocuments = useMemo(() => Object.values(categoryUploads).flat(), [categoryUploads]);
   const docKey = (file: UploadedFile) => `${file.category}||${file.name}`;
@@ -558,7 +562,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
         if (r.spouse) setSpouse((p) => ({ ...p, ...(r.spouse as any) }));
         if (r.notificationDate) setNotificationDate((p) => ({ ...p, ...(r.notificationDate as any) }));
         if (Array.isArray(r.familyMembers) && r.familyMembers.length) {
-          setFamilyMembers(r.familyMembers.map((fm) => ({ name: toText(fm.name), relationship: toText(fm.relationship), birthCertIcFin: toText(fm.birthCertIcFin ?? fm.birthCert), dateOfBirthDay: toText(fm.dateOfBirthDay ?? "01"), dateOfBirthMonth: toText(fm.dateOfBirthMonth ?? "01"), dateOfBirthYear: toText(fm.dateOfBirthYear ?? "1910") })));
+          setFamilyMembers(r.familyMembers.map((fm) => ({ name: toText(fm.name), relationship: toText(fm.relationship), birthCertIcFin: toText(fm.birthCertIcFin ?? fm.birthCert), dateOfBirthDay: toText(fm.dateOfBirthDay), dateOfBirthMonth: toText(fm.dateOfBirthMonth), dateOfBirthYear: toText(fm.dateOfBirthYear) })));
         }
         if (Array.isArray(r.documents)) {
           setCategoryUploads(r.documents.reduce<Record<string, UploadedFile[]>>((acc, doc) => {
@@ -575,6 +579,32 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
     };
     void load();
   }, [isCreateMode, refCode]);
+
+  /* ── Unsaved-changes guard ── */
+  // Flag the form dirty whenever any form-data object changes (after hydration).
+  useEffect(() => {
+    if (!dirtyArmedRef.current) return;
+    setDirty(true);
+  }, [maid, agency, employer, spouse, familyMembers, notificationDate, categoryUploads]);
+
+  // Arm dirty-tracking only once the initial contract data has finished loading,
+  // so the state updates from the load don't count as user edits.
+  useEffect(() => {
+    if (isLoading) return;
+    const id = window.setTimeout(() => { dirtyArmedRef.current = true; }, 0);
+    return () => window.clearTimeout(id);
+  }, [isLoading]);
+
+  // Warn the user before a tab-close / refresh / navigation loses unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
 
   /* ── Maid search autocomplete ── */
   useEffect(() => {
@@ -625,7 +655,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
     setCategoryUploads((p) => { const next = { ...p }; for (const [cat, files] of Object.entries(by)) { next[cat] = mergeUploadedFiles(next[cat] ?? [], files); } return next; });
   };
   const transformFamilyMembers = (members: typeof familyMembers) =>
-    members.map(({ name, relationship, dateOfBirthDay: day, dateOfBirthMonth: month, dateOfBirthYear: year }) => ({ name, type: ["Daughter","Son"].includes(relationship) ? "child" : "parent" as const, relationship, dateOfBirth: `${day.padStart(2,"0")}-${month.padStart(2,"0")}-${year}` }));
+    members.map(({ name, relationship, dateOfBirthDay: day, dateOfBirthMonth: month, dateOfBirthYear: year }) => ({ name, type: ["Daughter","Son"].includes(relationship) ? "child" : "parent" as const, relationship, dateOfBirth: (day || month || year) ? `${day.padStart(2,"0")}-${month.padStart(2,"0")}-${year}` : "" }));
 
   const submitContract = async () => {
     if (isSubmitting) return;
@@ -662,6 +692,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
       });
       const d = (await r.json().catch(() => ({}))) as { error?: string; employer?: { refCode?: string } };
       if (!r.ok || !d.employer?.refCode) throw new Error(d.error || "Failed to save employer contract");
+      setDirty(false);
       toast.success("Employer contract saved successfully!");
       if (showStepTabs) navigate(adminPath(`/employment-contracts/${encodeURIComponent(d.employer.refCode)}/edit?step=4`));
       else navigate(adminPath(`/employment-contracts/${encodeURIComponent(d.employer.refCode)}`));

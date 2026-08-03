@@ -6,7 +6,16 @@ import {
   deleteEnquiryStore,
   getClientByEmailStore,
   getEnquiriesStore,
+  updateEnquiryStore,
+  type EnquiryStatus,
 } from '../store'
+
+const VALID_ENQUIRY_STATUSES: EnquiryStatus[] = [
+  'new',
+  'in_progress',
+  'replied',
+  'resolved',
+]
 
 export const getEnquiries = async (req: Request, res: Response) => {
   try {
@@ -101,6 +110,62 @@ export const createEnquiry = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error creating enquiry:', error)
     res.status(500).json({ error: 'Failed to create enquiry' })
+  }
+}
+
+export const updateEnquiry = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Valid id is required' })
+    }
+
+    const body = req.body as {
+      status?: unknown
+      note?: unknown
+      assignedTo?: unknown
+    }
+
+    const patch: {
+      status?: EnquiryStatus
+      note?: string
+      assignedTo?: string
+    } = {}
+
+    if (body.status !== undefined) {
+      if (
+        typeof body.status !== 'string' ||
+        !VALID_ENQUIRY_STATUSES.includes(body.status as EnquiryStatus)
+      ) {
+        return res.status(400).json({
+          error: `status must be one of: ${VALID_ENQUIRY_STATUSES.join(', ')}`,
+        })
+      }
+      patch.status = body.status as EnquiryStatus
+    }
+    if (body.note !== undefined) {
+      if (typeof body.note !== 'string') {
+        return res.status(400).json({ error: 'note must be a string' })
+      }
+      patch.note = body.note.slice(0, 5000)
+    }
+    if (body.assignedTo !== undefined) {
+      if (typeof body.assignedTo !== 'string') {
+        return res.status(400).json({ error: 'assignedTo must be a string' })
+      }
+      patch.assignedTo = body.assignedTo.slice(0, 200)
+    }
+
+    const updated = await updateEnquiryStore(id, patch, agencyId)
+    if (!updated) {
+      return res.status(404).json({ error: 'Enquiry not found' })
+    }
+
+    res.status(200).json({ enquiry: updated })
+  } catch (error) {
+    console.error('Error updating enquiry:', error)
+    res.status(500).json({ error: 'Failed to update enquiry' })
   }
 }
 

@@ -95,9 +95,9 @@ const ClientHistoryPage = () => {
   return (
     <div className="client-page-theme min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(var(--muted))_100%)]">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
-        <Link to="/client/dashboard" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+        <Link to="/client/home" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
+          Back to Home
         </Link>
 
         <Card className="rounded-[28px] border bg-card shadow-sm">

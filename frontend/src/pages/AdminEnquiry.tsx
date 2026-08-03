@@ -88,32 +88,38 @@ const TOP_BAR_COLORS = [
 
 const getAvatarColor = (id: number) => AVATAR_COLORS[id % AVATAR_COLORS.length];
 
-/* ─── Local storage helpers for status/notes (no backend change needed) ── */
-const LS_KEY = "enq_meta";
+/* ─── Status/note persistence via the enquiries API (shared across admins) ── */
 interface EnqMeta { status?: Status; note?: string; assignedTo?: string }
-function getMeta(id: number): EnqMeta {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}")[id] ?? {}; }
-  catch { return {}; }
+
+/** Default the triage fields for records saved before these columns existed. */
+function withStatusDefaults(enqs: EnquiryRecord[]): EnquiryRecord[] {
+  return enqs.map((e) => ({
+    ...e,
+    status: e.status ?? "new",
+    note: e.note ?? "",
+    assignedTo: e.assignedTo ?? "",
+  }));
 }
-function setMeta(id: number, patch: Partial<EnqMeta>) {
+
+/** PATCH an enquiry's triage fields. Returns true on success. */
+async function patchEnquiry(
+  id: number,
+  patch: Partial<EnqMeta>,
+  opts: { silent?: boolean } = {},
+): Promise<boolean> {
   try {
-    const all = JSON.parse(localStorage.getItem(LS_KEY) || "{}") as Record<number, EnqMeta>;
-    all[id] = { ...all[id], ...patch };
-    localStorage.setItem(LS_KEY, JSON.stringify(all));
-  } catch { /* ignore */ }
-}
-function bulkDeleteMeta(ids: number[]) {
-  try {
-    const all = JSON.parse(localStorage.getItem(LS_KEY) || "{}") as Record<number, EnqMeta>;
-    ids.forEach((id) => delete all[id]);
-    localStorage.setItem(LS_KEY, JSON.stringify(all));
-  } catch { /* ignore */ }
-}
-function enrichWithMeta(enqs: EnquiryRecord[]): EnquiryRecord[] {
-  return enqs.map((e) => {
-    const m = getMeta(e.id);
-    return { ...e, status: m.status ?? "new", note: m.note ?? "", assignedTo: m.assignedTo ?? "" };
-  });
+    const res = await fetch(`/api/enquiries/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+      body: JSON.stringify(patch),
+    });
+    const d = await readSafeJson<{ error?: string }>(res);
+    if (!res.ok) throw new Error(d.error || "Failed to update enquiry");
+    return true;
+  } catch (e) {
+    if (!opts.silent) toast.error(e instanceof Error ? e.message : "Failed to save changes");
+    return false;
+  }
 }
 
 /* ─── Skeleton card ─────────────────────────────────────────────────────── */
@@ -570,7 +576,7 @@ const AdminEnquiry = () => {
         if (!response.ok || !data.enquiries)
           throw new Error(data.error || "Failed to load enquiries");
         const sorted = [...data.enquiries].sort((a, b) => b.id - a.id);
-        setEnquiries(enrichWithMeta(sorted));
+        setEnquiries(withStatusDefaults(sorted));
         setPage(1);
         setSelectedIds(new Set());
       } catch (error) {
@@ -618,7 +624,7 @@ const AdminEnquiry = () => {
               if (searchRef.current.trim()) return;
               setEnquiries((prev) => {
                 if (prev.some((item) => item.id === next.id)) return prev;
-                const enriched = { ...next, ...getMeta(next.id), status: getMeta(next.id).status ?? "new" };
+                const [enriched] = withStatusDefaults([next]);
                 return [...prev, enriched].sort((a, b) => b.id - a.id);
               });
             },
@@ -633,7 +639,7 @@ const AdminEnquiry = () => {
                 const res = await fetch("/api/enquiries?pageSize=500", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
                 const d = await readSafeJson<{ enquiries?: EnquiryRecord[]; error?: string }>(res);
                 if (res.ok && d.enquiries) {
-                  setEnquiries(enrichWithMeta([...d.enquiries].sort((a, b) => b.id - a.id)));
+                  setEnquiries(withStatusDefaults([...d.enquiries].sort((a, b) => b.id - a.id)));
                   setPage(1);
                   lastId = Math.max(lastId, d.enquiries.reduce((m, e) => Math.max(m, e.id), 0));
                 }
@@ -660,7 +666,6 @@ const AdminEnquiry = () => {
       const response = await fetch(`/api/enquiries/${id}`, { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } });
       const data = await readSafeJson<{ error?: string }>(response);
       if (!response.ok) throw new Error(data.error || "Failed to delete enquiry");
-      bulkDeleteMeta([id]);
       setEnquiries((prev) => prev.filter((e) => e.id !== id));
       setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       toast.success("Enquiry deleted");
@@ -687,7 +692,6 @@ const AdminEnquiry = () => {
       const d = await readSafeJson<{ deleted?: number; error?: string }>(res);
       if (!res.ok) throw new Error(d.error ?? "Failed to delete enquiries");
       const deleted = d.deleted ?? ids.length;
-      bulkDeleteMeta(ids);
       setEnquiries((prev) => prev.filter((e) => !selectedIds.has(e.id)));
       toast.success(`${deleted} enqu${deleted !== 1 ? "iries" : "iry"} deleted`);
       setSelectedIds(new Set());
@@ -698,16 +702,29 @@ const AdminEnquiry = () => {
     }
   };
 
-  /* ── Status change ── */
-  const handleStatusChange = (id: number, status: Status) => {
-    setMeta(id, { status });
+  /* ── Status change (optimistic, persisted via API) ── */
+  const handleStatusChange = async (id: number, status: Status) => {
+    const prevStatus = enquiries.find((e) => e.id === id)?.status ?? "new";
     setEnquiries((prev) => prev.map((e) => e.id === id ? { ...e, status } : e));
+    const ok = await patchEnquiry(id, { status });
+    if (!ok) {
+      // Revert on failure so the UI reflects the persisted state.
+      setEnquiries((prev) => prev.map((e) => e.id === id ? { ...e, status: prevStatus } : e));
+    }
   };
 
-  /* ── Note save ── */
-  const handleNoteSave = (id: number, note: string, assignedTo: string) => {
-    setMeta(id, { note, assignedTo });
-    setEnquiries((prev) => prev.map((e) => e.id === id ? { ...e, note, assignedTo } : e));
+  /* ── Note save (optimistic, persisted via API) ── */
+  const handleNoteSave = async (id: number, note: string, assignedTo: string) => {
+    const prev = enquiries.find((e) => e.id === id);
+    setEnquiries((p) => p.map((e) => e.id === id ? { ...e, note, assignedTo } : e));
+    const ok = await patchEnquiry(id, { note, assignedTo });
+    if (ok) {
+      toast.success("Note saved");
+    } else if (prev) {
+      setEnquiries((p) => p.map((e) => e.id === id
+        ? { ...e, note: prev.note ?? "", assignedTo: prev.assignedTo ?? "" }
+        : e));
+    }
   };
 
   const handleOpenSupportChat = (enquiry: EnquiryRecord) => {
@@ -759,14 +776,30 @@ const AdminEnquiry = () => {
     }
   };
 
-  /* ── Bulk status change ── */
-  const handleBulkStatus = (status: Status) => {
-    selectedIds.forEach((id) => setMeta(id, { status }));
-    setEnquiries((prev) =>
-      prev.map((e) => selectedIds.has(e.id) ? { ...e, status } : e)
+  /* ── Bulk status change (optimistic, persisted via API) ── */
+  const handleBulkStatus = async (status: Status) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const prevById = new Map(
+      ids.map((id) => [id, enquiries.find((e) => e.id === id)?.status ?? "new"] as const),
     );
-    toast.success(`Marked ${selectedIds.size} as "${STATUS_CONFIG[status].label}"`);
+    setEnquiries((prev) => prev.map((e) => selectedIds.has(e.id) ? { ...e, status } : e));
     setSelectedIds(new Set());
+
+    const results = await Promise.all(ids.map((id) => patchEnquiry(id, { status }, { silent: true })));
+    const failedIds = ids.filter((_, i) => !results[i]);
+    const okCount = ids.length - failedIds.length;
+
+    if (failedIds.length > 0) {
+      // Revert the ones that failed to persist.
+      const failedSet = new Set(failedIds);
+      setEnquiries((prev) => prev.map((e) =>
+        failedSet.has(e.id) ? { ...e, status: prevById.get(e.id) ?? "new" } : e));
+      toast.error(`${failedIds.length} could not be updated`);
+    }
+    if (okCount > 0) {
+      toast.success(`Marked ${okCount} as "${STATUS_CONFIG[status].label}"`);
+    }
   };
 
   /* ── Filtered + paginated enquiries ── */
