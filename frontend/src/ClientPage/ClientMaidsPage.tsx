@@ -22,7 +22,9 @@ import {
   Phone,
   MessageCircle,
   Facebook,
+  Youtube,
 } from "lucide-react";
+import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
@@ -1768,8 +1770,14 @@ const SiteFooter = () => (
         <div>
           <h5 className="cm-footer-heading">Follow Us</h5>
           <div style={{ display: "flex", gap: 10 }}>
-            <a href="#" aria-label="Facebook" className="cm-footer-social-btn">
+            <a href="https://www.facebook.com/share/1Bi1dLHTQw/" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="cm-footer-social-btn">
               <Facebook size={18} />
+            </a>
+            <a href="https://www.tiktok.com/@atagency.maid.sol?_r=1&_t=ZS-98H4zr4nZ4s" target="_blank" rel="noopener noreferrer" aria-label="TikTok" className="cm-footer-social-btn">
+              <FaTiktok size={17} />
+            </a>
+            <a href="https://www.youtube.com/@atagencymaidsolutions?si=lNyfLWv6k6dcsKSK" target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="cm-footer-social-btn">
+              <Youtube size={18} />
             </a>
           </div>
         </div>

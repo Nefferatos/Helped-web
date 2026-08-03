@@ -69,8 +69,8 @@ const PublicSiteFooter = () => (
           <h5 className="psf-heading">Follow Us</h5>
           <div className="psf-socials">
             <a href="https://www.facebook.com/share/1Bi1dLHTQw/" target="_blank" rel="noopener noreferrer" className="psf-social psf-social--facebook" aria-label="Follow us on Facebook"><Facebook size={18}/></a>
-            <a href="https://www.tiktok.com/@atagency.maid.sol" target="_blank" rel="noopener noreferrer" className="psf-social psf-social--tiktok" aria-label="Follow us on TikTok"><FaTiktok size={17}/></a>
-            <a href="https://www.youtube.com/@atagencymaidsolutions" target="_blank" rel="noopener noreferrer" className="psf-social psf-social--youtube" aria-label="Follow us on YouTube"><Youtube size={18}/></a>
+            <a href="https://www.tiktok.com/@atagency.maid.sol?_r=1&_t=ZS-98H4zr4nZ4s" target="_blank" rel="noopener noreferrer" className="psf-social psf-social--tiktok" aria-label="Follow us on TikTok"><FaTiktok size={17}/></a>
+            <a href="https://www.youtube.com/@atagencymaidsolutions?si=lNyfLWv6k6dcsKSK" target="_blank" rel="noopener noreferrer" className="psf-social psf-social--youtube" aria-label="Follow us on YouTube"><Youtube size={18}/></a>
           </div>
         </div>
       </div>
