@@ -1184,7 +1184,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               border: "none",
               background: "transparent",
               cursor: "pointer",
-              color: "#9CA3AF",
+              color: "#6B7280",
             }}
           >
             <X style={{ width: 16, height: 16 }} />
@@ -1679,7 +1679,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             textAlign: "center",
             fontSize: 12,
             fontWeight: 500,
-            color: "#9CA3AF",
+            color: "#6B7280",
           }}
         >
           © 2026 STREET PTE LTD. All Rights Reserved.

@@ -974,7 +974,7 @@ export default function PublicAiReceptionist() {
                             </p>
                           )}
                           {!isLoggedIn && (
-                            <p className="text-[11px]" style={{ color: "#9ca3af", paddingLeft: 2 }}>
+                            <p className="text-[11px]" style={{ color: "#6b7280", paddingLeft: 2 }}>
                               🔒 Login to view full profiles and contact details
                             </p>
                           )}

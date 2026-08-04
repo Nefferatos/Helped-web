@@ -555,7 +555,7 @@ function ConversationItem({
         <div className="flex-shrink-0 flex flex-col items-end gap-1 ml-0.5">
           {hasUnread
             ? <UnreadBadge count={conversation.unreadCount} />
-            : <CheckCheck className="h-3.5 w-3.5 mt-0.5" style={{ color: "#9ca3af" }} />
+            : <CheckCheck className="h-3.5 w-3.5 mt-0.5" style={{ color: "#6b7280" }} />
           }
         </div>
       </div>
@@ -1006,7 +1006,9 @@ const AdminSupportChat = () => {
     const unreadNow = conversations.reduce((sum, item) => sum + item.unreadCount, 0);
     if (unreadNow > lastUnreadTotalRef.current) {
       try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AudioCtx = (window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) as typeof AudioContext;
+        const ctx = new AudioCtx();
         const osc = ctx.createOscillator(); const gain = ctx.createGain();
         osc.type = "sine"; osc.frequency.value = 880; gain.gain.value = 0.03;
         osc.connect(gain); gain.connect(ctx.destination);

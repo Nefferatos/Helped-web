@@ -133,7 +133,7 @@ const GLOBAL_CSS = `
     border-color: #0E4E5E;
     box-shadow: 0 0 0 4px rgba(14,78,94,0.10);
   }
-  .enq-input::placeholder { color: #9ca3af; }
+  .enq-input::placeholder { color: #6b7280; }
 
   .enq-submit-btn {
     display: inline-flex;
@@ -443,7 +443,7 @@ function ConfirmationScreen({ onReset }: { onReset: () => void }) {
             fontWeight: 800,
             textTransform: "uppercase",
             letterSpacing: "0.12em",
-            color: "#9ca3af",
+            color: "#6b7280",
             marginBottom: 20,
           }}
         >
@@ -661,7 +661,7 @@ function SimpleEnquiryForm({
         {fieldErrors.phone && (
           <p style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#b91c1c" }}>{fieldErrors.phone}</p>
         )}
-        <p style={{ marginTop: 6, fontSize: 12, color: "#9ca3af" }}>Include country code, e.g. +65 for Singapore</p>
+        <p style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>Include country code, e.g. +65 for Singapore</p>
       </div>
 
       <div>
@@ -720,7 +720,7 @@ function SimpleEnquiryForm({
             </span>
           )}
         </button>
-        <p style={{ fontSize: 12, color: "#9ca3af" }}>Goes straight to the agency admin inbox.</p>
+        <p style={{ fontSize: 12, color: "#6b7280" }}>Goes straight to the agency admin inbox.</p>
       </div>
     </form>
   );
@@ -966,13 +966,13 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
                             fontWeight: 800,
                             textTransform: "uppercase",
                             letterSpacing: "0.12em",
-                            color: "#9ca3af",
+                            color: "#6b7280",
                             marginBottom: 4,
                           }}
                         >
                           Quick Topics
                         </p>
-                        <p style={{ fontSize: 12, color: "#9ca3af", lineHeight: 1.5 }}>
+                        <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>
                           Pick a topic to auto-fill a message template.
                         </p>
                       </div>
@@ -1002,7 +1002,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
                                   style={{
                                     fontSize: 11,
                                     marginTop: 2,
-                                    color: selectedTopic === topic.label ? "#0a6075" : "#9ca3af",
+                                    color: selectedTopic === topic.label ? "#0a6075" : "#6b7280",
                                     whiteSpace: "nowrap",
                                     overflow: "hidden",
                                     textOverflow: "ellipsis",
@@ -1133,7 +1133,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
                       <span className="enq-pulse-dot" style={{ background: "#0E4E5E" }} />
                       <div>
                         <p style={{ fontSize: 13, fontWeight: 700, color: "#1f2937" }}>Typical response</p>
-                        <p style={{ fontSize: 12, color: "#9ca3af" }}>Agency replies within 1–2 business hours</p>
+                        <p style={{ fontSize: 12, color: "#6b7280" }}>Agency replies within 1–2 business hours</p>
                       </div>
                     </div>
                   </div>

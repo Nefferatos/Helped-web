@@ -249,7 +249,7 @@ const CSS = `
   --sc-green-border:#a8e6cc; --sc-blue-light:#eff6ff;
   --sc-surface:#ffffff; --sc-bg:#f0f4f2;
   --sc-border:#e4e8e6; --sc-border-soft:#eef1ef;
-  --sc-text:#111827; --sc-text2:#6b7280; --sc-text3:#9ca3af;
+  --sc-text:#111827; --sc-text2:#6b7280; --sc-text3:#6b7280;
   --sc-shadow-xs:0 1px 2px rgba(0,0,0,.05);
   --sc-shadow-sm:0 1px 4px rgba(0,0,0,.08),0 2px 8px rgba(0,0,0,.04);
   --sc-shadow-md:0 4px 16px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.06);
