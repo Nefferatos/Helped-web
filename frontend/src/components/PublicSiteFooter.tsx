@@ -17,10 +17,10 @@ const PublicSiteFooter = () => (
       .psf-footer{position:relative;z-index:2;isolation:isolate;background:#0B1F25!important;color:#fff;padding:58px 0 0;font-family:'Inter',sans-serif;border-top:4px solid #FCD34D}
       .psf-inner{max-width:1280px;margin:0 auto;padding:0 24px}
       .psf-grid{display:grid;grid-template-columns:1.4fr 1fr 1.2fr 1.2fr .8fr;gap:36px;margin-bottom:44px}
-      .psf-brand{font-family:'Playfair Display',Georgia,serif;font-size:18px;margin:0 0 12px}
-      .psf-copy{font-size:13px;color:rgba(255,255,255,.68);line-height:1.7;margin:0}
-      .psf-heading{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:0 0 16px;color:#FCD34D}
-      .psf-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.6}
+      .psf-brand{font-family:'Playfair Display',Georgia,serif;font-size:16px;margin:0 0 12px}
+      .psf-copy{font-size:16px;color:rgba(255,255,255,.68);line-height:1.7;margin:0}
+      .psf-heading{font-size:16px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:0 0 16px;color:#FCD34D}
+      .psf-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:16px;line-height:1.6}
       .psf-link{color:#fff;text-decoration:none;transition:color .15s}
       .psf-link:hover{color:#FCD34D}
       .psf-contact{display:flex;align-items:flex-start;gap:8px}
@@ -33,7 +33,7 @@ const PublicSiteFooter = () => (
       .psf-social--youtube{color:#FF4D4D}
       .psf-social--youtube:hover{color:#fff;background:#FF0000;border-color:#FF0000;transform:translateY(-2px)}
       .psf-bottom{border-top:1px solid rgba(255,255,255,.1);padding:20px 0;text-align:center}
-      .psf-bottom p{font-size:12px;color:rgba(255,255,255,.72);margin:0;width:100%}
+      .psf-bottom p{font-size:16px;color:rgba(255,255,255,.72);margin:0;width:100%}
       @media(max-width:900px){.psf-grid{grid-template-columns:1fr 1fr 1fr;gap:30px}}
       @media(max-width:600px){.psf-footer{padding-top:44px}.psf-grid{grid-template-columns:1fr 1fr;gap:28px 20px}.psf-grid>div:first-child{grid-column:1/-1}.psf-bottom{align-items:flex-start;flex-direction:column}}
       @media(max-width:420px){.psf-grid{grid-template-columns:1fr}}

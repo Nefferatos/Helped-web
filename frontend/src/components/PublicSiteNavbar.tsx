@@ -59,6 +59,21 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
     ._pnb_nav-link-slide {
       animation: _pnb_slideIn .18s ease both;
     }
+    .public-site-navbar,
+    .public-site-navbar nav,
+    .public-site-navbar a,
+    .public-site-navbar button,
+    .public-site-navbar h1,
+    .public-site-navbar h2,
+    .public-site-navbar h3,
+    .public-site-navbar h4,
+    .public-site-navbar h5,
+    .public-site-navbar h6,
+    ._pnb_drawer,
+    ._pnb_drawer a,
+    ._pnb_drawer button {
+      font-size: 16px !important;
+    }
   `;
   document.head.appendChild(s);
 }
@@ -177,8 +192,8 @@ const PublicSiteNavbar = () => {
         "font-bold tracking-wide select-none",
         "transition-all duration-150 hover:brightness-105 active:translate-y-[2px] active:border-b-[1px]",
         "text-[#3d2800]",
-        full    && "w-full h-11 justify-center text-[14px] px-4",
-        compact && "h-[38px] px-3 text-[12px]",
+        full    && "w-full h-11 justify-center text-base px-4",
+        compact && "h-[38px] px-3 text-base",
         !full && !compact && "px-4 py-[9px] text-[16px]"
       )}
     >
@@ -206,14 +221,14 @@ const PublicSiteNavbar = () => {
     >
       <Avatar className="h-7 w-7">
         <AvatarImage src={clientUser?.profileImageUrl} alt={clientUser?.name} />
-        <AvatarFallback style={{ background: TEAL }} className="text-xs font-bold text-white">
+        <AvatarFallback style={{ background: TEAL }} className="text-base font-bold text-white">
           {clientUser?.name[0].toUpperCase()}
         </AvatarFallback>
       </Avatar>
       <span
         className={cn(
           "font-medium truncate",
-          small ? "text-[12.5px] max-w-[70px]" : "text-[13px] max-w-[110px]"
+          small ? "text-base max-w-[70px]" : "text-base max-w-[110px]"
         )}
       >
         {small ? clientUser?.name.split(" ")[0] : clientUser?.name}
@@ -226,7 +241,7 @@ const PublicSiteNavbar = () => {
     <header
       ref={headerRef}
       className={cn(
-        "sticky top-0 z-50 bg-white",
+        "public-site-navbar sticky top-0 z-50 bg-white",
         "transition-shadow duration-300",
         scrolled
           ? "shadow-[0_2px_20px_rgba(14,78,94,.13)]"
@@ -379,7 +394,7 @@ const PublicSiteNavbar = () => {
                   className={({ isActive }) =>
                     cn(
                       "_pnb_nav-link-slide flex items-center justify-between px-5 py-3.5",
-                      "text-[14px] font-medium transition-colors duration-100",
+                      "text-base font-medium transition-colors duration-100",
                       "border-b border-b-gray-50 border-l-[3px]",
                       isActive
                         ? "font-semibold bg-[#0E4E5E]/5"
@@ -398,7 +413,7 @@ const PublicSiteNavbar = () => {
                       <span>{link.label}</span>
                       <span
                         style={{ color: isActive ? TEAL : "#d1d5db" }}
-                        className="text-lg leading-none"
+                        className="text-base leading-none"
                       >
                         ›
                       </span>
@@ -423,29 +438,29 @@ const PublicSiteNavbar = () => {
                       <AvatarImage src={clientUser.profileImageUrl} alt={clientUser.name} />
                       <AvatarFallback
                         style={{ background: TEAL }}
-                        className="text-sm font-bold text-white"
+                        className="text-base font-bold text-white"
                       >
                         {clientUser.name[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p style={{ color: TEAL }} className="text-[14px] font-bold">
+                      <p style={{ color: TEAL }} className="text-base font-bold">
                         {clientUser.name}
                       </p>
-                      <p className="text-xs text-gray-400">Logged in</p>
+                      <p className="text-base text-gray-400">Logged in</p>
                     </div>
                   </div>
                   <Link
                     to="/client/home"
                     onClick={() => setIsMobileMenuOpen(false)}
                     style={{ background: TEAL, borderColor: TEAL_D }}
-                    className="flex h-11 w-full items-center justify-center rounded-[9px] border-b-[3px] text-[14px] font-bold text-white hover:brightness-110 transition-all active:translate-y-[2px] active:border-b-[1px]"
+                    className="flex h-11 w-full items-center justify-center rounded-[9px] border-b-[3px] text-base font-bold text-white hover:brightness-110 transition-all active:translate-y-[2px] active:border-b-[1px]"
                   >
                     Open Portal
                   </Link>
                   <button
                     style={{ borderColor: `${TEAL}33`, color: TEAL }}
-                    className="flex h-11 w-full items-center justify-center rounded-[9px] border-2 bg-white text-[14px] font-semibold hover:bg-[#0E4E5E]/5 transition-colors"
+                    className="flex h-11 w-full items-center justify-center rounded-[9px] border-2 bg-white text-base font-semibold hover:bg-[#0E4E5E]/5 transition-colors"
                     onClick={() => {
                       setIsMobileMenuOpen(false);
                       void logoutClientPortal("/");
