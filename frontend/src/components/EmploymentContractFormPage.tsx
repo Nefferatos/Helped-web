@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PhoneNumberInput } from "@/components/ui/phone-input";
 import { toast } from "@/components/ui/sonner";
 import {
   Eye, Download, Upload, Search, X, Check, Plus, User, Loader2,
@@ -128,6 +129,7 @@ const isMaidAlreadyAssigned = (
 /* ─── shared styles ─── */
 const inp = "h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-[13px] text-gray-900 font-medium outline-none transition-all placeholder:text-gray-400 placeholder:font-normal focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100";
 const selTrigger = "h-10 rounded-lg border border-gray-200 bg-gray-50 px-3 text-[13px] text-gray-900 font-medium focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100";
+const phoneInp = "h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-[13px] text-gray-900 font-medium transition-all focus-within:bg-white [--phone-input-focus-border:#34d399] [--phone-input-focus-ring:rgba(209,250,229,0.9)]";
 
 /* ─── Two-column field layout ─── */
 function Field2({ label, required, hint, children, half }: {
@@ -1122,10 +1124,10 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
                     </Field2>
                   </div>
                   <Field2 label="Residential Phone">
-                    <input className={inp} value={employer.residentialPhone} onChange={(e) => setEmployer({ ...employer, residentialPhone: e.target.value })} placeholder="e.g. 64643212" />
+                    <PhoneNumberInput className={phoneInp} value={employer.residentialPhone} onChange={(v) => setEmployer({ ...employer, residentialPhone: v })} />
                   </Field2>
                   <Field2 label="Handphone Number">
-                    <input className={inp} value={employer.mobileNumber} onChange={(e) => setEmployer({ ...employer, mobileNumber: e.target.value })} placeholder="e.g. 91234567" />
+                    <PhoneNumberInput className={phoneInp} value={employer.mobileNumber} onChange={(v) => setEmployer({ ...employer, mobileNumber: v })} />
                   </Field2>
                   <div className="col-span-2">
                     <Field2 label="Monthly Combined Income">

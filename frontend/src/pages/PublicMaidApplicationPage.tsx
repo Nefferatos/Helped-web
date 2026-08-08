@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneNumberInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { fetchAgencyOptions } from "@/lib/agencies";
@@ -929,7 +930,7 @@ const PublicMaidApplicationPage = () => {
 
                     <label className="space-y-1.5">
                       <FieldLabel required>WhatsApp / contact number</FieldLabel>
-                      <Input className={fieldCls} value={form.contactNumber} onChange={(e) => updateField("contactNumber", e.target.value)} required placeholder="+63 912 345 6789" />
+                      <PhoneNumberInput className={fieldCls} value={form.contactNumber} onChange={(v) => updateField("contactNumber", v)} required />
                     </label>
 
                     {/* ── Nationality dropdown ── */}
@@ -1068,7 +1069,7 @@ const PublicMaidApplicationPage = () => {
 
                     <label className="space-y-1.5">
                       <FieldLabel>Home country contact number</FieldLabel>
-                      <Input className={fieldCls} value={form.homeCountryContactNumber} onChange={(e) => updateField("homeCountryContactNumber", e.target.value)} />
+                      <PhoneNumberInput className={fieldCls} value={form.homeCountryContactNumber} onChange={(v) => updateField("homeCountryContactNumber", v)} />
                     </label>
                   </div>
                 </>

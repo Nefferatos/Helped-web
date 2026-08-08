@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { PhoneNumberInput } from "@/components/ui/phone-input";
 import { toast } from "@/components/ui/sonner";
 import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
@@ -1611,8 +1612,9 @@ const RequestForm = ({ prefillFilters, onBack }:{ prefillFilters:Filters; onBack
             </div>
             <div>
               <label className="cm-lbl">Phone Number <span className="cm-req-star">*</span></label>
-              <input className="cm-form-input" placeholder="+65 9123 4567" value={form.phone}
-                onChange={e=>setForm(p=>({...p,phone:e.target.value}))} required/>
+              <PhoneNumberInput className="cm-form-input" value={form.phone}
+                onChange={v=>setForm(p=>({...p,phone:v}))} required
+                style={{ "--phone-input-focus-border": "var(--teal-3)", "--phone-input-focus-ring": "rgba(14,78,94,0.1)" } as React.CSSProperties}/>
             </div>
             <div>
               <label className="cm-lbl">Agency <span className="cm-req-star">*</span></label>

@@ -4,6 +4,7 @@ import { Star, ChevronRight, User, Briefcase, Clock, FileText, Globe, Lock } fro
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { PhoneNumberInput } from "@/components/ui/phone-input";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
-import { getDialCodePrefillForNationality, NATIONALITY_DIAL_CODE, type MaidProfile } from "@/lib/maids";
+import { getDialCodePrefillForNationality, type MaidProfile } from "@/lib/maids";
 
 /* ─── Constants ─── */
 
@@ -458,6 +459,22 @@ const StyledInput = ({ className = "", ...props }: React.InputHTMLAttributes<HTM
       focus:shadow-[0_0_0_3px_rgba(251,191,36,0.18),0_1px_4px_rgba(0,0,0,0.06)]
       hover:border-slate-300 hover:bg-white
       disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100
+      ${className}
+    `}
+  />
+);
+
+const StyledPhoneInput = ({ className = "", ...props }: React.ComponentProps<typeof PhoneNumberInput>) => (
+  <PhoneNumberInput
+    {...props}
+    className={`
+      w-full h-11 rounded-xl border border-slate-600 bg-slate-50/80
+      px-3.5 text-sm text-slate-800 font-medium
+      shadow-sm
+      transition-all duration-200 ease-in-out
+      hover:border-slate-300 hover:bg-white
+      focus-within:bg-white
+      [--phone-input-focus-border:#fbbf24] [--phone-input-focus-ring:rgba(251,191,36,0.18)]
       ${className}
     `}
   />
@@ -1009,23 +1026,21 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
             }
             right={
               <Field label="Contact Number in Home Country">
-                <StyledInput
-                  type="tel"
+                <StyledPhoneInput
                   value={form.agencyContact.homeCountryContactNumber}
-                  onChange={(e) =>
+                  onChange={(v) =>
                     setForm((p) =>
                       p
                         ? {
                             ...p,
                             agencyContact: {
                               ...p.agencyContact,
-                              homeCountryContactNumber: e.target.value,
+                              homeCountryContactNumber: v,
                             },
                           }
                         : p,
                     )
                   }
-                  placeholder={NATIONALITY_DIAL_CODE[form.nationality] ? `${NATIONALITY_DIAL_CODE[form.nationality]} XXX XXXX` : "+XX XXX XXXX"}
                 />
               </Field>
             }
@@ -2160,14 +2175,13 @@ const PrivateInfoTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabPr
       </Field>
 
       <Field label="Phone (Maid / Foreign Agency) — WhatsApp">
-        <StyledInput
+        <StyledPhoneInput
           value={form.agencyContact.phone}
-          onChange={(e) =>
+          onChange={(v) =>
             setForm((p) =>
-              p ? { ...p, agencyContact: { ...p.agencyContact, phone: e.target.value } } : p,
+              p ? { ...p, agencyContact: { ...p.agencyContact, phone: v } } : p,
             )
           }
-          placeholder="+60 XXX XXXX"
         />
       </Field>
 

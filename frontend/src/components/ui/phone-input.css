@@ -1,0 +1,62 @@
+/* Styling for <PhoneNumberInput>. The wrapper element receives the field classes
+   used by the surrounding form (fieldCls, cm-form-input, cel-input, …), so the
+   country selector and the number input have to render as one seamless field. */
+
+.phone-input-field {
+  /* Overridable per call site, e.g. style={{ "--phone-input-focus-border": "#f59e0b" }} */
+  --phone-input-focus-border: #10b981;
+  --phone-input-focus-ring: rgba(16, 185, 129, 0.18);
+
+  display: flex;
+  align-items: center;
+}
+
+.phone-input-field .PhoneInputInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+.phone-input-field .PhoneInputInput:focus,
+.phone-input-field .PhoneInputInput:focus-visible {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+.phone-input-field .PhoneInputInput::placeholder {
+  color: inherit;
+  opacity: 0.45;
+}
+
+.phone-input-field:focus-within {
+  border-color: var(--phone-input-focus-border);
+  box-shadow: 0 0 0 3px var(--phone-input-focus-ring);
+}
+
+.phone-input-field .PhoneInputCountry {
+  margin-right: 0.5em;
+}
+
+.phone-input-field .PhoneInputCountrySelect:focus + .PhoneInputCountryIcon .PhoneInputInternationalIconGlobe {
+  opacity: 1;
+}
+
+.phone-input-field .PhoneInputCountrySelectArrow {
+  opacity: 0.5;
+}
+
+.phone-input-field[aria-disabled="true"],
+.phone-input-field .PhoneInputInput:disabled {
+  cursor: not-allowed;
+}

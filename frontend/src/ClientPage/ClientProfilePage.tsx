@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneNumberInput, phoneFieldBaseClass } from "@/components/ui/phone-input";
 import { toast } from "@/components/ui/sonner";
 import { getStoredClient, saveClientAuth, type ClientUser } from "@/lib/clientAuth";
 import { clientFetch, hasActiveClientSession } from "@/lib/supabaseAuth";
@@ -215,15 +216,23 @@ const ClientProfilePage = () => {
                   style={{ animationDelay: `${0.1 + i * 0.07}s` }}
                 >
                   <label className="cp-label">{label}</label>
-                  <Input
-                    type={type}
-                    placeholder={placeholder}
-                    value={form[key as keyof typeof form]}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, [key]: e.target.value }))
-                    }
-                    className="cp-input"
-                  />
+                  {type === "tel" ? (
+                    <PhoneNumberInput
+                      value={form[key as keyof typeof form]}
+                      onChange={(v) => setForm((prev) => ({ ...prev, [key]: v }))}
+                      className={`${phoneFieldBaseClass} cp-input`}
+                    />
+                  ) : (
+                    <Input
+                      type={type}
+                      placeholder={placeholder}
+                      value={form[key as keyof typeof form]}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      className="cp-input"
+                    />
+                  )}
                 </div>
               ))}
             </div>

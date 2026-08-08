@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneNumberInput } from "@/components/ui/phone-input";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
 
@@ -137,7 +138,7 @@ const profileFields: Array<{ label: string; field: keyof CompanyFormData; type?:
   { label: "Fax", field: "fax" },
   { label: "Website", field: "website" },
   { label: "Facebook", field: "facebook" },
-  { label: "WhatsApp Number", field: "whatsappNumber", type: "tel", placeholder: "+65 9123 4567", hint: "Include country code for non-Singapore numbers, e.g. +60 12 345 6789" },
+  { label: "WhatsApp Number", field: "whatsappNumber", type: "tel", placeholder: "+65 9123 4567", hint: "Pick the country from the flag list — Singapore (+65) by default" },
   { label: "Theme Color", field: "themeColor" },
   { label: "Button Color", field: "buttonColor" },
 ];
@@ -616,13 +617,21 @@ const AgencyProfileEdit = () => {
                   >
                     <label style={{ ...labelStyle, textAlign: "right" }}>{label}:</label>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                      <input
-                        type={type ?? "text"}
-                        placeholder={placeholder}
-                        style={inputStyle}
-                        value={formData[field] as string}
-                        onChange={(e) => handleChange(field, e.target.value)}
-                      />
+                      {type === "tel" ? (
+                        <PhoneNumberInput
+                          style={inputStyle}
+                          value={formData[field] as string}
+                          onChange={(v) => handleChange(field, v)}
+                        />
+                      ) : (
+                        <input
+                          type={type ?? "text"}
+                          placeholder={placeholder}
+                          style={inputStyle}
+                          value={formData[field] as string}
+                          onChange={(e) => handleChange(field, e.target.value)}
+                        />
+                      )}
                       {hint && (
                         <span style={{ fontSize: "0.72rem", color: "#94a3b8", lineHeight: 1.4 }}>{hint}</span>
                       )}

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PhoneNumberInput, phoneFieldBaseClass } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitLeadWithAutomation, type LeadSubmissionResponse } from "@/hooks/useAiAutomation";
 
@@ -86,7 +87,7 @@ const AiLeadCaptureForm = () => {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Contact</label>
-            <Input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="+6591234567" />
+            <PhoneNumberInput className={phoneFieldBaseClass} value={contact} onChange={setContact} />
           </div>
 
           <div className="space-y-2">

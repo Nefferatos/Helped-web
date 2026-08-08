@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import PublicSiteFooter from "@/components/PublicSiteFooter";
+import { PhoneNumberInput } from "@/components/ui/phone-input";
 import { getClientAuthHeaders, getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import {
   CheckCircle2,
@@ -650,18 +651,20 @@ function SimpleEnquiryForm({
         <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
           Phone Number <span style={{ color: "#ef4444" }}>*</span>
         </label>
-        <input
-          type="tel"
+        <PhoneNumberInput
           value={phone}
-          onChange={(e) => { setPhone(e.target.value); clearFieldError("phone"); }}
-          placeholder="+65 9123 4567"
+          onChange={(v) => { setPhone(v); clearFieldError("phone"); }}
           className="enq-input"
-          style={fieldErrors.phone ? { borderColor: "#fca5a5" } : undefined}
+          style={{
+            "--phone-input-focus-border": "#0E4E5E",
+            "--phone-input-focus-ring": "rgba(14,78,94,0.10)",
+            ...(fieldErrors.phone ? { borderColor: "#fca5a5" } : {}),
+          } as React.CSSProperties}
         />
         {fieldErrors.phone && (
           <p style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#b91c1c" }}>{fieldErrors.phone}</p>
         )}
-        <p style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>Include country code, e.g. +65 for Singapore</p>
+        <p style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>Pick your country from the flag list — Singapore (+65) by default</p>
       </div>
 
       <div>

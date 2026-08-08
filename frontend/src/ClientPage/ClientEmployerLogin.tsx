@@ -6,6 +6,7 @@ import { getClientPostLoginPath } from "@/lib/clientNavigation";
 import { requireSupabase } from "@/lib/supabaseClient";
 import { finalizeClientLoginFromSupabase } from "@/lib/supabaseAuth";
 import SocialOAuthButtons from "@/components/SocialOAuthButtons";
+import { PhoneNumberInput } from "@/components/ui/phone-input";
 import "./ClientTheme.css";
 
 const ClientEmployerLogin = () => {
@@ -512,13 +513,15 @@ const ClientEmployerLogin = () => {
 
                     <div className="cel-field">
                       <label className="cel-label" htmlFor="cel-phone">Phone Number</label>
-                      <input
+                      <PhoneNumberInput
                         id="cel-phone"
-                        type="tel"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onChange={setPhone}
                         className="cel-input"
-                        placeholder="+65 9123 4567"
+                        style={{
+                          "--phone-input-focus-border": "rgba(252,211,77,0.55)",
+                          "--phone-input-focus-ring": "rgba(252,211,77,0.1)",
+                        } as React.CSSProperties}
                       />
                     </div>
 
