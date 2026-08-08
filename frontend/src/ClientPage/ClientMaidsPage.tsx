@@ -1616,6 +1616,9 @@ const RequestForm = ({ prefillFilters, onBack }:{ prefillFilters:Filters; onBack
                 onChange={v=>setForm(p=>({...p,phone:v}))} required
                 style={{ "--phone-input-focus-border": "var(--teal-3)", "--phone-input-focus-ring": "rgba(14,78,94,0.1)" } as React.CSSProperties}/>
             </div>
+            {/*
+              Agency selection is temporarily disabled. Requests continue to use
+              the default agency (ID 1) in the submission payload.
             <div>
               <label className="cm-lbl">Agency <span className="cm-req-star">*</span></label>
               {selectWrapper(
@@ -1626,6 +1629,7 @@ const RequestForm = ({ prefillFilters, onBack }:{ prefillFilters:Filters; onBack
                 </select>
               )}
             </div>
+            */}
           </div>
         </div>
 
