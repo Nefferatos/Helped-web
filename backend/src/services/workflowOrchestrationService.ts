@@ -106,7 +106,51 @@ export const processInquiryWorkflow = async (payload: {
   contact: string
   employerId?: number
 }) => {
-  return await processInquiryWithAiOrchestrator(payload)
+  const result = await processInquiryWithAiOrchestrator(payload)
+
+  const buildProfileUrl = (referenceCode: string) => {
+    const baseUrl =
+      process.env.MAID_PROFILE_BASE_URL?.trim() || process.env.PUBLIC_URL?.trim() || ''
+    const path = `/maids/${encodeURIComponent(referenceCode)}`
+    return baseUrl ? `${baseUrl.replace(/\/$/, '')}${path}` : path
+  }
+
+  const shouldAutoTriggerMake =
+    result.workflow === 'make_pipeline' || process.env.MAKE_AUTO_TRIGGER === 'true'
+
+  if (shouldAutoTriggerMake) {
+    try {
+      const makePayload = {
+        event: 'inquiry.processed',
+        inquiryId: result.inquiry.id,
+        intent: result.inquiry.intent,
+        workflow: result.inquiry.workflow,
+        aiUsed: result.inquiry.aiUsed,
+        matches: (result.matches ?? []).map((match) => ({
+          ...match,
+          profileUrl: buildProfileUrl(match.maidReferenceCode),
+        })),
+        reply: result.reply,
+        name: payload.name,
+        contact: payload.contact,
+        message: payload.message,
+        employerId: payload.employerId ?? null,
+        source: 'agent',
+        channel: 'orchestrator',
+        conversationId: null,
+        messageId: null,
+        receivedAt: new Date().toISOString(),
+        metadata: {},
+      }
+
+      const scenario = process.env.MAKE_SCENARIO?.trim() || 'inquiry_pipeline'
+      await sendWorkflowToMake({ scenario, payload: makePayload })
+    } catch (error) {
+      // swallow - sendWorkflowToMake logs delivery records; no further action required here
+    }
+  }
+
+  return result
 }
 
 export const runDirectMatchingWorkflow = async (criteria: MatchCriteria) => {

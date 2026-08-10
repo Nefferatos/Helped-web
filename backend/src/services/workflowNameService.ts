@@ -2,6 +2,7 @@ import { WorkflowAssignment } from '../types/workflow'
 
 const CANONICAL_WORKFLOWS: WorkflowAssignment[] = [
   'inquiry_match',
+  'make_pipeline',
   'inquiry_only',
   'lead_scoring',
   'contract_creation',

@@ -1,0 +1,33 @@
+[
+  {
+    "example": "Inquiry -> Make pipeline",
+    "scenario": "inquiry_pipeline",
+    "triggerCondition": "AI classifier returns make_pipeline or MAKE_AUTO_TRIGGER=true",
+    "payload": {
+      "event": "inquiry.processed",
+      "inquiryId": 123,
+      "intent": "hiring",
+      "workflow": "make_pipeline",
+      "aiUsed": true,
+      "matches": [
+        {
+          "maidId": 88,
+          "maidReferenceCode": "232",
+          "maidName": "Niluh Emma Kusumawati",
+          "score": 85,
+          "reasons": ["Currently available", "Experience aligned with childcare"],
+          "profileUrl": "https://example.com/maids/232"
+        }
+      ],
+      "reply": "Thanks — we are shortlisting candidates.",
+      "name": "Test User",
+      "contact": "test@example.com",
+      "message": "I want to hire a maid who can cook and look after infants",
+      "employerId": null,
+      "source": "agent",
+      "channel": "orchestrator",
+      "receivedAt": "2026-08-11T00:00:00.000Z",
+      "metadata": {}
+    }
+  }
+]

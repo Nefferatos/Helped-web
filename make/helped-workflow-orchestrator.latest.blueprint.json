@@ -1,0 +1,376 @@
+{
+  "name": "Helped Maids – Full Workflow Orchestrator (Latest)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 2957274, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -1060, "y": 552 } }
+    },
+    {
+      "id": 10,
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "parameters": { "makeConnectionId": 7082764 },
+      "mapper": {
+        "defaultModel": "gpt-5.4",
+        "reasoningEffort": "low",
+        "systemPrompt": "You are a workflow classifier for a maid agency platform. Choose exactly one workflow from: lead_scoring, inquiry_only, inquiry_match, make_pipeline, contract_creation, schedule_creation, notification_only, human_review. Return JSON with keys 'workflow' and 'payload'. Do not use markdown or explain.",
+        "message": "Action: {{1.action}}\nCustomer name: {{ifempty(1.customer.name; '')}}\nMessage: {{ifempty(1.message; '')}}",
+        "threadId": "{{1.customer.contact}}-{{ifempty(1.context.employerId; 'guest')}}",
+        "modelConfig": {
+          "recursionLimit": 300,
+          "iterationsFromHistoryCount": "10"
+        },
+        "outputType": "text"
+      },
+      "metadata": { "designer": { "x": -698, "y": 545 }, "tools": [] }
+    },
+    {
+      "id": 12,
+      "module": "json:ParseJSON",
+      "version": 1,
+      "mapper": { "json": "{{10.response}}" },
+      "metadata": { "designer": { "x": -374, "y": 549 } }
+    },
+    {
+      "id": 14,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 15,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Inquiry Only",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "inquiry_only"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/inquiry",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\"}"
+              }
+            },
+            {
+              "id": 28,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{15.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 16,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Lead Scoring",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "lead_scoring"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/leads/raw",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"source\":\"{{12.payload.source}}\",\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\"}"
+              }
+            },
+            {
+              "id": 29,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{16.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 20,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Inquiry Match",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "inquiry_match"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/match",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"employerId\":{{ifempty(12.payload.employerId;null)}},\"message\":\"{{12.payload.message}}\",\"serviceType\":\"{{12.payload.serviceType}}\",\"location\":\"{{12.payload.location}}\",\"budget\":\"{{12.payload.budgetText}}\"}"
+              }
+            },
+            {
+              "id": 30,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{20.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 21,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Contract Creation",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "contract_creation"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/contracts/generate",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"maidId\":{{12.payload.maidId}},\"employerId\":{{12.payload.employerId}},\"serviceType\":\"{{12.payload.serviceType}}\",\"location\":\"{{12.payload.location}}\",\"budgetText\":\"{{12.payload.budgetText}}\",\"scheduleDate\":\"{{12.payload.scheduleDate}}\"}"
+              }
+            },
+            {
+              "id": 31,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{21.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 22,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Schedule Creation",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "schedule_creation"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/schedule",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"maidId\":{{12.payload.maidId}},\"employerId\":{{12.payload.employerId}},\"datetime\":\"{{12.payload.datetime}}\"}"
+              }
+            },
+            {
+              "id": 32,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{22.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 24,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Notification Only",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "notification_only"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/notifications/send",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"channel\":\"{{ifempty(12.payload.channel;'internal')}}\",\"recipient\":\"{{12.payload.recipient}}\",\"message\":\"{{12.payload.notificationMessage}}\"}"
+              }
+            },
+            {
+              "id": 33,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{24.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 25,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Human Review",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "human_review"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/internal/triage",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\"}"
+              }
+            },
+            {
+              "id": 34,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{25.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 26,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Make Pipeline",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "make_pipeline"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/inquiry/make",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\",\"employerId\":{{ifempty(12.payload.employerId;null)}},\"makeScenario\":\"{{ifempty(12.payload.makeScenario;'inquiry_pipeline')}}\",\"makeUrl\":\"{{12.payload.makeUrl}}\",\"metadata\":{\"agentRoute\":\"make_pipeline\"}}"
+              }
+            },
+            {
+              "id": 35,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{26.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false
+    },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com",
+    "notes": [
+      "Orchestrator: routes AI-classifier output to backend endpoints.",
+      "On import: set WORKER_BASE_URL variable to your backend URL (e.g. http://localhost:3000).",
+      "The make_pipeline route posts to /api/inquiry/make which relays results back into Make when configured."
+    ]
+  }
+}

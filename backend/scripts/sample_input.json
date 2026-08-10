@@ -1,0 +1,22 @@
+{
+  "applicant": {
+    "fullName": "Maria Santos",
+    "email": "maria.santos@example.com",
+    "contactNumber": "+6591234567",
+    "yearsOfExperience": 4,
+    "childcareExperience": 2,
+    "newbornCareExperience": 1,
+    "elderlyCareExperience": 1,
+    "disabledCareExperience": 0,
+    "housekeepingExperience": 3,
+    "cookingSkills": ["Chinese food", "Western"],
+    "languageSkills": ["English", "Tagalog"],
+    "certifications": ["First Aid"]
+  },
+  "criteria": {
+    "minimumYearsExperience": 1,
+    "requiredSkills": [],
+    "minScore": 50,
+    "nextPhaseName": "Screening Interview"
+  }
+}

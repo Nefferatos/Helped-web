@@ -1,5 +1,6 @@
 const CANONICAL_WORKFLOWS = new Set([
   "inquiry_match",
+  "make_pipeline",
   "inquiry_only",
   "lead_scoring",
   "contract_creation",
@@ -45,7 +46,10 @@ const withTimeout = async (promise, timeoutMs) => {
     return await Promise.race([
       promise,
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`TIMEOUT:${timeoutMs}ms`)), timeoutMs);
+        timer = setTimeout(
+          () => reject(new Error(`TIMEOUT:${timeoutMs}ms`)),
+          timeoutMs,
+        );
       }),
     ]);
   } finally {
@@ -80,14 +84,18 @@ const extractWorkflowValues = (value, hits = []) => {
 };
 
 const containsLegacyWorkflow = (responseBody) =>
-  extractWorkflowValues(responseBody).some((workflow) => LEGACY_WORKFLOWS.has(workflow));
+  extractWorkflowValues(responseBody).some((workflow) =>
+    LEGACY_WORKFLOWS.has(workflow),
+  );
 
 const getPrimaryWorkflow = (responseBody) => {
   if (typeof responseBody?.workflow === "string") return responseBody.workflow;
   const payload = unwrapData(responseBody);
   if (typeof payload?.workflow === "string") return payload.workflow;
-  if (typeof payload?.inquiry?.workflow === "string") return payload.inquiry.workflow;
-  if (typeof payload?.classifier?.workflow === "string") return payload.classifier.workflow;
+  if (typeof payload?.inquiry?.workflow === "string")
+    return payload.inquiry.workflow;
+  if (typeof payload?.classifier?.workflow === "string")
+    return payload.classifier.workflow;
   return null;
 };
 
@@ -95,8 +103,10 @@ const getPrimaryIntent = (responseBody) => {
   if (typeof responseBody?.intent === "string") return responseBody.intent;
   const payload = unwrapData(responseBody);
   if (typeof payload?.intent === "string") return payload.intent;
-  if (typeof payload?.inquiry?.intent === "string") return payload.inquiry.intent;
-  if (typeof payload?.classifier?.intent === "string") return payload.classifier.intent;
+  if (typeof payload?.inquiry?.intent === "string")
+    return payload.inquiry.intent;
+  if (typeof payload?.classifier?.intent === "string")
+    return payload.classifier.intent;
   return null;
 };
 
@@ -110,18 +120,25 @@ const stableMatchReferences = (responseBody) =>
 const scoresAreDescending = (matches) =>
   Array.isArray(matches) &&
   matches.every(
-    (item, index) => index === 0 || Number(matches[index - 1]?.score ?? 0) >= Number(item?.score ?? 0),
+    (item, index) =>
+      index === 0 ||
+      Number(matches[index - 1]?.score ?? 0) >= Number(item?.score ?? 0),
   );
 
 const normalizeParityView = (testName, responseBody) => {
   const payload = unwrapData(responseBody);
-  if (testName.startsWith("orchestrator_") || testName.startsWith("workflow_")) {
+  if (
+    testName.startsWith("orchestrator_") ||
+    testName.startsWith("workflow_")
+  ) {
     return {
       workflow: getPrimaryWorkflow(responseBody),
       intent: getPrimaryIntent(responseBody),
       fallbackUsed: responseBody?.fallbackUsed ?? null,
       fallbackProvider: responseBody?.fallbackProvider ?? null,
-      hasMatches: Array.isArray(payload?.matches) ? payload.matches.length > 0 : false,
+      hasMatches: Array.isArray(payload?.matches)
+        ? payload.matches.length > 0
+        : false,
     };
   }
 
@@ -146,7 +163,9 @@ const normalizeParityView = (testName, responseBody) => {
 };
 
 const logResult = (result) => {
-  console.log(`\n[${result.status.toUpperCase()}] ${result.environment} :: ${result.name}`);
+  console.log(
+    `\n[${result.status.toUpperCase()}] ${result.environment} :: ${result.name}`,
+  );
   console.log(`request payload: ${pretty(result.requestPayload)}`);
   console.log(`response json: ${pretty(result.responseBody)}`);
   console.log(`workflow used: ${result.workflowUsed ?? "null"}`);
@@ -180,7 +199,11 @@ const parseRetryAfterMs = (headerValue) => {
 const fetchJson = async (baseUrl, path, payload, method = "POST") => {
   const startedAt = Date.now();
 
-  for (let attempt = 0; attempt <= DEFAULT_RETRY_DELAYS_MS.length; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt <= DEFAULT_RETRY_DELAYS_MS.length;
+    attempt += 1
+  ) {
     const response = await withTimeout(
       fetch(`${baseUrl}${path}`, {
         method,
@@ -217,9 +240,12 @@ const fetchJson = async (baseUrl, path, payload, method = "POST") => {
 };
 
 const bootstrapEnvironment = async (environment) => {
-  const maidsResponse = await fetchJson(environment.baseUrl, "/api/public-maids", {}, "GET").catch(
-    () => null,
-  );
+  const maidsResponse = await fetchJson(
+    environment.baseUrl,
+    "/api/public-maids",
+    {},
+    "GET",
+  ).catch(() => null);
   const matchResponse = await fetchJson(
     environment.baseUrl,
     "/api/match",
@@ -228,7 +254,8 @@ const bootstrapEnvironment = async (environment) => {
   ).catch(() => null);
 
   const maidFromPublic =
-    Array.isArray(maidsResponse?.body?.maids) && maidsResponse.body.maids.length > 0
+    Array.isArray(maidsResponse?.body?.maids) &&
+    maidsResponse.body.maids.length > 0
       ? maidsResponse.body.maids[0]
       : null;
   const maidFromMatch =
@@ -239,7 +266,8 @@ const bootstrapEnvironment = async (environment) => {
 
   return {
     firstMaidId: maidFromPublic?.id ?? maidFromMatch?.maidId ?? 1,
-    firstMaidRef: maidFromPublic?.referenceCode ?? maidFromMatch?.maidReferenceCode ?? null,
+    firstMaidRef:
+      maidFromPublic?.referenceCode ?? maidFromMatch?.maidReferenceCode ?? null,
   };
 };
 
@@ -256,7 +284,8 @@ const buildCases = (bootstrap) => {
         requestId: "ai-suite-inquiry-match",
         name: "[AI TEST] Hiring",
         contact: "ai.test@example.com",
-        message: "Please recommend a transfer maid for childcare in Woodlands with budget 800",
+        message:
+          "Please recommend a transfer maid for childcare in Woodlands with budget 800",
       },
       expectedStatus: 200,
       expectedWorkflow: "inquiry_match",
@@ -308,7 +337,8 @@ const buildCases = (bootstrap) => {
         source: "website",
         name: "[AI TEST] Lead",
         contact: "lead.ai@example.com",
-        message: "Need a nanny in Singapore next week with a budget of SGD 950.",
+        message:
+          "Need a nanny in Singapore next week with a budget of SGD 950.",
       },
       expectedStatus: 201,
       expectedWorkflow: "lead_scoring",
@@ -395,7 +425,8 @@ const buildCases = (bootstrap) => {
       category: "matching-rag",
       path: "/api/match",
       payload: {
-        message: "Need a maid for infant care and childcare in Woodlands with budget 800",
+        message:
+          "Need a maid for infant care and childcare in Woodlands with budget 800",
         serviceType: "childcare",
         location: "Woodlands",
         budget: "SGD 800",
@@ -404,10 +435,22 @@ const buildCases = (bootstrap) => {
       requireWorkflowOutput: false,
       compareAcrossEnvs: true,
       customAssertions: (responseBody, errors) => {
-        assert(Array.isArray(responseBody?.matches), "matches must be an array", errors);
-        assert((responseBody?.matches?.length ?? 0) > 0, "matches must not be empty", errors);
-        const scores = (responseBody?.matches ?? []).map((item) => item.score ?? 0);
-        const isDescending = scores.every((score, index) => index === 0 || scores[index - 1] >= score);
+        assert(
+          Array.isArray(responseBody?.matches),
+          "matches must be an array",
+          errors,
+        );
+        assert(
+          (responseBody?.matches?.length ?? 0) > 0,
+          "matches must not be empty",
+          errors,
+        );
+        const scores = (responseBody?.matches ?? []).map(
+          (item) => item.score ?? 0,
+        );
+        const isDescending = scores.every(
+          (score, index) => index === 0 || scores[index - 1] >= score,
+        );
         assert(isDescending, "match scores must be sorted descending", errors);
       },
     },
@@ -416,7 +459,8 @@ const buildCases = (bootstrap) => {
       category: "matching-rag",
       path: "/api/match",
       payload: {
-        message: "Looking for a transfer maid for elderly care in Yishun with budget 700",
+        message:
+          "Looking for a transfer maid for elderly care in Yishun with budget 700",
         serviceType: "eldercare",
         location: "Yishun",
         budget: "SGD 700",
@@ -425,8 +469,16 @@ const buildCases = (bootstrap) => {
       requireWorkflowOutput: false,
       compareAcrossEnvs: true,
       customAssertions: (responseBody, errors) => {
-        assert(Array.isArray(responseBody?.matches), "matches must be an array", errors);
-        assert((responseBody?.matches?.length ?? 0) > 0, "filtered matching should return results", errors);
+        assert(
+          Array.isArray(responseBody?.matches),
+          "matches must be an array",
+          errors,
+        );
+        assert(
+          (responseBody?.matches?.length ?? 0) > 0,
+          "filtered matching should return results",
+          errors,
+        );
       },
     },
     {
@@ -446,15 +498,24 @@ const buildCases = (bootstrap) => {
           key: "irrelevant",
           path: "/api/match",
           payload: {
-            message: "Need someone focused on cooking and general housekeeping only",
+            message:
+              "Need someone focused on cooking and general housekeeping only",
           },
         },
       ],
       validateComposite: (responses, errors) => {
         const relevant = unwrapData(responses.relevant?.body);
         const irrelevant = unwrapData(responses.irrelevant?.body);
-        assert(Array.isArray(relevant?.matches), "relevant query must return matches", errors);
-        assert(Array.isArray(irrelevant?.matches), "irrelevant query must return matches", errors);
+        assert(
+          Array.isArray(relevant?.matches),
+          "relevant query must return matches",
+          errors,
+        );
+        assert(
+          Array.isArray(irrelevant?.matches),
+          "irrelevant query must return matches",
+          errors,
+        );
         const relevantTop = relevant?.matches?.[0]?.score ?? 0;
         const irrelevantTop = irrelevant?.matches?.[0]?.score ?? 0;
         assert(
@@ -474,7 +535,8 @@ const buildCases = (bootstrap) => {
         statusCode: 200,
         body: {
           skipped: true,
-          reason: "No dedicated policy/SOP/document retrieval API surface detected in current runtime.",
+          reason:
+            "No dedicated policy/SOP/document retrieval API surface detected in current runtime.",
         },
       }),
       customAssertions: (responseBody, errors, notes) => {
@@ -482,7 +544,11 @@ const buildCases = (bootstrap) => {
           notes.push(responseBody.reason);
           return;
         }
-        assert(false, "document retrieval test expected to be skipped or explicitly implemented", errors);
+        assert(
+          false,
+          "document retrieval test expected to be skipped or explicitly implemented",
+          errors,
+        );
       },
     },
     {
@@ -492,7 +558,8 @@ const buildCases = (bootstrap) => {
       payload: {
         name: "[AI TEST] E2E Inquiry",
         contact: "e2e.ai@example.com",
-        message: "Please recommend the top 3 maids for childcare in Woodlands with budget 850.",
+        message:
+          "Please recommend the top 3 maids for childcare in Woodlands with budget 850.",
       },
       expectedStatus: 200,
       expectedWorkflow: "inquiry_match",
@@ -500,7 +567,12 @@ const buildCases = (bootstrap) => {
       requireFallbackFields: true,
       compareAcrossEnvs: true,
       customAssertions: (responseBody, errors) => {
-        assert(typeof responseBody?.reply === "string" && responseBody.reply.length > 0, "reply must be non-empty", errors);
+        assert(
+          typeof responseBody?.reply === "string" &&
+            responseBody.reply.length > 0,
+          "reply must be non-empty",
+          errors,
+        );
       },
     },
     {
@@ -523,7 +595,10 @@ const buildCases = (bootstrap) => {
 };
 
 const runSimpleCase = async (environment, testCase) => {
-  const requestPayload = typeof testCase.payload === "function" ? testCase.payload(environment) : testCase.payload;
+  const requestPayload =
+    typeof testCase.payload === "function"
+      ? testCase.payload(environment)
+      : testCase.payload;
   const errors = [];
   const notes = [];
 
@@ -532,20 +607,31 @@ const runSimpleCase = async (environment, testCase) => {
     response =
       testCase.mode === "synthetic"
         ? { latencyMs: 0, ...(await testCase.runSynthetic(environment)) }
-        : await fetchJson(environment.baseUrl, testCase.path, requestPayload, testCase.method ?? "POST");
+        : await fetchJson(
+            environment.baseUrl,
+            testCase.path,
+            requestPayload,
+            testCase.method ?? "POST",
+          );
   } catch (error) {
     return {
       name: testCase.name,
       environment: environment.key,
       status: "failed",
       requestPayload,
-      responseBody: { error: error instanceof Error ? error.message : String(error) },
+      responseBody: {
+        error: error instanceof Error ? error.message : String(error),
+      },
       workflowUsed: null,
       fallbackUsed: null,
       fallbackProvider: null,
       latencyMs: 0,
-      notes: [`environment unavailable: ${error instanceof Error ? error.message : String(error)}`],
-      errors: [`Request failed before receiving a response from ${environment.baseUrl}`],
+      notes: [
+        `environment unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      ],
+      errors: [
+        `Request failed before receiving a response from ${environment.baseUrl}`,
+      ],
       category: testCase.category,
     };
   }
@@ -566,17 +652,33 @@ const runSimpleCase = async (environment, testCase) => {
       errors,
     );
   }
-  assert(!containsLegacyWorkflow(responseBody), "legacy workflow label detected in response", errors);
+  assert(
+    !containsLegacyWorkflow(responseBody),
+    "legacy workflow label detected in response",
+    errors,
+  );
 
   if (testCase.requireWorkflowOutput) {
-    assert(Boolean(workflowUsed), "workflow field is missing from response", errors);
+    assert(
+      Boolean(workflowUsed),
+      "workflow field is missing from response",
+      errors,
+    );
     if (workflowUsed) {
-      assert(CANONICAL_WORKFLOWS.has(workflowUsed), `workflow is not canonical: ${workflowUsed}`, errors);
+      assert(
+        CANONICAL_WORKFLOWS.has(workflowUsed),
+        `workflow is not canonical: ${workflowUsed}`,
+        errors,
+      );
     }
   }
 
   if (testCase.expectedWorkflow) {
-    assert(workflowUsed === testCase.expectedWorkflow, `expected workflow ${testCase.expectedWorkflow}, got ${workflowUsed ?? "null"}`, errors);
+    assert(
+      workflowUsed === testCase.expectedWorkflow,
+      `expected workflow ${testCase.expectedWorkflow}, got ${workflowUsed ?? "null"}`,
+      errors,
+    );
   }
 
   if (testCase.expectedIntent) {
@@ -588,10 +690,15 @@ const runSimpleCase = async (environment, testCase) => {
   }
 
   if (testCase.requireFallbackFields) {
-    assert(typeof responseBody?.fallbackUsed === "boolean", "fallbackUsed must be present as a boolean", errors);
+    assert(
+      typeof responseBody?.fallbackUsed === "boolean",
+      "fallbackUsed must be present as a boolean",
+      errors,
+    );
     if (responseBody?.fallbackUsed === true) {
       assert(
-        typeof responseBody?.fallbackProvider === "string" && responseBody.fallbackProvider.length > 0,
+        typeof responseBody?.fallbackProvider === "string" &&
+          responseBody.fallbackProvider.length > 0,
         "fallbackProvider must be present when fallbackUsed is true",
         errors,
       );
@@ -628,11 +735,18 @@ const runCompositeCase = async (environment, testCase) => {
   for (const request of testCase.requests) {
     requestPayload[request.key] = request.payload;
     try {
-      const response = await fetchJson(environment.baseUrl, request.path, request.payload, request.method ?? "POST");
+      const response = await fetchJson(
+        environment.baseUrl,
+        request.path,
+        request.payload,
+        request.method ?? "POST",
+      );
       responses[request.key] = response;
       totalLatency += response.latencyMs;
     } catch (error) {
-      errors.push(`request ${request.key} failed before response: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(
+        `request ${request.key} failed before response: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -691,15 +805,25 @@ const compareEnvironments = (localResults, prodResults) => {
   const comparisons = [];
 
   for (const localResult of localResults) {
-    const prodResult = prodResults.find((item) => item.name === localResult.name);
+    const prodResult = prodResults.find(
+      (item) => item.name === localResult.name,
+    );
     if (!prodResult) continue;
 
     const compareEnabledCase =
-      buildCases({ firstMaidId: 1 }).find((item) => item.name === localResult.name)?.compareAcrossEnvs ?? false;
+      buildCases({ firstMaidId: 1 }).find(
+        (item) => item.name === localResult.name,
+      )?.compareAcrossEnvs ?? false;
     if (!compareEnabledCase) continue;
 
-    const localView = normalizeParityView(localResult.name, localResult.responseBody);
-    const prodView = normalizeParityView(prodResult.name, prodResult.responseBody);
+    const localView = normalizeParityView(
+      localResult.name,
+      localResult.responseBody,
+    );
+    const prodView = normalizeParityView(
+      prodResult.name,
+      prodResult.responseBody,
+    );
     const same = pretty(localView) === pretty(prodView);
 
     comparisons.push({
@@ -707,7 +831,9 @@ const compareEnvironments = (localResults, prodResults) => {
       status: same ? "passed" : "failed",
       localView,
       prodView,
-      errors: same ? [] : ["local and production responses differ on normalized parity view"],
+      errors: same
+        ? []
+        : ["local and production responses differ on normalized parity view"],
     });
   }
 
@@ -718,16 +844,28 @@ const printSummary = (environmentRuns, comparisons) => {
   console.log("\n=== Summary ===");
   for (const [key, run] of Object.entries(environmentRuns)) {
     if (!run) continue;
-    const passed = run.results.filter((item) => item.status === "passed").length;
-    const failed = run.results.filter((item) => item.status === "failed").length;
-    console.log(`${ENVIRONMENTS[key].label}: ${passed} passed, ${failed} failed`);
+    const passed = run.results.filter(
+      (item) => item.status === "passed",
+    ).length;
+    const failed = run.results.filter(
+      (item) => item.status === "failed",
+    ).length;
+    console.log(
+      `${ENVIRONMENTS[key].label}: ${passed} passed, ${failed} failed`,
+    );
   }
 
   if (comparisons.length > 0) {
-    const passed = comparisons.filter((item) => item.status === "passed").length;
-    const failed = comparisons.filter((item) => item.status === "failed").length;
+    const passed = comparisons.filter(
+      (item) => item.status === "passed",
+    ).length;
+    const failed = comparisons.filter(
+      (item) => item.status === "failed",
+    ).length;
     console.log(`Parity checks: ${passed} passed, ${failed} failed`);
-    for (const comparison of comparisons.filter((item) => item.status === "failed")) {
+    for (const comparison of comparisons.filter(
+      (item) => item.status === "failed",
+    )) {
       console.log(`parity failure :: ${comparison.name}`);
       console.log(`local: ${pretty(comparison.localView)}`);
       console.log(`prod: ${pretty(comparison.prodView)}`);
@@ -745,7 +883,10 @@ const main = async () => {
 
   const comparisons =
     environmentRuns.local && environmentRuns.prod
-      ? compareEnvironments(environmentRuns.local.results, environmentRuns.prod.results)
+      ? compareEnvironments(
+          environmentRuns.local.results,
+          environmentRuns.prod.results,
+        )
       : [];
 
   printSummary(environmentRuns, comparisons);
@@ -758,10 +899,14 @@ const main = async () => {
   if (runFailures.length > 0 || parityFailures.length > 0) {
     console.error("\nAI integration suite failed.");
     for (const failure of runFailures) {
-      console.error(`- ${failure.environment} :: ${failure.name} :: ${failure.errors.join("; ")}`);
+      console.error(
+        `- ${failure.environment} :: ${failure.name} :: ${failure.errors.join("; ")}`,
+      );
     }
     for (const failure of parityFailures) {
-      console.error(`- parity :: ${failure.name} :: ${failure.errors.join("; ")}`);
+      console.error(
+        `- parity :: ${failure.name} :: ${failure.errors.join("; ")}`,
+      );
     }
     process.exit(1);
   }

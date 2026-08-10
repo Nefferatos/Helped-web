@@ -1,6 +1,38 @@
 {
   "leads": [
     {
+      "id": 7,
+      "status": "qualified",
+      "createdAt": "2026-08-10T22:36:40.951Z",
+      "updatedAt": "2026-08-10T22:36:40.951Z",
+      "source": "website",
+      "message": "Need a nanny in Singapore next week with a budget of SGD 950.",
+      "name": "[AI TEST] Lead",
+      "contact": "lead.ai@example.com",
+      "serviceType": "need_a_nanny_in_singapore_next_week_with_a_budget_of_sgd_950",
+      "budget": {
+        "min": 950,
+        "max": 950,
+        "currency": "SGD",
+        "text": "950"
+      },
+      "urgency": "medium",
+      "location": "Singapore Next Week With A Budget Of Sgd",
+      "summary": "Lead needs need a nanny in singapore next week with a budget of sgd 950 support in Singapore Next Week With A Budget Of Sgd with medium urgency and 950.",
+      "score": 100,
+      "classification": "HIGH",
+      "aiSummary": "Lead needs need a nanny in singapore next week with a budget of sgd 950 support in Singapore Next Week With A Budget Of Sgd with medium urgency and 950.",
+      "qualificationReasons": [
+        "Lead provided a name",
+        "Lead provided contact information",
+        "Service type identified",
+        "Location identified",
+        "Budget identified",
+        "Moderate urgency detected",
+        "Lead message contains useful context"
+      ]
+    },
+    {
       "id": 6,
       "status": "qualified",
       "createdAt": "2026-05-05T01:28:00.592Z",
@@ -190,6 +222,72 @@
     }
   ],
   "inquiries": [
+    {
+      "id": 56,
+      "createdAt": "2026-08-10T22:36:52.707Z",
+      "name": "[AI TEST] E2E Make",
+      "contact": "e2e.ai@example.com",
+      "message": "Please recommend a maid for childcare in Tampines.",
+      "intent": "hiring",
+      "workflow": "inquiry_match",
+      "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 55,
+      "createdAt": "2026-08-10T22:36:51.382Z",
+      "name": "[AI TEST] E2E Inquiry",
+      "contact": "e2e.ai@example.com",
+      "message": "Please recommend the top 3 maids for childcare in Woodlands with budget 850.",
+      "intent": "hiring",
+      "workflow": "inquiry_match",
+      "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 54,
+      "createdAt": "2026-08-10T22:36:46.467Z",
+      "name": "[AI TEST] Contract Intent",
+      "contact": "ai.test@example.com",
+      "message": "Please create a contract draft for employer 9991 and maid 1.",
+      "intent": "inquiry",
+      "workflow": "contract_creation",
+      "reply": "Thanks for reaching out. We have logged your contract request and our team will prepare the next steps shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 53,
+      "createdAt": "2026-08-10T22:36:39.233Z",
+      "name": "[AI TEST] Complaint",
+      "contact": "ai.test@example.com",
+      "message": "I am very angry about a refund dispute and need an urgent manager escalation for a bad service incident.",
+      "intent": "complaint",
+      "workflow": "human_review",
+      "reply": "Thanks for letting us know. We have logged your concern and a team member will follow up shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 52,
+      "createdAt": "2026-08-10T22:36:38.155Z",
+      "name": "[AI TEST] Inquiry",
+      "contact": "ai.test@example.com",
+      "message": "Can you explain your agency fees and placement process?",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 51,
+      "createdAt": "2026-08-10T22:36:36.131Z",
+      "name": "[AI TEST] Hiring",
+      "contact": "ai.test@example.com",
+      "message": "Please recommend a transfer maid for childcare in Woodlands with budget 800",
+      "intent": "hiring",
+      "workflow": "inquiry_match",
+      "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+      "aiUsed": false
+    },
     {
       "id": 50,
       "createdAt": "2026-05-16T01:36:00.407Z",
@@ -742,6 +840,389 @@
     }
   ],
   "matches": [
+    {
+      "id": 145,
+      "createdAt": "2026-08-10T22:36:53.255Z",
+      "leadId": null,
+      "inquiryId": 56,
+      "employerId": null,
+      "maidId": 128,
+      "maidReferenceCode": "IND-MP-9720",
+      "maidName": "Linghawikim Vaiphei",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 146,
+      "createdAt": "2026-08-10T22:36:53.255Z",
+      "leadId": null,
+      "inquiryId": 56,
+      "employerId": null,
+      "maidId": 104,
+      "maidReferenceCode": "IND-DAR-PRI-9698",
+      "maidName": "Priyanka Dewan",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 147,
+      "createdAt": "2026-08-10T22:36:53.255Z",
+      "leadId": null,
+      "inquiryId": 56,
+      "employerId": null,
+      "maidId": 88,
+      "maidReferenceCode": "232",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 72,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 142,
+      "createdAt": "2026-08-10T22:36:51.953Z",
+      "leadId": null,
+      "inquiryId": 55,
+      "employerId": null,
+      "maidId": 120,
+      "maidReferenceCode": "IND-MP-KIM-6250",
+      "maidName": "Ruth Poumei",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 143,
+      "createdAt": "2026-08-10T22:36:51.953Z",
+      "leadId": null,
+      "inquiryId": 55,
+      "employerId": null,
+      "maidId": 92,
+      "maidReferenceCode": "24324",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 79,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 144,
+      "createdAt": "2026-08-10T22:36:51.953Z",
+      "leadId": null,
+      "inquiryId": 55,
+      "employerId": null,
+      "maidId": 93,
+      "maidReferenceCode": "45646",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 79,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 139,
+      "createdAt": "2026-08-10T22:36:49.782Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 93,
+      "maidReferenceCode": "45646",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 140,
+      "createdAt": "2026-08-10T22:36:49.782Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 84,
+      "maidReferenceCode": "4543",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 141,
+      "createdAt": "2026-08-10T22:36:49.782Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 86,
+      "maidReferenceCode": "0998",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 136,
+      "createdAt": "2026-08-10T22:36:49.264Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 121,
+      "maidReferenceCode": "IND-MP-PIP-9554a",
+      "maidName": "HoiNeiLhing Singsit",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 137,
+      "createdAt": "2026-08-10T22:36:49.264Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 101,
+      "maidReferenceCode": "FIL-PHK-OVR-9461",
+      "maidName": "Redelina Moreno",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 138,
+      "createdAt": "2026-08-10T22:36:49.264Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 93,
+      "maidReferenceCode": "45646",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 133,
+      "createdAt": "2026-08-10T22:36:48.512Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 120,
+      "maidReferenceCode": "IND-MP-KIM-6250",
+      "maidName": "Ruth Poumei",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 134,
+      "createdAt": "2026-08-10T22:36:48.512Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 126,
+      "maidReferenceCode": "IND-DAR-SWE-9435",
+      "maidName": "Pem Doma Sherpa",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 135,
+      "createdAt": "2026-08-10T22:36:48.512Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 84,
+      "maidReferenceCode": "4543",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 130,
+      "createdAt": "2026-08-10T22:36:47.236Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 120,
+      "maidReferenceCode": "IND-MP-KIM-6250",
+      "maidName": "Ruth Poumei",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 131,
+      "createdAt": "2026-08-10T22:36:47.236Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 93,
+      "maidReferenceCode": "45646",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 78,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 132,
+      "createdAt": "2026-08-10T22:36:47.236Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 92,
+      "maidReferenceCode": "24324",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 78,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 127,
+      "createdAt": "2026-08-10T22:36:36.668Z",
+      "leadId": null,
+      "inquiryId": 51,
+      "employerId": null,
+      "maidId": 92,
+      "maidReferenceCode": "24324",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 128,
+      "createdAt": "2026-08-10T22:36:36.668Z",
+      "leadId": null,
+      "inquiryId": 51,
+      "employerId": null,
+      "maidId": 93,
+      "maidReferenceCode": "45646",
+      "maidName": "Meena Sunar Biswakarma",
+      "score": 80,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 129,
+      "createdAt": "2026-08-10T22:36:36.668Z",
+      "leadId": null,
+      "inquiryId": 51,
+      "employerId": null,
+      "maidId": 120,
+      "maidReferenceCode": "IND-MP-KIM-6250",
+      "maidName": "Ruth Poumei",
+      "score": 80,
+      "reasons": [
+        "Currently available",
+        "Experience aligned with childcare",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 124,
+      "createdAt": "2026-08-10T22:36:36.254Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 81,
+      "maidReferenceCode": "Fil-001",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 125,
+      "createdAt": "2026-08-10T22:36:36.254Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 59,
+      "maidReferenceCode": "INA-PAT-9693",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 126,
+      "createdAt": "2026-08-10T22:36:36.254Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 80,
+      "maidReferenceCode": "78787",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
     {
       "id": 121,
       "createdAt": "2026-05-13T00:08:33.608Z",
@@ -2722,6 +3203,14 @@
   ],
   "schedules": [
     {
+      "id": 5,
+      "status": "scheduled",
+      "createdAt": "2026-08-10T22:36:42.765Z",
+      "maidId": 128,
+      "employerId": 9991,
+      "datetime": "2026-05-10T09:30:00.000Z"
+    },
+    {
       "id": 4,
       "status": "scheduled",
       "createdAt": "2026-05-05T01:28:01.664Z",
@@ -2755,6 +3244,15 @@
     }
   ],
   "contracts": [
+    {
+      "id": 6,
+      "status": "draft",
+      "createdAt": "2026-08-10T22:36:42.480Z",
+      "maidId": 128,
+      "employerId": 9991,
+      "contractText": "Employment Service Agreement\n\nEmployer ID: 9991\nMaid ID: 128\nService Type: childcare\nLocation: Woodlands\nBudget / Salary Terms: SGD 800\nInterview / Start Date Reference: 2026-05-12\n\nTerms:\n1. The agency will coordinate screening, matching, and interview scheduling.\n2. The employer will confirm final hiring terms before activation.\n3. The maid candidate remains subject to availability and final approval.\n4. Any personal data exchanged is used only for hiring workflow administration.",
+      "summary": "Draft contract prepared for employer 9991 and maid 128."
+    },
     {
       "id": 5,
       "status": "draft",
@@ -2802,6 +3300,46 @@
     }
   ],
   "notifications": [
+    {
+      "id": 23,
+      "status": "sent",
+      "createdAt": "2026-08-10T22:36:43.304Z",
+      "channel": "internal",
+      "recipient": "qa-team",
+      "message": "[AI TEST] Notification-only workflow validation",
+      "referenceType": "workflow",
+      "referenceId": "ai-suite"
+    },
+    {
+      "id": 22,
+      "status": "sent",
+      "createdAt": "2026-08-10T22:36:42.811Z",
+      "channel": "internal",
+      "recipient": "maid:128",
+      "message": "Interview scheduled with employer 9991 on 2026-05-10T09:30:00.000Z",
+      "referenceType": "schedule",
+      "referenceId": "5"
+    },
+    {
+      "id": 21,
+      "status": "sent",
+      "createdAt": "2026-08-10T22:36:42.771Z",
+      "channel": "internal",
+      "recipient": "employer:9991",
+      "message": "Interview scheduled with maid Linghawikim Vaiphei on 2026-05-10T09:30:00.000Z",
+      "referenceType": "schedule",
+      "referenceId": "5"
+    },
+    {
+      "id": 20,
+      "status": "sent",
+      "createdAt": "2026-08-10T22:36:41.482Z",
+      "channel": "internal",
+      "recipient": "sales-team",
+      "message": "New HIGH lead received from website: [AI TEST] Lead",
+      "referenceType": "lead",
+      "referenceId": "7"
+    },
     {
       "id": 19,
       "status": "sent",
@@ -2994,6 +3532,423 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 193,
+      "createdAt": "2026-08-10T22:37:00.454Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 13,
+        "createdAt": "2026-08-10T22:37:00.447Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "event": "inquiry.processed",
+          "inquiryId": 56,
+          "intent": "hiring",
+          "workflow": "inquiry_match",
+          "aiUsed": false,
+          "matches": [
+            {
+              "id": 145,
+              "createdAt": "2026-08-10T22:36:53.255Z",
+              "leadId": null,
+              "inquiryId": 56,
+              "employerId": null,
+              "maidId": 128,
+              "maidReferenceCode": "IND-MP-9720",
+              "maidName": "Linghawikim Vaiphei",
+              "score": 85,
+              "reasons": [
+                "Currently available",
+                "Experience aligned with childcare",
+                "Location fit for Singapore",
+                "Language profile available"
+              ],
+              "profileUrl": "/maids/IND-MP-9720"
+            },
+            {
+              "id": 146,
+              "createdAt": "2026-08-10T22:36:53.255Z",
+              "leadId": null,
+              "inquiryId": 56,
+              "employerId": null,
+              "maidId": 104,
+              "maidReferenceCode": "IND-DAR-PRI-9698",
+              "maidName": "Priyanka Dewan",
+              "score": 77,
+              "reasons": [
+                "Currently available",
+                "Experience aligned with childcare",
+                "Language profile available"
+              ],
+              "profileUrl": "/maids/IND-DAR-PRI-9698"
+            },
+            {
+              "id": 147,
+              "createdAt": "2026-08-10T22:36:53.255Z",
+              "leadId": null,
+              "inquiryId": 56,
+              "employerId": null,
+              "maidId": 88,
+              "maidReferenceCode": "232",
+              "maidName": "Niluh Emma Kusumawati",
+              "score": 72,
+              "reasons": [
+                "Currently available",
+                "Experience aligned with childcare",
+                "Language profile available"
+              ],
+              "profileUrl": "/maids/232"
+            }
+          ],
+          "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+          "name": "[AI TEST] E2E Make",
+          "contact": "e2e.ai@example.com",
+          "message": "Please recommend a maid for childcare in Tampines.",
+          "employerId": null,
+          "source": "make_ai_agent",
+          "channel": "webhook",
+          "conversationId": "",
+          "messageId": "",
+          "receivedAt": "",
+          "metadata": {}
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 6937,
+        "responseBody": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"inquiry_match\",\r\n  \"reason\": \"User is requesting maid recommendations for childcare in Tampines.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 192,
+      "createdAt": "2026-08-10T22:36:53.262Z",
+      "workflow": "inquiry_pipeline",
+      "step": "inquiry_match",
+      "status": "success",
+      "message": "Generated 3 match candidates",
+      "payload": {
+        "inquiryId": 56,
+        "aiUsed": false,
+        "vectorSearch": {
+          "used": true,
+          "candidateCount": 14
+        }
+      }
+    },
+    {
+      "id": 191,
+      "createdAt": "2026-08-10T22:36:52.713Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as hiring",
+      "payload": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 190,
+      "createdAt": "2026-08-10T22:36:52.256Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Please recommend a maid for childcare in Tampines.",
+        "name": "[AI TEST] E2E Make",
+        "contact": "e2e.ai@example.com",
+        "requestId": "90fad5ea-b26e-4f7b-83fe-75eebcbe3115"
+      }
+    },
+    {
+      "id": 189,
+      "createdAt": "2026-08-10T22:36:51.960Z",
+      "workflow": "inquiry_pipeline",
+      "step": "inquiry_match",
+      "status": "success",
+      "message": "Generated 3 match candidates",
+      "payload": {
+        "inquiryId": 55,
+        "aiUsed": false,
+        "vectorSearch": {
+          "used": true,
+          "candidateCount": 14
+        }
+      }
+    },
+    {
+      "id": 188,
+      "createdAt": "2026-08-10T22:36:51.389Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as hiring",
+      "payload": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 187,
+      "createdAt": "2026-08-10T22:36:50.401Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Please recommend the top 3 maids for childcare in Woodlands with budget 850.",
+        "name": "[AI TEST] E2E Inquiry",
+        "contact": "e2e.ai@example.com",
+        "requestId": "9b754eab-4db0-478a-9536-7057ff9d3d95"
+      }
+    },
+    {
+      "id": 186,
+      "createdAt": "2026-08-10T22:36:46.475Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "contract_creation",
+        "reply": "Thanks for reaching out. We have logged your contract request and our team will prepare the next steps shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 185,
+      "createdAt": "2026-08-10T22:36:43.892Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "requestId": "ai-suite-orchestrator-contract",
+        "message": "Please create a contract draft for employer 9991 and maid 1.",
+        "name": "[AI TEST] Contract Intent",
+        "contact": "ai.test@example.com"
+      }
+    },
+    {
+      "id": 184,
+      "createdAt": "2026-08-10T22:36:43.310Z",
+      "workflow": "notification_pipeline",
+      "step": "notify",
+      "status": "success",
+      "message": "Notification sent to qa-team",
+      "payload": {
+        "channel": "internal",
+        "recipient": "qa-team",
+        "message": "[AI TEST] Notification-only workflow validation",
+        "referenceType": "workflow",
+        "referenceId": "ai-suite"
+      }
+    },
+    {
+      "id": 183,
+      "createdAt": "2026-08-10T22:36:42.865Z",
+      "workflow": "matching_pipeline",
+      "step": "schedule",
+      "status": "success",
+      "message": "Interview 5 scheduled",
+      "payload": {
+        "id": 5,
+        "status": "scheduled",
+        "createdAt": "2026-08-10T22:36:42.765Z",
+        "maidId": 128,
+        "employerId": 9991,
+        "datetime": "2026-05-10T09:30:00.000Z"
+      }
+    },
+    {
+      "id": 182,
+      "createdAt": "2026-08-10T22:36:42.492Z",
+      "workflow": "matching_pipeline",
+      "step": "contract_generation",
+      "status": "warning",
+      "message": "Contract 6 generated",
+      "payload": {
+        "contractId": 6,
+        "aiUsed": false
+      }
+    },
+    {
+      "id": 181,
+      "createdAt": "2026-08-10T22:36:40.967Z",
+      "workflow": "lead_pipeline",
+      "step": "lead_stored",
+      "status": "success",
+      "message": "Structured lead 7 stored",
+      "payload": {
+        "leadId": 7,
+        "classification": "HIGH"
+      }
+    },
+    {
+      "id": 180,
+      "createdAt": "2026-08-10T22:36:40.931Z",
+      "workflow": "lead_pipeline",
+      "step": "qualification",
+      "status": "warning",
+      "message": "Lead qualification used fallback rules",
+      "payload": {
+        "score": 100,
+        "classification": "HIGH",
+        "reasons": [
+          "Lead provided a name",
+          "Lead provided contact information",
+          "Service type identified",
+          "Location identified",
+          "Budget identified",
+          "Moderate urgency detected",
+          "Lead message contains useful context"
+        ]
+      }
+    },
+    {
+      "id": 179,
+      "createdAt": "2026-08-10T22:36:40.408Z",
+      "workflow": "lead_pipeline",
+      "step": "enrichment",
+      "status": "warning",
+      "message": "Lead enrichment used fallback rules",
+      "payload": {
+        "serviceType": "need_a_nanny_in_singapore_next_week_with_a_budget_of_sgd_950",
+        "budget": {
+          "min": 950,
+          "max": 950,
+          "currency": "SGD",
+          "text": "950"
+        },
+        "urgency": "medium",
+        "location": "Singapore Next Week With A Budget Of Sgd",
+        "summary": "Lead needs need a nanny in singapore next week with a budget of sgd 950 support in Singapore Next Week With A Budget Of Sgd with medium urgency and 950."
+      }
+    },
+    {
+      "id": 178,
+      "createdAt": "2026-08-10T22:36:39.832Z",
+      "workflow": "lead_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Raw lead received",
+      "payload": {
+        "source": "website",
+        "message": "Need a nanny in Singapore next week with a budget of SGD 950.",
+        "name": "[AI TEST] Lead",
+        "contact": "lead.ai@example.com"
+      }
+    },
+    {
+      "id": 177,
+      "createdAt": "2026-08-10T22:36:39.285Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as complaint",
+      "payload": {
+        "intent": "complaint",
+        "workflow": "human_review",
+        "reply": "Thanks for letting us know. We have logged your concern and a team member will follow up shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 176,
+      "createdAt": "2026-08-10T22:36:38.738Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "requestId": "ai-suite-human-review",
+        "message": "I am very angry about a refund dispute and need an urgent manager escalation for a bad service incident.",
+        "name": "[AI TEST] Complaint",
+        "contact": "ai.test@example.com"
+      }
+    },
+    {
+      "id": 175,
+      "createdAt": "2026-08-10T22:36:38.161Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 174,
+      "createdAt": "2026-08-10T22:36:37.568Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "requestId": "ai-suite-inquiry-only",
+        "message": "Can you explain your agency fees and placement process?",
+        "name": "[AI TEST] Inquiry",
+        "contact": "ai.test@example.com"
+      }
+    },
+    {
+      "id": 173,
+      "createdAt": "2026-08-10T22:36:37.090Z",
+      "workflow": "inquiry_pipeline",
+      "step": "inquiry_match",
+      "status": "success",
+      "message": "Generated 3 match candidates",
+      "payload": {
+        "inquiryId": 51,
+        "aiUsed": false,
+        "vectorSearch": {
+          "used": true,
+          "candidateCount": 14
+        }
+      }
+    },
+    {
+      "id": 172,
+      "createdAt": "2026-08-10T22:36:36.139Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as hiring",
+      "payload": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 171,
+      "createdAt": "2026-08-10T22:36:33.561Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "requestId": "ai-suite-inquiry-match",
+        "message": "Please recommend a transfer maid for childcare in Woodlands with budget 800",
+        "name": "[AI TEST] Hiring",
+        "contact": "ai.test@example.com"
+      }
+    },
     {
       "id": 170,
       "createdAt": "2026-05-16T01:36:00.416Z",
@@ -5983,6 +6938,166 @@
   ],
   "decisionLogs": [
     {
+      "id": 70,
+      "createdAt": "2026-08-10T22:36:53.461Z",
+      "requestId": "90fad5ea-b26e-4f7b-83fe-75eebcbe3115",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly."
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 1205,
+      "fallbackUsed": true
+    },
+    {
+      "id": 69,
+      "createdAt": "2026-08-10T22:36:51.965Z",
+      "requestId": "9b754eab-4db0-478a-9536-7057ff9d3d95",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly."
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 1564,
+      "fallbackUsed": true
+    },
+    {
+      "id": 68,
+      "createdAt": "2026-08-10T22:36:49.789Z",
+      "requestId": "17574aa0-a7b1-4039-a510-326135c44793",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 424,
+      "fallbackUsed": true
+    },
+    {
+      "id": 67,
+      "createdAt": "2026-08-10T22:36:49.270Z",
+      "requestId": "8c2aede9-3427-41af-bd28-80742794e1a6",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 426,
+      "fallbackUsed": true
+    },
+    {
+      "id": 66,
+      "createdAt": "2026-08-10T22:36:48.519Z",
+      "requestId": "3b20a095-2e4e-465c-af62-e0a84fc204ad",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "eldercare",
+        "location": "Yishun"
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 953,
+      "fallbackUsed": true
+    },
+    {
+      "id": 65,
+      "createdAt": "2026-08-10T22:36:47.242Z",
+      "requestId": "abf079ff-7102-4de7-9dff-b76e84bfe4ae",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "childcare",
+        "location": "Woodlands"
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 409,
+      "fallbackUsed": true
+    },
+    {
+      "id": 64,
+      "createdAt": "2026-08-10T22:36:46.511Z",
+      "requestId": "ai-suite-orchestrator-contract",
+      "workflow": "contract_creation",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "contract_creation",
+        "reply": "Thanks for reaching out. We have logged your contract request and our team will prepare the next steps shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 2620,
+      "fallbackUsed": true
+    },
+    {
+      "id": 63,
+      "createdAt": "2026-08-10T22:36:39.359Z",
+      "requestId": "ai-suite-human-review",
+      "workflow": "human_review",
+      "classifierOutput": {
+        "intent": "complaint",
+        "workflow": "human_review",
+        "reply": "Thanks for letting us know. We have logged your concern and a team member will follow up shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 621,
+      "fallbackUsed": true
+    },
+    {
+      "id": 62,
+      "createdAt": "2026-08-10T22:36:38.168Z",
+      "requestId": "ai-suite-inquiry-only",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 600,
+      "fallbackUsed": true
+    },
+    {
+      "id": 61,
+      "createdAt": "2026-08-10T22:36:37.129Z",
+      "requestId": "ai-suite-inquiry-match",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly."
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 3570,
+      "fallbackUsed": true
+    },
+    {
+      "id": 60,
+      "createdAt": "2026-08-10T22:36:36.319Z",
+      "requestId": "3617d0cd-e79a-4eb4-8e4f-15904c47fc12",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 3118,
+      "fallbackUsed": true
+    },
+    {
       "id": 59,
       "createdAt": "2026-05-16T01:36:00.425Z",
       "requestId": "1a4f42e6-a85f-4356-9a0f-3d8a0b1c6bf7",
@@ -6850,6 +7965,89 @@
   ],
   "makeDeliveries": [
     {
+      "id": 13,
+      "createdAt": "2026-08-10T22:37:00.447Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "event": "inquiry.processed",
+        "inquiryId": 56,
+        "intent": "hiring",
+        "workflow": "inquiry_match",
+        "aiUsed": false,
+        "matches": [
+          {
+            "id": 145,
+            "createdAt": "2026-08-10T22:36:53.255Z",
+            "leadId": null,
+            "inquiryId": 56,
+            "employerId": null,
+            "maidId": 128,
+            "maidReferenceCode": "IND-MP-9720",
+            "maidName": "Linghawikim Vaiphei",
+            "score": 85,
+            "reasons": [
+              "Currently available",
+              "Experience aligned with childcare",
+              "Location fit for Singapore",
+              "Language profile available"
+            ],
+            "profileUrl": "/maids/IND-MP-9720"
+          },
+          {
+            "id": 146,
+            "createdAt": "2026-08-10T22:36:53.255Z",
+            "leadId": null,
+            "inquiryId": 56,
+            "employerId": null,
+            "maidId": 104,
+            "maidReferenceCode": "IND-DAR-PRI-9698",
+            "maidName": "Priyanka Dewan",
+            "score": 77,
+            "reasons": [
+              "Currently available",
+              "Experience aligned with childcare",
+              "Language profile available"
+            ],
+            "profileUrl": "/maids/IND-DAR-PRI-9698"
+          },
+          {
+            "id": 147,
+            "createdAt": "2026-08-10T22:36:53.255Z",
+            "leadId": null,
+            "inquiryId": 56,
+            "employerId": null,
+            "maidId": 88,
+            "maidReferenceCode": "232",
+            "maidName": "Niluh Emma Kusumawati",
+            "score": 72,
+            "reasons": [
+              "Currently available",
+              "Experience aligned with childcare",
+              "Language profile available"
+            ],
+            "profileUrl": "/maids/232"
+          }
+        ],
+        "reply": "Thanks for your hiring request. We are reviewing your requirements now and will shortlist suitable maid profiles for you shortly.",
+        "name": "[AI TEST] E2E Make",
+        "contact": "e2e.ai@example.com",
+        "message": "Please recommend a maid for childcare in Tampines.",
+        "employerId": null,
+        "source": "make_ai_agent",
+        "channel": "webhook",
+        "conversationId": "",
+        "messageId": "",
+        "receivedAt": "",
+        "metadata": {}
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 6937,
+      "responseBody": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"inquiry_match\",\r\n  \"reason\": \"User is requesting maid recommendations for childcare in Tampines.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
       "id": 12,
       "createdAt": "2026-05-05T01:28:10.414Z",
       "scenario": "inquiry_pipeline",
@@ -7454,14 +8652,14 @@
     }
   ],
   "counters": {
-    "leads": 7,
-    "inquiries": 51,
-    "matches": 124,
-    "schedules": 5,
-    "contracts": 6,
-    "notifications": 20,
-    "automationLogs": 171,
-    "decisionLogs": 60,
-    "makeDeliveries": 13
+    "leads": 8,
+    "inquiries": 57,
+    "matches": 148,
+    "schedules": 6,
+    "contracts": 7,
+    "notifications": 24,
+    "automationLogs": 194,
+    "decisionLogs": 71,
+    "makeDeliveries": 14
   }
 }

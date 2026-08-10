@@ -3,6 +3,7 @@ export type LeadClassification = 'HIGH' | 'MEDIUM' | 'LOW'
 export type InquiryIntent = 'hiring' | 'inquiry' | 'complaint'
 export type WorkflowAssignment =
   | 'inquiry_match'
+  | 'make_pipeline'
   | 'inquiry_only'
   | 'lead_scoring'
   | 'contract_creation'

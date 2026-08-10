@@ -459,6 +459,7 @@ export const classifyInquiryWithAi = async (payload: {
           : fallback.intent,
       workflow:
         aiResponse.workflow === 'inquiry_match' ||
+        aiResponse.workflow === 'make_pipeline' ||
         aiResponse.workflow === 'inquiry_only' ||
         aiResponse.workflow === 'contract_creation' ||
         aiResponse.workflow === 'schedule_creation' ||

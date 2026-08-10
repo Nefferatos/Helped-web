@@ -26,36 +26,7 @@
       "routes": [
         {
           "flow": [
-            {
-              "id": 3,
-              "module": "http:ActionSendData",
-              "version": 3,
-              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
-              "mapper": {
-                "url": "https://api.groq.com/openai/v1/chat/completions",
-                "serializeUrl": false,
-                "method": "post",
-                "headers": [
-                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_GROQ_API_KEY" },
-                  { "name": "Content-Type", "value": "application/json" }
-                ],
-                "qs": [],
-                "bodyType": "raw",
-                "parseResponse": true,
-                "authUser": "",
-                "authPass": "",
-                "timeout": "30",
-                "shareCookies": false,
-                "ca": "",
-                "rejectUnauthorized": true,
-                "followRedirect": true,
-                "useQuerystring": false,
-                "gzip": true,
-                "body": "{\"model\":\"llama-3.3-70b-versatile\",\"temperature\":0.45,\"max_tokens\":300,\"messages\":[{\"role\":\"system\",\"content\":\"You are a WhatsApp marketing writer for a Singapore domestic helper agency. Write ONE short WhatsApp outreach message. Rules: start with Hi [contact name], use 1 warm emoji, max 280 characters, end with a WhatsApp CTA number. Return ONLY the message text, nothing else.\"},{\"role\":\"user\",\"content\":\"Contact name: {{1.contactName}}. Campaign goal: {{1.goal}}. Agency name: {{1.agencyName}}. Agency WhatsApp: {{1.agencyPhone}}. Featured helpers: {{1.maidHighlights}}. Write the message.\"}]}"
-              },
-              "metadata": { "designer": { "x": 150, "y": -500 } }
-            },
-            {
+{
               "id": 4,
               "module": "http:ActionSendData",
               "version": 3,
@@ -80,13 +51,13 @@
                 "followRedirect": true,
                 "useQuerystring": false,
                 "gzip": true,
-                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{1.to}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"{{3.choices[1].message.content}}\"}}"
+                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{1.to}}\",\"type\":\"text\",\"text\":{\"preview_url\":true,\"body\":\"{{1.message}}\"}}"
               },
               "metadata": { "designer": { "x": 450, "y": -500 } }
             }
           ],
           "metadata": {
-            "name": "📣 WhatsApp (Groq)",
+            "name": "📣 WhatsApp (relay Worker copy)",
             "color": "#25D366",
             "conditions": [
               { "a": "{{1.scenario}}", "b": "whatsapp_marketing", "o": "text:equal" },
@@ -96,37 +67,7 @@
         },
         {
           "flow": [
-            {
-              "id": 5,
-              "module": "http:ActionSendData",
-              "version": 3,
-              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
-              "mapper": {
-                "url": "https://api.anthropic.com/v1/messages",
-                "serializeUrl": false,
-                "method": "post",
-                "headers": [
-                  { "name": "x-api-key", "value": "REPLACE_WITH_CLAUDE_API_KEY" },
-                  { "name": "anthropic-version", "value": "2023-06-01" },
-                  { "name": "Content-Type", "value": "application/json" }
-                ],
-                "qs": [],
-                "bodyType": "raw",
-                "parseResponse": true,
-                "authUser": "",
-                "authPass": "",
-                "timeout": "30",
-                "shareCookies": false,
-                "ca": "",
-                "rejectUnauthorized": true,
-                "followRedirect": true,
-                "useQuerystring": false,
-                "gzip": true,
-                "body": "{\"model\":\"claude-haiku-4-5-20251001\",\"max_tokens\":400,\"system\":\"You are an email marketing writer for a Singapore domestic helper agency. Write a warm, professional plain-text email body. Max 120 words. Include the agency phone as a CTA. Return ONLY the email body text, no subject line.\",\"messages\":[{\"role\":\"user\",\"content\":\"Contact: {{1.contactName}}. Goal: {{1.goal}}. Agency: {{1.agencyName}}. Phone: {{1.agencyPhone}}. Featured helpers: {{1.maidHighlights}}.\"}]}"
-              },
-              "metadata": { "designer": { "x": 150, "y": -200 } }
-            },
-            {
+{
               "id": 6,
               "module": "http:ActionSendData",
               "version": 3,
@@ -151,13 +92,13 @@
                 "followRedirect": true,
                 "useQuerystring": false,
                 "gzip": true,
-                "body": "{\"from\":\"REPLACE_WITH_FROM_EMAIL\",\"to\":[\"{{1.to}}\"],\"subject\":\"{{1.subject}}\",\"text\":\"{{5.content[1].text}}\",\"html\":\"<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px'><p style='font-size:15px;line-height:1.8;color:#1a1a1a'>{{replace(5.content[1].text; '\\n'; '<br>')}}</p><hr style='border:none;border-top:1px solid #e5e7eb;margin:24px 0'/><p style='font-size:12px;color:#6b7280'>Sent by {{1.agencyName}} &middot; {{1.agencyPhone}}. Reply STOP to unsubscribe.</p></div>\"}"
+                "body": "{\"from\":\"REPLACE_WITH_FROM_EMAIL\",\"to\":[\"{{1.to}}\"],\"subject\":\"{{1.subject}}\",\"text\":\"{{1.message}}\",\"html\":\"{{1.html}}\"}"
               },
               "metadata": { "designer": { "x": 450, "y": -200 } }
             }
           ],
           "metadata": {
-            "name": "📧 Email (Claude)",
+            "name": "📧 Email (relay Worker HTML)",
             "color": "#4F46E5",
             "conditions": [
               { "a": "{{1.scenario}}", "b": "email_marketing", "o": "text:equal" },

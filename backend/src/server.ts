@@ -1,236 +1,240 @@
-import 'dotenv/config'
+import "dotenv/config";
 
-import express, { Express, Request, Response, ErrorRequestHandler } from 'express'
-import cors from 'cors'
-import fs from 'fs'
-import path from 'path'
-import companyRoutes from './routes/companyRoutes'
-import maidRoutes from './routes/maidRoutes'
-import enquiryRoutes from './routes/enquiryRoutes'
-import directSaleRoutes from './routes/directSaleRoutes'
-import requestRoutes from './routes/requestRoutes'
-import requestConversationRoutes from './routes/requestConversationRoutes'
-import requestMessageRoutes from './routes/requestMessageRoutes'
-import clientAuthRoutes from './routes/clientAuthRoutes'
-import agencyAuthRoutes from './routes/agencyAuthRoutes'
-import agencyRoutes from './routes/agencyRoutes'
-import agencyDirectoryRoutes from './routes/agencyDirectoryRoutes'
-import clientRoutes from './routes/clientRoutes'
-import chatRoutes from './routes/chatRoutes'
-import dashboardRoutes from './routes/dashboardRoutes'
-import employerRoutes from './routes/employerRoutes'
-import employerContractFileRoutes from './routes/employerContractFileRoutes'
-import leadWorkflowRoutes from './routes/leadWorkflowRoutes'
-import inquiryWorkflowRoutes from './routes/inquiryWorkflowRoutes'
-import matchingWorkflowRoutes from './routes/matchingWorkflowRoutes'
-import automationRoutes from './routes/automationRoutes'
-import aiRoutes from './routes/aiRoutes'
-import directMarketingRoutes from './routes/directMarketingRoutes'
-import shareRoutes from './routes/shareRoutes'
-import whatsappRoutes from './routes/whatsappRoutes'
-import atsRoutes from './routes/atsRoutes'
-import { initializeDatabase } from './db'
+import express, {
+  Express,
+  Request,
+  Response,
+  ErrorRequestHandler,
+} from "express";
+import cors from "cors";
+import fs from "fs";
+import path from "path";
+import companyRoutes from "./routes/companyRoutes";
+import maidRoutes from "./routes/maidRoutes";
+import enquiryRoutes from "./routes/enquiryRoutes";
+import directSaleRoutes from "./routes/directSaleRoutes";
+import requestRoutes from "./routes/requestRoutes";
+import requestConversationRoutes from "./routes/requestConversationRoutes";
+import requestMessageRoutes from "./routes/requestMessageRoutes";
+import clientAuthRoutes from "./routes/clientAuthRoutes";
+import agencyAuthRoutes from "./routes/agencyAuthRoutes";
+import agencyRoutes from "./routes/agencyRoutes";
+import agencyDirectoryRoutes from "./routes/agencyDirectoryRoutes";
+import clientRoutes from "./routes/clientRoutes";
+import chatRoutes from "./routes/chatRoutes";
+import dashboardRoutes from "./routes/dashboardRoutes";
+import employerRoutes from "./routes/employerRoutes";
+import employerContractFileRoutes from "./routes/employerContractFileRoutes";
+import leadWorkflowRoutes from "./routes/leadWorkflowRoutes";
+import inquiryWorkflowRoutes from "./routes/inquiryWorkflowRoutes";
+import matchingWorkflowRoutes from "./routes/matchingWorkflowRoutes";
+import automationRoutes from "./routes/automationRoutes";
+import aiRoutes from "./routes/aiRoutes";
+import directMarketingRoutes from "./routes/directMarketingRoutes";
+import shareRoutes from "./routes/shareRoutes";
+import whatsappRoutes from "./routes/whatsappRoutes";
+import atsRoutes from "./routes/atsRoutes";
+import { initializeDatabase } from "./db";
 import {
   getAgencyAdminsStore,
   getAllMaidsStore,
   syncMaidsToSqlStore,
   getStoreDiagnostics,
   initializeStore,
-} from './store'
-import { syncAgencyAdminsFromStoreRecords } from './repositories/agencyAdminRepository'
-import { initializeWorkflowStore } from './store/workflowStore'
-import { initializeWhatsAppStore } from './whatsappStore'
-import { initializeAtsStore } from './atsStore'
-import { saveEmployerContract } from './controllers/employerController'
+} from "./store";
+import { syncAgencyAdminsFromStoreRecords } from "./repositories/agencyAdminRepository";
+import { initializeWorkflowStore } from "./store/workflowStore";
+import { initializeWhatsAppStore } from "./whatsappStore";
+import { initializeAtsStore } from "./atsStore";
+import { saveEmployerContract } from "./controllers/employerController";
 
-const app: Express = express()
-const port = process.env.PORT || 3000
-const frontendDist = path.resolve(__dirname, '../../frontend/dist')
-const hasFrontendSite = fs.existsSync(frontendDist)
-const uploadsDir = path.resolve(__dirname, '../data/uploads')
+const app: Express = express();
+const port = process.env.PORT || 3000;
+const frontendDist = path.resolve(__dirname, "../../frontend/dist");
+const hasFrontendSite = fs.existsSync(frontendDist);
+const uploadsDir = path.resolve(__dirname, "../data/uploads");
 
 const resolveCorsOrigin = () => {
-  const configured = process.env.CORS_ORIGIN?.trim()
-  if (!configured) return true
-  if (configured === '*') return true
-  return configured.split(',').map((origin) => origin.trim())
-}
+  const configured = process.env.CORS_ORIGIN?.trim();
+  if (!configured) return true;
+  if (configured === "*") return true;
+  return configured.split(",").map((origin) => origin.trim());
+};
 
 const logOptionalEnv = (key: string) => {
   if (!process.env[key]?.trim()) {
     console.warn(
-      `[server] Optional environment variable ${key} is missing. Supabase-backed client JWT verification may be unavailable.`
-    )
+      `[server] Optional environment variable ${key} is missing. Supabase-backed client JWT verification may be unavailable.`,
+    );
   }
-}
+};
 
-logOptionalEnv('SUPABASE_URL')
-logOptionalEnv('SUPABASE_SERVICE_ROLE_KEY')
+logOptionalEnv("SUPABASE_URL");
+logOptionalEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(
   cors({
     origin: resolveCorsOrigin(),
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  })
-)
+    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  }),
+);
 
 // ─── Body parsers ─────────────────────────────────────────────────────────────
 // Global JSON + urlencoded for JSON-based routes.
-app.use(express.json({ limit: '120mb' }))
-app.use(express.urlencoded({ extended: true, limit: '120mb' }))
+app.use(express.json({ limit: "120mb" }));
+app.use(express.urlencoded({ extended: true, limit: "120mb" }));
 app.use(
-  '/uploads',
+  "/uploads",
   express.static(uploadsDir, {
-    maxAge: '30d',
+    maxAge: "30d",
     immutable: true,
-  })
-)
+  }),
+);
 
 // ─── Health / utility endpoints ───────────────────────────────────────────────
-app.get('/api/health', (_req: Request, res: Response) => {
-  const storageType = process.env.SUPABASE_URL ? 'supabase' : 'memory'
-  res.json({ status: 'Server is running', storage: storageType })
-})
+app.get("/api/health", (_req: Request, res: Response) => {
+  const storageType = process.env.SUPABASE_URL ? "supabase" : "memory";
+  res.json({ status: "Server is running", storage: storageType });
+});
 
-app.get('/api/diagnostics', async (_req: Request, res: Response) => {
+app.get("/api/diagnostics", async (_req: Request, res: Response) => {
   try {
-    const store = await getStoreDiagnostics()
-    res.json({ runtime: 'express', ...store })
+    const store = await getStoreDiagnostics();
+    res.json({ runtime: "express", ...store });
   } catch (error) {
-    console.error('Error building diagnostics:', error)
-    res.status(500).json({ error: 'Failed to load diagnostics' })
+    console.error("Error building diagnostics:", error);
+    res.status(500).json({ error: "Failed to load diagnostics" });
   }
-})
+});
 
+app.get("/api", (_req: Request, res: Response) => {
+  res.json({ message: "Welcome to Maid Agency Backend API" });
+});
 
-app.get('/api', (_req: Request, res: Response) => {
-  res.json({ message: 'Welcome to Maid Agency Backend API' })
-})
-
-app.get('/api/data', (_req: Request, res: Response) => {
+app.get("/api/data", (_req: Request, res: Response) => {
   res.json({
     data: [
-      { id: 1, name: 'Item 1' },
-      { id: 2, name: 'Item 2' },
+      { id: 1, name: "Item 1" },
+      { id: 2, name: "Item 2" },
     ],
-  })
-})
+  });
+});
 
 // ─── Named/specific routes ────────────────────────────────────────────────────
-app.use('/api/company', companyRoutes)
-app.use('/api/maids', maidRoutes)
-app.use('/api/enquiries', enquiryRoutes)
-app.use('/api/enquiry', enquiryRoutes)
-app.use('/api/direct-sales', directSaleRoutes)
-app.use('/api/direct-sell', directSaleRoutes)
-app.use('/api/requests', requestRoutes)
-app.use('/api/conversations', requestConversationRoutes)
-app.use('/api/messages', requestMessageRoutes)
-app.use('/api/client-auth', clientAuthRoutes)
-app.use('/api/agency-auth', agencyAuthRoutes)
-app.use('/api/agency', agencyRoutes)
-app.use('/api/agencies', agencyDirectoryRoutes)
-app.use('/api/client', clientRoutes)
-app.use('/api/chats', chatRoutes)
-app.use('/api/leads', leadWorkflowRoutes)
-app.use('/api/inquiry', inquiryWorkflowRoutes)
-app.use('/api/ai', aiRoutes)
-app.use('/api/ai/direct-marketing', directMarketingRoutes)
-app.use('/api/whatsapp', whatsappRoutes)
-app.use('/api/ats', atsRoutes)
+app.use("/api/company", companyRoutes);
+app.use("/api/maids", maidRoutes);
+app.use("/api/enquiries", enquiryRoutes);
+app.use("/api/enquiry", enquiryRoutes);
+app.use("/api/direct-sales", directSaleRoutes);
+app.use("/api/direct-sell", directSaleRoutes);
+app.use("/api/requests", requestRoutes);
+app.use("/api/conversations", requestConversationRoutes);
+app.use("/api/messages", requestMessageRoutes);
+app.use("/api/client-auth", clientAuthRoutes);
+app.use("/api/agency-auth", agencyAuthRoutes);
+app.use("/api/agency", agencyRoutes);
+app.use("/api/agencies", agencyDirectoryRoutes);
+app.use("/api/client", clientRoutes);
+app.use("/api/chats", chatRoutes);
+app.use("/api/leads", leadWorkflowRoutes);
+app.use("/api/inquiry", inquiryWorkflowRoutes);
+app.use("/api/ai", aiRoutes);
+app.use("/api/ai/direct-marketing", directMarketingRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/ats", atsRoutes);
 
 // ─── Share route ──────────────────────────────────────────────────────────────
 // IMPORTANT: Must be mounted BEFORE the generic /api catch-all routers below.
 // dashboardRoutes, matchingWorkflowRoutes, and automationRoutes all mount at
 // /api with no prefix — if they're registered first, they can shadow
 // /api/tell-friend and return 404 before shareRoutes ever runs.
-app.use('/api', shareRoutes)
+app.use("/api", shareRoutes);
 
 // ─── Generic /api routers (after all named routes) ────────────────────────────
-app.use('/api', dashboardRoutes)
-app.use('/api', matchingWorkflowRoutes)
-app.use('/api', automationRoutes)
+app.use("/api", dashboardRoutes);
+app.use("/api", matchingWorkflowRoutes);
+app.use("/api", automationRoutes);
 
 // ─── Employer routes ──────────────────────────────────────────────────────────
-app.use('/api/employers', employerRoutes)
-app.post('/api/employment-contract', saveEmployerContract)
-app.use('/api/employer-contract-files', employerContractFileRoutes)
-app.use('/api/employer-files', employerContractFileRoutes)
+app.use("/api/employers", employerRoutes);
+app.post("/api/employment-contract", saveEmployerContract);
+app.use("/api/employer-contract-files", employerContractFileRoutes);
+app.use("/api/employer-files", employerContractFileRoutes);
 
 // ─── Public maids ─────────────────────────────────────────────────────────────
-app.get('/api/public-maids', async (_req: Request, res: Response) => {
+app.get("/api/public-maids", async (_req: Request, res: Response) => {
   try {
-    const maids = await getAllMaidsStore(undefined, 'public')
-    res.status(200).json({ maids })
+    const maids = await getAllMaidsStore(undefined, "public");
+    res.status(200).json({ maids });
   } catch (error) {
-    console.error('Error fetching public maids:', error)
-    res.status(500).json({ error: 'Failed to fetch public maids' })
+    console.error("Error fetching public maids:", error);
+    res.status(500).json({ error: "Failed to fetch public maids" });
   }
-})
+});
 
 // ─── Frontend SPA catch-all ───────────────────────────────────────────────────
 if (hasFrontendSite) {
-  app.use(express.static(frontendDist))
+  app.use(express.static(frontendDist));
   app.get(/^(?!\/api(?:\/|$)).*/, (_req: Request, res: Response) => {
-    res.sendFile(path.join(frontendDist, 'index.html'))
-  })
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
 }
 
 // ─── Error handler ────────────────────────────────────────────────────────────
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (
     err &&
-    typeof err === 'object' &&
-    'type' in err &&
-    (err as { type?: string }).type === 'entity.too.large'
+    typeof err === "object" &&
+    "type" in err &&
+    (err as { type?: string }).type === "entity.too.large"
   ) {
     return res.status(413).json({
-      error: 'Payload too large. Please upload a smaller file.',
-    })
+      error: "Payload too large. Please upload a smaller file.",
+    });
   }
 
   if (
     err &&
-    typeof err === 'object' &&
-    'type' in err &&
-    (err as { type?: string }).type === 'entity.parse.failed'
+    typeof err === "object" &&
+    "type" in err &&
+    (err as { type?: string }).type === "entity.parse.failed"
   ) {
-    return res.status(400).json({ error: 'Invalid JSON body' })
+    return res.status(400).json({ error: "Invalid JSON body" });
   }
 
-  console.error(err.stack)
-  return res.status(500).json({ error: 'Something went wrong!' })
-}
-app.use(errorHandler)
+  console.error(err.stack);
+  return res.status(500).json({ error: "Something went wrong!" });
+};
+app.use(errorHandler);
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const startServer = async () => {
   try {
-    await initializeStore()
-    await initializeWorkflowStore()
-    await initializeWhatsAppStore()
-    await initializeAtsStore()
+    await initializeStore();
+    await initializeWorkflowStore();
+    await initializeWhatsAppStore();
+    await initializeAtsStore();
 
     try {
-      await initializeDatabase()
-      await syncAgencyAdminsFromStoreRecords(await getAgencyAdminsStore())
-      await syncMaidsToSqlStore()
+      await initializeDatabase();
+      await syncAgencyAdminsFromStoreRecords(await getAgencyAdminsStore());
+      await syncMaidsToSqlStore();
     } catch (error) {
       console.warn(
-        '[server] Database initialization unavailable; continuing in degraded local-store mode:',
-        error instanceof Error ? error.message : error
-      )
+        "[server] Database initialization unavailable; continuing in degraded local-store mode:",
+        error instanceof Error ? error.message : error,
+      );
     }
 
     app.listen(port, () => {
-      console.log(`Server is running at http://localhost:${port}`)
-    })
+      console.log(`Server is running at http://localhost:${port}`);
+    });
   } catch (error) {
-    console.error('Failed to initialize server:', error)
-    process.exit(1)
+    console.error("Failed to initialize server:", error);
+    process.exit(1);
   }
-}
+};
 
-void startServer()
+void startServer();

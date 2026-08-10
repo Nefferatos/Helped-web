@@ -12,13 +12,14 @@
 
 export type DeterministicWorkflow =
   | "inquiry_match"
+  | "make_pipeline"
   | "contract_creation"
   | "schedule_creation"
   | "notification_only"
   | "human_review"
   | "inquiry_only"
-  | "lead_scoring"       // added - present in CANONICAL_WORKFLOWS
-  | "validation_error";  // added - present in CANONICAL_WORKFLOWS
+  | "lead_scoring" // added - present in CANONICAL_WORKFLOWS
+  | "validation_error"; // added - present in CANONICAL_WORKFLOWS
 
 const INQUIRY_MATCH_PATTERN =
   /\b(hire|nanny|maid|housemaid|infant care|childcare|babysitter|recommend|shortlist|match)\b/i;

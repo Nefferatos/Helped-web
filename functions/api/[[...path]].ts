@@ -649,6 +649,7 @@ const toTrimmedString = (value: unknown) => String(value ?? "").trim();
 
 const CANONICAL_WORKFLOWS = [
   "inquiry_match",
+  "make_pipeline",
   "inquiry_only",
   "lead_scoring",
   "contract_creation",
@@ -727,6 +728,8 @@ const defaultIntentForWorkflow = (workflow: CanonicalWorkflow) => {
   switch (workflow) {
     case "inquiry_match":
       return "hiring";
+    case "make_pipeline":
+      return "inquiry";
     case "inquiry_only":
       return "inquiry";
     case "lead_scoring":
