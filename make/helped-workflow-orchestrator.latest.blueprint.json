@@ -17,9 +17,9 @@
       "mapper": {
         "defaultModel": "gpt-5.4",
         "reasoningEffort": "low",
-        "systemPrompt": "You are a workflow classifier for a maid agency platform. Choose exactly one workflow from: lead_scoring, inquiry_only, inquiry_match, make_pipeline, contract_creation, schedule_creation, notification_only, human_review. Return JSON with keys 'workflow' and 'payload'. Do not use markdown or explain.",
-        "message": "Action: {{1.action}}\nCustomer name: {{ifempty(1.customer.name; '')}}\nMessage: {{ifempty(1.message; '')}}",
-        "threadId": "{{1.customer.contact}}-{{ifempty(1.context.employerId; 'guest')}}",
+        "systemPrompt": "You are a workflow classifier for a maid agency platform.\n\nChoose exactly one workflow based on the user request:\n- lead_scoring\n- inquiry_only\n- inquiry_match\n- make_pipeline\n- contract_creation\n- schedule_creation\n- notification_only\n- human_review\n\nRules:\n- Classify intent only.\n- Do not perform business validation.\n- Do not enforce ID requirements.\n- Do not decide ranking, compliance, or recommendation quality.\n- Never invent IDs, names, dates, contact details, or records.\n- Copy available fields into payload.\n- Return valid JSON only.\n- Do not use markdown.\n- Do not explain anything.\n\nWorkflow hints:\n- lead_scoring: new lead or lead qualification request\n- inquiry_only: general inquiry with no maid recommendation needed\n- inquiry_match: hiring, recommendation, shortlist, or maid matching request\n- make_pipeline: request should be processed by the backend inquiry Make relay\n- contract_creation: contract or draft contract request\n- schedule_creation: interview or appointment scheduling request\n- notification_only: delivery-only message or notification request\n- human_review: ambiguous, risky, policy-sensitive, or invalid AI output fallback\n\nReturn this exact structure:\n{\n  \"workflow\": \"\",\n  \"payload\": {\n    \"source\": \"website\",\n    \"name\": \"\",\n    \"contact\": \"\",\n    \"message\": \"\",\n    \"employerId\": null,\n    \"maidId\": null,\n    \"datetime\": null,\n    \"serviceType\": \"\",\n    \"location\": \"\",\n    \"budgetText\": \"\",\n    \"scheduleDate\": \"\",\n    \"recipient\": \"\",\n    \"notificationMessage\": \"\",\n    \"channel\": \"\",\n    \"makeScenario\": \"\",\n    \"makeUrl\": \"\"\n  }\n}",
+        "message": "Action: {{1.action}}\nUser role: {{ifempty(1.actor.role; \"guest\")}}\nUser id: {{ifempty(1.actor.id; \"\")}}\nCustomer name: {{ifempty(1.customer.name; \"\")}}\nCustomer contact: {{ifempty(1.customer.contact; \"\")}}\nMessage: {{ifempty(1.message; \"\")}}\nEmployer ID: {{ifempty(1.context.employerId; \"\")}}\nMaid ID: {{ifempty(1.context.maidId; \"\")}}\nSchedule datetime: {{ifempty(1.context.scheduleDateTime; \"\")}}\nService type: {{ifempty(1.context.serviceType; \"\")}}\nLocation: {{ifempty(1.context.location; \"\")}}\nBudget text: {{ifempty(1.context.budgetText; \"\")}}\nSchedule date: {{ifempty(1.context.scheduleDate; \"\")}}\nRecipient: {{ifempty(1.context.recipient; \"\")}}\nNotification message: {{ifempty(1.context.notificationMessage; \"\")}}\nChannel: {{ifempty(1.context.channel; \"\")}}\nMake scenario: {{ifempty(1.context.makeScenario; \"\")}}\nMake URL: {{ifempty(1.context.makeUrl; \"\")}}",
+        "threadId": "{{1.customer.contact}}-{{ifempty(1.context.employerId; \"guest\")}}",
         "modelConfig": {
           "recursionLimit": 300,
           "iterationsFromHistoryCount": "10"
@@ -254,7 +254,7 @@
                 ]
               },
               "mapper": {
-                "url": "{{WORKER_BASE_URL}}/api/notifications/send",
+                "url": "{{WORKER_BASE_URL}}/api/notify",
                 "method": "post",
                 "headers": [
                   { "name": "Content-Type", "value": "application/json" }
@@ -293,13 +293,13 @@
                 ]
               },
               "mapper": {
-                "url": "{{WORKER_BASE_URL}}/api/internal/triage",
+                "url": "{{WORKER_BASE_URL}}/api/notify",
                 "method": "post",
                 "headers": [
                   { "name": "Content-Type", "value": "application/json" }
                 ],
                 "contentType": "custom",
-                "rawBodyContent": "{\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\"}"
+                "rawBodyContent": "{\"channel\":\"internal\",\"recipient\":\"admin\",\"message\":\"Human review needed for {{12.payload.name}} ({{12.payload.contact}}): {{12.payload.message}}\",\"referenceType\":\"human_review\"}"
               }
             },
             {

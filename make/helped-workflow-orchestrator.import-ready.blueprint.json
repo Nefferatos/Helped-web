@@ -1,0 +1,739 @@
+{
+  "name": "Helped Maids - Full Workflow Orchestrator Import Ready",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": -1060,
+          "y": 552
+        }
+      }
+    },
+    {
+      "id": 10,
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "parameters": {},
+      "mapper": {
+        "defaultModel": "gpt-5.4",
+        "reasoningEffort": "low",
+        "systemPrompt": "You are a workflow classifier for a maid agency platform.\n\nChoose exactly one workflow based on the user request:\n- lead_scoring\n- inquiry_only\n- inquiry_match\n- make_pipeline\n- contract_creation\n- schedule_creation\n- notification_only\n- human_review\n\nRules:\n- Classify intent only.\n- Do not perform business validation.\n- Do not enforce ID requirements.\n- Do not decide ranking, compliance, or recommendation quality.\n- Never invent IDs, names, dates, contact details, or records.\n- Copy available fields into payload.\n- Return valid JSON only.\n- Do not use markdown.\n- Do not explain anything.\n\nWorkflow hints:\n- lead_scoring: new lead or lead qualification request\n- inquiry_only: general inquiry with no maid recommendation needed\n- inquiry_match: hiring, recommendation, shortlist, or maid matching request\n- make_pipeline: request should be processed by the backend inquiry Make relay\n- contract_creation: contract or draft contract request\n- schedule_creation: interview or appointment scheduling request\n- notification_only: delivery-only message or notification request\n- human_review: ambiguous, risky, policy-sensitive, or invalid AI output fallback\n\nReturn this exact structure:\n{\n  \"workflow\": \"\",\n  \"payload\": {\n    \"source\": \"website\",\n    \"name\": \"\",\n    \"contact\": \"\",\n    \"message\": \"\",\n    \"employerId\": null,\n    \"maidId\": null,\n    \"datetime\": null,\n    \"serviceType\": \"\",\n    \"location\": \"\",\n    \"budgetText\": \"\",\n    \"scheduleDate\": \"\",\n    \"recipient\": \"\",\n    \"notificationMessage\": \"\",\n    \"channel\": \"\",\n    \"makeScenario\": \"\",\n    \"makeUrl\": \"\"\n  }\n}\n\nCRITICAL OUTPUT RULES:\nReturn ONLY raw JSON.\nThe first character of your response must be {.\nThe last character of your response must be }.\nDo not wrap the JSON in ```json fences.\nDo not include labels, notes, comments, or explanations.\nIf unsure, return {\"workflow\":\"human_review\",\"payload\":{\"source\":\"website\",\"name\":\"\",\"contact\":\"\",\"message\":\"\",\"employerId\":null,\"maidId\":null,\"datetime\":null,\"serviceType\":\"\",\"location\":\"\",\"budgetText\":\"\",\"scheduleDate\":\"\",\"recipient\":\"admin\",\"notificationMessage\":\"Manual review required\",\"channel\":\"internal\",\"makeScenario\":\"\",\"makeUrl\":\"\"}}",
+        "message": "Action: {{1.action}}\nUser role: {{ifempty(1.actor.role; \"guest\")}}\nUser id: {{ifempty(1.actor.id; \"\")}}\nCustomer name: {{ifempty(1.customer.name; \"\")}}\nCustomer contact: {{ifempty(1.customer.contact; \"\")}}\nMessage: {{ifempty(1.message; \"\")}}\nEmployer ID: {{ifempty(1.context.employerId; \"\")}}\nMaid ID: {{ifempty(1.context.maidId; \"\")}}\nSchedule datetime: {{ifempty(1.context.scheduleDateTime; \"\")}}\nService type: {{ifempty(1.context.serviceType; \"\")}}\nLocation: {{ifempty(1.context.location; \"\")}}\nBudget text: {{ifempty(1.context.budgetText; \"\")}}\nSchedule date: {{ifempty(1.context.scheduleDate; \"\")}}\nRecipient: {{ifempty(1.context.recipient; \"\")}}\nNotification message: {{ifempty(1.context.notificationMessage; \"\")}}\nChannel: {{ifempty(1.context.channel; \"\")}}\nMake scenario: {{ifempty(1.context.makeScenario; \"\")}}\nMake URL: {{ifempty(1.context.makeUrl; \"\")}}\n",
+        "files": [],
+        "threadId": "{{1.customer.contact}}-{{ifempty(1.context.employerId; \"guest\")}}",
+        "modelConfig": {
+          "recursionLimit": 300,
+          "iterationsFromHistoryCount": "10"
+        },
+        "timeout": "",
+        "outputType": "text"
+      },
+      "metadata": {
+        "designer": {
+          "x": -698,
+          "y": 545
+        }
+      },
+      "tools": []
+    },
+    {
+      "id": 12,
+      "module": "json:ParseJSON",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "json": "{{10.response}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": -374,
+          "y": 549
+        },
+        "interface": [
+          {
+            "name": "workflow",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "payload",
+            "type": "collection",
+            "required": false,
+            "spec": [
+              {
+                "name": "source",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "name",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "contact",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "message",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "employerId",
+                "type": "number",
+                "required": false
+              },
+              {
+                "name": "maidId",
+                "type": "number",
+                "required": false
+              },
+              {
+                "name": "datetime",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "serviceType",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "location",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "budgetText",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "scheduleDate",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "recipient",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "notificationMessage",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "channel",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "makeScenario",
+                "type": "text",
+                "required": false
+              },
+              {
+                "name": "makeUrl",
+                "type": "text",
+                "required": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 14,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": -74,
+          "y": 549
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 15,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "parameters": {
+                "authenticationType": "noAuth",
+                "tlsType": "",
+                "proxyKeychain": ""
+              },
+              "filter": {
+                "name": "Inquiry Only",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "inquiry_only"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/inquiry",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "contentType": "custom",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true,
+                "contentTypeValue": "application/json",
+                "rawBodyContent": "{\r\n  \"name\": \"{{12.payload.name}}\",\r\n  \"contact\": \"{{12.payload.contact}}\",\r\n  \"message\": \"{{12.payload.message}}\"\r\n}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 226,
+                  "y": -351
+                }
+              }
+            },
+            {
+              "id": 28,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{15.statusCode}}\r\n}",
+                "status": "200",
+                "headers": []
+              },
+              "metadata": {
+                "designer": {
+                  "x": 526,
+                  "y": -351
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 16,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "parameters": {
+                "authenticationType": "noAuth",
+                "tlsType": "",
+                "proxyKeychain": ""
+              },
+              "filter": {
+                "name": "Lead Scoring",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "lead_scoring"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/leads/raw",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "contentType": "custom",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true,
+                "contentTypeValue": "application/json",
+                "rawBodyContent": "{\r\n  \"source\": \"{{ifempty(12.payload.source; \"website\")}}\",\r\n  \"name\": \"{{12.payload.name}}\",\r\n  \"contact\": \"{{12.payload.contact}}\",\r\n  \"message\": \"{{12.payload.message}}\"\r\n}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 226,
+                  "y": -51
+                }
+              }
+            },
+            {
+              "id": 29,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{16.statusCode}}\r\n}",
+                "status": "200",
+                "headers": []
+              },
+              "metadata": {
+                "designer": {
+                  "x": 526,
+                  "y": -51
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 20,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "parameters": {
+                "authenticationType": "noAuth",
+                "tlsType": "",
+                "proxyKeychain": ""
+              },
+              "filter": {
+                "name": "Inquiry Match",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "inquiry_match"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/match",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "contentType": "custom",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true,
+                "contentTypeValue": "application/json",
+                "rawBodyContent": "{\r\n  \"employerId\": {{ifempty(12.payload.employerId; null)}},\r\n  \"message\": \"{{12.payload.message}}\",\r\n  \"serviceType\": \"{{12.payload.serviceType}}\",\r\n  \"location\": \"{{12.payload.location}}\",\r\n  \"budget\": \"{{12.payload.budgetText}}\"\r\n}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 226,
+                  "y": 249
+                }
+              }
+            },
+            {
+              "id": 30,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{20.statusCode}}\r\n}",
+                "status": "200",
+                "headers": []
+              },
+              "metadata": {
+                "designer": {
+                  "x": 526,
+                  "y": 249
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 21,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "parameters": {
+                "authenticationType": "noAuth",
+                "tlsType": "",
+                "proxyKeychain": ""
+              },
+              "filter": {
+                "name": "Contract Creation",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "contract_creation"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/contracts/generate",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "contentType": "custom",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true,
+                "contentTypeValue": "application/json",
+                "rawBodyContent": "{\r\n  \"maidId\": {{12.payload.maidId}},\r\n  \"employerId\": {{12.payload.employerId}},\r\n  \"serviceType\": \"{{12.payload.serviceType}}\",\r\n  \"location\": \"{{12.payload.location}}\",\r\n  \"budgetText\": \"{{12.payload.budgetText}}\",\r\n  \"scheduleDate\": \"{{12.payload.scheduleDate}}\"\r\n}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 233,
+                  "y": 526
+                }
+              }
+            },
+            {
+              "id": 31,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{21.statusCode}}\r\n}",
+                "status": "200",
+                "headers": []
+              },
+              "metadata": {
+                "designer": {
+                  "x": 555,
+                  "y": 538
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 22,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "parameters": {
+                "authenticationType": "noAuth",
+                "tlsType": "",
+                "proxyKeychain": ""
+              },
+              "filter": {
+                "name": "Schedule Creation",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "schedule_creation"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/schedule",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "contentType": "custom",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true,
+                "contentTypeValue": "application/json",
+                "rawBodyContent": "{\r\n  \"maidId\": {{12.payload.maidId}},\r\n  \"employerId\": {{12.payload.employerId}},\r\n  \"datetime\": \"{{12.payload.datetime}}\"\r\n}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 226,
+                  "y": 809
+                }
+              }
+            },
+            {
+              "id": 32,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{22.statusCode}}\r\n}",
+                "status": "200",
+                "headers": []
+              },
+              "metadata": {
+                "designer": {
+                  "x": 567,
+                  "y": 788
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 23,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "parameters": {
+                "authenticationType": "noAuth",
+                "tlsType": "",
+                "proxyKeychain": ""
+              },
+              "filter": {
+                "name": "Notification Only",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "notification_only"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/notify",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "contentType": "custom",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true,
+                "contentTypeValue": "application/json",
+                "rawBodyContent": "{\r\n  \"channel\": \"{{ifempty(12.payload.channel; \"internal\")}}\",\r\n  \"recipient\": \"{{12.payload.recipient}}\",\r\n  \"message\": \"{{12.payload.notificationMessage}}\",\r\n  \"referenceType\": \"workflow\",\r\n  \"referenceId\": \"\"\r\n}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 239,
+                  "y": 1054
+                }
+              }
+            },
+            {
+              "id": 33,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{23.statusCode}}\r\n}",
+                "status": "200",
+                "headers": []
+              },
+              "metadata": {
+                "designer": {
+                  "x": 547,
+                  "y": 1054
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 27,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "parameters": {
+                "authenticationType": "noAuth",
+                "tlsType": "",
+                "proxyKeychain": ""
+              },
+              "filter": {
+                "name": "Human Review Or Validation Error",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "human_review"
+                    }
+                  ],
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "validation_error"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/notify",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "contentType": "custom",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true,
+                "contentTypeValue": "application/json",
+                "rawBodyContent": "{\r\n  \"channel\": \"internal\",\r\n  \"recipient\": \"sales-team\",\r\n  \"message\": \"Human review required: classifier output invalid or manual review requested\",\r\n  \"referenceType\": \"workflow\",\r\n  \"referenceId\": \"\"\r\n}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 249,
+                  "y": 1385
+                }
+              }
+            },
+            {
+              "id": 34,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\r\n  \"ok\": true,\r\n  \"workflow\": \"{{12.workflow}}\",\r\n  \"statusCode\": {{27.statusCode}}\r\n}",
+                "status": "200",
+                "headers": []
+              },
+              "metadata": {
+                "designer": {
+                  "x": 564,
+                  "y": 1369
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 26,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "parameters": {
+                "authenticationType": "noAuth",
+                "tlsType": "",
+                "proxyKeychain": ""
+              },
+              "filter": {
+                "name": "Make Pipeline",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "make_pipeline"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/inquiry/make",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "contentType": "custom",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true,
+                "contentTypeValue": "application/json",
+                "rawBodyContent": "{\n  \"name\": \"{{12.payload.name}}\",\n  \"contact\": \"{{12.payload.contact}}\",\n  \"message\": \"{{12.payload.message}}\",\n  \"employerId\": {{ifempty(12.payload.employerId; null)}},\n  \"makeScenario\": \"{{ifempty(12.payload.makeScenario; \"inquiry_pipeline\")}}\",\n  \"makeUrl\": \"{{12.payload.makeUrl}}\",\n  \"metadata\": {\"agentRoute\": \"make_pipeline\"}\n}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 245,
+                  "y": 1660
+                }
+              }
+            },
+            {
+              "id": 35,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\n  \"ok\": true,\n  \"workflow\": \"{{12.workflow}}\",\n  \"statusCode\": {{26.statusCode}}\n}",
+                "status": "200",
+                "headers": []
+              },
+              "metadata": {
+                "designer": {
+                  "x": 560,
+                  "y": 1660
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "eu1.make.com",
+    "notes": [
+      "Import-ready orchestrator for Helped Maids. After import, create/select a Custom Webhook in module 1 and create/select your Make AI Agent connection in module 10.",
+      "This blueprint intentionally omits account-specific webhook hook IDs and JSON data-structure IDs because Make cannot transfer those between accounts.",
+      "HTTP routes point at https://helped-web-v2.jonathan-tan-1290.workers.dev. Replace this base URL in HTTP modules if your live Worker URL is different.",
+      "If the JSON Parse module asks for a data structure, click Generate and paste the sample classifier output from this project guide."
+    ]
+  }
+}
