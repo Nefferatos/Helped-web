@@ -1175,6 +1175,43 @@ const GLOBAL_CSS = `
   transition: color 0.15s;
 }
 .cm-footer-legal-link:hover { color: var(--amber); }
+
+/* Accessibility baseline: keep all readable UI copy at 16px or larger and
+   use a high-contrast dark ink on light surfaces. Dark sections deliberately
+   retain their light text for contrast. */
+.cm-root {
+  font-size:16px;
+  color:#091c22;
+  --ink-2:#091c22;
+  --ink-3:#19353d;
+  --ink-4:#294952;
+}
+.cm-classic-filter,
+.cm-classic-input,.cm-classic-select,
+.cm-classic-heading,
+.cm-panel-title,.cm-btn-collapse,.cm-btn-clear,
+.cm-tag,.cm-section-lbl,.cm-input,.cm-select,.cm-chip,
+.cm-filter-section-title,.cm-maid-name,.cm-maid-ref,.cm-maid-meta,
+.cm-gate-title,.cm-gate-sub,.cm-state-title,.cm-state-sub,
+.cm-step-label,.cm-form-label,.cm-form-input,.cm-form-select,.cm-form-textarea {
+  font-size:16px;
+}
+.cm-classic-filter,.cm-classic-input,.cm-classic-select,
+.cm-classic-heading,.cm-panel-title,.cm-btn-collapse,.cm-btn-clear,
+.cm-tag,.cm-section-lbl,.cm-input,.cm-select,.cm-chip,
+.cm-filter-section-title,.cm-maid-name,.cm-maid-ref,.cm-maid-meta,
+.cm-gate-title,.cm-gate-sub,.cm-state-title,.cm-state-sub,
+.cm-step-label,.cm-form-label,.cm-form-input,.cm-form-select,.cm-form-textarea {
+  color:#091c22;
+}
+.cm-root p,.cm-root button,.cm-root input,.cm-root select,.cm-root textarea,
+.cm-hero-eyebrow,.cm-hero-sub,.cm-hero-step,.cm-trust-val,.cm-trust-lbl,
+.cm-count-badge,.cm-maid-badge,.cm-maid-status,.cm-cta-eyebrow,.cm-cta-sub,
+.cm-cta-feat,.cm-cta-filter-lbl,.cm-cta-filter-pill,.cm-req-eyebrow,
+.cm-req-sub,.cm-req-back,.cm-req-filter-lbl,.cm-req-filter-pill,
+.cm-step-num,.cm-req-star,.cm-footer-copyright,.cm-footer-legal-link {
+  font-size:16px !important;
+}
 `;
 
 /* ═══════════════════════════════════════════════════════════════════════════

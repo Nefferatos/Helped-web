@@ -31,7 +31,27 @@ const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
   .enq-root * { box-sizing: border-box; }
-  .enq-root { font-family: 'Inter', sans-serif; }
+  .enq-root { font-family: 'Inter', sans-serif; color: #000; }
+
+  /* Readable enquiry content: use a 16px baseline and true black text on
+     light surfaces. Light copy is retained only where the background is dark. */
+  .enq-root p,
+  .enq-root label,
+  .enq-root input,
+  .enq-root textarea,
+  .enq-root select,
+  .enq-root button {
+    font-size: 16px !important;
+    color: #000 !important;
+  }
+  .enq-input::placeholder { color: #374151 !important; }
+  .enq-hero p { color: rgba(255,255,255,0.88) !important; }
+  .enq-root .enq-submit-btn,
+  .enq-root .enq-submit-btn * { color: #fff !important; }
+  .enq-root .enq-submit-btn .enq-free-badge { color: #000 !important; }
+  .enq-form-header p { color: #fff !important; }
+  .enq-tips-card p,
+  .enq-tips-card span { color: #fff !important; }
 
   @keyframes enq-fadeUp {
     from { opacity: 0; transform: translateY(22px); }
@@ -664,7 +684,7 @@ function SimpleEnquiryForm({
         {fieldErrors.phone && (
           <p style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#b91c1c" }}>{fieldErrors.phone}</p>
         )}
-        <p style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>Pick your country from the flag list — Singapore (+65) by default</p>
+        {/* <p style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>Pick your country from the flag list — Singapore (+65) by default</p> */}
       </div>
 
       <div>
@@ -709,6 +729,7 @@ function SimpleEnquiryForm({
           {isSubmitting ? "Sending…" : "Send Enquiry"}
           {!isSubmitting && (
             <span
+              className="enq-free-badge"
               style={{
                 marginLeft: 4,
                 background: "#FCD34D",
@@ -914,7 +935,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
                           right: 14,
                           fontSize: 36,
                           fontWeight: 900,
-                          color: "rgba(14,78,94,0.06)",
+                          color: "rgba(14,78,94,0.14)",
                           letterSpacing: "-0.04em",
                           lineHeight: 1,
                           userSelect: "none",
@@ -1032,6 +1053,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
 
                     {/* Tips card */}
                     <div
+                      className="enq-tips-card"
                       style={{
                         borderRadius: 20,
                         background: "linear-gradient(135deg, #0E4E5E 0%, #0a3845 100%)",
@@ -1239,6 +1261,7 @@ const Enquiry = ({ embedded = false }: EnquiryProps) => {
                     >
                       {/* Card header */}
                       <div
+                        className="enq-form-header"
                         style={{
                           background: "linear-gradient(135deg, #0E4E5E 0%, #0a3845 100%)",
                           padding: "22px 28px",

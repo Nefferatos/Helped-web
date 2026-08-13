@@ -254,9 +254,9 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           --surface-2:   #e3edf1;
           --white:       #ffffff;
           --ink:         #091c22;
-          --ink-2:       #1a3a44;
-          --ink-3:       #4a6a74;
-          --ink-4:       #8aaab4;
+          --ink-2:       #091c22;
+          --ink-3:       #19353d;
+          --ink-4:       #294952;
           --rule:        #cde0e6;
           --rule-2:      #ddeef2;
           --r-sm: 8px;
@@ -998,7 +998,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                     >
                       Resend code
                     </button>
-                    <span className="ap-ssl" style={{ color: "#8aaab4" }}>·</span>
+                    <span className="ap-ssl" style={{ color: "#294952" }}>·</span>
                     <button
                       type="button"
                       disabled={isSubmitting}
