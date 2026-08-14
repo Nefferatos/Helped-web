@@ -5,14 +5,6 @@ import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PhoneNumberInput } from "@/components/ui/phone-input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { getDialCodePrefillForNationality, type MaidProfile } from "@/lib/maids";
@@ -709,20 +701,27 @@ const EvalCheckbox = ({
 
 type SaveButtonsProps = {
   onSave?: () => void;
+  onSaveAndClose?: () => void;
   isSaving?: boolean;
-  primaryLabel?: string;
 };
 
-const SaveButtons = ({ onSave, isSaving, primaryLabel }: SaveButtonsProps) => (
-  <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
+const SaveButtons = ({ onSave, onSaveAndClose, isSaving }: SaveButtonsProps) => (
+  <div className="flex justify-end gap-5 pt-6 border-t border-slate-100">
     <Button
       type="button"
       onClick={() => void onSave?.()}
       disabled={isSaving}
-      className="rounded-xl bg-amber-400 text-slate-900 hover:bg-amber-500 font-semibold px-6 shadow-md shadow-amber-200"
+      className="h-10 rounded-none border border-amber-600 bg-[#ffb347] px-5 font-semibold text-white shadow-none hover:bg-[#f5a332]"
     >
-      {isSaving ? "Saving..." : primaryLabel || "Save Changes"}
-      {!isSaving && <ChevronRight className="h-4 w-4 ml-1" />}
+      {isSaving ? "Saving..." : "Save"}
+    </Button>
+    <Button
+      type="button"
+      onClick={onSaveAndClose}
+      disabled={isSaving}
+      className="h-10 rounded-none border border-amber-700 bg-[#159b2d] px-7 font-semibold text-white shadow-none hover:bg-[#108225]"
+    >
+      {isSaving ? "Saving..." : "Save & Close"}
     </Button>
   </div>
 );
@@ -733,14 +732,14 @@ type TabProps = {
   form: MaidProfileFormState;
   setForm: React.Dispatch<React.SetStateAction<MaidProfileFormState | null>>;
   onSave: () => void;
+  onSaveAndClose: () => void;
   isSaving: boolean;
-  primaryLabel?: string;
 };
 
 /* ─────────────────────────────
    TAB 1 – PROFILE
 ───────────────────────────── */
-const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) => {
+const ProfileTab = ({ form, setForm, onSave, onSaveAndClose, isSaving }: TabProps) => {
   const currentYear = new Date().getFullYear();
   const years = ["--", ...Array.from({ length: currentYear + 10 - 1960 + 1 }, (_, i) => String(1960 + i))];
   const days = ["--", ...Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"))];
@@ -1486,39 +1485,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
         </Field>
       </section>
 
-      {/* Public profile toggle */}
-      <div className="pt-2">
-        <label className="flex items-center gap-3 text-sm cursor-pointer select-none group">
-          <div
-            className={`relative h-5 w-5 rounded-md border-2 flex items-center justify-center transition-all duration-150 ${
-              form.isPublic
-                ? "bg-amber-400 border-amber-400"
-                : "bg-white border-slate-300 group-hover:border-amber-300"
-            }`}
-          >
-            {form.isPublic && (
-              <svg
-                className="h-3 w-3 text-slate-900"
-                fill="none"
-                viewBox="0 0 12 12"
-                stroke="currentColor"
-                strokeWidth={2.5}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
-              </svg>
-            )}
-            <input
-              type="checkbox"
-              className="sr-only"
-              checked={form.isPublic}
-              onChange={(e) => setForm((p) => (p ? { ...p, isPublic: e.target.checked } : p))}
-            />
-          </div>
-          <span className="text-slate-700 font-medium">Public profile (visible without login)</span>
-        </label>
-      </div>
-
-      <SaveButtons onSave={onSave} isSaving={isSaving} primaryLabel={primaryLabel} />
+      <SaveButtons onSave={onSave} onSaveAndClose={onSaveAndClose} isSaving={isSaving} />
     </TabCard>
   );
 };
@@ -1526,7 +1493,7 @@ const ProfileTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps)
 /* ─────────────────────────────
    TAB 2 – SKILLS
 ───────────────────────────── */
-const SkillsTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) => {
+const SkillsTab = ({ form, setForm, onSave, onSaveAndClose, isSaving }: TabProps) => {
   const evaluationMethods = form.skillsPreferences.evaluationMethods ?? [];
   const isDeclarationChecked = evaluationMethods.includes(EVAL_PARENT_DECLARATION);
   const isInterviewedChecked = evaluationMethods.includes(EVAL_PARENT_INTERVIEWED);
@@ -1749,7 +1716,7 @@ const SkillsTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) 
         </table>
       </div>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} primaryLabel={primaryLabel} />
+      <SaveButtons onSave={onSave} onSaveAndClose={onSaveAndClose} isSaving={isSaving} />
     </TabCard>
   );
 };
@@ -1757,7 +1724,7 @@ const SkillsTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) 
 /* ─────────────────────────────
    TAB 3 – EMPLOYMENT HISTORY
 ───────────────────────────── */
-const EmploymentHistoryTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) => {
+const EmploymentHistoryTab = ({ form, setForm, onSave, onSaveAndClose, isSaving }: TabProps) => {
   const years = ["--", ...Array.from({ length: 30 }, (_, i) => String(2000 + i))];
 
   const updateRow = (index: number, patch: Partial<EmploymentHistoryRow>) =>
@@ -1921,7 +1888,7 @@ const EmploymentHistoryTab = ({ form, setForm, onSave, isSaving, primaryLabel }:
         </div>
       </section>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} primaryLabel={primaryLabel} />
+      <SaveButtons onSave={onSave} onSaveAndClose={onSaveAndClose} isSaving={isSaving} />
     </TabCard>
   );
 };
@@ -1929,7 +1896,7 @@ const EmploymentHistoryTab = ({ form, setForm, onSave, isSaving, primaryLabel }:
 /* ─────────────────────────────
    TAB 4 – AVAILABILITY / REMARK
 ───────────────────────────── */
-const AvailabilityRemarkTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) => {
+const AvailabilityRemarkTab = ({ form, setForm, onSave, onSaveAndClose, isSaving }: TabProps) => {
   const interviewOptions = form.skillsPreferences.availabilityInterviewOptions;
 
   const toggleOption = (opt: string, checked: boolean) =>
@@ -2026,7 +1993,7 @@ const AvailabilityRemarkTab = ({ form, setForm, onSave, isSaving, primaryLabel }
         </Field>
       </section>
 
-      <SaveButtons onSave={onSave} isSaving={isSaving} primaryLabel={primaryLabel} />
+      <SaveButtons onSave={onSave} onSaveAndClose={onSaveAndClose} isSaving={isSaving} />
     </TabCard>
   );
 };
@@ -2034,7 +2001,7 @@ const AvailabilityRemarkTab = ({ form, setForm, onSave, isSaving, primaryLabel }
 /* ─────────────────────────────
    TAB 5 – INTRODUCTION
 ───────────────────────────── */
-const IntroductionTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) => (
+const IntroductionTab = ({ form, setForm, onSave, onSaveAndClose, isSaving }: TabProps) => (
   <TabCard>
     <div className="text-center space-y-1">
       <h3 className="text-xl font-bold text-slate-800">Maid's Introduction</h3>
@@ -2056,14 +2023,14 @@ const IntroductionTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabP
       />
     </Field>
 
-    <SaveButtons onSave={onSave} isSaving={isSaving} primaryLabel={primaryLabel} />
+    <SaveButtons onSave={onSave} onSaveAndClose={onSaveAndClose} isSaving={isSaving} />
   </TabCard>
 );
 
 /* ─────────────────────────────
    TAB 6 – PUBLIC INTRODUCTION
 ───────────────────────────── */
-const PublicIntroductionTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) => (
+const PublicIntroductionTab = ({ form, setForm, onSave, onSaveAndClose, isSaving }: TabProps) => (
   <TabCard>
     <div className="text-center space-y-1">
       <h3 className="text-xl font-bold text-slate-800">Public Introduction</h3>
@@ -2104,14 +2071,14 @@ const PublicIntroductionTab = ({ form, setForm, onSave, isSaving, primaryLabel }
       />
     </Field>
 
-    <SaveButtons onSave={onSave} isSaving={isSaving} primaryLabel={primaryLabel} />
+    <SaveButtons onSave={onSave} onSaveAndClose={onSaveAndClose} isSaving={isSaving} />
   </TabCard>
 );
 
 /* ─────────────────────────────
    TAB 7 – PRIVATE INFO
 ───────────────────────────── */
-const PrivateInfoTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabProps) => (
+const PrivateInfoTab = ({ form, setForm, onSave, onSaveAndClose, isSaving }: TabProps) => (
   <TabCard>
     <div className="text-center space-y-1">
       <h3 className="text-xl font-bold text-slate-800">Private Information</h3>
@@ -2204,14 +2171,14 @@ const PrivateInfoTab = ({ form, setForm, onSave, isSaving, primaryLabel }: TabPr
       </Field>
     </div>
 
-    <SaveButtons onSave={onSave} isSaving={isSaving} primaryLabel={primaryLabel} />
+    <SaveButtons onSave={onSave} onSaveAndClose={onSaveAndClose} isSaving={isSaving} />
   </TabCard>
 );
 
 /* ─────────────────────────────
    MAIN EditMaid COMPONENT
 ───────────────────────────── */
-const EditMaid = () => {
+const EditMaid = ({ popup = false }: { popup?: boolean }) => {
   const { refCode } = useParams<{ refCode: string }>();
   const navigate = useNavigate();
   const [maid, setMaid] = useState<MaidProfile | null>(null);
@@ -2219,7 +2186,6 @@ const EditMaid = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!refCode) return;
@@ -2248,14 +2214,14 @@ const EditMaid = () => {
 
   const handleSave = () => {
     if (isSaving) return;
-    if (activeTab === tabs.length - 1) {
-      setIsConfirmOpen(true);
-    } else {
-      void performSave();
-    }
+    void performSave();
   };
 
-  const performSave = async () => {
+  const handleSaveAndClose = () => {
+    if (!isSaving) void performSave(true);
+  };
+
+  const performSave = async (closeAfterSave = false) => {
     if (!refCode || !maid || !form) return;
 
     const height = Number(form.height);
@@ -2325,13 +2291,16 @@ const EditMaid = () => {
       setMaid(data.maid);
       setForm(buildFormState(data.maid));
 
-      if (activeTab >= tabs.length - 1) {
+      if (closeAfterSave) {
         toast.success("Maid profile updated successfully");
+        if (popup) {
+          window.close();
+          return;
+        }
         navigate(adminPath(`/maid/${encodeURIComponent(data.maid.referenceCode)}`));
         return;
       }
       toast.success("Saved");
-      setActiveTab(activeTab + 1);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update maid");
     } finally {
@@ -2347,21 +2316,18 @@ const EditMaid = () => {
     );
   }
 
-  const primaryLabel = activeTab >= tabs.length - 1 ? "Save & Finish" : "Save & Continue";
-
   const tabProps: TabProps = {
     form,
     setForm: setForm as React.Dispatch<React.SetStateAction<MaidProfileFormState | null>>,
     onSave: handleSave,
+    onSaveAndClose: handleSaveAndClose,
     isSaving,
-    primaryLabel,
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-amber-50/30">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
+      <div className={`max-w-6xl mx-auto px-4 ${popup ? "py-4" : "py-8"}`}>
+        {!popup && <div className="mb-8">
           <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
             <span>Agency Admin</span>
             <ChevronRight className="h-3 w-3" />
@@ -2395,7 +2361,7 @@ const EditMaid = () => {
               ← Back to Profile
             </Button>
           </div>
-        </div>
+        </div>}
 
         {/* Tab Navigation */}
         <div className="flex flex-wrap gap-1 mb-0 bg-white rounded-t-2xl border border-b-0 border-slate-200 p-2 shadow-sm">
@@ -2431,39 +2397,6 @@ const EditMaid = () => {
         {activeTab === 5 && <PublicIntroductionTab {...tabProps} />}
         {activeTab === 6 && <PrivateInfoTab {...tabProps} />}
 
-        {/* Confirmation Dialog */}
-        <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-          <DialogContent className="max-w-md rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-bold">Confirm Save</DialogTitle>
-              <DialogDescription className="text-slate-500">
-                You are about to save and finish editing this profile. Continue?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsConfirmOpen(false)}
-                disabled={isSaving}
-                className="rounded-xl"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setIsConfirmOpen(false);
-                  void performSave();
-                }}
-                disabled={isSaving}
-                className="rounded-xl bg-amber-400 text-slate-900 hover:bg-amber-500 font-semibold"
-              >
-                {isSaving ? "Saving..." : "Confirm & Save"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );

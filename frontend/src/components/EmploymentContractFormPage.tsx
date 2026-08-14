@@ -254,7 +254,7 @@ const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload,
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          <span className="truncate text-[12px] font-semibold text-gray-700">{category}</span>
+          <span className="ecp-document-label truncate text-[12px] font-semibold text-gray-700">{category}</span>
         </div>
         {!readOnly && (
           <button type="button" onClick={() => inputRef.current?.click()} disabled={isUploading}
@@ -757,6 +757,18 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
         .ecp-root, .ecp-root * { font-family: 'DM Sans', sans-serif; }
+        .ecp-root :is(label, p, a, li, td, th, input, textarea, select) {
+          font-size: 16px !important;
+          color: #000 !important;
+        }
+        .ecp-root input::placeholder,
+        .ecp-root textarea::placeholder {
+          color: #4b5563 !important;
+        }
+        .ecp-root .ecp-document-label {
+          font-size: 16px !important;
+          color: #000 !important;
+        }
         @keyframes ecpFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .ecp-section { animation: ecpFadeUp 0.22s cubic-bezier(0.16,1,0.3,1) both; }
       `}</style>

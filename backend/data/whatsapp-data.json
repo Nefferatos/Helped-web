@@ -1,6 +1,92 @@
 {
   "conversations": [
     {
+      "id": "5fdb18da-1bd1-4c92-aaae-91b01892b284",
+      "agencyId": 1,
+      "candidateReferenceCode": "IND-DAR-PRI-9698",
+      "candidateId": 31,
+      "candidateName": "Priyanka Dewan",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-08-14T12:19:36.937Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-08-14T12:22:38.399Z",
+      "updatedAt": "2026-08-14T12:30:41.768Z"
+    },
+    {
+      "id": "d54f0c09-1340-49ff-9d11-33af24efe510",
+      "agencyId": 1,
+      "candidateReferenceCode": "3432",
+      "candidateId": 40,
+      "candidateName": "Niluh Emma Kusumawati",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-08-14T12:19:36.937Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-08-14T12:20:08.908Z",
+      "updatedAt": "2026-08-14T12:47:38.114Z"
+    },
+    {
       "id": "e46b4dab-e485-4bfa-919a-ddb2073d988a",
       "agencyId": 1,
       "candidateReferenceCode": "IND-MP-9720",

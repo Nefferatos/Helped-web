@@ -328,6 +328,7 @@ const App = () => {
             <Route path="/agencyadmin/maid/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/maid/:refCode/full" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><MaidProfileFullView /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/maid/:refCode/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditMaid /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/maid/:refCode/edit-popup" element={withRouteLoader(<ProtectedAdminRoute><EditMaid popup /></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/change-password" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ChangePassword /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/enquiry" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminEnquiry /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/requests" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>)} />

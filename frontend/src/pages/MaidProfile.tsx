@@ -456,6 +456,20 @@ const MaidProfilePage = () => {
     else navigate(adminPath("/edit-maids"));
   };
 
+  const handleOpenEditWindow = () => {
+    if (!maid) return;
+    const width = Math.min(1180, Math.max(860, window.outerWidth - 120));
+    const height = Math.min(900, Math.max(680, window.outerHeight - 100));
+    const left = Math.max(0, Math.round((window.screen.availWidth - width) / 2));
+    const top = Math.max(0, Math.round((window.screen.availHeight - height) / 2));
+    const editWindow = window.open(
+      adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit-popup`),
+      `edit-maid-${maid.referenceCode}`,
+      `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+    );
+    editWindow?.focus();
+  };
+
   const handleBringToTop = async () => {
     if (!maid || isBringingToTop) return;
     try {
@@ -750,7 +764,7 @@ const MaidProfilePage = () => {
   const navSep = <span className="text-black select-none mx-1.5 text-sm">|</span>;
 
   return (
-    <div className="page-container text-black">
+    <div className="page-container max-w-[1100px] text-black">
 
       {/* ── Lightbox ── */}
       {lightboxPhoto && (
@@ -889,7 +903,7 @@ const MaidProfilePage = () => {
       >
         {/* ── Top Navigation Bar ── */}
         <div className="mb-5 pb-2 border-b-2 border-gray-300">
-          <div className="flex flex-wrap items-center gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-y-1.5 md:flex-nowrap md:gap-y-0">
             <button
               type="button"
               onClick={() => void handleBringToTop()}
@@ -900,7 +914,7 @@ const MaidProfilePage = () => {
             {navSep}
             <button type="button" onClick={handleBack} className={navLink}>View All Maids</button>
             {navSep}
-            <button type="button" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/edit`))} className={navLink}>Edit This Maid</button>
+            <button type="button" onClick={handleOpenEditWindow} className={navLink}>Edit This Maid</button>
             {navSep}
             <button type="button" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))} className={navLink}>Full View</button>
             {navSep}
