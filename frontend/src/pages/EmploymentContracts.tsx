@@ -618,7 +618,7 @@ const EmploymentContracts = () => {
               </button>
             </div>
 
-            <p className="text-[13px] text-gray-500 leading-relaxed">
+            <p className="text-[16px] text-gray-800 leading-relaxed">
               Click{" "}
               <span className="font-bold text-emerald-700">Add New Contract</span>{" "}
               for a blank form, click a row to{" "}
@@ -640,7 +640,7 @@ const EmploymentContracts = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search by name, ref number, spouse, or maid…"
-                className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-10 text-[15px] text-gray-800 outline-none placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-10 text-[16px] text-gray-900 outline-none placeholder:text-gray-700 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
               />
               {searchTerm && (
                 <button
@@ -660,19 +660,19 @@ const EmploymentContracts = () => {
               className={`grid items-center gap-3 border-b border-gray-100 bg-gray-50 ${ROW_PX} py-2.5`}
               style={{ gridTemplateColumns: GRID_COLS }}
             >
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <p className="text-[16px] font-bold uppercase tracking-wider text-gray-700">
                 Ref #
               </p>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <p className="text-[16px] font-bold uppercase tracking-wider text-gray-700">
                 Date
               </p>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <p className="text-[16px] font-bold uppercase tracking-wider text-gray-700">
                 Employer
               </p>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <p className="text-[16px] font-bold uppercase tracking-wider text-gray-700">
                 Spouse
               </p>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <p className="text-[16px] font-bold uppercase tracking-wider text-gray-700">
                 Maid
               </p>
               {/* Checkbox toggle-all — aligned with data-row checkboxes */}
@@ -759,13 +759,13 @@ const EmploymentContracts = () => {
                   >
                     {/* Col 1 — Ref */}
                     <div>
-                      <span className="inline-block rounded-lg bg-gray-100 px-2.5 py-1 text-[13px] font-bold text-gray-600 font-mono">
+                      <span className="inline-block rounded-lg bg-gray-100 px-2.5 py-1 text-[16px] font-bold text-gray-800 font-mono">
                         {emp.ref}
                       </span>
                     </div>
 
                     {/* Col 2 — Date */}
-                    <p className="text-[13px] font-semibold text-gray-500 truncate">
+                    <p className="text-[16px] font-semibold text-gray-700 truncate">
                       {emp.date || "—"}
                     </p>
 
@@ -779,7 +779,7 @@ const EmploymentContracts = () => {
                           .join("")
                           .toUpperCase() || "?"}
                       </div>
-                      <p className="text-[14px] font-bold text-gray-900 truncate leading-snug">
+                      <p className="text-[16px] font-bold text-gray-900 truncate leading-snug">
                         {emp.employer || "—"}
                       </p>
                     </div>
@@ -796,12 +796,12 @@ const EmploymentContracts = () => {
                               .join("")
                               .toUpperCase()}
                           </div>
-                          <p className="text-[14px] font-semibold text-gray-700 truncate">
+                          <p className="text-[16px] font-semibold text-gray-900 truncate">
                             {emp.spouse}
                           </p>
                         </>
                       ) : (
-                        <p className="text-[14px] text-gray-300 font-medium">—</p>
+                        <p className="text-[16px] text-gray-500 font-medium">—</p>
                       )}
                     </div>
 
@@ -811,18 +811,18 @@ const EmploymentContracts = () => {
                         <>
                           <MaidAvatar name={emp.maid} photo={emp.maidPhoto} />
                           <div className="min-w-0 flex-1">
-                            <p className="text-[14px] font-bold text-emerald-800 truncate leading-snug">
+                            <p className="text-[16px] font-bold text-emerald-900 truncate leading-snug">
                               {emp.maid}
                             </p>
                             {emp.maidNationality && (
-                              <p className="text-[11px] text-gray-400 font-medium truncate">
+                              <p className="text-[16px] text-gray-700 font-medium truncate">
                                 {emp.maidNationality}
                               </p>
                             )}
                           </div>
                         </>
                       ) : (
-                        <p className="text-[14px] text-gray-300 font-medium">—</p>
+                        <p className="text-[16px] text-gray-500 font-medium">—</p>
                       )}
                     </div>
 

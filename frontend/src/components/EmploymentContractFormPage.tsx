@@ -127,7 +127,7 @@ const isMaidAlreadyAssigned = (
 };
 
 /* ─── shared styles ─── */
-const inp = "h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-[13px] text-gray-900 font-medium outline-none transition-all placeholder:text-gray-400 placeholder:font-normal focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100";
+const inp = "h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-[13px] text-gray-900 font-medium outline-none transition-all placeholder:text-gray-800 placeholder:font-medium focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100";
 const selTrigger = "h-10 rounded-lg border border-gray-200 bg-gray-50 px-3 text-[13px] text-gray-900 font-medium focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100";
 const phoneInp = "h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-[13px] text-gray-900 font-medium transition-all focus-within:bg-white [--phone-input-focus-border:#34d399] [--phone-input-focus-ring:rgba(209,250,229,0.9)]";
 
@@ -137,7 +137,7 @@ function Field2({ label, required, hint, children, half }: {
 }) {
   return (
     <div className={`flex flex-col gap-1 ${half ? "" : ""}`}>
-      <label className="text-[12px] font-bold text-gray-500 uppercase tracking-wide">
+      <label className="text-[12px] font-bold text-gray-900 uppercase tracking-wide">
         {label}{required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
       <div>
@@ -763,7 +763,11 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
         }
         .ecp-root input::placeholder,
         .ecp-root textarea::placeholder {
-          color: #4b5563 !important;
+          color: #1f2937 !important;
+          opacity: 1;
+        }
+        .ecp-root [data-placeholder] {
+          color: #1f2937 !important;
         }
         .ecp-root .ecp-document-label {
           font-size: 16px !important;
