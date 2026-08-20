@@ -56,6 +56,7 @@ export interface AtsApplicationListItem {
     score: number;
   } | null;
   clientMatchScore?: number;
+  source?: string;
 }
 
 export interface AtsApplicationBundle {

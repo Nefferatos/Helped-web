@@ -43,6 +43,21 @@ AI_AUTOPILOT_ENABLED = "true"
 # writing quality. The ANTHROPIC_API_KEY itself is a secret: npx wrangler secret put ANTHROPIC_API_KEY
 ANTHROPIC_MODEL = "claude-haiku-4-5"
 
+# OpenAI-compatible API — used by PDF autofill when set.
+# OPENAI_API_KEY should be set via: npx wrangler secret put OPENAI_API_KEY
+# Change OPENAI_BASE_URL to use a different provider:
+#   OpenAI:     https://api.openai.com/v1
+#   OpenRouter: https://openrouter.ai/api/v1
+#   Groq:       https://api.groq.com/openai/v1
+# Cline AI (Kimi K2.6 Code — primary AI for screening, HR interviews, etc.)
+CLINE_API_URL = "https://api.cline.ai/v1"
+CLINE_MODEL = "Kimi K2.6 Code"
+# CLINE_API_KEY must be set as a secret: npx wrangler secret put CLINE_API_KEY
+
+# Fallback: OpenAI-compatible API
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+OPENAI_MODEL = "gpt-4o"
+
 # Email confirmations — requires Resend account + verified domain.
 # Steps: 1) Sign up at resend.com  2) Verify your domain  3) Run:
 #   npx wrangler secret put RESEND_API_KEY

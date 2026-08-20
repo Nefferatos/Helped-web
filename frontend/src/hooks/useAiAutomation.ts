@@ -21,6 +21,7 @@ export interface AiInquiryRecord {
     | "contract_creation"
     | "schedule_creation"
     | "notification_only"
+    | "applicant_interview"
     | "validation_error"
     | "human_review";
   reply: string;
@@ -95,6 +96,7 @@ interface LeadPayload {
 const MAKE_WEBHOOKS = {
   inquiry_pipeline: import.meta.env.VITE_MAKE_WEBHOOK_URL_INQUIRY_PIPELINE as string | undefined,
   lead_pipeline: import.meta.env.VITE_MAKE_WEBHOOK_URL_LEAD_PIPELINE as string | undefined,
+  interview_pipeline: import.meta.env.VITE_MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE as string | undefined,
 } as const;
 
 const parseApiError = async (response: Response, fallbackMessage: string) => {
@@ -117,7 +119,7 @@ const postJson = async <TResponse, TPayload>(url: string, payload: TPayload, fal
 };
 
 export const triggerMakeScenario = async (
-  scenario: "inquiry_pipeline" | "lead_pipeline",
+  scenario: "inquiry_pipeline" | "lead_pipeline" | "interview_pipeline",
   payload: Record<string, unknown>,
 ) => {
   const directWebhookUrl = MAKE_WEBHOOKS[scenario]?.trim();
@@ -227,6 +229,63 @@ export const submitLeadWithAutomation = async (payload: LeadPayload) => {
   return {
     data: leadResult,
     makeTriggered,
+    makeError,
+  };
+};
+
+export interface InterviewSessionPayload {
+  applicationId: string;
+  sessionData?: Record<string, unknown>;
+  rating?: number;
+  recommendation?: string;
+  summary?: string;
+  triggerMake?: boolean;
+}
+
+export interface InterviewSessionResponse {
+  workflow: string;
+  intent: string;
+  fallbackUsed: boolean;
+  data: {
+    applicationId: string;
+    stage: string;
+    rating: number | null;
+    recommendation: string;
+    summary: string;
+    makeTriggered: boolean;
+    makeDelivery: Record<string, unknown> | null;
+    updatedAt: string;
+  };
+}
+
+export const submitInterviewSession = async (payload: InterviewSessionPayload) => {
+  const sessionResult = await postJson<InterviewSessionResponse, InterviewSessionPayload>(
+    "/api/ai/hr-interview/session",
+    payload,
+    "Failed to save interview session",
+  );
+
+  let makeTriggered = false;
+  let makeError: string | null = null;
+
+  if (payload.triggerMake !== false) {
+    try {
+      await triggerMakeScenario("interview_pipeline", {
+        applicationId: payload.applicationId,
+        rating: payload.rating,
+        recommendation: payload.recommendation,
+        summary: payload.summary,
+        sessionData: payload.sessionData ?? {},
+      });
+      makeTriggered = true;
+    } catch (error) {
+      makeError = error instanceof Error ? error.message : "Failed to trigger interview automation";
+    }
+  }
+
+  return {
+    data: sessionResult,
+    makeTriggered: makeTriggered || sessionResult.data.makeTriggered,
     makeError,
   };
 };

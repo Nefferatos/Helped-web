@@ -28,22 +28,29 @@ import {
   updateAtsStage,
   type AtsApplicationListItem,
 } from "@/lib/ats";
+import RecruiterAiAssistant from "@/components/RecruiterAiAssistant";
+import RecruiterCalendar from "@/components/RecruiterCalendar";
 import {
+  Activity,
+  AlertTriangle,
   Brain,
   BriefcaseBusiness,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
+  Cpu,
   ExternalLink,
   Filter,
   FileText,
   Image as ImageIcon,
   Lightbulb,
+  Loader2,
   Mail,
   MessageCircle,
   MonitorUp,
   MoveLeft,
   MoveRight,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -51,6 +58,7 @@ import {
   Video,
   X,
   XCircle,
+  Zap,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -78,44 +86,6 @@ const pipelineStages = [
   READY_TO_POST_PUBLIC_STAGE,
   "Placed",
   "Rejected",
-] as const;
-
-const applicantFlowGuide = [
-  {
-    title: "1. Intake & First Review",
-    description:
-      "New applicants land here from the public portal. Check profile completeness, WhatsApp access, and the qualification score first.",
-    stage: "New Applicant -> Documents Submitted",
-    icon: MonitorUp,
-  },
-  {
-    title: "2. Validate Profile Quality",
-    description:
-      "Open the profile, review work history, languages, salary expectations, and attached files before spending time on outreach.",
-    stage: "Resume Parsed",
-    icon: FileText,
-  },
-  {
-    title: "3. Contact & Screen",
-    description:
-      "Reach out by WhatsApp or email, confirm availability, and move serious candidates into interview and verification stages quickly.",
-    stage: "Screening Interview -> Background Check",
-    icon: MessageCircle,
-  },
-  {
-    title: "4. Approve & Market",
-    description:
-      "Approve only candidates with verified details, then move them into public profile setup before anything is posted for employers or clients.",
-    stage: "Approved -> Ready to Configure Public Profile",
-    icon: Sparkles,
-  },
-] as const;
-
-const processChecklist = [
-  "Use search and quick filters to build a shortlist by score, experience, and care type.",
-  "Open each profile before outreach so recruiters speak with full context.",
-  "Update the pipeline immediately after each action to keep the team aligned.",
-  "Use bulk actions only for clear batch work like document requests or approvals.",
 ] as const;
 
 const applicantListSop = [
@@ -218,69 +188,6 @@ const stageHoverGuide: Record<string, { title: string; description: string }> = 
   },
 };
 
-const walkthroughSteps = [
-  {
-    id: "intake",
-    label: "Intake",
-    eyebrow: "Step 1",
-    title: "Review new applicants first",
-    summary:
-      "Start with fresh applicants from the portal and quickly confirm whether the profile is ready for recruiter attention.",
-    helper: "Overview of new submissions and first-pass qualification.",
-    points: [
-      "Check WhatsApp, email, and profile completeness before outreach.",
-      "Use the qualification score to spot strong applicants early.",
-      "Move complete records into document review without delay.",
-    ],
-    chips: ["New Applicant", "Documents Submitted", "Score check"],
-  },
-  {
-    id: "profile",
-    label: "Profile",
-    eyebrow: "Step 2",
-    title: "Validate documents and profile quality",
-    summary:
-      "Open the candidate profile to verify work history, attachments, salary expectations, and skill details before spending recruiter time.",
-    helper: "Review details before the recruiter invests outreach time.",
-    points: [
-      "Review resume, biodata, and supporting files in one place.",
-      "Check languages, cooking ability, and care experience against client demand.",
-      "Use filters to narrow the shortlist before opening profiles one by one.",
-    ],
-    chips: ["Resume Parsed", "Files", "Skills review"],
-  },
-  {
-    id: "screen",
-    label: "Screen",
-    eyebrow: "Step 3",
-    title: "Contact and screen serious candidates",
-    summary:
-      "Once a profile looks promising, reach out immediately and update the pipeline after every meaningful interaction.",
-    helper: "Keep follow-up fast and stage movement consistent.",
-    points: [
-      "Use WhatsApp or email shortcuts directly from the card.",
-      "Confirm availability, salary alignment, and job fit during screening.",
-      "Advance candidates to background checks as soon as the first screening is positive.",
-    ],
-    chips: ["Screening Interview", "Background Check", "Outreach"],
-  },
-  {
-    id: "market",
-    label: "Market",
-    eyebrow: "Step 4",
-    title: "Approve and prepare public profile setup",
-    summary:
-      "Verified candidates should move into public profile setup first, so the agency can configure the final profile before it goes live for employers and clients.",
-    helper: "Finish verification and prepare the profile configuration step.",
-    points: [
-      "Approve only after references and important claims are checked.",
-      "Move strong candidates into the public profile configuration stage as soon as they are ready.",
-      "Use bulk actions only for repetitive admin work, not judgment calls.",
-    ],
-    chips: ["Approved", READY_TO_POST_PUBLIC_STAGE, "Bulk actions"],
-  },
-] as const;
-
 const quickFilters = [
   {
     label: "WhatsApp + Score 70+",
@@ -313,7 +220,6 @@ const quickFilters = [
 ] as const;
 
 const ALL_STAGE_TAB = "All Applicants";
-const ATS_GUIDE_STORAGE_KEY = "ats-recruiter-guide-hidden";
 const ATS_TABLE_PAGE_SIZE = 15;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -534,9 +440,6 @@ const AtsRecruitmentPage = () => {
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
   const [activeStageTab, setActiveStageTab] = useState<string>(ALL_STAGE_TAB);
   const [currentPage, setCurrentPage] = useState(1);
-  const [showGuide, setShowGuide] = useState(false);
-  const [activeGuideStep, setActiveGuideStep] = useState(0);
-  const [guideDoNotShowAgain, setGuideDoNotShowAgain] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [filters, setFilters] = useState<Record<string, unknown>>({});
@@ -562,6 +465,31 @@ const AtsRecruitmentPage = () => {
     enabled: Boolean(selectedId),
     queryFn: () => fetchAtsApplication(selectedId!),
   });
+
+  // AI Health Check — ping the screening endpoint to verify AI is working
+  const aiHealthQuery = useQuery({
+    queryKey: ["ats-ai-health"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/ai/screen-applicant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ healthCheck: true }),
+        });
+        // If endpoint responds at all (even with auth error), the AI service is reachable
+        return { online: true, status: res.status, ok: res.ok };
+      } catch {
+        return { online: false, status: 0, ok: false };
+      }
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchInterval: 5 * 60 * 1000, // Re-check every 5 minutes
+    retry: 1,
+  });
+
+  const aiStatus = aiHealthQuery.data;
+  const aiIsOnline = aiStatus?.online ?? false;
+  const aiIsLoading = aiHealthQuery.isLoading;
 
   const stageMutation = useMutation({
     mutationFn: ({
@@ -604,7 +532,10 @@ const AtsRecruitmentPage = () => {
 
   const dashboard = dashboardQuery.data;
   const applications = useMemo(
-    () => applicationsQuery.data?.data ?? [],
+    () =>
+      (applicationsQuery.data?.data ?? []).filter(
+        (item) => item.source !== "synced_from_maid"
+      ),
     [applicationsQuery.data?.data]
   );
   const detail = detailQuery.data;
@@ -651,9 +582,6 @@ const AtsRecruitmentPage = () => {
       paginatedApplications.filter((item) => selectedIds.includes(item.id)).length,
     [paginatedApplications, selectedIds]
   );
-  const activeGuide = walkthroughSteps[activeGuideStep];
-  const guideProgress = ((activeGuideStep + 1) / walkthroughSteps.length) * 100;
-
   const automatedRecommendations = useMemo(
     () => [
       {
@@ -739,28 +667,16 @@ const AtsRecruitmentPage = () => {
     }
   };
 
+  const handleAiApplyFilter = (filter: Record<string, unknown>) => {
+    setActiveQuickFilter(null);
+    setFilters(filter);
+    setShowFilters(true);
+  };
+
   const clearAllFilters = () => {
     setActiveQuickFilter(null);
     setFilters({});
     setSearch("");
-  };
-
-  const closeGuide = () => {
-    try {
-      if (guideDoNotShowAgain) {
-        window.localStorage.setItem(ATS_GUIDE_STORAGE_KEY, "1");
-      } else {
-        window.localStorage.removeItem(ATS_GUIDE_STORAGE_KEY);
-      }
-    } catch {
-      // ignore
-    }
-    setShowGuide(false);
-  };
-
-  const openGuide = () => {
-    setActiveGuideStep(0);
-    setShowGuide(true);
   };
 
   const openProfileModal = (applicationId: string) => {
@@ -818,16 +734,6 @@ const AtsRecruitmentPage = () => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
-  useEffect(() => {
-    try {
-      const hidden = window.localStorage.getItem(ATS_GUIDE_STORAGE_KEY) === "1";
-      setGuideDoNotShowAgain(hidden);
-      setShowGuide(!hidden);
-    } catch {
-      setShowGuide(true);
-    }
-  }, []);
-
   const selectAllVisible = () =>
     setSelectedIds((current) =>
       Array.from(
@@ -840,314 +746,6 @@ const AtsRecruitmentPage = () => {
 
   return (
     <div className="space-y-5">
-      {/* ── Recruiter Walkthrough Modal ──────────────────────────────────── */}
-      <Dialog
-        open={showGuide}
-        onOpenChange={(open) => (!open ? closeGuide() : openGuide())}
-      >
-        <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-3xl border-0 bg-[#060c1a] p-0 text-slate-100 shadow-[0_40px_120px_rgba(2,6,23,0.9),0_0_0_1px_rgba(56,189,248,0.08)]">
-          {/* Header */}
-          <div className="relative shrink-0 overflow-hidden border-b border-white/5 px-6 py-5">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_top_left,_rgba(56,189,248,0.13),_transparent),radial-gradient(ellipse_60%_50%_at_top_right,_rgba(16,185,129,0.1),_transparent)]" />
-            <div className="relative flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-emerald-500 shadow-[0_0_18px_rgba(56,189,248,0.4)]">
-                  <Lightbulb className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <DialogTitle className="text-sm font-black leading-none text-white">
-                    Recruiter Walkthrough
-                  </DialogTitle>
-                  <DialogDescription className="mt-0.5 text-[11px] text-slate-500">
-                    Guided tour · intake to public profile
-                  </DialogDescription>
-                </div>
-              </div>
-              {/* Segmented step pills */}
-              <div className="flex items-center gap-1.5">
-                {walkthroughSteps.map((step, i) => (
-                  <button
-                    key={step.label}
-                    type="button"
-                    onClick={() => setActiveGuideStep(i)}
-                    title={step.label}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                      i < activeGuideStep
-                        ? "w-6 bg-emerald-500/80"
-                        : i === activeGuideStep
-                        ? "w-10 bg-gradient-to-r from-sky-400 to-emerald-400 shadow-[0_0_8px_rgba(56,189,248,0.55)]"
-                        : "w-4 bg-slate-700 hover:bg-slate-600"
-                    }`}
-                  />
-                ))}
-                <span className="ml-2 text-[10px] font-bold tabular-nums text-slate-500">
-                  {Math.round(guideProgress)}%
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Body */}
-          <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[200px_1fr]">
-            {/* Sidebar stepper */}
-            <div className="overflow-y-auto border-b border-white/5 bg-[#07101f] p-4 lg:border-b-0 lg:border-r">
-              <p className="mb-4 text-[9px] font-black uppercase tracking-[0.32em] text-slate-600">
-                Steps
-              </p>
-              <ol className="relative space-y-0">
-                {applicantFlowGuide.map((step, index) => {
-                  const isActive = index === activeGuideStep;
-                  const isComplete = index < activeGuideStep;
-                  const isLast = index === applicantFlowGuide.length - 1;
-                  return (
-                    <li key={step.title} className="relative flex gap-3">
-                      {/* Vertical connector line */}
-                      {!isLast && (
-                        <div
-                          className={`absolute left-[21px] top-11 h-[calc(100%-28px)] w-px ${
-                            isComplete ? "bg-emerald-500/25" : "bg-slate-800"
-                          }`}
-                        />
-                      )}
-                      {/* Single button wrapping icon + label */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveGuideStep(index)}
-                        aria-current={isActive ? "step" : undefined}
-                        className="mb-5 flex flex-1 items-start gap-3 text-left"
-                      >
-                        <div
-                          className={`relative z-10 mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-all duration-200 ${
-                            isActive
-                              ? "border-sky-400/40 bg-gradient-to-br from-sky-500/20 to-emerald-500/15 shadow-[0_0_20px_rgba(56,189,248,0.18),inset_0_0_0_1px_rgba(56,189,248,0.08)]"
-                              : isComplete
-                              ? "border-emerald-500/25 bg-emerald-500/8"
-                              : "border-slate-700/60 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800"
-                          }`}
-                        >
-                          {isComplete ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                          ) : (
-                            <step.icon
-                              className={`h-4 w-4 ${
-                                isActive ? "text-sky-300" : "text-slate-500"
-                              }`}
-                            />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={`text-[9px] font-black uppercase tracking-[0.26em] ${
-                              isActive
-                                ? "text-sky-400"
-                                : isComplete
-                                ? "text-emerald-500/60"
-                                : "text-slate-600"
-                            }`}
-                          >
-                            Step {index + 1}
-                          </p>
-                          <p
-                            className={`mt-0.5 text-[11px] font-bold leading-snug ${
-                              isActive
-                                ? "text-white"
-                                : isComplete
-                                ? "text-slate-400"
-                                : "text-slate-500"
-                            }`}
-                          >
-                            {step.title.replace(/^\d+\.\s/, "")}
-                          </p>
-                          {isActive && (
-                            <p className="mt-1 text-[10px] leading-[1.5] text-slate-500">
-                              {walkthroughSteps[index]?.helper}
-                            </p>
-                          )}
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-
-            {/* Main panel */}
-            <div className="overflow-y-auto bg-[#060c1a] p-5">
-              <div className="space-y-4">
-                {/* Hero card */}
-                <div className="relative overflow-hidden rounded-2xl border border-white/5 p-5">
-                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_top_right,_rgba(56,189,248,0.1),_transparent),radial-gradient(ellipse_50%_50%_at_bottom_left,_rgba(16,185,129,0.08),_transparent),linear-gradient(135deg,rgba(10,18,40,0.99),rgba(6,12,26,0.99))]" />
-                  <div className="relative flex items-start gap-4">
-                    {/* Step number badge */}
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-sky-400/20 bg-gradient-to-br from-sky-500/15 to-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.06)]">
-                      <span className="text-3xl font-black leading-none text-sky-300">
-                        {activeGuideStep + 1}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-sky-400/80">
-                        {activeGuide.eyebrow}
-                      </p>
-                      <h3 className="mt-1 text-xl font-black tracking-tight text-white">
-                        {activeGuide.title}
-                      </h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">
-                        {activeGuide.summary}
-                      </p>
-                    </div>
-                  </div>
-                  {/* Chips */}
-                  <div className="relative mt-4 flex flex-wrap gap-2">
-                    {activeGuide.chips.map((chip, i) => (
-                      <span
-                        key={chip}
-                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold tracking-wide ${
-                          i % 3 === 0
-                            ? "border-sky-400/20 bg-sky-500/10 text-sky-300"
-                            : i % 3 === 1
-                            ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
-                            : "border-violet-400/20 bg-violet-500/10 text-violet-300"
-                        }`}
-                      >
-                        {chip}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Two-col grid */}
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {/* Action steps */}
-                  <div className="rounded-2xl border border-white/5 bg-slate-900/30 p-4">
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="h-4 w-1 rounded-full bg-gradient-to-b from-sky-400 to-emerald-400" />
-                      <p className="text-xs font-bold text-white">
-                        Actions for this step
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {activeGuide.points.map((item, i) => (
-                        <div
-                          key={item}
-                          className="flex items-start gap-3 rounded-xl border border-white/5 bg-slate-950/50 p-3 transition-colors hover:border-slate-700/60 hover:bg-slate-900/60"
-                        >
-                          <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-sky-400/25 bg-sky-500/10">
-                            <span className="text-[9px] font-black text-sky-400">
-                              {i + 1}
-                            </span>
-                          </div>
-                          <span className="text-xs leading-5 text-slate-300">
-                            {item}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Right column */}
-                  <div className="space-y-3">
-                    {/* Tip */}
-                    <div className="rounded-2xl border border-indigo-400/15 bg-gradient-to-br from-indigo-500/8 to-violet-500/5 p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-500/12">
-                          <Lightbulb className="h-3.5 w-3.5 text-indigo-300" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-white">
-                            Pro tip
-                          </p>
-                          <p className="mt-1 text-[11px] leading-[1.55] text-slate-400">
-                            Reopen this walkthrough any time from the tutorial
-                            button in the page header.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Daily checklist */}
-                    <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <div className="h-4 w-1 rounded-full bg-emerald-400" />
-                        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">
-                          Daily checklist
-                        </p>
-                      </div>
-                      <div className="space-y-2.5">
-                        {processChecklist.map((item) => (
-                          <div
-                            key={item}
-                            className="flex items-start gap-2.5 text-[11px] leading-5 text-slate-400"
-                          >
-                            <div className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10">
-                              <CheckCircle2 className="h-2 w-2 text-emerald-400" />
-                            </div>
-                            <span>{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer controls */}
-                <div className="flex flex-col gap-3 border-t border-white/5 pt-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <label className="flex cursor-pointer select-none items-center gap-2.5 text-xs text-slate-400">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400 focus:ring-offset-0"
-                        checked={guideDoNotShowAgain}
-                        onChange={(e) =>
-                          setGuideDoNotShowAgain(e.target.checked)
-                        }
-                      />
-                      Don't show on startup
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-white/10 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:bg-slate-700 hover:text-white"
-                        onClick={() =>
-                          setActiveGuideStep((c) => Math.max(c - 1, 0))
-                        }
-                        disabled={activeGuideStep === 0}
-                      >
-                        <MoveLeft className="mr-1.5 h-3.5 w-3.5" />
-                        Back
-                      </Button>
-                      {activeGuideStep < walkthroughSteps.length - 1 ? (
-                        <Button
-                          size="sm"
-                          className="bg-gradient-to-r from-sky-500 to-emerald-500 font-bold text-slate-950 shadow-[0_0_16px_rgba(56,189,248,0.28)] hover:from-sky-400 hover:to-emerald-400 hover:shadow-[0_0_22px_rgba(56,189,248,0.4)]"
-                          onClick={() =>
-                            setActiveGuideStep((c) =>
-                              Math.min(c + 1, walkthroughSteps.length - 1)
-                            )
-                          }
-                        >
-                          Next step
-                          <MoveRight className="ml-1.5 h-3.5 w-3.5" />
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          className="bg-gradient-to-r from-sky-500 to-emerald-500 font-bold text-slate-950 shadow-[0_0_16px_rgba(56,189,248,0.28)] hover:from-sky-400 hover:to-emerald-400"
-                          onClick={closeGuide}
-                        >
-                          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                          Start recruiting
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* ── SOP Modal ────────────────────────────────────────────────────── */}
       <Dialog open={sopModalOpen} onOpenChange={setSopModalOpen}>
         <DialogContent className="flex max-h-[86vh] max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white p-0 shadow-[0_32px_80px_rgba(15,23,42,0.15)]">
@@ -1201,13 +799,6 @@ const AtsRecruitmentPage = () => {
               ))}
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                onClick={openGuide}
-              >
-                Open full walkthrough
-              </Button>
               <Button
                 className="bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.25)] hover:bg-emerald-600"
                 onClick={() => setSopModalOpen(false)}
@@ -1290,15 +881,43 @@ const AtsRecruitmentPage = () => {
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-2 xl:flex-col xl:items-end">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-white/80"
-              onClick={openGuide}
+            {/* AI Status Indicator */}
+            <div
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                aiIsLoading
+                  ? "border-slate-200 bg-slate-50 text-slate-500"
+                  : aiIsOnline
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-amber-200 bg-amber-50 text-amber-700"
+              }`}
+              title={aiIsOnline ? "AI scoring & screening service is online" : "AI service is not responding — scores may be from cache"}
             >
-              <Lightbulb className="mr-1.5 h-3.5 w-3.5" />
-              Tutorial
-            </Button>
+              {aiIsLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : aiIsOnline ? (
+                <Zap className="h-3.5 w-3.5" />
+              ) : (
+                <AlertTriangle className="h-3.5 w-3.5" />
+              )}
+              <span>
+                {aiIsLoading
+                  ? "Checking AI…"
+                  : aiIsOnline
+                  ? "AI Active"
+                  : "AI Offline"}
+              </span>
+              {!aiIsLoading && (
+                <button
+                  type="button"
+                  onClick={() => void aiHealthQuery.refetch()}
+                  className="ml-0.5 rounded p-0.5 text-current opacity-50 hover:opacity-100 transition-opacity"
+                  aria-label="Re-check AI status"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
             {/* <Button asChild variant="outline" size="sm" className="bg-white/80">
               <Link to="/apply-as-maid">Open Portal</Link>
             </Button> */}
@@ -1726,7 +1345,27 @@ const AtsRecruitmentPage = () => {
 
           {/* Table */}
           <div className="p-4">
-            {displayedApplications.length === 0 ? (
+            {applicationsQuery.isLoading ? (
+              /* Loading skeleton */
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 rounded-xl border border-slate-100 p-4 animate-pulse">
+                    <div className="h-4 w-4 rounded bg-slate-200" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-40 rounded bg-slate-200" />
+                      <div className="h-3 w-24 rounded bg-slate-100" />
+                    </div>
+                    <div className="h-6 w-20 rounded-full bg-slate-200" />
+                    <div className="h-6 w-16 rounded-full bg-slate-100" />
+                    <div className="h-8 w-24 rounded-lg bg-slate-200" />
+                  </div>
+                ))}
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+                  <p className="text-xs text-slate-400">Loading applicants…</p>
+                </div>
+              </div>
+            ) : displayedApplications.length === 0 ? (
               <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-slate-400">
                 <Users className="h-8 w-8 opacity-30" />
                 <p className="text-sm font-medium">
@@ -2121,6 +1760,30 @@ const AtsRecruitmentPage = () => {
           </div>
         </Card>
       </section>
+
+      {/* ── Calendar + AI Assistant Row ────────────────────────────────────── */}
+      <section className="grid gap-5 lg:grid-cols-[380px_1fr]">
+        <RecruiterCalendar
+          selectedApplicantName={
+            selectedId
+              ? applications.find((a) => a.id === selectedId)?.profile.fullName || undefined
+              : undefined
+          }
+        />
+        <div className="hidden lg:block" />
+      </section>
+
+      {/* ── AI Recruiting Assistant ───────────────────────────────────────── */}
+      <RecruiterAiAssistant
+        applications={applications as unknown as import("@/components/RecruiterAiAssistant").RecruiterAiAssistantProps["applications"]}
+        dashboard={dashboard}
+        selectedId={selectedId}
+        onSelectApplicant={(id) => {
+          setSelectedId(id);
+          setProfileModalOpen(true);
+        }}
+        onApplyFilter={handleAiApplyFilter}
+      />
 
       {/* ── Profile Modal ─────────────────────────────────────────────────── */}
       <Dialog open={profileModalOpen} onOpenChange={setProfileModalOpen}>

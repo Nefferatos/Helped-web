@@ -1091,14 +1091,22 @@ export default function AiDirectMarketingPage() {
                   <p className="mb-2 text-sm font-semibold text-foreground">
                     Goal
                   </p>
-                  <PillSelect options={GOALS} value={goal} onChange={setGoal} />
+                  <PillSelect
+                    options={GOALS}
+                    value={goal}
+                    onChange={(next) => setGoal(next)}
+                  />
                 </div>
 
                 <div>
                   <p className="mb-2 text-sm font-semibold text-foreground">
                     Tone
                   </p>
-                  <PillSelect options={TONES} value={tone} onChange={setTone} />
+                  <PillSelect
+                    options={TONES}
+                    value={tone}
+                    onChange={(next) => setTone(next)}
+                  />
                 </div>
 
                 <div>

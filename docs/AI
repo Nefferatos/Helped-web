@@ -1,0 +1,192 @@
+# AI Provider Setup Guide — Cline, OpenAI, OpenRouter & More
+
+## Quick Start: Sample `.env` Text
+
+Copy ONE of the following blocks into your `.dev.vars` file (for Cloudflare Worker) or `backend/.env` file:
+
+---
+
+### Option A: Using Cline (OpenAI-compatible)
+
+```bash
+# ─── AI Provider: Cline ───
+# Get your API key from your Cline subscription dashboard
+OPENAI_API_KEY=sk_9a8ee110f028bba65f74ce51374bb2b2aaffbb6f302960ec5d3b0912ff9cdeed
+OPENAI_BASE_URL=https://api.cline.ai/v1
+OPENAI_MODEL=claude-sonnet-4-20250514
+
+# ─── Database (keep existing) ───
+SUPABASE_URL=https://etdbexgrsenjznxbbnbd.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_APP_DATA_TABLE=app_data
+SUPABASE_APP_DATA_ID=default
+
+# ─── Email ───
+RESEND_FROM="Helped <no-reply@yourdomain.com>"
+DEV_EXPOSE_CONFIRMATION_CODE=false
+
+# ─── Autopilot ───
+AI_AUTOPILOT_ENABLED=true
+
+# ─── Make.com ───
+MAKE_WEBHOOK_URL=https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig
+```
+
+---
+
+### Option B: Using OpenAI Direct
+
+```bash
+# ─── AI Provider: OpenAI ───
+# Get your key from https://platform.openai.com/api-keys
+OPENAI_API_KEY=sk-proj-your-openai-key-here
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o
+
+# ... (rest same as above)
+```
+
+---
+
+### Option C: Using OpenRouter (access multiple models)
+
+```bash
+# ─── AI Provider: OpenRouter ───
+# Get your key from https://openrouter.ai/keys
+OPENAI_API_KEY=sk-or-v1-your-openrouter-key-here
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_MODEL=anthropic/claude-3.5-sonnet
+
+# ... (rest same as above)
+```
+
+---
+
+### Option D: Keep using Anthropic Claude (current setup)
+
+```bash
+# ─── AI Provider: Anthropic Claude (existing) ───
+# No OPENAI_* vars needed — the system falls back to ANTHROPIC_API_KEY
+ANTHROPIC_API_KEY=sk-ant-api03-your-anthropic-key-here
+
+# ... (rest same as above)
+```
+
+---
+
+## Model Recommendations
+
+### For Cline Subscription
+
+If you have a Cline subscription, check your Cline dashboard for available models. Common options:
+
+| Model | Best For | Speed | Cost |
+|-------|----------|-------|------|
+| `claude-sonnet-4-20250514` | General chat, inquiry, interview | Medium | Included in subscription |
+| `claude-haiku-4-5-20251001` | Fast classification, simple tasks | Fast | Included in subscription |
+| `gpt-4o` | General purpose, multimodal | Medium | Included in subscription |
+| `gpt-4o-mini` | Fast, cheap classification | Very fast | Included in subscription |
+
+**Recommended for your app:**
+- **AI HR Interviewer**: `claude-sonnet-4-20250514` (needs nuanced understanding)
+- **Inquiry chatbot**: `gpt-4o-mini` (fast responses)
+- **PDF autofill**: `gpt-4o` (good at structured extraction)
+- **Workflow classifier**: `gpt-4o-mini` (fast classification)
+
+### For OpenAI Direct
+
+| Model | Best For | Speed | Cost per 1M tokens |
+|-------|----------|-------|-------------------|
+| `gpt-4o` | Best overall quality | Medium | $2.50 in / $10 out |
+| `gpt-4o-mini` | Fast, affordable | Very fast | $0.15 in / $0.60 out |
+| `gpt-4-turbo` | Complex reasoning | Slow | $10 in / $30 out |
+
+### For OpenRouter
+
+OpenRouter gives access to many models. Recommended:
+
+| Model | Best For |
+|-------|----------|
+| `anthropic/claude-3.5-sonnet` | Best quality |
+| `openai/gpt-4o` | General purpose |
+| `openai/gpt-4o-mini` | Fast and cheap |
+| `google/gemini-flash-1.5` | Very fast, free tier |
+| `meta-llama/llama-3.1-70b-instruct` | Open source, cheap |
+
+---
+
+## How to Find Your Cline API Details
+
+1. **Check your Cline dashboard** (where you subscribed) for:
+   - API key (starts with `sk_`)
+   - API base URL (likely `https://api.cline.ai/v1`)
+   - Available model names
+
+2. **Check your VS Code Cline settings**:
+   - Open VS Code then Settings then search "Cline"
+   - Look at the API Provider field
+   - Look at the Model field
+   - These tell you what Cline is currently using
+
+3. **Test your API key**:
+   ```bash
+   curl -X POST https://api.cline.ai/v1/chat/completions \
+     -H "Authorization: Bearer sk_your_key_here" \
+     -H "Content-Type: application/json" \
+     -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello"}]}'
+   ```
+
+---
+
+## What Was Implemented
+
+### New File: `functions/api/services/ai/openai.ts`
+
+This file provides:
+- `openaiChat()` — Send chat completions to any OpenAI-compatible API
+- `openaiChatStream()` — Stream responses (for real-time chat)
+- `getAiProviderConfig()` — Automatically picks the right provider based on env vars
+- `assertAiRateLimit()` — Rate limiting (same as existing)
+- `parseJsonObject()` — JSON parsing helper
+
+### Provider Priority
+
+The system automatically selects the AI provider:
+
+```
+1. If OPENAI_API_KEY is set    -> Use OpenAI-compatible API (Cline, OpenAI, OpenRouter)
+2. If GROQ_API_KEY is set     -> Use Anthropic Claude API (existing)
+3. Otherwise                   -> Use keyword-based fallback classifier
+```
+
+### What's Connected
+
+All AI agents in your system use this provider chain:
+- AI HR Interviewer
+- AI Receptionist (public chatbot)
+- AI Inquiry Handler
+- AI Workflow Classifier
+- AI PDF Autofill
+- AI Marketing Dispatcher
+- AI Autopilot (cron-triggered)
+
+---
+
+## Next Steps
+
+1. **Find your Cline API details** (check your subscription dashboard)
+2. **Add the env vars** to `.dev.vars` (for local dev) using Option A above
+3. **Set the Wrangler secret** for production:
+   ```bash
+   npx wrangler secret put OPENAI_API_KEY
+   npx wrangler secret put OPENAI_BASE_URL
+   npx wrangler secret put OPENAI_MODEL
+   ```
+4. **Test it** by running `npx wrangler dev` and using any AI feature
+
+## Security Reminder
+
+- **Never commit `.dev.vars` or `backend/.env` to git** (they're in `.gitignore`)
+- **Never paste API keys in chat** — add them directly to the file
+- **Rotate/revoke any keys that were shared in plain text**

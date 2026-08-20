@@ -10,6 +10,7 @@ import {
   searchSimilarMaids,
   buildRecommendationQuery,
 } from "./services/ai/embeddings";
+import { openaiChat, type OpenAIMessage } from "./services/ai/openai";
 
 type AssetsBinding = {
   fetch: (request: Request) => Promise<Response>;
@@ -463,6 +464,12 @@ type Bindings = {
   // Claude model used for marketing copy (and other Anthropic calls that read it).
   // Defaults to claude-haiku-4-5 when unset — see marketingModel().
   ANTHROPIC_MODEL?: string;
+  // ─── Cline / OpenAI-compatible provider ───────────────────────────────────
+  // When OPENAI_API_KEY is set, ALL AI features (agents, PDF autofill, marketing,
+  // autopilot) route through the OpenAI-compatible endpoint (e.g. Cline API).
+  OPENAI_API_KEY?: string;
+  OPENAI_BASE_URL?: string;
+  OPENAI_MODEL?: string;
   AI_AUTOPILOT_ENABLED?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
@@ -655,6 +662,7 @@ const CANONICAL_WORKFLOWS = [
   "contract_creation",
   "schedule_creation",
   "notification_only",
+  "applicant_interview",
   "validation_error",
   "human_review",
 ] as const;
@@ -740,6 +748,8 @@ const defaultIntentForWorkflow = (workflow: CanonicalWorkflow) => {
       return "schedule";
     case "notification_only":
       return "notification";
+    case "applicant_interview":
+      return "interview";
     case "validation_error":
       return "validation_error";
     case "human_review":
@@ -9096,6 +9106,349 @@ app.post(
   }),
 );
 
+
+app.post(
+  "/api/ai/hr-interview/chat",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const openaiKey = c.env.OPENAI_API_KEY?.trim();
+    const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
+
+    if (!openaiKey && !anthropicKey) {
+      return c.json({ error: "AI service is not configured" }, 503);
+    }
+
+    const body = await parseBody<{
+      candidateName?: string;
+      position?: string;
+      messages?: Array<{ role: string; content: string }>;
+      currentStage?: string;
+    }>(c.req.raw);
+
+    if (!body?.candidateName || !body?.messages || body.messages.length === 0) {
+      return c.json({ error: "candidateName and messages are required" }, 400);
+    }
+
+    const systemPrompt = `You are an AI HR Interviewer for a Singapore domestic helper (maid) placement agency. You conduct professional, structured interviews to assess candidates.
+
+Candidate: ${body.candidateName}
+Position: ${body.position || "Domestic Worker"}
+
+INTERVIEW STAGES (follow in order):
+1. Introduction — greeting, background, motivation
+2. Experience — years worked, countries, previous employers, duties
+3. Skills — childcare, elderly care, cooking, housework, language abilities
+4. Scenarios — situational questions about handling real situations
+5. Conclusion — candidate questions, wrap-up
+
+RULES:
+- Ask ONE question at a time
+- Adapt follow-up questions based on the candidate's answers
+- Be warm but professional
+- After 8-12 meaningful exchanges, conclude the interview
+- Evaluate each response for detail, relevance, and quality
+
+OUTPUT FORMAT — respond with ONLY a JSON object (no markdown, no explanation):
+{
+  "evaluation": { "score": <0-100>, "notes": "<brief evaluation>" },
+  "nextQuestion": "<your next question, or null if done>",
+  "stage": "<current stage name>",
+  "isComplete": <false>,
+  "result": null
+}
+
+When concluding (isComplete=true), include:
+{
+  "evaluation": { "score": <0-100>, "notes": "Final evaluation" },
+  "nextQuestion": null,
+  "stage": "conclusion",
+  "isComplete": true,
+  "result": {
+    "overallScore": <0-100>,
+    "recommendation": "<pass|fail|borderline>",
+    "summary": "<2-3 sentence summary>",
+    "strengths": ["<strength1>", "<strength2>"],
+    "weaknesses": ["<weakness1>", "<weakness2>"]
+  }
+}`;
+
+    const aiMessages = [
+      { role: "system" as const, content: systemPrompt },
+      ...body.messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+    ];
+
+    try {
+      let content: string;
+
+      if (openaiKey) {
+        const result = await openaiChat({
+          apiKey: openaiKey,
+          model: c.env.OPENAI_MODEL?.trim() || "gpt-4o",
+          baseUrl: c.env.OPENAI_BASE_URL?.trim() || undefined,
+          messages: aiMessages,
+          temperature: 0.7,
+          maxTokens: 1024,
+          retries: 2,
+          signal: AbortSignal.timeout(30_000),
+        });
+        content = result.content;
+      } else {
+        const systemParts = aiMessages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+        const nonSystem = aiMessages.filter((m) => m.role !== "system");
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": anthropicKey!,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001",
+            temperature: 0.7,
+            max_tokens: 1024,
+            system: systemParts,
+            messages: nonSystem,
+          }),
+          signal: AbortSignal.timeout(30_000),
+        });
+        const data = (await res.json()) as { content?: Array<{ type: string; text?: string }>; error?: { message?: string } };
+        if (data.error?.message) throw new Error(data.error.message);
+        content = data.content?.find((c) => c.type === "text")?.text ?? "";
+      }
+
+      // Parse JSON from AI response
+      let parsed: Record<string, unknown>;
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(content);
+      } catch {
+        // Fallback if JSON parsing fails
+        parsed = {
+          evaluation: { score: 50, notes: "Response received" },
+          nextQuestion: content.includes("?") ? content.trim() : "Thank you for that response. Can you tell me more about your experience?",
+          stage: body.currentStage || "skills",
+          isComplete: false,
+          result: null,
+        };
+      }
+
+      return c.json(parsed);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "AI interview failed";
+      return c.json({ error: msg }, 500);
+    }
+  }),
+);
+
+app.post(
+  "/api/ai/hr-interview/email",
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      to?: string;
+      subject?: string;
+      body?: string;
+      candidateName?: string;
+      position?: string;
+      type?: string;
+      result?: Record<string, unknown>;
+      scheduledDate?: string;
+      scheduledTime?: string;
+    }>(c.req.raw);
+
+    const to = toTrimmedString(body?.to);
+    const subject = toTrimmedString(body?.subject);
+    const text = toTrimmedString(body?.body);
+
+    if (!to || !subject || !text) {
+      return c.json({ error: "to, subject, and body are required" }, 400);
+    }
+
+    // Try Resend first
+    const emailResult = await sendEmailViaResend(c.env, to, subject, text);
+
+    if (emailResult.ok) {
+      return c.json({
+        ok: true,
+        message: "Email sent successfully via Resend",
+        to,
+        type: body?.type || "unknown",
+        provider: "resend",
+      });
+    }
+
+    // Fallback: use Make.com webhook to dispatch email
+    const makeUrl = c.env.MAKE_WEBHOOK_URL?.trim();
+    if (makeUrl) {
+      try {
+        const makeResponse = await fetch(makeUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scenario: "hr_interview_email",
+            to,
+            subject,
+            body: text,
+            candidateName: body?.candidateName || "",
+            position: body?.position || "",
+            type: body?.type || "unknown",
+            scheduledDate: body?.scheduledDate || "",
+            scheduledTime: body?.scheduledTime || "",
+            result: body?.result || null,
+          }),
+          signal: AbortSignal.timeout(10_000),
+        });
+
+        if (makeResponse.ok) {
+          return c.json({
+            ok: true,
+            message: "Email queued via Make.com automation",
+            to,
+            type: body?.type || "unknown",
+            provider: "make.com",
+          });
+        }
+
+        return c.json({ error: "Make.com webhook failed to dispatch email" }, 502);
+      } catch (err) {
+        return c.json({ error: "Failed to send email via Make.com" }, 502);
+      }
+    }
+
+    // Neither Resend nor Make.com available
+    if (emailResult.error === "RESEND_NOT_CONFIGURED") {
+      return c.json({ error: "Email service is not configured. Set RESEND_API_KEY or MAKE_WEBHOOK_URL." }, 503);
+    }
+    return c.json({ error: "Email could not be delivered right now" }, 502);
+  }),
+);
+
+app.post(
+  "/api/ai/hr-interview/session",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const body = await parseBody<{
+      applicationId?: string;
+      sessionData?: Record<string, unknown>;
+      rating?: number;
+      recommendation?: string;
+      summary?: string;
+      triggerMake?: boolean;
+    }>(c.req.raw);
+
+    const applicationId = toTrimmedString(body?.applicationId);
+    if (!applicationId) {
+      return c.json({ error: "applicationId is required" }, 400);
+    }
+
+    const data = await loadData(c.env);
+    const application = data.ats.applications.find(
+      (item) => item.id === applicationId && item.agencyId === admin.agencyId,
+    );
+    if (!application) {
+      return c.json({ error: "Application not found" }, 404);
+    }
+
+    // Update ATS stage to "Screening Interview" if not already there
+    const previousStage = application.status;
+    if (application.status !== "Screening Interview" && application.status !== "Approved" && application.status !== "Rejected") {
+      application.status = "Screening Interview";
+      application.updatedAt = now();
+      data.ats.history[applicationId] = [
+        {
+          id: randomId("history"),
+          fromStage: previousStage,
+          toStage: "Screening Interview",
+          actor: admin.username || admin.email || "Agency Staff",
+          reason: "AI HR interview session completed",
+          createdAt: now(),
+        },
+        ...(data.ats.history[applicationId] ?? []),
+      ];
+    }
+
+    // Update interview rating in the score record if a rating was provided
+    const rating = typeof body?.rating === "number" ? Math.max(0, Math.min(100, body.rating)) : null;
+    if (rating !== null && data.ats.scores[applicationId]) {
+      data.ats.scores[applicationId] = {
+        ...data.ats.scores[applicationId],
+        factors: {
+          ...data.ats.scores[applicationId].factors,
+          interviewRating: rating,
+        },
+      };
+    }
+
+    // Add a notification for the interview session
+    if (!data.ats.notifications[applicationId]) {
+      data.ats.notifications[applicationId] = [];
+    }
+    data.ats.notifications[applicationId].unshift({
+      id: randomId("notify"),
+      applicationId,
+      event: "Interview Completed",
+      channel: "internal",
+      message: `AI HR interview completed. Rating: ${rating ?? "N/A"}. Recommendation: ${toTrimmedString(body?.recommendation) || "Pending review"}.`,
+      createdAt: now(),
+    });
+
+    await saveData(c.env, data);
+
+    // Optionally trigger Make.com orchestrator for downstream automation
+    let makeTriggered = false;
+    let makeDelivery: Record<string, unknown> | null = null;
+    if (body?.triggerMake !== false) {
+      const webhookUrl = toTrimmedString(c.env.MAKE_WEBHOOK_URL);
+      if (webhookUrl) {
+        try {
+          const response = await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              scenario: "applicant_interview_completed",
+              applicationId,
+              agencyId: admin.agencyId,
+              rating,
+              recommendation: toTrimmedString(body?.recommendation),
+              summary: toTrimmedString(body?.summary),
+              sessionData: body?.sessionData ?? {},
+            }),
+            signal: AbortSignal.timeout(10_000),
+          });
+          makeTriggered = response.ok;
+          makeDelivery = {
+            success: response.ok,
+            statusCode: response.status,
+          };
+        } catch (error) {
+          makeDelivery = {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+    }
+
+    return c.json(
+      buildWorkflowResponse(c.req.raw, {
+        workflow: "applicant_interview",
+        intent: "interview",
+        fallbackUsed: false,
+        data: {
+          applicationId,
+          stage: application.status,
+          rating,
+          recommendation: toTrimmedString(body?.recommendation),
+          summary: toTrimmedString(body?.summary),
+          makeTriggered,
+          makeDelivery,
+          updatedAt: application.updatedAt,
+        },
+      }),
+    );
+  }),
+);
+
 app.post(
   "/api/ai/admin-analytics",
   requireAgencyAdminAuth,
@@ -12427,6 +12780,112 @@ app.get("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
   });
 });
 
+app.post("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<Record<string, unknown>>(c.req.raw);
+
+  const fullName = toTrimmedString(body?.fullName);
+  const email = toTrimmedString(body?.email);
+  const contactNumber = toTrimmedString(body?.contactNumber);
+
+  if (!fullName) return c.json({ error: "fullName is required" }, 400);
+  if (!email) return c.json({ error: "email is required" }, 400);
+  if (!contactNumber) return c.json({ error: "contactNumber is required" }, 400);
+
+  const applicationId = randomId("ats-app");
+  const profileId = randomId("ats-profile");
+  const appliedAt = now();
+
+  const profile: AtsApplicationProfileRecord = {
+    id: profileId,
+    applicationId,
+    maidReferenceCode: toTrimmedString(body?.maidReferenceCode) || undefined,
+    fullName,
+    email,
+    contactNumber,
+    whatsappNumber: toTrimmedString(body?.whatsappNumber) || contactNumber,
+    nationality: toTrimmedString(body?.nationality),
+    dateOfBirth: toTrimmedString(body?.dateOfBirth),
+    age: calculateAgeFromDate(toTrimmedString(body?.dateOfBirth)),
+    gender: toTrimmedString(body?.gender) || "Female",
+    maritalStatus: toTrimmedString(body?.maritalStatus),
+    address: toTrimmedString(body?.address),
+    yearsOfExperience: toNumericValue(body?.yearsOfExperience),
+    previousCountriesWorkedIn: listFromDelimitedString(body?.previousCountriesWorkedIn),
+    childcareExperience: toNumericValue(body?.childcareExperience),
+    newbornCareExperience: toNumericValue(body?.newbornCareExperience),
+    elderlyCareExperience: toNumericValue(body?.elderlyCareExperience),
+    disabledCareExperience: toNumericValue(body?.disabledCareExperience),
+    housekeepingExperience: toNumericValue(body?.housekeepingExperience),
+    cookingSkills: listFromDelimitedString(body?.cookingSkills),
+    petCareExperience: toNumericValue(body?.petCareExperience),
+    languageSkills: listFromDelimitedString(body?.languageSkills),
+    certifications: listFromDelimitedString(body?.certifications),
+    trainingRecords: listFromDelimitedString(body?.trainingRecords),
+    availableDate: toTrimmedString(body?.availableDate),
+    expectedSalary: toOptionalNumber(body?.expectedSalary),
+    employmentPreference: toTrimmedString(body?.employmentPreference),
+    coverNote: toTrimmedString(body?.coverNote),
+    workHistory: [],
+    fdwFormData: {},
+    strengthsTags: [],
+    weaknessesTags: [],
+    clientMatchScore: 0,
+    createdAt: appliedAt,
+    updatedAt: appliedAt,
+  };
+
+  const documents: AtsDocumentRecord[] = [];
+  const score = buildAtsScore(profile, documents);
+  const tags = buildAtsProfileTags(profile, score);
+  profile.strengthsTags = tags.strengthsTags;
+  profile.weaknessesTags = tags.weaknessesTags;
+  profile.clientMatchScore = tags.clientMatchScore;
+
+  const application: AtsApplicationRecord = {
+    id: applicationId,
+    agencyId: admin.agencyId,
+    profileId,
+    applicationCode: `ATS-${Date.now().toString(36).toUpperCase()}`,
+    applicantAccessToken: crypto.randomUUID(),
+    status: "New Applicant",
+    source: "resume_upload",
+    appliedAt,
+    updatedAt: appliedAt,
+    aiParseSummary: `Manually added by ${admin.username}`,
+    notificationLogIds: [],
+  };
+
+  const history: AtsHistoryRecord[] = [
+    {
+      id: randomId("hist"),
+      toStage: "New Applicant",
+      actor: admin.username,
+      reason: "Applicant created by agency admin",
+      createdAt: appliedAt,
+    },
+  ];
+
+  const data = await loadData(c.env);
+  data.ats.applications.unshift(application);
+  data.ats.profiles.unshift(profile);
+  data.ats.scores[applicationId] = score;
+  data.ats.history[applicationId] = history;
+  if (!data.ats.documents[applicationId]) data.ats.documents[applicationId] = documents;
+  if (!data.ats.notifications[applicationId]) data.ats.notifications[applicationId] = [];
+  await saveData(c.env, data);
+
+  return c.json(
+    {
+      applicationId,
+      applicationCode: application.applicationCode,
+      applicantAccessToken: application.applicantAccessToken,
+      submittedAt: appliedAt,
+    },
+    201,
+  );
+});
+
 app.get("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, async (c) => {
   return c.json({ error: "Method not allowed" }, 405);
 });
@@ -12627,17 +13086,50 @@ app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
 });
 
 app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
+  const openaiKey = c.env.OPENAI_API_KEY?.trim();
   const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
-  if (!anthropicKey) return c.json({ error: "PDF autofill is not configured" }, 503);
+
+  if (!openaiKey && !anthropicKey) {
+    return c.json({ error: "PDF autofill is not configured" }, 503);
+  }
 
   const body = await parseBody<{ model?: string; messages?: unknown[] }>(c.req.raw);
   if (!Array.isArray(body?.messages) || body.messages.length === 0) {
     return c.json({ error: "messages are required" }, 400);
   }
 
-  // Extract system messages and convert to Anthropic format
   type MsgLike = { role?: string; content?: string };
   const msgs = body.messages as MsgLike[];
+
+  // ── OpenAI-compatible path (Cline / Kimi / OpenRouter) ──────────────
+  if (openaiKey) {
+    try {
+      const openaiMessages: OpenAIMessage[] = msgs
+        .filter((m) => m.role === "system" || m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role as OpenAIMessage["role"], content: m.content ?? "" }));
+
+      const result = await openaiChat({
+        apiKey:      openaiKey,
+        model:       c.env.OPENAI_MODEL?.trim() || body.model || "gpt-4o",
+        baseUrl:     c.env.OPENAI_BASE_URL?.trim() || undefined,
+        messages:    openaiMessages,
+        temperature: 0,
+        maxTokens:   8192,
+        retries:     2,
+        signal:      AbortSignal.timeout(55_000),
+      });
+
+      return c.json({
+        content:       result.content,
+        finish_reason: "stop",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "PDF autofill failed";
+      return c.json({ error: msg }, 500);
+    }
+  }
+
+  // ── Anthropic fallback ──────────────────────────────────────────────
   const systemParts = msgs.filter((m) => m.role === "system").map((m) => m.content ?? "").filter(Boolean);
   const nonSystem = msgs.filter((m) => m.role !== "system") as Array<{ role: "user" | "assistant"; content: string }>;
   const sanitized: Array<{ role: "user" | "assistant"; content: string }> = [];
@@ -12653,7 +13145,7 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      "x-api-key": anthropicKey,
+      "x-api-key": anthropicKey!,
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },

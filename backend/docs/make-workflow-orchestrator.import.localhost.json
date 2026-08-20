@@ -50,101 +50,15 @@
       "id": 12,
       "module": "json:ParseJSON",
       "version": 1,
-      "parameters": {
-        "type": 401353
-      },
+      "parameters": {},
       "mapper": {
-        "json": "{{10.response}}"
+        "json": "{{replace(replace(replace(trim(10.response); \"```json\"; \"\"); \"```\"; \"\"); \"`\"; \"\")}}"
       },
       "metadata": {
         "designer": {
           "x": -374,
           "y": 549
-        },
-        "interface": [
-          {
-            "name": "workflow",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "payload",
-            "type": "collection",
-            "required": false,
-            "spec": [
-              {
-                "name": "source",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "name",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "contact",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "message",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "employerId",
-                "type": "number",
-                "required": false
-              },
-              {
-                "name": "maidId",
-                "type": "number",
-                "required": false
-              },
-              {
-                "name": "datetime",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "serviceType",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "location",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "budgetText",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "scheduleDate",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "recipient",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "notificationMessage",
-                "type": "text",
-                "required": false
-              },
-              {
-                "name": "channel",
-                "type": "text",
-                "required": false
-              }
-            ]
-          }
-        ]
+        }
       }
     },
     {

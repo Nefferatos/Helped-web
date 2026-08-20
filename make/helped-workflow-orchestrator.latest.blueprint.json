@@ -17,8 +17,8 @@
       "mapper": {
         "defaultModel": "gpt-5.4",
         "reasoningEffort": "low",
-        "systemPrompt": "You are a workflow classifier for a maid agency platform.\n\nChoose exactly one workflow based on the user request:\n- lead_scoring\n- inquiry_only\n- inquiry_match\n- make_pipeline\n- contract_creation\n- schedule_creation\n- notification_only\n- human_review\n\nRules:\n- Classify intent only.\n- Do not perform business validation.\n- Do not enforce ID requirements.\n- Do not decide ranking, compliance, or recommendation quality.\n- Never invent IDs, names, dates, contact details, or records.\n- Copy available fields into payload.\n- Return valid JSON only.\n- Do not use markdown.\n- Do not explain anything.\n\nWorkflow hints:\n- lead_scoring: new lead or lead qualification request\n- inquiry_only: general inquiry with no maid recommendation needed\n- inquiry_match: hiring, recommendation, shortlist, or maid matching request\n- make_pipeline: request should be processed by the backend inquiry Make relay\n- contract_creation: contract or draft contract request\n- schedule_creation: interview or appointment scheduling request\n- notification_only: delivery-only message or notification request\n- human_review: ambiguous, risky, policy-sensitive, or invalid AI output fallback\n\nReturn this exact structure:\n{\n  \"workflow\": \"\",\n  \"payload\": {\n    \"source\": \"website\",\n    \"name\": \"\",\n    \"contact\": \"\",\n    \"message\": \"\",\n    \"employerId\": null,\n    \"maidId\": null,\n    \"datetime\": null,\n    \"serviceType\": \"\",\n    \"location\": \"\",\n    \"budgetText\": \"\",\n    \"scheduleDate\": \"\",\n    \"recipient\": \"\",\n    \"notificationMessage\": \"\",\n    \"channel\": \"\",\n    \"makeScenario\": \"\",\n    \"makeUrl\": \"\"\n  }\n}",
-        "message": "Action: {{1.action}}\nUser role: {{ifempty(1.actor.role; \"guest\")}}\nUser id: {{ifempty(1.actor.id; \"\")}}\nCustomer name: {{ifempty(1.customer.name; \"\")}}\nCustomer contact: {{ifempty(1.customer.contact; \"\")}}\nMessage: {{ifempty(1.message; \"\")}}\nEmployer ID: {{ifempty(1.context.employerId; \"\")}}\nMaid ID: {{ifempty(1.context.maidId; \"\")}}\nSchedule datetime: {{ifempty(1.context.scheduleDateTime; \"\")}}\nService type: {{ifempty(1.context.serviceType; \"\")}}\nLocation: {{ifempty(1.context.location; \"\")}}\nBudget text: {{ifempty(1.context.budgetText; \"\")}}\nSchedule date: {{ifempty(1.context.scheduleDate; \"\")}}\nRecipient: {{ifempty(1.context.recipient; \"\")}}\nNotification message: {{ifempty(1.context.notificationMessage; \"\")}}\nChannel: {{ifempty(1.context.channel; \"\")}}\nMake scenario: {{ifempty(1.context.makeScenario; \"\")}}\nMake URL: {{ifempty(1.context.makeUrl; \"\")}}",
+        "systemPrompt": "You are a workflow classifier for a maid agency platform.\n\nChoose exactly one workflow based on the user request:\n- lead_scoring\n- inquiry_only\n- inquiry_match\n- make_pipeline\n- contract_creation\n- schedule_creation\n- notification_only\n- applicant_interview\n- human_review\n\nRules:\n- Classify intent only.\n- Do not perform business validation.\n- Do not enforce ID requirements.\n- Do not decide ranking, compliance, or recommendation quality.\n- Never invent IDs, names, dates, contact details, or records.\n- Copy available fields into payload.\n- Return valid JSON only.\n- Do not use markdown.\n- Do not explain anything.\n\nWorkflow hints:\n- lead_scoring: new lead or lead qualification request\n- inquiry_only: general inquiry with no maid recommendation needed\n- inquiry_match: hiring, recommendation, shortlist, or maid matching request\n- make_pipeline: request should be processed by the backend inquiry Make relay\n- contract_creation: contract or draft contract request\n- schedule_creation: interview or appointment scheduling request\n- notification_only: delivery-only message or notification request\n- applicant_interview: applicant interview scheduling or HR interview request\n- human_review: ambiguous, risky, policy-sensitive, or invalid AI output fallback\n\nReturn this exact structure:\n{\n  \"workflow\": \"\",\n  \"payload\": {\n    \"source\": \"website\",\n    \"name\": \"\",\n    \"contact\": \"\",\n    \"message\": \"\",\n    \"employerId\": null,\n    \"maidId\": null,\n    \"datetime\": null,\n    \"serviceType\": \"\",\n    \"location\": \"\",\n    \"budgetText\": \"\",\n    \"scheduleDate\": \"\",\n    \"recipient\": \"\",\n    \"notificationMessage\": \"\",\n    \"channel\": \"\",\n    \"makeScenario\": \"\",\n    \"salary\": \"\",\n    \"availability\": \"\"\n  }\n}\n\nCRITICAL OUTPUT RULES:\nReturn ONLY raw JSON.\nThe first character of your response must be {.\nThe last character of your response must be }.\nDo not wrap the JSON in ```json fences.\nDo not include labels, notes, comments, or explanations.\nIf unsure, return {\"workflow\":\"human_review\",\"payload\":{\"source\":\"website\",\"name\":\"\",\"contact\":\"\",\"message\":\"\",\"employerId\":null,\"maidId\":null,\"datetime\":null,\"serviceType\":\"\",\"location\":\"\",\"budgetText\":\"\",\"scheduleDate\":\"\",\"recipient\":\"admin\",\"notificationMessage\":\"Manual review required\",\"channel\":\"internal\",\"makeScenario\":\"\",\"salary\":\"\",\"availability\":\"\"}}",
+        "message": "Action: {{1.action}}\nUser role: {{ifempty(1.actor.role; \"guest\")}}\nUser id: {{ifempty(1.actor.id; \"\")}}\nCustomer name: {{ifempty(1.customer.name; \"\")}}\nCustomer contact: {{ifempty(1.customer.contact; \"\")}}\nMessage: {{ifempty(1.message; \"\")}}\nEmployer ID: {{ifempty(1.context.employerId; \"\")}}\nMaid ID: {{ifempty(1.context.maidId; \"\")}}\nSchedule datetime: {{ifempty(1.context.scheduleDateTime; \"\")}}\nService type: {{ifempty(1.context.serviceType; \"\")}}\nLocation: {{ifempty(1.context.location; \"\")}}\nBudget text: {{ifempty(1.context.budgetText; \"\")}}\nSchedule date: {{ifempty(1.context.scheduleDate; \"\")}}\nRecipient: {{ifempty(1.context.recipient; \"\")}}\nNotification message: {{ifempty(1.context.notificationMessage; \"\")}}\nChannel: {{ifempty(1.context.channel; \"\")}}\nMake scenario: {{ifempty(1.context.makeScenario; \"\")}}\nSalary: {{ifempty(1.context.salary; \"\")}}\nAvailability: {{ifempty(1.context.availability; \"\")}}",
         "threadId": "{{1.customer.contact}}-{{ifempty(1.context.employerId; \"guest\")}}",
         "modelConfig": {
           "recursionLimit": 300,
@@ -32,7 +32,7 @@
       "id": 12,
       "module": "json:ParseJSON",
       "version": 1,
-      "mapper": { "json": "{{10.response}}" },
+      "mapper": { "json": "{{replace(replace(replace(trim(10.response); \"```json\"; \"\"); \"```\"; \"\"); \"`\"; \"\")}}" },
       "metadata": { "designer": { "x": -374, "y": 549 } }
     },
     {
@@ -65,7 +65,7 @@
                   { "name": "Content-Type", "value": "application/json" }
                 ],
                 "contentType": "custom",
-                "rawBodyContent": "{\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\"}"
+                "rawBodyContent": "{\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\",\"employerId\":{{ifempty(12.payload.employerId;null)}}}"
               }
             },
             {
@@ -143,7 +143,7 @@
                   { "name": "Content-Type", "value": "application/json" }
                 ],
                 "contentType": "custom",
-                "rawBodyContent": "{\"employerId\":{{ifempty(12.payload.employerId;null)}},\"message\":\"{{12.payload.message}}\",\"serviceType\":\"{{12.payload.serviceType}}\",\"location\":\"{{12.payload.location}}\",\"budget\":\"{{12.payload.budgetText}}\"}"
+                "rawBodyContent": "{\"message\":\"{{12.payload.message}}\",\"serviceType\":\"{{12.payload.serviceType}}\",\"location\":\"{{12.payload.location}}\",\"budget\":\"{{12.payload.budgetText}}\",\"salary\":\"{{12.payload.salary}}\",\"availability\":\"{{12.payload.availability}}\"}"
               }
             },
             {
@@ -260,7 +260,7 @@
                   { "name": "Content-Type", "value": "application/json" }
                 ],
                 "contentType": "custom",
-                "rawBodyContent": "{\"channel\":\"{{ifempty(12.payload.channel;'internal')}}\",\"recipient\":\"{{12.payload.recipient}}\",\"message\":\"{{12.payload.notificationMessage}}\"}"
+                "rawBodyContent": "{\"channel\":\"{{ifempty(12.payload.channel;'internal')}}\",\"recipient\":\"{{12.payload.recipient}}\",\"message\":\"{{12.payload.notificationMessage}}\",\"referenceType\":\"workflow\",\"referenceId\":\"\"}"
               }
             },
             {
@@ -277,17 +277,17 @@
         {
           "flow": [
             {
-              "id": 25,
+              "id": 36,
               "module": "http:MakeRequest",
               "version": 4,
               "filter": {
-                "name": "Human Review",
+                "name": "Applicant Interview",
                 "conditions": [
                   [
                     {
                       "a": "{{12.workflow}}",
                       "o": "text:equal",
-                      "b": "human_review"
+                      "b": "applicant_interview"
                     }
                   ]
                 ]
@@ -299,7 +299,53 @@
                   { "name": "Content-Type", "value": "application/json" }
                 ],
                 "contentType": "custom",
-                "rawBodyContent": "{\"channel\":\"internal\",\"recipient\":\"admin\",\"message\":\"Human review needed for {{12.payload.name}} ({{12.payload.contact}}): {{12.payload.message}}\",\"referenceType\":\"human_review\"}"
+                "rawBodyContent": "{\"channel\":\"internal\",\"recipient\":\"hr-team\",\"message\":\"Applicant interview request: {{12.payload.name}} ({{12.payload.contact}}) — {{12.payload.message}}\",\"referenceType\":\"applicant_interview\",\"referenceId\":\"\"}"
+              }
+            },
+            {
+              "id": 37,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{36.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 25,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "filter": {
+                "name": "Human Review Or Validation Error",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "human_review"
+                    }
+                  ],
+                  [
+                    {
+                      "a": "{{12.workflow}}",
+                      "o": "text:equal",
+                      "b": "validation_error"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/notify",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"channel\":\"internal\",\"recipient\":\"sales-team\",\"message\":\"Human review required for {{12.payload.name}} ({{12.payload.contact}}): {{12.payload.message}}\",\"referenceType\":\"workflow\",\"referenceId\":\"\"}"
               }
             },
             {
@@ -338,7 +384,7 @@
                   { "name": "Content-Type", "value": "application/json" }
                 ],
                 "contentType": "custom",
-                "rawBodyContent": "{\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\",\"employerId\":{{ifempty(12.payload.employerId;null)}},\"makeScenario\":\"{{ifempty(12.payload.makeScenario;'inquiry_pipeline')}}\",\"makeUrl\":\"{{12.payload.makeUrl}}\",\"metadata\":{\"agentRoute\":\"make_pipeline\"}}"
+                "rawBodyContent": "{\"name\":\"{{12.payload.name}}\",\"contact\":\"{{12.payload.contact}}\",\"message\":\"{{12.payload.message}}\",\"employerId\":{{ifempty(12.payload.employerId;null)}},\"makeScenario\":\"{{ifempty(12.payload.makeScenario;'inquiry_pipeline')}}\",\"metadata\":{\"agentRoute\":\"make_pipeline\"}}"
               }
             },
             {
@@ -347,6 +393,33 @@
               "version": 1,
               "mapper": {
                 "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{26.statusCode}} }",
+                "status": "200"
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 38,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "mapper": {
+                "url": "{{WORKER_BASE_URL}}/api/notify",
+                "method": "post",
+                "headers": [
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "custom",
+                "rawBodyContent": "{\"channel\":\"internal\",\"recipient\":\"admin\",\"message\":\"Unclassified workflow '{{12.workflow}}' from {{12.payload.name}} ({{12.payload.contact}}): {{12.payload.message}}\",\"referenceType\":\"catch_all\",\"referenceId\":\"\"}"
+              }
+            },
+            {
+              "id": 39,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "mapper": {
+                "body": "{\"ok\": true, \"workflow\": \"{{12.workflow}}\", \"statusCode\": {{38.statusCode}} }",
                 "status": "200"
               }
             }
@@ -370,7 +443,9 @@
     "notes": [
       "Orchestrator: routes AI-classifier output to backend endpoints.",
       "On import: set WORKER_BASE_URL variable to your backend URL (e.g. http://localhost:3000).",
-      "The make_pipeline route posts to /api/inquiry/make which relays results back into Make when configured."
+      "The make_pipeline route posts to /api/inquiry/make which relays results back into Make when configured.",
+      "Routes: inquiry_only, lead_scoring, inquiry_match, contract_creation, schedule_creation, notification_only, applicant_interview, human_review/validation_error, make_pipeline, and a catch-all for unmatched workflows.",
+      "The catch-all route (no filter) sends unmatched workflows to /api/notify for admin review."
     ]
   }
 }

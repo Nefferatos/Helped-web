@@ -15,10 +15,10 @@
     "frontend:build:dev": "npm run build:dev --prefix frontend",
     "start": "npm start --prefix backend",
     "install-all": "npm install && cd frontend && npm install && cd ../backend && npm install",
-    "deploy:cf": "npm run frontend:build && wrangler deploy",
-    "worker:dev": "npm run frontend:build:dev && wrangler dev",
+    "deploy:cf": "npm run frontend:build && node scripts/wrangler-deploy.mjs",
+    "worker:dev": "npm run frontend:build:dev && node -e \"delete process.env.CLOUDFLARE_API_TOKEN;require('child_process').execSync('npx wrangler dev',{stdio:'inherit',env:{...process.env}})\"",
     "pages:dev": "npm run worker:dev",
-    "worker:deploy": "wrangler deploy"
+    "worker:deploy": "node scripts/wrangler-deploy.mjs"
   },
   "keywords": [
     "react",

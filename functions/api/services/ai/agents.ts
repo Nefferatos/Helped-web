@@ -1,4 +1,4 @@
-import { assertAiRateLimit, groqChat, groqChatStream, parseJsonObject, type GroqMessage } from "./groq";
+import { assertAiRateLimit, openaiChat, openaiChatStream, parseJsonObject, type OpenAIMessage } from "./openai";
 import { getAgentDefinition, type AiAgentId } from "./prompts";
 import { runAgentTools, type AiActorContext } from "./tools";
 
@@ -9,11 +9,20 @@ type SupabaseAiConfig = {
 
 type CfAiBinding = { run(model: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> };
 
+export type AiProviderConfig = {
+  apiKey: string;
+  baseUrl?: string;
+  model?: string;
+};
+
 export type AiRunOptions = {
   agentId: AiAgentId;
   input: Record<string, unknown>;
   actor: AiActorContext;
   appData: Record<string, unknown>;
+  /** Cline / OpenAI-compatible API key. When set, all agent calls route through openaiChat(). */
+  aiProvider?: AiProviderConfig | null;
+  /** Legacy Anthropic key — used as fallback when aiProvider is not set. */
   anthropicApiKey?: string;
   cfAi?: CfAiBinding | null;
   supabase?: SupabaseAiConfig | null;
@@ -170,7 +179,7 @@ export const buildAgentMessages = async (options: AiRunOptions) => {
   });
   const userContent = String(options.input.message ?? options.input.prompt ?? options.input.task ?? "");
 
-  const messages: GroqMessage[] = [
+  const messages: OpenAIMessage[] = [
     { role: "system", content: definition.systemPrompt },
     {
       role: "system",
@@ -191,7 +200,7 @@ export const buildAgentMessages = async (options: AiRunOptions) => {
 
 const runWithCfAi = async (
   cfAi: NonNullable<AiRunOptions["cfAi"]>,
-  messages: GroqMessage[],
+  messages: OpenAIMessage[],
 ) => {
   // Merge multiple system messages into one — some CF AI models reject duplicates
   const systemContent = messages
@@ -209,9 +218,9 @@ const runWithCfAi = async (
 };
 
 export const runAIAgent = async (options: AiRunOptions) => {
-  const hasGroq = Boolean(options.anthropicApiKey?.trim());
+  const hasProvider = Boolean(options.aiProvider?.apiKey?.trim());
   const hasCfAi = Boolean(options.cfAi);
-  if (!hasGroq && !hasCfAi) {
+  if (!hasProvider && !hasCfAi) {
     throw new Error("AI service is not configured. Please contact support.");
   }
 
@@ -237,13 +246,14 @@ export const runAIAgent = async (options: AiRunOptions) => {
     usage: extra ?? {},
   });
 
-  // ── Try Claude first ──────────────────────────────────────────────────────
-  let groqError: Error | null = null;
-  if (hasGroq) {
+  // ── Try Cline / OpenAI-compatible provider first ────────────────────────
+  let aiError: Error | null = null;
+  if (hasProvider) {
     try {
-      const result = await groqChat({
-        apiKey: options.anthropicApiKey!,
-        model: definition.model,
+      const result = await openaiChat({
+        apiKey: options.aiProvider!.apiKey,
+        baseUrl: options.aiProvider!.baseUrl,
+        model: options.aiProvider!.model || definition.model,
         messages,
         temperature: definition.temperature,
         maxTokens: definition.maxTokens,
@@ -261,8 +271,8 @@ export const runAIAgent = async (options: AiRunOptions) => {
       });
       return buildResult(result.content, result.usage);
     } catch (error) {
-      groqError = error instanceof Error ? error : new Error("Claude request failed");
-      console.error("[AI] Claude failed:", groqError.message, "| agentId:", options.agentId);
+      aiError = error instanceof Error ? error : new Error("AI request failed");
+      console.error("[AI] Cline/OpenAI failed:", aiError.message, "| agentId:", options.agentId);
     }
   }
 
@@ -281,20 +291,21 @@ export const runAIAgent = async (options: AiRunOptions) => {
   await writeLog(options, "error", {
     conversationId,
     latencyMs: Date.now() - startedAt,
-    error: groqError?.message ?? "AI agent failed",
+    error: aiError?.message ?? "AI agent failed",
   });
   throw new Error("The AI receptionist is temporarily unavailable. Please try again in a moment.");
 };
 
 export const streamAIAgent = async (options: AiRunOptions) => {
-  if (!options.anthropicApiKey?.trim()) {
+  if (!options.aiProvider?.apiKey?.trim()) {
     throw new Error("AI service is not configured. Please contact support.");
   }
   const { definition, conversationId, messages } = await buildAgentMessages(options);
   await writeMessage(options.supabase, conversationId, options.agentId, options.actor, "user", messages[messages.length - 1]?.content ?? "");
-  const body = await groqChatStream({
-    apiKey: options.anthropicApiKey,
-    model: definition.model,
+  const body = await openaiChatStream({
+    apiKey: options.aiProvider.apiKey,
+    baseUrl: options.aiProvider.baseUrl,
+    model: options.aiProvider.model || definition.model,
     messages,
     temperature: definition.temperature,
     maxTokens: definition.maxTokens,

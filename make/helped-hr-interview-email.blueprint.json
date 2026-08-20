@@ -1,0 +1,306 @@
+{
+    "name": "Helped HR Interview Email Notifications",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "hook": 2831492,
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                },
+                "restore": {
+                    "parameters": {
+                        "hook": {
+                            "label": "HR Interview Email Webhook",
+                            "data": {
+                                "editable": "true"
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "hook",
+                        "type": "hook:gateway-webhook",
+                        "label": "Webhook",
+                        "required": true
+                    },
+                    {
+                        "name": "maxResults",
+                        "type": "number",
+                        "label": "Maximum number of results"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 2,
+            "module": "util:FunctionSleep",
+            "version": 1,
+            "parameters": {},
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 0
+                }
+            },
+            "mapper": {
+                "duration": 1
+            }
+        },
+        {
+            "id": 3,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "metadata": {
+                "designer": {
+                    "x": 600,
+                    "y": 0
+                }
+            },
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 4,
+                            "module": "util:ComposeTransformer",
+                            "version": 1,
+                            "metadata": {
+                                "designer": {
+                                    "x": 900,
+                                    "y": -200
+                                },
+                                "restore": {},
+                                "parameters": []
+                            },
+                            "mapper": {
+                                "subject": "📅 Interview Invitation – {{1.position}} Position | Helped Agency",
+                                "body_html": "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\nbody { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }\n.container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }\n.header { background: linear-gradient(135deg, #6366f1, #4f46e5); padding: 30px; text-align: center; }\n.header h1 { color: #ffffff; font-size: 22px; margin: 0 0 5px; }\n.header p { color: rgba(255,255,255,0.85); font-size: 13px; margin: 0; }\n.body { padding: 30px; }\n.greeting { font-size: 16px; color: #1e293b; margin-bottom: 20px; }\n.details-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin: 20px 0; }\n.details-card h3 { color: #4f46e5; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 15px; }\n.info-box { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 0 8px 8px 0; margin: 20px 0; }\n.info-box p { color: #1e40af; font-size: 13px; margin: 0; line-height: 1.6; }\n.footer { background: #f8fafc; padding: 20px 30px; text-align: center; border-top: 1px solid #e2e8f0; }\n.footer p { color: #94a3b8; font-size: 11px; margin: 3px 0; }\n.badge { display: inline-block; background: #dbeafe; color: #1d4ed8; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n<div class=\"header\">\n<h1>📋 Interview Invitation</h1>\n<p>Helped Agency – Domestic Helper Placement</p>\n</div>\n<div class=\"body\">\n<div class=\"greeting\">Dear <strong>{{1.candidateName}}</strong>,</div>\n<p style=\"color: #475569; font-size: 14px; line-height: 1.7;\">We are pleased to invite you for an interview for the <strong>{{1.position}}</strong> position. Our AI-assisted interview process helps us understand your experience and skills better to find the best placement for you.</p>\n<div class=\"details-card\">\n<h3>📅 Interview Details</h3>\n<div style=\"padding: 8px 0; border-bottom: 1px solid #f1f5f9;\"><span style=\"color: #64748b; font-size: 13px; font-weight: 600;\">📅 Date:</span> <span style=\"color: #1e293b; font-size: 13px; float: right;\">{{1.scheduledDate}}</span></div>\n<div style=\"padding: 8px 0; border-bottom: 1px solid #f1f5f9;\"><span style=\"color: #64748b; font-size: 13px; font-weight: 600;\">🕐 Time:</span> <span style=\"color: #1e293b; font-size: 13px; float: right;\">{{1.scheduledTime}}</span></div>\n<div style=\"padding: 8px 0; border-bottom: 1px solid #f1f5f9;\"><span style=\"color: #64748b; font-size: 13px; font-weight: 600;\">💼 Position:</span> <span style=\"color: #1e293b; font-size: 13px; float: right;\">{{1.position}}</span></div>\n<div style=\"padding: 8px 0;\"><span style=\"color: #64748b; font-size: 13px; font-weight: 600;\">🤖 Type:</span> <span style=\"float: right;\"><span class=\"badge\">AI-Assisted Interview</span></span></div>\n</div>\n<div class=\"info-box\">\n<p><strong>What to expect:</strong> The interview will be conducted by our AI HR assistant and will assess your experience, skills, and suitability for the role. Please ensure you are available at the scheduled time. The interview typically takes 10-15 minutes.</p>\n</div>\n<p style=\"color: #475569; font-size: 14px; line-height: 1.7;\">If you need to reschedule or have any questions, please don't hesitate to contact us.</p>\n<p style=\"color: #1e293b; font-size: 14px; margin-top: 25px;\">We look forward to speaking with you!</p>\n<p style=\"color: #1e293b; font-size: 14px; margin-top: 15px;\">Warm regards,<br><strong>The Agency HR Team</strong><br><span style=\"color: #64748b; font-size: 12px;\">Helped – Domestic Helper Placement Agency</span></p>\n</div>\n<div class=\"footer\">\n<p>This is an automated notification from Helped Agency</p>\n<p style=\"color: #cbd5e1;\">© 2026 Helped Agency. All rights reserved.</p>\n</div>\n</div>\n</body>\n</html>"
+                            }
+                        },
+                        {
+                            "id": 5,
+                            "module": "util:ComposeTransformer",
+                            "version": 1,
+                            "metadata": {
+                                "designer": {
+                                    "x": 1200,
+                                    "y": -200
+                                },
+                                "restore": {},
+                                "parameters": []
+                            },
+                            "mapper": {
+                                "body_plain": "Dear {{1.candidateName}},\n\nWe are pleased to invite you for an interview for the {{1.position}} position.\n\nInterview Details:\n- Date: {{1.scheduledDate}}\n- Time: {{1.scheduledTime}}\n- Type: AI-Assisted HR Interview\n\nPlease ensure you are available at the scheduled time.\n\nWe look forward to speaking with you!\n\nBest regards,\nThe Agency HR Team\nHelped – Domestic Helper Placement Agency"
+                            }
+                        },
+                        {
+                            "id": 6,
+                            "module": "gmail:ActionSendMessage",
+                            "version": 1,
+                            "parameters": {},
+                            "metadata": {
+                                "designer": {
+                                    "x": 1500,
+                                    "y": -200
+                                },
+                                "restore": {
+                                    "parameters": {}
+                                }
+                            },
+                            "mapper": {
+                                "to": "{{1.to}}",
+                                "subject": "{{4.subject}}",
+                                "messageType": "html",
+                                "htmlContent": "{{4.body_html}}",
+                                "isHtml": true
+                            }
+                        }
+                    ],
+                    "filter": {
+                        "name": "Interview Invitation",
+                        "conditions": [
+                            [
+                                {
+                                    "a": "{{1.type}}",
+                                    "b": "interview_invitation",
+                                    "o": "equal:ignoreCase"
+                                }
+                            ]
+                        ]
+                    }
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 7,
+                            "module": "util:ComposeTransformer",
+                            "version": 1,
+                            "metadata": {
+                                "designer": {
+                                    "x": 900,
+                                    "y": 0
+                                },
+                                "restore": {},
+                                "parameters": []
+                            },
+                            "mapper": {
+                                "subject": "🎉 Congratulations! You've Been Shortlisted – {{1.position}} | Helped Agency",
+                                "body_html": "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\nbody { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }\n.container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }\n.header { background: linear-gradient(135deg, #059669, #10b981); padding: 30px; text-align: center; }\n.header h1 { color: #ffffff; font-size: 22px; margin: 0 0 5px; }\n.header p { color: rgba(255,255,255,0.85); font-size: 13px; margin: 0; }\n.body { padding: 30px; }\n.greeting { font-size: 16px; color: #1e293b; margin-bottom: 20px; }\n.score-card { background: #ecfdf5; border: 2px solid #a7f3d0; border-radius: 12px; padding: 25px; margin: 20px 0; text-align: center; }\n.score-number { font-size: 48px; font-weight: 800; color: #059669; }\n.score-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; }\n.strengths { background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 0 8px 8px 0; margin: 15px 0; }\n.strengths h4 { color: #15803d; font-size: 13px; margin: 0 0 10px; }\n.strengths li { color: #166534; font-size: 13px; margin: 5px 0; }\n.footer { background: #f8fafc; padding: 20px 30px; text-align: center; border-top: 1px solid #e2e8f0; }\n.footer p { color: #94a3b8; font-size: 11px; margin: 3px 0; }\n.badge { display: inline-block; background: #d1fae5; color: #065f46; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n<div class=\"header\">\n<h1>🎉 Congratulations!</h1>\n<p>You've been shortlisted for the next step</p>\n</div>\n<div class=\"body\">\n<div class=\"greeting\">Dear <strong>{{1.candidateName}}</strong>,</div>\n<p style=\"color: #475569; font-size: 14px; line-height: 1.7;\">We are delighted to inform you that based on your interview, you have been <strong>shortlisted</strong> for the <strong>{{1.position}}</strong> position. Your responses demonstrated strong potential and relevant experience.</p>\n<div class=\"score-card\">\n<div class=\"score-number\">{{1.rating}}</div>\n<div class=\"score-label\">Interview Score (out of 100)</div>\n<div style=\"margin-top: 10px;\"><span class=\"badge\">✅ RECOMMENDED</span></div>\n</div>\n<div class=\"strengths\">\n<h4>💪 Key Strengths Identified</h4>\n<ul style=\"margin: 0; padding-left: 20px;\">\n{{1.strengthsHtml}}\n</ul>\n</div>\n<p style=\"color: #475569; font-size: 14px; line-height: 1.7;\">Our placement team will contact you shortly to discuss the next steps in the hiring process, including documentation requirements and placement timeline.</p>\n<p style=\"color: #1e293b; font-size: 14px; margin-top: 25px;\">Congratulations once again, and we look forward to working with you!</p>\n<p style=\"color: #1e293b; font-size: 14px; margin-top: 15px;\">Best regards,<br><strong>The Placement Team</strong><br><span style=\"color: #64748b; font-size: 12px;\">Helped – Domestic Helper Placement Agency</span></p>\n</div>\n<div class=\"footer\">\n<p>This is an automated notification from Helped Agency</p>\n<p style=\"color: #cbd5e1;\">© 2026 Helped Agency. All rights reserved.</p>\n</div>\n</div>\n</body>\n</html>"
+                            }
+                        },
+                        {
+                            "id": 8,
+                            "module": "util:ComposeTransformer",
+                            "version": 1,
+                            "metadata": {
+                                "designer": {
+                                    "x": 1200,
+                                    "y": 0
+                                },
+                                "restore": {},
+                                "parameters": []
+                            },
+                            "mapper": {
+                                "body_plain": "Dear {{1.candidateName}},\n\nCongratulations! Based on your interview, you have been shortlisted for the {{1.position}} position.\n\nYour overall interview score was {{1.rating}}/100.\n\nOur team will contact you shortly to discuss next steps.\n\nBest regards,\nThe Placement Team\nHelped – Domestic Helper Placement Agency"
+                            }
+                        },
+                        {
+                            "id": 9,
+                            "module": "gmail:ActionSendMessage",
+                            "version": 1,
+                            "parameters": {},
+                            "metadata": {
+                                "designer": {
+                                    "x": 1500,
+                                    "y": 0
+                                },
+                                "restore": {
+                                    "parameters": {}
+                                }
+                            },
+                            "mapper": {
+                                "to": "{{1.to}}",
+                                "subject": "{{7.subject}}",
+                                "messageType": "html",
+                                "htmlContent": "{{7.body_html}}",
+                                "isHtml": true
+                            }
+                        }
+                    ],
+                    "filter": {
+                        "name": "Pass Result",
+                        "conditions": [
+                            [
+                                {
+                                    "a": "{{1.type}}",
+                                    "b": "pass",
+                                    "o": "equal:ignoreCase"
+                                }
+                            ]
+                        ]
+                    }
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 10,
+                            "module": "util:ComposeTransformer",
+                            "version": 1,
+                            "metadata": {
+                                "designer": {
+                                    "x": 900,
+                                    "y": 200
+                                },
+                                "restore": {},
+                                "parameters": []
+                            },
+                            "mapper": {
+                                "subject": "Update on Your Application – {{1.position}} | Helped Agency",
+                                "body_html": "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\nbody { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }\n.container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }\n.header { background: linear-gradient(135deg, #475569, #64748b); padding: 30px; text-align: center; }\n.header h1 { color: #ffffff; font-size: 22px; margin: 0 0 5px; }\n.header p { color: rgba(255,255,255,0.85); font-size: 13px; margin: 0; }\n.body { padding: 30px; }\n.greeting { font-size: 16px; color: #1e293b; margin-bottom: 20px; }\n.improve-box { background: #fff7ed; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 0 8px 8px 0; margin: 15px 0; }\n.improve-box h4 { color: #92400e; font-size: 13px; margin: 0 0 10px; }\n.improve-box li { color: #78350f; font-size: 13px; margin: 5px 0; }\n.encourage-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 20px; margin: 20px 0; text-align: center; }\n.encourage-box p { color: #1e40af; font-size: 14px; margin: 0; }\n.footer { background: #f8fafc; padding: 20px 30px; text-align: center; border-top: 1px solid #e2e8f0; }\n.footer p { color: #94a3b8; font-size: 11px; margin: 3px 0; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n<div class=\"header\">\n<h1>Application Update</h1>\n<p>Thank you for your interest in joining our team</p>\n</div>\n<div class=\"body\">\n<div class=\"greeting\">Dear <strong>{{1.candidateName}}</strong>,</div>\n<p style=\"color: #475569; font-size: 14px; line-height: 1.7;\">Thank you for taking the time to interview for the <strong>{{1.position}}</strong> position. We appreciate your interest in working with our agency.</p>\n<p style=\"color: #475569; font-size: 14px; line-height: 1.7;\">After careful consideration, we regret to inform you that we are unable to proceed with your application at this time.</p>\n<div class=\"improve-box\">\n<h4>📝 Areas for Improvement</h4>\n<ul style=\"margin: 0; padding-left: 20px;\">\n{{1.weaknessesHtml}}\n</ul>\n</div>\n<div class=\"encourage-box\">\n<p>🌟 We encourage you to continue developing your skills and apply again in the future. We wish you all the best in your career.</p>\n</div>\n<p style=\"color: #1e293b; font-size: 14px; margin-top: 25px;\">Thank you again for your time and interest.</p>\n<p style=\"color: #1e293b; font-size: 14px; margin-top: 15px;\">Best regards,<br><strong>The Recruitment Team</strong><br><span style=\"color: #64748b; font-size: 12px;\">Helped – Domestic Helper Placement Agency</span></p>\n</div>\n<div class=\"footer\">\n<p>This is an automated notification from Helped Agency</p>\n<p style=\"color: #cbd5e1;\">© 2026 Helped Agency. All rights reserved.</p>\n</div>\n</div>\n</body>\n</html>"
+                            }
+                        },
+                        {
+                            "id": 11,
+                            "module": "util:ComposeTransformer",
+                            "version": 1,
+                            "metadata": {
+                                "designer": {
+                                    "x": 1200,
+                                    "y": 200
+                                },
+                                "restore": {},
+                                "parameters": []
+                            },
+                            "mapper": {
+                                "body_plain": "Dear {{1.candidateName}},\n\nThank you for taking the time to interview for the {{1.position}} position.\n\nAfter careful consideration, we regret to inform you that we are unable to proceed with your application at this time.\n\nWe encourage you to continue developing your skills and apply again in the future.\n\nBest regards,\nThe Recruitment Team\nHelped – Domestic Helper Placement Agency"
+                            }
+                        },
+                        {
+                            "id": 12,
+                            "module": "gmail:ActionSendMessage",
+                            "version": 1,
+                            "parameters": {},
+                            "metadata": {
+                                "designer": {
+                                    "x": 1500,
+                                    "y": 200
+                                },
+                                "restore": {
+                                    "parameters": {}
+                                }
+                            },
+                            "mapper": {
+                                "to": "{{1.to}}",
+                                "subject": "{{10.subject}}",
+                                "messageType": "html",
+                                "htmlContent": "{{10.body_html}}",
+                                "isHtml": true
+                            }
+                        }
+                    ],
+                    "filter": {
+                        "name": "Fail Result",
+                        "conditions": [
+                            [
+                                {
+                                    "a": "{{1.type}}",
+                                    "b": "fail",
+                                    "o": "equal:ignoreCase"
+                                }
+                            ]
+                        ]
+                    }
+                }
+            ]
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "eu1.make.com",
+        "notes": []
+    }
+}

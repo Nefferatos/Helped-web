@@ -1,0 +1,126 @@
+{
+  "referenceCode": "IND-MP-PIP-9554",
+  "type": "Transfer maid",
+  "fullName": "Sample FDW Name",
+  "dateOfBirth": "1993-01-01",
+  "placeOfBirth": "India",
+  "height": 156,
+  "weight": 60,
+  "nationality": "Indian maid",
+  "religion": "Hindu",
+  "educationLevel": "High School (10–12 yrs)",
+  "maritalStatus": "Single",
+  "numberOfChildren": 0,
+  "numberOfSiblings": "3/4",
+  "homeAddress": null,
+  "airportRepatriation": null,
+  "foodPreferences": null,
+  "restDaysPerMonth": 2,
+  "illnesses": {
+    "HIV/AIDS": false,
+    "Mental Illness": false,
+    "Asthma": false,
+    "Epilepsy": false,
+    "Other Major Operations": false,
+    "Drug Allergy": false,
+    "Physical Disability": false,
+    "Tuberculosis": false,
+    "Hepatitis B": false,
+    "Heart Disease": false,
+    "Malaria": false,
+    "Diabetes": false
+  },
+  "languageSkills": {
+    "English": "Fair",
+    "Hindi": "Good",
+    "Mandarin/Chinese-Dialect": null,
+    "Tamil": null,
+    "Bahasa Indonesia/Malaysia": null
+  },
+  "skills": [
+    {
+      "area": "General Housework",
+      "willing": true,
+      "experience": true,
+      "rating": 4,
+      "note": "",
+      "subNote": "",
+      "yearsOfExperience": "3"
+    },
+    {
+      "area": "Cooking",
+      "willing": true,
+      "experience": true,
+      "rating": 3,
+      "note": "",
+      "subNote": "Indian, Chinese",
+      "yearsOfExperience": "2"
+    },
+    {
+      "area": "Elderly Care",
+      "willing": true,
+      "experience": false,
+      "rating": null,
+      "note": "",
+      "subNote": "",
+      "yearsOfExperience": ""
+    },
+    {
+      "area": "Baby Care",
+      "willing": true,
+      "experience": true,
+      "rating": 4,
+      "note": "",
+      "subNote": "",
+      "yearsOfExperience": "2"
+    },
+    {
+      "area": "Child Care",
+      "willing": true,
+      "experience": true,
+      "rating": 4,
+      "note": "",
+      "subNote": "",
+      "yearsOfExperience": "3"
+    },
+    {
+      "area": "Infant Care",
+      "willing": false,
+      "experience": false,
+      "rating": null,
+      "note": "",
+      "subNote": "",
+      "yearsOfExperience": ""
+    }
+  ],
+  "employmentHistory": [
+    {
+      "from": "2020",
+      "to": "2023",
+      "duties": "General housework, cooking,照顾老人",
+      "remarks": ""
+    },
+    {
+      "from": "2018",
+      "to": "2020",
+      "duties": "Housework and baby care",
+      "remarks": ""
+    }
+  ],
+  "interviewAvailability": [
+    "FDW can be interviewed by phone"
+  ],
+  "availabilityRemark": null,
+  "intro": "Hardworking and dedicated helper with 5 years of experience.",
+  "publicIntro": "Experienced helper擅长做家务和照顾老人.",
+  "presentSalary": "$510 + $50",
+  "expectedSalary": "$550 + $50",
+  "otherRemarks": null,
+  "evalByDeclaration": true,
+  "evalInterviewedBySgEA": false,
+  "evalInterviewSubOptions": [],
+  "sgExperienceFromC2": false,
+  "canWorkLandedHouse": true,
+  "canWorkIndianFamily": true,
+  "canWorkVegetarianFamily": "yes"
+}

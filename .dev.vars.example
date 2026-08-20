@@ -12,7 +12,13 @@ SUPABASE_USE_NORMALIZED=true
 # Supabase Auth (JWT verification for social/phone login)
 SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 
-# AI agents (server-side only; do not expose this as a Vite/browser env var)
+# Cline AI provider (primary — used for screening, HR interviews, PDF autofill)
+# Get your key from https://api.cline.ai
+CLINE_API_KEY=YOUR_CLINE_API_KEY
+CLINE_API_URL=https://api.cline.ai/v1
+CLINE_MODEL=Kimi K2.6 Code
+
+# Fallback AI agents (server-side only; only used if CLINE_API_KEY is not set)
 GROQ_API_KEY=YOUR_GROQ_API_KEY
 
 # Runs the AI autopilot from the Worker cron trigger.
@@ -25,3 +31,6 @@ RESEND_FROM="Helped <no-reply@yourdomain.com>"
 
 # Dev-only: include confirmation code in API JSON responses (never enable in production).
 DEV_EXPOSE_CONFIRMATION_CODE=false
+
+# Make.com webhook for workflow automation (interview sessions, inquiry pipeline, etc.)
+MAKE_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-url

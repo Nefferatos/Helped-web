@@ -417,6 +417,65 @@ GET /api/dashboard
 - `inquiry_pipeline`: support queue, canned reply audit, messaging sync
 - `matching_pipeline`: shortlist messaging, scheduler, follow-up tasks
 - `notification_pipeline`: email, WhatsApp, SMS fanout
+- `interview_pipeline`: ATS stage update, candidate email, HR notification, follow-up task
+
+## Scenario 8: AI HR Interviewer
+
+Trigger:
+- AI HR Interviewer page completes an interview session
+- Frontend calls `POST /api/ai/hr-interview/session` to persist the session
+- Frontend triggers Make.com via `interview_pipeline` webhook
+
+Backend endpoint:
+
+```http
+POST /api/ai/hr-interview/session
+Content-Type: application/json
+
+{
+  "applicationId": "interview-1234567890",
+  "sessionData": {
+    "candidateName": "Maria Santos",
+    "candidateEmail": "maria.santos@email.com",
+    "position": "Domestic Worker (Childcare)",
+    "messages": [],
+    "result": {
+      "overallScore": 82,
+      "recommendation": "pass",
+      "summary": "Strong candidate with 5+ years childcare experience.",
+      "strengths": ["Detailed responses", "International experience"],
+      "weaknesses": []
+    }
+  },
+  "rating": 82,
+  "recommendation": "pass",
+  "summary": "Strong candidate with 5+ years childcare experience."
+}
+```
+
+Recommended Make actions for `interview_pipeline`:
+- Update ATS/applicant stage in CRM
+- Send pass/fail email to candidate via SMTP or Resend
+- Notify HR team of interview completion
+- Create follow-up task for human review if borderline
+- Append interview record to spreadsheet
+
+### AI HR Interviewer email endpoint
+
+```http
+POST /api/ai/hr-interview/email
+Content-Type: application/json
+
+{
+  "to": "candidate@email.com",
+  "subject": "Congratulations! Your application has been shortlisted",
+  "body": "Dear Maria, ...",
+  "candidateName": "Maria Santos",
+  "position": "Domestic Worker (Childcare)",
+  "result": {},
+  "type": "pass"
+}
+```
 
 ## Important note
 
