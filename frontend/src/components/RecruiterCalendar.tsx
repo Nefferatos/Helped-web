@@ -18,6 +18,7 @@ import {
   CalendarCheck,
   StickyNote,
   ListTodo,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ interface CalendarEvent {
   type: EventType;
   time?: string; // HH:MM
   applicantName?: string;
+  meetingLink?: string;
   completed?: boolean;
   createdAt: string;
 }
@@ -99,6 +101,16 @@ const saveEvents = (events: CalendarEvent[]) => {
   }
 };
 
+const getSafeMeetingLink = (value: string) => {
+  if (!value.trim()) return undefined;
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) => {
@@ -117,6 +129,7 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
   const [formType, setFormType] = useState<EventType>("todo");
   const [formTime, setFormTime] = useState("");
   const [formApplicant, setFormApplicant] = useState("");
+  const [formMeetingLink, setFormMeetingLink] = useState("");
 
   // Load events from localStorage
   useEffect(() => {
@@ -244,6 +257,7 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
     setFormType("todo");
     setFormTime("");
     setFormApplicant("");
+    setFormMeetingLink("");
     setEditingEvent(null);
     setShowAddForm(false);
   };
@@ -262,12 +276,18 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
     setFormType(event.type);
     setFormTime(event.time || "");
     setFormApplicant(event.applicantName || "");
+    setFormMeetingLink(event.meetingLink || "");
     setShowAddForm(true);
   };
 
   const handleSave = () => {
     if (!formTitle.trim()) {
       toast.error("Title is required");
+      return;
+    }
+    const meetingLink = getSafeMeetingLink(formMeetingLink);
+    if (formMeetingLink.trim() && !meetingLink) {
+      toast.error("Enter a valid http or https meeting link");
       return;
     }
     if (!selectedDate) {
@@ -285,6 +305,7 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
               type: formType,
               time: formTime || undefined,
               applicantName: formApplicant.trim() || undefined,
+              meetingLink,
             }
           : e
       );
@@ -299,6 +320,7 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
         type: formType,
         time: formTime || undefined,
         applicantName: formApplicant.trim() || undefined,
+        meetingLink,
         completed: false,
         createdAt: new Date().toISOString(),
       };
@@ -329,30 +351,43 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden ${isExpanded ? "col-span-full" : ""}`}>
+    <div className={`rounded-2xl border border-violet-200 bg-white text-base text-black shadow-sm overflow-hidden ${isExpanded ? "col-span-full" : ""}`}>
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-3">
         <div className="flex items-center gap-2">
           <CalendarIcon className="h-4 w-4 text-violet-600" />
-          <h3 className="text-sm font-bold text-slate-900">Recruiter Calendar</h3>
+          <h3 className="text-lg font-bold text-black">Recruiter Calendar</h3>
         </div>
         <div className="flex items-center gap-1.5">
           <Button
+            size="sm"
+            className="h-10 gap-1.5 bg-violet-600 px-3 text-base hover:bg-violet-700"
+            onClick={() =>
+              openAddForm(
+                selectedDate ||
+                  formatDateKey(today.getFullYear(), today.getMonth(), today.getDate())
+              )
+            }
+          >
+            <Plus className="h-4 w-4" />
+            Add event
+          </Button>
+          <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0"
+            className="h-10 px-2 text-base"
             onClick={goToToday}
             title="Go to today"
           >
-            <span className="text-[10px] font-bold text-violet-600">Today</span>
+            <span className="font-bold text-violet-600">Today</span>
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={goToPrevMonth}>
+          <Button variant="ghost" size="sm" className="h-10 w-10 p-0" onClick={goToPrevMonth}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[120px] text-center text-xs font-bold text-slate-700">
+          <span className="min-w-[150px] text-center text-base font-bold text-black">
             {MONTH_NAMES[currentMonth]} {currentYear}
           </span>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={goToNextMonth}>
+          <Button variant="ghost" size="sm" className="h-10 w-10 p-0" onClick={goToNextMonth}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -417,22 +452,22 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
       {selectedDate && (
         <div className="border-t border-slate-100 px-3 py-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-slate-700">
+            <p className="text-base font-bold text-black">
               {formatDateDisplay(selectedDate)}
             </p>
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 gap-1 text-[10px] text-violet-600 hover:text-violet-700"
+              className="h-9 gap-1.5 text-base text-violet-600 hover:text-violet-700"
               onClick={() => openAddForm(selectedDate)}
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="h-4 w-4" />
               Add
             </Button>
           </div>
 
           {selectedDateEvents.length === 0 ? (
-            <p className="text-[11px] text-slate-400 text-center py-2">No events</p>
+            <p className="py-2 text-center text-base text-black">No events</p>
           ) : (
             <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
               {selectedDateEvents.map((event) => {
@@ -441,7 +476,7 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
                 return (
                   <div
                     key={event.id}
-                    className={`flex items-start gap-2 rounded-lg border p-2 text-[11px] transition ${
+                    className={`flex items-start gap-3 rounded-lg border p-3 text-base transition ${
                       event.completed
                         ? "opacity-50 border-slate-100 bg-slate-50"
                         : `${meta.border} ${meta.bg}`
@@ -459,21 +494,32 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
                       )}
                     </button>
                     <div className="min-w-0 flex-1">
-                      <p className={`font-semibold ${event.completed ? "line-through text-slate-400" : "text-slate-800"}`}>
+                      <p className={`font-semibold text-black ${event.completed ? "line-through opacity-50" : ""}`}>
                         {event.title}
                       </p>
                       {event.time && (
-                        <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                          <Clock className="h-2.5 w-2.5" /> {event.time}
+                        <p className="mt-1 flex items-center gap-1.5 text-base text-black">
+                          <Clock className="h-3.5 w-3.5" /> {event.time}
                         </p>
                       )}
                       {event.applicantName && (
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="mt-1 text-base text-black">
                           👤 {event.applicantName}
                         </p>
                       )}
+                      {getSafeMeetingLink(event.meetingLink || "") && (
+                        <a
+                          href={getSafeMeetingLink(event.meetingLink || "")}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Open meeting
+                        </a>
+                      )}
                       {event.description && (
-                        <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">{event.description}</p>
+                        <p className="mt-1 line-clamp-2 text-base text-black">{event.description}</p>
                       )}
                     </div>
                     <div className="flex shrink-0 gap-0.5">
@@ -503,7 +549,7 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
       {/* Upcoming Events */}
       {upcomingEvents.length > 0 && !showAddForm && (
         <div className="border-t border-slate-100 px-3 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">Upcoming</p>
+          <p className="mb-2 text-sm font-bold uppercase tracking-wide text-black">Upcoming</p>
           <div className="space-y-1">
             {upcomingEvents.map((event) => {
               const meta = EVENT_TYPE_META[event.type];
@@ -511,12 +557,12 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
               return (
                 <div
                   key={event.id}
-                  className={`flex items-center gap-2 rounded-lg border ${meta.border} ${meta.bg} p-1.5 text-[10px]`}
+                  className={`flex items-center gap-3 rounded-lg border ${meta.border} ${meta.bg} p-3 text-base`}
                 >
                   <Icon className={`h-3 w-3 shrink-0 ${meta.color}`} />
-                  <span className="font-semibold text-slate-700 truncate flex-1">{event.title}</span>
-                  <span className="text-slate-400 shrink-0">{formatDateDisplay(event.date)}</span>
-                  {event.time && <span className="text-slate-400 shrink-0">{event.time}</span>}
+                  <span className="flex-1 truncate font-semibold text-black">{event.title}</span>
+                  <span className="shrink-0 text-black">{formatDateDisplay(event.date)}</span>
+                  {event.time && <span className="shrink-0 text-black">{event.time}</span>}
                 </div>
               );
             })}
@@ -528,7 +574,7 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
       {showAddForm && (
         <div className="border-t border-slate-100 bg-slate-50/50 px-3 py-3 space-y-2.5">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-slate-700">
+            <p className="text-base font-bold text-black">
               {editingEvent ? "Edit Event" : "New Event"}
             </p>
             <button type="button" onClick={resetForm} className="text-slate-400 hover:text-slate-600">
@@ -560,45 +606,57 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
           </div>
 
           <Input
-            placeholder="Title"
+            placeholder="Event title"
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
-            className="h-8 text-xs"
+            className="h-11 border-violet-300 bg-violet-50/40 text-base text-black placeholder:text-slate-500 focus-visible:border-violet-600 focus-visible:ring-violet-500"
           />
 
           <div className="flex gap-2">
             <div className="flex-1">
-              <label className="text-[10px] font-bold text-slate-500">Time</label>
+              <label className="text-base font-bold text-black">Time</label>
               <Input
                 type="time"
                 value={formTime}
                 onChange={(e) => setFormTime(e.target.value)}
-                className="h-8 text-xs mt-0.5"
+                className="mt-1 h-11 border-violet-300 bg-violet-50/40 text-base text-black focus-visible:border-violet-600 focus-visible:ring-violet-500"
               />
             </div>
             <div className="flex-1">
-              <label className="text-[10px] font-bold text-slate-500">Applicant</label>
+              <label className="text-base font-bold text-black">Applicant</label>
               <Input
                 placeholder="Name (optional)"
                 value={formApplicant}
                 onChange={(e) => setFormApplicant(e.target.value)}
-                className="h-8 text-xs mt-0.5"
+                className="mt-1 h-11 border-violet-300 bg-violet-50/40 text-base text-black placeholder:text-slate-500 focus-visible:border-violet-600 focus-visible:ring-violet-500"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="text-base font-bold text-black">Meeting or interview link</label>
+            <Input
+              type="url"
+              inputMode="url"
+              placeholder="https://meet.google.com/..."
+              value={formMeetingLink}
+              onChange={(e) => setFormMeetingLink(e.target.value)}
+              className="mt-1 h-11 border-violet-300 bg-violet-50/40 text-base text-black placeholder:text-slate-500 focus-visible:border-violet-600 focus-visible:ring-violet-500"
+            />
           </div>
 
           <Textarea
             placeholder="Description / notes (optional)"
             value={formDescription}
             onChange={(e) => setFormDescription(e.target.value)}
-            className="min-h-[50px] text-xs resize-y"
+            className="min-h-[88px] resize-y border-violet-300 bg-violet-50/40 text-base text-black placeholder:text-slate-500 focus-visible:border-violet-600 focus-visible:ring-violet-500"
           />
 
           <div className="flex gap-2">
             <Button
               size="sm"
               onClick={handleSave}
-              className="flex-1 gap-1 text-xs bg-violet-600 hover:bg-violet-700"
+              className="h-11 flex-1 gap-1.5 text-base bg-violet-600 hover:bg-violet-700"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
               {editingEvent ? "Update" : "Save"}
@@ -608,7 +666,7 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
                 size="sm"
                 variant="outline"
                 onClick={() => deleteEvent(editingEvent.id)}
-                className="gap-1 text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                className="h-11 gap-1.5 text-base text-rose-600 border-rose-200 hover:bg-rose-50"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete

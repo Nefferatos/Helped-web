@@ -35,6 +35,7 @@ import {
   AlertTriangle,
   Brain,
   BriefcaseBusiness,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
@@ -436,6 +437,7 @@ const AtsRecruitmentPage = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [sopModalOpen, setSopModalOpen] = useState(false);
+  const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
   const [activeDocumentIndex, setActiveDocumentIndex] = useState(0);
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
   const [activeStageTab, setActiveStageTab] = useState<string>(ALL_STAGE_TAB);
@@ -923,6 +925,15 @@ const AtsRecruitmentPage = () => {
             </Button> */}
             <Button
               size="sm"
+              variant="outline"
+              onClick={() => setCalendarDialogOpen(true)}
+              className="bg-white"
+            >
+              <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
+              Open Recruiter Calendar
+            </Button>
+            <Button
+              size="sm"
               onClick={() =>
                 selectedId &&
                 stageMutation.mutate({
@@ -1222,7 +1233,7 @@ const AtsRecruitmentPage = () => {
             </div>
 
             {/* Stage tabs */}
-            <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {[ALL_STAGE_TAB, ...pipelineStages].map((stage) => {
                 const isActive = activeStageTab === stage;
                 const count =
@@ -1309,8 +1320,8 @@ const AtsRecruitmentPage = () => {
                 {(
                   [
                     { label: "Approve", action: "approve" },
-                    { label: "Assign Interview", action: "assign_interview" },
-                    { label: "Request Docs", action: "request_documents" },
+                    { label: "Schedule Interview", action: "assign_interview" },
+                    { label: "Request Documents", action: "request_documents" },
                     { label: "Reject", action: "reject" },
                   ] as const
                 ).map(({ label, action }) => (
@@ -1337,7 +1348,7 @@ const AtsRecruitmentPage = () => {
                   onClick={clearSelection}
                 >
                   <X className="mr-1 h-3 w-3" />
-                  Deselect
+                  Clear selection
                 </Button>
               </div>
             )}
@@ -1381,8 +1392,75 @@ const AtsRecruitmentPage = () => {
               </div>
             ) : (
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1100px] text-left">
+                {/* Compact applicant cards avoid a horizontal table scroll on laptops and phones. */}
+                <div className="space-y-3 p-3 xl:hidden">
+                  {paginatedApplications.map((item) => {
+                    const nextAction = getNextApplicantAction(item);
+                    const isSelected = selectedIds.includes(item.id);
+                    return (
+                      <article
+                        key={item.id}
+                        className={`rounded-xl border p-3.5 transition-colors ${
+                          selectedId === item.id ? "border-emerald-300 bg-emerald-50/60" : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${getApplicantDisplayName(item)}`}
+                            className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-400"
+                            checked={isSelected}
+                            onChange={() => toggleSelect(item.id)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => openProfileModal(item.id)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-slate-950 hover:text-emerald-700">{getApplicantDisplayName(item)}</p>
+                                <p className="mt-0.5 truncate text-xs text-slate-500">{item.maidReferenceCode || item.applicationCode} · {item.profile.nationality}</p>
+                              </div>
+                              <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-bold tabular-nums ${scoreTone(item.score?.score)}`}>
+                                Score {item.score?.score ?? 0}
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          <Badge variant="outline" className={`text-[10px] ${statusTone(item.status)}`}>{getStageDisplayLabel(item.status)}</Badge>
+                          {item.profile.strengthsTags.slice(0, 2).map((tag) => (
+                            <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>
+                          ))}
+                        </div>
+
+                        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-y border-slate-100 py-3 text-xs">
+                          <div className="min-w-0"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contact</dt><dd className="mt-0.5 truncate font-medium text-slate-700">{item.profile.contactNumber || "Not provided"}</dd></div>
+                          <div className="min-w-0"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Experience</dt><dd className="mt-0.5 text-slate-700">{item.profile.yearsOfExperience} years</dd></div>
+                          <div className="min-w-0"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Languages</dt><dd className="mt-0.5 truncate text-slate-700">{item.profile.languageSkills.slice(0, 2).join(", ") || "Not listed"}</dd></div>
+                          <div className="min-w-0"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Applied</dt><dd className="mt-0.5 text-slate-700">{formatDate(item.appliedAt)}</dd></div>
+                        </dl>
+
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold text-slate-900">{nextAction.title}</p>
+                          <p className="mt-0.5 text-xs leading-5 text-slate-500">{nextAction.detail}</p>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button size="sm" className="h-8 text-xs" onClick={() => nextAction.nextStage ? stageMutation.mutate({ applicationId: item.id, stage: nextAction.nextStage! }) : openProfileModal(item.id)} disabled={stageMutation.isPending}>{nextAction.cta}</Button>
+                          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openProfileModal(item.id)}>View profile</Button>
+                          {item.status === READY_TO_POST_PUBLIC_STAGE && <Button asChild size="sm" className="h-8 text-xs bg-fuchsia-600 hover:bg-fuchsia-700"><Link to={buildPublicProfileSetupPath(item)}>Set up public profile</Link></Button>}
+                          {makeWhatsAppHref(item.profile.contactNumber) && <Button asChild size="sm" variant="outline" className="h-8 text-xs"><a href={makeWhatsAppHref(item.profile.contactNumber)} target="_blank" rel="noreferrer"><MessageCircle className="mr-1 h-3 w-3" />WhatsApp</a></Button>}
+                          {item.profile.email && <Button asChild size="sm" variant="outline" className="h-8 text-xs"><a href={`mailto:${item.profile.email}`}><Mail className="mr-1 h-3 w-3" />Email applicant</a></Button>}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden xl:block">
+                  <table className="w-full table-fixed text-left">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-200">
                         <th className="w-10 px-4 py-3 text-[10px] font-bold uppercase tracking-wide text-slate-500">
@@ -1622,7 +1700,7 @@ const AtsRecruitmentPage = () => {
 
                             {/* Actions */}
                             <td className="px-4 py-3.5">
-                              <div className="flex min-w-[200px] flex-wrap gap-1.5">
+                              <div className="flex flex-wrap gap-1.5">
                                 {nextAction.nextStage ? (
                                   <Button
                                     size="sm"
@@ -1656,7 +1734,7 @@ const AtsRecruitmentPage = () => {
                                     <Link
                                       to={buildPublicProfileSetupPath(item)}
                                     >
-                                      Public Maid
+                                      Set up public profile
                                     </Link>
                                   </Button>
                                 )}
@@ -1677,7 +1755,7 @@ const AtsRecruitmentPage = () => {
                                       rel="noreferrer"
                                     >
                                       <MessageCircle className="mr-1 h-3 w-3" />
-                                      WA
+                                      WhatsApp
                                     </a>
                                   </Button>
                                 )}
@@ -1724,7 +1802,7 @@ const AtsRecruitmentPage = () => {
                       }
                       disabled={currentPage === 1}
                     >
-                      Prev
+                      Previous
                     </Button>
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(
                       (page) => (
@@ -1761,17 +1839,23 @@ const AtsRecruitmentPage = () => {
         </Card>
       </section>
 
-      {/* ── Calendar + AI Assistant Row ────────────────────────────────────── */}
-      <section className="grid gap-5 lg:grid-cols-[380px_1fr]">
-        <RecruiterCalendar
-          selectedApplicantName={
-            selectedId
-              ? applications.find((a) => a.id === selectedId)?.profile.fullName || undefined
-              : undefined
-          }
-        />
-        <div className="hidden lg:block" />
-      </section>
+      <Dialog open={calendarDialogOpen} onOpenChange={setCalendarDialogOpen}>
+        <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto p-0 sm:rounded-2xl [&>button]:hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Recruiter Calendar</DialogTitle>
+            <DialogDescription>
+              Manage recruiter tasks, interviews, notes, and deadlines.
+            </DialogDescription>
+          </DialogHeader>
+          <RecruiterCalendar
+            selectedApplicantName={
+              selectedId
+                ? applications.find((a) => a.id === selectedId)?.profile.fullName || undefined
+                : undefined
+            }
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* ── AI Recruiting Assistant ───────────────────────────────────────── */}
       <RecruiterAiAssistant

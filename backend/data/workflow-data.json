@@ -223,6 +223,94 @@
   ],
   "inquiries": [
     {
+      "id": 64,
+      "createdAt": "2026-08-20T15:46:35.815Z",
+      "name": "Agency Admin",
+      "contact": "ai-command-center",
+      "message": "show me the contracts",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 63,
+      "createdAt": "2026-08-20T15:46:14.698Z",
+      "name": "Agency Admin",
+      "contact": "ai-command-center",
+      "message": "Pipeline summary",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 62,
+      "createdAt": "2026-08-20T14:56:35.327Z",
+      "name": "Agency Admin",
+      "contact": "ai-command-center",
+      "message": "Show me all urgent enquiries that need attention",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 61,
+      "createdAt": "2026-08-20T14:56:33.984Z",
+      "name": "Agency Admin",
+      "contact": "ai-command-center",
+      "message": "Generate a pipeline report and post to Make workflow",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 60,
+      "createdAt": "2026-08-20T14:56:33.689Z",
+      "name": "Agency Admin",
+      "contact": "ai-command-center",
+      "message": "Generate a pipeline report and post to Make workflow",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 59,
+      "createdAt": "2026-08-20T14:56:33.557Z",
+      "name": "Agency Admin",
+      "contact": "ai-command-center",
+      "message": "Generate a pipeline report and post to Make workflow",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 58,
+      "createdAt": "2026-08-20T14:56:31.565Z",
+      "name": "Agency Admin",
+      "contact": "ai-command-center",
+      "message": "Generate a pipeline report and post to Make workflow",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
+      "id": 57,
+      "createdAt": "2026-08-20T14:56:24.982Z",
+      "name": "Agency Admin",
+      "contact": "ai-command-center",
+      "message": "Pipeline summary",
+      "intent": "inquiry",
+      "workflow": "inquiry_only",
+      "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+      "aiUsed": false
+    },
+    {
       "id": 56,
       "createdAt": "2026-08-10T22:36:52.707Z",
       "name": "[AI TEST] E2E Make",
@@ -3532,6 +3620,230 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 209,
+      "createdAt": "2026-08-20T15:46:35.818Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 208,
+      "createdAt": "2026-08-20T15:46:35.279Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "show me the contracts",
+        "name": "Agency Admin",
+        "contact": "ai-command-center",
+        "requestId": "b3fbc4b3-00bb-4004-9b51-68bdecd1df12"
+      }
+    },
+    {
+      "id": 207,
+      "createdAt": "2026-08-20T15:46:14.701Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 206,
+      "createdAt": "2026-08-20T15:46:13.973Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Pipeline summary",
+        "name": "Agency Admin",
+        "contact": "ai-command-center",
+        "requestId": "c7a7e9cb-2d83-40e6-be34-95a349cfc892"
+      }
+    },
+    {
+      "id": 205,
+      "createdAt": "2026-08-20T14:56:35.330Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 204,
+      "createdAt": "2026-08-20T14:56:34.990Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Show me all urgent enquiries that need attention",
+        "name": "Agency Admin",
+        "contact": "ai-command-center",
+        "requestId": "c174106c-3787-4fe2-b41d-1175fb8d379f"
+      }
+    },
+    {
+      "id": 203,
+      "createdAt": "2026-08-20T14:56:33.988Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 202,
+      "createdAt": "2026-08-20T14:56:33.696Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 201,
+      "createdAt": "2026-08-20T14:56:33.561Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 200,
+      "createdAt": "2026-08-20T14:56:33.358Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Generate a pipeline report and post to Make workflow",
+        "name": "Agency Admin",
+        "contact": "ai-command-center",
+        "requestId": "4ed6748e-8d95-4104-947b-c3038083f5d4"
+      }
+    },
+    {
+      "id": 199,
+      "createdAt": "2026-08-20T14:56:33.173Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Generate a pipeline report and post to Make workflow",
+        "name": "Agency Admin",
+        "contact": "ai-command-center",
+        "requestId": "62cc6c21-902c-4cb7-83a4-405d0251f9ce"
+      }
+    },
+    {
+      "id": 198,
+      "createdAt": "2026-08-20T14:56:32.998Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Generate a pipeline report and post to Make workflow",
+        "name": "Agency Admin",
+        "contact": "ai-command-center",
+        "requestId": "7f43497b-af72-4dac-a821-fef11bb3859d"
+      }
+    },
+    {
+      "id": 197,
+      "createdAt": "2026-08-20T14:56:31.592Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 196,
+      "createdAt": "2026-08-20T14:56:31.110Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Generate a pipeline report and post to Make workflow",
+        "name": "Agency Admin",
+        "contact": "ai-command-center",
+        "requestId": "f17606f9-4790-4714-86cd-ce41a6b45853"
+      }
+    },
+    {
+      "id": 195,
+      "createdAt": "2026-08-20T14:56:24.985Z",
+      "workflow": "inquiry_pipeline",
+      "step": "classification",
+      "status": "warning",
+      "message": "Inquiry classified as inquiry",
+      "payload": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly.",
+        "fallbackProvider": "deterministic"
+      }
+    },
+    {
+      "id": 194,
+      "createdAt": "2026-08-20T14:56:24.225Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "Pipeline summary",
+        "name": "Agency Admin",
+        "contact": "ai-command-center",
+        "requestId": "8bb9e69a-8316-4e5b-8710-ba67acc407d6"
+      }
+    },
     {
       "id": 193,
       "createdAt": "2026-08-10T22:37:00.454Z",
@@ -6938,6 +7250,126 @@
   ],
   "decisionLogs": [
     {
+      "id": 78,
+      "createdAt": "2026-08-20T15:46:35.821Z",
+      "requestId": "b3fbc4b3-00bb-4004-9b51-68bdecd1df12",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 542,
+      "fallbackUsed": true
+    },
+    {
+      "id": 77,
+      "createdAt": "2026-08-20T15:46:14.705Z",
+      "requestId": "c7a7e9cb-2d83-40e6-be34-95a349cfc892",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 732,
+      "fallbackUsed": true
+    },
+    {
+      "id": 76,
+      "createdAt": "2026-08-20T14:56:35.334Z",
+      "requestId": "c174106c-3787-4fe2-b41d-1175fb8d379f",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 345,
+      "fallbackUsed": true
+    },
+    {
+      "id": 75,
+      "createdAt": "2026-08-20T14:56:33.991Z",
+      "requestId": "4ed6748e-8d95-4104-947b-c3038083f5d4",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 633,
+      "fallbackUsed": true
+    },
+    {
+      "id": 74,
+      "createdAt": "2026-08-20T14:56:33.700Z",
+      "requestId": "7f43497b-af72-4dac-a821-fef11bb3859d",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 701,
+      "fallbackUsed": true
+    },
+    {
+      "id": 73,
+      "createdAt": "2026-08-20T14:56:33.565Z",
+      "requestId": "62cc6c21-902c-4cb7-83a4-405d0251f9ce",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 392,
+      "fallbackUsed": true
+    },
+    {
+      "id": 72,
+      "createdAt": "2026-08-20T14:56:31.618Z",
+      "requestId": "f17606f9-4790-4714-86cd-ce41a6b45853",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 508,
+      "fallbackUsed": true
+    },
+    {
+      "id": 71,
+      "createdAt": "2026-08-20T14:56:24.990Z",
+      "requestId": "8bb9e69a-8316-4e5b-8710-ba67acc407d6",
+      "workflow": "inquiry_only",
+      "classifierOutput": {
+        "intent": "inquiry",
+        "workflow": "inquiry_only",
+        "reply": "Thanks for reaching out. We have logged your inquiry and our team will get back to you with the right information shortly."
+      },
+      "endpointCalled": "/api/inquiry",
+      "status": "success",
+      "latency": 765,
+      "fallbackUsed": true
+    },
+    {
       "id": 70,
       "createdAt": "2026-08-10T22:36:53.461Z",
       "requestId": "90fad5ea-b26e-4f7b-83fe-75eebcbe3115",
@@ -8653,13 +9085,13 @@
   ],
   "counters": {
     "leads": 8,
-    "inquiries": 57,
+    "inquiries": 65,
     "matches": 148,
     "schedules": 6,
     "contracts": 7,
     "notifications": 24,
-    "automationLogs": 194,
-    "decisionLogs": 71,
+    "automationLogs": 210,
+    "decisionLogs": 79,
     "makeDeliveries": 14
   }
 }
