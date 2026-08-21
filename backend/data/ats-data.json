@@ -9,7 +9,7 @@
       "status": "Rejected",
       "source": "resume_upload",
       "appliedAt": "2026-08-21T12:20:17.353Z",
-      "updatedAt": "2026-08-21T12:20:27.011Z",
+      "updatedAt": "2026-08-21T12:31:03.110Z",
       "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
       "aiParseReviewRequired": true,
       "notificationLogIds": [
@@ -17,7 +17,7 @@
         "ea12ad46-e83a-4675-bc7f-9613c31ab196",
         "8556d786-b772-4fe4-a19b-dcd1a9a87ea4"
       ],
-      "rejectedAt": "2026-08-21T12:20:27.011Z"
+      "rejectedAt": "2026-08-21T12:31:03.110Z"
     },
     {
       "id": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
@@ -10242,6 +10242,15 @@
   ],
   "history": [
     {
+      "id": "03201a15-bfc3-4123-97a7-7bddb1af54c3",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Rejected",
+      "toStage": "Rejected",
+      "actor": "attheagency",
+      "reason": "Bulk rejection",
+      "createdAt": "2026-08-21T12:31:03.110Z"
+    },
+    {
       "id": "41fb24b9-6413-48a1-b239-ef522c0d9deb",
       "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
       "fromStage": "New Applicant",
@@ -12110,6 +12119,16 @@
     }
   ],
   "notifications": [
+    {
+      "id": "d47a8f32-fc65-45dd-87d1-9551c385668c",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Rejected",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "rejected",
+      "message": "Maria Clara moved to Rejected",
+      "createdAt": "2026-08-21T12:31:03.110Z"
+    },
     {
       "id": "be35f2bb-dfc5-4ab0-b895-e5c5beac6d7d",
       "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",

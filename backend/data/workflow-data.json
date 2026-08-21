@@ -3621,6 +3621,240 @@
   ],
   "automationLogs": [
     {
+      "id": 222,
+      "createdAt": "2026-08-21T13:10:08.450Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 26,
+        "createdAt": "2026-08-21T13:10:08.443Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "fail",
+          "to": "test@gmail.com",
+          "candidateName": "Maria Clara",
+          "position": "Domestic Helper",
+          "rating": 33,
+          "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+          "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+          "applicationCode": "APP-05CF297E"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 4298,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 221,
+      "createdAt": "2026-08-21T13:10:04.132Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 25,
+        "createdAt": "2026-08-21T13:10:04.126Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "fail",
+          "to": "saturog350@gmail.com",
+          "candidateName": "Maria Clara",
+          "position": "Domestic Helper",
+          "rating": 37,
+          "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+          "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+          "applicationCode": "APP-82F5A694"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3923,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 220,
+      "createdAt": "2026-08-21T12:51:00.482Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 24,
+        "createdAt": "2026-08-21T12:51:00.474Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "fail",
+          "to": "test@gmail.com",
+          "candidateName": "Maria Clara",
+          "position": "Domestic Helper",
+          "rating": 33,
+          "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+          "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+          "applicationCode": "APP-05CF297E"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3689,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 219,
+      "createdAt": "2026-08-21T12:50:56.773Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 23,
+        "createdAt": "2026-08-21T12:50:56.763Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "fail",
+          "to": "saturog350@gmail.com",
+          "candidateName": "Maria Clara",
+          "position": "Domestic Helper",
+          "rating": 37,
+          "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+          "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+          "applicationCode": "APP-82F5A694"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 4008,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 218,
+      "createdAt": "2026-08-21T12:39:08.690Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 22,
+        "createdAt": "2026-08-21T12:39:08.683Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "fail",
+          "to": "test@gmail.com",
+          "candidateName": "Maria Clara",
+          "position": "Domestic Helper",
+          "rating": 33,
+          "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+          "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+          "applicationCode": "APP-05CF297E"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 4660,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 217,
+      "createdAt": "2026-08-21T12:39:04.008Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 21,
+        "createdAt": "2026-08-21T12:39:04.004Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "fail",
+          "to": "saturog350@gmail.com",
+          "candidateName": "Maria Clara",
+          "position": "Domestic Helper",
+          "rating": 37,
+          "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+          "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+          "applicationCode": "APP-82F5A694"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3719,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 216,
+      "createdAt": "2026-08-21T12:31:15.930Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 20,
+        "createdAt": "2026-08-21T12:31:15.925Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "candidate_email",
+          "action": "reject",
+          "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+          "applicantName": "Maria Clara",
+          "applicantEmail": "test@gmail.com",
+          "subject": "Application Update - APP-05CF297E",
+          "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-05CF297E\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+          "score": 33,
+          "applicationCode": "APP-05CF297E"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3546,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 215,
+      "createdAt": "2026-08-21T12:31:12.367Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 19,
+        "createdAt": "2026-08-21T12:31:12.361Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "candidate_email",
+          "action": "reject",
+          "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+          "applicantName": "Maria Clara",
+          "applicantEmail": "saturog350@gmail.com",
+          "subject": "Application Update - APP-82F5A694",
+          "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-82F5A694\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+          "score": 37,
+          "applicationCode": "APP-82F5A694"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3630,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
       "id": 214,
       "createdAt": "2026-08-21T12:22:28.586Z",
       "workflow": "make_pipeline",
@@ -8547,6 +8781,176 @@
   ],
   "makeDeliveries": [
     {
+      "id": 26,
+      "createdAt": "2026-08-21T13:10:08.443Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "fail",
+        "to": "test@gmail.com",
+        "candidateName": "Maria Clara",
+        "position": "Domestic Helper",
+        "rating": 33,
+        "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+        "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+        "applicationCode": "APP-05CF297E"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 4298,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 25,
+      "createdAt": "2026-08-21T13:10:04.126Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "fail",
+        "to": "saturog350@gmail.com",
+        "candidateName": "Maria Clara",
+        "position": "Domestic Helper",
+        "rating": 37,
+        "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+        "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+        "applicationCode": "APP-82F5A694"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3923,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 24,
+      "createdAt": "2026-08-21T12:51:00.474Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "fail",
+        "to": "test@gmail.com",
+        "candidateName": "Maria Clara",
+        "position": "Domestic Helper",
+        "rating": 33,
+        "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+        "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+        "applicationCode": "APP-05CF297E"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3689,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 23,
+      "createdAt": "2026-08-21T12:50:56.763Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "fail",
+        "to": "saturog350@gmail.com",
+        "candidateName": "Maria Clara",
+        "position": "Domestic Helper",
+        "rating": 37,
+        "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+        "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+        "applicationCode": "APP-82F5A694"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 4008,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 22,
+      "createdAt": "2026-08-21T12:39:08.683Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "fail",
+        "to": "test@gmail.com",
+        "candidateName": "Maria Clara",
+        "position": "Domestic Helper",
+        "rating": 33,
+        "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+        "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+        "applicationCode": "APP-05CF297E"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 4660,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 21,
+      "createdAt": "2026-08-21T12:39:04.004Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "fail",
+        "to": "saturog350@gmail.com",
+        "candidateName": "Maria Clara",
+        "position": "Domestic Helper",
+        "rating": 37,
+        "weaknessesHtml": "<li>The application did not meet the current role requirements.</li>",
+        "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+        "applicationCode": "APP-82F5A694"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3719,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 20,
+      "createdAt": "2026-08-21T12:31:15.925Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "candidate_email",
+        "action": "reject",
+        "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+        "applicantName": "Maria Clara",
+        "applicantEmail": "test@gmail.com",
+        "subject": "Application Update - APP-05CF297E",
+        "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-05CF297E\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+        "score": 33,
+        "applicationCode": "APP-05CF297E"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3546,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 19,
+      "createdAt": "2026-08-21T12:31:12.361Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "candidate_email",
+        "action": "reject",
+        "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+        "applicantName": "Maria Clara",
+        "applicantEmail": "saturog350@gmail.com",
+        "subject": "Application Update - APP-82F5A694",
+        "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-82F5A694\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+        "score": 37,
+        "applicationCode": "APP-82F5A694"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3630,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
       "id": 18,
       "createdAt": "2026-08-21T12:22:28.581Z",
       "scenario": "inquiry_pipeline",
@@ -9350,8 +9754,8 @@
     "schedules": 6,
     "contracts": 7,
     "notifications": 24,
-    "automationLogs": 215,
+    "automationLogs": 223,
     "decisionLogs": 79,
-    "makeDeliveries": 19
+    "makeDeliveries": 27
   }
 }

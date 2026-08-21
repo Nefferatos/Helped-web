@@ -478,6 +478,9 @@ type Bindings = {
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
   MAKE_WEBHOOK_URL?: string;
+  // Dedicated webhook for the HR Interview Email Notifications Make scenario.
+  // Keep this separate from the general inquiry/lead orchestrator webhook.
+  MAKE_HR_EMAIL_WEBHOOK_URL?: string;
   STORAGE_BACKEND?: string;
   // Server-only secret enabling POST /api/agency-auth/bootstrap-reset.
   // Set via: npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
@@ -13283,10 +13286,14 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
 });
 
 app.post("/api/send-to-make", requireAgencyAdminAuth, async (c) => {
-  const webhookUrl = c.env.MAKE_WEBHOOK_URL?.trim();
+  const body = await parseBody<{ scenario?: string; payload?: Record<string, unknown> }>(c.req.raw);
+  const webhookUrl = (
+    body?.scenario === "interview_pipeline"
+      ? c.env.MAKE_HR_EMAIL_WEBHOOK_URL || c.env.MAKE_WEBHOOK_URL
+      : c.env.MAKE_WEBHOOK_URL
+  )?.trim();
   if (!webhookUrl) return c.json({ error: "Make webhook is not configured" }, 503);
 
-  const body = await parseBody<{ scenario?: string; payload?: Record<string, unknown> }>(c.req.raw);
   if (!body?.scenario || typeof body.payload !== "object" || body.payload === null) {
     return c.json({ error: "scenario and payload are required" }, 400);
   }
@@ -13298,10 +13305,29 @@ app.post("/api/send-to-make", requireAgencyAdminAuth, async (c) => {
     signal: AbortSignal.timeout(10_000),
   });
 
-  return c.json({
-    ok: res.ok,
-    delivery: { id: Date.now(), scenario: body.scenario, success: res.ok, statusCode: res.status },
-  });
+  const responseText = await res.text();
+  let makeResult: Record<string, unknown> | null = null;
+  try {
+    const parsed = JSON.parse(responseText) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      makeResult = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Some Make webhooks return a plain-text acknowledgement such as "Accepted".
+  }
+
+  // A webhook may use HTTP 200 for a handled business-rule failure. Honour its
+  // explicit `ok: false` flag so the UI never claims an email was sent.
+  const delivered = res.ok && makeResult?.ok !== false;
+  return c.json(
+    {
+      ok: delivered,
+      delivery: { id: Date.now(), scenario: body.scenario, success: delivered, statusCode: res.status },
+      ...(makeResult ? { makeResult } : {}),
+      ...(delivered ? {} : { error: String(makeResult?.error ?? makeResult?.reason ?? "Make.com did not dispatch the email") }),
+    },
+    delivered ? 200 : 502,
+  );
 });
 
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));

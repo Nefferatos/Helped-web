@@ -290,8 +290,6 @@ const RecruiterAiAssistant = ({
 
     for (const candidate of passingCandidates) {
       try {
-        const emailContent = generatePassEmail(candidate);
-        
         const res = await fetch("/api/send-to-make", {
           method: "POST",
           headers: {
@@ -299,16 +297,15 @@ const RecruiterAiAssistant = ({
             ...getAgencyAdminAuthHeaders(),
           },
           body: JSON.stringify({
-            scenario: "inquiry_pipeline",
+            scenario: "interview_pipeline",
             payload: {
-              type: "candidate_email",
-              action: "pass",
+              type: "pass",
+              to: candidate.profile.email,
+              candidateName: candidate.profile.fullName,
+              position: "Domestic Helper",
+              rating: candidate.score?.score,
+              strengthsHtml: "<li>Application approved based on the recruitment assessment.</li>",
               applicantId: candidate.id,
-              applicantName: candidate.profile.fullName,
-              applicantEmail: candidate.profile.email,
-              subject: emailContent.subject,
-              body: emailContent.body,
-              score: candidate.score?.score,
               applicationCode: candidate.applicationCode,
             },
           }),
@@ -377,8 +374,6 @@ const RecruiterAiAssistant = ({
 
     for (const candidate of failedCandidates) {
       try {
-        const emailContent = generateRejectEmail(candidate);
-        
         const res = await fetch("/api/send-to-make", {
           method: "POST",
           headers: {
@@ -386,16 +381,15 @@ const RecruiterAiAssistant = ({
             ...getAgencyAdminAuthHeaders(),
           },
           body: JSON.stringify({
-            scenario: "inquiry_pipeline",
+            scenario: "interview_pipeline",
             payload: {
-              type: "candidate_email",
-              action: "reject",
+              type: "fail",
+              to: candidate.profile.email,
+              candidateName: candidate.profile.fullName,
+              position: "Domestic Helper",
+              rating: candidate.score?.score,
+              weaknessesHtml: "<li>The application did not meet the current role requirements.</li>",
               applicantId: candidate.id,
-              applicantName: candidate.profile.fullName,
-              applicantEmail: candidate.profile.email,
-              subject: emailContent.subject,
-              body: emailContent.body,
-              score: candidate.score?.score,
               applicationCode: candidate.applicationCode,
             },
           }),
