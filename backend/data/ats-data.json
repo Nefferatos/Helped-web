@@ -1,6 +1,25 @@
 {
   "applications": [
     {
+      "id": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "agencyId": 1,
+      "profileId": "f0c8ea15-bd0d-49bc-aea8-810650f79459",
+      "applicationCode": "APP-82F5A694",
+      "applicantAccessToken": "e39c7d8b-9ee9-4b27-854e-6cf8bbc55501",
+      "status": "Rejected",
+      "source": "resume_upload",
+      "appliedAt": "2026-08-21T12:20:17.353Z",
+      "updatedAt": "2026-08-21T12:20:27.011Z",
+      "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
+      "aiParseReviewRequired": true,
+      "notificationLogIds": [
+        "61022ef0-dec0-4ce5-b556-7662d37d1a04",
+        "ea12ad46-e83a-4675-bc7f-9613c31ab196",
+        "8556d786-b772-4fe4-a19b-dcd1a9a87ea4"
+      ],
+      "rejectedAt": "2026-08-21T12:20:27.011Z"
+    },
+    {
       "id": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
       "agencyId": 1,
       "profileId": "e86dfa73-6144-4f37-9010-1845acc659d4",
@@ -25,10 +44,10 @@
       "profileId": "d5508673-ef50-4166-95f8-ebe7b219ed00",
       "applicationCode": "APP-05CF297E",
       "applicantAccessToken": "acad340a-83ae-4e8e-b71b-803b8ad413af",
-      "status": "Ready to Configure Public Profile",
+      "status": "Rejected",
       "source": "resume_upload",
       "appliedAt": "2026-08-20T15:57:39.460Z",
-      "updatedAt": "2026-08-20T15:59:17.827Z",
+      "updatedAt": "2026-08-21T12:17:28.264Z",
       "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
       "aiParseReviewRequired": true,
       "notificationLogIds": [
@@ -36,7 +55,8 @@
         "cd475f5f-6da6-4f51-ba3a-23eb1903a53d",
         "408740ea-46f3-4829-8909-f59f6b9f6117"
       ],
-      "approvedAt": "2026-08-20T15:59:15.876Z"
+      "approvedAt": "2026-08-21T12:15:33.742Z",
+      "rejectedAt": "2026-08-21T12:17:28.264Z"
     },
     {
       "id": "3174a055-dd34-432a-9fcd-7a244264f5c9",
@@ -1362,6 +1382,113 @@
     }
   ],
   "profiles": [
+    {
+      "id": "f0c8ea15-bd0d-49bc-aea8-810650f79459",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fullName": "Maria Clara",
+      "email": "saturog350@gmail.com",
+      "whatsappNumber": "+639222299912",
+      "nationality": "Filipino",
+      "dateOfBirth": "2000-02-01",
+      "age": 26,
+      "gender": "Female",
+      "maritalStatus": "Single",
+      "contactNumber": "+639222299912",
+      "address": "",
+      "yearsOfExperience": 1,
+      "previousCountriesWorkedIn": [
+        "Dubai"
+      ],
+      "childcareExperience": 5,
+      "newbornCareExperience": 5,
+      "elderlyCareExperience": 5,
+      "disabledCareExperience": 5,
+      "housekeepingExperience": 5,
+      "cookingSkills": [],
+      "petCareExperience": 5,
+      "languageSkills": [],
+      "certifications": [],
+      "trainingRecords": [],
+      "availableDate": "2026-08-23",
+      "expectedSalary": 800,
+      "employmentPreference": "Full-time live-in",
+      "medicalStatus": "pending",
+      "passportStatus": "missing",
+      "certificationStatus": "missing",
+      "workHistory": [
+        {
+          "from": "2021",
+          "to": "2023",
+          "country": "Singapore",
+          "employer": "aa",
+          "duties": "",
+          "remarks": ""
+        }
+      ],
+      "fdwFormData": {
+        "placeOfBirth": "Bataan",
+        "heightCm": "171",
+        "weightKg": "44",
+        "residentialAddressLine1": "",
+        "residentialAddressLine2": "",
+        "repatriationPort": "",
+        "homeCountryContactNumber": "",
+        "religion": "Catholic",
+        "educationLevel": "College / Degree (≥13 yrs)",
+        "numberOfSiblings": "",
+        "numberOfChildren": "",
+        "childrenAges": "",
+        "allergies": "none",
+        "physicalDisabilities": "none",
+        "dietaryRestrictions": "",
+        "foodPreference": "No Pork",
+        "foodPreferenceOther": "",
+        "restDayPreference": "2 rest days per month",
+        "otherRemarksA3": "",
+        "sgInfantsChildrenAssessment": "",
+        "sgElderlyAssessment": "",
+        "sgDisabledAssessment": "",
+        "sgHouseworkAssessment": "",
+        "sgCookingAssessment": "",
+        "sgLanguageAssessment": "",
+        "sgOtherSkills": "",
+        "sgOtherSkillsAssessment": "",
+        "foreignTrainingCentreName": "",
+        "thirdPartyCertificationDetails": "",
+        "overseasInfantsChildrenAssessment": "",
+        "overseasElderlyAssessment": "",
+        "overseasDisabledAssessment": "",
+        "overseasHouseworkAssessment": "",
+        "overseasCookingAssessment": "",
+        "overseasLanguageAssessment": "",
+        "overseasOtherSkills": "",
+        "overseasOtherSkillsAssessment": "",
+        "feedbackEmployer1": "",
+        "feedbackEmployer2": "",
+        "otherRemarksE": "",
+        "medicalConditions": "none",
+        "workedInSingapore": false,
+        "willingToHandleInfants": false,
+        "willingToHandleElderly": false,
+        "willingToHandleDisabled": false,
+        "willingToDoHousework": false,
+        "willingToCook": false
+      },
+      "strengthsTags": [
+        "Childcare",
+        "Newborn care",
+        "Elderly care",
+        "Disabled care",
+        "Housekeeping"
+      ],
+      "weaknessesTags": [
+        "Passport missing",
+        "Certificates missing",
+        "Limited experience"
+      ],
+      "createdAt": "2026-08-21T12:20:17.353Z",
+      "updatedAt": "2026-08-21T12:20:17.353Z"
+    },
     {
       "id": "e86dfa73-6144-4f37-9010-1845acc659d4",
       "applicationId": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
@@ -6870,6 +6997,19 @@
   "interviews": [],
   "backgroundChecks": [
     {
+      "id": "01365307-c01c-4dbb-b567-f565fb0ede93",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "passportVerified": false,
+      "identityVerified": false,
+      "employmentHistoryVerified": false,
+      "referenceVerified": false,
+      "medicalClearanceVerified": false,
+      "completionPercentage": 0,
+      "result": "Pending",
+      "notes": "",
+      "updatedAt": "2026-08-21T12:20:17.354Z"
+    },
+    {
       "id": "d2454906-20b1-44bb-a03f-474fd594168c",
       "applicationId": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
       "passportVerified": false,
@@ -7976,6 +8116,28 @@
     }
   ],
   "scores": [
+    {
+      "id": "bc6bb53b-6fb0-449f-bcdb-97e92517444e",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "score": 37,
+      "category": "Not Qualified",
+      "explanation": "Maria Clara is not qualified based on experience, skills, language coverage, references, and interview performance.",
+      "strengths": [],
+      "weaknesses": [
+        "Passport not submitted",
+        "Certificates missing",
+        "Limited verified work experience"
+      ],
+      "factors": {
+        "experience": 13,
+        "skillMatch": 86,
+        "certifications": 0,
+        "references": 80,
+        "languageSkills": 0,
+        "interviewRating": 0
+      },
+      "updatedAt": "2026-08-21T12:20:17.354Z"
+    },
     {
       "id": "7573f9c6-1a9a-40bd-a8eb-c12192056940",
       "applicationId": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
@@ -10080,6 +10242,68 @@
   ],
   "history": [
     {
+      "id": "41fb24b9-6413-48a1-b239-ef522c0d9deb",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "New Applicant",
+      "toStage": "Rejected",
+      "actor": "attheagency",
+      "reason": "Bulk rejection",
+      "createdAt": "2026-08-21T12:20:27.011Z"
+    },
+    {
+      "id": "5c92e9b3-8de9-427e-9cd5-43247bb7dd0f",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "toStage": "New Applicant",
+      "actor": "applicant",
+      "reason": "Application submitted through the public maid applicant portal",
+      "createdAt": "2026-08-21T12:20:17.353Z"
+    },
+    {
+      "id": "0dd95bab-c12c-450d-9f3c-1e02c92c4631",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Rejected",
+      "actor": "attheagency",
+      "reason": "Bulk rejection",
+      "createdAt": "2026-08-21T12:17:28.264Z"
+    },
+    {
+      "id": "ce2bbe9b-8d2e-4036-b163-806770c0b3f7",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "fromStage": "Approved",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-08-21T12:15:34.364Z"
+    },
+    {
+      "id": "7455e343-2518-4006-bf83-e17c0ca5ae51",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "fromStage": "Background Check",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Stage changed to Approved",
+      "createdAt": "2026-08-21T12:15:33.742Z"
+    },
+    {
+      "id": "be2159cd-fefc-4c6f-802d-ef307a366767",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "fromStage": "Screening Interview",
+      "toStage": "Background Check",
+      "actor": "attheagency",
+      "reason": "Stage changed to Background Check",
+      "createdAt": "2026-08-21T12:15:32.937Z"
+    },
+    {
+      "id": "1fc82169-dcfa-4ce4-a723-0bf1b7a8dcf1",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Screening Interview",
+      "actor": "attheagency",
+      "reason": "Bulk interview assignment",
+      "createdAt": "2026-08-21T12:15:03.798Z"
+    },
+    {
       "id": "62fb0c0b-7240-41de-bae0-375336754cb2",
       "applicationId": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
       "fromStage": "Approved",
@@ -11886,6 +12110,96 @@
     }
   ],
   "notifications": [
+    {
+      "id": "be35f2bb-dfc5-4ab0-b895-e5c5beac6d7d",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Rejected",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "rejected",
+      "message": "Maria Clara moved to Rejected",
+      "createdAt": "2026-08-21T12:20:27.011Z"
+    },
+    {
+      "id": "8556d786-b772-4fe4-a19b-dcd1a9a87ea4",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "agency-1",
+      "templateKey": "application_received",
+      "message": "Maria Clara submitted a new applicant portal form.",
+      "createdAt": "2026-08-21T12:20:17.354Z"
+    },
+    {
+      "id": "ea12ad46-e83a-4675-bc7f-9613c31ab196",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "email",
+      "recipient": "saturog350@gmail.com",
+      "templateKey": "application_received",
+      "message": "Thank you Maria Clara. Your application has been received with reference APP-82F5A694. Our recruitment team will review your profile shortly.",
+      "createdAt": "2026-08-21T12:20:17.354Z"
+    },
+    {
+      "id": "61022ef0-dec0-4ce5-b556-7662d37d1a04",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "whatsapp",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Thank you Maria Clara. Your application has been received with reference APP-82F5A694. Our recruitment team will review your profile shortly.",
+      "createdAt": "2026-08-21T12:20:17.354Z"
+    },
+    {
+      "id": "ab495f09-06a6-4762-92e3-dc1136d043c8",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "event": "Rejected",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "rejected",
+      "message": "Maria Clara moved to Rejected",
+      "createdAt": "2026-08-21T12:17:28.264Z"
+    },
+    {
+      "id": "c40ae220-7491-4c07-80ba-45791f1ae242",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Ready to Configure Public Profile",
+      "createdAt": "2026-08-21T12:15:34.364Z"
+    },
+    {
+      "id": "57b0379f-ce68-42d1-93b6-f83c4e08cd65",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "approved",
+      "message": "Maria Clara moved to Approved",
+      "createdAt": "2026-08-21T12:15:33.742Z"
+    },
+    {
+      "id": "6b92dec2-1fb8-4814-bd27-f12e53616d51",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Background Check",
+      "createdAt": "2026-08-21T12:15:32.937Z"
+    },
+    {
+      "id": "47ed0ed3-1763-41fd-9437-3731fce41632",
+      "applicationId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Screening Interview",
+      "createdAt": "2026-08-21T12:15:03.798Z"
+    },
     {
       "id": "82f96533-9424-488c-9ab7-325a7942ef45",
       "applicationId": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
@@ -15766,6 +16080,71 @@
         "url": "",
         "required": false,
         "uploadedAt": "2026-08-20T16:18:03.924Z",
+        "status": "missing"
+      }
+    ],
+    "fa5899be-614a-4c4b-82ab-ff3accbb7b7f": [
+      {
+        "id": "22a68918-4483-4b90-8591-29fc78422307",
+        "type": "resume",
+        "name": "Resume/CV",
+        "url": "",
+        "required": true,
+        "uploadedAt": "2026-08-21T12:20:17.354Z",
+        "status": "missing"
+      },
+      {
+        "id": "c3aef305-d5cf-4f8b-a7aa-ce9fef6a5764",
+        "type": "passport",
+        "name": "Passport",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-08-21T12:20:17.354Z",
+        "status": "missing"
+      },
+      {
+        "id": "923bf19c-d422-418f-998f-55f91f553373",
+        "type": "work_permit",
+        "name": "Work Permit Documents",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-08-21T12:20:17.354Z",
+        "status": "missing"
+      },
+      {
+        "id": "f4c4b540-10a6-4d1f-a16a-cabbc1725fd7",
+        "type": "medical",
+        "name": "Medical Records",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-08-21T12:20:17.354Z",
+        "status": "missing"
+      },
+      {
+        "id": "4236257d-bf69-4c3b-b2ca-838724c64c51",
+        "type": "certificate",
+        "name": "Certificates",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-08-21T12:20:17.354Z",
+        "status": "missing"
+      },
+      {
+        "id": "541b210f-7ecc-49b5-8fc3-a059205bf2c9",
+        "type": "reference",
+        "name": "References",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-08-21T12:20:17.354Z",
+        "status": "missing"
+      },
+      {
+        "id": "46765a00-2761-4c60-b78f-ff0f10febe94",
+        "type": "video",
+        "name": "Introduction Video",
+        "url": "",
+        "required": false,
+        "uploadedAt": "2026-08-21T12:20:17.354Z",
         "status": "missing"
       }
     ]

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 
 export interface AiMatchCandidate {
   maidId: number;
@@ -128,12 +129,12 @@ export const triggerMakeScenario = async (
     directWebhookUrl
       ? {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
           body: JSON.stringify(payload),
         }
       : {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
           body: JSON.stringify({ scenario, payload }),
         },
   );

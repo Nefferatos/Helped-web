@@ -3621,6 +3621,156 @@
   ],
   "automationLogs": [
     {
+      "id": 214,
+      "createdAt": "2026-08-21T12:22:28.586Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 18,
+        "createdAt": "2026-08-21T12:22:28.581Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "candidate_email",
+          "action": "reject",
+          "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+          "applicantName": "Maria Clara",
+          "applicantEmail": "test@gmail.com",
+          "subject": "Application Update - APP-05CF297E",
+          "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-05CF297E\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+          "score": 33,
+          "applicationCode": "APP-05CF297E"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 4564,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 213,
+      "createdAt": "2026-08-21T12:22:24.005Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 17,
+        "createdAt": "2026-08-21T12:22:23.999Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "candidate_email",
+          "action": "reject",
+          "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+          "applicantName": "Maria Clara",
+          "applicantEmail": "saturog350@gmail.com",
+          "subject": "Application Update - APP-82F5A694",
+          "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-82F5A694\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+          "score": 37,
+          "applicationCode": "APP-82F5A694"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3936,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 212,
+      "createdAt": "2026-08-21T12:20:40.523Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 16,
+        "createdAt": "2026-08-21T12:20:40.519Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "candidate_email",
+          "action": "reject",
+          "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+          "applicantName": "Maria Clara",
+          "applicantEmail": "test@gmail.com",
+          "subject": "Application Update - APP-05CF297E",
+          "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-05CF297E\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+          "score": 33,
+          "applicationCode": "APP-05CF297E"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3250,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 211,
+      "createdAt": "2026-08-21T12:20:37.253Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 15,
+        "createdAt": "2026-08-21T12:20:37.244Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "candidate_email",
+          "action": "reject",
+          "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+          "applicantName": "Maria Clara",
+          "applicantEmail": "saturog350@gmail.com",
+          "subject": "Application Update - APP-82F5A694",
+          "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-82F5A694\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+          "score": 37,
+          "applicationCode": "APP-82F5A694"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 4607,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 210,
+      "createdAt": "2026-08-21T12:17:44.444Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario inquiry_pipeline triggered",
+      "payload": {
+        "id": 14,
+        "createdAt": "2026-08-21T12:17:44.436Z",
+        "scenario": "inquiry_pipeline",
+        "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+        "payload": {
+          "type": "candidate_email",
+          "action": "reject",
+          "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+          "applicantName": "Maria Clara",
+          "applicantEmail": "test@gmail.com",
+          "subject": "Application Update - APP-05CF297E",
+          "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-05CF297E\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+          "score": 33,
+          "applicationCode": "APP-05CF297E"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 4416,
+        "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+        "error": ""
+      }
+    },
+    {
       "id": 209,
       "createdAt": "2026-08-20T15:46:35.818Z",
       "workflow": "inquiry_pipeline",
@@ -8397,6 +8547,116 @@
   ],
   "makeDeliveries": [
     {
+      "id": 18,
+      "createdAt": "2026-08-21T12:22:28.581Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "candidate_email",
+        "action": "reject",
+        "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+        "applicantName": "Maria Clara",
+        "applicantEmail": "test@gmail.com",
+        "subject": "Application Update - APP-05CF297E",
+        "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-05CF297E\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+        "score": 33,
+        "applicationCode": "APP-05CF297E"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 4564,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 17,
+      "createdAt": "2026-08-21T12:22:23.999Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "candidate_email",
+        "action": "reject",
+        "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+        "applicantName": "Maria Clara",
+        "applicantEmail": "saturog350@gmail.com",
+        "subject": "Application Update - APP-82F5A694",
+        "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-82F5A694\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+        "score": 37,
+        "applicationCode": "APP-82F5A694"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3936,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 16,
+      "createdAt": "2026-08-21T12:20:40.519Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "candidate_email",
+        "action": "reject",
+        "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+        "applicantName": "Maria Clara",
+        "applicantEmail": "test@gmail.com",
+        "subject": "Application Update - APP-05CF297E",
+        "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-05CF297E\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+        "score": 33,
+        "applicationCode": "APP-05CF297E"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3250,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 15,
+      "createdAt": "2026-08-21T12:20:37.244Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "candidate_email",
+        "action": "reject",
+        "applicantId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+        "applicantName": "Maria Clara",
+        "applicantEmail": "saturog350@gmail.com",
+        "subject": "Application Update - APP-82F5A694",
+        "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-82F5A694\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+        "score": 37,
+        "applicationCode": "APP-82F5A694"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 4607,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
+      "id": 14,
+      "createdAt": "2026-08-21T12:17:44.436Z",
+      "scenario": "inquiry_pipeline",
+      "url": "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig",
+      "payload": {
+        "type": "candidate_email",
+        "action": "reject",
+        "applicantId": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
+        "applicantName": "Maria Clara",
+        "applicantEmail": "test@gmail.com",
+        "subject": "Application Update - APP-05CF297E",
+        "body": "Dear Maria Clara,\n\nThank you for your interest in working with Rinzin Agency and for taking the time to submit your application.\n\nAfter careful review, we regret to inform you that we are unable to proceed with your application at this time. This decision was based on our current requirements and the high volume of applications we receive.\n\nApplication Details:\n• Application Code: APP-05CF297E\n• Status: Not approved at this time\n\nWe encourage you to:\n1. Continue developing your skills and experience\n2. Reapply in the future when new positions become available\n3. Keep your profile updated on our portal\n\nWe appreciate your understanding and wish you all the best in your career journey.\n\nBest regards,\nRinzin Agency Recruitment Team",
+        "score": 33,
+        "applicationCode": "APP-05CF297E"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 4416,
+      "responseBody": "{\r\n  \"ok\": false,\r\n  \"workflow\": \"human_review\",\r\n  \"reason\": \"The request contains no actionable details to process a rejection, so it cannot be safely classified into another workflow.\",\r\n  \"statusCode\": 200\r\n}",
+      "error": ""
+    },
+    {
       "id": 13,
       "createdAt": "2026-08-10T22:37:00.447Z",
       "scenario": "inquiry_pipeline",
@@ -9090,8 +9350,8 @@
     "schedules": 6,
     "contracts": 7,
     "notifications": 24,
-    "automationLogs": 210,
+    "automationLogs": 215,
     "decisionLogs": 79,
-    "makeDeliveries": 14
+    "makeDeliveries": 19
   }
 }

@@ -10,7 +10,7 @@ import {
   searchSimilarMaids,
   buildRecommendationQuery,
 } from "./services/ai/embeddings";
-import { openaiChat, type OpenAIMessage } from "./services/ai/openai";
+import { getAiProviderConfig, openaiChat, type OpenAIMessage } from "./services/ai/openai";
 
 type AssetsBinding = {
   fetch: (request: Request) => Promise<Response>;
@@ -470,6 +470,9 @@ type Bindings = {
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
   OPENAI_MODEL?: string;
+  CLINE_API_KEY?: string;
+  CLINE_API_URL?: string;
+  CLINE_MODEL?: string;
   AI_AUTOPILOT_ENABLED?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
@@ -8247,6 +8250,47 @@ const qualifyLead = (
   };
 };
 
+/**
+ * Runs the configured OpenAI-compatible provider for the workflow console.
+ * A provider failure must never block an enquiry or lead from being captured,
+ * so callers retain the deterministic result as a safe fallback.
+ */
+const runWorkflowAi = async <T extends Record<string, unknown>>(
+  env: Bindings,
+  system: string,
+  input: Record<string, unknown>,
+): Promise<T | null> => {
+  const provider = getAiProviderConfig({
+    CLINE_API_KEY: env.CLINE_API_KEY,
+    CLINE_API_URL: env.CLINE_API_URL,
+    CLINE_MODEL: env.CLINE_MODEL,
+    OPENAI_API_KEY: env.OPENAI_API_KEY,
+    OPENAI_BASE_URL: env.OPENAI_BASE_URL,
+    OPENAI_MODEL: env.OPENAI_MODEL,
+  });
+  if (!provider || provider.provider !== "openai") return null;
+
+  try {
+    const result = await openaiChat({
+      apiKey: provider.apiKey,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
+      temperature: 0.1,
+      maxTokens: 700,
+      responseFormat: "json_object",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: JSON.stringify(input) },
+      ],
+    });
+    const parsed = parseJsonObject<Record<string, unknown>>(result.content, {});
+    return Object.keys(parsed).length > 0 ? (parsed as T) : null;
+  } catch (error) {
+    console.warn("Workflow AI unavailable; using deterministic fallback", error);
+    return null;
+  }
+};
+
 app.post(
   "/api/inquiry",
   safeApi(async (c) => {
@@ -8275,17 +8319,33 @@ app.post(
 
     const data = await loadData(c.env);
     const fallback = classifyFallback(message);
-    const intent = classifyInquiryIntent(message);
+    const fallbackIntent = classifyInquiryIntent(message);
+    const aiClassification = await runWorkflowAi<{
+      intent?: "hiring" | "inquiry" | "complaint";
+      reply?: string;
+    }>(
+      c.env,
+      "Classify domestic-helper agency enquiries. Return JSON only with intent (hiring, inquiry, or complaint) and reply (a concise, professional reply under 80 words). Never promise a placement, approval, refund, or exact follow-up time.",
+      { name, contact, message },
+    );
+    const aiUsed = ["hiring", "inquiry", "complaint"].includes(aiClassification?.intent ?? "");
+    const intent = aiUsed
+      ? aiClassification!.intent!
+      : fallbackIntent;
     const workflow = normalizeWorkflow(
-      fallback.workflow === "inquiry_match"
+      aiUsed
         ? workflowForIntent(intent)
-        : fallback.workflow === "inquiry_only"
-          ? ("inquiry_only" as const)
-          : fallback.workflow,
+        : fallback.workflow === "inquiry_match"
+          ? workflowForIntent(intent)
+          : fallback.workflow === "inquiry_only"
+            ? ("inquiry_only" as const)
+            : fallback.workflow,
     );
     const matches =
       intent === "hiring" ? buildMatchCandidates(data.maids, message) : [];
-    const reply = buildInquiryReply(intent, matches.length);
+    const reply = aiUsed
+      ? aiClassification?.reply?.trim().slice(0, 1200) || buildInquiryReply(intent, matches.length)
+      : buildInquiryReply(intent, matches.length);
 
     const enquiry: EnquiryRecord = {
       id: data.counters.enquiries++,
@@ -8303,8 +8363,8 @@ app.post(
     const responseBody = buildWorkflowResponse(c.req.raw, {
       workflow,
       intent,
-      fallbackUsed: true,
-      fallbackProvider: "deterministic",
+      fallbackUsed: !aiUsed,
+      fallbackProvider: aiUsed ? null : "deterministic",
       data: {
         inquiry: {
           id: enquiry.id,
@@ -8314,7 +8374,7 @@ app.post(
           intent,
           workflow,
           reply,
-          aiUsed: false,
+          aiUsed,
           createdAt: enquiry.createdAt,
         },
         matches: matches.length > 0 ? matches : undefined,
@@ -10101,8 +10161,58 @@ app.post(
       );
     }
 
-    const enrichment = inferLeadEnrichment(message);
-    const qualification = qualifyLead(enrichment, message);
+    const deterministicEnrichment = inferLeadEnrichment(message);
+    const aiAnalysis = await runWorkflowAi<{
+      enrichment?: {
+        serviceType?: string;
+        budget?: { min?: number | null; max?: number | null; currency?: string; text?: string };
+        urgency?: string;
+        location?: string;
+        summary?: string;
+      };
+      qualification?: { score?: number; classification?: "HIGH" | "MEDIUM" | "LOW"; reasons?: string[] };
+    }>(
+      c.env,
+      "Analyse a domestic-helper agency lead. Return JSON only: {enrichment:{serviceType,budget:{min,max,currency,text},urgency,location,summary},qualification:{score,classification,reasons}}. Use only details in the lead. classification must be HIGH, MEDIUM, or LOW; score must be 0-100; do not invent facts.",
+      { source, name, contact, message },
+    );
+    const candidateEnrichment = aiAnalysis?.enrichment;
+    const candidateQualification = aiAnalysis?.qualification;
+    const hasValidAiEnrichment = Boolean(
+      candidateEnrichment &&
+        typeof candidateEnrichment.serviceType === "string" &&
+        typeof candidateEnrichment.urgency === "string" &&
+        typeof candidateEnrichment.location === "string" &&
+        typeof candidateEnrichment.summary === "string",
+    );
+    const hasValidAiQualification = Boolean(
+      candidateQualification &&
+        Number.isFinite(candidateQualification.score) &&
+        ["HIGH", "MEDIUM", "LOW"].includes(candidateQualification.classification ?? "") &&
+        Array.isArray(candidateQualification.reasons),
+    );
+    const enrichment = hasValidAiEnrichment
+      ? {
+          serviceType: candidateEnrichment!.serviceType!.trim().slice(0, 80),
+          budget: {
+            min: Number.isFinite(candidateEnrichment!.budget?.min) ? candidateEnrichment!.budget!.min! : null,
+            max: Number.isFinite(candidateEnrichment!.budget?.max) ? candidateEnrichment!.budget!.max! : null,
+            currency: candidateEnrichment!.budget?.currency?.trim().slice(0, 12) || "SGD",
+            text: candidateEnrichment!.budget?.text?.trim().slice(0, 100) || "",
+          },
+          urgency: candidateEnrichment!.urgency!.trim().slice(0, 40),
+          location: candidateEnrichment!.location!.trim().slice(0, 100),
+          summary: candidateEnrichment!.summary!.trim().slice(0, 1200),
+        }
+      : deterministicEnrichment;
+    const qualification = hasValidAiQualification
+      ? {
+          score: Math.max(0, Math.min(100, Math.round(candidateQualification!.score!))),
+          classification: candidateQualification!.classification!,
+          reasons: candidateQualification!.reasons!.filter((reason) => typeof reason === "string").map((reason) => reason.trim().slice(0, 240)).filter(Boolean).slice(0, 8),
+        }
+      : qualifyLead(enrichment, message);
+    const aiUsed = hasValidAiEnrichment && hasValidAiQualification;
     const data = await loadData(c.env);
     const leadId = data.counters.directSales++;
     const createdAt = now();
@@ -10129,7 +10239,8 @@ app.post(
       buildWorkflowResponse(c.req.raw, {
         workflow: "lead_scoring",
         intent: "lead",
-        fallbackUsed: true,
+        fallbackUsed: !aiUsed,
+        fallbackProvider: aiUsed ? null : "deterministic",
         data: {
           lead: {
             id: leadId,
@@ -10146,7 +10257,7 @@ app.post(
             recipient: "sales-team",
             message: `New ${qualification.classification} lead received from ${source}: ${name}`,
           },
-          aiUsed: false,
+          aiUsed,
         },
       }),
       201,
@@ -13171,7 +13282,7 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
   });
 });
 
-app.post("/api/send-to-make", async (c) => {
+app.post("/api/send-to-make", requireAgencyAdminAuth, async (c) => {
   const webhookUrl = c.env.MAKE_WEBHOOK_URL?.trim();
   if (!webhookUrl) return c.json({ error: "Make webhook is not configured" }, 503);
 
