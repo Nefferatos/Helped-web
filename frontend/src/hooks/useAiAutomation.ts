@@ -166,12 +166,28 @@ export const triggerMakeScenario = async (
   };
 };
 
+/** Raw API response shape from POST /api/inquiry (wrapped by buildWorkflowResponse) */
+interface WorkflowApiResponse<T> {
+  workflow: string;
+  intent: string;
+  fallbackUsed: boolean;
+  fallbackProvider: string | null;
+  data: T;
+}
+
 export const submitInquiryWithAutomation = async (payload: InquiryPayload) => {
-  const inquiryResult = await postJson<AiInquiryResponse, InquiryPayload>(
+  const rawResponse = await postJson<WorkflowApiResponse<AiInquiryResponse>, InquiryPayload>(
     "/api/inquiry",
     payload,
     "Failed to process inquiry",
   );
+
+  // The API wraps the inquiry result under a `data` key via buildWorkflowResponse.
+  // Unwrap it so downstream code gets the expected AiInquiryResponse shape.
+  const inquiryResult: AiInquiryResponse =
+    rawResponse.data && typeof rawResponse.data === "object" && "inquiry" in rawResponse.data
+      ? rawResponse.data
+      : (rawResponse as unknown as AiInquiryResponse);
 
   let makeTriggered = false;
   let makeError: string | null = null;

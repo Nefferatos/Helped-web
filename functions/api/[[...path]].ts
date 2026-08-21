@@ -9253,48 +9253,44 @@ app.post(
       result?: Record<string, unknown>;
       scheduledDate?: string;
       scheduledTime?: string;
+      rating?: number;
+      strengthsHtml?: string;
+      weaknessesHtml?: string;
     }>(c.req.raw);
 
     const to = toTrimmedString(body?.to);
+    const emailType = toTrimmedString(body?.type) || "unknown";
+
+    if (!to) {
+      return c.json({ error: "to (recipient email) is required" }, 400);
+    }
+
+    // Try Resend first (only when subject + body are provided for plain-text fallback)
     const subject = toTrimmedString(body?.subject);
     const text = toTrimmedString(body?.body);
-
-    if (!to || !subject || !text) {
-      return c.json({ error: "to, subject, and body are required" }, 400);
+    if (subject && text) {
+      const emailResult = await sendEmailViaResend(c.env, to, subject, text);
+      if (emailResult.ok) {
+        return c.json({
+          ok: true,
+          message: "Email sent successfully via Resend",
+          to,
+          type: emailType,
+          provider: "resend",
+        });
+      }
     }
 
-    // Try Resend first
-    const emailResult = await sendEmailViaResend(c.env, to, subject, text);
-
-    if (emailResult.ok) {
-      return c.json({
-        ok: true,
-        message: "Email sent successfully via Resend",
-        to,
-        type: body?.type || "unknown",
-        provider: "resend",
-      });
-    }
-
-    // Fallback: use Make.com webhook to dispatch email
+    // Forward structured data to Make.com (generates its own HTML templates)
     const makeUrl = c.env.MAKE_WEBHOOK_URL?.trim();
     if (makeUrl) {
       try {
+        // Forward the entire body so Make.com can use all structured fields
+        // (type, candidateName, position, scheduledDate, scheduledTime, rating, strengthsHtml, weaknessesHtml)
         const makeResponse = await fetch(makeUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            scenario: "hr_interview_email",
-            to,
-            subject,
-            body: text,
-            candidateName: body?.candidateName || "",
-            position: body?.position || "",
-            type: body?.type || "unknown",
-            scheduledDate: body?.scheduledDate || "",
-            scheduledTime: body?.scheduledTime || "",
-            result: body?.result || null,
-          }),
+          body: JSON.stringify(body),
           signal: AbortSignal.timeout(10_000),
         });
 
@@ -9303,7 +9299,7 @@ app.post(
             ok: true,
             message: "Email queued via Make.com automation",
             to,
-            type: body?.type || "unknown",
+            type: emailType,
             provider: "make.com",
           });
         }
@@ -9315,10 +9311,7 @@ app.post(
     }
 
     // Neither Resend nor Make.com available
-    if (emailResult.error === "RESEND_NOT_CONFIGURED") {
-      return c.json({ error: "Email service is not configured. Set RESEND_API_KEY or MAKE_WEBHOOK_URL." }, 503);
-    }
-    return c.json({ error: "Email could not be delivered right now" }, 502);
+    return c.json({ error: "Email service is not configured. Set RESEND_API_KEY or MAKE_WEBHOOK_URL." }, 503);
   }),
 );
 

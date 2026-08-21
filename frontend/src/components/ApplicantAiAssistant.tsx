@@ -300,67 +300,101 @@ const ApplicantAiAssistant = ({
     (userMessage: string): string => {
       const lower = userMessage.toLowerCase();
       const stepNames = ["Start", "Biodata", "Health & Prefs", "Skills & History", "Attachments"];
+      const name = (form.fullName || "").trim().split(/\s+/)[0] || "there";
+      const score = analysis.readinessScore;
+
+      // Greetings
+      if (/^(hi|hello|hey|good\s?(morning|afternoon|evening)|howdy)\b/.test(lower)) {
+        if (score >= 80) {
+          return `Hey ${name}! 😊 Great news — your application is looking strong at ${score}% ready. Is there anything specific you'd like help with, or shall I review what's left?`;
+        } else if (score >= 50) {
+          return `Hi ${name}! Welcome. I'm here to help you put together a great application. You're at ${score}% right now — we can get that up quickly. Want me to show you what to focus on?`;
+        }
+        return `Hi ${name}! 👋 I'm your application assistant. I'll guide you through each step to make sure your profile stands out to employers. You're at ${score}% — let's work through it together. Where would you like to start?`;
+      }
+
+      // Thank you
+      if (/thank|thanks|thx|appreciate/.test(lower)) {
+        return `You're welcome, ${name}! 😊 I'm right here if you need anything else. Good luck with your application — you've got this!`;
+      }
 
       // Readiness check
-      if (lower.includes("readiness") || lower.includes("ready") || lower.includes("missing") || lower.includes("incomplete")) {
+      if (lower.includes("readiness") || lower.includes("ready") || lower.includes("missing") || lower.includes("incomplete") || lower.includes("check") || lower.includes("progress") || lower.includes("how.*doing") || lower.includes("how.*going") || lower.includes("status")) {
         const lines: string[] = [];
-        lines.push(`Your application readiness score is ${analysis.readinessScore}%.`);
+
+        if (score >= 90) {
+          lines.push(`Amazing work, ${name}! Your application is ${score}% ready — almost there! 🎉`);
+        } else if (score >= 70) {
+          lines.push(`Good progress, ${name}! You're at ${score}% — just a few more things to fill in.`);
+        } else if (score >= 50) {
+          lines.push(`You're getting there, ${name}! Currently at ${score}%. Let me walk you through what's still needed.`);
+        } else {
+          lines.push(`No worries, ${name} — we all start somewhere! You're at ${score}% and I'll help you get to 100%. Here's what we need:`);
+        }
 
         if (analysis.missingRequired.length === 0) {
-          lines.push("All required fields are complete.");
+          lines.push("All the required fields are filled in — that's the hard part done!");
         } else {
-          lines.push(`\nMissing required fields (${analysis.missingRequired.length}):`);
           const stepGroups = new Map<number, string[]>();
           analysis.missingRequired.forEach((f) => {
             const existing = stepGroups.get(f.step) ?? [];
             existing.push(f.label);
             stepGroups.set(f.step, existing);
           });
+          lines.push(`\nWe still need ${analysis.missingRequired.length} required field${analysis.missingRequired.length > 1 ? "s" : ""}:`);
           stepGroups.forEach((fields, step) => {
-            lines.push(`  • Step ${step} (${stepNames[step]}): ${fields.join(", ")}`);
+            lines.push(`→ ${stepNames[step]}: ${fields.join(", ")}`);
           });
         }
 
         if (analysis.missingRecommended.length > 0) {
-          lines.push(`\nRecommended fields still empty: ${analysis.missingRecommended.length}`);
-          if (analysis.missingRecommended.length <= 5) {
-            lines.push(`  • ${analysis.missingRecommended.map((f) => f.label).join(", ")}`);
-          }
+          lines.push(`\nThere are also ${analysis.missingRecommended.length} optional fields that would make your profile stronger — but we can come back to those.`);
         }
 
-        lines.push(`\nSkills rated: ${analysis.completedSkills}/${analysis.totalSkills}`);
+        if (analysis.completedSkills < analysis.totalSkills) {
+          lines.push(`\nYou've rated ${analysis.completedSkills} of ${analysis.totalSkills} skill areas. Rating your skills helps employers see what you're best at.`);
+        }
 
         return lines.join("\n");
       }
 
       // Improvement tips
-      if (lower.includes("improve") || lower.includes("tip") || lower.includes("advice") || lower.includes("stand out") || lower.includes("better")) {
+      if (lower.includes("improve") || lower.includes("tip") || lower.includes("advice") || lower.includes("stand out") || lower.includes("better") || lower.includes("strengthen") || lower.includes("help")) {
         if (analysis.tips.length === 0) {
-          return "Your application looks comprehensive! To stand out further, make sure your cover note is personal and specific, and that your skill ratings accurately reflect your abilities.";
+          return `Honestly, ${name}, your application is looking really solid! 💪 A couple of things that can make it even better:\n\n• Make your cover note personal — mention your experience and why you enjoy this work\n• Double-check that your skill ratings truly reflect your abilities\n\nYou're in great shape to submit!`;
         }
-        return `Here are personalized tips to improve your application:\n\n${analysis.tips.map((t, i) => `${i + 1}. ${t}`).join("\n")}`;
+        const personalizedTips = analysis.tips.slice(0, 4).map((t, i) => `${i + 1}. ${t}`).join("\n");
+        return `Here's what I'd focus on to make your application stand out, ${name}:\n\n${personalizedTips}\n\nThese small improvements can make a big difference to employers reviewing your profile.`;
       }
 
-      // Next steps
-      if (lower.includes("next") || lower.includes("focus") || lower.includes("should i") || lower.includes("what to do")) {
+      // Next steps / what to do
+      if (lower.includes("next") || lower.includes("focus") || lower.includes("should i") || lower.includes("what to do") || lower.includes("where do i") || lower.includes("how do i") || lower.includes("what now") || lower.includes("start")) {
         if (analysis.missingRequired.length > 0) {
           const nextStep = Math.min(...analysis.missingRequired.map((f) => f.step));
           const fieldsAtStep = analysis.missingRequired.filter((f) => f.step === nextStep);
-          return `Focus on Step ${nextStep} (${stepNames[nextStep]}) next. Complete: ${fieldsAtStep.map((f) => f.label).join(", ")}. You're currently on step ${activeStep + 1} of ${totalSteps}.`;
+          return `Great question, ${name}! Right now, I'd suggest focusing on the "${stepNames[nextStep]}" section. You need to fill in: ${fieldsAtStep.map((f) => f.label).join(", ")}.\n\nYou're on step ${activeStep + 1} of ${totalSteps}. Once you complete these, you'll be much closer to a strong application!`;
         }
         if (analysis.missingRecommended.length > 0) {
-          return `All required fields are done! Consider filling in ${analysis.missingRecommended.length} recommended fields to strengthen your profile further.`;
+          return `Nice work, ${name}! All the required fields are done. ✅\n\nTo really make your profile shine, consider adding some of the ${analysis.missingRecommended.length} optional details — things like previous countries worked in, certifications, or training records. These help employers see the full picture of your experience.`;
         }
-        return "Your application is complete! Review your details and submit when ready. After submission, I can provide a full AI screening report.";
+        if (analysis.completedSkills < analysis.totalSkills) {
+          return `Almost there, ${name}! Your info is complete. The last thing is rating your remaining skills — even a 1-star rating helps. Would you like to do that now?`;
+        }
+        return `You're all set, ${name}! 🎉 Your application looks complete and ready to submit. Go ahead and hit that submit button — I'll be here if you need anything after!`;
       }
 
       // Current step guidance
-      if (lower.includes("step") || lower.includes("current") || lower.includes("where am i")) {
-        return `You're on Step ${activeStep + 1} of ${totalSteps} (${stepNames[activeStep] || "Form"}). Your overall readiness is ${analysis.readinessScore}%. ${analysis.missingRequired.filter((f) => f.step === activeStep).length > 0 ? `This step has ${analysis.missingRequired.filter((f) => f.step === activeStep).length} incomplete required fields.` : "This step's required fields are complete."}`;
+      if (lower.includes("step") || lower.includes("current") || lower.includes("where am i") || lower.includes("which page") || lower.includes("where.*i")) {
+        const stepIncomplete = analysis.missingRequired.filter((f) => f.step === activeStep);
+        const stepLabel = stepNames[activeStep] || "Form";
+        if (stepIncomplete.length > 0) {
+          return `You're on Step ${activeStep + 1} — "${stepLabel}". There ${stepIncomplete.length === 1 ? "is" : "are"} ${stepIncomplete.length} required field${stepIncomplete.length > 1 ? "s" : ""} still needed on this step: ${stepIncomplete.map((f) => f.label).join(", ")}.\n\nYour overall progress is ${score}%. You're doing well — keep going!`;
+        }
+        return `You're on Step ${activeStep + 1} — "${stepLabel}". Good news: all required fields here are filled in! ✅\n\nYour overall progress is ${score}%. You can move to the next step or add more details here if you'd like.`;
       }
 
       // Skills
-      if (lower.includes("skill") || lower.includes("rating") || lower.includes("experience")) {
+      if (lower.includes("skill") || lower.includes("rating") || lower.includes("experience") || lower.includes("rate")) {
         const skillLabels: Record<string, string> = {
           childcareExperience: "Childcare",
           newbornCareExperience: "Newborn care",
@@ -372,19 +406,54 @@ const ApplicantAiAssistant = ({
         const rated = SKILL_RATING_FIELDS.filter((k) => Number(form[k] || 0) > 0);
         const unrated = SKILL_RATING_FIELDS.filter((k) => Number(form[k] || 0) === 0);
         const lines: string[] = [];
-        lines.push(`You've rated ${rated.length}/${SKILL_RATING_FIELDS.length} skill areas.`);
+
+        if (rated.length === SKILL_RATING_FIELDS.length) {
+          return `Great news, ${name}! You've rated all ${SKILL_RATING_FIELDS.length} skill areas. This gives employers a clear picture of your strengths. 💪`;
+        }
+
         if (rated.length > 0) {
-          lines.push(`Rated: ${rated.map((k) => `${skillLabels[k]} (${form[k]}/5)`).join(", ")}`);
+          lines.push(`So far you've rated ${rated.length} of ${SKILL_RATING_FIELDS.length} skills:`);
+          lines.push(rated.map((k) => `  ${skillLabels[k]}: ${form[k]}/5 ⭐`).join("\n"));
+        } else {
+          lines.push(`You haven't rated any skills yet, ${name}. This is a great way to show employers what you're good at!`);
         }
+
         if (unrated.length > 0) {
-          lines.push(`Unrated: ${unrated.map((k) => skillLabels[k]).join(", ")}`);
-          lines.push("Even a 1-star rating helps recruiters assess your level.");
+          lines.push(`\nStill need ratings for: ${unrated.map((k) => skillLabels[k]).join(", ")}`);
+          lines.push("Don't worry about being perfect — even a 1-star rating is better than leaving it blank. It shows you have some experience in that area.");
         }
+
         return lines.join("\n");
       }
 
-      // Default
-      return `I can help you with: checking readiness (currently ${analysis.readinessScore}%), improvement tips, next steps, or skill ratings. What would you like to know?`;
+      // Cover note
+      if (lower.includes("cover") || lower.includes("note") || lower.includes("introduction") || lower.includes("letter") || lower.includes("bio")) {
+        if (form.coverNote?.trim()) {
+          return `I can see you've written a cover note — that's great, ${name}! A strong cover note mentions your relevant experience, what kind of employer you're looking for, and what makes you a reliable helper. If you'd like, you can review and polish it before submitting.`;
+        }
+        return `A cover note is one of the best ways to stand out, ${name}! It's your chance to introduce yourself to employers in your own words. Try to include:\n\n• A brief introduction and your background\n• What you're good at and enjoy doing\n• Why you'd be a great helper for a family\n\nEven 2-3 sentences can make a real difference!`;
+      }
+
+      // Salary
+      if (lower.includes("salary") || lower.includes("pay") || lower.includes("wage") || lower.includes("money") || lower.includes("how much") || lower.includes("compensation")) {
+        if (form.expectedSalary?.trim()) {
+          return `You've set your expected salary at $${form.expectedSalary}/month. That looks good! Employers will use this to see if you're a match for their budget. You can always adjust it if needed.`;
+        }
+        return `Setting an expected salary helps agencies match you with the right employers, ${name}. Think about what's fair for your experience level and the type of work involved. You can always update it later — it's not set in stone.`;
+      }
+
+      // Help / general questions
+      if (lower.includes("what can you") || lower.includes("what do you") || lower.includes("who are you") || lower.includes("how can you help") || lower.includes("what are you")) {
+        return `I'm your application assistant, ${name}! Think of me as your personal guide through the application process. I can:\n\n• Check how complete your application is\n• Suggest what to fill in next\n• Give tips to make your profile stand out\n• Help with skill ratings and your cover note\n\nJust ask me anything — I'm here to help! 😊`;
+      }
+
+      // Default — warm, contextual response
+      if (score >= 80) {
+        return `I'm here to help, ${name}! Your application is looking strong at ${score}%. You can ask me about your progress, what to improve, or what to focus on next. What's on your mind?`;
+      } else if (score >= 50) {
+        return `Hey ${name}! I'm here to help you complete your application. You're at ${score}% right now. Want me to show you what's missing, or give you tips to improve? Just ask!`;
+      }
+      return `Hi ${name}! 👋 I'm here to help you with your application. You can ask me things like:\n\n• "What's missing?" — I'll check your progress\n• "What should I do next?" — I'll guide you step by step\n• "How can I improve?" — I'll give you personalized tips\n\nWhat would you like help with?`;
     },
     [analysis, activeStep, totalSteps, form],
   );

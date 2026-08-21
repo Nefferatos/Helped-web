@@ -64,6 +64,7 @@ interface ScheduledInterview {
   position: string;
   scheduledDate: string;
   scheduledTime: string;
+  meetLink?: string;
   status: "scheduled" | "completed" | "cancelled";
   createdAt: string;
 }
@@ -178,6 +179,7 @@ const AiHrInterviewerPage = () => {
   const [aiEnabled, setAiEnabled] = useState(true);
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
+  const [meetLink, setMeetLink] = useState("");
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduledInterviews, setScheduledInterviews] = useState<ScheduledInterview[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -299,7 +301,7 @@ const AiHrInterviewerPage = () => {
     }
   }, [input, isThinking, currentStage, messages, addMessage, askNextQuestion, aiEnabled, callAiInterviewer, handleAiResponse]);
 
-  // ── Schedule Interview & Send Invitation ──────────────────────────────
+  // ── Schedule Interview & Send Invitation (via Make.com) ───────────────
   const scheduleInterview = useCallback(async () => {
     if (!candidateName.trim() || !candidateEmail.trim() || !position.trim()) { toast.error("Fill in candidate details first"); return; }
     if (!scheduledDate || !scheduledTime) { toast.error("Select a date and time"); return; }
@@ -308,32 +310,57 @@ const AiHrInterviewerPage = () => {
       const dt = new Date(`${scheduledDate}T${scheduledTime}`);
       const formattedDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
       const formattedTime = dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-      const subject = `Interview Invitation – ${position} Position`;
-      const body = `Dear ${candidateName},\n\nWe are pleased to invite you for an interview for the ${position} position.\n\nInterview Details:\n• Date: ${formattedDate}\n• Time: ${formattedTime}\n• Type: AI-Assisted HR Interview\n\nPlease ensure you are available at the scheduled time. The interview will be conducted by our AI HR assistant and will assess your experience, skills, and suitability for the role.\n\nIf you need to reschedule, please contact us as soon as possible.\n\nWe look forward to speaking with you.\n\nBest regards,\nThe Agency HR Team`;
 
+      // Send structured data for Make.com workflow (generates its own HTML templates)
       const response = await fetch("/api/ai/hr-interview/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: candidateEmail, subject, body, candidateName, position, type: "interview_invitation", scheduledDate, scheduledTime }),
+        body: JSON.stringify({
+          to: candidateEmail,
+          candidateName,
+          position,
+          type: "interview_invitation",
+          scheduledDate: formattedDate,
+          scheduledTime: formattedTime,
+          meetLink: meetLink.trim() || undefined,
+        }),
       });
       if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || "Failed to send invitation"); }
 
-      const newSchedule: ScheduledInterview = { id: `sched-${Date.now()}`, candidateName, candidateEmail, position, scheduledDate, scheduledTime, status: "scheduled", createdAt: new Date().toISOString() };
+      const newSchedule: ScheduledInterview = { id: `sched-${Date.now()}`, candidateName, candidateEmail, position, scheduledDate, scheduledTime, meetLink: meetLink.trim() || undefined, status: "scheduled", createdAt: new Date().toISOString() };
       setScheduledInterviews((prev) => [newSchedule, ...prev]);
       toast.success(`Invitation sent to ${candidateEmail} for ${formattedDate} at ${formattedTime}`);
     } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to schedule"); }
     finally { setIsScheduling(false); }
-  }, [candidateName, candidateEmail, position, scheduledDate, scheduledTime]);
+  }, [candidateName, candidateEmail, position, scheduledDate, scheduledTime, meetLink]);
 
   const sendResultEmail = useCallback(async (type: "pass" | "fail") => {
     if (!candidateEmail) return;
     setEmailSending(true);
     try {
-      const subject = type === "pass" ? `Congratulations! Shortlisted for ${position}` : `Update on your application for ${position}`;
-      const body = type === "pass"
-        ? `Dear ${candidateName},\n\nCongratulations! You have been shortlisted for the ${position} position.\n\nScore: ${interviewResult?.overallScore}/100\n\nStrengths:\n${interviewResult?.strengths.map((s) => `- ${s}`).join("\n")}\n\nBest regards,\nThe Agency HR Team`
-        : `Dear ${candidateName},\n\nThank you for interviewing for the ${position} position.\n\nWe are unable to proceed at this time.\n\nAreas for improvement:\n${interviewResult?.weaknesses.map((w) => `- ${w}`).join("\n")}\n\nBest regards,\nThe Agency HR Team`;
-      const response = await fetch("/api/ai/hr-interview/email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: candidateEmail, subject, body, candidateName, position, result: interviewResult, type }) });
+      // Build structured data for Make.com workflow (generates its own HTML templates)
+      const strengthsHtml = (interviewResult?.strengths ?? []).map((s) => `<li>${s}</li>`).join("");
+      const weaknessesHtml = (interviewResult?.weaknesses ?? []).map((w) => `<li>${w}</li>`).join("");
+
+      const payload: Record<string, unknown> = {
+        to: candidateEmail,
+        candidateName,
+        position,
+        type,
+        rating: interviewResult?.overallScore ?? 0,
+      };
+
+      if (type === "pass") {
+        payload.strengthsHtml = strengthsHtml || "<li>Strong overall performance</li>";
+      } else {
+        payload.weaknessesHtml = weaknessesHtml || "<li>Areas for improvement identified</li>";
+      }
+
+      const response = await fetch("/api/ai/hr-interview/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
       if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || "Failed to send email"); }
       setEmailSent(true);
       toast.success(`${type === "pass" ? "Pass" : "Fail"} email sent to ${candidateEmail}`);
@@ -345,7 +372,7 @@ const AiHrInterviewerPage = () => {
     setMessages([]); setInput(""); setCurrentStageIndex(0); setQuestionIndex(0);
     setCandidateName(""); setCandidateEmail(""); setPosition(""); setShowSetup(true);
     setInterviewResult(null); setEmailSent(false); setMakeTriggered(false); setMakeError(null); setIsSubmittingSession(false);
-    setScheduledDate(""); setScheduledTime("");
+    setScheduledDate(""); setScheduledTime(""); setMeetLink("");
   }, []);
 
   const statusBadge = (status: InterviewSession["status"]) => {
@@ -414,6 +441,7 @@ const AiHrInterviewerPage = () => {
                         <label className="block"><span className="text-[11px] font-semibold text-slate-600">Date</span><Input className="mt-1" type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} min={new Date().toISOString().split("T")[0]} /></label>
                         <label className="block"><span className="text-[11px] font-semibold text-slate-600">Time</span><Input className="mt-1" type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} /></label>
                       </div>
+                      <label className="block"><span className="text-[11px] font-semibold text-slate-600">Google Meet Link (optional)</span><Input className="mt-1" type="url" value={meetLink} onChange={(e) => setMeetLink(e.target.value)} placeholder="https://meet.google.com/xxx-xxxx-xxx" /></label>
                       {scheduledDate && scheduledTime && (
                         <Button onClick={() => void scheduleInterview()} disabled={isScheduling} variant="outline" className="w-full border-blue-300 text-blue-700 hover:bg-blue-100" size="sm">
                           {isScheduling ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-2 h-3.5 w-3.5" />}
@@ -586,6 +614,7 @@ const AiHrInterviewerPage = () => {
                         <div className="flex items-center gap-2"><p className="text-sm font-semibold text-slate-900">{sched.candidateName}</p>{scheduleStatusBadge(sched.status)}</div>
                         <p className="text-xs text-slate-500">{sched.position} · {sched.candidateEmail}</p>
                         <p className="text-xs text-blue-600 font-semibold mt-0.5">📅 {new Date(`${sched.scheduledDate}T${sched.scheduledTime}`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at {new Date(`${sched.scheduledDate}T${sched.scheduledTime}`).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}</p>
+                        {sched.meetLink && <a href={sched.meetLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:underline mt-0.5">📹 Join Google Meet</a>}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600"><Mail className="h-3 w-3" /> Invitation sent</span>
