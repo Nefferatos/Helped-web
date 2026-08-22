@@ -74,6 +74,7 @@ const PublicMaidApplicationStatusPage = lazyRoute(() => import("@/pages/PublicMa
 const NotFound = lazyRoute(() => import("@/pages/NotFound"));
 const AuthCallback = lazyRoute(() => import("@/pages/AuthCallback"));
 const PrivacyPolicy = lazyRoute(() => import("@/pages/PrivacyPolicy"));
+const TermsOfService = lazyRoute(() => import("@/pages/TermsOfService"));
 const DataDeletion = lazyRoute(() => import("@/pages/DataDeletion"));
 const AiAutomationPage = lazyRoute(() => import("@/pages/AiAutomationPage"));
 const AiAgentsPage = lazyRoute(() => import("@/pages/AiAgentsPage"));
@@ -164,7 +165,7 @@ const ProtectedAdminRoute = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, storedAdmin]);
 
   if (status === "checking") {
     return (
@@ -378,6 +379,7 @@ const App = () => {
             <Route path="/apply-as-maid" element={withRouteLoader(<PublicMaidApplicationPage />)} />
             <Route path="/apply-as-maid/status/:applicationId" element={withRouteLoader(<PublicMaidApplicationStatusPage />)} />
             <Route path="/privacy-policy" element={withRouteLoader(<PrivacyPolicy />)} />
+            <Route path="/terms-of-service" element={withRouteLoader(<TermsOfService />)} />
             <Route path="/data-deletion" element={withRouteLoader(<DataDeletion />)} />
             <Route path="/ai-workflows" element={withRouteLoader(<AiAutomationPage />)} />
             <Route path="/" element={withRouteLoader(<ClientHomeRedirect />)} />

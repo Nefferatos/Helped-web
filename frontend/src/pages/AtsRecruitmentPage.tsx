@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
 import {
   bulkAtsAction,
@@ -475,7 +476,10 @@ const AtsRecruitmentPage = () => {
       try {
         const res = await fetch("/api/ai/screen-applicant", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...getAgencyAdminAuthHeaders(),
+          },
           body: JSON.stringify({ healthCheck: true }),
         });
         // If endpoint responds at all (even with auth error), the AI service is reachable
