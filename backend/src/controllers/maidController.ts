@@ -499,13 +499,13 @@ const buildMaidProfilesFromCsv = (
 export const getMaidList = async (req: Request, res: Response) => {
   try {
     const { search, visibility } = req.query
-    const noPhotos = req.query.noPhotos === '1' || req.query.noPhotos === 'true'
     const requestedAgencyId = parsePositiveInteger(req.query.agencyId)
     const page = parsePositiveInteger(req.query.page)
     const pageSize = parsePositiveInteger(req.query.pageSize)
     const offset = parsePositiveInteger(req.query.offset) ?? 0
     const limit = pageSize ?? parsePositiveInteger(req.query.limit)
     const admin = await getAuthenticatedAgencyAdmin(req)
+    const noPhotos = req.query.noPhotos === '1' || req.query.noPhotos === 'true'
     const shouldUseAllPublic =
       !admin &&
       typeof visibility === 'string' &&

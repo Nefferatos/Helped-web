@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowRight, CheckCircle, HeartHandshake, Users, X, Star,
   Shield, ChevronRight, Search, Home, Heart, Baby, Backpack,
@@ -19,14 +20,10 @@ import culinaryImg from "./assets/culinary-optimized.webp";
 import elderlyImg from "./assets/elderly-care-optimized.webp";
 import familyImg from "./assets/family.jpg";
 import heroImage from "./assets/maid1-optimized.webp";
-import indianMaidImage from "./assets/northeast-indian-maid-domestic-helper.png";
-import filipinoMaidImage from "./assets/filipino-maid-domestic-helper.png";
-import indonesianMaidImage from "./assets/indonesian-maid-domestic-helper.png";
-import myanmarMaidImage from "./assets/myanmar-maid-domestic-helper.png";
-import nepaleseMaidImage from "./assets/nepalese-maid-domestic-helper.png";
 import housekeepingImg from "./assets/housekeeping-optimized.webp";
 import infantImg from "./assets/infant-care-optimized.webp";
 import "./ClientTheme.css";
+import { RequestForm, defaultFilters, GLOBAL_CSS as REQUEST_FORM_CSS } from "./ClientMaidsPage";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    GLOBAL STYLES
@@ -51,6 +48,8 @@ const GLOBAL_STYLES = `
   *, *::before, *::after { box-sizing: border-box; }
 
   .client-landing p { font-size: 16px !important; }
+  .landing-request-tab { width: 52px; height: 154px; padding: 12px 0; font-size: 13px; }
+  @media (max-width: 640px) { .landing-request-tab { width: 40px; height: 118px; padding: 8px 0; font-size: 11px; border-radius: 0 9px 9px 0 !important; } }
 
   @keyframes morphOrb {
     0%,100% { border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; transform: scale(1) rotate(0deg); }
@@ -705,6 +704,42 @@ const GLOBAL_STYLES = `
   .maid-card-info { padding: 10px 12px 12px; }
   @media (max-width: 480px) { .maid-card-info { padding: 8px 10px 10px; } }
 
+  /* ── Nationality browse panels ── */
+  .nationality-panel { overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: #fff; }
+  .nationality-panel + .nationality-panel { margin-top: 16px; }
+  .nationality-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, #f7fcfd, #e0f4f7); }
+  .nationality-panel-title { margin: 0; color: var(--teal); font: 800 16px/1.2 'Inter', sans-serif; }
+  .nationality-panel-link { color: var(--teal); font: 700 13px/1.3 'Inter', sans-serif; text-align: right; text-decoration: underline; }
+  .nationality-preview-grid { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px; padding: 14px 16px 16px; }
+  .nationality-preview { width: 100%; min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: #fff; color: #0b1f25; text-align: left; text-decoration: none; font: inherit; cursor: pointer; appearance: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+  .nationality-preview-photo { width: 100%; overflow: hidden; border-bottom: 1px solid var(--border); background: #f5f7f8; }
+  .nationality-preview-photo img { width: 100%; height: auto; display: block; }
+  .nationality-preview.is-locked .nationality-preview-photo img { filter: blur(9px); transform: scale(1.08); }
+  .nationality-preview p { margin: 8px 12px 0; font: 500 13px/1.35 'Inter', sans-serif; }
+  .nationality-preview p + p { margin-top: 1px; }
+  .nationality-preview p:last-child { margin-bottom: 12px; }
+  .nationality-preview:hover { border-color: var(--teal-light); box-shadow: 0 5px 16px rgba(14,78,94,.16); transform: translateY(-2px); }
+  .nationality-preview:hover .nationality-preview-photo { border-color: var(--teal-light); }
+  .nationality-preview:hover p:first-of-type { color: var(--teal); }
+  .nationality-guest-unlock {
+    position: absolute; z-index: 3; top: 50%; left: 50%; width: min(360px, calc(100% - 30px));
+    transform: translate(-50%, -50%); padding: 15px 18px; border-radius: 10px;
+    background: linear-gradient(120deg, #0B3340 0%, #0E4E5E 54%, #1A6678 100%);
+    border: 1px solid rgba(252,211,77,.38); box-shadow: 0 16px 36px rgba(11,51,64,.30);
+    color: #fff; text-align: center; text-decoration: none;
+  }
+  .nationality-guest-unlock::before {
+    content: ""; position: absolute; left: -13px; top: 50%; transform: translateY(-50%);
+    border-top: 13px solid transparent; border-bottom: 13px solid transparent; border-right: 13px solid #0B3340;
+  }
+  .nationality-guest-unlock-title { display: flex; align-items: center; justify-content: center; gap: 8px; font: 800 15px/1.35 'Inter', sans-serif; }
+  .nationality-guest-unlock-copy { margin: 4px 0 11px; color: rgba(255,255,255,.75); font: 500 12px/1.4 'Inter', sans-serif; }
+  .nationality-guest-unlock-button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; border-radius: 7px; background: #FCD34D; color: #0B3340; font: 800 13px/1 'Inter', sans-serif; }
+  .nationality-guest-unlock:hover .nationality-guest-unlock-button { background: #fdd96a; }
+  @media (max-width: 1180px) { .nationality-preview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 800px) { .nationality-preview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { .nationality-panel-header { align-items: flex-start; flex-direction: column; gap: 5px; } .nationality-panel-link { text-align: left; } .nationality-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; } .nationality-guest-unlock { padding: 16px; width: calc(100% - 24px); } .nationality-guest-unlock-title { font-size: 15px; } .nationality-guest-unlock-copy { display: none; } .nationality-guest-unlock-button { min-height: 40px; font-size: 13px; } }
+
   /* ── Pagination ── */
   .pagination-wrap {
     margin-top: 40px;
@@ -1168,6 +1203,98 @@ const MaidCardFull = ({
   );
 };
 
+const NationalityPreviewPanel = ({
+  title,
+  nationality,
+  searchQuery,
+  maids,
+  isLoggedIn,
+}: {
+  title: string;
+  nationality: string;
+  searchQuery: string;
+  maids: MaidProfile[];
+  isLoggedIn: boolean;
+}) => {
+  const [guestPromptAnchor, setGuestPromptAnchor] = useState<DOMRect | null>(null);
+  const guestCardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const guestPromptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openGuestPrompt = (referenceCode: string) => {
+    if (guestPromptTimer.current) clearTimeout(guestPromptTimer.current);
+    const rect = guestCardRefs.current[referenceCode]?.getBoundingClientRect();
+    if (rect) setGuestPromptAnchor(rect);
+  };
+  const closeGuestPrompt = () => {
+    if (guestPromptTimer.current) clearTimeout(guestPromptTimer.current);
+    guestPromptTimer.current = setTimeout(() => setGuestPromptAnchor(null), 180);
+  };
+
+  useEffect(() => () => {
+    if (guestPromptTimer.current) clearTimeout(guestPromptTimer.current);
+  }, []);
+
+  if (!maids.length) return null;
+  const moreHref = `/search-maids/results?q=${encodeURIComponent(searchQuery)}`;
+
+  return (
+    <section className="nationality-panel" aria-label={`${title} profiles`}>
+      <div className="nationality-panel-header">
+        <h3 className="nationality-panel-title">{title}</h3>
+        <Link className="nationality-panel-link" to={moreHref}>
+          View {maids.length} {nationality} {maids.length === 1 ? "helper" : "helpers"} →
+        </Link>
+      </div>
+      <div className="nationality-preview-grid">
+        {maids.slice(0, 7).map(maid => {
+          const age = calculateAge(maid.dateOfBirth);
+          const cardContent = <>
+            <div className="nationality-preview-photo">
+              <img src={getPrimaryPhoto(maid)} alt={maid.fullName || `${nationality} helper`} loading="lazy" decoding="async" />
+            </div>
+            <p>{maid.nationality || `${nationality} maid`}</p>
+            {maid.religion && <p>{maid.religion}</p>}
+            {(maid.maritalStatus || age) && <p>{maid.maritalStatus || ""}{maid.maritalStatus && age ? " " : ""}{age ? `(${age})` : ""}</p>}
+          </>;
+          return (
+            isLoggedIn ? (
+              <Link key={maid.referenceCode} to={`/maids/${encodeURIComponent(maid.referenceCode)}`} className="nationality-preview" aria-label={`View ${maid.fullName || `${nationality} helper`} profile`}>
+                {cardContent}
+              </Link>
+            ) : (
+              <button key={maid.referenceCode} ref={(element) => { guestCardRefs.current[maid.referenceCode] = element; }} type="button" className="nationality-preview is-locked" onClick={() => openGuestPrompt(maid.referenceCode)} onMouseEnter={() => openGuestPrompt(maid.referenceCode)} onMouseLeave={closeGuestPrompt} onFocus={() => openGuestPrompt(maid.referenceCode)} onBlur={closeGuestPrompt} aria-label="Log in to view this helper's full profile">
+                {cardContent}
+              </button>
+            )
+          );
+        })}
+      </div>
+      {!isLoggedIn && guestPromptAnchor && <LandingGuestPrompt anchorRect={guestPromptAnchor} onMouseEnter={() => { if (guestPromptTimer.current) clearTimeout(guestPromptTimer.current); }} onMouseLeave={closeGuestPrompt} />}
+    </section>
+  );
+};
+
+const LandingGuestPrompt = ({ anchorRect, onMouseEnter, onMouseLeave }: { anchorRect: DOMRect; onMouseEnter: () => void; onMouseLeave: () => void }) => {
+  const width = 320;
+  const mobile = window.innerWidth < 640;
+  const arrowSize = 15;
+  const showLeft = !mobile && anchorRect.right + arrowSize + width > window.innerWidth;
+  const left = mobile ? window.scrollX + window.innerWidth / 2 : Math.max(window.scrollX, showLeft ? anchorRect.left + window.scrollX - width - arrowSize : anchorRect.right + window.scrollX + arrowSize);
+  const top = mobile ? window.scrollY + window.innerHeight / 2 : Math.max(window.scrollY, anchorRect.top + window.scrollY);
+  return createPortal((
+    <div onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} style={{ position:"absolute", zIndex:9999, width: mobile ? "min(320px, calc(100vw - 28px))" : width, top, left, transform: mobile ? "translate(-50%, -50%)" : undefined, overflow:"visible", borderRadius:12, background:"#fff", border:"1px solid #c8e8ef", boxShadow:"0 16px 34px rgba(11,51,64,.22)", color:"#0B3340" }}>
+      {!mobile && <span style={{ position:"absolute", top:58, [showLeft ? "right" : "left"]:-15, width:0, height:0, borderTop:"15px solid transparent", borderBottom:"15px solid transparent", ...(showLeft ? { borderLeft:"15px solid #fff" } : { borderRight:"15px solid #fff" }) }} />}
+      <div style={{ padding:"15px 16px 14px", borderRadius:"11px 11px 0 0", background:"linear-gradient(135deg,#0B3340,#0E4E5E)", color:"#fff", textAlign:"left" }}>
+        <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 8px", borderRadius:999, background:"rgba(252,211,77,.16)", color:"#FCD34D", fontFamily:"'Inter',sans-serif", fontSize:10, fontWeight:800, letterSpacing:".06em", textTransform:"uppercase" as const }}><Lock size={12} /> Secure profile</span>
+        <p style={{ margin:"9px 0 0", fontFamily:"'Inter',sans-serif", fontSize:16, fontWeight:800, lineHeight:1.3 }}>View full biodata and photos</p>
+      </div>
+      <div style={{ padding:"14px 16px 16px", textAlign:"left" }}>
+        <p style={{ margin:"0 0 13px", color:"#517984", fontFamily:"'Inter',sans-serif", fontSize:12, lineHeight:1.45 }}>Sign in to unlock work experience, skills, and complete helper details.</p>
+        <Link to="/employer-login" style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, minHeight:40, borderRadius:7, background:"#FCD34D", color:"#0B3340", textDecoration:"none", fontFamily:"'Inter',sans-serif", fontSize:13, fontWeight:800 }}>Log in / Register <ArrowRight size={15} /></Link>
+      </div>
+    </div>
+  ), document.body);
+};
+
 /* ─────────────────────────────────────────────────────────────────────────────
    BACK TO TOP
 ───────────────────────────────────────────────────────────────────────────── */
@@ -1221,6 +1348,8 @@ const MAID_TYPES = [
 ] as const;
 
 const ITEMS_PER_PAGE = 12;
+// Versioned to discard any browser-session cache created before guest photos
+// were removed from the public API response.
 const MAIDS_CACHE_KEY = "landing_maids_cache";
 const MAIDS_CACHE_TTL = 5 * 60 * 1000;
 
@@ -1250,6 +1379,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [language, setLanguage] = useState("No Preference");
   const [currentPage, setCurrentPage] = useState(1);
   const [showSocialRail, setShowSocialRail] = useState(true);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
 
   const isLoggedIn = !!getClientToken();
   const searchMaidsHref = isLoggedIn ? "/client/maids" : "/search-maids";
@@ -1314,6 +1444,24 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     [allPublicMaids, keyword, maidTypes, nationality, language],
   );
 
+  const nationalityPreviews = useMemo(() => {
+    const groups = new Map<string, { nationality: string; searchQuery: string; maids: MaidProfile[] }>();
+
+    allPublicMaids.forEach(maid => {
+      const rawNationality = maid.nationality?.trim();
+      if (!rawNationality) return;
+      const nationality = rawNationality.replace(/\s+maid$/i, "").trim();
+      const key = nationality.toLowerCase();
+      const group = groups.get(key);
+      if (group) group.maids.push(maid);
+      else groups.set(key, { nationality, searchQuery: nationality, maids: [maid] });
+    });
+
+    return Array.from(groups.values())
+      .map(group => ({ ...group, title: `${group.nationality} Maid` }))
+      .sort((a, b) => a.nationality.localeCompare(b.nationality));
+  }, [allPublicMaids]);
+
   useEffect(() => { setCurrentPage(1); }, [keyword, maidTypes, nationality, language]);
 
   const totalPages = Math.ceil(filteredMaids.length / ITEMS_PER_PAGE);
@@ -1361,10 +1509,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     navigate(`${maidSearchResultsHref}${query ? `?${query}` : ""}`);
   };
   const handleRequestMaid = () => {
-    const params = buildParams();
-    params.set("intent", "request");
-    const base = isLoggedIn ? "/client/maids" : "/search-maids";
-    navigate(`${base}?${params.toString()}`);
+    setRequestModalOpen(true);
   };
   const clearFilters = () => {
     setKeyword(""); setMaidTypes([]); setNationality("No Preference"); setLanguage("No Preference"); setCurrentPage(1);
@@ -1373,7 +1518,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
 
   /* ── RENDER ── */
   return (
-    <div className="int client-landing" style={{ minHeight: "100vh", background: "#fff", fontFamily: "'Inter', sans-serif" }}>
+    <div className="int client-landing" style={{ position:"relative", minHeight: "100vh", background: "#fff", fontFamily: "'Inter', sans-serif" }}>
       <style>{GLOBAL_STYLES}</style>
       <BackToTopButton />
 
@@ -1393,6 +1538,9 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           minHeight: showSocialRail ? undefined : 42,
         }}
       >
+        <button type="button" onClick={() => setRequestModalOpen(true)} style={{ display:"none" }}>
+          Request help
+        </button>
         <button
           type="button"
           onClick={() => setShowSocialRail((visible) => !visible)}
@@ -1460,6 +1608,15 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           </a>
         ))}
       </aside>
+      <button type="button" className="landing-request-tab" onClick={() => setRequestModalOpen(true)} aria-label="Request Maid" title="Request Maid" style={{ position:"fixed", left:0, top:"50%", transform:"translateY(-50%)", zIndex:46, border:0, borderRadius:"0 12px 12px 0", background:"#FCD34D", color:"#0B3340", cursor:"pointer", boxShadow:"0 6px 16px rgba(11,51,64,.22)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, writingMode:"vertical-rl", whiteSpace:"nowrap" }}>
+        Request Maid
+      </button>
+      {requestModalOpen && <div className="request-modal-overlay" onMouseDown={() => setRequestModalOpen(false)}><div className="request-modal-shell" onMouseDown={(event) => event.stopPropagation()}><style>{`${REQUEST_FORM_CSS}
+        .request-modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.52);padding:16px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+        .request-modal-shell{width:min(960px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:hidden}
+        .request-modal-scale{zoom:.72}
+        @media(max-width:640px){.request-modal-overlay{padding:8px;align-items:flex-start;overflow-y:auto}.request-modal-shell{width:calc(100vw - 16px);max-height:none;overflow:visible;margin:auto 0}.request-modal-scale{zoom:.52}}
+      `}</style><div className="request-modal-scale"><RequestForm prefillFilters={defaultFilters} onBack={() => setRequestModalOpen(false)} /></div></div></div>}
 
       {!embedded && <PublicSiteNavbar />}
 
@@ -1620,46 +1777,33 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
         </div>
       </section>
 
-      {/* ── BROWSE BY ORIGIN ── */}
-      <section aria-labelledby="origin-heading" style={{ background:"#fff",padding:"58px 0 64px",borderBottom:"1px solid var(--teal-pale)" }}>
+      {/* ── BROWSE BY NATIONALITY ── */}
+      <section aria-labelledby="nationality-heading" style={{ background:"#fff",padding:"58px 0 64px",borderBottom:"1px solid var(--teal-pale)" }}>
         <div style={{ maxWidth:1280,margin:"0 auto",padding:"0 24px" }}>
           <div className="reveal" style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:18,marginBottom:24,flexWrap:"wrap" }}>
             <div>
               <span className="section-chip" style={{ background:"var(--teal-pale)",color:"var(--teal)",marginBottom:10 }}>Explore helpers</span>
-              <h2 id="origin-heading" className="pf" style={{ margin:0,color:"var(--teal-deep)",fontSize:"clamp(1.6rem,3vw,2.25rem)",fontStyle:"italic" }}>Browse by origin</h2>
-              <p style={{ margin:"7px 0 0",color:"#6A929C",fontSize:13 }}>Find the right cultural and language fit for your household.</p>
+              <h2 id="nationality-heading" className="pf" style={{ margin:0,color:"var(--teal-deep)",fontSize:"clamp(1.6rem,3vw,2.25rem)",fontStyle:"italic" }}>Browse by nationality</h2>
+              <p style={{ margin:"7px 0 0",color:"#6A929C",fontSize:13 }}>Preview available helpers, then open the full filtered list for a nationality.</p>
             </div>
             <Link to="/search-maids/results" className="btn-ghost-teal" style={{ textDecoration:"none" }}>View all helpers <ArrowRight size={14} /></Link>
           </div>
-          <div className="origin-gallery reveal">
-            <Link to="/search-maids/results?quick=indian" className="origin-card">
-              <img src={indianMaidImage} alt="Indian and Indian Nepalese domestic helpers" loading="lazy" />
-              <span className="origin-card-copy">
-                <span className="origin-card-title">Indian Helpers <ArrowRight size={17} /></span>
-                <span className="origin-card-note">Skilled, adaptable household support</span>
-              </span>
-            </Link>
-            {[
-              { title:"Filipino", note:"Experienced, English-speaking helpers", image:filipinoMaidImage, href:"/search-maids/results?quick=filipino" },
-              { title:"Indonesian", note:"Warm, adaptable household support", image:indonesianMaidImage, href:"/search-maids/results?quick=indonesian" },
-              { title:"Myanmar", note:"Dependable helpers for family care", image:myanmarMaidImage, href:"/search-maids/results?quick=myanmar" },
-              { title:"Nepalese", note:"Caring helpers for modern families", image:nepaleseMaidImage, href:"/search-maids/results?nationality=Nepali" },
-            ].map(item => (
-              <Link key={item.title} to={item.href} className="origin-card">
-                <img src={item.image} alt={`${item.title} domestic helper`} loading="lazy" />
-                <span className="origin-card-copy">
-                  <span className="origin-card-title">{item.title} <ArrowRight size={15} /></span>
-                  <span className="origin-card-note">{item.note}</span>
-                </span>
-              </Link>
-            ))}
+          <div className="reveal">
+            {isLoading ? (
+              <div style={{ padding:28,textAlign:"center",color:"#6A929C" }}>Loading nationality profiles…</div>
+            ) : (
+              nationalityPreviews.map(section => (
+                <NationalityPreviewPanel key={section.nationality} {...section} isLoggedIn={isLoggedIn} />
+              ))
+            )}
           </div>
         </div>
       </section>
 
       {/* ─────────────────────────────────────────────────────────────────────
-          MAID RESULTS
+          MAID RESULTS — temporarily disabled; nationality panels above are used instead.
       ───────────────────────────────────────────────────────────────────────── */}
+      {false && (
       <section id="maid-results" className="section-pad" style={{ background: "linear-gradient(180deg, #FFFDF5 0%, #FFFFFF 28%, #F1FAFC 100%)", padding: "72px 0", borderTop:"6px solid #FCD34D" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
 
@@ -1752,6 +1896,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           )}
         </div>
       </section>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────────
           SERVICES

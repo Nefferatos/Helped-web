@@ -331,7 +331,7 @@ const PopupRow = ({ label, value, valueClass = "", valueStyle }: { label: string
 // ════════════════════════════════════════════════════════════════════════════
 //  LockedMaidHoverModal
 // ════════════════════════════════════════════════════════════════════════════
-const LOCKED_MODAL_WIDTH = 340;
+const LOCKED_MODAL_WIDTH = 380;
 const LOCKED_MODAL_GAP = 10;
 
 const LockedMaidHoverModal = ({
@@ -460,11 +460,11 @@ const LockedMaidHoverModal = ({
         <div className="px-4 py-3 border-b" style={{ background:C.white, borderColor:C.border }}>
           <p style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.07em", color:C.textMuted, marginBottom:6 }}>Employment History</p>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
+            <table className="w-full text-xs border-collapse" style={{ tableLayout:"fixed" }}>
               <thead>
                 <tr style={{ background:C.surface }}>
-                  {["From","To","Country","Duties"].map(h => (
-                    <th key={h} className="px-2 py-1.5 text-left font-semibold" style={{ border:`1px solid ${C.border}`, color:C.text }}>{h}</th>
+                  {["From","To","Country","Duties"].map((h, index) => (
+                    <th key={h} className="px-2 py-1.5 text-left font-semibold" style={{ border:`1px solid ${C.border}`, color:C.text, width: index === 0 || index === 1 ? 62 : index === 2 ? 112 : undefined, whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -475,11 +475,11 @@ const LockedMaidHoverModal = ({
                     <tr key={idx} style={{ background: idx % 2 === 0 ? C.white : C.surface }}>
                       <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>{String(e["from"]||e["From"]||e["startYear"]||e["startDate"]||"—")}</td>
                       <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>{String(e["to"]||e["To"]||e["endYear"]||e["endDate"]||"—")}</td>
-                      <td className="px-2 py-1.5 select-none" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>
-                        <span className="inline-flex items-center gap-1" style={{ color:C.greenMid }}><Lock className="h-3 w-3 flex-shrink-0" />Sign in to view</span>
+                      <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>
+                        {String(e["country"] || e["Country"] || e["location"] || "â€”")}
                       </td>
-                      <td className="px-2 py-1.5 select-none" style={{ border:`1px solid ${C.border}`, color:C.textMuted }}>
-                        <span className="inline-flex items-center gap-1" style={{ color:C.greenMid }}><Lock className="h-3 w-3 flex-shrink-0" />Sign in to view</span>
+                      <td className="px-2 py-1.5" style={{ border:`1px solid ${C.border}`, color:C.textMuted, whiteSpace:"normal", wordBreak:"break-word" }}>
+                        {String(e["duties"] || e["Duties"] || e["duty"] || e["jobScope"] || "â€”")}
                       </td>
                     </tr>
                   );
@@ -578,7 +578,7 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
     <>
       <article
         ref={cardRef as React.RefObject<HTMLElement>}
-        className="group relative flex flex-col overflow-visible cursor-pointer transition-all"
+        className="group relative flex flex-col overflow-visible cursor-pointer transition-all rounded-[7px]"
         style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}
         onClick={handleLockedCardClick}
         onMouseEnter={disableHoverModal ? undefined : () => { if (window.innerWidth < 640) return; cardHovered.current = true; openModal(); }}
@@ -597,8 +597,7 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
           {photo ? (
             <img src={photo} alt="Maid profile" loading="lazy" decoding="async"
               className="block w-full h-auto"
-              style={{ aspectRatio:"3/4", objectFit:"contain", objectPosition:"top center", minHeight:130,
-                background:C.white, filter:"blur(10px)", opacity:0.9, transform:"scale(1.05)" }}
+              style={{ background:C.white, filter:"blur(9px)", opacity:0.9, transform:"scale(1.08)" }}
             />
           ) : (
             <div className="w-full flex items-center justify-center" style={{ aspectRatio:"3/4", minHeight:130, background:C.surface }}>
@@ -672,9 +671,6 @@ const MaidCard = ({
 
   const photo = getPrimaryPhoto(maid);
   const age = calculateAge(maid.dateOfBirth);
-  const flagCode = getNationalityCode(maid.nationality);
-  const typeColorClass = getMaidTypeBadgeClass(maid.type);
-  const experienceBucket = getExperienceBucket(maid);
   const category = getMaidCategory(maid);
   const displayLabel = showCategory && category ? category : (maid.nationality || "");
   const schedulePopupClose = () => {
@@ -718,18 +714,17 @@ const MaidCard = ({
     <>
       <article
         ref={cardRef}
-        className="group flex flex-col overflow-hidden cursor-pointer transition-all"
+        className="group flex flex-col overflow-hidden cursor-pointer transition-all rounded-[7px]"
         style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleCardClick}
       >
-        <div className="relative w-full overflow-hidden" style={{ background:C.white }}>
+        <div className="relative w-full overflow-hidden" style={{ background:C.white, borderBottom:`1px solid ${C.border}` }}>
           <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
             {photo ? (
               <img src={photo} alt={maid.fullName}
-                className="block w-full h-auto transition-transform duration-300 group-hover:scale-[1.03]"
-                style={{ aspectRatio:"3/4", objectFit:"contain", objectPosition:"top center", minHeight:130, background:C.white }}
+                className="block w-full h-auto"
                 loading="lazy" decoding="async"
               />
             ) : (
@@ -740,11 +735,6 @@ const MaidCard = ({
               </div>
             )}
           </Link>
-          {maid.type && (
-            <div className="absolute top-0 left-0">
-              <span className={`inline-block px-1.5 py-px text-xs font-semibold border bg-white/90 backdrop-blur-sm ${typeColorClass}`}>{getTypeLabel(maid.type)}</span>
-            </div>
-          )}
           <button
             onClick={(e) => { e.preventDefault(); onToggleShortlist(maid.referenceCode); }}
             className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
@@ -758,23 +748,21 @@ const MaidCard = ({
           </button>
         </div>
 
-        <div className="flex flex-col gap-0.5 p-2.5 flex-1" style={{ background:C.white }}>
-          <h3 className="text-sm font-bold line-clamp-1 leading-tight" style={{ color:C.text }}>{maid.fullName || "Unnamed maid"}</h3>
-          {maid.referenceCode && <p className="text-xs font-mono leading-tight" style={{ color:C.textMuted }}>{maid.referenceCode}</p>}
+        <div className="flex flex-col gap-1 p-3 flex-1" style={{ background:C.white }}>
           {displayLabel && (
-            <p className="inline-flex items-center gap-1 text-xs leading-tight mt-0.5">
-              <FlagCircle code={flagCode} />
-              <span className="font-semibold" style={{ color:C.text }}>{displayLabel}</span>
+            <p className="leading-tight" style={{ color:C.text, fontSize:13, lineHeight:1.35 }}>
+              {displayLabel}
             </p>
           )}
-          <div className="my-1" style={{ borderTop:`1px solid ${C.border}` }} />
-          <div className="flex items-center gap-1.5 text-xs leading-tight" style={{ color:C.textMuted }}>
+          {maid.referenceCode && <p className="font-mono leading-tight" style={{ color:C.textMuted, fontSize:11, lineHeight:1.2 }}>Ref: {maid.referenceCode}</p>}
+          <div className="hidden" style={{ borderTop:`1px solid ${C.border}` }} />
+          <div className="hidden" style={{ color:C.textMuted }}>
             {age !== null && <span className="font-medium" style={{ color:C.text }}>({age}) yrs</span>}
             {age !== null && maid.maritalStatus && <span style={{ color:C.border }}>·</span>}
             {maid.maritalStatus && <span className="truncate" style={{ color:C.text }}>{maid.maritalStatus}</span>}
           </div>
-          {maid.religion && <p className="text-xs leading-tight line-clamp-1" style={{ color:C.text }}>{maid.religion}</p>}
-          {experienceBucket && <p className="text-xs leading-tight mt-0.5 line-clamp-1" style={{ color:C.text }}>{experienceBucket}</p>}
+          {maid.religion && <p className="leading-tight line-clamp-1" style={{ color:C.text, fontSize:13, lineHeight:1.35 }}>{maid.religion}</p>}
+          {(maid.maritalStatus || age !== null) && <p className="leading-tight" style={{ color:C.text, fontSize:13, lineHeight:1.35 }}>{maid.maritalStatus || ""}{maid.maritalStatus && age !== null ? " " : ""}{age !== null ? `(${age})` : ""}</p>}
         </div>
       </article>
       {(hovered || clickedOpen) && cardRef.current && !disableHoverPopup && (
@@ -1531,7 +1519,7 @@ const MaidSearchPage = ({
 
           {/* Grid */}
           {isLoading ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
                 <div key={i} className="overflow-hidden animate-pulse" style={{ border:`1px solid ${C.border}`, background:C.white }}>
                   <div className="aspect-[3/4]" style={{ background:C.surface }} />
@@ -1560,7 +1548,7 @@ const MaidSearchPage = ({
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {pagedMaids.map((maid) => (
                 <MaidCard
                   key={maid.referenceCode}

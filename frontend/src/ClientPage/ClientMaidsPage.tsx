@@ -112,7 +112,7 @@ type RequirementsState = {
 type ClientMaidsPageProps = { resultsPath?: string; loginPath?: string; embedded?: boolean; };
 
 /* ─── Defaults ────────────────────────────────────────────────────────────── */
-const defaultFilters: Filters = {
+export const defaultFilters: Filters = {
   keyword:"", agencyPreference:"No Preference", biodataCreatedWithin:"No Preference", maidType:"",
   willingOffDays:false, hasChildren:false, withVideo:false,
   natFilipino:false, natIndonesian:false, natMyanmar:false, natIndian:false,
@@ -209,7 +209,7 @@ const getPublicProfilePath = (m: MaidProfile) =>
   m.refCode ? `/maids/${encodeURIComponent(m.refCode)}` : null;
 
 
-const GLOBAL_CSS = `
+export const GLOBAL_CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap');
 
 :root {
@@ -959,7 +959,7 @@ const GLOBAL_CSS = `
   font-size:1.35rem;font-weight:800;color:#fff;line-height:1.15;
   letter-spacing:-0.01em;margin-bottom:0.4rem;
 }
-.cm-req-sub{font-size:0.82rem;color:rgba(255,255,255,0.58);line-height:1.6;max-width:380px;}
+.cm-req-sub{font-size:0.82rem;color:rgba(255,255,255,0.88);line-height:1.6;max-width:380px;}
 .cm-req-back{
   position:absolute;top:1.25rem;right:1.25rem;z-index:1;
   display:inline-flex;align-items:center;gap:0.4rem;
@@ -994,13 +994,13 @@ const GLOBAL_CSS = `
   display:flex;align-items:center;justify-content:center;
   font-size:0.7rem;font-weight:800;color:#fff;
 }
-.cm-step-label{font-size:0.85rem;font-weight:700;color:var(--ink-2);}
+.cm-step-label{font-size:0.85rem;font-weight:700;color:#0b1f25;}
 .cm-form-grid{display:grid;gap:0.9rem;}
 @media(min-width:560px){.cm-form-grid{grid-template-columns:1fr 1fr;}}
 .cm-lbl{
   display:block;font-size:0.62rem;font-weight:800;
   letter-spacing:0.1em;text-transform:uppercase;
-  color:var(--ink-4);margin-bottom:0.4rem;
+  color:#274a55;margin-bottom:0.4rem;
 }
 .cm-req-star{color:#dc2626;font-size:0.7rem;font-weight:400;text-transform:none;letter-spacing:0;}
 .cm-form-input{
@@ -1508,7 +1508,7 @@ const SearchResults = ({ maids, isLoggedIn, isLoading, onLoginClick, onViewProfi
 /* ═══════════════════════════════════════════════════════════════════════════
    REQUEST FORM
 ═══════════════════════════════════════════════════════════════════════════ */
-const RequestForm = ({ prefillFilters, onBack }:{ prefillFilters:Filters; onBack:()=>void }) => {
+export const RequestForm = ({ prefillFilters, onBack }:{ prefillFilters:Filters; onBack:()=>void }) => {
   const storedClient = useMemo(()=>getStoredClient(),[]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [agencyOptions, setAgencyOptions] = useState<PublicAgencyOption[]>([]);
@@ -1614,7 +1614,7 @@ const RequestForm = ({ prefillFilters, onBack }:{ prefillFilters:Filters; onBack
       <div className="cm-request-header">
         <div className="cm-request-header-blob"/>
         <button type="button" className="cm-req-back" onClick={onBack}>
-          <ArrowLeft size={13}/> Back
+          <X size={17} aria-hidden="true" />
         </button>
         <div className="cm-req-eyebrow"><Sparkles size={10}/> Agency Matching</div>
         <h2 className="cm-req-title">Request Agency Help</h2>
@@ -1862,6 +1862,7 @@ const ClientMaidsPage = ({
   const [isSearching,     setIsSearching]     = useState(false);
   const [hasSearched,     setHasSearched]     = useState(false);
   const isLoggedIn = !!getClientToken();
+  const isPublicSearchPage = resultsPath === "/search-maids/results";
 
   useEffect(()=>{
     const next=parseDraftFromSearchParams(searchParams);
@@ -2220,9 +2221,9 @@ const ClientMaidsPage = ({
                     </span>
                   )}
                 </button>
-                <button type="button" className="cm-btn-request" onClick={handleOpenRequest}>
+                {!isPublicSearchPage && <button type="button" className="cm-btn-request" onClick={handleOpenRequest}>
                   <Sparkles size={14} style={{color:T.amber}}/> Request Agency Help
-                </button>
+                </button>}
                 {activeFilterCount>0&&(
                   <button type="button" className="cm-btn-clear" onClick={clearAllFilters}>
                     <X size={11}/> Clear
@@ -2241,7 +2242,7 @@ const ClientMaidsPage = ({
         )}
 
         {/* ── Agency CTA ── */}
-        {!requestOpen&&(
+        {!isPublicSearchPage&&!requestOpen&&(
           <div className="cm-cta">
             <div className="cm-cta-blob-1"/>
             <div className="cm-cta-blob-2"/>
@@ -2282,7 +2283,7 @@ const ClientMaidsPage = ({
         )}
 
         {/* ── Request form ── */}
-        {requestOpen&&(
+        {!isPublicSearchPage&&requestOpen&&(
           <div ref={requestRef}>
             <RequestForm prefillFilters={searchedFilters} onBack={handleCloseRequest}/>
           </div>

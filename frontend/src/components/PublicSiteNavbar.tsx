@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, type FormEvent } from "react";
 import { Link, useLocation, NavLink } from "react-router-dom";
 import { X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,6 +14,7 @@ import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
 import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import { cn } from "@/lib/utils";
+import { RequestForm, defaultFilters, GLOBAL_CSS as REQUEST_FORM_CSS } from "@/ClientPage/ClientMaidsPage";
 
 /* ─── Scoped keyframes injected once ─────────────────────────────────────── */
 const STYLE_ID = "pubnavbar-styles";
@@ -147,6 +148,13 @@ const PublicSiteNavbar = () => {
   const loginPath = buildEmployerLoginPath(
     `${location.pathname}${location.search}${location.hash}`
   );
+  const showFloatingRequest = !location.pathname.startsWith("/search-maids")
+    && !location.pathname.startsWith("/client/")
+    && !location.pathname.startsWith("/agency");
+  const [isRequestOpen, setIsRequestOpen] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [requestForm, setRequestForm] = useState({ name: "", email: "", phone: "", notes: "" });
+  const submitRequest = async (event: FormEvent) => { event.preventDefault(); setRequestStatus("idle"); };
 
   /* ── Login Button ── */
   const LoginButton = ({ full = false, onClick }: { full?: boolean; onClick?: () => void }) => (
@@ -474,6 +482,44 @@ const PublicSiteNavbar = () => {
               )}
             </div>
           </div>
+        </>
+      )}
+
+      {showFloatingRequest && (
+        <>
+          <button type="button" onClick={() => { setIsRequestOpen(true); setRequestStatus("idle"); }}
+            className="fixed left-0 top-1/2 z-40 h-[118px] w-10 -translate-y-1/2 text-[11px] font-bold shadow-lg sm:h-[154px] sm:w-[52px] sm:text-[13px]"
+            style={{ border:0, borderRadius:"0 12px 12px 0", background: "#FCD34D", color: "#0B3340", writingMode:"vertical-rl", boxShadow: "0 10px 28px rgba(11,51,64,.28)" }}>
+            Request Maid
+          </button>
+          {false && isRequestOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onMouseDown={() => setIsRequestOpen(false)}>
+              <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="flex items-start justify-between p-5" style={{ background: "linear-gradient(135deg,#0B3340,#0E4E5E)", color: "white" }}>
+                  <div><p className="m-0 text-xs font-bold uppercase tracking-widest text-[#FCD34D]">Agency matching</p><h2 className="mt-1 text-xl font-bold">Request Agency Help</h2><p className="m-0 text-sm text-white/70">Tell us what you need and we’ll help shortlist suitable candidates.</p></div>
+                  <button type="button" onClick={() => setIsRequestOpen(false)} className="rounded-md p-1 text-white/80 hover:bg-white/10" aria-label="Close request form"><X size={20}/></button>
+                </div>
+                {requestStatus === "sent" ? (
+                  <div className="p-8 text-center"><p className="text-lg font-bold" style={{ color: TEAL }}>Request sent successfully.</p><p className="text-sm text-slate-500">Our agency will contact you shortly.</p><button type="button" onClick={() => setIsRequestOpen(false)} className="mt-4 rounded-lg px-4 py-2 font-bold" style={{ background: AMBER, color: TEAL }}>Close</button></div>
+                ) : (
+                  <form onSubmit={submitRequest} className="space-y-3 p-5">
+                    <input required placeholder="Full name" value={requestForm.name} onChange={(e) => setRequestForm((v) => ({ ...v, name: e.target.value }))} className="w-full rounded-lg border p-3 text-sm" />
+                    <input required type="email" placeholder="Email address" value={requestForm.email} onChange={(e) => setRequestForm((v) => ({ ...v, email: e.target.value }))} className="w-full rounded-lg border p-3 text-sm" />
+                    <input required placeholder="Phone number" value={requestForm.phone} onChange={(e) => setRequestForm((v) => ({ ...v, phone: e.target.value }))} className="w-full rounded-lg border p-3 text-sm" />
+                    <textarea placeholder="Requirements (optional)" rows={3} value={requestForm.notes} onChange={(e) => setRequestForm((v) => ({ ...v, notes: e.target.value }))} className="w-full rounded-lg border p-3 text-sm" />
+                    {requestStatus === "error" && <p className="m-0 text-sm text-red-600">Could not send your request. Please try again.</p>}
+                    <button disabled={requestStatus === "sending"} type="submit" className="w-full rounded-lg px-4 py-3 font-bold disabled:opacity-60" style={{ background: AMBER, color: TEAL }}>{requestStatus === "sending" ? "Sending…" : "Submit Request"}</button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+          {isRequestOpen && <div className="request-modal-overlay" onMouseDown={() => setIsRequestOpen(false)}><div className="request-modal-shell" onMouseDown={(event) => event.stopPropagation()}><style>{`${REQUEST_FORM_CSS}
+            .request-modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.52);padding:16px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+            .request-modal-shell{width:min(960px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:hidden}
+            .request-modal-scale{zoom:.72}
+            @media(max-width:640px){.request-modal-overlay{padding:8px;align-items:flex-start;overflow-y:auto}.request-modal-shell{width:calc(100vw - 16px);max-height:none;overflow:visible;margin:auto 0}.request-modal-scale{zoom:.52}}
+          `}</style><div className="request-modal-scale"><RequestForm prefillFilters={defaultFilters} onBack={() => setIsRequestOpen(false)} /></div></div></div>}
         </>
       )}
     </header>

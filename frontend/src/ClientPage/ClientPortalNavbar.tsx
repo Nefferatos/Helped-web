@@ -309,7 +309,7 @@ const ClientPortalNavbar = () => {
                   tabRefs.current[tab.to] = el;
                 }}
                 className={cn(
-                  "relative whitespace-nowrap rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors duration-150",
+                  "relative whitespace-nowrap rounded-lg px-2.5 py-2 text-[16px] font-medium transition-colors duration-150",
                   active
                     ? "font-semibold text-[#0E4E5E]"
                     : "text-[#0E4E5E] hover:bg-[#0E4E5E]/[.08] hover:text-[#0B3340]",
@@ -460,7 +460,7 @@ const ClientPortalNavbar = () => {
                     key={tab.to}
                     to={tab.to}
                     className={cn(
-                      "flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors",
+                      "flex items-center gap-3 px-4 py-3 text-[16px] font-medium transition-colors",
                       active ? "bg-primary/10 text-foreground" : "bg-background text-foreground hover:bg-muted",
                     )}
                     aria-current={active ? "page" : undefined}
