@@ -356,6 +356,36 @@ const formatFileSize = (bytes: number): string => {
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Keep the public application quick to complete: only the essentials are required.
+const requiredAddMaidProfileFields: Array<keyof ApplicantFormState> = [
+  "fullName",
+  "email",
+  "contactNumber",
+  "nationality",
+  "dateOfBirth",
+];
+
+const addMaidFieldLabels: Partial<Record<keyof ApplicantFormState, string>> = {
+  fullName: "Full name",
+  email: "Email",
+  contactNumber: "WhatsApp / contact number",
+  nationality: "Nationality",
+  dateOfBirth: "Date of birth",
+  placeOfBirth: "Place of birth",
+  heightCm: "Height",
+  weightKg: "Weight",
+  address: "Current residential address",
+  repatriationPort: "Repatriation port / airport",
+  homeCountryContactNumber: "Home country contact number",
+  educationLevel: "Education level",
+  religion: "Religion",
+  maritalStatus: "Marital status",
+  numberOfSiblings: "Number of siblings",
+  numberOfChildren: "Number of children",
+  employmentPreference: "Employment preference",
+  availableDate: "Available date",
+};
+
 // ─── Small reusable components ────────────────────────────────────────────────
 
 const FieldLabel = ({ children, required, tooltip }: { children: React.ReactNode; required?: boolean; tooltip?: string }) => (
@@ -804,6 +834,9 @@ const PublicMaidApplicationPage = () => {
         if (!value) return "Please select your nationality.";
         return undefined;
       default:
+        if (requiredAddMaidProfileFields.includes(key as keyof ApplicantFormState) && !value.trim()) {
+          return `${addMaidFieldLabels[key as keyof ApplicantFormState] || key} is required.`;
+        }
         return undefined;
     }
   };
@@ -811,8 +844,7 @@ const PublicMaidApplicationPage = () => {
   const validateStep = (step: number): FieldErrors => {
     const newErrors: FieldErrors = {};
     if (step === 1) {
-      const requiredFields: Array<keyof ApplicantFormState> = ["fullName", "email", "contactNumber", "nationality"];
-      requiredFields.forEach((key) => {
+      requiredAddMaidProfileFields.forEach((key) => {
         const error = validateField(key, form[key]);
         if (error) newErrors[key] = error;
       });
@@ -989,7 +1021,7 @@ const PublicMaidApplicationPage = () => {
           s.id === "intro"
             ? introCompleted
             : s.id === "biodata"
-              ? Boolean(form.fullName && form.email && form.contactNumber && form.nationality)
+              ? Boolean(form.fullName && form.email && form.contactNumber && form.nationality && form.dateOfBirth)
               : s.id === "health"
                 ? Boolean(form.medicalConditions || form.restDayPreference || form.foodPreference)
                 : s.id === "skills"
@@ -1004,6 +1036,7 @@ const PublicMaidApplicationPage = () => {
       form.contactNumber,
       form.cookingSkills,
       form.coverNote,
+      form.dateOfBirth,
       form.email,
       form.foodPreference,
       form.fullName,
@@ -1016,11 +1049,11 @@ const PublicMaidApplicationPage = () => {
     ],
   );
 
-  const isLastStep = activeStep === stepItems.length - 1;
   const isReviewStep = activeStep === stepItems.length - 1;
   const isFirstStep = activeStep === 0;
-  const completedSteps = stepItems.filter((s) => s.isComplete).length;
-  const progressPct = Math.round((activeStep / (stepItems.length - 1)) * 100);
+  const applicantStepCount = stepItems.length - 1;
+  const progressPct = Math.round((activeStep / applicantStepCount) * 100);
+  const progressLabel = activeStep === 0 ? "Getting started" : `Step ${activeStep} of ${applicantStepCount}`;
 
   const scrollToTerms = () => {
     setTimeout(() => {
@@ -1100,7 +1133,7 @@ const PublicMaidApplicationPage = () => {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#ecfdf5_0,_#f8fafc_38rem,_#f8fafc_100%)]">
       <PublicSiteNavbar />
 
       {/* Draft restore banner */}
@@ -1159,12 +1192,21 @@ const PublicMaidApplicationPage = () => {
           }}
         >
           {/* ── Main card ── */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-[0_18px_45px_-28px_rgba(15,23,42,0.35)]">
 
             {/* Step nav */}
-            <div className="border-b border-slate-100 bg-slate-50/80 p-1.5 rounded-t-2xl">
+            <div className="border-b border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-slate-50 px-3 py-4 sm:px-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">FDW application</p>
+                  <p className="mt-0.5 text-sm font-bold text-slate-900">{progressLabel} <span className="font-medium text-slate-400">· {stepItems[activeStep].title}</span></p>
+                </div>
+                <div className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold tabular-nums text-emerald-800 shadow-sm">
+                  {progressPct}% complete
+                </div>
+              </div>
               {/* Desktop step nav */}
-              <div className="hidden sm:grid grid-cols-6 gap-0.5" role="tablist">
+              <div className="hidden sm:grid grid-cols-6 gap-1" role="tablist">
                 {stepItems.map((s, i) => {
                   const Icon = s.icon;
                   const isActive = i === activeStep;
@@ -1178,9 +1220,9 @@ const PublicMaidApplicationPage = () => {
                       aria-selected={isActive}
                       aria-current={isActive ? "step" : undefined}
                       onClick={() => handleStepClick(i)}
-                      className={`group flex flex-col items-center gap-1 rounded-xl px-1.5 py-2.5 text-center transition-all touch-manipulation ${
+                      className={`group relative flex flex-col items-center gap-1 rounded-xl px-1.5 py-2.5 text-center transition-all touch-manipulation ${
                         isActive
-                          ? "bg-white shadow-sm"
+                          ? "bg-white shadow-sm ring-1 ring-emerald-100"
                           : isLocked
                           ? "opacity-40 cursor-not-allowed"
                           : "hover:bg-white/80 cursor-pointer"
@@ -1188,23 +1230,23 @@ const PublicMaidApplicationPage = () => {
                       disabled={isLocked}
                     >
                       <div
-                        className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
                           isActive
-                            ? "bg-emerald-700 text-white shadow-sm"
-                            : isDone
+                            ? "bg-emerald-700 text-white shadow-md shadow-emerald-700/20"
+                          : isDone
                               ? "bg-emerald-100 text-emerald-800"
                               : "bg-slate-200 text-slate-500 group-hover:bg-slate-300"
                         }`}
                       >
                         {isDone && !isActive ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" />
+                          <CheckCircle2 className="h-4 w-4 text-emerald-700" />
                         ) : (
-                          <Icon className="h-3.5 w-3.5" />
+                          <Icon className="h-4 w-4" />
                         )}
                       </div>
                       <div>
                         <p className={`text-[9px] font-bold uppercase tracking-widest leading-none ${isActive ? "text-emerald-700" : "text-slate-400"}`}>
-                          {s.step}
+                          {i === 0 ? s.step : `0${i}`}
                         </p>
                         <p className={`text-[11px] font-semibold leading-tight mt-0.5 ${isActive ? "text-slate-900" : "text-slate-500"}`}>
                           {s.title}
@@ -1262,15 +1304,15 @@ const PublicMaidApplicationPage = () => {
             </div>
 
             {/* Progress bar */}
-            <div className="h-1 bg-slate-100" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Form completion progress">
+            <div className="h-2 bg-slate-100" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label={`Application progress: ${progressLabel}`}>
               <div
-                className="h-full bg-emerald-600 transition-all duration-500 ease-out"
+                className="h-full rounded-r-full bg-gradient-to-r from-emerald-600 to-teal-500 transition-all duration-500 ease-out"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
 
             {/* Panel content */}
-            <div className="p-4 sm:p-6 lg:p-8" role="tabpanel">
+            <div className="p-5 sm:p-7 lg:p-9" role="tabpanel">
 
               {/* ── Step 0: Intro ── */}
               {activeStep === 0 && (
@@ -1398,7 +1440,7 @@ const PublicMaidApplicationPage = () => {
                   />
 
                   {/* Validation summary */}
-                  {Object.keys(errors).length > 0 && touched.fullName && (
+                  {Object.keys(errors).length > 0 && (
                     <div className="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4" role="alert">
                       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
                       <div>
@@ -1493,7 +1535,7 @@ const PublicMaidApplicationPage = () => {
                     </label>
 
                     <label className="space-y-1.5">
-                      <FieldLabel>Date of birth</FieldLabel>
+                      <FieldLabel required>Date of birth</FieldLabel>
                       <input
                         type="date"
                         className={dateCls}
@@ -1656,7 +1698,7 @@ const PublicMaidApplicationPage = () => {
                     {/* Conditional: only show when "Other" is selected */}
                     {form.foodPreference === "Other" && (
                       <label className="space-y-1.5 sm:col-span-2">
-                        <FieldLabel required>Please specify your food preference</FieldLabel>
+                        <FieldLabel>Please specify your food preference</FieldLabel>
                         <Input className={fieldCls} value={form.foodPreferenceOther} onChange={(e) => updateField("foodPreferenceOther", e.target.value)} placeholder="Describe your food preference" />
                       </label>
                     )}
@@ -2204,7 +2246,7 @@ const PublicMaidApplicationPage = () => {
                   </span>
                   <span className="hidden sm:inline text-[10px] text-slate-300">·</span>
                   <span className="hidden sm:inline text-[10px] font-medium text-slate-400">
-                    {completedSteps} of {stepItems.length} sections completed
+                    {activeStep === 0 ? "Review the guide, then start your application" : "You can revisit any tab before submitting"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

@@ -150,7 +150,10 @@ const PublicSiteNavbar = () => {
   );
   const showFloatingRequest = !location.pathname.startsWith("/search-maids")
     && !location.pathname.startsWith("/client/")
-    && !location.pathname.startsWith("/agency");
+    && !location.pathname.startsWith("/agency")
+    // The FDW application flow is focused on the applicant's submission, so
+    // it should not display the separate employer "Request Maid" shortcut.
+    && !location.pathname.startsWith("/apply-as-maid");
   const [isRequestOpen, setIsRequestOpen] = useState(false);
   const [requestStatus, setRequestStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [requestForm, setRequestForm] = useState({ name: "", email: "", phone: "", notes: "" });

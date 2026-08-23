@@ -4,10 +4,12 @@ import {
   createPublicAtsApplicationController,
   getAtsApplicationController,
   getAtsDashboardController,
+  getUnreadAtsApplicationCountController,
   getPublicAtsApplicationSummaryController,
   listAtsApplicationsController,
   listAtsPresetsController,
   matchAtsApplicationsController,
+  markAtsApplicationsViewedController,
   saveAtsPresetController,
   syncAtsFromMaidsController,
   updateAtsStageController,
@@ -22,6 +24,8 @@ router.post('/public/apply', createPublicAtsApplicationController)
 router.get('/public/applications/:applicationId', getPublicAtsApplicationSummaryController)
 router.get('/dashboard', requireAgencyAuth, getAtsDashboardController)
 router.get('/applications', requireAgencyAuth, listAtsApplicationsController)
+router.get('/applications/unread-count', requireAgencyAuth, getUnreadAtsApplicationCountController)
+router.post('/applications/mark-viewed', requireAgencyAuth, markAtsApplicationsViewedController)
 router.post('/sync-from-maids', requireAgencyAuth, syncAtsFromMaidsController)
 router.get('/presets', requireAgencyAuth, listAtsPresetsController)
 router.post('/presets', requireAgencyAuth, saveAtsPresetController)

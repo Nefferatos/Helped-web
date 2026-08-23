@@ -6,10 +6,10 @@
       "profileId": "f0c8ea15-bd0d-49bc-aea8-810650f79459",
       "applicationCode": "APP-82F5A694",
       "applicantAccessToken": "e39c7d8b-9ee9-4b27-854e-6cf8bbc55501",
-      "status": "Rejected",
+      "status": "Documents Submitted",
       "source": "resume_upload",
       "appliedAt": "2026-08-21T12:20:17.353Z",
-      "updatedAt": "2026-08-21T12:31:03.110Z",
+      "updatedAt": "2026-08-23T05:27:08.388Z",
       "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
       "aiParseReviewRequired": true,
       "notificationLogIds": [
@@ -17,7 +17,8 @@
         "ea12ad46-e83a-4675-bc7f-9613c31ab196",
         "8556d786-b772-4fe4-a19b-dcd1a9a87ea4"
       ],
-      "rejectedAt": "2026-08-21T12:31:03.110Z"
+      "rejectedAt": "2026-08-23T05:26:25.753Z",
+      "approvedAt": "2026-08-23T05:26:54.444Z"
     },
     {
       "id": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
@@ -25,10 +26,10 @@
       "profileId": "e86dfa73-6144-4f37-9010-1845acc659d4",
       "applicationCode": "APP-127C4C6B",
       "applicantAccessToken": "b7935022-1506-4006-811a-ae6c5d47925a",
-      "status": "Ready to Configure Public Profile",
+      "status": "Rejected",
       "source": "resume_upload",
       "appliedAt": "2026-08-20T16:18:03.923Z",
-      "updatedAt": "2026-08-20T16:18:30.891Z",
+      "updatedAt": "2026-08-23T05:26:25.779Z",
       "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
       "aiParseReviewRequired": true,
       "notificationLogIds": [
@@ -36,7 +37,8 @@
         "4cd4f5fc-0b8e-4551-91a9-285424996213",
         "50ff628e-9424-4efe-a140-e8b629d9d832"
       ],
-      "approvedAt": "2026-08-20T16:18:30.268Z"
+      "approvedAt": "2026-08-20T16:18:30.268Z",
+      "rejectedAt": "2026-08-23T05:26:25.779Z"
     },
     {
       "id": "fd7ea1d1-a601-4db2-b77f-842ea0679511",
@@ -64,10 +66,10 @@
       "profileId": "df26ce69-430f-42d2-89c1-51e112243ebb",
       "applicationCode": "APP-3F6BF642",
       "applicantAccessToken": "a5413fa0-cfb1-401a-bafe-5a9d2c76df8f",
-      "status": "Ready to Configure Public Profile",
+      "status": "Rejected",
       "source": "resume_upload",
       "appliedAt": "2026-05-26T02:15:15.673Z",
-      "updatedAt": "2026-05-27T02:01:43.687Z",
+      "updatedAt": "2026-08-23T05:26:25.816Z",
       "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
       "aiParseReviewRequired": true,
       "notificationLogIds": [
@@ -75,7 +77,8 @@
         "8123d7dd-7000-4376-9008-083294e212d2",
         "8daf0576-3909-4eed-9ccd-1a13c2cc1707"
       ],
-      "approvedAt": "2026-05-26T02:23:08.307Z"
+      "approvedAt": "2026-05-26T02:23:08.307Z",
+      "rejectedAt": "2026-08-23T05:26:25.816Z"
     },
     {
       "id": "ca1ffba4-c59f-41e6-8c8a-1b38591aa6b8",
@@ -10242,6 +10245,168 @@
   ],
   "history": [
     {
+      "id": "7ef33905-b2bb-4780-8443-9866855328b5",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Documents Submitted",
+      "actor": "attheagency",
+      "reason": "Bulk document request",
+      "createdAt": "2026-08-23T05:27:08.388Z"
+    },
+    {
+      "id": "ab7625a8-8893-4d18-80b9-e91b601a08b3",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Approved",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-08-23T05:26:56.101Z"
+    },
+    {
+      "id": "029b8d05-1760-4799-97ef-e1b2429d78a3",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Rejected",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Bulk approval",
+      "createdAt": "2026-08-23T05:26:54.444Z"
+    },
+    {
+      "id": "93d81b7f-00a3-4e8d-82d8-7bab8978dbcf",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Rejected",
+      "actor": "attheagency",
+      "reason": "Bulk rejection",
+      "createdAt": "2026-08-23T05:26:25.816Z"
+    },
+    {
+      "id": "e68571df-0ec7-45ff-9ef0-93769e144bbb",
+      "applicationId": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Rejected",
+      "actor": "attheagency",
+      "reason": "Bulk rejection",
+      "createdAt": "2026-08-23T05:26:25.779Z"
+    },
+    {
+      "id": "6e219ba5-6e55-49b0-a4d5-1dbe793d7017",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Approved",
+      "toStage": "Rejected",
+      "actor": "attheagency",
+      "reason": "Bulk rejection",
+      "createdAt": "2026-08-23T05:26:25.753Z"
+    },
+    {
+      "id": "2678cb83-fa0f-427d-b034-9f25ff03ecc5",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Documents Submitted",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Bulk approval",
+      "createdAt": "2026-08-23T05:24:38.882Z"
+    },
+    {
+      "id": "276bbcfc-3ca7-477f-ba45-6e613c804f85",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Approved",
+      "toStage": "Documents Submitted",
+      "actor": "attheagency",
+      "reason": "Bulk document request",
+      "createdAt": "2026-08-23T05:24:30.836Z"
+    },
+    {
+      "id": "52cf9fe0-2b0f-4393-84d2-5afa1dc50884",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Bulk approval",
+      "createdAt": "2026-08-23T05:23:01.086Z"
+    },
+    {
+      "id": "99c9007f-024d-4aa8-9a27-66c130dc9f5a",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Approved",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-08-23T05:22:38.028Z"
+    },
+    {
+      "id": "2de7258e-190e-455a-bfaa-07030adac9a6",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Background Check",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Stage changed to Approved",
+      "createdAt": "2026-08-23T05:22:35.984Z"
+    },
+    {
+      "id": "26d189a8-8234-4b73-a130-b9f78ec6a4e0",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Screening Interview",
+      "toStage": "Background Check",
+      "actor": "attheagency",
+      "reason": "Stage changed to Background Check",
+      "createdAt": "2026-08-23T05:22:32.779Z"
+    },
+    {
+      "id": "e9467469-43f7-4bcd-ae64-004b5c1f7e58",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Documents Submitted",
+      "toStage": "Screening Interview",
+      "actor": "attheagency",
+      "reason": "Bulk interview assignment",
+      "createdAt": "2026-08-23T05:22:29.326Z"
+    },
+    {
+      "id": "7034f967-d26e-4063-95cd-a7e457753a99",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Approved",
+      "toStage": "Documents Submitted",
+      "actor": "attheagency",
+      "reason": "Bulk document request",
+      "createdAt": "2026-08-23T05:22:04.245Z"
+    },
+    {
+      "id": "ba8a7361-544a-4e91-a52b-e6f66d651f03",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Bulk approval",
+      "createdAt": "2026-08-23T05:20:05.578Z"
+    },
+    {
+      "id": "5d218c36-fd21-4f42-9d84-afcce9bb2e65",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Approved",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-08-23T03:48:57.849Z"
+    },
+    {
+      "id": "742d88ef-e509-471c-8706-2a8e4a7fa6a5",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Screening Interview",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Bulk approval",
+      "createdAt": "2026-08-23T03:48:50.164Z"
+    },
+    {
+      "id": "808740d3-8bca-4c6d-acda-6ffb060cf22b",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "fromStage": "Rejected",
+      "toStage": "Screening Interview",
+      "actor": "attheagency",
+      "reason": "Bulk interview assignment",
+      "createdAt": "2026-08-23T03:48:24.194Z"
+    },
+    {
       "id": "03201a15-bfc3-4123-97a7-7bddb1af54c3",
       "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
       "fromStage": "Rejected",
@@ -12119,6 +12284,186 @@
     }
   ],
   "notifications": [
+    {
+      "id": "357a119e-a2a9-4eb1-bc0e-81130dcf0b4b",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Documents Submitted",
+      "createdAt": "2026-08-23T05:27:08.388Z"
+    },
+    {
+      "id": "0d114ae4-0c19-421b-b5d3-7ff4858c3a99",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Ready to Configure Public Profile",
+      "createdAt": "2026-08-23T05:26:56.101Z"
+    },
+    {
+      "id": "ad620aa8-b9d3-467f-8184-d1c91e4430aa",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "approved",
+      "message": "Maria Clara moved to Approved",
+      "createdAt": "2026-08-23T05:26:54.444Z"
+    },
+    {
+      "id": "3a5efa7d-bc1d-491f-9615-f49580d37d2b",
+      "applicationId": "3174a055-dd34-432a-9fcd-7a244264f5c9",
+      "event": "Rejected",
+      "channel": "internal",
+      "recipient": "090909009",
+      "templateKey": "rejected",
+      "message": "test moved to Rejected",
+      "createdAt": "2026-08-23T05:26:25.816Z"
+    },
+    {
+      "id": "78e9dd70-6b1a-429a-8d66-dc11d0f84ccd",
+      "applicationId": "f684cf80-2065-4688-9b4e-c9b52120a5f3",
+      "event": "Rejected",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "rejected",
+      "message": "Maria Clara moved to Rejected",
+      "createdAt": "2026-08-23T05:26:25.779Z"
+    },
+    {
+      "id": "41f8011c-45ec-420d-b18a-ade1bddf4c87",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Rejected",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "rejected",
+      "message": "Maria Clara moved to Rejected",
+      "createdAt": "2026-08-23T05:26:25.753Z"
+    },
+    {
+      "id": "9ba06b51-5c25-430e-9fd2-3c1d71761767",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "approved",
+      "message": "Maria Clara moved to Approved",
+      "createdAt": "2026-08-23T05:24:38.882Z"
+    },
+    {
+      "id": "b46e0990-e576-4bd2-8ba5-ad6dc20a354a",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Documents Submitted",
+      "createdAt": "2026-08-23T05:24:30.837Z"
+    },
+    {
+      "id": "f73301d7-d9e9-40d0-b532-d2ebb3ef510b",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "approved",
+      "message": "Maria Clara moved to Approved",
+      "createdAt": "2026-08-23T05:23:01.086Z"
+    },
+    {
+      "id": "be2cfe23-e87a-4d6a-be6b-4afc87accb1b",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Ready to Configure Public Profile",
+      "createdAt": "2026-08-23T05:22:38.028Z"
+    },
+    {
+      "id": "ff8097c5-77f8-4469-93ef-91c79855b265",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "approved",
+      "message": "Maria Clara moved to Approved",
+      "createdAt": "2026-08-23T05:22:35.984Z"
+    },
+    {
+      "id": "ad9ffc7b-65bb-4832-bb5f-67b79c4f1ed1",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Background Check",
+      "createdAt": "2026-08-23T05:22:32.779Z"
+    },
+    {
+      "id": "b67c56b7-134e-44dd-8a7a-e0044aea9008",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Screening Interview",
+      "createdAt": "2026-08-23T05:22:29.326Z"
+    },
+    {
+      "id": "d9738926-a06e-41c5-81aa-430a73a4fded",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Documents Submitted",
+      "createdAt": "2026-08-23T05:22:04.245Z"
+    },
+    {
+      "id": "02f10d1b-8b14-4c2d-8588-71ce58dce27e",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "approved",
+      "message": "Maria Clara moved to Approved",
+      "createdAt": "2026-08-23T05:20:05.578Z"
+    },
+    {
+      "id": "57e20aab-21b6-4433-b908-52c519a6783a",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Ready to Configure Public Profile",
+      "createdAt": "2026-08-23T03:48:57.849Z"
+    },
+    {
+      "id": "ff1256c7-de23-428b-89ef-f5a3cfc0765a",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "approved",
+      "message": "Maria Clara moved to Approved",
+      "createdAt": "2026-08-23T03:48:50.164Z"
+    },
+    {
+      "id": "dda64304-f06f-4fca-b499-0406bbff68f6",
+      "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+639222299912",
+      "templateKey": "application_received",
+      "message": "Maria Clara moved to Screening Interview",
+      "createdAt": "2026-08-23T03:48:24.194Z"
+    },
     {
       "id": "d47a8f32-fc65-45dd-87d1-9551c385668c",
       "applicationId": "fa5899be-614a-4c4b-82ab-ff3accbb7b7f",

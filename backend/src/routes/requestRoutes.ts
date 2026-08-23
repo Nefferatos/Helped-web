@@ -4,6 +4,7 @@ import {
   getRequest,
   getRequestStatusCounts,
   getUnreadRequestCount,
+  markRequestsViewed,
   listRequests,
   patchRequestMaids,
   patchRequestStatus,
@@ -14,6 +15,7 @@ const router: Router = express.Router()
 router.get('/', listRequests)
 router.post('/', createRequest)
 router.get('/unread-count', getUnreadRequestCount)
+router.post('/mark-viewed', markRequestsViewed)
 router.get('/status-counts', getRequestStatusCounts)
 router.get('/:id', getRequest)
 router.patch('/:id/status', patchRequestStatus)

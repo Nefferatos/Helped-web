@@ -164,6 +164,8 @@ export interface MaidApplicationRecord {
   source: "manual" | "resume_upload" | "imported" | "synced_from_maid";
   appliedAt: string;
   updatedAt: string;
+  /** Set when agency staff open the applicant list. */
+  viewedAt?: string;
   parsedAt?: string;
   approvedAt?: string;
   placedAt?: string;
@@ -1268,6 +1270,37 @@ export const getPublicAtsApplicationSummary = async (
       createdAt: item.createdAt,
     })),
   };
+};
+
+export const getUnreadAtsApplicationCount = async (agencyId: number) => {
+  const data = await readData();
+  return data.applications.filter(
+    (application) =>
+      application.agencyId === agencyId &&
+      application.source !== "synced_from_maid" &&
+      !application.viewedAt,
+  ).length;
+};
+
+export const markAtsApplicationsViewed = async (agencyId: number) => {
+  const data = await readData();
+  const viewedAt = now();
+  let markedCount = 0;
+
+  data.applications = data.applications.map((application) => {
+    if (
+      application.agencyId === agencyId &&
+      application.source !== "synced_from_maid" &&
+      !application.viewedAt
+    ) {
+      markedCount += 1;
+      return { ...application, viewedAt };
+    }
+    return application;
+  });
+
+  if (markedCount > 0) await writeData(data);
+  return markedCount;
 };
 
 export const listAtsApplications = async (

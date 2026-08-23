@@ -176,3 +176,25 @@ export const fetchAdminUnreadChatCount = async () => {
   });
   return readUnreadCount(response);
 };
+
+export const markAdminNotificationsRead = async () => {
+  const response = await fetch('/api/chats/admin/notifications/read', {
+    method: 'POST',
+    headers: { ...getAgencyAdminAuthHeaders() },
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || 'Failed to mark notifications read');
+  }
+};
+
+export const markClientNotificationsRead = async () => {
+  const response = await fetch('/api/chats/client/notifications/read', {
+    method: 'POST',
+    headers: { ...getClientAuthHeaders() },
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || 'Failed to mark notifications read');
+  }
+};

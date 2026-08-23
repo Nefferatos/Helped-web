@@ -15,7 +15,7 @@ import {
   updateCompanyProfileStore,
   updateMomPersonnelStore,
 } from '../store'
-import { getRequestMetricsByAgencyId } from '../repositories/requestRepository'
+import { getRequestMetricsByAgencyId, getUnreadRequestCountByAgencyId } from '../repositories/requestRepository'
 import { getWhatsAppDashboardMetrics } from '../whatsappStore'
 
 interface CompanyProfile {
@@ -62,11 +62,12 @@ export const getCompanyProfile = async (req: Request, res: Response) => {
 export const getCompanySummary = async (req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(req)
-    const [companyBundle, maids, enquiries, requestMetrics, unreadAgencyChats, whatsappMetrics] = await Promise.all([
+    const [companyBundle, maids, enquiries, requestMetrics, unreadRequests, unreadAgencyChats, whatsappMetrics] = await Promise.all([
       getCompanyBundle(),
       getMaidsStore(undefined, undefined, agencyId),
       getEnquiriesStore(undefined, agencyId),
       getRequestMetricsByAgencyId(agencyId),
+      getUnreadRequestCountByAgencyId(agencyId),
       getUnreadAgencyChatCountStore(agencyId),
       getWhatsAppDashboardMetrics(agencyId),
     ])
@@ -87,9 +88,9 @@ export const getCompanySummary = async (req: Request, res: Response) => {
       hiddenMaids,
       totalMaids: maids.length,
       maidsWithPhotos,
-      enquiries: enquiries.length,
+      enquiries: enquiries.filter((enquiry) => !enquiry.viewedAt).length,
       requests: requestMetrics.total,
-      pendingRequests: requestMetrics.pending,
+      pendingRequests: unreadRequests,
       unreadAgencyChats,
       whatsappMessagesSent: whatsappMetrics.messagesSent,
       whatsappMessagesDelivered: whatsappMetrics.messagesDelivered,

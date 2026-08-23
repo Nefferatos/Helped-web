@@ -250,6 +250,13 @@ const makeWhatsAppHref = (value?: string) => {
   return digits ? `https://wa.me/${digits}` : "";
 };
 
+const makeEmailComposeHref = (value?: string) => {
+  const email = String(value ?? "").trim();
+  return email
+    ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}`
+    : "";
+};
+
 const getDocumentKind = (name?: string, url?: string) => {
   const target = `${name ?? ""} ${url ?? ""}`.toLowerCase();
   if (/\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(target)) return "image";
@@ -817,64 +824,51 @@ const AtsRecruitmentPage = () => {
       </Dialog>
 
       {/* ── Page Header ──────────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="space-y-4">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-600">
-                Recruitment ATS
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">
+                Recruitment
               </p>
-              <h1 className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                Maid Applicant Pipeline
+              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                Applicants
               </h1>
-              <p className="mt-1.5 max-w-2xl text-sm text-slate-500">
-                Review applicants faster with a cleaner shortlist, guided
-                filters, and responsive profile access.
+              <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                Review, contact, and move applicants through the hiring process.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-3 gap-2 sm:max-w-xl">
               {[
                 {
-                  label: "Total Applicants",
+                  label: "All applicants",
                   value: dashboard?.totalApplicants ?? 0,
                   icon: Users,
-                  color: "text-sky-700 bg-sky-100",
+                  color: "text-slate-700 bg-slate-100",
                 },
                 {
-                  label: "Approved",
-                  value: dashboard?.approvedCandidates ?? 0,
-                  icon: ClipboardCheck,
-                  color: "text-violet-700 bg-violet-100",
+                  label: "Need review",
+                  value: applications.filter((item) => ["New Applicant", "Documents Submitted", "Resume Parsed"].includes(item.status)).length,
+                  icon: Activity,
+                  color: "text-amber-700 bg-amber-100",
                 },
                 {
-                  label: "Ready for Matching",
+                  label: "Ready for profile",
                   value: dashboard?.readyForMatching ?? 0,
                   icon: Sparkles,
-                  color: "text-fuchsia-700 bg-fuchsia-100",
-                },
-                {
-                  label: "Placed",
-                  value: dashboard?.placedHelpers ?? 0,
-                  icon: BriefcaseBusiness,
-                  color: "text-teal-700 bg-teal-100",
-                },
-                {
-                  label: "Avg Score",
-                  value: dashboard?.averageQualificationScore ?? 0,
-                  icon: Brain,
                   color: "text-emerald-700 bg-emerald-100",
                 },
               ].map((metric) => (
                 <div
                   key={metric.label}
-                  className="min-w-0 rounded-xl border border-white/80 bg-white p-3 shadow-sm"
+                  className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3"
                 >
                   <div className="flex items-start justify-between gap-1">
                     <div className={`rounded-lg p-2 ${metric.color}`}>
                       <metric.icon className="h-3.5 w-3.5" />
                     </div>
-                    <p className="text-right text-xl font-black leading-none text-slate-950 tabular-nums">
+                    <p className="text-right text-lg font-black leading-none text-slate-950 tabular-nums">
                       {metric.value}
                     </p>
                   </div>
@@ -886,7 +880,7 @@ const AtsRecruitmentPage = () => {
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap gap-2 xl:flex-col xl:items-end">
+          <div className="flex shrink-0 flex-wrap gap-2 xl:justify-end">
             {/* AI Status Indicator */}
             <div
               className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
@@ -905,7 +899,7 @@ const AtsRecruitmentPage = () => {
               ) : (
                 <AlertTriangle className="h-3.5 w-3.5" />
               )}
-              <span>
+              <span className="hidden sm:inline">
                 {aiIsLoading
                   ? "Checking AI…"
                   : aiIsOnline
@@ -927,14 +921,9 @@ const AtsRecruitmentPage = () => {
             {/* <Button asChild variant="outline" size="sm" className="bg-white/80">
               <Link to="/apply-as-maid">Open Portal</Link>
             </Button> */}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCalendarDialogOpen(true)}
-              className="bg-white"
-            >
+            <Button size="sm" variant="outline" onClick={() => setCalendarDialogOpen(true)} className="bg-white">
               <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-              Open Recruiter Calendar
+              Calendar
             </Button>
             <Button
               size="sm"
@@ -949,7 +938,7 @@ const AtsRecruitmentPage = () => {
               className="bg-emerald-600 hover:bg-emerald-700"
             >
               <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-              Move to Profile Setup
+              Set up profile
             </Button>
           </div>
         </div>
@@ -1456,7 +1445,7 @@ const AtsRecruitmentPage = () => {
                           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openProfileModal(item.id)}>View profile</Button>
                           {item.status === READY_TO_POST_PUBLIC_STAGE && <Button asChild size="sm" className="h-8 text-xs bg-fuchsia-600 hover:bg-fuchsia-700"><Link to={buildPublicProfileSetupPath(item)}>Set up public profile</Link></Button>}
                           {makeWhatsAppHref(item.profile.contactNumber) && <Button asChild size="sm" variant="outline" className="h-8 text-xs"><a href={makeWhatsAppHref(item.profile.contactNumber)} target="_blank" rel="noreferrer"><MessageCircle className="mr-1 h-3 w-3" />WhatsApp</a></Button>}
-                          {item.profile.email && <Button asChild size="sm" variant="outline" className="h-8 text-xs"><a href={`mailto:${item.profile.email}`}><Mail className="mr-1 h-3 w-3" />Email applicant</a></Button>}
+                          {makeEmailComposeHref(item.profile.email) && <Button asChild size="sm" variant="outline" className="h-8 text-xs"><a href={makeEmailComposeHref(item.profile.email)} target="_blank" rel="noreferrer"><Mail className="mr-1 h-3 w-3" />Email applicant</a></Button>}
                         </div>
                       </article>
                     );
@@ -1703,12 +1692,12 @@ const AtsRecruitmentPage = () => {
                             </td>
 
                             {/* Actions */}
-                            <td className="px-4 py-3.5">
-                              <div className="flex flex-wrap gap-1.5">
+                            <td className="w-[190px] px-4 py-3.5">
+                              <div className="flex flex-col items-stretch gap-1.5">
                                 {nextAction.nextStage ? (
                                   <Button
                                     size="sm"
-                                    className="h-7 text-xs"
+                                    className="min-h-7 h-auto w-full whitespace-normal break-words px-2 py-1.5 text-left text-xs leading-tight"
                                     onClick={() =>
                                       stageMutation.mutate({
                                         applicationId: item.id,
@@ -1723,7 +1712,7 @@ const AtsRecruitmentPage = () => {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-7 text-xs"
+                                    className="min-h-7 h-auto w-full whitespace-normal break-words px-2 py-1.5 text-left text-xs leading-tight"
                                     onClick={() => openProfileModal(item.id)}
                                   >
                                     {nextAction.cta}
@@ -1733,7 +1722,7 @@ const AtsRecruitmentPage = () => {
                                   <Button
                                     asChild
                                     size="sm"
-                                    className="h-7 text-xs bg-fuchsia-600 hover:bg-fuchsia-700"
+                                    className="min-h-7 h-auto w-full whitespace-normal break-words px-2 py-1.5 text-xs leading-tight bg-fuchsia-600 hover:bg-fuchsia-700"
                                   >
                                     <Link
                                       to={buildPublicProfileSetupPath(item)}
@@ -1763,14 +1752,19 @@ const AtsRecruitmentPage = () => {
                                     </a>
                                   </Button>
                                 )}
-                                {item.profile.email && (
+                                {makeEmailComposeHref(item.profile.email) && (
                                   <Button
                                     asChild
                                     size="sm"
                                     variant="outline"
-                                    className="h-7 text-xs"
+                                    className="min-h-7 h-auto w-full px-2 py-1.5 text-xs leading-tight"
                                   >
-                                    <a href={`mailto:${item.profile.email}`}>
+                                    <a
+                                      href={makeEmailComposeHref(item.profile.email)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      title={`Email ${item.profile.email}`}
+                                    >
                                       <Mail className="mr-1 h-3 w-3" />
                                       Email
                                     </a>
@@ -1972,8 +1966,8 @@ const AtsRecruitmentPage = () => {
                     </a>
                     <a
                       href={
-                        detail.profile?.email
-                          ? `mailto:${String(detail.profile.email)}`
+                        detail.profile?.email || detail.application.profile.email
+                          ? `mailto:${String(detail.profile?.email || detail.application.profile.email)}`
                           : undefined
                       }
                       className="rounded-xl border bg-slate-50 p-2.5 text-[11px] transition hover:border-emerald-300"
@@ -1983,7 +1977,7 @@ const AtsRecruitmentPage = () => {
                         Email
                       </p>
                       <p className="mt-0.5 truncate text-slate-500">
-                        {String(detail.profile?.email || "–")}
+                        {String(detail.profile?.email || detail.application.profile.email || "–")}
                       </p>
                     </a>
                   </div>

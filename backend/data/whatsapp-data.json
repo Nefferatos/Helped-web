@@ -1,6 +1,49 @@
 {
   "conversations": [
     {
+      "id": "727c7190-9c05-42e6-9d9a-7b1734f1099e",
+      "agencyId": 1,
+      "candidateReferenceCode": "45646",
+      "candidateId": 37,
+      "candidateName": "Meena Sunar Biswakarma",
+      "phoneNumber": "80730757",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-08-23T04:06:22.239Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-08-23T04:36:02.569Z",
+      "updatedAt": "2026-08-23T05:15:19.828Z"
+    },
+    {
       "id": "5fdb18da-1bd1-4c92-aaae-91b01892b284",
       "agencyId": 1,
       "candidateReferenceCode": "IND-DAR-PRI-9698",

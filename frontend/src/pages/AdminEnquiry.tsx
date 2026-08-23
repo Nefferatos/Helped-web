@@ -579,6 +579,11 @@ const AdminEnquiry = () => {
         setEnquiries(withStatusDefaults(sorted));
         setPage(1);
         setSelectedIds(new Set());
+        // Opening this inbox acknowledges every enquiry currently shown.
+        void fetch("/api/enquiries/mark-viewed", {
+          method: "POST",
+          headers: { ...getAgencyAdminAuthHeaders() },
+        });
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError"))
           toast.error(error instanceof Error ? error.message : "Failed to load enquiries");

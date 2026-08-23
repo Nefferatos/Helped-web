@@ -7,10 +7,12 @@ import {
   getAtsApplication,
   getAtsDashboard,
   getAtsFilterPresets,
+  getUnreadAtsApplicationCount,
   getPublicAtsApplicationSummary,
   initializeAtsStore,
   listAtsApplications,
   matchApplicationsToRequirement,
+  markAtsApplicationsViewed,
   saveAtsFilterPreset,
   updateApplicationStage,
   upsertBackgroundCheck,
@@ -133,6 +135,28 @@ export const listAtsApplicationsController = async (req: Request, res: Response)
   } catch (error) {
     console.error('Error listing ATS applications:', error)
     res.status(500).json({ error: 'Failed to list ATS applications' })
+  }
+}
+
+export const getUnreadAtsApplicationCountController = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const unreadCount = await getUnreadAtsApplicationCount(agencyId)
+    res.status(200).json({ unreadCount, count: unreadCount })
+  } catch (error) {
+    console.error('Error fetching unread applicant count:', error)
+    res.status(500).json({ error: 'Failed to fetch unread applicant count' })
+  }
+}
+
+export const markAtsApplicationsViewedController = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const markedCount = await markAtsApplicationsViewed(agencyId)
+    res.status(200).json({ ok: true, markedCount })
+  } catch (error) {
+    console.error('Error marking applicants viewed:', error)
+    res.status(500).json({ error: 'Failed to mark applicants viewed' })
   }
 }
 
@@ -300,6 +324,15 @@ export const createPublicAtsApplicationController = async (req: Request, res: Re
     if (!fullName) return res.status(400).json({ error: 'fullName is required' })
     if (!contactNumber) return res.status(400).json({ error: 'contactNumber is required' })
     if (!email) return res.status(400).json({ error: 'email is required' })
+
+    const requiredAddMaidFields: Array<[string, string]> = [
+      ['nationality', 'nationality'],
+      ['dateOfBirth', 'date of birth'],
+    ]
+    const missingField = requiredAddMaidFields.find(([field]) => !toTrimmedString(formData.get(field)))
+    if (missingField) {
+      return res.status(400).json({ error: `${missingField[1]} is required` })
+    }
 
     const filePairs: Array<[string, PublicApplicantFileInput['kind']]> = [
       ['resume', 'resume'],

@@ -935,6 +935,20 @@ const AdminSupportChat = () => {
 
   useEffect(() => { void loadConversations(false); }, [loadConversations]);
 
+  // Presence changes do not create a chat message, so refresh the conversation
+  // list independently to keep each employer's online indicator accurate.
+  useEffect(() => {
+    const refreshPresence = () => {
+      if (document.visibilityState === "visible") void loadConversations(true);
+    };
+    const interval = window.setInterval(refreshPresence, 10_000);
+    document.addEventListener("visibilitychange", refreshPresence);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshPresence);
+    };
+  }, [loadConversations]);
+
   useEffect(() => {
     if (!activeConversationKey) {
       setMessages([]); lastMessageSignatureRef.current = ""; lastLoadedConversationKeyRef.current = null; return;

@@ -110,6 +110,8 @@ export interface EnquiryRecord {
   clientId?: number
   clientName?: string
   createdAt: string
+  /** Set once an agency staff member has opened the enquiries inbox. */
+  viewedAt?: string
   status?: EnquiryStatus
   note?: string
   assignedTo?: string
@@ -2656,6 +2658,25 @@ export const getEnquiriesStore = async (
   return enquiries.sort((a, b) => b.id - a.id)
 }
 
+export const markEnquiriesViewedForAgencyStore = async (
+  agencyId: number = DEFAULT_AGENCY_ID
+) => {
+  const data = await loadData()
+  const viewedAt = now()
+  let markedCount = 0
+
+  data.enquiries = data.enquiries.map((enquiry) => {
+    if (enquiry.agencyId === agencyId && !enquiry.viewedAt) {
+      markedCount += 1
+      return { ...enquiry, viewedAt }
+    }
+    return enquiry
+  })
+
+  if (markedCount > 0) await saveData(data)
+  return markedCount
+}
+
 export const getClientByEmailStore = async (email: string) => {
   const data = await loadData()
   const normalizedEmail = email.trim().toLowerCase()
@@ -3109,6 +3130,16 @@ export const getAgencySummariesStore = async () => {
 }
 
 export const getAgencyNameByIdStore = async (agencyId: number) => {
+  // The primary agency's public identity is managed in Our Profile. Use that
+  // name everywhere requests are displayed instead of the admin account label.
+  if (normalizeAgencyId(agencyId) === DEFAULT_AGENCY_ID) {
+    const data = await loadData()
+    return (
+      data.companyProfile.company_name?.trim() ||
+      data.companyProfile.short_name?.trim() ||
+      `Agency ${agencyId}`
+    )
+  }
   const agencies = await getAgencySummariesStore()
   return agencies.find((agency) => agency.id === agencyId)?.name ?? `Agency ${agencyId}`
 }
@@ -3561,6 +3592,7 @@ export const markChatMessagesReadForAgencyStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
+  let changed = false
   const conversation = getSupportConversationByContext(
     data,
     clientId,
@@ -3568,6 +3600,7 @@ export const markChatMessagesReadForAgencyStore = async (
     agencyId
   )
   if (conversation) {
+    changed = conversation.unreadAdmin > 0
     conversation.unreadAdmin = 0
     conversation.adminLastReadAt = now()
     data.supportNotifications = data.supportNotifications.map((notification) =>
@@ -3578,15 +3611,83 @@ export const markChatMessagesReadForAgencyStore = async (
         : notification
     )
   }
-  data.chatMessages = data.chatMessages.map((message) =>
-    message.clientId === clientId &&
-    message.senderRole === 'client' &&
-    message.conversationType === conversationType &&
-    message.agencyId === agencyId
-      ? { ...message, readByAgency: true }
-      : message
+  data.chatMessages = data.chatMessages.map((message) => {
+    const shouldMarkRead =
+      message.clientId === clientId &&
+      message.senderRole === 'client' &&
+      message.conversationType === conversationType &&
+      message.agencyId === agencyId &&
+      !message.readByAgency
+    if (!shouldMarkRead) return message
+    changed = true
+    return { ...message, readByAgency: true }
+  })
+  if (changed) await saveData(data)
+}
+
+/**
+ * Marks all unread support notifications for an agency as viewed.  The bell
+ * represents incoming chat activity, so clear the related conversation unread
+ * counts as well; otherwise a viewed alert would reappear on the next poll.
+ */
+export const markSupportNotificationsReadForAgencyStore = async (
+  agencyId: number = DEFAULT_AGENCY_ID
+) => {
+  const data = await loadData()
+  const viewedAt = now()
+  const affectedConversationIds = new Set<number>()
+
+  data.supportNotifications = data.supportNotifications.map((notification) => {
+    if (
+      notification.agencyId === agencyId &&
+      notification.recipientType === 'admin' &&
+      !notification.readAt
+    ) {
+      affectedConversationIds.add(notification.conversationId)
+      return { ...notification, readAt: viewedAt }
+    }
+    return notification
+  })
+
+  data.supportConversations = data.supportConversations.map((conversation) =>
+    affectedConversationIds.has(conversation.id)
+      ? { ...conversation, unreadAdmin: 0, adminLastReadAt: viewedAt }
+      : conversation
   )
-  await saveData(data)
+
+  if (affectedConversationIds.size > 0) {
+    await saveData(data)
+  }
+
+  return affectedConversationIds.size
+}
+
+/** Marks all client bell notifications as viewed and clears their chat badges. */
+export const markSupportNotificationsReadForClientStore = async (clientId: number) => {
+  const data = await loadData()
+  const viewedAt = now()
+  const affectedConversationIds = new Set<number>()
+
+  data.supportNotifications = data.supportNotifications.map((notification) => {
+    if (
+      notification.clientId === clientId &&
+      notification.recipientType === 'client' &&
+      !notification.readAt
+    ) {
+      affectedConversationIds.add(notification.conversationId)
+      return { ...notification, readAt: viewedAt }
+    }
+    return notification
+  })
+
+  data.supportConversations = data.supportConversations.map((conversation) =>
+    affectedConversationIds.has(conversation.id)
+      ? { ...conversation, unreadClient: 0, clientLastReadAt: viewedAt }
+      : conversation
+  )
+
+  if (affectedConversationIds.size > 0) await saveData(data)
+  return affectedConversationIds.size
 }
 
 export const markChatMessagesReadForClientStore = async (
@@ -3595,6 +3696,7 @@ export const markChatMessagesReadForClientStore = async (
   agencyId: number = DEFAULT_AGENCY_ID
 ) => {
   const data = await loadData()
+  let changed = false
   const conversation = getSupportConversationByContext(
     data,
     clientId,
@@ -3602,6 +3704,7 @@ export const markChatMessagesReadForClientStore = async (
     agencyId
   )
   if (conversation) {
+    changed = conversation.unreadClient > 0
     conversation.unreadClient = 0
     conversation.clientLastReadAt = now()
     data.supportNotifications = data.supportNotifications.map((notification) =>
@@ -3612,15 +3715,18 @@ export const markChatMessagesReadForClientStore = async (
         : notification
     )
   }
-  data.chatMessages = data.chatMessages.map((message) =>
-    message.clientId === clientId &&
-    message.senderRole === 'agency' &&
-    message.conversationType === conversationType &&
-    message.agencyId === agencyId
-      ? { ...message, readByClient: true }
-      : message
-  )
-  await saveData(data)
+  data.chatMessages = data.chatMessages.map((message) => {
+    const shouldMarkRead =
+      message.clientId === clientId &&
+      message.senderRole === 'agency' &&
+      message.conversationType === conversationType &&
+      message.agencyId === agencyId &&
+      !message.readByClient
+    if (!shouldMarkRead) return message
+    changed = true
+    return { ...message, readByClient: true }
+  })
+  if (changed) await saveData(data)
 }
 
 export const getUnreadAgencyChatCountStore = async (

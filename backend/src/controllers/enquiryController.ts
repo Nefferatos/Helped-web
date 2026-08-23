@@ -6,6 +6,7 @@ import {
   deleteEnquiryStore,
   getClientByEmailStore,
   getEnquiriesStore,
+  markEnquiriesViewedForAgencyStore,
   updateEnquiryStore,
   type EnquiryStatus,
 } from "../store";
@@ -49,12 +50,23 @@ export const getUnreadEnquiryCount = async (req: Request, res: Response) => {
     const enquiries = await getEnquiriesStore(undefined, agencyId);
 
     res.status(200).json({
-      unreadCount: enquiries.length,
-      count: enquiries.length,
+      unreadCount: enquiries.filter((enquiry) => !enquiry.viewedAt).length,
+      count: enquiries.filter((enquiry) => !enquiry.viewedAt).length,
     });
   } catch (error) {
     console.error("Error fetching unread enquiry count:", error);
     res.status(500).json({ error: "Failed to fetch unread enquiry count" });
+  }
+};
+
+export const markEnquiriesViewed = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req);
+    const markedCount = await markEnquiriesViewedForAgencyStore(agencyId);
+    res.status(200).json({ ok: true, markedCount });
+  } catch (error) {
+    console.error("Error marking enquiries viewed:", error);
+    res.status(500).json({ error: "Failed to mark enquiries viewed" });
   }
 };
 

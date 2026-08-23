@@ -16,11 +16,13 @@ import {
   createRequestRecord,
   getRequestRecordById,
   getRequestMetricsByAgencyId,
+  getUnreadRequestCountByAgencyId,
   getRequestStatusCountsRecord,
   listRequestRecords,
   type SqlRequestRecord,
   updateRequestMaidsRecord,
   updateRequestStatusRecord,
+  markRequestsViewedByAgencyId,
 } from '../repositories/requestRepository'
 import { getAgencyNameByIdRecord } from '../repositories/agencyAdminRepository'
 
@@ -293,15 +295,28 @@ export const getUnreadRequestCount = async (req: Request, res: Response) => {
     }
 
     const agencyId = await getRequestAgencyId(req)
-    const metrics = await getRequestMetricsByAgencyId(agencyId)
+    const unreadCount = await getUnreadRequestCountByAgencyId(agencyId)
 
     res.status(200).json({
-      unreadCount: metrics.pending,
-      count: metrics.pending,
+      unreadCount,
+      count: unreadCount,
     })
   } catch (error) {
     console.error('Error fetching unread request count:', error)
     res.status(500).json({ error: 'Failed to fetch unread request count' })
+  }
+}
+
+export const markRequestsViewed = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) return res.status(401).json({ error: 'Unauthorized' })
+    const agencyId = await getRequestAgencyId(req)
+    const markedCount = await markRequestsViewedByAgencyId(agencyId)
+    return res.status(200).json({ ok: true, markedCount })
+  } catch (error) {
+    console.error('Error marking requests viewed:', error)
+    return res.status(500).json({ error: 'Failed to mark requests viewed' })
   }
 }
 

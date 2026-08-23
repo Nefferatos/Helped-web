@@ -3,9 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   Bell,
   ChevronRight,
-  ClipboardList,
   HelpCircle,
-  History as HistoryIcon,
   Home,
   Menu,
   MessageCircle,
@@ -27,7 +25,7 @@ import {
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
-import { fetchClientUnreadChatCount, type SupportNotification } from "@/lib/chat";
+import { fetchClientUnreadChatCount, markClientNotificationsRead, type SupportNotification } from "@/lib/chat";
 import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import "./ClientTheme.css";
 
@@ -36,11 +34,9 @@ type NavTab = { label: string; to: string; icon: LucideIcon };
 const allTabs: NavTab[] = [
   { label: "Home",        to: "/client/home",         icon: Home },
   { label: "Search Maid", to: "/client/maids",         icon: Search },
-  { label: "My Requests", to: "/client/requests",      icon: ClipboardList },
   { label: "Messages",    to: "/client/support-chat",  icon: MessageCircle },
   { label: "FAQ",         to: "/client/faq",           icon: HelpCircle },
   { label: "Enquiry",     to: "/client/enquiry",       icon: MessageSquarePlus },
-  { label: "History",     to: "/client/history",       icon: HistoryIcon },
 ];
 
 // Enquiry is a secondary action — shown as its own CTA button in the
@@ -97,6 +93,15 @@ const ClientPortalNavbar = () => {
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const [underline, setUnderline] = useState<{ left: number; width: number } | null>(null);
+
+  const handleNotificationsOpenChange = (open: boolean) => {
+    if (!open || chatNotifications.length === 0) return;
+    setUnreadChatCount(0);
+    setChatNotifications([]);
+    void markClientNotificationsRead().catch(() => {
+      // The next polling cycle will restore the badge if the request did not persist.
+    });
+  };
 
   const isActive = useCallback(
     (to: string) => {
@@ -332,7 +337,7 @@ const ClientPortalNavbar = () => {
 
         {/* ── Right: notifications + avatar ── */}
         <div className="flex items-center gap-2 shrink-0">
-          <DropdownMenu>
+          <DropdownMenu onOpenChange={handleNotificationsOpenChange}>
             <DropdownMenuTrigger asChild>
               <button
                 className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-[#0E4E5E]/15 bg-[#0E4E5E]/5 text-[#0E4E5E] transition hover:border-[#0E4E5E]/30 hover:bg-[#0E4E5E]/10"

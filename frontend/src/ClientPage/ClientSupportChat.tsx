@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
-  Bot,
   ChevronDown,
   ChevronLeft,
   CheckCircle,
@@ -34,8 +33,8 @@ import { getBotReply } from "@/hooks/useChatbot";
 import "./ClientTheme.css";
 
 type TopicOption = AgencyChatbotTopicOption;
-const MAIN_MENU_TOPIC_ID = "__main_menu__";
-const GUIDE_STORAGE_KEY = "sc_guide_dismissed";
+const GUIDE_STORAGE_PREFIX = "sc_guide_seen";
+const seenGuideKeys = new Set<string>();
 
 const defaultConversation: ClientConversation = {
   key: "support:0",
@@ -111,21 +110,6 @@ const DEFAULT_CONFIG: AgencyChatbotConfig = {
   updatedAt: "",
 };
 
-const createQuickReplyTopic = (
-  id: string,
-  label: string,
-  icon: string,
-  suggestedMessage: string,
-  description = "",
-): TopicOption => ({
-  id,
-  label,
-  icon,
-  description,
-  suggestedMessage,
-  enabled: true,
-});
-
 const detectTopicIntent = (topic?: TopicOption | null) => {
   const haystack = `${topic?.id ?? ""} ${topic?.label ?? ""} ${topic?.description ?? ""} ${topic?.suggestedMessage ?? ""}`.toLowerCase();
   if (/(placement|status|application|progress|update)/.test(haystack)) return "placement";
@@ -135,53 +119,6 @@ const detectTopicIntent = (topic?: TopicOption | null) => {
   if (/(renew|renewal|contract|extend|extension)/.test(haystack)) return "renewal";
   if (/(document|paperwork|permit|requirement)/.test(haystack)) return "documents";
   return "general";
-};
-
-const getTopicFollowUps = (topic: TopicOption): TopicOption[] => {
-  switch (detectTopicIntent(topic)) {
-    case "placement":
-      return [
-        createQuickReplyTopic("placement-status", "Current status", "📍", "Can you check my current placement status?"),
-        createQuickReplyTopic("placement-next", "Next update", "⏭️", "What is the next update or next step for my request?"),
-        createQuickReplyTopic("placement-docs", "Documents needed", "🗂️", "Are there any documents you still need from me for this request?"),
-      ];
-    case "schedule":
-      return [
-        createQuickReplyTopic("schedule-change", "Change timing", "🕒", "I want to request a change of date or timing."),
-        createQuickReplyTopic("schedule-availability", "Check availability", "📅", "Can you check the available dates and times for me?"),
-        createQuickReplyTopic("schedule-confirm", "Confirm next slot", "✅", "Please confirm the next available slot for this arrangement."),
-      ];
-    case "billing":
-      return [
-        createQuickReplyTopic("billing-invoice", "Invoice details", "🧾", "Can you explain the invoice or billing breakdown for me?"),
-        createQuickReplyTopic("billing-payment", "Payment status", "💳", "Can you check whether my payment has been received or is still pending?"),
-        createQuickReplyTopic("billing-fees", "Agency fees", "🏷️", "Can you clarify which agency fees or charges apply here?"),
-      ];
-    case "concern":
-      return [
-        createQuickReplyTopic("concern-report", "Report issue", "📝", "I want to report an issue with more details."),
-        createQuickReplyTopic("concern-urgent", "Urgent support", "🚨", "This concern feels urgent and I need support as soon as possible."),
-        createQuickReplyTopic("concern-escalate", "Escalate case", "⬆️", "Please help escalate this concern to the right person."),
-      ];
-    case "renewal":
-      return [
-        createQuickReplyTopic("renewal-process", "Renewal process", "🔁", "Can you guide me through the renewal process?"),
-        createQuickReplyTopic("renewal-timeline", "Renewal timeline", "⏱️", "When should I start the renewal and what is the timeline?"),
-        createQuickReplyTopic("renewal-docs", "Renewal documents", "📄", "What documents are needed for the renewal?"),
-      ];
-    case "documents":
-      return [
-        createQuickReplyTopic("docs-required", "Required documents", "📄", "What documents are required from me?"),
-        createQuickReplyTopic("docs-submitted", "Submitted already", "📤", "I have already submitted some documents. Can you check what is still missing?"),
-        createQuickReplyTopic("docs-next", "Next step", "➡️", "After the documents are submitted, what is the next step?"),
-      ];
-    default:
-      return [
-        createQuickReplyTopic("general-help", "General help", "💬", "I need general help with my request."),
-        createQuickReplyTopic("general-followup", "Follow up", "🔎", "I want to follow up on my earlier message."),
-        createQuickReplyTopic("general-agent", "Need human support", "🙋", "I would like a team member to review this."),
-      ];
-  }
 };
 
 const compactWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
@@ -253,7 +190,8 @@ const CSS = `
   --sc-shadow-xs:0 1px 2px rgba(0,0,0,.05);
   --sc-shadow-sm:0 1px 4px rgba(0,0,0,.08),0 2px 8px rgba(0,0,0,.04);
   --sc-shadow-md:0 4px 16px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.06);
-  display:flex;flex-direction:column;height:100dvh;
+  display:flex;flex-direction:column;
+  height:calc(100dvh - 79px); min-height:0;
   background:var(--sc-bg);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   overflow:hidden;
@@ -261,7 +199,7 @@ const CSS = `
 
 /* ── Nav ── */
 .sc-nav {
-  height:60px; background:var(--sc-surface);
+  height:56px; background:rgba(255,255,255,.94); backdrop-filter:blur(12px);
   border-bottom:1px solid var(--sc-border); display:flex;
   align-items:center; justify-content:space-between;
   padding:0 20px; flex-shrink:0;
@@ -277,16 +215,6 @@ const CSS = `
 .sc-nav-title { font-size:16px; font-weight:800; color:var(--sc-text); letter-spacing:-.02em; }
 .sc-nav-unread { font-size:11px; color:var(--sc-green); font-weight:600; margin-top:1px; }
 .sc-nav-right { display:flex; align-items:center; gap:10px; }
-.sc-status-pill {
-  display:inline-flex; align-items:center; gap:6px;
-  border-radius:99px; padding:5px 12px; font-size:12px;
-  font-weight:600; border:1px solid; min-height:32px;
-}
-.sc-status-pill.online  { background:var(--sc-green-light); color:#0a5c40; border-color:var(--sc-green-border); }
-.sc-status-pill.offline { background:#fff5f5; color:#b91c1c; border-color:#fca5a5; }
-.sc-status-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
-.sc-status-dot.online  { background:var(--sc-green); }
-.sc-status-dot.offline { background:#ef4444; }
 .sc-help-btn {
   width:34px; height:34px; border-radius:50%;
   border:1.5px solid var(--sc-green-border);
@@ -309,13 +237,13 @@ const CSS = `
 .sc-overlay { display:none; position:absolute; inset:0; background:rgba(0,0,0,.45); z-index:24; }
 .sc-overlay.visible { display:block; }
 .sc-sidebar {
-  width:290px; min-width:290px; background:var(--sc-surface);
+  width:306px; min-width:306px; background:var(--sc-surface);
   border-right:1px solid var(--sc-border);
   display:flex; flex-direction:column; overflow:hidden;
   flex-shrink:0; z-index:25;
   transition:transform .24s cubic-bezier(.4,0,.2,1);
 }
-.sc-sidebar-hdr { padding:16px 14px 10px; border-bottom:1px solid var(--sc-border-soft); flex-shrink:0; }
+.sc-sidebar-hdr { padding:16px 14px 12px; border-bottom:1px solid var(--sc-border-soft); flex-shrink:0; background:linear-gradient(180deg,#fff 0%,#f8fcfa 100%); }
 .sc-sidebar-label {
   font-size:11px; font-weight:700; color:var(--sc-text3);
   text-transform:uppercase; letter-spacing:.07em; margin-bottom:10px;
@@ -330,7 +258,7 @@ const CSS = `
 .sc-searchbox input::placeholder { color:var(--sc-text3); }
 
 /* ── Conversation list ── */
-.sc-conv-list { flex:1; overflow-y:auto; padding:8px 8px 4px; scrollbar-width:thin; scrollbar-color:rgba(0,0,0,.1) transparent; }
+.sc-conv-list { flex:1; overflow-y:auto; padding:10px 8px 6px; scrollbar-width:thin; scrollbar-color:rgba(0,0,0,.1) transparent; }
 .sc-conv-list::-webkit-scrollbar { width:4px; }
 .sc-conv-list::-webkit-scrollbar-thumb { background:rgba(0,0,0,.10); border-radius:8px; }
 .sc-conv-item {
@@ -340,7 +268,7 @@ const CSS = `
   border-left:3px solid transparent;
 }
 .sc-conv-item:hover:not(.active) { background:#f5f8f6; }
-.sc-conv-item.active { background:var(--sc-green-light); border-left-color:var(--sc-green); }
+.sc-conv-item.active { background:linear-gradient(90deg,#e6f9ef,#f3fcf7); border-left-color:var(--sc-green); box-shadow:inset 0 0 0 1px rgba(22,169,123,.08); }
 .sc-conv-av {
   width:42px; height:42px; border-radius:13px;
   display:flex; align-items:center; justify-content:center;
@@ -385,11 +313,11 @@ const CSS = `
 .sc-stat-val.green { color:var(--sc-green); }
 
 /* ── Main / header ── */
-.sc-main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; background:var(--sc-bg); }
+.sc-main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; background:#f7faf8; }
 .sc-chat-hdr {
-  background:var(--sc-surface); border-bottom:1px solid var(--sc-border);
-  padding:12px 16px; display:flex; align-items:center; gap:11px;
-  flex-shrink:0; box-shadow:var(--sc-shadow-xs);
+  background:rgba(255,255,255,.96); border-bottom:1px solid var(--sc-border);
+  padding:11px 18px; display:flex; align-items:center; gap:11px;
+  flex-shrink:0; box-shadow:0 2px 12px rgba(15,23,42,.035);
 }
 .sc-back-btn {
   display:none; width:36px; height:36px; border-radius:10px;
@@ -410,13 +338,9 @@ const CSS = `
 .sc-chat-info { flex:1; min-width:0; }
 .sc-chat-name { font-size:15px; font-weight:800; color:var(--sc-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-.01em; }
 .sc-chat-desc { font-size:12px; color:var(--sc-text3); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sc-online-tag {
-  display:inline-flex; align-items:center; gap:5px;
-  font-size:12px; font-weight:600; color:#0a5c40; flex-shrink:0;
-}
 
 /* ── Topic picker ── */
-.sc-topics { flex-shrink:0; border-bottom:1px solid var(--sc-border); background:var(--sc-surface); overflow:hidden; }
+.sc-topics { flex-shrink:0; border-bottom:1px solid var(--sc-border); background:#fff; overflow:hidden; }
 .sc-topics-hdr {
   display:flex; align-items:center; justify-content:space-between;
   padding:10px 16px; cursor:pointer; user-select:none;
@@ -479,8 +403,9 @@ const CSS = `
 
 /* ── Messages area ── */
 .sc-msgs {
-  flex:1; overflow-y:auto; padding:16px; display:flex;
+  flex:1; min-height:0; overflow-y:auto; padding:20px clamp(14px,3vw,34px); display:flex;
   flex-direction:column; gap:10px;
+  background:radial-gradient(circle at top right,rgba(209,250,229,.52),transparent 26rem),#f7faf8;
   scrollbar-width:thin; scrollbar-color:rgba(0,0,0,.10) transparent;
 }
 .sc-msgs::-webkit-scrollbar { width:4px; }
@@ -517,7 +442,7 @@ const CSS = `
   box-shadow:var(--sc-shadow-xs);
 }
 .sc-msg-avi img { width:100%; height:100%; object-fit:cover; }
-.sc-msg-col { display:flex; flex-direction:column; max-width:76%; }
+.sc-msg-col { display:flex; flex-direction:column; max-width:min(76%,680px); }
 .sc-msg-row.own .sc-msg-col { align-items:flex-end; }
 .sc-msg-sender { font-size:11px; font-weight:600; color:var(--sc-text3); margin-bottom:3px; padding-left:3px; }
 .sc-bubble {
@@ -567,9 +492,10 @@ const CSS = `
 
 /* ── Compose ── */
 .sc-compose {
-  background:var(--sc-surface);
+  background:rgba(255,255,255,.96);
   border-top:1px solid var(--sc-border);
-  padding:10px 14px 12px; flex-shrink:0;
+  padding:12px clamp(14px,3vw,28px) 14px; flex-shrink:0;
+  box-shadow:0 -5px 18px rgba(15,23,42,.035);
 }
 .sc-topic-tag {
   display:inline-flex; align-items:center; gap:6px;
@@ -619,48 +545,51 @@ const CSS = `
 @media (min-width:520px) { .sc-guide-backdrop { align-items:center; padding:20px; } }
 @keyframes sc-guide-fade { from{opacity:0} to{opacity:1} }
 .sc-guide-sheet {
-  background:var(--sc-surface); border-radius:28px 28px 0 0;
-  width:100%; max-width:440px; overflow:hidden;
+  background:var(--sc-surface); border-radius:24px 24px 0 0;
+  width:100%; max-width:468px; overflow:hidden;
   display:flex; flex-direction:column;
-  box-shadow:0 -12px 48px rgba(0,0,0,.22);
+  border:1px solid rgba(255,255,255,.35); box-shadow:0 24px 70px rgba(15,23,42,.30);
   animation:sc-guide-up .32s cubic-bezier(.34,1.46,.64,1);
 }
-@media (min-width:520px) { .sc-guide-sheet { border-radius:24px; animation:sc-guide-pop .28s cubic-bezier(.34,1.46,.64,1); } }
+@media (min-width:520px) { .sc-guide-sheet { border-radius:22px; animation:sc-guide-pop .28s cubic-bezier(.34,1.46,.64,1); } }
 @keyframes sc-guide-up { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
 @keyframes sc-guide-pop { from{transform:scale(.92);opacity:0} to{transform:scale(1);opacity:1} }
-.sc-guide-accent { height:4px; background:linear-gradient(90deg,#27c48a,#0f8a64); flex-shrink:0; }
-.sc-guide-inner { padding:28px 24px 32px; display:flex; flex-direction:column; position:relative; }
+.sc-guide-accent { height:5px; background:linear-gradient(90deg,#0f8a64 0%,#28c48b 52%,#a7f3d0 100%); flex-shrink:0; }
+.sc-guide-inner { padding:30px; display:flex; flex-direction:column; position:relative; }
 .sc-guide-close {
-  position:absolute; top:0; right:0; width:34px; height:34px;
-  border-radius:50%; border:none; background:rgba(0,0,0,.06); color:#6b7280;
+  position:absolute; top:16px; right:16px; width:34px; height:34px;
+  border-radius:10px; border:1px solid #edf0ee; background:#f8faf9; color:#64748b;
   display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s;
 }
-.sc-guide-close:hover { background:rgba(0,0,0,.12); }
+.sc-guide-close:hover { background:#edf7f1; color:#0f8a64; }
+.sc-guide-heading { display:flex; align-items:center; gap:15px; padding-right:44px; }
 .sc-guide-emoji-ring {
-  width:84px; height:84px; border-radius:26px; margin:0 auto 20px;
-  background:linear-gradient(135deg,#e0faf0,#c8f4e2);
+  width:58px; height:58px; border-radius:17px; flex-shrink:0;
+  background:linear-gradient(135deg,#d9faeb,#bbf1d8);
   display:flex; align-items:center; justify-content:center;
-  box-shadow:0 4px 20px rgba(22,169,123,.18);
+  border:1px solid #c7f3dd; box-shadow:0 8px 20px rgba(22,169,123,.15);
 }
-.sc-guide-emoji { font-size:42px; line-height:1; display:block; }
-.sc-guide-title { font-size:21px; font-weight:800; color:var(--sc-text); text-align:center; margin-bottom:10px; letter-spacing:-.02em; }
-.sc-guide-body { font-size:15px; color:#4b5563; line-height:1.7; text-align:center; margin-bottom:28px; min-height:72px; }
-.sc-guide-progress-wrap { margin-bottom:26px; }
-.sc-guide-progress-track { height:4px; background:#f0f0f0; border-radius:99px; overflow:hidden; }
+.sc-guide-emoji { font-size:29px; line-height:1; display:block; }
+.sc-guide-kicker { margin:0 0 4px; color:#0f8a64; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+.sc-guide-title { font-size:21px; font-weight:800; color:var(--sc-text); margin:0; letter-spacing:-.025em; line-height:1.2; }
+.sc-guide-body { font-size:14px; color:#526072; line-height:1.7; margin:22px 0 24px; min-height:72px; }
+.sc-guide-progress-wrap { margin-bottom:24px; padding:14px; border:1px solid #e9efec; border-radius:14px; background:#f9fcfa; }
+.sc-guide-progress-track { height:6px; background:#e8efeb; border-radius:99px; overflow:hidden; }
 .sc-guide-progress-fill { height:100%; background:linear-gradient(90deg,#27c48a,#16a97b); border-radius:99px; transition:width .35s cubic-bezier(.4,0,.2,1); }
-.sc-guide-progress-meta { display:flex; justify-content:space-between; margin-top:8px; font-size:11px; color:var(--sc-text3); font-weight:600; }
-.sc-guide-actions { display:flex; gap:10px; }
-.sc-guide-btn-skip { flex:1; padding:13px; border-radius:12px; border:1.5px solid #e5e7eb; background:#fff; font-size:14px; font-weight:600; color:var(--sc-text2); cursor:pointer; transition:background .12s,border-color .12s; }
+.sc-guide-progress-meta { display:flex; justify-content:space-between; margin-top:9px; font-size:11px; color:#64748b; font-weight:700; }
+.sc-guide-actions { display:flex; gap:12px; }
+.sc-guide-btn-skip { flex:1; padding:13px; border-radius:11px; border:1px solid #dce5e0; background:#fff; font-size:14px; font-weight:700; color:#64748b; cursor:pointer; transition:background .12s,border-color .12s; }
 .sc-guide-btn-skip:hover { background:#f6f8f7; border-color:#d1d5db; }
-.sc-guide-btn-next { flex:2; padding:13px; border-radius:12px; border:none; background:linear-gradient(135deg,#27c48a,#16a97b); color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 2px 10px rgba(22,169,123,.32); transition:transform .12s,box-shadow .12s; }
+.sc-guide-btn-next { flex:2; padding:13px; border-radius:11px; border:none; background:linear-gradient(135deg,#20b982,#0f956b); color:#fff; font-size:14px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 4px 12px rgba(22,169,123,.25); transition:transform .12s,box-shadow .12s; }
 .sc-guide-btn-next:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(22,169,123,.40); }
 .sc-guide-btn-next:active { transform:translateY(0); }
-.sc-guide-btn-done { flex:1; padding:13px; border-radius:12px; border:none; background:linear-gradient(135deg,#27c48a,#16a97b); color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 2px 10px rgba(22,169,123,.32); transition:transform .12s,box-shadow .12s; }
+.sc-guide-btn-done { flex:1; padding:13px; border-radius:11px; border:none; background:linear-gradient(135deg,#20b982,#0f956b); color:#fff; font-size:14px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 4px 12px rgba(22,169,123,.25); transition:transform .12s,box-shadow .12s; }
 .sc-guide-btn-done:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(22,169,123,.40); }
 .sc-guide-btn-done:active { transform:translateY(0); }
 
 /* ── Responsive ── */
 @media (max-width:768px) {
+  .sc { height:calc(100dvh - 59px); }
   .sc-sidebar { position:absolute; top:0; left:0; bottom:0; width:82%; max-width:300px; transform:translateX(-100%); z-index:25; }
   .sc-sidebar.open { transform:translateX(0); box-shadow:8px 0 40px rgba(0,0,0,.20); }
   .sc-back-btn { display:flex !important; }
@@ -684,17 +613,22 @@ function GuideModal({ onDismiss }: { onDismiss: () => void }) {
 
   return (
     <div className="sc-guide-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}>
-      <div className="sc-guide-sheet">
+      <div className="sc-guide-sheet" role="dialog" aria-modal="true" aria-labelledby="support-guide-title">
         <div className="sc-guide-accent" />
         <div className="sc-guide-inner">
           <button className="sc-guide-close" onClick={onDismiss} aria-label="Close guide">
             <X size={15} />
           </button>
 
-          <div className="sc-guide-emoji-ring">
-            <span className="sc-guide-emoji">{current.emoji}</span>
+          <div className="sc-guide-heading">
+            <div className="sc-guide-emoji-ring" aria-hidden="true">
+              <span className="sc-guide-emoji">{current.emoji}</span>
+            </div>
+            <div>
+              <p className="sc-guide-kicker">Support chat · Quick guide</p>
+              <h2 id="support-guide-title" className="sc-guide-title">{current.title}</h2>
+            </div>
           </div>
-          <div className="sc-guide-title">{current.title}</div>
           <div className="sc-guide-body">{current.body}</div>
 
           <div className="sc-guide-progress-wrap">
@@ -852,36 +786,13 @@ function MessageBubble({ message, isOwn }: { message: ChatMessage; isOwn: boolea
   );
 }
 
-function QuickReplies({
-  topics,
-  onSelect,
-}: {
-  topics: TopicOption[];
-  onSelect: (topic: TopicOption) => void;
-}) {
-  if (topics.length === 0) return null;
-  return (
-    <div className="sc-quick-replies">
-      {topics.map((topic) => (
-        <button
-          key={topic.id}
-          className="sc-quick-reply-btn"
-          onClick={() => onSelect(topic)}
-          type="button"
-        >
-          <span>{topic.icon}</span>
-          <span>{topic.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const ClientSupportChat = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const client = getStoredClient();
+  const guideStorageKey = `${GUIDE_STORAGE_PREFIX}:${client?.id ?? "guest"}`;
   const [conversations, setConversations] = useState<ClientConversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -896,27 +807,35 @@ const ClientSupportChat = () => {
   const [isBotTyping, setIsBotTyping] = useState(false);
   const [chatbotConfig, setChatbotConfig] = useState<AgencyChatbotConfig>(DEFAULT_CONFIG);
 
-  // Guide: show on first visit, hide after dismiss, re-openable via ? button
+  // Show the guide automatically once per signed-in client. Record it immediately
+  // so a remount, refresh, or navigation cannot show the automatic popup again.
   const [showGuide, setShowGuide] = useState(() => {
+    let hasSeenGuide = seenGuideKeys.has(guideStorageKey);
     try {
-      return !localStorage.getItem(GUIDE_STORAGE_KEY);
+      hasSeenGuide = hasSeenGuide || Boolean(
+        localStorage.getItem(guideStorageKey) || sessionStorage.getItem(guideStorageKey),
+      );
     } catch {
-      return true;
+      // The in-memory record still prevents repeat popups in restricted browsers.
     }
+    if (!hasSeenGuide) {
+      seenGuideKeys.add(guideStorageKey);
+      try {
+        localStorage.setItem(guideStorageKey, "1");
+        sessionStorage.setItem(guideStorageKey, "1");
+      } catch { /* ignore unavailable storage */ }
+    }
+    return !hasSeenGuide;
   });
 
   const dismissGuide = () => {
-    try { localStorage.setItem(GUIDE_STORAGE_KEY, "1"); } catch { /* ignore */ }
+    seenGuideKeys.add(guideStorageKey);
+    try {
+      localStorage.setItem(guideStorageKey, "1");
+      sessionStorage.setItem(guideStorageKey, "1");
+    } catch { /* ignore unavailable storage */ }
     setShowGuide(false);
   };
-
-  // Persist "seen" on mount so navigating away without dismissing won't re-show it
-  useEffect(() => {
-    if (showGuide) {
-      try { localStorage.setItem(GUIDE_STORAGE_KEY, "1"); } catch { /* ignore */ }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -927,8 +846,6 @@ const ClientSupportChat = () => {
   const justPrependedRef = useRef(false);
   // Track IDs of messages we've already added optimistically so SSE doesn't double-add them
   const optimisticIdsRef = useRef<Set<number>>(new Set());
-
-  const client = getStoredClient();
 
   const selectedType: ConversationType = searchParams.get("type") === "agency" ? "agency" : "support";
   const selectedAgencyId = selectedType === "agency" ? Number(searchParams.get("agencyId")) : undefined;
@@ -980,23 +897,6 @@ const ClientSupportChat = () => {
         .filter((topic) => topic.enabled !== false),
     [chatbotConfig.topicOptions],
   );
-  const choiceTopics = useMemo(
-    () => topics.filter((topic) => topic.id !== "other"),
-    [topics],
-  );
-  const menuTopics = useMemo(() => {
-    if (!selectedTopic || selectedTopic.id === "other") return choiceTopics;
-    const followUps = getTopicFollowUps(selectedTopic);
-    return [
-      ...followUps,
-      createQuickReplyTopic(MAIN_MENU_TOPIC_ID, "Main menu", "🏠", "", "Show all support topics"),
-    ];
-  }, [choiceTopics, selectedTopic]);
-  const shouldShowTopicChoices =
-    menuTopics.length > 0 &&
-    !isBotTyping &&
-    (messages.length === 0 || messages[messages.length - 1]?.senderRole === "agency");
-
   const filteredConversations = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return conversations;
@@ -1144,6 +1044,26 @@ const ClientSupportChat = () => {
   useEffect(() => {
     void loadChatbotConfig();
   }, [loadChatbotConfig]);
+
+  // Keep the employer's presence current while the support chat is open.
+  // The agency inbox uses this heartbeat to render the green online indicator.
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      if (document.visibilityState !== "visible") return;
+      void clientFetch(`/api/chats/client/heartbeat?${qs}`, {
+        method: "POST",
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    sendHeartbeat();
+    const interval = window.setInterval(sendHeartbeat, 20_000);
+    document.addEventListener("visibilitychange", sendHeartbeat);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", sendHeartbeat);
+    };
+  }, [qs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1388,11 +1308,6 @@ const ClientSupportChat = () => {
           >
             <HelpCircle size={16} />
           </button>
-          <div className={`sc-status-pill ${chatbotEnabled ? "online" : "offline"}`}>
-            <Bot size={13} />
-            <div className={`sc-status-dot ${chatbotEnabled ? "online" : "offline"}`} />
-            {chatbotEnabled ? "AI Support On" : "AI Support Off"}
-          </div>
         </div>
       </nav>
 
@@ -1493,12 +1408,6 @@ const ClientSupportChat = () => {
               <div className="sc-chat-name">{activeConv.title}</div>
               <div className="sc-chat-desc">{`${getConversationBadgeLabel(activeConv)} · ${activeConv.description}`}</div>
             </div>
-            {chatbotEnabled && (
-              <div className="sc-online-tag">
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--sc-green)", flexShrink: 0 }} />
-                AI Receptionist
-              </div>
-            )}
           </div>
 
           {topics.length > 0 && (
@@ -1506,10 +1415,6 @@ const ClientSupportChat = () => {
               topics={topics}
               selectedId={selectedTopic?.id ?? null}
               onSelect={(topic) => {
-                if (topic.id === MAIN_MENU_TOPIC_ID) {
-                  setSelectedTopic(null);
-                  return;
-                }
                 setSelectedTopic(topic);
                 if (topic.suggestedMessage?.trim()) {
                   void sendMessage(topic.suggestedMessage);
@@ -1555,25 +1460,6 @@ const ClientSupportChat = () => {
                   <MessageBubble key={message.id} message={message} isOwn={message.senderRole === "client"} />
                 ))}
               </>
-            )}
-
-            {shouldShowTopicChoices && (
-              <QuickReplies
-                topics={menuTopics}
-                onSelect={(topic) => {
-                  if (topic.id === MAIN_MENU_TOPIC_ID) {
-                    setSelectedTopic(null);
-                    return;
-                  }
-                  setSelectedTopic(topic);
-                  if (topic.suggestedMessage?.trim()) {
-                    void sendMessage(topic.suggestedMessage);
-                    return;
-                  }
-                  setDraft("");
-                  window.setTimeout(() => textareaRef.current?.focus(), 60);
-                }}
-              />
             )}
 
             {isBotTyping && (

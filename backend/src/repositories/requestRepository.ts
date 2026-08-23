@@ -286,6 +286,28 @@ export const getRequestMetricsByAgencyId = async (
   }
 }
 
+export const getUnreadRequestCountByAgencyId = async (agencyId: number) => {
+  const result = (await query(
+    `SELECT COUNT(*)::int AS total
+     FROM requests
+     WHERE COALESCE(agency_id, 1) = $1
+       AND COALESCE(details->>'agencyViewedAt', '') = ''`,
+    [agencyId]
+  )) as { rows: Array<{ total: number }> }
+  return Number(result.rows[0]?.total ?? 0)
+}
+
+export const markRequestsViewedByAgencyId = async (agencyId: number) => {
+  const result = (await query(
+    `UPDATE requests
+     SET details = jsonb_set(COALESCE(details, '{}'::jsonb), '{agencyViewedAt}', to_jsonb(CURRENT_TIMESTAMP::text), true)
+     WHERE COALESCE(agency_id, 1) = $1
+       AND COALESCE(details->>'agencyViewedAt', '') = ''`,
+    [agencyId]
+  )) as { rowCount?: number }
+  return Number(result.rowCount ?? 0)
+}
+
 export const updateRequestStatusRecord = async (
   id: string,
   agencyId: number,

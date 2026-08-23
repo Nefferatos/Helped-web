@@ -9,6 +9,8 @@ import {
   getAdminChatConversations,
   getAdminChatSummary,
   getAdminChatMessages,
+  markAdminNotificationsRead,
+  markClientNotificationsRead,
   getMyChatLastId,
   getMyChatbotConfig,
   getMyChatConversations,
@@ -30,6 +32,7 @@ router.get('/client/config', getMyChatbotConfig)
 router.get('/client/last-id', getMyChatLastId)
 router.get('/client/stream', streamMyChatMessages)
 router.get('/client/summary', getMyChatSummary)
+router.post('/client/notifications/read', markClientNotificationsRead)
 router.get('/client', getMyChatMessages)
 router.post('/client', sendMyChatMessage)
 router.post('/client/bot-reply', postMyChatBotReply)
@@ -44,6 +47,7 @@ router.put('/admin/config', updateAdminChatbotConfig)
 router.get('/admin/last-id', getAdminChatLastId)
 router.get('/admin/stream', streamAdminChatMessages)
 router.get('/admin/summary', getAdminChatSummary)
+router.post('/admin/notifications/read', markAdminNotificationsRead)
 router.get('/admin/:clientId', getAdminChatMessages)
 router.post('/admin/:clientId', sendAdminChatMessage)
 router.patch('/admin/:clientId', updateAdminConversationMeta)

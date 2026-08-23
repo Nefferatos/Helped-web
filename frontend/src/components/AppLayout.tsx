@@ -41,7 +41,11 @@ import {
   shouldShowAgencyAdminWelcome,
   type AgencyAdminUser,
 } from "@/lib/agencyAdminAuth";
-import { fetchAdminUnreadChatCount, type SupportNotification } from "@/lib/chat";
+import {
+  fetchAdminUnreadChatCount,
+  markAdminNotificationsRead,
+  type SupportNotification,
+} from "@/lib/chat";
 
 /* ─── Responsive breakpoint hook ─────────────────────────────────────────── */
 
@@ -109,7 +113,7 @@ const navItems = [
     iconShadow: "0 4px 0 #059669, 0 6px 12px rgba(16,185,129,0.45)",
     iconShadowActive: "0 2px 0 #059669, 0 3px 8px rgba(16,185,129,0.4)",
     iconColor: "#fff",
-    badgeKey: null,
+    badgeKey: "unreadApplicants" as const,
   },
   {
     label: "Messages",
@@ -188,12 +192,14 @@ const navItems = [
 type BadgeCounts = {
   unreadChats: number;
   unreadEnquiries: number;
+  unreadApplicants: number;
   unreadRequests: number;
 };
 
 const EMPTY_BADGE_COUNTS: BadgeCounts = {
   unreadChats: 0,
   unreadEnquiries: 0,
+  unreadApplicants: 0,
   unreadRequests: 0,
 };
 
@@ -220,6 +226,7 @@ const readAdminNotificationCache = (): AdminNotificationCache | null => {
       badgeCounts: {
         unreadChats: Number(badgeCounts.unreadChats) || 0,
         unreadEnquiries: Number(badgeCounts.unreadEnquiries) || 0,
+        unreadApplicants: Number(badgeCounts.unreadApplicants) || 0,
         unreadRequests: Number(badgeCounts.unreadRequests) || 0,
       },
       chatNotifications: Array.isArray(parsed.chatNotifications)
@@ -237,29 +244,6 @@ const writeAdminNotificationCache = (cache: AdminNotificationCache) => {
 
   try {
     window.localStorage.setItem(ADMIN_NOTIFICATION_CACHE_KEY, JSON.stringify(cache));
-  } catch {
-    // Storage can be unavailable in private sessions; notifications still work in memory.
-  }
-};
-
-const ADMIN_NOTIFICATION_DISMISSED_KEY = "helped-admin-notification-dismissed-total";
-
-const readDismissedNotificationTotal = (): number => {
-  if (typeof window === "undefined") return 0;
-
-  try {
-    const raw = window.localStorage.getItem(ADMIN_NOTIFICATION_DISMISSED_KEY);
-    return raw ? Number(raw) || 0 : 0;
-  } catch {
-    return 0;
-  }
-};
-
-const writeDismissedNotificationTotal = (total: number) => {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(ADMIN_NOTIFICATION_DISMISSED_KEY, String(total));
   } catch {
     // Storage can be unavailable in private sessions; notifications still work in memory.
   }
@@ -958,10 +942,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>(
     () => readAdminNotificationCache()?.chatNotifications ?? []
   );
-  const [dismissedNotificationTotal, setDismissedNotificationTotal] = useState<number>(
-    () => readDismissedNotificationTotal()
-  );
-
   const [agencyAdmin, setAgencyAdmin] = useState<AgencyAdminUser | null>(
     getStoredAgencyAdmin()
   );
@@ -999,6 +979,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         } | null = null;
         let companyLogo = cached?.agencyLogoUrl ?? "";
         let unreadChats = cached?.badgeCounts.unreadChats ?? 0;
+        let unreadApplicants = cached?.badgeCounts.unreadApplicants ?? 0;
         let dedicatedNotifications: SupportNotification[] = cached?.chatNotifications ?? [];
 
         try {
@@ -1010,11 +991,14 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         }
 
         if (!isAddMaidRoute) {
-          const [summaryResult, companyResult] = await Promise.allSettled([
+          const [summaryResult, companyResult, applicantsResult] = await Promise.allSettled([
             fetch("/api/company/summary", {
               headers: authHeaders,
             }),
             fetch("/api/company", {
+              headers: authHeaders,
+            }),
+            fetch("/api/ats/applications/unread-count", {
               headers: authHeaders,
             }),
           ]);
@@ -1037,6 +1021,13 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             };
             companyLogo = compData.companyProfile?.logo_data_url || "";
           }
+
+          if (applicantsResult.status === "fulfilled" && applicantsResult.value.ok) {
+            const applicantsData = (await applicantsResult.value.json().catch(() => ({}))) as {
+              unreadCount?: number;
+            };
+            unreadApplicants = Number(applicantsData.unreadCount) || 0;
+          }
         }
 
         if (!active) return;
@@ -1044,6 +1035,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         const nextBadgeCounts = {
           unreadChats,
           unreadEnquiries: summaryData?.enquiries ?? cached?.badgeCounts.unreadEnquiries ?? 0,
+          unreadApplicants,
           unreadRequests: summaryData?.pendingRequests ?? cached?.badgeCounts.unreadRequests ?? 0,
         };
 
@@ -1074,6 +1066,65 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     setAgencyAdmin(getStoredAgencyAdmin());
   }, [location.pathname]);
 
+  // Viewing Requests acknowledges the items without changing their workflow status.
+  useEffect(() => {
+    if (!location.pathname.endsWith("/requests")) return;
+    const authHeaders = getAgencyAdminAuthHeaders();
+    if (!authHeaders.Authorization) return;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/requests/mark-viewed", {
+          method: "POST",
+          headers: authHeaders,
+        });
+        if (!response.ok) throw new Error(`Request acknowledgement failed (${response.status})`);
+        setBadgeCounts((current) => ({ ...current, unreadRequests: 0 }));
+      } catch (error) {
+        console.warn("[AppLayout] Failed to mark requests viewed", error);
+      }
+    })();
+  }, [location.pathname]);
+
+  // Opening either inbox acknowledges its related notifications permanently.
+  useEffect(() => {
+    if (!location.pathname.endsWith("/enquiry")) return;
+    const authHeaders = getAgencyAdminAuthHeaders();
+    if (!authHeaders.Authorization) return;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/enquiries/mark-viewed", {
+          method: "POST",
+          headers: authHeaders,
+        });
+        if (!response.ok) throw new Error(`Enquiry acknowledgement failed (${response.status})`);
+        setBadgeCounts((current) => ({ ...current, unreadEnquiries: 0 }));
+      } catch (error) {
+        console.warn("[AppLayout] Failed to mark enquiries viewed", error);
+      }
+    })();
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!location.pathname.endsWith("/recruitment")) return;
+    const authHeaders = getAgencyAdminAuthHeaders();
+    if (!authHeaders.Authorization) return;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/ats/applications/mark-viewed", {
+          method: "POST",
+          headers: authHeaders,
+        });
+        if (!response.ok) throw new Error(`Applicant acknowledgement failed (${response.status})`);
+        setBadgeCounts((current) => ({ ...current, unreadApplicants: 0 }));
+      } catch (error) {
+        console.warn("[AppLayout] Failed to mark applicants viewed", error);
+      }
+    })();
+  }, [location.pathname]);
+
   const handleLogout = async () => {
     try {
       await fetch("/api/agency-auth/logout", {
@@ -1099,16 +1150,20 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const totalUnread =
     badgeCounts.unreadChats +
     badgeCounts.unreadEnquiries +
+    badgeCounts.unreadApplicants +
     badgeCounts.unreadRequests;
-  // Hide the bell badge once the admin has opened the notification list, until
-  // the underlying unread total grows again (i.e. new notifications arrive).
-  const visibleUnread = totalUnread > dismissedNotificationTotal ? totalUnread : 0;
+  const visibleUnread = totalUnread;
   const visibleChatNotifications = chatNotifications.slice(0, 6);
 
   const handleNotificationsOpenChange = (open: boolean) => {
-    if (!open) return;
-    setDismissedNotificationTotal(totalUnread);
-    writeDismissedNotificationTotal(totalUnread);
+    if (!open || chatNotifications.length === 0) return;
+
+    // Update immediately, then persist the viewed state so it survives refreshes.
+    setChatNotifications([]);
+    setBadgeCounts((current) => ({ ...current, unreadChats: 0 }));
+    void markAdminNotificationsRead().catch((error) => {
+      console.warn("[AppLayout] Failed to mark notifications read", error);
+    });
   };
 
   const sharedSidebarProps = {
@@ -1338,7 +1393,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               }}
             >
               {isDesktop
-                ? "Maid Agency Account Management"
+                ? "Dashboard"
                 : "Find Maids Admin"}
             </span>
           </div>
@@ -1453,6 +1508,25 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                       </div>
                       <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                         Enquiry
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+
+                {badgeCounts.unreadApplicants > 0 && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      to={adminPath("/recruitment")}
+                      className="flex items-start justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground">Applicants need review</div>
+                        <div className="text-xs text-muted-foreground">
+                          {badgeCounts.unreadApplicants} unread applicant{badgeCounts.unreadApplicants !== 1 ? "s" : ""}
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                        Applicants
                       </span>
                     </Link>
                   </DropdownMenuItem>

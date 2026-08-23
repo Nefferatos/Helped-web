@@ -19,6 +19,8 @@ import {
   getSupportNotificationsStore,
   markChatMessagesReadForAgencyStore,
   markChatMessagesReadForClientStore,
+  markSupportNotificationsReadForAgencyStore,
+  markSupportNotificationsReadForClientStore,
   setPresenceOfflineStore,
   touchPresenceStore,
   updateSupportConversationStore,
@@ -88,11 +90,16 @@ export const getMyChatMessages = async (req: Request, res: Response) => {
       agencyId,
       { before: beforeId, limit }
     )
-    await markChatMessagesReadForClientStore(
-      client.id,
-      context.conversationType,
-      agencyId
-    )
+    try {
+      await markChatMessagesReadForClientStore(
+        client.id,
+        context.conversationType,
+        agencyId
+      )
+    } catch (error) {
+      // A read receipt should not stop an employer from seeing loaded messages.
+      console.warn('Unable to persist client chat read state:', error)
+    }
     res.status(200).json({ client, messages })
   } catch (error) {
     console.error('Error fetching client chat messages:', error)
@@ -378,6 +385,36 @@ export const getAdminChatSummary = async (req: Request, res: Response) => {
   }
 }
 
+export const markAdminNotificationsRead = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const markedConversationCount = await markSupportNotificationsReadForAgencyStore(
+      admin.agencyId
+    )
+    return res.status(200).json({ ok: true, markedConversationCount })
+  } catch (error) {
+    console.error('Error marking admin notifications read:', error)
+    return res.status(500).json({ error: 'Failed to mark notifications read' })
+  }
+}
+
+export const markClientNotificationsRead = async (req: Request, res: Response) => {
+  try {
+    const client = await getAuthenticatedClient(req)
+    if (!client) return res.status(401).json({ error: 'Unauthorized' })
+
+    const markedConversationCount = await markSupportNotificationsReadForClientStore(client.id)
+    return res.status(200).json({ ok: true, markedConversationCount })
+  } catch (error) {
+    console.error('Error marking client notifications read:', error)
+    return res.status(500).json({ error: 'Failed to mark notifications read' })
+  }
+}
+
 export const getAdminChatMessages = async (req: Request, res: Response) => {
   try {
     const admin = await getAuthenticatedAgencyAdmin(req)
@@ -403,11 +440,15 @@ export const getAdminChatMessages = async (req: Request, res: Response) => {
       agencyId,
       { before: beforeId, limit }
     )
-    await markChatMessagesReadForAgencyStore(
-      clientId,
-      context.conversationType,
-      agencyId
-    )
+    try {
+      await markChatMessagesReadForAgencyStore(
+        clientId,
+        context.conversationType,
+        agencyId
+      )
+    } catch (error) {
+      console.warn('Unable to persist agency chat read state:', error)
+    }
     res.status(200).json({ messages })
   } catch (error) {
     console.error('Error fetching admin chat messages:', error)
