@@ -496,10 +496,55 @@ const RecruiterAiAssistant = ({
 
   const handleQuery = useCallback(
     async (query: string): Promise<ChatMessage> => {
-      const lower = query.toLowerCase();
       const id = `a-${Date.now()}-${Math.random()}`;
 
-      if (lower.includes("summary") || lower.includes("pipeline") || lower.includes("overview") || lower.includes("status")) {
+      // Build applicant data context for the AI
+      const applicantLines = applications.slice(0, 20).map((a) => {
+        const p = a.profile || {};
+        return `- ${p.fullName || "Unnamed"} (${p.nationality || "N/A"}, ${p.yearsOfExperience ?? 0}y exp, score: ${a.score?.score ?? "N/A"}, status: ${a.status}) WhatsApp: ${p.whatsappNumber || "N/A"} Email: ${p.email || "N/A"} Phone: ${p.contactNumber || "N/A"}`;
+      });
+
+      const systemPrompt = `You are an intelligent AI recruiting assistant for a domestic worker (maid) agency. You help the admin manage applicants, analyze the recruitment pipeline, and provide actionable insights.
+
+Your personality: Professional, proactive, data-driven, concise but thorough. Use markdown formatting (bold, bullet points).
+
+Current pipeline data:
+- Total applicants: ${analytics.total}
+- Average score: ${analytics.avgScore}%
+- High score (80+): ${analytics.highScore.length}
+- Need contact fix: ${analytics.needsAttention.length}
+- Awaiting screening: ${analytics.readyForScreening.length}
+- Ready to approve: ${analytics.readyForApproval.length}
+- Top nationalities: ${analytics.topNationalities.map(([n, c]) => `${n}(${c})`).join(", ")}
+
+Applicant details:
+${applicantLines.join("\n") || "No applicants yet."}
+
+Always reference actual applicant names and data when responding. Be specific and helpful.`;
+
+      try {
+        const response = await fetch("/api/ai/command-center/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: "user", content: query }],
+            system: systemPrompt,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json() as { reply?: string; error?: string };
+          if (data.reply) {
+            return { id, role: "assistant", content: data.reply, type: "insight" };
+          }
+        }
+      } catch {
+        // Fall through to local fallback
+      }
+
+      // Fallback: local keyword-based responses
+      const lower = query.toLowerCase();
+      if (lower.includes("summary") || lower.includes("pipeline")) {
         const lines = [
           `📊 **Pipeline Summary** — ${analytics.total} applicants`,
           "",
@@ -512,93 +557,18 @@ const RecruiterAiAssistant = ({
           `❌ **${analytics.byStage.get("Rejected")?.length ?? 0}** rejected`,
           "",
           `Average qualification score: **${analytics.avgScore}%**`,
-          `Approved with score 70+: **${analytics.approvedWithScore.length}** (ready for pass emails)`,
         ];
         return { id, role: "assistant", content: lines.join("\n"), type: "summary" };
-      }
-
-      if (lower.includes("pass") && lower.includes("email")) {
-        const count = applications.filter((a) => (a.score?.score ?? 0) >= 70 && a.status === "Approved" && a.profile.email).length;
-        return {
-          id,
-          role: "assistant",
-          content: `📧 **Pass Email Candidates**: **${count}** approved candidates with score 70+ have email addresses.\n\nUse the **Actions tab** to send congratulatory emails to all passing candidates.`,
-          type: "insight",
-        };
-      }
-
-      if (lower.includes("reject") && lower.includes("email")) {
-        const count = applications.filter((a) => a.status === "Rejected" && a.profile.email).length;
-        return {
-          id,
-          role: "assistant",
-          content: `📧 **Rejection Email Candidates**: **${count}** rejected candidates have email addresses.\n\nUse the **Actions tab** to send polite rejection emails.`,
-          type: "insight",
-        };
-      }
-
-      if (lower.includes("top") || lower.includes("best") || lower.includes("highest") || lower.includes("strong")) {
-        const top = [...applications]
-          .filter((a) => a.status !== "Rejected" && a.status !== "Placed")
-          .sort((a, b) => (b.score?.score ?? 0) - (a.score?.score ?? 0))
-          .slice(0, 5);
-        if (top.length === 0) return { id, role: "assistant", content: "No active applicants found.", type: "insight" };
-        const lines = top.map((a, i) => `${i + 1}. **${a.profile.fullName || "Unnamed"}** — ${a.score?.score ?? 0}% (${a.profile.nationality}) — ${a.status}`);
-        return { id, role: "assistant", content: `🏆 **Top ${top.length} Applicants by Score:**\n\n${lines.join("\n")}`, type: "insight" };
-      }
-
-      if (lower.includes("attention") || lower.includes("fix") || lower.includes("missing contact") || lower.includes("incomplete")) {
-        if (analytics.needsAttention.length === 0) return { id, role: "assistant", content: "✅ All active applicants have contact details.", type: "insight" };
-        const lines = analytics.needsAttention.slice(0, 8).map((a) => `• **${a.profile.fullName || "Unnamed"}** (${a.status}) — missing WhatsApp & email`);
-        return { id, role: "assistant", content: `⚠️ **${analytics.needsAttention.length} applicants need contact details:**\n\n${lines.join("\n")}${analytics.needsAttention.length > 8 ? `\n\n...and ${analytics.needsAttention.length - 8} more` : ""}`, type: "insight" };
-      }
-
-      if (lower.includes("screen") || lower.includes("interview") || lower.includes("ready")) {
-        if (analytics.readyForScreening.length === 0) return { id, role: "assistant", content: "No applicants currently awaiting screening.", type: "insight" };
-        const lines = analytics.readyForScreening.slice(0, 8).map((a) => `• **${a.profile.fullName || "Unnamed"}** — ${a.score?.score ?? 0}% — ${(a.profile.contactNumber as string) || (a.profile.email as string) || "no contact"}`);
-        return { id, role: "assistant", content: `🔍 **${analytics.readyForScreening.length} applicants ready for screening:**\n\n${lines.join("\n")}`, type: "insight" };
-      }
-
-      if (lower.includes("nationality") || lower.includes("country") || lower.includes("where from")) {
-        const lines = analytics.topNationalities.map(([nat, count]) => `• **${nat}**: ${count} applicant${count > 1 ? "s" : ""}`);
-        return { id, role: "assistant", content: `🌍 **Nationality Breakdown:**\n\n${lines.join("\n")}`, type: "insight" };
-      }
-
-      if (selectedApp && (lower.includes("this") || lower.includes("selected") || lower.includes("current") || lower.includes("profile"))) {
-        const a = selectedApp;
-        const score = a.score?.score ?? 0;
-        const lines = [
-          `📋 **${a.profile.fullName || "Unnamed"}** — ${a.applicationCode}`,
-          "",
-          `Score: **${score}%** (${getScoreLabel(score)})`,
-          `Stage: **${a.status}**`,
-          `Nationality: ${a.profile.nationality}`,
-          `Experience: ${a.profile.yearsOfExperience} years`,
-          `Contact: ${(a.profile.contactNumber as string) || "—"} / ${(a.profile.email as string) || "—"}`,
-          `Salary: ${a.profile.expectedSalary ?? "—"}`,
-          "",
-          a.score?.explanation ? `💡 ${a.score.explanation}` : "",
-        ].filter(Boolean);
-        return { id, role: "assistant", content: lines.join("\n"), type: "insight" };
-      }
-
-      if (lower.includes("help") || lower.includes("what can") || lower.includes("how to")) {
-        return {
-          id,
-          role: "assistant",
-          content: `🤖 **I can help you with:**\n\n• **Pipeline summary** — overview of all stages\n• **Top applicants** — highest scoring candidates\n• **Needs attention** — missing contact details\n• **Ready for screening** — candidates awaiting review\n• **Nationality breakdown** — demographic insights\n• **Selected profile** — deep-dive on the current selection\n• **Pass emails** — send congratulatory emails to approved candidates\n• **Reject emails** — send polite rejection emails\n• **Post to workflow** — send AI report to Make automation\n\nJust type your question naturally!`,
-          type: "insight",
-        };
       }
 
       return {
         id,
         role: "assistant",
-        content: `I analyzed your pipeline: **${analytics.total} applicants**, average score **${analytics.avgScore}%**.\n\nTry asking about: "pipeline summary", "top applicants", "pass emails", "reject emails", or "nationality breakdown".`,
+        content: `I analyzed your pipeline: **${analytics.total} applicants**, average score **${analytics.avgScore}%**.\n\nI'm having trouble connecting to the AI service. Please try again.`,
         type: "insight",
       };
     },
-    [analytics, applications, selectedApp],
+    [analytics, applications],
   );
 
   const handleSubmit = useCallback(
