@@ -1517,6 +1517,12 @@ function AdPreviewCard() {
   );
 }
 
+interface CommandCenterMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
 function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
   enquiries: EnquiryRecord[];
   requests: RequestRecord[];
@@ -1525,8 +1531,10 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"insights" | "chat" | "actions">("insights");
-  const { isSubmitting, error, history, submitInquiry, clearConversation } = useAiInquiry();
+  const [messages, setMessages] = useState<CommandCenterMessage[]>([]);
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const analytics = useMemo(() => {
@@ -1550,34 +1558,131 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [history]);
+  }, [messages, isSubmitting]);
 
   useEffect(() => {
-    if (isOpen && history.length === 0) {
+    if (isOpen && messages.length === 0) {
       setMessages([{
         id: `welcome-${Date.now()}`,
-        role: "assistant" as const,
-        content: `Welcome! I'm your AI Command Center assistant. I've analyzed your entire agency pipeline:\n\n• **${analytics.totalEnquiries}** enquiries (${analytics.urgentEnquiries} urgent)\n• **${analytics.totalRequests}** requests (${analytics.pendingRequests} pending)\n• **${analytics.totalApplicants}** applicants (${analytics.topApplicants} scoring 80+)\n• **${analytics.totalContracts}** contracts (${analytics.missingContracts} missing docs)\n\nSelect an action below or ask me anything about your operations.`,
-        type: "summary" as const,
+        role: "assistant",
+        content: `Welcome! I'm your AI Command Center assistant. I've analyzed your entire agency pipeline:\n\n• **${analytics.totalEnquiries}** enquiries (${analytics.urgentEnquiries} urgent)\n• **${analytics.totalRequests}** requests (${analytics.pendingRequests} pending)\n• **${analytics.totalApplicants}** applicants (${analytics.topApplicants} scoring 80+)\n• **${analytics.totalContracts}** contracts (${analytics.missingContracts} missing docs)\n\nAsk me anything about your operations — I can analyze data, draft replies, suggest actions, and more.`,
       }]);
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [messages, setMessages] = useState<Array<{ id: string; role: "user" | "assistant"; content: string; type?: string }>>([]);
+  // Build a context string from the agency's live data
+  const buildDataContext = useCallback(() => {
+    const parts: string[] = [];
+    const safeSlice = (v: unknown, len: number) => String(v ?? "").slice(0, len);
+
+    const urgentEnqs = enquiries.filter((e) => e.status === "new" || e.status === "in_progress");
+    if (enquiries.length > 0) {
+      parts.push(`ENQUIRIES (${enquiries.length} total, ${urgentEnqs.length} urgent):`);
+      urgentEnqs.slice(0, 10).forEach((e) => {
+        parts.push(`  - [${e.status || "new"}] ${e.username || "Anonymous"}: "${safeSlice(e.message, 120)}" (${e.email || e.phone || "no contact"}) - ${formatDate(e.createdAt)}`);
+      });
+    }
+
+    const pendingReqs = requests.filter((r) => r.status === "pending");
+    if (requests.length > 0) {
+      parts.push(`\nREQUESTS (${requests.length} total, ${pendingReqs.length} pending):`);
+      requests.slice(0, 10).forEach((r) => {
+        const maidNames = (r.maids || []).map((m) => m.fullName || m.referenceCode).join(", ");
+        parts.push(`  - [${r.status || "pending"}] ${r.client?.name || "Unknown"}: ${safeSlice(r.summary, 120)}${maidNames ? ` (Maids: ${maidNames})` : ""}${r.budget ? ` Budget: $${r.budget}` : ""}`);
+      });
+    }
+
+    if (applicants.length > 0) {
+      parts.push(`\nAPPLICANTS (${applicants.length} total):`);
+      applicants.slice(0, 10).forEach((a) => {
+        const p: Partial<AtsProfile> = a.profile || {};
+        parts.push(`  - ${p.fullName || "Unnamed"} (${p.nationality || "N/A"}, ${p.yearsOfExperience ?? 0}y exp, score: ${a.score?.score ?? "N/A"}, ${a.status || "pending"}) - Skills: ${(p.languageSkills || []).join(", ") || "N/A"}, Childcare: ${p.childcareExperience ?? 0}y, Elderly: ${p.elderlyCareExperience ?? 0}y`);
+      });
+    }
+
+    const noContract = contracts.filter((c) => !c.hasContract);
+    if (contracts.length > 0) {
+      parts.push(`\nCONTRACTS (${contracts.length} total, ${noContract.length} missing contract):`);
+      contracts.slice(0, 10).forEach((c) => {
+        const docs = (c.documents || []).map((d) => `${d.name}:${d.status}`).join(", ") || "none";
+        parts.push(`  - ${c.employer || c.ref} → ${c.maid || "N/A"} (${c.hasContract ? "Has contract" : "NO CONTRACT"}) ${c.maidNationality || ""} Docs: ${docs}`);
+      });
+    }
+
+    return parts.join("\n");
+  }, [enquiries, requests, applicants, contracts]);
+
+  // Call AI API via backend proxy (avoids CORS issues from browser)
+  const callClaude = useCallback(async (conversationHistory: CommandCenterMessage[]): Promise<string> => {
+    const dataContext = buildDataContext();
+
+    const systemPrompt = `You are an intelligent AI assistant for a domestic worker (maid) agency. You are the agency admin's right-hand assistant — knowledgeable, proactive, and helpful. You have access to the agency's live operational data.
+
+Your personality:
+- Professional yet warm and approachable
+- Proactive — suggest actions, not just answers
+- Data-driven — reference specific records by name
+- Concise but thorough
+- Use markdown formatting for readability (bold, bullet points, etc.)
+
+Your capabilities:
+- Analyze enquiries, requests, applicants, and contracts
+- Draft professional replies to client enquiries
+- Suggest maid matches for pending requests
+- Identify urgent items that need attention
+- Provide pipeline health summaries
+- Draft marketing content
+- Suggest workflow improvements
+
+--- LIVE AGENCY DATA ---
+${dataContext || "No data available yet."}
+--- END DATA ---
+
+Always reference actual records from the data above when responding. Be specific with names, scores, and statuses. If the user asks about something not in the data, let them know what you can see and suggest how to get the information they need.`;
+
+    const apiMessages = conversationHistory
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    // Call the backend proxy endpoint (Cloudflare Worker handles CORS)
+    const response = await fetch("/api/ai/command-center/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: apiMessages, system: systemPrompt }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      throw new Error(errData.error || `AI request failed (${response.status})`);
+    }
+
+    const data = await response.json() as { reply?: string; error?: string };
+    if (data.error) throw new Error(data.error);
+    return data.reply || "I couldn't generate a response. Please try again.";
+  }, [buildDataContext]);
 
   const handleSubmit = async (text?: string) => {
     const msg = (text ?? message).trim();
-    if (!msg) return;
+    if (!msg || isSubmitting) return;
     setMessage("");
-    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", content: msg }]);
+    setError(null);
+
+    const userMsg: CommandCenterMessage = { id: `u-${Date.now()}`, role: "user", content: msg };
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    setIsSubmitting(true);
+
     try {
-      await submitInquiry({
-        name: "Agency Admin",
-        contact: "ai-command-center",
-        message: msg,
-      });
-    } catch {
-      /* handled by hook */
+      const aiResponse = await callClaude(updatedMessages);
+      setMessages((prev) => [...prev, {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        content: aiResponse,
+      }]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to get AI response");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

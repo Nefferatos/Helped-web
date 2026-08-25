@@ -50,8 +50,8 @@ ANTHROPIC_MODEL = "claude-haiku-4-5"
 #   OpenRouter: https://openrouter.ai/api/v1
 #   Groq:       https://api.groq.com/openai/v1
 # Cline AI (Kimi K2.6 Code — primary AI for screening, HR interviews, etc.)
-CLINE_API_URL = "https://api.cline.ai/v1"
-CLINE_MODEL = "Kimi K2.6 Code"
+CLINE_API_URL = "https://api.cline.bot/api/v1"
+CLINE_MODEL = "openai/gpt-4o-mini"
 # CLINE_API_KEY must be set as a secret: npx wrangler secret put CLINE_API_KEY
 
 # Fallback: OpenAI-compatible API
