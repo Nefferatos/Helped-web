@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { adminPath } from "@/lib/routes";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
@@ -366,13 +366,17 @@ const HomePage = () => {
   const width = useWindowWidth();
   const isSm = width < 768;
   const isMd = width < 1024;
+  const location = useLocation();
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
+      setLoading(true);
       try {
-        const res = await fetch("/api/company/summary", { headers: { ...getAgencyAdminAuthHeaders() } });
+        const res = await fetch("/api/company/summary", { headers: { ...getAgencyAdminAuthHeaders() }, cache: "no-store" });
         const data = (await res.json().catch(() => ({}))) as Partial<DashboardSummary> & { error?: string };
         if (!res.ok) throw new Error(data.error || "Failed to load");
+        if (cancelled) return;
         setSummary({
           publicMaids:                        data.publicMaids ?? 0,
           hiddenMaids:                        data.hiddenMaids ?? 0,
@@ -402,7 +406,8 @@ const HomePage = () => {
       }
     };
     void load();
-  }, []);
+    return () => { cancelled = true; };
+  }, [location.pathname]);
 
   const s = summary;
   const cols = isSm ? 2 : 4;
