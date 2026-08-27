@@ -130,7 +130,10 @@ export const triggerMakeScenario = async (
       ? {
           method: "POST",
           headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-          body: JSON.stringify(payload),
+          // Direct Make webhooks do not pass through /api/send-to-make, so include
+          // the route name here as well. This lets one imported scenario safely
+          // route every website event.
+          body: JSON.stringify({ scenario, ...payload }),
         }
       : {
           method: "POST",

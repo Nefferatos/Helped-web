@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import {
   Search,
@@ -16,7 +15,6 @@ import {
   Clock,
   AlertCircle,
   Circle,
-  Copy,
   Reply,
   StickyNote,
   Filter,
@@ -28,9 +26,11 @@ import {
   Tag,
   LayoutGrid,
   List,
+  Sparkles,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { streamSse } from "@/lib/sse";
-import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { readSafeJson } from "@/lib/safeJson";
 
@@ -289,39 +289,48 @@ function NotesPanel({
         <StickyNote className="h-3.5 w-3.5" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl border border-gray-100 bg-white p-4 shadow-xl shadow-gray-200/60">
-          <p className="text-[12px] font-black uppercase tracking-widest text-gray-400 mb-2">Internal Note</p>
-          <textarea
-            value={draftNote}
-            onChange={(e) => setDraftNote(e.target.value)}
-            placeholder="e.g. Called client, waiting callback..."
-            rows={3}
-            className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-800 outline-none placeholder:text-gray-400 focus:border-amber-400 focus:bg-white resize-none transition-all"
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Edit internal note">
+          <button
+            type="button"
+            aria-label="Close internal note editor"
+            onClick={() => setOpen(false)}
+            className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]"
           />
-          <div className="mt-2 flex items-center gap-2">
-            <User className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-            <input
-              value={draftAssigned}
-              onChange={(e) => setDraftAssigned(e.target.value)}
-              placeholder="Assigned to..."
-              className="flex-1 rounded-xl border-2 border-gray-200 bg-gray-50 px-3 py-1.5 text-[13px] text-gray-800 outline-none placeholder:text-gray-400 focus:border-amber-400 focus:bg-white transition-all"
+          <div className="relative z-10 max-h-[calc(100dvh-1rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-amber-100 bg-white p-3.5 shadow-2xl shadow-slate-900/20 sm:p-4">
+            <div className="mb-2.5 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-amber-600">Internal Note</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-900">Keep the team aligned</p>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <textarea
+              autoFocus
+              value={draftNote}
+              onChange={(e) => setDraftNote(e.target.value)}
+              placeholder="e.g. Called client, waiting callback..."
+              rows={3}
+              className="w-full resize-none rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-amber-400 focus:bg-white transition-all"
             />
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={handleSave}
-              className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 py-2 text-[13px] font-bold text-white hover:opacity-90 transition-opacity"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl border-2 border-gray-200 px-3 py-2 text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
+            <div className="mt-2.5 flex items-center gap-2">
+              <User className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <input
+                value={draftAssigned}
+                onChange={(e) => setDraftAssigned(e.target.value)}
+                placeholder="Assigned to..."
+                className="flex-1 rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-amber-400 focus:bg-white transition-all"
+              />
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={handleSave} className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 py-2 text-[13px] font-bold text-white shadow-sm shadow-amber-300 hover:brightness-105 transition sm:py-2.5">
+                Save note
+              </button>
+              <button type="button" onClick={() => setOpen(false)} className="rounded-xl border-2 border-slate-200 px-3.5 py-2 text-[13px] font-bold text-slate-600 hover:bg-slate-50 transition-colors sm:px-4 sm:py-2.5">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -333,71 +342,137 @@ function NotesPanel({
 function QuickContact({
   email,
   phone,
-  canOpenChat,
-  onOpenChat,
 }: {
   email: string;
   phone: string;
-  canOpenChat: boolean;
-  onOpenChat: () => void;
 }) {
-  const copy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied!`));
-  };
-
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       {/* Email copy */}
-      <button
-        type="button"
-        onClick={() => copy(email, "Email")}
-        title="Copy email"
-        className="flex items-center gap-1.5 rounded-xl bg-sky-50 border border-sky-100 px-3 py-1.5 min-w-0 hover:bg-sky-100 transition-colors group"
-      >
-        <Mail className="h-3.5 w-3.5 shrink-0 text-sky-500" />
-        <span className="text-[13px] font-semibold text-sky-900 truncate max-w-[160px]">{email}</span>
-        <Copy className="h-3 w-3 text-sky-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-      </button>
-
-      {/* Chat reply button */}
-      <button
-        type="button"
-        onClick={onOpenChat}
-        disabled={!canOpenChat}
-        title={canOpenChat ? "Reply in chat support" : "Cannot open chat without a registered client account"}
-        className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 transition-colors ${
-          canOpenChat
-            ? "bg-indigo-50 border-indigo-100 hover:bg-indigo-100"
-            : "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-        }`}
-      >
-        <Reply className="h-3.5 w-3.5 text-indigo-500" />
-        <span className={`text-[13px] font-semibold ${canOpenChat ? "text-indigo-900" : "text-gray-400"}`}>Reply in Chat</span>
-      </button>
+      {email && (
+        <a
+          href={`mailto:${email}`}
+          title={`Email ${email}`}
+          className="group flex min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-sky-100 bg-sky-50 px-3 py-1.5 transition-colors hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-300"
+        >
+          <Mail className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+          <span className="max-w-[160px] truncate text-[13px] font-semibold text-sky-900">{email}</span>
+        </a>
+      )}
 
       {/* Phone copy */}
       {phone ? (
-        <button
-          type="button"
-          onClick={() => copy(phone, "Phone number")}
-          title="Copy phone"
-          className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-1.5 hover:bg-emerald-100 transition-colors group"
+        <a
+          href={`tel:${phone.replace(/[^+\d]/g, "")}`}
+          title={`Call ${phone}`}
+          className="group flex min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-1.5 transition-colors hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-300"
         >
           <Phone className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-          <span className="text-[13px] font-semibold text-emerald-900">{phone}</span>
-          <Copy className="h-3 w-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-        </button>
-      ) : (
+          <span className="truncate text-[13px] font-semibold text-emerald-900">{phone}</span>
+        </a>
+      ) : !email ? (
         <div className="flex items-center gap-1.5 rounded-xl bg-gray-50 border border-gray-100 px-3 py-1.5">
           <Phone className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          <span className="text-[13px] text-gray-400 font-normal">No phone</span>
+          <span className="text-[13px] text-gray-400 font-normal">No contact details</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ─── Enquiry card ──────────────────────────────────────────────────────── */
+interface MatchCandidate {
+  maidId: number;
+  maidReferenceCode: string;
+  maidName: string;
+  score: number;
+  reasons: string[];
+}
+
+interface MatchReviewData {
+  aiUsed?: boolean;
+  fallbackUsed?: boolean;
+  matches?: MatchCandidate[];
+  matchReview?: {
+    requirements?: { known?: string[]; missing?: string[] };
+    draftMessage?: string;
+  };
+}
+
+function MatchReview({ enq }: { enq: EnquiryRecord }) {
+  const [matches, setMatches] = useState<MatchCandidate[] | null>(null);
+  const [review, setReview] = useState<MatchReviewData | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
+
+  const draft = useMemo(() => {
+    if (!matches?.length) return "";
+    const profileLines = matches.map((match, index) => {
+      const profileUrl = window.location.origin + "/maids/" + encodeURIComponent(match.maidReferenceCode);
+      return (index + 1) + ". " + match.maidName + " (" + match.maidReferenceCode + ")\n" + profileUrl;
+    });
+    const introduction = review?.matchReview?.draftMessage || "Hello " + enq.username + ",\n\nBased on the requirements you shared, our team has shortlisted the following helper profile" + (matches.length === 1 ? "" : "s") + " for your review.";
+    return introduction + "\n\n" + profileLines.join("\n\n") + "\n\nThese are preliminary recommendations subject to staff review and the candidates' current availability. Please let us know which profile you would like to discuss, or share any additional requirements.\n\nWarm regards,\nAT The Agency";
+  }, [enq.username, matches, review]);
+
+  const handleMatch = async () => {
+    setIsMatching(true);
+    try {
+      const response = await fetch("/api/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+        body: JSON.stringify({ message: enq.message }),
+      });
+      const result = await readSafeJson<{ data?: MatchReviewData; error?: string }>(response);
+      if (!response.ok) throw new Error(result.error || "Could not find matching profiles");
+      setMatches(result.data?.matches ?? []);
+      setReview(result.data ?? null);
+      toast.success(result.data?.matches?.length ? (result.data.aiUsed ? "AI shortlist prepared for staff review" : "Shortlist prepared using the safe fallback") : "No available public profiles found");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not find matching profiles");
+    } finally {
+      setIsMatching(false);
+    }
+  };
+
+  const copyDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(draft);
+      toast.success("Draft message copied — review it before sending");
+    } catch {
+      toast.error("Could not copy the draft message");
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      <button type="button" onClick={() => void handleMatch()} disabled={isMatching} className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] font-bold text-violet-700 transition hover:bg-violet-100 disabled:cursor-wait disabled:opacity-60">
+        <Sparkles className={"h-3.5 w-3.5 " + (isMatching ? "animate-spin" : "")} />
+        {isMatching ? "Finding matches…" : matches ? "Refresh maid matches" : "Find maid matches"}
+      </button>
+
+      {matches && (
+        <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/50 p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-violet-700">{review?.aiUsed ? "AI shortlist — staff review required" : "Fallback shortlist — staff review required"}</p>
+            {draft && <button type="button" onClick={() => void copyDraft()} className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-violet-700"><Copy className="h-3 w-3" /> Copy draft</button>}
+          </div>
+          {matches.length ? (
+            <div className="mt-2.5 space-y-2">
+              {matches.map((match) => (
+                <a key={match.maidId} href={"/maids/" + encodeURIComponent(match.maidReferenceCode)} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-lg border border-white bg-white px-3 py-2.5 hover:border-violet-200">
+                  <span className="min-w-0"><span className="block truncate text-[13px] font-bold text-slate-900">{match.maidName}</span><span className="block truncate text-[11px] text-slate-500">{match.maidReferenceCode} · {match.reasons[0]}</span></span>
+                  <span className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-violet-700">{match.score}% <ExternalLink className="h-3 w-3" /></span>
+                </a>
+              ))}
+              <textarea readOnly value={draft} className="mt-1 min-h-40 w-full resize-y rounded-lg border border-violet-100 bg-white p-3 text-[12px] leading-relaxed text-slate-700 outline-none" aria-label="Draft employer shortlist message" />
+            </div>
+          ) : <p className="mt-2 text-[12px] text-slate-600">No public, available maid profiles matched this enquiry. Add more requirements or review the maid records.</p>}
         </div>
       )}
     </div>
   );
 }
 
-/* ─── Enquiry card ──────────────────────────────────────────────────────── */
 function EnquiryCard({
   enq,
   index,
@@ -407,7 +482,6 @@ function EnquiryCard({
   isBusy,
   onStatusChange,
   onNoteSave,
-  onOpenSupportChat,
 }: {
   enq: EnquiryRecord;
   index: number;
@@ -417,7 +491,6 @@ function EnquiryCard({
   isBusy: boolean;
   onStatusChange: (id: number, status: Status) => void;
   onNoteSave: (id: number, note: string, assignedTo: string) => void;
-  onOpenSupportChat: (enquiry: EnquiryRecord) => void;
 }) {
   const avatar = getAvatarColor(enq.id);
   const initials =
@@ -470,20 +543,6 @@ function EnquiryCard({
 
           {/* Action buttons */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => onOpenSupportChat(enq)}
-              disabled={!enq.clientId}
-              title={enq.clientId ? "Open this enquiry in client support chat" : "Cannot open chat without a registered client account"}
-              className={`flex h-9 min-w-[120px] items-center justify-center rounded-xl border-2 px-3 text-sm font-semibold transition-all duration-200 ${
-                enq.clientId
-                  ? "border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
-                  : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
-              }`}
-            >
-              <Inbox className="mr-2 h-4 w-4" />
-              Open Chat
-            </button>
             <NotesPanel
               note={enq.note ?? ""}
               assignedTo={enq.assignedTo ?? ""}
@@ -498,8 +557,6 @@ function EnquiryCard({
           <QuickContact
             email={enq.email}
             phone={enq.phone}
-            canOpenChat={Boolean(enq.clientId)}
-            onOpenChat={() => onOpenSupportChat(enq)}
           />
         </div>
 
@@ -526,6 +583,8 @@ function EnquiryCard({
           </p>
         </div>
 
+        <MatchReview enq={enq} />
+
         {/* Internal note (if exists) */}
         {enq.note && (
           <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
@@ -542,7 +601,6 @@ function EnquiryCard({
 
 /* ─── Main component ───────────────────────────────────────────────────── */
 const AdminEnquiry = () => {
-  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
@@ -731,27 +789,6 @@ const AdminEnquiry = () => {
         : e));
     }
   };
-
-  const handleOpenSupportChat = (enquiry: EnquiryRecord) => {
-    if (!enquiry.clientId) {
-      toast.error("No registered client account was found for this enquiry.");
-      return;
-    }
-
-    const params = new URLSearchParams();
-    params.set("clientId", String(enquiry.clientId));
-    params.set("type", "support");
-    params.set("clientName", enquiry.clientName ?? enquiry.username);
-    params.set("enquiryId", String(enquiry.id));
-    params.set("enquiryEmail", enquiry.email);
-    params.set("enquiryMessage", enqSummary(enquiry.message));
-
-    navigate(adminPath(`/chat-support?${params.toString()}`));
-  };
-
-  function enqSummary(message: string) {
-    return message.replace(/\s+/g, " ").trim().slice(0, 240);
-  }
 
   /* ── Select toggle ── */
   const handleSelect = (id: number) => {
@@ -1111,7 +1148,6 @@ const AdminEnquiry = () => {
                       isBusy={busyId === enq.id}
                       onStatusChange={handleStatusChange}
                       onNoteSave={handleNoteSave}
-                      onOpenSupportChat={handleOpenSupportChat}
                     />
                   ))}
                 </div>

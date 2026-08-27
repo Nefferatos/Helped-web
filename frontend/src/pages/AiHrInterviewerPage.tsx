@@ -320,8 +320,10 @@ const AiHrInterviewerPage = () => {
           candidateName,
           position,
           type: "interview_invitation",
-          scheduledDate: formattedDate,
-          scheduledTime: formattedTime,
+          // Make's Google Calendar module needs the original ISO date and
+          // 24-hour time values, rather than the display-formatted strings.
+          scheduledDate,
+          scheduledTime,
           meetLink: meetLink.trim() || undefined,
         }),
       });

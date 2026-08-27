@@ -2424,7 +2424,7 @@ export default function AiAgentsPage() {
       if (atsRes.status === "fulfilled") {
         const d = await readSafeJson<{ data?: AtsApplication[]; error?: string }>(atsRes.value);
         // Only show public FDW form submissions (source: "resume_upload"),
-        // not synced maids (source: "synced_from_maid")
+        // not synced maids (source: "synced_from_maid").
         if (d.data) setApplicants(d.data.filter((app) => app.source === "resume_upload"));
       }
       if (empRes.status === "fulfilled") {

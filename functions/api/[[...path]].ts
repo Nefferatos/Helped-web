@@ -8140,6 +8140,62 @@ const buildMatchCandidates = (maids: MaidRecord[], message: string) => {
     });
 };
 
+type AiMatchResult = {
+  rankedCandidates?: Array<{ maidId?: number; score?: number; reasons?: string[] }>;
+  requirements?: { known?: string[]; missing?: string[] };
+  draftMessage?: string;
+};
+
+const toStringList = (value: unknown, limit = 6) =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean).slice(0, limit)
+    : [];
+
+/** AI can rank records, but it can never create a candidate outside agency data. */
+const buildAiMatchReview = async (env: Bindings, maids: MaidRecord[], enquiry: Record<string, string>) => {
+  const fallbackMatches = buildMatchCandidates(maids, enquiry.message);
+  const candidates = maids.filter(isAvailableMaid).slice(0, 20).map((maid) => ({
+    maidId: maid.id,
+    referenceCode: maid.referenceCode,
+    name: maid.fullName,
+    nationality: maid.nationality,
+    status: maid.status ?? "available",
+    type: maid.type,
+    languages: maid.languageSkills,
+    skills: maid.skillsPreferences,
+    workAreas: maid.workAreas,
+    employmentHistory: maid.employmentHistory,
+    introduction: maid.introduction,
+  }));
+  const candidateById = new Map(candidates.map((candidate) => [candidate.maidId, candidate]));
+  const ai = await runWorkflowAi<AiMatchResult>(
+    env,
+    "You are an internal domestic-helper matching reviewer. Rank candidates only for staff review. Use ONLY the enquiry and candidate records supplied. Return JSON with rankedCandidates (maximum 3 objects, each with maidId, integer score 0-100, and 1-3 factual reasons), requirements (known and missing string arrays), and draftMessage (a concise professional draft). Never invent profile details, availability, salary, identity, promises, or links. Only use maidId values supplied. Do not state that a placement is guaranteed.",
+    { enquiry, candidates },
+  );
+  const seen = new Set<number>();
+  const matches = (ai?.rankedCandidates ?? []).flatMap((ranked) => {
+    const maidId = Number(ranked.maidId);
+    const candidate = candidateById.get(maidId);
+    if (!candidate || seen.has(maidId)) return [];
+    seen.add(maidId);
+    const score = Number.isFinite(Number(ranked.score)) ? Math.max(0, Math.min(100, Math.round(Number(ranked.score)))) : 0;
+    const reasons = toStringList(ranked.reasons, 3);
+    return reasons.length ? [{ maidId, maidReferenceCode: candidate.referenceCode, maidName: candidate.name, score, reasons }] : [];
+  }).slice(0, 3);
+  const aiUsed = Boolean(ai && matches.length);
+  const draftMessage = toTrimmedString(ai?.draftMessage).slice(0, 1200);
+  return {
+    aiUsed,
+    fallbackUsed: !aiUsed,
+    matches: aiUsed ? matches : fallbackMatches,
+    matchReview: {
+      requirements: { known: toStringList(ai?.requirements?.known), missing: toStringList(ai?.requirements?.missing) },
+      draftMessage: draftMessage || "Hello,\n\nBased on the requirements you shared, our team has prepared the following helper profiles for your review.",
+    },
+  };
+};
+
 const classifyInquiryIntent = (message: string) => {
   const workflow = classifyFallback(message).workflow;
   if (workflow === "inquiry_match") {
@@ -9425,7 +9481,9 @@ app.post(
         const makeResponse = await fetch(makeUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          // The unified Make router requires the scenario name. Preserve every
+          // email field while explicitly routing this HR email request.
+          body: JSON.stringify({ scenario: "interview_pipeline", ...body }),
           signal: AbortSignal.timeout(10_000),
         });
 
@@ -10353,34 +10411,36 @@ app.post(
     }>(c.req.raw);
     const message = toTrimmedString(body?.message);
     const data = await loadData(c.env);
-    const matches = buildMatchCandidates(data.maids, message);
+    const normalized = {
+      message,
+      serviceType: toTrimmedString(body?.serviceType),
+      location: toTrimmedString(body?.location),
+      budget: toTrimmedString(body?.budget),
+      salary: toTrimmedString(body?.salary),
+      availability: toTrimmedString(body?.availability),
+    };
+    const matchResult = await buildAiMatchReview(c.env, data.maids, normalized);
 
     return c.json(
       buildWorkflowResponse(c.req.raw, {
         workflow: "inquiry_match",
         intent: "hiring",
-        fallbackUsed: true,
+        fallbackUsed: matchResult.fallbackUsed,
         data: {
           requestId: crypto.randomUUID(),
           screening: {
             valid: Boolean(message),
             missingFields: message ? [] : ["message"],
-            normalized: {
-              message,
-              serviceType: toTrimmedString(body?.serviceType),
-              location: toTrimmedString(body?.location),
-              budget: toTrimmedString(body?.budget),
-              salary: toTrimmedString(body?.salary),
-              availability: toTrimmedString(body?.availability),
-            },
+            normalized,
           },
           vectorSearch: {
             used: Boolean(message),
             candidateCount: data.maids.filter(isAvailableMaid).length,
           },
-          aiUsed: false,
-          fallbackUsed: true,
-          matches,
+          aiUsed: matchResult.aiUsed,
+          fallbackUsed: matchResult.fallbackUsed,
+          matches: matchResult.matches,
+          matchReview: matchResult.matchReview,
         },
       }),
     );

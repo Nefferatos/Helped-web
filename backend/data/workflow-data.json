@@ -929,6 +929,141 @@
   ],
   "matches": [
     {
+      "id": 154,
+      "createdAt": "2026-08-26T18:14:06.251Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 42,
+      "maidReferenceCode": "232",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 155,
+      "createdAt": "2026-08-26T18:14:06.251Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 47,
+      "maidReferenceCode": "78787",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 156,
+      "createdAt": "2026-08-26T18:14:06.251Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 46,
+      "maidReferenceCode": "Fil-001",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 151,
+      "createdAt": "2026-08-26T18:08:19.995Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 42,
+      "maidReferenceCode": "232",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 152,
+      "createdAt": "2026-08-26T18:08:19.995Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 47,
+      "maidReferenceCode": "78787",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 153,
+      "createdAt": "2026-08-26T18:08:19.995Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 46,
+      "maidReferenceCode": "Fil-001",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 148,
+      "createdAt": "2026-08-26T18:03:19.415Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 42,
+      "maidReferenceCode": "232",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 149,
+      "createdAt": "2026-08-26T18:03:19.415Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 47,
+      "maidReferenceCode": "78787",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 150,
+      "createdAt": "2026-08-26T18:03:19.415Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 46,
+      "maidReferenceCode": "Fil-001",
+      "maidName": "Niluh Emma Kusumawati",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
       "id": 145,
       "createdAt": "2026-08-10T22:36:53.255Z",
       "leadId": null,
@@ -7634,6 +7769,48 @@
   ],
   "decisionLogs": [
     {
+      "id": 81,
+      "createdAt": "2026-08-26T18:14:06.255Z",
+      "requestId": "3957532e-cb30-4f04-804e-18f8ad83417b",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 668,
+      "fallbackUsed": true
+    },
+    {
+      "id": 80,
+      "createdAt": "2026-08-26T18:08:19.999Z",
+      "requestId": "664c4b67-6152-44d4-ba88-f8b4ac3b7f67",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 690,
+      "fallbackUsed": true
+    },
+    {
+      "id": 79,
+      "createdAt": "2026-08-26T18:03:19.443Z",
+      "requestId": "ae04f3ca-4b0f-479a-8fd8-48b4c68ee65c",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 796,
+      "fallbackUsed": true
+    },
+    {
       "id": 78,
       "createdAt": "2026-08-20T15:46:35.821Z",
       "requestId": "b3fbc4b3-00bb-4004-9b51-68bdecd1df12",
@@ -9750,12 +9927,12 @@
   "counters": {
     "leads": 8,
     "inquiries": 65,
-    "matches": 148,
+    "matches": 157,
     "schedules": 6,
     "contracts": 7,
     "notifications": 24,
     "automationLogs": 223,
-    "decisionLogs": 79,
+    "decisionLogs": 82,
     "makeDeliveries": 27
   }
 }

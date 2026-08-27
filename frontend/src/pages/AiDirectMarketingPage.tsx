@@ -767,7 +767,15 @@ export default function AiDirectMarketingPage() {
         toast.success("All clear — no campaigns needed right now");
       } else {
         toast.success(
-          `${data.opportunities.length} advertising opportunit${data.opportunities.length > 1 ? "ies" : "y"} detected`,
+          <div className="min-w-0 pr-2">
+            <p className="text-sm font-extrabold tracking-tight text-emerald-950">
+              {data.opportunities.length} advertising opportunit{data.opportunities.length > 1 ? "ies" : "y"} detected
+            </p>
+            <p className="mt-0.5 text-xs font-medium text-emerald-800">
+              Your campaigns are ready to review and generate.
+            </p>
+          </div>,
+          { duration: 5500 },
         );
       }
     } catch (err) {

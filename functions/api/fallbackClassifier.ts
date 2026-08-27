@@ -2,13 +2,9 @@
 // Deterministic keyword-based workflow classifier used as a fast-path fallback
 // before (or instead of) the AI classifier.
 //
-// FIXES applied:
-//  1. DeterministicWorkflow now includes all values present in CANONICAL_WORKFLOWS
-//     so normalizeWorkflow() in the server never throws INVALID_WORKFLOW for a
-//     fallback-produced value.
-//  2. Pattern priority reordered: inquiry_match (the most common intent) is
-//     checked FIRST so that a message like "hire contract" routes to inquiry_match
-//     rather than accidentally falling through to contract_creation.
+// The deterministic classifier deliberately gives explicit operational requests
+// precedence over a general hiring keyword.  For example, “create a contract for
+// a maid” is a contract request, not a request to find another maid.
 
 export type DeterministicWorkflow =
   | "inquiry_match"
@@ -37,13 +33,6 @@ export const classifyFallback = (
 ): { workflow: DeterministicWorkflow } => {
   const text = message.trim();
 
-  // FIX: inquiry_match is checked FIRST.
-  // Previously it was the last check, so messages like "hire contract" would
-  // incorrectly route to contract_creation instead of inquiry_match.
-  if (INQUIRY_MATCH_PATTERN.test(text)) {
-    return { workflow: "inquiry_match" };
-  }
-
   if (HUMAN_REVIEW_PATTERN.test(text)) {
     return { workflow: "human_review" };
   }
@@ -58,6 +47,10 @@ export const classifyFallback = (
 
   if (NOTIFICATION_PATTERN.test(text)) {
     return { workflow: "notification_only" };
+  }
+
+  if (INQUIRY_MATCH_PATTERN.test(text)) {
+    return { workflow: "inquiry_match" };
   }
 
   return { workflow: "inquiry_only" };
