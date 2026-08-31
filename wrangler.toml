@@ -63,8 +63,14 @@ OPENAI_MODEL = "gpt-4o"
 #   npx wrangler secret put RESEND_API_KEY
 # Then update RESEND_FROM below with your verified domain.
 # Without RESEND_API_KEY, email features (client registration confirmation) return 503 gracefully.
-RESEND_FROM = "Find Maid <no-reply@findmaid.wow-aisolution.workers.dev>"
+RESEND_FROM = "Find Maid <no-reply@rinzinagency.com>"
 DEV_EXPOSE_CONFIRMATION_CODE = "false"
+
+# TikTok Developer App credentials (for Login Kit OAuth).
+# Set via: npx wrangler secret put TIKTOK_CLIENT_KEY
+# Set via: npx wrangler secret put TIKTOK_CLIENT_SECRET
+# TIKTOK_CLIENT_KEY = ""
+# TIKTOK_CLIENT_SECRET = ""
 
 [observability.logs]
 enabled = false

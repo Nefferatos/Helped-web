@@ -406,6 +406,20 @@ interface AtsFilterPresetRecord {
   filters: Record<string, unknown>;
   createdAt: string;
 }
+}
+
+interface TiktokIntegrationRecord {
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: string;
+  openId?: string;
+  displayName?: string;
+  avatarUrl?: string;
+  connectedAt?: string;
+  updatedAt?: string;
+}
+
+interface AtsData {
 
 interface AtsData {
   applications: AtsApplicationRecord[];
@@ -434,6 +448,8 @@ interface AppData {
   chatMessages: ChatMessageRecord[];
   employers: EmployerContractRecord[];
   employmentContracts: EmploymentContractRecord[];
+  ats: AtsData;
+  tiktokIntegration?: TiktokIntegrationRecord;
   ats: AtsData;
   counters: {
     momPersonnel: number;
@@ -485,6 +501,8 @@ type Bindings = {
   // Server-only secret enabling POST /api/agency-auth/bootstrap-reset.
   // Set via: npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
   ADMIN_BOOTSTRAP_TOKEN?: string;
+  TIKTOK_CLIENT_KEY?: string;
+  TIKTOK_CLIENT_SECRET?: string;
 };
 
 type Variables = {
@@ -499,7 +517,8 @@ app.use(
   cors({
     origin: (origin) => {
       const allowed = [
-        "https://helped-web-v2.pages.dev",
+        "https://findmaid.wow-aisolution.workers.dev",
+        "https://rinzinagency.com",
         "http://localhost:5173",
         "http://localhost:3000",
       ];
@@ -13460,6 +13479,153 @@ app.post("/api/send-to-make", requireAgencyAdminAuth, async (c) => {
     },
     delivered ? 200 : 502,
   );
+});
+
+// ─── TikTok OAuth Integration ─────────────────────────────────────────────────
+// Allows the agency admin to connect their TikTok account via Login Kit.
+// The access token is stored in AppData and used by Make.com content engine.
+
+const TIKTOK_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/";
+const TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
+const TIKTOK_USER_INFO_URL = "https://open.tiktokapis.com/v2/user/info/";
+
+// GET /api/tiktok/auth-url — Generate TikTok OAuth authorization URL
+app.get("/api/tiktok/auth-url", requireAgencyAdminAuth, async (c) => {
+  const clientKey = c.env.TIKTOK_CLIENT_KEY?.trim();
+  if (!clientKey) {
+    return c.json({ error: "TikTok integration is not configured" }, 503);
+  }
+
+  const redirectUri = "https://rinzinagency.com/auth/tiktok/callback";
+  const scopes = "user.info.basic,user.info.profile";
+  const state = crypto.randomUUID();
+
+  const authUrl = new URL(TIKTOK_AUTH_URL);
+  authUrl.searchParams.set("client_key", clientKey);
+  authUrl.searchParams.set("scope", scopes);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("state", state);
+
+  return c.json({ authUrl: authUrl.toString(), state });
+});
+
+// POST /api/tiktok/callback — Exchange authorization code for access token
+app.post("/api/tiktok/callback", requireAgencyAdminAuth, async (c) => {
+  const clientKey = c.env.TIKTOK_CLIENT_KEY?.trim();
+  const clientSecret = c.env.TIKTOK_CLIENT_SECRET?.trim();
+  if (!clientKey || !clientSecret) {
+    return c.json({ error: "TikTok integration is not configured" }, 503);
+  }
+
+  const body = await parseBody<{ code?: string }>(c.req.raw);
+  if (!body?.code?.trim()) {
+    return c.json({ error: "Authorization code is required" }, 400);
+  }
+
+  const redirectUri = "https://rinzinagency.com/auth/tiktok/callback";
+
+  // Exchange code for access token
+  const tokenRes = await fetch(TIKTOK_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_key: clientKey,
+      client_secret: clientSecret,
+      code: body.code.trim(),
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  const tokenData = (await tokenRes.json().catch(() => ({}))) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    open_id?: string;
+    error?: string;
+    error_description?: string;
+    data?: Record<string, unknown>;
+  };
+
+  if (!tokenRes.ok || !tokenData.access_token) {
+    return c.json(
+      {
+        error: tokenData.error_description || tokenData.error || "Failed to exchange TikTok authorization code",
+      },
+      400,
+    );
+  }
+
+  // Fetch user info
+  let displayName = "";
+  let avatarUrl = "";
+  try {
+    const userRes = await fetch(`${TIKTOK_USER_INFO_URL}?fields=open_id,display_name,avatar_url`, {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const userData = (await userRes.json().catch(() => ({}))) as {
+      data?: { user?: { display_name?: string; avatar_url?: string; open_id?: string } };
+    };
+    if (userData.data?.user) {
+      displayName = userData.data.user.display_name ?? "";
+      avatarUrl = userData.data.user.avatar_url ?? "";
+    }
+  } catch {
+    // Non-critical: proceed without user info
+  }
+
+  // Store the token
+  const data = await loadData(c.env);
+  const now = new Date().toISOString();
+  data.tiktokIntegration = {
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token,
+    expiresAt: tokenData.expires_in
+      ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
+      : undefined,
+    openId: tokenData.open_id,
+    displayName,
+    avatarUrl,
+    connectedAt: data.tiktokIntegration?.connectedAt ?? now,
+    updatedAt: now,
+  };
+  await saveData(c.env, data);
+
+  return c.json({
+    ok: true,
+    message: "TikTok account connected successfully",
+    profile: { displayName, avatarUrl, openId: tokenData.open_id },
+  });
+});
+
+// GET /api/tiktok/status — Check TikTok connection status
+app.get("/api/tiktok/status", requireAgencyAdminAuth, async (c) => {
+  const data = await loadData(c.env);
+  const tiktok = data.tiktokIntegration;
+  if (!tiktok?.accessToken) {
+    return c.json({ connected: false });
+  }
+  return c.json({
+    connected: true,
+    profile: {
+      displayName: tiktok.displayName,
+      avatarUrl: tiktok.avatarUrl,
+      openId: tiktok.openId,
+    },
+    connectedAt: tiktok.connectedAt,
+    expiresAt: tiktok.expiresAt,
+  });
+});
+
+// POST /api/tiktok/disconnect — Remove TikTok connection
+app.post("/api/tiktok/disconnect", requireAgencyAdminAuth, async (c) => {
+  const data = await loadData(c.env);
+  data.tiktokIntegration = undefined;
+  await saveData(c.env, data);
+  return c.json({ ok: true, message: "TikTok account disconnected" });
 });
 
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));

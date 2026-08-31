@@ -79,29 +79,6 @@ const FAQ_KNOWLEDGE = [
   },
 ]
 
-const ANSWER_KEYWORDS = [
-  'salary',
-  'salaries',
-  'range',
-  'ranges',
-  'hire',
-  'hired',
-  'hiring',
-  'fee',
-  'fees',
-  'cost',
-  'costs',
-  'price',
-  'pricing',
-  'levy',
-  'insurance',
-  'document',
-  'documents',
-  'obligation',
-  'obligations',
-  'mom',
-]
-
 const COMPANY_KEYWORDS = [
   'company',
   'agency',
@@ -224,6 +201,10 @@ const FEE_QUESTION_PATTERN = /\b(fee|fees|cost|costs|price|pricing|salary|salari
 const OFF_TOPIC_PATTERN =
   /\b(weather|sports|football|basketball|movie|movies|song|joke|recipe|coding|programming|homework|math|bitcoin|crypto|stock|stocks|politics|president|news)\b/i
 
+// Pattern to detect work/productivity-related questions that the AI assistant should always help with
+const WORK_PRODUCTIVITY_PATTERN =
+  /\b(help|assist|how to|how do|what is|explain|summarize|write|draft|create|plan|organize|schedule|remind|suggest|recommend|idea|brainstorm|tips|advice|guide|tutorial|learn|understand|clarify|define|meaning|example|template|format|document|email|letter|report|proposal|presentation|meeting|task|project|deadline|priority|workflow|process|improve|optimize|efficient|productivity|time management|goal|strategy|technique|method|approach|solution|problem|issue|challenge|fix|resolve|troubleshoot|debug|error|mistake|correct|review|feedback|opinion|compare|difference|pros|cons|benefits|drawbacks|best practice|checklist|step|steps|instructions|instructions)\b/i
+
 // Pronoun pattern used to detect follow-up questions that refer back to a
 // previously-discussed maid (e.g. "what is the rating of her english?",
 // "is he available next month?", "how old is she?")
@@ -294,7 +275,10 @@ const isMaidProfileQuestion = (message: string) =>
   MAID_TOPIC_PATTERN.test(message) && MAID_PROFILE_REQUEST_PATTERN.test(message) && !FEE_QUESTION_PATTERN.test(message)
 
 const isOffTopicQuestion = (message: string) =>
-  OFF_TOPIC_PATTERN.test(message) && !isCompanyQuestion(message) && !isMaidSearchQuestion(message)
+  OFF_TOPIC_PATTERN.test(message) && !isCompanyQuestion(message) && !isMaidSearchQuestion(message) && !WORK_PRODUCTIVITY_PATTERN.test(message)
+
+const isWorkProductivityQuestion = (message: string) =>
+  WORK_PRODUCTIVITY_PATTERN.test(message) && !isCompanyQuestion(message) && !isMaidSearchQuestion(message)
 
 const isFeeOrPricingQuestion = (message: string) => FEE_QUESTION_PATTERN.test(message)
 
@@ -569,36 +553,6 @@ const describeLanguages = (maid: MaidRecord) =>
     })
     .slice(0, 4)
     .join(', ')
-
-const describeBestSkills = (maid: MaidRecord) => {
-  const scored = Object.entries(asRecord(maid.workAreas))
-    .map(([area, raw]) => {
-      const config = asRecord(raw)
-      const evaluation = compactList(config.evaluation)
-      const experience = Boolean(config.experience)
-      const willing = Boolean(config.willing)
-      const years = compactList(config.yearsOfExperience)
-      const score =
-        /excellent|very\s*good|good/i.test(evaluation) ? 4 :
-        experience ? 3 :
-        willing ? 2 :
-        years ? 1 :
-        0
-      return {
-        area,
-        score,
-        detail: [evaluation, years ? `${years} experience` : ''].filter(Boolean).join(', '),
-      }
-    })
-    .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 3)
-
-  if (scored.length === 0) return ''
-  return scored
-    .map((item) => (item.detail ? `${item.area} (${item.detail})` : item.area))
-    .join(', ')
-}
 
 const describeMaidForPrompt = (maid: MaidRecord) => {
   const intro = asRecord(maid.introduction)
@@ -910,19 +864,118 @@ const buildMaidCardIntro = (maids: MaidRecord[]): string => {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Calls Groq with a general AI assistant prompt for off-topic or work/productivity questions.
+ * This allows the AI to help users with any question while still maintaining
+ * the maid agency context when relevant.
+ */
+const callGroqGeneralAssistant = async (params: {
+  message: string
+  companyProfile: CompanyProfileRecord | null
+  conversationHistory?: Array<{ role: string; content: string }>
+}) => {
+  const apiKey = process.env.GROQ_API_KEY?.trim() || process.env.AI_RECEPTIONIST_API_KEY?.trim()
+  if (!apiKey) return null
+
+  const companyContext = params.companyProfile
+    ? `You are currently assisting users on the website of ${params.companyProfile.company_name || params.companyProfile.short_name || 'a maid agency'}, a Singapore-based domestic helper agency.`
+    : 'You are currently assisting users on a maid agency website.'
+
+  const messages = [
+    {
+      role: 'system',
+      content: [
+        'You are a helpful, warm, and professional AI assistant. You help users with any question they have, whether related to the maid agency or not.',
+        '',
+        'CRITICAL — PLAIN TEXT ONLY: This is a chat widget. Do NOT use any markdown syntax in your replies. That means no asterisks (**bold**), no underscores (_italic_), no backticks, no hash headers. Write only plain conversational text. Use line breaks between paragraphs to aid readability.',
+        '',
+        'FORMATTING & SPACING: Write in short, well-spaced paragraphs. Separate distinct points with a blank line so the message is easy to read. Avoid long unbroken walls of text. Keep sentences clear and concise.',
+        '',
+        'TONE: Be friendly, approachable, and professional. Use a conversational tone like a helpful colleague. You can use occasional emojis sparingly to add warmth (1-2 per message max).',
+        '',
+        'CONTEXT:',
+        companyContext,
+        '',
+        'GUIDELINES:',
+        '1. Always be helpful and provide useful, accurate information.',
+        '2. If the question is about work, productivity, or general topics, provide helpful advice and guidance.',
+        '3. If the question could relate to the maid agency context (hiring, household management, etc.), feel free to connect your answer to how the agency can help.',
+        '4. For completely unrelated topics (weather, sports, jokes, etc.), still provide a helpful response but keep it brief.',
+        '5. If you don\'t know something, be honest about it and suggest where they might find the information.',
+        '6. Always maintain a professional and supportive tone.',
+        '7. Keep responses concise - aim for 2-4 paragraphs maximum unless the question requires more detail.',
+        '8. If the user seems to be testing you or asking random questions, respond warmly and show you\'re here to help.',
+        '',
+        'Remember: You are representing a professional maid agency. Your responses should reflect the agency\'s commitment to excellent service and customer care.',
+      ].join('\n'),
+    },
+    ...(params.conversationHistory || []).slice(-6).map((msg) => ({
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+    })),
+    {
+      role: 'user',
+      content: params.message,
+    },
+  ]
+
+  const response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      temperature: 0.5,
+      max_tokens: 800,
+      messages,
+    }),
+  })
+
+  if (!response.ok) {
+    console.error(`[callGroqGeneralAssistant] Groq API error: ${response.status} ${response.statusText}`)
+    return null
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
+  }
+
+  const raw = data.choices?.[0]?.message?.content?.trim() || null
+  return raw ? stripMarkdownSyntax(raw) : null
+}
+
 const shouldShowMaidCards = (message: string) => {
   return isMaidCardListQuestion(message) && !isCompanyQuestion(message)
 }
 
-const fallbackReceptionistResponse = (
+const fallbackReceptionistResponse = async (
   message: string,
   relevantFaqs: Array<{ q: string; a: string }>,
   featuredMaids: ReturnType<typeof pickFeaturedMaids>,
   relevantMaids: MaidRecord[],
-  companyProfile: CompanyProfileRecord | null
+  companyProfile: CompanyProfileRecord | null,
+  conversationHistory?: Array<{ role: string; content: string }>
 ) => {
-  if (isOffTopicQuestion(message)) {
-    return "I'm sorry, but I'm only able to help with our maid agency services, company details, hiring questions, and available helper profiles."
+  // For off-topic or work/productivity questions, use the general AI assistant
+  if (isOffTopicQuestion(message) || isWorkProductivityQuestion(message)) {
+    const generalResponse = await callGroqGeneralAssistant({
+      message,
+      companyProfile,
+      conversationHistory,
+    }).catch(() => null)
+    
+    if (generalResponse) {
+      return generalResponse
+    }
+    
+    // Fallback if Groq is unavailable
+    if (isWorkProductivityQuestion(message)) {
+      return "I'd be happy to help with that! While I specialize in maid agency services, I can assist with general work and productivity questions too. Could you provide more details about what you need help with?"
+    }
+    
+    return "That's an interesting question! While I'm primarily here to help with maid agency services, I'm happy to assist with other topics too. Feel free to ask me anything, and I'll do my best to help."
   }
 
   if (isCompanyQuestion(message) && companyProfile) {
@@ -987,7 +1040,18 @@ const fallbackReceptionistResponse = (
     return `I found the top ${featuredMaids.length} available helpers that may be a great fit:\n\n${names}\n\nYou can review their profile cards below.`
   }
 
-  return "I can help with helper recommendations, skills, company details, salary ranges, levy, fees, documents, insurance, and hiring questions.\n\nLet me know what you need and I'll be happy to assist."
+  // For any other question, try the general AI assistant
+  const generalResponse = await callGroqGeneralAssistant({
+    message,
+    companyProfile,
+    conversationHistory,
+  }).catch(() => null)
+  
+  if (generalResponse) {
+    return generalResponse
+  }
+
+  return "I can help with helper recommendations, skills, company details, salary ranges, levy, fees, documents, insurance, and hiring questions.\n\nI can also assist with general work and productivity questions. Let me know what you need and I'll be happy to help!"
 }
 
 const callGroqReceptionist = async (params: {
@@ -1097,7 +1161,7 @@ PARAGRAPH 5 — Closing: End with one warm sentence about their attitude and rea
 
             'FOLLOW-UP QUESTIONS ABOUT A SPECIFIC HELPER: The "Currently discussed helper" context below identifies the helper the customer is asking about. When the customer asks a short follow-up question — e.g. "what is her English like?", "is she available next month?", "what is her expected salary?" — answer ONLY that specific question about THAT helper. Translate raw ratings/levels into plain English (e.g. a language level of "Good" means "Her English is good — she communicates well."). Keep the answer brief — 1 to 3 sentences.',
 
-            'OFF-TOPIC: If the question is truly unrelated to maids, hiring, or the agency, politely redirect.',
+            'OFF-TOPIC QUESTIONS: If the question is not about maids, hiring, or the agency, still provide a helpful and friendly response. You are a helpful AI assistant that can answer general questions too. Keep off-topic responses brief (1-2 paragraphs) and professional. If appropriate, you can gently mention that you specialize in maid agency services but are happy to help with other topics.',
           ].join('\n\n'),
         },
         {
@@ -1256,22 +1320,23 @@ const pickRelevantMaidRecordsForMessage = (
   return { maids: [], isPronounFollowUp: false }
 }
 
-const shouldAnswerWithProfiles = (message: string) =>
-  !isCompanyQuestion(message) &&
-  !isFeeOrPricingQuestion(message) &&
-  (isMaidCardListQuestion(message) || isMaidProfileQuestion(message) || MAID_PROFILE_REQUEST_PATTERN.test(message))
-
 export const receptionist = async (req: Request, res: Response) => {
   try {
     const message = requiredString(req.body.message, 'message')
     const conversationId = optionalString(req.body.conversationId, 120) || randomUUID()
     const currentMaidReference = extractMaidReferenceFromPath(req.body.currentPath)
+    const conversationHistory = Array.isArray(req.body.history)
+      ? req.body.history
+          .filter((msg: unknown) => msg && typeof msg === 'object' && 'role' in msg && 'content' in msg)
+          .map((msg: { role: string; content: string }) => ({ role: msg.role, content: msg.content }))
+          .slice(-12)
+      : []
     const [maids, companyBundle] = await Promise.all([
       getAllMaidsStore(undefined, 'public'),
       getCompanyBundle().catch(() => null),
     ])
     const companyProfile = companyBundle?.companyProfile ?? null
-    const relevantFaqs = isOffTopicQuestion(message) ? [] : findRelevantFaqs(message)
+    const relevantFaqs = findRelevantFaqs(message)
 
     const isFeeQuestion = isFeeOrPricingQuestion(message)
 
@@ -1334,7 +1399,7 @@ export const receptionist = async (req: Request, res: Response) => {
 
     const baseResponse =
       synchronizedMaidResponse ||
-      fallbackReceptionistResponse(message, relevantFaqs, featuredMaids, relevantMaids, companyProfile) ||
+      (await fallbackReceptionistResponse(message, relevantFaqs, featuredMaids, relevantMaids, companyProfile, conversationHistory)) ||
       "I'm here to help with helper recommendations, hiring questions, and company details. How can I assist you?"
 
     const hasFewerThanRequested =
@@ -1424,3 +1489,4 @@ export const processInquiry = async (req: Request, res: Response) => {
     )
   }
 }
+

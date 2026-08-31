@@ -19,7 +19,7 @@ import path from "node:path";
 // ─── Config ──────────────────────────────────────────────────────────────────
 const TARGETS = {
   local: "http://localhost:3000",
-  prod:  "https://helped-web-v2.jonathan-tan-1290.workers.dev",
+  prod:  "https://findmaid.wow-aisolution.workers.dev",
 };
 
 const CLINE_BASE_URL = "https://api.cline.ai/v1";

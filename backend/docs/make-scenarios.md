@@ -247,7 +247,7 @@ Recommended AI output for contract requests:
 For the Make HTTP module:
 
 - Method: `POST`
-- URL: `https://helped-web-v2.jonathan-tan-1290.workers.dev/api/contracts/generate`
+- URL: `https://findmaid.wow-aisolution.workers.dev/api/contracts/generate`
 - Header: `Content-Type: application/json`
 - Body type: `Raw`
 - Content type: `application/json`

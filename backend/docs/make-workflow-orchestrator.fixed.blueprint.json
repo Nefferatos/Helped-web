@@ -97,7 +97,7 @@
                 ]
               },
               "mapper": {
-                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/inquiry",
+                "url": "https://findmaid.wow-aisolution.workers.dev/api/inquiry",
                 "method": "post",
                 "headers": [
                   {
@@ -164,7 +164,7 @@
                 ]
               },
               "mapper": {
-                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/leads/raw",
+                "url": "https://findmaid.wow-aisolution.workers.dev/api/leads/raw",
                 "method": "post",
                 "headers": [
                   {
@@ -231,7 +231,7 @@
                 ]
               },
               "mapper": {
-                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/match",
+                "url": "https://findmaid.wow-aisolution.workers.dev/api/match",
                 "method": "post",
                 "headers": [
                   {
@@ -298,7 +298,7 @@
                 ]
               },
               "mapper": {
-                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/contracts/generate",
+                "url": "https://findmaid.wow-aisolution.workers.dev/api/contracts/generate",
                 "method": "post",
                 "headers": [
                   {
@@ -365,7 +365,7 @@
                 ]
               },
               "mapper": {
-                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/schedule",
+                "url": "https://findmaid.wow-aisolution.workers.dev/api/schedule",
                 "method": "post",
                 "headers": [
                   {
@@ -432,7 +432,7 @@
                 ]
               },
               "mapper": {
-                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/notify",
+                "url": "https://findmaid.wow-aisolution.workers.dev/api/notify",
                 "method": "post",
                 "headers": [
                   {
@@ -506,7 +506,7 @@
                 ]
               },
               "mapper": {
-                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/notify",
+                "url": "https://findmaid.wow-aisolution.workers.dev/api/notify",
                 "method": "post",
                 "headers": [
                   {

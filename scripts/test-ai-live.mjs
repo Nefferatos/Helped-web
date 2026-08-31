@@ -3,7 +3,7 @@
  * Usage: node scripts/test-ai-live.mjs
  */
 
-const BASE_URL = "https://helped-web-v2.jonathan-tan-1290.workers.dev";
+const BASE_URL = "https://findmaid.wow-aisolution.workers.dev";
 const TIMEOUT_MS = 60_000; // 60s for AI processing
 
 let passed = 0;

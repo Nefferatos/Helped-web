@@ -25,7 +25,7 @@ const ENVIRONMENTS = {
   prod: {
     key: "prod",
     label: "Production",
-    baseUrl: "https://helped-web-v2.jonathan-tan-1290.workers.dev",
+    baseUrl: "https://findmaid.wow-aisolution.workers.dev",
   },
 };
 

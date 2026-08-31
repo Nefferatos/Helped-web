@@ -1,6 +1,6 @@
 const TARGETS = {
   local: "http://localhost:3000",
-  prod:  "https://helped-web-v2.jonathan-tan-1290.workers.dev",
+  prod:  "https://findmaid.wow-aisolution.workers.dev",
 };
 
 const args    = process.argv.slice(2);

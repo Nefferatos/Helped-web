@@ -94,7 +94,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/inquiry",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/inquiry",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -161,7 +161,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/leads/raw",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/leads/raw",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -228,7 +228,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/match",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/match",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -295,7 +295,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/contracts/generate",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/contracts/generate",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -362,7 +362,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/schedule",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/schedule",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -429,7 +429,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/notify",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/notify",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -496,7 +496,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/notify",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/notify",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -570,7 +570,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/notify",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/notify",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -637,7 +637,7 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/inquiry/make",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/inquiry/make",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -692,7 +692,7 @@
                                 "proxyKeychain": ""
                             },
                             "mapper": {
-                                "url": "https://helped-web-v2.jonathan-tan-1290.workers.dev/api/notify",
+                                "url": "https://findmaid.wow-aisolution.workers.dev/api/notify",
                                 "method": "post",
                                 "headers": [
                                     {
@@ -759,7 +759,7 @@
         "zone": "eu1.make.com",
         "notes": [
             "Import-ready orchestrator for Helped Maids. After import, create/select a Custom Webhook in module 1 and create/select your Make AI Agent connection in module 10.",
-            "Set the WORKER_BASE_URL variable to your backend URL (e.g. https://helped-web-v2.jonathan-tan-1290.workers.dev or http://localhost:3000).",
+            "Set the WORKER_BASE_URL variable to your backend URL (e.g. https://findmaid.wow-aisolution.workers.dev or http://localhost:3000).",
             "This blueprint intentionally omits account-specific webhook hook IDs and JSON data-structure IDs because Make cannot transfer those between accounts.",
             "PARSEJSON DATA STRUCTURE SETUP: Click the ParseJSON module (id 12), then create a new data structure. Name it 'Workflow Classifier Output'. Click Generate and paste: {\"workflow\":\"inquiry_only\",\"payload\":{\"source\":\"website\",\"name\":\"John Doe\",\"contact\":\"+6512345678\",\"message\":\"I want to hire a maid\",\"employerId\":null,\"maidId\":null,\"datetime\":null,\"serviceType\":\"\",\"location\":\"\",\"budgetText\":\"\",\"scheduleDate\":\"\",\"recipient\":\"\",\"notificationMessage\":\"\",\"channel\":\"\",\"makeScenario\":\"\",\"salary\":\"\",\"availability\":\"\"}}. Set Strict to No.",
             "Routes: inquiry_only, lead_scoring, inquiry_match, contract_creation, schedule_creation, notification_only, applicant_interview, human_review/validation_error, make_pipeline, and a catch-all for unmatched workflows."

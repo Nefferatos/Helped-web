@@ -3756,6 +3756,20 @@
   ],
   "automationLogs": [
     {
+      "id": 223,
+      "createdAt": "2026-08-29T14:24:01.847Z",
+      "workflow": "inquiry_pipeline",
+      "step": "ingest",
+      "status": "success",
+      "message": "Inquiry received",
+      "payload": {
+        "message": "I need a Filipino maid for childcare",
+        "name": "Test User",
+        "contact": "test@example.com",
+        "requestId": "6922d9a6-52ce-42b9-94ad-37efff4e16d9"
+      }
+    },
+    {
       "id": 222,
       "createdAt": "2026-08-21T13:10:08.450Z",
       "workflow": "make_pipeline",
@@ -9931,7 +9945,7 @@
     "schedules": 6,
     "contracts": 7,
     "notifications": 24,
-    "automationLogs": 223,
+    "automationLogs": 224,
     "decisionLogs": 82,
     "makeDeliveries": 27
   }

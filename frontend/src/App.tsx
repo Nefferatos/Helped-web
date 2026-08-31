@@ -73,6 +73,7 @@ const PublicMaidApplicationPage = lazyRoute(() => import("@/pages/PublicMaidAppl
 const PublicMaidApplicationStatusPage = lazyRoute(() => import("@/pages/PublicMaidApplicationStatusPage"));
 const NotFound = lazyRoute(() => import("@/pages/NotFound"));
 const AuthCallback = lazyRoute(() => import("@/pages/AuthCallback"));
+const TikTokCallback = lazyRoute(() => import("@/pages/TikTokCallback"));
 const PrivacyPolicy = lazyRoute(() => import("@/pages/PrivacyPolicy"));
 const TermsOfService = lazyRoute(() => import("@/pages/TermsOfService"));
 const DataDeletion = lazyRoute(() => import("@/pages/DataDeletion"));
@@ -317,6 +318,7 @@ const App = () => {
           <Routes>
             <Route path="/employer-login" element={withRouteLoader(<ClientEmployerLogin />)} />
             <Route path="/auth/callback" element={withRouteLoader(<AuthCallback />)} />
+            <Route path="/auth/tiktok/callback" element={withRouteLoader(<TikTokCallback />)} />
             <Route path="/agencies" element={withRouteLoader(<AgenciesPage />)} />
             <Route path="/agencies/:id" element={withRouteLoader(<AgencyDetailsPage />)} />
             <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
