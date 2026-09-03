@@ -345,6 +345,7 @@ const App = () => {
             <Route path="/agencyadmin/employment-contracts/new" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/ai-automation" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiAutomationPage /></AdminShell></ProtectedAdminRoute>)} />
 
             {/* FIX: ClientPortalLayout is now imported eagerly at the top of this
                 file, so this route renders the layout shell immediately without
@@ -383,7 +384,6 @@ const App = () => {
             <Route path="/privacy-policy" element={withRouteLoader(<PrivacyPolicy />)} />
             <Route path="/terms-of-service" element={withRouteLoader(<TermsOfService />)} />
             <Route path="/data-deletion" element={withRouteLoader(<DataDeletion />)} />
-            <Route path="/ai-workflows" element={withRouteLoader(<AiAutomationPage />)} />
             <Route path="/" element={withRouteLoader(<ClientHomeRedirect />)} />
             <Route path="*" element={withRouteLoader(<NotFound />)} />
             <Route path="/about" element={withRouteLoader(<AboutUs />)} />

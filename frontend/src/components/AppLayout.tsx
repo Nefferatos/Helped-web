@@ -21,6 +21,7 @@ import {
   Sparkles,
   Brain,
   Megaphone,
+  Zap,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -182,6 +183,16 @@ const navItems = [
     iconBg: "linear-gradient(145deg, #F9A8D4, #DB2777)",
     iconShadow: "0 4px 0 #BE185D, 0 6px 12px rgba(219,39,119,0.45)",
     iconShadowActive: "0 2px 0 #BE185D, 0 3px 8px rgba(219,39,119,0.4)",
+    iconColor: "#fff",
+    badgeKey: null,
+  },
+  {
+    label: "AI Automation",
+    path: adminPath("/ai-automation"),
+    icon: Zap,
+    iconBg: "linear-gradient(145deg, #FDE68A, #F59E0B)",
+    iconShadow: "0 4px 0 #D97706, 0 6px 12px rgba(245,158,11,0.45)",
+    iconShadowActive: "0 2px 0 #D97706, 0 3px 8px rgba(245,158,11,0.4)",
     iconColor: "#fff",
     badgeKey: null,
   },

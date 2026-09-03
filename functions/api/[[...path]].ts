@@ -406,7 +406,6 @@ interface AtsFilterPresetRecord {
   filters: Record<string, unknown>;
   createdAt: string;
 }
-}
 
 interface TiktokIntegrationRecord {
   accessToken?: string;
@@ -418,8 +417,6 @@ interface TiktokIntegrationRecord {
   connectedAt?: string;
   updatedAt?: string;
 }
-
-interface AtsData {
 
 interface AtsData {
   applications: AtsApplicationRecord[];
@@ -450,7 +447,6 @@ interface AppData {
   employmentContracts: EmploymentContractRecord[];
   ats: AtsData;
   tiktokIntegration?: TiktokIntegrationRecord;
-  ats: AtsData;
   counters: {
     momPersonnel: number;
     testimonials: number;
