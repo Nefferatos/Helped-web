@@ -187,8 +187,8 @@ const navItems = [
     badgeKey: null,
   },
   {
-    label: "AI Automation",
-    path: adminPath("/ai-automation"),
+    label: "TikTok",
+    path: adminPath("/tiktok"),
     icon: Zap,
     iconBg: "linear-gradient(145deg, #FDE68A, #F59E0B)",
     iconShadow: "0 4px 0 #D97706, 0 6px 12px rgba(245,158,11,0.45)",

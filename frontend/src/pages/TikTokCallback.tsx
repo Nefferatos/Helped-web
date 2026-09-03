@@ -22,13 +22,19 @@ const TikTokCallback = () => {
         const params = new URLSearchParams(window.location.search);
         const code = params.get("code");
         const error = params.get("error");
+        const allParams = window.location.search;
 
         if (error) {
-          throw new Error(params.get("error_description") || `TikTok authorization failed: ${error}`);
+          throw new Error(
+            params.get("error_description") || `TikTok authorization failed: ${error}`
+          );
         }
 
         if (!code) {
-          throw new Error("No authorization code received from TikTok.");
+          const debugInfo = allParams
+            ? `TikTok returned: ${allParams}`
+            : "TikTok redirected without any parameters. Check your TikTok Developer Portal: ensure the redirect URI is exactly https://rinzinagency.com/auth/tiktok/callback";
+          throw new Error(`No authorization code received from TikTok. ${debugInfo}`);
         }
 
         // Exchange code for token via backend
@@ -55,10 +61,10 @@ const TikTokCallback = () => {
         if (!cancelled) {
           setStatus("success");
           setMessage(
-            `TikTok account connected${data.profile?.displayName ? ` as ${data.profile.displayName}` : ""}!`,
+            `TikTok account connected${data.profile?.displayName ? ` as ${data.profile.displayName}` : ""}!`
           );
           toast.success("TikTok account connected successfully!");
-          setTimeout(() => navigate(adminPath("/ai-automation"), { replace: true }), 2000);
+          setTimeout(() => navigate(adminPath("/tiktok"), { replace: true }), 2000);
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "TikTok connection failed";
@@ -88,8 +94,18 @@ const TikTokCallback = () => {
         {status === "success" && (
           <div className="space-y-3">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-              <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg
+                className="h-5 w-5 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
             </div>
             <p className="text-sm font-medium text-green-700">{message}</p>
@@ -99,13 +115,23 @@ const TikTokCallback = () => {
         {status === "error" && (
           <div className="space-y-3">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
-              <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="h-5 w-5 text-red-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </div>
             <p className="text-sm font-medium text-red-700">{message}</p>
             <button
-              onClick={() => navigate(adminPath("/ai-automation"), { replace: true })}
+              onClick={() => navigate(adminPath("/tiktok"), { replace: true })}
               className="mt-2 text-xs text-primary underline hover:no-underline"
             >
               Return to dashboard

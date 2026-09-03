@@ -345,7 +345,7 @@ const App = () => {
             <Route path="/agencyadmin/employment-contracts/new" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>)} />
-            <Route path="/agencyadmin/ai-automation" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiAutomationPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/tiktok" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiAutomationPage /></AdminShell></ProtectedAdminRoute>)} />
 
             {/* FIX: ClientPortalLayout is now imported eagerly at the top of this
                 file, so this route renders the layout shell immediately without
