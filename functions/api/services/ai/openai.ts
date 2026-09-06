@@ -30,6 +30,16 @@ export type OpenAIChatOptions = {
   baseUrl?: string;
 };
 
+type OpenAIChatResponse = {
+  id?: string;
+  data?: {
+    choices?: { message?: { role?: string; content?: string }; finish_reason?: string }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+  };
+  choices?: { message?: { role?: string; content?: string }; finish_reason?: string }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+};
+
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const rateLimitBuckets = new Map<string, number[]>();
 
@@ -43,7 +53,7 @@ export const assertAiRateLimit = (key: string, limit = 30, windowMs = 60_000) =>
   rateLimitBuckets.set(key, recent);
 };
 
-const parseJson = <T>(text: string): T | null => {
+const parseJson = <T,>(text: string): T | null => {
   if (!text.trim()) return null;
   try { return JSON.parse(text) as T; } catch { return null; }
 };
@@ -65,10 +75,7 @@ export const openaiChat = async (options: OpenAIChatOptions) => {
   const url = `${baseUrl}/chat/completions`;
 
   const systemMessages = options.messages.filter((m) => m.role === "system");
-  const nonSystemMessages = options.messages.filter((m) => m.role !== "system") as Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
+  const nonSystemMessages = options.messages.filter((m) => m.role !== "system") as { role: "user" | "assistant"; content: string }[];
 
   const systemContent = systemMessages.map((m) => m.content).join("\n\n");
   const finalMessages: OpenAIMessage[] = [];
@@ -112,14 +119,7 @@ export const openaiChat = async (options: OpenAIChatOptions) => {
       }
 
       const text = await response.text();
-      const data = parseJson<{
-        id?: string;
-        choices?: Array<{
-          message?: { role?: string; content?: string };
-          finish_reason?: string;
-        }>;
-        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
-      }>(text);
+      const data = parseJson<OpenAIChatResponse>(text);
 
       if (!data) {
         throw new Error(
@@ -129,7 +129,9 @@ export const openaiChat = async (options: OpenAIChatOptions) => {
         );
       }
 
-      const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+      // Handle Cline API's {data: {...}, success: true} wrapper
+      const inner = data.data ?? data;
+      const content = inner.choices?.[0]?.message?.content?.trim() ?? "";
       if (!content) {
         throw new Error("AI returned an empty message.");
       }
@@ -137,7 +139,7 @@ export const openaiChat = async (options: OpenAIChatOptions) => {
       return {
         id: data.id ?? "",
         content,
-        usage: data.usage ?? {},
+        usage: inner.usage ?? {},
       };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error("AI request failed");
@@ -158,10 +160,7 @@ export const openaiChatStream = async (options: OpenAIChatOptions) => {
   const url = `${baseUrl}/chat/completions`;
 
   const systemMessages = options.messages.filter((m) => m.role === "system");
-  const nonSystemMessages = options.messages.filter((m) => m.role !== "system") as Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
+  const nonSystemMessages = options.messages.filter((m) => m.role !== "system") as { role: "user" | "assistant"; content: string }[];
 
   const systemContent = systemMessages.map((m) => m.content).join("\n\n");
   const finalMessages: OpenAIMessage[] = [];
@@ -193,7 +192,7 @@ export const openaiChatStream = async (options: OpenAIChatOptions) => {
   return response.body;
 };
 
-export const parseJsonObject = <T>(content: string, fallback: T): T => {
+export const parseJsonObject = <T,>(content: string, fallback: T): T => {
   try { return JSON.parse(content) as T; } catch {}
   const match = content.match(/\{[\s\S]*\}/);
   if (!match) return fallback;

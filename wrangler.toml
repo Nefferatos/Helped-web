@@ -55,8 +55,8 @@ CLINE_MODEL = "openai/gpt-4o-mini"
 # CLINE_API_KEY must be set as a secret: npx wrangler secret put CLINE_API_KEY
 
 # Fallback: OpenAI-compatible API
-OPENAI_BASE_URL = "https://api.openai.com/v1"
-OPENAI_MODEL = "gpt-4o"
+OPENAI_BASE_URL = "https://api.cline.bot/api/v1"
+OPENAI_MODEL = "openai/gpt-4o-mini"
 
 # Email confirmations — requires Resend account + verified domain.
 # Steps: 1) Sign up at resend.com  2) Verify your domain  3) Run:

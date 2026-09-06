@@ -13851,22 +13851,22 @@ export default {
     }
 
     if (url.pathname === "/agencyadmin") {
-      return Response.redirect(new URL("/agencyadmin/login", url), 301);
+      return Response.redirect(new URL("/agencyadmin/login", url).toString(), 301);
     }
 
     if (
       url.pathname === "/agency-admin-portal" ||
       url.pathname === "/agencyadminportal"
     ) {
-      return Response.redirect(new URL("/agencyadmin/login", url), 301);
+      return Response.redirect(new URL("/agencyadmin/login", url).toString(), 301);
     }
 
     if (url.pathname === "/agency-portal" || url.pathname === "/agencyportal") {
-      return Response.redirect(new URL("/agencies", url), 301);
+      return Response.redirect(new URL("/agencies", url).toString(), 301);
     }
 
     if (url.pathname === "/user-portal" || url.pathname === "/userportal") {
-      return Response.redirect(new URL("/employer-login", url), 301);
+      return Response.redirect(new URL("/employer-login", url).toString(), 301);
     }
 
     const isAssetRequest =

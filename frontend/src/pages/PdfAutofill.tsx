@@ -165,6 +165,110 @@ interface ExtractedData {
   maidType?:                  string | null;
 }
 
+// ─── Checkbox & text item types ──────────────────────────────────────────────
+type TextItem = { str: string; transform: number[] };
+
+/**
+ * Scan all items on a page to find the X-positions of "Yes" and "No" column
+ * headers.  These are used by annotateCheckboxes to determine which column a
+ * checkbox glyph belongs to, even when the glyph and the header are on
+ * different lines (which is the common case in FDW biodata forms).
+ */
+function findYesNoColumns(items: TextItem[]): { yesXs: number[]; noXs: number[] } {
+  const yesXs: number[] = [];
+  const noXs: number[] = [];
+  for (const item of items) {
+    const s = item.str.trim();
+    if (s === "Yes") yesXs.push(item.transform[4]);
+    if (s === "No")  noXs.push(item.transform[4]);
+  }
+  return { yesXs, noXs };
+}
+
+/**
+ * Replace raw checkbox glyphs (\u0001 = empty box, \u0003/\u0004 = filled)
+ * with human-readable markers the AI can understand.
+ *
+ * Also sorts items left-to-right within each line so the AI sees the
+ * correct spatial ordering of Yes/No columns.
+ *
+ * @param items      text items on a single line
+ * @param pageCols   pre-computed Yes/No column X-positions for the whole page
+ */
+function annotateCheckboxes(
+  items: TextItem[],
+  pageCols: { yesXs: number[]; noXs: number[] },
+): string {
+  // Sort by X position so columns read left→right
+  const sorted = [...items].sort((a, b) => a.transform[4] - b.transform[4]);
+
+  // Also collect Yes/No on THIS line (for skills table where Yes/No are inline)
+  const lineYesXs = sorted.filter((i) => i.str.trim() === "Yes").map((i) => i.transform[4]);
+  const lineNoXs  = sorted.filter((i) => i.str.trim() === "No").map((i) => i.transform[4]);
+
+  const parts: string[] = [];
+  for (const item of sorted) {
+    const s = item.str;
+    const code = s.charCodeAt(0);
+
+    // ── Empty checkbox glyph (U+0001 SOH) ──────────────────────────────
+    if (code === 0x0001 && s.length === 1) {
+      const x = item.transform[4];
+      // Page-level columns use tighter tolerance (15px) — they're from the
+      // header row and should only match checkboxes directly below them.
+      // Line-level columns (skills table) use looser tolerance (30px).
+      const nearPageYes = pageCols.yesXs.some((yx) => Math.abs(x - yx) < 15);
+      const nearPageNo  = pageCols.noXs.some((nx) => Math.abs(x - nx) < 15);
+      const nearLineYes = lineYesXs.some((yx) => Math.abs(x - yx) < 30);
+      const nearLineNo  = lineNoXs.some((nx) => Math.abs(x - nx) < 30);
+      const nearYes = nearPageYes || nearLineYes;
+      const nearNo  = nearPageNo  || nearLineNo;
+
+      if (nearYes && !nearNo) {
+        parts.push("[☐ unchecked Yes]");
+      } else if (nearNo && !nearYes) {
+        parts.push("[☐ unchecked No]");
+      } else if (nearYes && nearNo) {
+        // Ambiguous — both Yes and No are close
+        parts.push("[☐]");
+      } else {
+        // Standalone checkbox (e.g. interview options, evaluation methods)
+        parts.push("[☐]");
+      }
+      continue;
+    }
+
+    // ── Filled checkbox glyphs (common in PDF forms) ────────────────────
+    if ((code === 0x0003 || code === 0x0004 || code === 0x2713 || code === 0x2714 ||
+         code === 0x2611 || code === 0x25CF || code === 0x25A0) && s.length <= 2) {
+      const x = item.transform[4];
+      const nearPageYes = pageCols.yesXs.some((yx) => Math.abs(x - yx) < 15);
+      const nearPageNo  = pageCols.noXs.some((nx) => Math.abs(x - nx) < 15);
+      const nearLineYes = lineYesXs.some((yx) => Math.abs(x - yx) < 30);
+      const nearLineNo  = lineNoXs.some((nx) => Math.abs(x - nx) < 30);
+      const nearYes = nearPageYes || nearLineYes;
+      const nearNo  = nearPageNo  || nearLineNo;
+
+      if (nearYes && !nearNo) {
+        parts.push("[☑ checked Yes]");
+      } else if (nearNo && !nearYes) {
+        parts.push("[☑ checked No]");
+      } else {
+        parts.push("[☑]");
+      }
+      continue;
+    }
+
+    // ── Bullet character (\u0002) — skip, just decorative ───────────────
+    if (code === 0x0002 && s.length <= 2) continue;
+
+    // ── Normal text ─────────────────────────────────────────────────────
+    if (s.trim()) parts.push(s.trim());
+  }
+
+  return parts.join(" ");
+}
+
 // ─── pdf.js text extraction ───────────────────────────────────────────────────
 async function extractPdfText(file: File): Promise<string> {
   if (file.size > MAX_PDF_SIZE_BYTES) {
@@ -180,16 +284,21 @@ async function extractPdfText(file: File): Promise<string> {
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page        = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
-    const lines: Map<number, string[]> = new Map();
+    const allItems: TextItem[] = [];
+    const lineMap: Map<number, TextItem[]> = new Map();
     for (const item of textContent.items) {
       if (!("str" in item)) continue;
-      const y = Math.round((item as { transform: number[] }).transform[5] / 2) * 2;
-      if (!lines.has(y)) lines.set(y, []);
-      lines.get(y)!.push((item as { str: string }).str);
+      const ti  = item as TextItem;
+      allItems.push(ti);
+      const y   = Math.round(ti.transform[5] / 2) * 2;
+      if (!lineMap.has(y)) lineMap.set(y, []);
+      lineMap.get(y)!.push(ti);
     }
-    const sortedLines = Array.from(lines.entries())
-      .sort(([a], [b]) => b - a)
-      .map(([, parts]) => parts.join(" ").trim())
+    // Pre-compute Yes/No column positions for the entire page
+    const pageCols = findYesNoColumns(allItems);
+    const sortedLines = Array.from(lineMap.entries())
+      .sort(([a], [b]) => b - a)                                       // top → bottom
+      .map(([, items]) => annotateCheckboxes(items, pageCols))          // spatial-aware
       .filter(Boolean);
     pageTexts.push(`=== PAGE ${pageNum} ===\n` + sortedLines.join("\n"));
   }
@@ -339,7 +448,22 @@ CRITICAL OUTPUT RULES — follow exactly or the response is unusable:
 4. No trailing commas after the last item in any object or array.
 5. No JavaScript // comments or /* */ comments.
 6. Use null for any missing or unknown field (not "N/A", not "None", not "").
-7. Boolean fields: true or false only. Never strings "true"/"false".`;
+7. Boolean fields: true or false only. Never strings "true"/"false".
+
+CHECKBOX MARKERS (pre-processed from PDF glyphs):
+- [☐] = empty/unchecked checkbox → for boolean fields use false, for arrays omit the item
+- [☑] = filled/checked checkbox → for boolean fields use true, for arrays include the item
+- [☐ unchecked Yes] / [☐ unchecked No] = unchecked in that column → false
+- [☑ checked Yes] / [☑ checked No] = checked in that column → true for Yes, false for No
+- When a line shows BOTH [☐ unchecked Yes] AND [☐ unchecked No], the item is NOT checked → use false
+- When ALL checkboxes for illnesses show [☐], set ALL illness boolean fields to false
+- When ALL interview availability checkboxes show [☐], set interviewAvailability to empty array []
+- When ALL evaluation method checkboxes show [☐], set evalByDeclaration=false, evalInterviewedBySgEA=false
+
+NOT DETECTED vs EMPTY:
+- If a field is genuinely absent from the PDF text (no label, no value), return null
+- If a field label exists but the value area is blank/dash/empty, return null (the system will track this as "present but empty")
+- Do NOT invent data. If you cannot find a value, return null.`;
 
 // ─── Extraction prompt ────────────────────────────────────────────────────────
 function buildPrompt(pdfText: string): string {
@@ -374,12 +498,19 @@ MARITAL STATUS — must be exactly one of:
 
 NUMBER OF SIBLINGS: plain number → integer. Fraction like "6/7" → string "6/7". Blank → null.
 
-ILLNESSES: each has YES and NO checkbox columns. Tick in Yes → true. Tick in No → false. Both blank → false.
-Do NOT set true unless you clearly see a tick (☑) in the Yes column.
+ILLNESSES: each has YES and NO checkbox columns. Look for checkbox markers:
+  - [☑ checked Yes] → illness is TRUE
+  - [☑ checked No] → illness is FALSE
+  - [☐ unchecked Yes] AND [☐ unchecked No] → neither checked → illness is FALSE
+  - [☐] alone → unchecked → FALSE
+  When ALL illness rows show only [☐] markers (no [☑]), set ALL illness booleans to false.
 
-FOOD HANDLING PREFERENCES: only include items whose checkbox is ticked (☑).
-  Output comma-separated string of ticked items: "No pork", "No beef", or text from "Others:".
-  All unticked → null.
+FOOD HANDLING PREFERENCES: Look for checkbox markers before each option:
+  - [☑] before "No pork" → include "No pork"
+  - [☑] before "No beef" → include "No beef"
+  - [☑] before "Others:" → include the Others text
+  - [☐] → unchecked → skip
+  Output comma-separated string of checked items. All unchecked → null.
 
 REST DAYS: integer (e.g. "02" → 2)
 
@@ -399,14 +530,14 @@ LANGUAGE PROFICIENCY RANGES: If proficiency is given as a range (e.g. "Fair - Go
 EXPECTED SALARY / PRESENT SALARY: Extract only the monetary amount (e.g. "$550 + $50"). Strip leading qualifiers like "New is" and trailing phrases like "and 2 off".
 
 EVALUATION METHOD (B1 section):
-  evalByDeclaration: true if "Based on FDW's declaration…" checkbox ☑, false if ☐, null if section absent.
-  evalInterviewedBySgEA: true if "Interviewed by Singapore EA" checkbox ☑, false if ☐, null if absent.
-  evalInterviewSubOptions: array of TICKED sub-options from these exact strings:
-    "Interviewed via telephone/teleconference"
-    "Interviewed via videoconference"
-    "Interviewed in person"
-    "Interviewed in person and also made observation of FDW in the areas of work listed in table"
-  Empty array [] if none ticked.
+  Look for checkbox markers before each option:
+  - [☑] before "Based on FDW's declaration…" → evalByDeclaration=true
+  - [☐] before "Based on FDW's declaration…" → evalByDeclaration=false
+  - [☑] before "Interviewed by Singapore EA" → evalInterviewedBySgEA=true
+  - [☐] before "Interviewed by Singapore EA" → evalInterviewedBySgEA=false
+  - [☑] before sub-options → include in evalInterviewSubOptions array
+  - [☐] before sub-options → exclude from array
+  All [☐] → evalByDeclaration=false, evalInterviewedBySgEA=false, evalInterviewSubOptions=[]
 
 SKILLS TABLE — for each row:
   willing: true="Yes", false="No", null=X mark across cell or blank with no Yes/No
@@ -427,12 +558,13 @@ EMPLOYMENT HISTORY — all rows from C1 table:
   from/to: 4-digit year string or ""
   duties/remarks: full text or "". NEVER null.
 
-INTERVIEW AVAILABILITY (Section D) — array of ONLY ticked checkboxes:
-  "FDW is not available for interview"
-  "FDW can be interviewed by phone"
-  "FDW can be interviewed by video-conference"
-  "FDW can be interviewed in person"
-  Empty array [] if all unticked.
+INTERVIEW AVAILABILITY (Section D) — Look for checkbox markers before each option:
+  - [☑] before "FDW is not available for interview" → include in array
+  - [☑] before "FDW can be interviewed by phone" → include in array
+  - [☑] before "FDW can be interviewed by video-conference" → include in array
+  - [☑] before "FDW can be interviewed in person" → include in array
+  - [☐] → unchecked → exclude
+  All [☐] → empty array [].
 
 availabilityRemark: text from Section E about HOW the FDW can be interviewed (e.g. "available for interview anytime via WhatsApp video call"). null if not mentioned.
 
@@ -615,6 +747,38 @@ async function callGroqWithText(
   throw new Error("All AI models unavailable. Please try again later.");
 }
 
+// ─── Reference code generator ─────────────────────────────────────────────────
+const REF_CODE_MAP: Record<string, string> = {
+  "indian":     "IND",
+  "indonesian": "INA",
+  "filipino":   "FIL",
+  "myanmar":    "MYA",
+  "burmese":    "MYA",
+  "sri lankan": "SRL",
+  "bangladeshi":"BAN",
+  "nepali":     "NEP",
+  "cambodian":  "CAM",
+  "thai":       "THA",
+  "vietnamese": "VIE",
+  "ethiopian":  "ETH",
+};
+
+/**
+ * Generate a reference code in the standard agency format:
+ *   {NATIONALITY}-{REGION}-{4_DIGITS}
+ *
+ * Examples: IND-MP-9720, INA-PAT-9657, FIL-PHK-5432
+ *
+ * The region defaults to "MP" (most common) but can be overridden.
+ * The 4-digit suffix is randomised to avoid collisions.
+ */
+function generateRefCode(nationality?: string | null): string {
+  const natLower = (nationality ?? "").toLowerCase().replace(/\s*maid\s*$/, "").trim();
+  const natCode  = REF_CODE_MAP[natLower] ?? "REF";
+  const digits   = String(Math.floor(1000 + Math.random() * 9000));   // 1000–9999
+  return `${natCode}-MP-${digits}`;
+}
+
 // ─── Map extracted data → MaidProfile ────────────────────────────────────────
 function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfile {
   const e = extracted;
@@ -795,7 +959,9 @@ function applyToProfile(extracted: ExtractedData, prev: MaidProfile): MaidProfil
 
   return {
     ...prev,
-    referenceCode:       e.referenceCode       != null ? e.referenceCode       : prev.referenceCode,
+    referenceCode:       e.referenceCode       != null ? e.referenceCode
+                       : prev.referenceCode   ? prev.referenceCode
+                       : generateRefCode(e.nationality ?? prev.nationality),
     type:                resolveType(e.type),
     fullName:            e.fullName             != null ? e.fullName             : prev.fullName,
     dateOfBirth:         e.dateOfBirth          != null ? e.dateOfBirth          : prev.dateOfBirth,
@@ -876,6 +1042,35 @@ function countFields(e: ExtractedData): number {
   return n;
 }
 
+// ─── Detect missing / undetected fields ───────────────────────────────────────
+const IMPORTANT_FIELDS: Array<{ key: keyof ExtractedData; label: string }> = [
+  { key: "fullName",           label: "Name" },
+  { key: "dateOfBirth",        label: "Date of Birth" },
+  { key: "nationality",        label: "Nationality" },
+  { key: "height",             label: "Height" },
+  { key: "weight",             label: "Weight" },
+  { key: "religion",           label: "Religion" },
+  { key: "educationLevel",     label: "Education Level" },
+  { key: "maritalStatus",      label: "Marital Status" },
+  { key: "numberOfChildren",   label: "Number of Children" },
+  { key: "numberOfSiblings",   label: "Number of Siblings" },
+  { key: "offDaysPerMonth",    label: "Rest Days / Month" },
+  { key: "type",               label: "Maid Type" },
+  { key: "sgExperienceFromC2", label: "SG Experience (C2)" },
+];
+
+function getMissingFields(e: ExtractedData): string[] {
+  return IMPORTANT_FIELDS
+    .filter(({ key }) => e[key] == null)
+    .map(({ label }) => label);
+}
+
+function getDetectedFields(e: ExtractedData): string[] {
+  return IMPORTANT_FIELDS
+    .filter(({ key }) => e[key] != null)
+    .map(({ label }) => label);
+}
+
 // ─── Stage config ─────────────────────────────────────────────────────────────
 const STAGE_LABELS: Record<Status, { label: string; sublabel: string }> = {
   idle:       { label: "AI PDF Upload",  sublabel: "Auto-fill from biodata PDF" },
@@ -932,12 +1127,12 @@ const UsageDots = ({ used, total }: { used: number; total: number }) => {
 
 // ─── Popup ────────────────────────────────────────────────────────────────────
 type PopupProps = {
-  status: Status; fileName: string | null; fieldCount: number; errMsg: string;
+  status: Status; fileName: string | null; fieldCount: number; missingFields: string[]; errMsg: string;
   pct: number; usedToday: number; countdown: string; onClose: () => void; onRetry: () => void;
 };
 const STATUS_ORDER: Status[] = ["idle", "reading", "extracting", "done", "error", "limit"];
 
-const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, countdown, onClose, onRetry }: PopupProps) => {
+const UploadPopup = ({ status, fileName, fieldCount, missingFields, errMsg, pct, usedToday, countdown, onClose, onRetry }: PopupProps) => {
   const cfg      = STAGE_LABELS[status];
   const isActive = status === "reading" || status === "extracting";
   const isDone   = status === "done";
@@ -1054,6 +1249,20 @@ const UploadPopup = ({ status, fileName, fieldCount, errMsg, pct, usedToday, cou
                   {isDone && fieldCount > 0 && (
                     <p className="text-[11px] text-emerald-400 font-semibold mt-1.5">✓ {fieldCount} fields auto-filled</p>
                   )}
+                  {isDone && missingFields.length > 0 && (
+                    <div className="mt-2 px-0.5">
+                      <p className="text-[10px] text-amber-400/80 font-medium mb-1">
+                        ⚠ Not detected — fill manually:
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {missingFields.map((f) => (
+                          <span key={f} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300/80 border border-amber-500/20">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1138,6 +1347,7 @@ export function PdfAutofillBanner({
   const [status,       setStatus]       = useState<Status>("idle");
   const [fileName,     setFileName]     = useState<string | null>(null);
   const [fieldCount,   setFieldCount]   = useState(0);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
   const [errMsg,       setErrMsg]       = useState("");
   const [showPopup,    setShowPopup]    = useState(false);
   const [liveProgress, setLiveProgress] = useState(0);
@@ -1178,7 +1388,7 @@ export function PdfAutofillBanner({
 
   const reset = useCallback(() => {
     stopTicker();
-    setStatus("idle"); setFileName(null); setFieldCount(0); setErrMsg("");
+    setStatus("idle"); setFileName(null); setFieldCount(0); setMissingFields([]); setErrMsg("");
     setShowPopup(false); setLiveProgress(0);
     processingRef.current = false;
     if (inputRef.current) inputRef.current.value = "";
@@ -1228,6 +1438,7 @@ export function PdfAutofillBanner({
 
       const count = countFields(extracted);
       setFieldCount(count);
+      setMissingFields(getMissingFields(extracted));
       setFormData((prev) => applyToProfile(extracted, prev));
 
       stopTicker();
@@ -1383,7 +1594,7 @@ export function PdfAutofillBanner({
 
       {showPopup && (
         <UploadPopup
-          status={status} fileName={fileName} fieldCount={fieldCount}
+          status={status} fileName={fileName} fieldCount={fieldCount} missingFields={missingFields}
           errMsg={errMsg} pct={pct} usedToday={usedToday} countdown={countdown}
           onClose={reset} onRetry={handleRetry}
         />
