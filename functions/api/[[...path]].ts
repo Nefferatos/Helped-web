@@ -490,6 +490,11 @@ type Bindings = {
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
   MAKE_WEBHOOK_URL?: string;
+  // Dedicated synchronous Make AI Agent webhook for PDF biodata extraction.
+  // Set its URL as a Worker secret; do not expose it to the browser.
+  MAKE_PDF_AUTOFILL_WEBHOOK_URL?: string;
+  // Optional shared token checked by the Make scenario before it runs the agent.
+  MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN?: string;
   // Dedicated webhook for the HR Interview Email Notifications Make scenario.
   // Keep this separate from the general inquiry/lead orchestrator webhook.
   MAKE_HR_EMAIL_WEBHOOK_URL?: string;
@@ -13342,8 +13347,9 @@ app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
 app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
   const openaiKey = c.env.OPENAI_API_KEY?.trim();
   const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
+  const makePdfWebhookUrl = c.env.MAKE_PDF_AUTOFILL_WEBHOOK_URL?.trim();
 
-  if (!openaiKey && !anthropicKey) {
+  if (!makePdfWebhookUrl && !openaiKey && !anthropicKey) {
     return c.json({ error: "PDF autofill is not configured" }, 503);
   }
 
@@ -13354,6 +13360,47 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
 
   type MsgLike = { role?: string; content?: string };
   const msgs = body.messages as MsgLike[];
+
+  // PDF extraction is handled by the Make AI Agent. The browser continues to
+  // use this authenticated endpoint, so Make credentials never reach it.
+  if (makePdfWebhookUrl) {
+    const systemPrompt = msgs.filter((message) => message.role === "system")
+      .map((message) => message.content ?? "").filter(Boolean).join("\n\n");
+    const userPrompt = msgs.filter((message) => message.role !== "system")
+      .map((message) => message.content ?? "").filter(Boolean).join("\n\n");
+    try {
+      const response = await fetch(makePdfWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenario: "pdf_autofill",
+          requestId: crypto.randomUUID(),
+          systemPrompt,
+          userPrompt,
+          ...(c.env.MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN?.trim()
+            ? { authToken: c.env.MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN.trim() }
+            : {}),
+        }),
+        signal: AbortSignal.timeout(55_000),
+      });
+      const result = await response.json() as { content?: unknown; finish_reason?: unknown; error?: unknown };
+      if (!response.ok || typeof result.error === "string") {
+        return c.json({ error: typeof result.error === "string" ? result.error : `Make PDF autofill failed (${response.status})` }, 502);
+      }
+      if (typeof result.content !== "string" || !result.content.trim()) {
+        return c.json({ error: "Make PDF autofill returned an empty response" }, 502);
+      }
+      return c.json({
+        content: result.content,
+        finish_reason: typeof result.finish_reason === "string" ? result.finish_reason : "stop",
+      });
+    } catch (error) {
+      const message = error instanceof Error && error.name === "TimeoutError"
+        ? "Make PDF autofill timed out. Please try a smaller file."
+        : "Make PDF autofill is unavailable. Please try again.";
+      return c.json({ error: message }, 502);
+    }
+  }
 
   // ── OpenAI-compatible path (Cline / Kimi / OpenRouter) ──────────────
   if (openaiKey) {

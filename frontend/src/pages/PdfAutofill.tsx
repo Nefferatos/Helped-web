@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle, AlertCircle, X, FileText, Zap } from "lucide-react";
+import { CheckCircle, AlertCircle, X, FileText, Zap, Sparkles, ShieldCheck } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import type { MaidProfile } from "@/lib/maids";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
@@ -1515,6 +1515,37 @@ export function PdfAutofillBanner({
         disabled={isProcessing || isLimit}
       />
 
+      <section className={`mb-6 overflow-hidden rounded-2xl border shadow-sm transition-all ${
+        isDone ? "border-emerald-200 bg-emerald-50/50" : isError || isLimit ? "border-rose-200 bg-rose-50/50" : "border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50/40"
+      }`} aria-label="AI PDF biodata autofill">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+              isDone ? "bg-emerald-500 text-white" : isError || isLimit ? "bg-rose-500 text-white" : "bg-amber-500 text-white shadow-lg shadow-amber-500/20"
+            }`}>
+              {isDone ? <CheckCircle className="h-5 w-5" /> : isError ? <AlertCircle className="h-5 w-5" /> : isLimit ? <Zap className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900 sm:text-base">
+                  {isProcessing ? "Reading biodata PDF" : isDone ? `${fieldCount} fields are ready to review` : isError ? "PDF upload needs another try" : isLimit ? "Daily AI upload limit reached" : "Import biodata with AI"}
+                </h2>
+                {!isProcessing && !isError && !isLimit && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700"><Sparkles className="h-3 w-3" />Make AI</span>}
+              </div>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500 sm:text-sm">
+                {isProcessing ? STAGE_LABELS[status].sublabel : isDone ? "Review the form after auto-fill, then save the profile." : isError ? "Choose a text-based biodata PDF and try again." : isLimit ? `Available again in ${countdown}.` : "Upload a biodata PDF and we will extract its details into this profile."}
+              </p>
+              {!isProcessing && !isLimit && <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500"><span>PDF only</span><span className="text-slate-300">•</span><span>Up to 10 MB</span><span className="text-slate-300">•</span><span>Up to 25 pages</span><span className="hidden items-center gap-1 text-emerald-700 sm:inline-flex"><ShieldCheck className="h-3.5 w-3.5" />Secure processing</span></div>}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
+            <span className={`text-xs font-semibold ${remaining <= 5 ? "text-rose-600" : "text-slate-600"}`}>{remaining} of {DAILY_LIMIT} uploads left today</span>
+            <span className="text-[11px] text-slate-400">Text-based PDFs work best</span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 bg-white/55 px-4 py-3 sm:px-5">
+          <span className="text-xs font-medium text-slate-500">{isProcessing ? `${pct}% complete — please keep this page open` : isDone ? "Open the result to see the detection summary" : "Your PDF text is sent securely to the Make AI Agent."}</span>
+          <span className="shrink-0">
       <button
         type="button" onClick={handleButtonClick}
         className="relative inline-flex items-center gap-0 overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-500"
@@ -1591,6 +1622,9 @@ export function PdfAutofillBanner({
           style={{ background: "rgba(255,255,255,0.08)" }} aria-hidden
         />
       </button>
+          </span>
+        </div>
+      </section>
 
       {showPopup && (
         <UploadPopup

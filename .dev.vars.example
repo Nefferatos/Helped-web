@@ -34,3 +34,9 @@ DEV_EXPOSE_CONFIRMATION_CODE=false
 
 # Make.com webhook for workflow automation (interview sessions, inquiry pipeline, etc.)
 MAKE_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-url
+
+# Dedicated synchronous Make AI Agent webhook for PDF biodata autofill.
+# In production use `npx wrangler secret put MAKE_PDF_AUTOFILL_WEBHOOK_URL`.
+MAKE_PDF_AUTOFILL_WEBHOOK_URL=https://hook.eu1.make.com/your-pdf-autofill-webhook-url
+# Optional: must match the authToken filter in the Make PDF route.
+MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN=YOUR_LONG_RANDOM_SHARED_SECRET
