@@ -1351,7 +1351,7 @@ const AtsRecruitmentPage = () => {
           <div className="p-4">
             {applicationsQuery.isLoading ? (
               /* Loading skeleton */
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-4 rounded-xl border border-slate-100 p-4 animate-pulse">
                     <div className="h-4 w-4 rounded bg-slate-200" />
@@ -1385,8 +1385,8 @@ const AtsRecruitmentPage = () => {
               </div>
             ) : (
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                {/* Compact applicant cards avoid a horizontal table scroll on laptops and phones. */}
-                <div className="space-y-3 p-3 xl:hidden">
+                {/* Two-column applicant cards make the list easier to scan on larger screens. */}
+                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
                   {paginatedApplications.map((item) => {
                     const nextAction = getNextApplicantAction(item);
                     const isSelected = selectedIds.includes(item.id);
@@ -1452,7 +1452,7 @@ const AtsRecruitmentPage = () => {
                   })}
                 </div>
 
-                <div className="hidden xl:block">
+                <div className="hidden">
                   <table className="w-full table-fixed text-left">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-200">
