@@ -15,16 +15,14 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ["'Playfair Display'", "serif"],
-        body: ["'DM Sans'", "sans-serif"],
+        display: ["'Inter'", "system-ui", "sans-serif"],
+        body: ["'Inter'", "system-ui", "sans-serif"],
+        sans: ["'Inter'", "system-ui", "-apple-system", "sans-serif"],
       },
-      // Readability floor for older users: the body-text tiers cannot render
-      // below ~18px. Larger tiers keep their Tailwind defaults; arbitrary
-      // values like text-[10px] are intentionally left small for micro UI.
       fontSize: {
-        xs: ["0.9375rem", { lineHeight: "1.4rem" }], // 15px — gently raised
-        sm: ["1.125rem", { lineHeight: "1.6rem" }],  // 18px floor
-        base: ["1.125rem", { lineHeight: "1.6rem" }], // 18px floor
+        xs: ["0.75rem", { lineHeight: "1rem" }],     // 12px
+        sm: ["0.8125rem", { lineHeight: "1.15rem" }], // 13px
+        base: ["0.875rem", { lineHeight: "1.25rem" }], // 14px
       },
       colors: {
         border: "hsl(var(--border))",

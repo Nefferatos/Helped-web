@@ -80,7 +80,7 @@ function useInView<T extends HTMLElement>(threshold = 0.18) {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [threshold]);
 
   return { ref, visible };
 }
@@ -599,136 +599,7 @@ const AboutUs = ({ embedded = false }: AboutUsProps) => {
           .au-footer-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
-      {false && <footer style={{ background: "#0B1F25", padding: "64px 0 0" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div className="au-footer-grid">
-
-            {/* Brand */}
-            <div>
-              <h4 style={{ fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 12px", fontFamily: "'Inter', sans-serif" }}>
-                "Find Maids" At The Agency
-              </h4>
-              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7, margin: 0, fontFamily: "'Inter', sans-serif" }}>
-                Matching trusted domestic professionals with families since 2009.
-              </p>
-            </div>
-
-            {/* Quick Links */}
-            <div>
-              <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em", textTransform: "uppercase" as const, margin: "0 0 16px", fontFamily: "'Inter', sans-serif" }}>
-                Quick Links
-              </h5>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column" as const, gap: 10 }}>
-                {[
-                  { label: "Home",         to: "/"             },
-                  { label: "Search Maids", to: "/search-maids" },
-                  { label: "About Us",     to: "/about"        },
-                  { label: "Agency",       to: "/agency"       },
-                  { label: "Enquiry",      to: "/enquiry2"     },
-                  { label: "FAQ",          to: "/faq"          },
-                ].map((item) => (
-                  <li key={item.to}>
-                    <Link to={item.to}
-                      style={{ color: "#fff", fontSize: 13, textDecoration: "none", transition: "color 0.15s", fontFamily: "'Inter', sans-serif" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Contact Us */}
-            <div>
-              <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em", textTransform: "uppercase" as const, margin: "0 0 16px", fontFamily: "'Inter', sans-serif" }}>
-                Contact Us
-              </h5>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column" as const, gap: 10, fontSize: 13, color: "#fff", fontFamily: "'Inter', sans-serif", lineHeight: 1.6 }}>
-                <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <MapPin size={16} color="#FCD34D" style={{ flexShrink: 0, marginTop: 2 }} />
-                  <span>3 Jalan Kukoh, #01-115<br />Singapore 161003</span>
-                </li>
-                <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <Mail size={16} color="#FCD34D" style={{ flexShrink: 0 }} />
-                  <a href="mailto:enquiries.j1@gmail.com"
-                    style={{ color: "#fff", textDecoration: "none", transition: "color 0.15s" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
-                    enquiries.j1@gmail.com
-                  </a>
-                </li>
-                <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <Phone size={16} color="#FCD34D" style={{ flexShrink: 0 }} />
-                  <a href="tel:+6580730757"
-                    style={{ color: "#fff", textDecoration: "none", transition: "color 0.15s" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
-                    8073 0757
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Opening Hours */}
-            <div>
-              <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em", textTransform: "uppercase" as const, margin: "0 0 16px", fontFamily: "'Inter', sans-serif" }}>
-                Opening Hours
-              </h5>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column" as const, gap: 10, fontSize: 13, color: "#fff", fontFamily: "'Inter', sans-serif", lineHeight: 1.6 }}>
-                <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <Clock size={16} color="#FCD34D" style={{ flexShrink: 0, marginTop: 2 }} />
-                  <span>Mon to Sun: 11:00am to 11:00pm</span>
-                </li>
-                <li style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <MessageCircle size={16} color="#FCD34D" style={{ flexShrink: 0, marginTop: 2 }} />
-                  <span>Other hours: by mobile. If unable to reach us urgently, please SMS.</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Follow Us */}
-            <div>
-              <h5 style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.1em", textTransform: "uppercase" as const, margin: "0 0 16px", fontFamily: "'Inter', sans-serif" }}>
-                Follow Us
-              </h5>
-              <div style={{ display: "flex", gap: 10 }}>
-                <a href="#" aria-label="Facebook"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 8, border: "1.5px solid rgba(255,255,255,0.18)", color: "#1877F2", transition: "all 0.15s" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "#0B1F25";
-                    e.currentTarget.style.background = "#1877F2";
-                    e.currentTarget.style.borderColor = "#1877F2";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "#1877F2";
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
-                  }}>
-                  <Facebook size={18} />
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom bar */}
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", padding: "20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" as const, gap: 12 }}>
-            <p style={{ fontSize: 12, color: "#fff", margin: 0, fontFamily: "'Inter', sans-serif" }}>
-              © 2026 "Find Maids" At The Agency. All rights reserved.
-            </p>
-            <div style={{ display: "flex", gap: 6 }}>
-              {["Privacy", "Terms", "Contact"].map((item) => (
-                <Link key={item} to="/enquiry2"
-                  style={{ fontSize: 12, color: "#fff", textDecoration: "none", padding: "0 8px", fontFamily: "'Inter', sans-serif", transition: "color 0.15s" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#FCD34D")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#fff")}>
-                  {item}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      </footer>}
+      {/* Footer removed — now rendered by <PublicSiteFooter /> */}
       <PublicSiteFooter />
 
     </div>

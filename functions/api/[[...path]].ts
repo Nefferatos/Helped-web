@@ -498,6 +498,13 @@ type Bindings = {
   // Dedicated webhook for the HR Interview Email Notifications Make scenario.
   // Keep this separate from the general inquiry/lead orchestrator webhook.
   MAKE_HR_EMAIL_WEBHOOK_URL?: string;
+  // Make.com AI Receptionist webhook — when set, the receptionist endpoint
+  // forwards conversations to Make.com's AI Agent instead of calling the AI directly.
+  // Set via: npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_URL
+  MAKE_AI_RECEPTIONIST_WEBHOOK_URL?: string;
+  // Optional shared secret for validating Make.com webhook responses.
+  // Set via: npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
+  MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET?: string;
   STORAGE_BACKEND?: string;
   // Server-only secret enabling POST /api/agency-auth/bootstrap-reset.
   // Set via: npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
@@ -8706,6 +8713,179 @@ const getAiSupabaseConfig = (env: Bindings) => {
 const isAiAutopilotEnabled = (env: Bindings) =>
   env.AI_AUTOPILOT_ENABLED?.trim().toLowerCase() === "true";
 
+// ─── Make.com AI Receptionist Webhook Integration ─────────────────────────────
+// When MAKE_AI_RECEPTIONIST_WEBHOOK_URL is set, the receptionist forwards
+// conversations to Make.com's AI Agent for orchestration. The Worker remains
+// the secure proxy — Make.com URLs and secrets are never exposed to the browser.
+
+type MakeReceptionistRequest = {
+  conversationId: string;
+  userId?: string | number;
+  message: string;
+  page: string;
+  history: Array<{ role: string; content: string }>;
+  context: {
+    company: {
+      name: string;
+      phone: string;
+      email: string;
+      whatsapp: string;
+      whatsappLink: string;
+      officeHours: string;
+      address: string;
+      website: string;
+      aboutUs: string;
+    } | null;
+    faqs: Array<{ q: string; a: string }>;
+    maidSummary: {
+      total: number;
+      nationalities: string[];
+      types: string[];
+    };
+  };
+  timestamp: string;
+};
+
+type MakeReceptionistResponse = {
+  success: boolean;
+  conversationId?: string;
+  response?: string;
+  /** Reference codes the AI mentioned — Worker uses these to attach maid cards */
+  maidReferences?: string[];
+  handoff?: boolean;
+  actions?: Array<{ type: string; [key: string]: unknown }>;
+  error?: string;
+};
+
+const callMakeReceptionistWebhook = async (
+  env: Bindings,
+  payload: MakeReceptionistRequest,
+): Promise<MakeReceptionistResponse> => {
+  const webhookUrl = env.MAKE_AI_RECEPTIONIST_WEBHOOK_URL?.trim();
+  if (!webhookUrl) {
+    throw new Error("Make.com receptionist webhook is not configured");
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (env.MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET?.trim()) {
+    headers["X-Webhook-Secret"] = env.MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET.trim();
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25_000); // 25s timeout
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error(
+        `[Make Receptionist] Webhook returned ${response.status}: ${errorText.slice(0, 200)}`,
+      );
+      throw new Error(`Make.com webhook returned ${response.status}`);
+    }
+
+    const data = (await response.json()) as MakeReceptionistResponse;
+    return data;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Make.com webhook timed out");
+    }
+    throw error;
+  }
+};
+
+/** Key FAQ knowledge for the AI receptionist */
+const RECEPTIONIST_FAQS: Array<{ q: string; a: string }> = [
+  {
+    q: "How much is the maid levy?",
+    a: "The standard Singapore maid levy is $300 per month, or $9.87 per day. A concessionary levy of $60 per month may apply for eligible households, such as those with a child below 16, an elderly person, or a person with disabilities.",
+  },
+  {
+    q: "How much are the agency fees?",
+    a: "Exact agency fees depend on the helper profile, hiring type, package, documents, insurance, and current case details. The agency team can confirm the final fee breakdown before you proceed.",
+  },
+  {
+    q: "What is the average salary of a Filipino maid?",
+    a: "The Philippine Overseas Employment Administration stipulates a minimum salary of $570. New or transfer Filipino maids typically earn $570-$650, while more experienced maids may command $600-$750 or higher.",
+  },
+  {
+    q: "What is the average salary of a Myanmar maid?",
+    a: "Myanmar maid salary ranges from about $450-$550, depending on skill level. Experienced or transfer Myanmar maids typically earn $500-$650 or more.",
+  },
+  {
+    q: "What is the average salary of an Indonesian maid?",
+    a: "New Indonesian maids typically earn $550-$570. Experienced Indonesian maids earn $600-$750 or more, depending on skill sets and years of experience.",
+  },
+  {
+    q: "What are the employer's obligations to the maid?",
+    a: "Employers must pay salary on time, provide adequate food and suitable accommodation, provide medical care including hospitalisation, provide a safe working environment, and treat the maid with respect and dignity.",
+  },
+];
+
+/** Build the context payload sent to Make.com */
+const buildMakeReceptionistContext = (data: AppData) => {
+  const profile = data.companyProfile;
+  const buildWaLink = (raw: string) => {
+    if (!raw) return "";
+    const hasPlus = raw.trimStart().startsWith("+");
+    let digits = raw.replace(/\D/g, "");
+    if (!digits) return "";
+    if (!hasPlus && digits.length === 9 && digits.startsWith("0")) digits = digits.slice(1);
+    if (!hasPlus && digits.length === 8) digits = `65${digits}`;
+    return `https://wa.me/${digits}`;
+  };
+
+  const company = profile
+    ? {
+        name: String(profile.company_name || profile.short_name || ""),
+        phone: String(profile.contact_phone || ""),
+        email: String(profile.contact_email || ""),
+        whatsapp: String(profile.social_whatsapp_number || ""),
+        whatsappLink: buildWaLink(String(profile.social_whatsapp_number || profile.contact_phone || "")),
+        officeHours: String(profile.office_hours_regular || ""),
+        address: [
+          profile.address_line1,
+          profile.address_line2,
+          profile.postal_code,
+          profile.country,
+        ]
+          .filter(Boolean)
+          .join(", "),
+        website: String(profile.contact_website || ""),
+        aboutUs: String(profile.about_us || ""),
+      }
+    : null;
+
+  const faqs = RECEPTIONIST_FAQS;
+
+  const publicMaids = (data.maids || []).filter(
+    (m: any) => m.isPublic && !/unavailable|inactive|hidden|archived/i.test(String(m.status || "")),
+  );
+  const nationalities = [...new Set(publicMaids.map((m: any) => String(m.nationality || "")).filter(Boolean))];
+  const types = [...new Set(publicMaids.map((m: any) => String(m.type || "")).filter(Boolean))];
+
+  return {
+    company,
+    faqs,
+    maidSummary: {
+      total: publicMaids.length,
+      nationalities,
+      types,
+    },
+  };
+};
+
 const parseAiBody = async (request: Request) =>
   (await parseBody<{
     message?: string;
@@ -8826,35 +9006,97 @@ app.post(
       }
     }
 
-    // Call runAIAgent directly so we can post-process and attach featured maid cards
+    // ── Build input message ─────────────────────────────────────────────────
     const input = {
       ...body,
       message: toTrimmedString(body.message) || toTrimmedString(body.prompt) || toTrimmedString(body.task),
     };
     if (!input.message) return c.json({ error: "message, prompt, or task is required" }, 400);
 
-    const aiActor = {
-      role: "public" as const,
-      ip: c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown",
-    };
+    const conversationId = toTrimmedString(body.conversationId) || crypto.randomUUID();
 
-    const result = await runAIAgent({
-      agentId: "receptionist",
-      input,
-      actor: aiActor,
-      appData: data as unknown as Record<string, unknown>,
-      anthropicApiKey: c.env.ANTHROPIC_API_KEY,
-      cfAi: c.env.AI ?? null,
-      supabase: getAiSupabaseConfig(c.env),
-      conversationId: toTrimmedString(body.conversationId) || undefined,
-      request: c.req.raw,
-    });
+    // ── AI call: Make.com webhook (primary) or existing runAIAgent (fallback) ──
+    let aiResponse: string;
+    let makeResponse: MakeReceptionistResponse | null = null;
+    const useMake = Boolean(c.env.MAKE_AI_RECEPTIONIST_WEBHOOK_URL?.trim());
+
+    if (useMake) {
+      // ── Make.com AI Agent path ────────────────────────────────────────────
+      const history = Array.isArray(body.history)
+        ? (body.history as Array<{ role: string; content: string }>).slice(-12)
+        : [];
+
+      const makePayload: MakeReceptionistRequest = {
+        conversationId,
+        userId: toTrimmedString(body.userId) || undefined,
+        message: input.message,
+        page: toTrimmedString(body.currentPath) || toTrimmedString(body.page) || "",
+        history,
+        context: buildMakeReceptionistContext(data),
+        timestamp: new Date().toISOString(),
+      };
+
+      try {
+        makeResponse = await callMakeReceptionistWebhook(c.env, makePayload);
+        aiResponse = makeResponse.response || "I'm here to help — could you tell me a little more about what you need?";
+      } catch (makeError) {
+        console.error(
+          "[Receptionist] Make.com webhook failed, falling back to direct AI:",
+          makeError instanceof Error ? makeError.message : makeError,
+        );
+        // Graceful fallback: use existing AI if Make.com fails
+        const fallbackResult = await runAIAgent({
+          agentId: "receptionist",
+          input,
+          actor: { role: "public", ip: c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown" },
+          appData: data as unknown as Record<string, unknown>,
+          anthropicApiKey: c.env.ANTHROPIC_API_KEY,
+          cfAi: c.env.AI ?? null,
+          supabase: getAiSupabaseConfig(c.env),
+          conversationId,
+          request: c.req.raw,
+        }).catch(() => null);
+
+        if (fallbackResult) {
+          aiResponse = fallbackResult.response;
+        } else {
+          return c.json({
+            response: "Sorry, our assistant is temporarily unavailable. Please try again in a moment, or contact our support team directly.",
+            conversationId,
+            error: "make_and_fallback_failed",
+          });
+        }
+      }
+    } else {
+      // ── Direct AI path (existing behaviour) ──────────────────────────────
+      const directResult = await runAIAgent({
+        agentId: "receptionist",
+        input,
+        actor: { role: "public", ip: c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown" },
+        appData: data as unknown as Record<string, unknown>,
+        anthropicApiKey: c.env.ANTHROPIC_API_KEY,
+        cfAi: c.env.AI ?? null,
+        supabase: getAiSupabaseConfig(c.env),
+        conversationId,
+        request: c.req.raw,
+      });
+      aiResponse = directResult.response;
+    }
+
+    // ── Post-process: extract maid cards from AI response ───────────────────
 
     // Extract [MAID:refCode] markers the AI inserted
     const MAID_RE = /\[MAID:([^\]]+)\]/g;
     const mentionedCodes = new Set<string>();
     let m: RegExpExecArray | null;
-    while ((m = MAID_RE.exec(result.response)) !== null) mentionedCodes.add(m[1].trim());
+    while ((m = MAID_RE.exec(aiResponse)) !== null) mentionedCodes.add(m[1].trim());
+
+    // Also honour maidReferences from Make.com response
+    if (makeResponse?.maidReferences?.length) {
+      for (const ref of makeResponse.maidReferences) {
+        if (ref) mentionedCodes.add(ref.trim());
+      }
+    }
 
     // Detect if a specific nationality was requested so we can filter cards accordingly
     const normalizedMsgNat = input.message.toLowerCase()
@@ -9040,7 +9282,7 @@ app.post(
     if (featured.length === 0) {
       featured = publicMaids.filter((maid) => {
         const n = String((maid as unknown as Record<string,unknown>).fullName || "").trim();
-        return n.length > 3 && result.response.includes(n);
+        return n.length > 3 && aiResponse.includes(n);
       });
     }
 
@@ -9094,18 +9336,26 @@ app.post(
     });
 
     // Remove markers from displayed text
-    const cleanedResponse = result.response
+    const cleanedResponse = aiResponse
       // Keep the reference code visible so the frontend can reliably pair each
       // description with its corresponding profile card.
       .replace(/\s*\[MAID:([^\]]+)\]/g, " ($1)")
       .replace(/\s*\[MAID:[^\]]*$/g, "")
       .trim();
 
-    return c.json({
-      ...result,
+    const responsePayload: Record<string, unknown> = {
       response: cleanedResponse,
+      conversationId,
       ...(featuredMaids.length > 0 ? { featuredMaids } : {}),
-    });
+    };
+
+    // Include Make.com-specific fields when using Make.com path
+    if (makeResponse) {
+      if (makeResponse.handoff) responsePayload.handoff = true;
+      if (makeResponse.actions?.length) responsePayload.actions = makeResponse.actions;
+    }
+
+    return c.json(responsePayload);
   }),
 );
 

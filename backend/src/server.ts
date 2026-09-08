@@ -142,6 +142,12 @@ app.use("/api/leads", leadWorkflowRoutes);
 app.use("/api/inquiry", inquiryWorkflowRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/ai/direct-marketing", directMarketingRoutes);
+
+// PDF autofill — mounted at /api/pdf-autofill (frontend calls this path directly)
+import { pdfAutofill } from './controllers/pdfAutofillController'
+import { requireAgencyAuth } from './middleware/requireAgencyAuth'
+app.post("/api/pdf-autofill", requireAgencyAuth, pdfAutofill);
+
 app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/ats", atsRoutes);
 

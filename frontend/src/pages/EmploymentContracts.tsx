@@ -456,7 +456,7 @@ const EmploymentContracts = () => {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        .ec-root, .ec-root * { font-family: 'DM Sans', sans-serif; }
+        .ec-root, .ec-root * { font-family: 'Inter', sans-serif; }
         @keyframes ecFadeUp {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }

@@ -79,7 +79,7 @@ const getPrimaryPhoto = (maid: Record<string, unknown>) => {
   return arr[0] || toText(maid.photoDataUrl);
 };
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
-const getMaidExperienceLabel = (maid: MaidSearchResult) => getExperienceBucket(maid as any);
+const getMaidExperienceLabel = (maid: MaidSearchResult) => getExperienceBucket(maid as unknown as import("@/lib/maids").MaidProfile);
 const getMaidPassportNo = (maid: MaidSearchResult) => toText((maid.agencyContact as Record<string, unknown> | undefined)?.passportNo);
 const parseNotificationOfAssessment = (value: string) => {
   const parts = value.trim().split(/\s+/);
@@ -543,7 +543,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
 
           setMaid((p) => ({
             ...p,
-            ...(r.maid as any),
+            ...(r.maid as Record<string, unknown>),
             name: toText(m.name ?? m.fullName),
             compensationNoOffday: toText(m.compensationNoOffday ?? m.compensationForOffDay),
             passportOfMaid: toText(m.passportOfMaid ?? m.passportOfReplacement),
@@ -554,15 +554,15 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
         if (r.agency) {
           const a = r.agency as Record<string, unknown>;
           const norm = normalizeEmploymentDateParts(toText(a.dateOfEmployment));
-          setAgency((p) => ({ ...p, ...(r.agency as any), dateOfEmploymentDay: toText(a.dateOfEmploymentDay) || norm.day, dateOfEmploymentMonth: toText(a.dateOfEmploymentMonth) || norm.month, dateOfEmploymentYear: toText(a.dateOfEmploymentYear) || norm.year }));
+          setAgency((p) => ({ ...p, ...(r.agency as Record<string, unknown>), dateOfEmploymentDay: toText(a.dateOfEmploymentDay) || norm.day, dateOfEmploymentMonth: toText(a.dateOfEmploymentMonth) || norm.month, dateOfEmploymentYear: toText(a.dateOfEmploymentYear) || norm.year }));
         }
         if (r.employer) {
           const e = r.employer as Record<string, unknown>;
-          setEmployer((p) => ({ ...p, ...(r.employer as any), monthlyContribution: toText(e.monthlyContribution) || toText(e.monthlyCombinedIncome) }));
+          setEmployer((p) => ({ ...p, ...(r.employer as Record<string, unknown>), monthlyContribution: toText(e.monthlyContribution) || toText(e.monthlyCombinedIncome) }));
           if (!r.notificationDate) { const nd = parseNotificationOfAssessment(toText(e.notificationOfAssessment)); if (nd.month || nd.year) setNotificationDate(nd); }
         }
-        if (r.spouse) setSpouse((p) => ({ ...p, ...(r.spouse as any) }));
-        if (r.notificationDate) setNotificationDate((p) => ({ ...p, ...(r.notificationDate as any) }));
+        if (r.spouse) setSpouse((p) => ({ ...p, ...(r.spouse as Record<string, unknown>) }));
+        if (r.notificationDate) setNotificationDate((p) => ({ ...p, ...(r.notificationDate as Record<string, unknown>) }));
         if (Array.isArray(r.familyMembers) && r.familyMembers.length) {
           setFamilyMembers(r.familyMembers.map((fm) => ({ name: toText(fm.name), relationship: toText(fm.relationship), birthCertIcFin: toText(fm.birthCertIcFin ?? fm.birthCert), dateOfBirthDay: toText(fm.dateOfBirthDay), dateOfBirthMonth: toText(fm.dateOfBirthMonth), dateOfBirthYear: toText(fm.dateOfBirthYear) })));
         }
@@ -756,7 +756,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        .ecp-root, .ecp-root * { font-family: 'DM Sans', sans-serif; }
+        .ecp-root, .ecp-root * { font-family: 'Inter', sans-serif; }
         .ecp-root :is(label, p, a, li, td, th, input, textarea, select) {
           font-size: 16px !important;
           color: #000 !important;
@@ -907,7 +907,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
                                     </p>
                                   ) : (
                                     <p className="text-[12px] text-emerald-700 font-semibold">
-                                      Ref: {result.referenceCode} · Salary: {toText((result.introduction as any)?.expectedSalary) || "—"}
+                                      Ref: {result.referenceCode} · Salary: {toText((result.introduction as Record<string, unknown>)?.expectedSalary) || "—"}
                                     </p>
                                   )}
                                 </div>

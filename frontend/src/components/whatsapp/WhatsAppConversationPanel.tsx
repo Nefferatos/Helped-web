@@ -83,7 +83,7 @@ const WhatsAppConversationPanel = ({ referenceCode, candidateName }: Props) => {
 
   useEffect(() => {
     void loadConversation();
-  }, [referenceCode]);
+  }, [referenceCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const templatePreview = useMemo(() => {
     if (!selectedTemplate) return "";

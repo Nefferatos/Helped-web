@@ -1,0 +1,138 @@
+{
+    "name": "Rinzin Agency - AI Receptionist",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                },
+                "notes": "AI Receptionist Chat Webhook. After import: click this module, create a new webhook, name it AI Receptionist Chat Webhook, then copy the URL."
+            }
+        },
+        {
+            "id": 2,
+            "module": "json:ParseJSON",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "json": "{{1.data}}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 0
+                },
+                "notes": "Parse incoming JSON. After import: click Data structure, click Add, click Generate, paste sample JSON, set Strict to No."
+            }
+        },
+        {
+            "id": 3,
+            "module": "ai-local-agent:RunLocalAIAgent",
+            "version": 0,
+            "parameters": {},
+            "mapper": {
+                "defaultModel": "gpt-4o-mini",
+                "reasoningEffort": "low",
+                "systemPrompt": "You are the professional AI receptionist for Rinzin Agency, a Foreign Domestic Worker (FDW / maid) agency in Singapore.\n\nPERSONALITY:\n- Warm, friendly, professional, helpful\n- Natural and conversational, never robotic\n- Patient: ask one or two relevant questions at a time\n\nNEVER say: As an AI, I am an AI language model, According to my programming\n\nOUTPUT FORMAT:\n- Never use markdown. Write in plain text.\n- Use numbered lists only when listing helpers or steps.\n- Keep responses focused and concise.\n- Write in complete sentences.\n\nAGENCY CONTACT:\nCompany: {{2.context.company.name}}\nPhone: {{2.context.company.phone}}\nEmail: {{2.context.company.email}}\nWhatsApp: {{2.context.company.whatsappLink}}\nOffice Hours: {{2.context.company.officeHours}}\nAddress: {{2.context.company.address}}\n\nAVAILABLE DATA:\n{{2.context.maidSummary.total}} helper profiles available.\nNationalities: {{join(2.context.maidSummary.nationalities; \", \")}}\nHelper types: {{join(2.context.maidSummary.types; \", \")}}\n\nFAQ KNOWLEDGE:\n{{2.context.faqs}}\n\nCONVERSATION MEMORY:\nUse the conversation history to remember what the customer said. Do NOT re-ask answered questions.\n\nHUMAN HANDOFF:\nIf the customer asks for a real person, acknowledge warmly and say you will connect them with the support team.\n\nIMPORTANT:\n- Ask about needs one step at a time\n- Use FAQ data for salary questions\n- Never invent maid information\n- Guide users to /search-maids or /enquiry2",
+                "message": "Customer message: {{2.message}}\n\nConversation history:\n{{join(map(slice(2.history; -6); item.role + \": \" + item.content); \"\n\")}}\n\nCurrent page: {{2.page}}",
+                "files": [],
+                "threadId": "{{2.conversationId}}",
+                "modelConfig": {
+                    "recursionLimit": 300,
+                    "iterationsFromHistoryCount": "12"
+                },
+                "timeout": "",
+                "outputType": "text"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 600,
+                    "y": 0
+                },
+                "notes": "Rinzin Agency AI Receptionist. After import: connect your OpenAI/Anthropic API key."
+            },
+            "tools": []
+        },
+        {
+            "id": 4,
+            "module": "json:CreateJSON",
+            "version": 1,
+            "parameters": {
+                "json": "{\n  \"success\": true,\n  \"conversationId\": \"\",\n  \"response\": \"\",\n  \"handoff\": false,\n  \"actions\": [],\n  \"maidReferences\": []\n}"
+            },
+            "mapper": {
+                "json": "{\"success\": true, \"conversationId\": \"{{2.conversationId}}\", \"response\": \"{{3.response}}\", \"handoff\": false, \"actions\": [], \"maidReferences\": []}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 900,
+                    "y": 0
+                },
+                "notes": "Format structured JSON response."
+            }
+        },
+        {
+            "id": 5,
+            "module": "gateway:WebhookRespond",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "body": "{{4.data}}",
+                "status": "200",
+                "headers": []
+            },
+            "metadata": {
+                "designer": {
+                    "x": 1200,
+                    "y": 0
+                },
+                "notes": "Return JSON response to Worker."
+            }
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "eu1.make.com",
+        "notes": [
+            "Rinzin Agency AI Receptionist - Import-ready blueprint.",
+            "",
+            "AFTER IMPORT:",
+            "1. WEBHOOK: Click Module 1, create webhook named AI Receptionist Chat Webhook, copy URL.",
+            "2. PARSE JSON: Click Module 2, click Data structure, click Add, click Generate, paste sample JSON, set Strict to No.",
+            "3. AI AGENT: Click Module 3, connect OpenAI/Anthropic API key. System prompt is pre-configured.",
+            "4. CREATE JSON: Module 4 is pre-configured.",
+            "5. WEBHOOK RESPONSE: Module 5 is pre-configured.",
+            "6. WORKER SECRETS: Run npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_URL and paste webhook URL.",
+            "7. TEST: curl -X POST https://findmaid.wow-aisolution.workers.dev/api/ai/receptionist -H Content-Type:application/json -d {\"message\":\"Hi\"}",
+            "8. ACTIVATE: Toggle scenario ON, set schedule to Immediately.",
+            "",
+            "Worker sends conversation context (company info, FAQs, maid summary) with every request.",
+            "AI Agent uses threadId for conversation memory.",
+            "If Make.com fails, Worker automatically falls back to direct AI pipeline."
+        ]
+    }
+}

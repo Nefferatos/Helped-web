@@ -63,6 +63,13 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 #   npx wrangler secret put MAKE_PDF_AUTOFILL_WEBHOOK_URL
 #   npx wrangler secret put MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN
 
+# Make.com AI Receptionist — when set, the /api/ai/receptionist endpoint forwards
+# conversations to Make.com's AI Agent instead of calling the AI directly.
+# The Worker remains the secure proxy; Make.com URLs and secrets never reach the browser.
+#   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_URL
+#   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
+# When unset, the receptionist falls back to the existing Cline/OpenAI/CF-AI pipeline.
+
 # Email confirmations — requires Resend account + verified domain.
 # Steps: 1) Sign up at resend.com  2) Verify your domain  3) Run:
 #   npx wrangler secret put RESEND_API_KEY

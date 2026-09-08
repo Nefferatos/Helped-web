@@ -79,4 +79,4 @@ const toast = Object.assign(sonnerToast.bind(null), sonnerToast, {
   },
 }) as ToastFunction;
 
-export { Toaster, toast };
+export { Toaster, toast }; // eslint-disable-line react-refresh/only-export-components

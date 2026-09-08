@@ -80,7 +80,7 @@ const AgencyChatbotConfigPage = () => {
 
   useEffect(() => {
     void loadConfig();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveConfig = async () => {
     try {

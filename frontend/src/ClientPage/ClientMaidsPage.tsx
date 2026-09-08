@@ -112,7 +112,7 @@ type RequirementsState = {
 type ClientMaidsPageProps = { resultsPath?: string; loginPath?: string; embedded?: boolean; };
 
 /* ─── Defaults ────────────────────────────────────────────────────────────── */
-export const defaultFilters: Filters = {
+export const defaultFilters: Filters = { // eslint-disable-line react-refresh/only-export-components
   keyword:"", agencyPreference:"No Preference", biodataCreatedWithin:"No Preference", maidType:"",
   willingOffDays:false, hasChildren:false, withVideo:false,
   natFilipino:false, natIndonesian:false, natMyanmar:false, natIndian:false,

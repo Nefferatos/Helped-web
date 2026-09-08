@@ -294,7 +294,7 @@ const RequestsPageContent = () => {
       void requestsQuery.refetch();
     });
     return unsubscribe;
-  }, [requestsQuery.refetch]);
+  }, [requestsQuery]);
 
   const statusMutation = useMutation({
     mutationFn: ({ requestId, status }: { requestId: string; status: RequestStatus }) =>
@@ -379,7 +379,7 @@ const RequestsPageContent = () => {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
-        .req-root, .req-root * { font-family: 'DM Sans', sans-serif; }
+        .req-root, .req-root * { font-family: 'Inter', sans-serif; }
         .req-root h1, .req-root h2, .req-root .font-display { font-family: 'Sora', sans-serif; }
 
         @keyframes reqSlideUp {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCheck,
   CheckCircle2,
@@ -42,7 +42,7 @@ import type {
 } from "@/lib/chat";
 import { streamSse } from "@/lib/sse";
 
-/* ─── Types ─────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 type SortOption = "newest" | "oldest" | "unread" | "name";
 type FilterOption = "all" | "unread" | "support" | "agency";
@@ -50,17 +50,17 @@ type StatusFilter = "ALL" | SupportConversationStatus;
 
 const MESSAGE_PAGE_SIZE = 50;
 
-/* ─── Quick reply templates ─────────────────────────────────────────────── */
+/* â”€â”€â”€ Quick reply templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const QUICK_REPLIES = [
   { label: "Acknowledged", text: "Thank you for reaching out. We have received your message and will get back to you shortly." },
-  { label: "Processing", text: "We are currently processing your request. We will update you within 1–2 business days." },
+  { label: "Processing", text: "We are currently processing your request. We will update you within 1â€“2 business days." },
   { label: "Need info", text: "To assist you better, could you please provide more details about your request?" },
   { label: "Resolved", text: "We are glad we could help! Your request has been resolved. Please don't hesitate to reach out if you need anything else." },
-  { label: "Follow-up", text: "Following up on our previous conversation — has your concern been fully addressed?" },
+  { label: "Follow-up", text: "Following up on our previous conversation â€” has your concern been fully addressed?" },
 ];
 
-/* ─── Helpers ───────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -118,21 +118,21 @@ function getConversationTypeLabel(conversationType: ConversationType) {
 
 function getStatusConfig(status?: SupportConversationStatus) {
   switch (status) {
-    case "OPEN":           return { label: "Open",            color: "#1d4ed8", bg: "#eff6ff", dot: "#2563eb" };
-    case "WAITING_CLIENT": return { label: "Waiting Client",  color: "#9a3412", bg: "#fff7ed", dot: "#ea580c" };
-    case "WAITING_SUPPORT":return { label: "Waiting Support", color: "#92400e", bg: "#fef3c7", dot: "#d97706" };
-    case "RESOLVED":       return { label: "Resolved",        color: "#065f46", bg: "#ecfdf5", dot: "#059669" };
-    case "CLOSED":         return { label: "Closed",          color: "#1f2937", bg: "#f3f4f6", dot: "#6b7280" };
-    default:               return { label: "Open",            color: "#1d4ed8", bg: "#eff6ff", dot: "#2563eb" };
+    case "OPEN":           return { label: "Open",            color: "#1E6F52", bg: "#E4F1EA", dot: "#1E6F52" };
+    case "WAITING_CLIENT": return { label: "Waiting Client",  color: "#B8781E", bg: "#FEF3E2", dot: "#B8781E" };
+    case "WAITING_SUPPORT":return { label: "Waiting Support", color: "#B8781E", bg: "#FEF3E2", dot: "#B8781E" };
+    case "RESOLVED":       return { label: "Resolved",        color: "#8B8F86", bg: "#F0EEE7", dot: "#8B8F86" };
+    case "CLOSED":         return { label: "Closed",          color: "#8B8F86", bg: "#F0EEE7", dot: "#8B8F86" };
+    default:               return { label: "Open",            color: "#1E6F52", bg: "#E4F1EA", dot: "#1E6F52" };
   }
 }
 
 function getPriorityConfig(priority?: SupportPriority) {
   switch (priority) {
-    case "URGENT": return { color: "#991b1b", bg: "#fef2f2", label: "Urgent" };
-    case "HIGH":   return { color: "#9a3412", bg: "#fff7ed", label: "High" };
-    case "MEDIUM": return { color: "#92400e", bg: "#fffbeb", label: "Medium" };
-    default:       return { color: "#14532d", bg: "#f0fdf4", label: "Low" };
+    case "URGENT": return { color: "#A23B3B", bg: "#FDE8E8", label: "Urgent" };
+    case "HIGH":   return { color: "#B8781E", bg: "#FEF3E2", label: "High" };
+    case "MEDIUM": return { color: "#6B7268", bg: "#F0EEE7", label: "Medium" };
+    default:       return { color: "#8B8F86", bg: "#F6F4EF", label: "Low" };
   }
 }
 
@@ -174,17 +174,17 @@ function sortConversations(conversations: AdminConversation[], sort: SortOption)
   }
 }
 
-/* ─── Avatar helpers ─────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Avatar helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg,#667eea,#764ba2)",
-  "linear-gradient(135deg,#f093fb,#f5576c)",
-  "linear-gradient(135deg,#4facfe,#00f2fe)",
-  "linear-gradient(135deg,#43e97b,#38f9d7)",
-  "linear-gradient(135deg,#fa709a,#fee140)",
-  "linear-gradient(135deg,#a18cd1,#fbc2eb)",
-  "linear-gradient(135deg,#ffecd2,#fcb69f)",
-  "linear-gradient(135deg,#a1c4fd,#c2e9fb)",
+  "linear-gradient(135deg,#1E6F52,#2A8B6A)",
+  "linear-gradient(135deg,#B8781E,#D4942A)",
+  "linear-gradient(135deg,#6B7268,#8B8F86)",
+  "linear-gradient(135deg,#1C231F,#3A4340)",
+  "linear-gradient(135deg,#A23B3B,#C45454)",
+  "linear-gradient(135deg,#1E6F52,#E4F1EA)",
+  "linear-gradient(135deg,#8B8F86,#B0B4AB)",
+  "linear-gradient(135deg,#B8781E,#FEF3E2)",
 ];
 
 function avatarGradient(name: string) {
@@ -193,7 +193,7 @@ function avatarGradient(name: string) {
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
-/* ─── Sub-components ────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function AvatarBubble({
   name,
@@ -241,9 +241,9 @@ function OnlineDot({ online, size = "sm" }: { online?: boolean; size?: "sm" | "m
         width: px,
         height: px,
         borderRadius: "50%",
-        background: online ? "#10b981" : "#d1d5db",
+        background: online ? "#1E6F52" : "#E3DFD4",
         border: "2px solid #fff",
-        boxShadow: online ? "0 0 0 0 rgba(16,185,129,0.4)" : "none",
+        boxShadow: online ? "0 0 0 0 rgba(30,111,82,0.4)" : "none",
       }}
     />
   );
@@ -252,8 +252,8 @@ function OnlineDot({ online, size = "sm" }: { online?: boolean; size?: "sm" | "m
 function UnreadBadge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span className="asc-badge-pop inline-flex min-w-[20px] h-5 items-center justify-center rounded-full px-1.5 leading-none text-white"
-      style={{ fontSize: 10.5, fontWeight: 900, background: "linear-gradient(135deg,#f87171,#ef4444)", boxShadow: "0 2px 6px rgba(239,68,68,0.4)" }}>
+    <span className="inline-flex min-w-[20px] h-5 items-center justify-center rounded-full px-1.5 leading-none text-white"
+      style={{ fontSize: 10.5, fontWeight: 700, background: "#A23B3B" }}>
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -300,12 +300,12 @@ function EmptyState({ label, icon }: { label: string; icon?: "message" | "user" 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-10">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl"
-        style={{ background: "linear-gradient(135deg,#eef1ff,#e0e7ff)", boxShadow: "0 4px 16px rgba(79,110,247,0.12)" }}>
+        style={{ background: "#E4F1EA" }}>
         {icon === "user"
-          ? <Users className="h-7 w-7" style={{ color: "#4f6ef7" }} />
-          : <Inbox className="h-7 w-7" style={{ color: "#4f6ef7" }} />}
+          ? <Users className="h-7 w-7" style={{ color: "#1E6F52" }} />
+          : <Inbox className="h-7 w-7" style={{ color: "#1E6F52" }} />}
       </div>
-      <p className="max-w-[220px] text-center leading-relaxed font-medium" style={{ fontSize: 13.5, color: "#374151" }}>{label}</p>
+      <p className="max-w-[220px] text-center leading-relaxed font-medium" style={{ fontSize: 13.5, color: "#6B7268" }}>{label}</p>
     </div>
   );
 }
@@ -313,17 +313,17 @@ function EmptyState({ label, icon }: { label: string; icon?: "message" | "user" 
 function DateDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 my-3">
-      <div className="h-px flex-1" style={{ background: "linear-gradient(to right, transparent, #e5e7eb)" }} />
+      <div className="h-px flex-1" style={{ background: "linear-gradient(to right, transparent, #E3DFD4)" }} />
       <span className="whitespace-nowrap rounded-full px-3 py-1 font-semibold tracking-wide"
-        style={{ fontSize: 11, background: "#f1f3f9", color: "#374151", border: "1px solid #e5e7eb" }}>
+        style={{ fontSize: 11, background: "#F0EEE7", color: "#6B7268", border: "1px solid #E3DFD4" }}>
         {label}
       </span>
-      <div className="h-px flex-1" style={{ background: "linear-gradient(to left, transparent, #e5e7eb)" }} />
+      <div className="h-px flex-1" style={{ background: "linear-gradient(to left, transparent, #E3DFD4)" }} />
     </div>
   );
 }
 
-/* ─── Quick Reply Panel ─────────────────────────────────────────────────── */
+/* â”€â”€â”€ Quick Reply Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function QuickReplyPanel({ onSelect }: { onSelect: (text: string) => void }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -331,37 +331,37 @@ function QuickReplyPanel({ onSelect }: { onSelect: (text: string) => void }) {
     <div className="relative">
       <button
         onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold transition-all hover:scale-105 active:scale-95"
-        style={{ fontSize: 12, background: "linear-gradient(135deg,#eef1ff,#e0e7ff)", color: "#3d55d4", border: "1px solid rgba(79,110,247,0.2)", boxShadow: "0 1px 4px rgba(79,110,247,0.12)" }}
+        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold transition-all"
+        style={{ fontSize: 12, background: "#E4F1EA", color: "#1E6F52", border: "1px solid #E3DFD4" }}
       >
         <Zap className="h-3 w-3" />
         Quick replies
         <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {isOpen && (
-        <div className="asc-float-panel absolute bottom-full left-0 mb-2.5 z-20 w-80 rounded-2xl overflow-hidden"
-          style={{ background: "#fff", boxShadow: "0 20px 48px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06)", border: "1px solid #eaecf5" }}>
+        <div className="absolute bottom-full left-0 mb-2.5 z-20 w-80 rounded-xl overflow-hidden"
+          style={{ background: "#fff", boxShadow: "0 12px 40px rgba(0,0,0,0.1)", border: "1px solid #E3DFD4" }}>
           <div className="px-4 py-3 flex items-center gap-2"
-            style={{ background: "linear-gradient(135deg,#f8f9ff,#eef1ff)", borderBottom: "1px solid #eaecf5" }}>
-            <Zap className="h-3.5 w-3.5" style={{ color: "#4f6ef7" }} />
-            <p className="font-bold tracking-wide" style={{ fontSize: 12, color: "#1e3a8a" }}>QUICK REPLY TEMPLATES</p>
+            style={{ background: "#F6F4EF", borderBottom: "1px solid #E3DFD4" }}>
+            <Zap className="h-3.5 w-3.5" style={{ color: "#1E6F52" }} />
+            <p className="font-semibold tracking-wide" style={{ fontSize: 12, color: "#1C231F" }}>QUICK REPLY TEMPLATES</p>
           </div>
-          <div className="max-h-56 overflow-y-auto asc-scrollbar">
+          <div className="max-h-56 overflow-y-auto">
             {QUICK_REPLIES.map((r, i) => (
               <button
                 key={r.label}
                 onClick={() => { onSelect(r.text); setIsOpen(false); }}
                 className="w-full px-4 py-3 text-left transition-all group"
-                style={{ borderBottom: i < QUICK_REPLIES.length - 1 ? "1px solid #f3f4f8" : "none" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#f8f9ff"; }}
+                style={{ borderBottom: i < QUICK_REPLIES.length - 1 ? "1px solid #E3DFD4" : "none" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#F6F4EF"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = ""; }}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <p className="font-bold" style={{ fontSize: 12.5, color: "#111827" }}>{r.label}</p>
-                  <span className="font-semibold rounded-full px-2 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ fontSize: 10, background: "#eef1ff", color: "#3d55d4" }}>Use →</span>
+                  <p className="font-semibold" style={{ fontSize: 12.5, color: "#1C231F" }}>{r.label}</p>
+                  <span className="font-medium rounded-full px-2 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ fontSize: 10, background: "#E4F1EA", color: "#1E6F52" }}>Use â†’</span>
                 </div>
-                <p className="leading-relaxed line-clamp-2" style={{ fontSize: 12, color: "#374151" }}>{r.text}</p>
+                <p className="leading-relaxed line-clamp-2" style={{ fontSize: 12, color: "#6B7268" }}>{r.text}</p>
               </button>
             ))}
           </div>
@@ -371,17 +371,17 @@ function QuickReplyPanel({ onSelect }: { onSelect: (text: string) => void }) {
   );
 }
 
-/* ─── Filter & Sort Bar ─────────────────────────────────────────────────── */
+/* â”€â”€â”€ Filter & Sort Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function FilterPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="rounded-full px-3.5 py-1.5 font-semibold transition-all hover:scale-105 active:scale-95"
+      className="rounded-full px-3.5 py-1.5 font-semibold transition-all"
       style={
         active
-          ? { fontSize: 13, background: "linear-gradient(135deg,#6580f8,#4f6ef7)", color: "#fff", boxShadow: "0 2px 8px rgba(79,110,247,0.35)" }
-          : { fontSize: 13, background: "#f0f1f6", color: "#111827", border: "1px solid #d1d5db" }
+          ? { fontSize: 13, background: "#1E6F52", color: "#fff" }
+          : { fontSize: 13, background: "#F0EEE7", color: "#6B7268", border: "1px solid #E3DFD4" }
       }
     >
       {label}
@@ -397,7 +397,7 @@ function TypeFilterRow({ filter, setFilter }: { filter: FilterOption; setFilter:
   return (
     <div className="flex items-center gap-1">
       <button onClick={() => scroll("left")} className="flex-shrink-0 flex items-center justify-center rounded-lg transition-all hover:scale-105 active:scale-95"
-        style={{ width: 24, height: 24, background: "#f0f1f6", border: "1px solid #d1d5db", color: "#374151" }}>
+        style={{ width: 24, height: 24, background: "#F0EEE7", border: "1px solid #E3DFD4", color: "#6B7268" }}>
         <ChevronDown className="h-3 w-3" style={{ transform: "rotate(90deg)" }} />
       </button>
       <div ref={scrollRef} className="asc-hscroll flex gap-1.5 flex-1" style={{ overflowX: "auto", paddingBottom: 2 }}>
@@ -408,7 +408,7 @@ function TypeFilterRow({ filter, setFilter }: { filter: FilterOption; setFilter:
         ))}
       </div>
       <button onClick={() => scroll("right")} className="flex-shrink-0 flex items-center justify-center rounded-lg transition-all hover:scale-105 active:scale-95"
-        style={{ width: 24, height: 24, background: "#f0f1f6", border: "1px solid #d1d5db", color: "#374151" }}>
+        style={{ width: 24, height: 24, background: "#F0EEE7", border: "1px solid #E3DFD4", color: "#6B7268" }}>
         <ChevronDown className="h-3 w-3" style={{ transform: "rotate(-90deg)" }} />
       </button>
     </div>
@@ -434,7 +434,7 @@ function StatusTabs({ value, onChange }: { value: StatusFilter; onChange: (value
       <button
         onClick={() => scroll("left")}
         className="flex-shrink-0 flex items-center justify-center rounded-lg transition-all active:scale-95"
-        style={{ width: 24, height: 24, background: "#f0f1f6", border: "1px solid #d1d5db", color: "#374151" }}
+        style={{ width: 24, height: 24, background: "#F0EEE7", border: "1px solid #E3DFD4", color: "#6B7268" }}
       >
         <ChevronDown className="h-3 w-3" style={{ transform: "rotate(90deg)" }} />
       </button>
@@ -449,13 +449,13 @@ function StatusTabs({ value, onChange }: { value: StatusFilter; onChange: (value
               className="rounded-full font-semibold flex items-center gap-1.5 flex-shrink-0 transition-colors"
               style={
                 isActive
-                  ? { fontSize: 12, padding: "5px 12px", whiteSpace: "nowrap", background: cfg ? cfg.bg : "#eef1ff", color: cfg ? cfg.color : "#1e3a8a", border: `1.5px solid ${cfg ? cfg.dot : "#4f6ef7"}`, fontWeight: 700 }
-                  : { fontSize: 12, padding: "5px 12px", whiteSpace: "nowrap", background: "#f0f1f6", color: "#111827", border: "1px solid #d1d5db" }
+                  ? { fontSize: 12, padding: "5px 12px", whiteSpace: "nowrap", background: cfg ? cfg.bg : "#E4F1EA", color: cfg ? cfg.color : "#1E6F52", border: `1.5px solid ${cfg ? cfg.dot : "#1E6F52"}`, fontWeight: 600 }
+                  : { fontSize: 12, padding: "5px 12px", whiteSpace: "nowrap", background: "#F0EEE7", color: "#6B7268", border: "1px solid #E3DFD4" }
               }
             >
               {isActive && (
                 <span className="inline-block rounded-full flex-shrink-0"
-                  style={{ width: 6, height: 6, background: cfg ? cfg.dot : "#4f6ef7" }} />
+                  style={{ width: 6, height: 6, background: cfg ? cfg.dot : "#1E6F52" }} />
               )}
               {tab.label}
             </button>
@@ -465,7 +465,7 @@ function StatusTabs({ value, onChange }: { value: StatusFilter; onChange: (value
       <button
         onClick={() => scroll("right")}
         className="flex-shrink-0 flex items-center justify-center rounded-lg transition-all active:scale-95"
-        style={{ width: 24, height: 24, background: "#f0f1f6", border: "1px solid #d1d5db", color: "#374151" }}
+        style={{ width: 24, height: 24, background: "#F0EEE7", border: "1px solid #E3DFD4", color: "#6B7268" }}
       >
         <ChevronDown className="h-3 w-3" style={{ transform: "rotate(-90deg)" }} />
       </button>
@@ -473,7 +473,7 @@ function StatusTabs({ value, onChange }: { value: StatusFilter; onChange: (value
   );
 }
 
-/* ─── Conversation list item ─────────────────────────────────────────────── */
+/* â”€â”€â”€ Conversation list item â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function ConversationItem({
   conversation,
@@ -494,12 +494,10 @@ function ConversationItem({
       className="group w-full text-left transition-all duration-150 rounded-xl px-3 py-3 mx-1 relative overflow-hidden"
       style={{
         width: "calc(100% - 8px)",
-        background: isActive
-          ? "linear-gradient(135deg,rgba(79,110,247,0.10),rgba(79,110,247,0.05))"
-          : "transparent",
-        borderLeft: isActive ? "2.5px solid #4f6ef7" : "2.5px solid transparent",
+        background: isActive ? "#E4F1EA" : "transparent",
+        borderLeft: isActive ? "3px solid #1E6F52" : "3px solid transparent",
       }}
-      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(0,0,0,0.03)"; }}
+      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "#F6F4EF"; }}
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
     >
       {/* Unread shimmer accent */}
@@ -525,7 +523,7 @@ function ConversationItem({
               {conversation.clientName}
             </p>
             <span className="flex-shrink-0 mt-0.5"
-              style={{ fontSize: 11.5, color: hasUnread ? "#dc2626" : "#374151", fontWeight: hasUnread ? 600 : 500 }}>
+              style={{ fontSize: 11.5, color: hasUnread ? "#A23B3B" : "#6B7268", fontWeight: hasUnread ? 600 : 500 }}>
               {formatTime(conversation.lastMessageAt)}
             </span>
           </div>
@@ -546,7 +544,7 @@ function ConversationItem({
 
           {/* Preview */}
           <p className="line-clamp-1 leading-5"
-            style={{ fontSize: 12.5, color: hasUnread ? "#1f2937" : "#374151", fontWeight: hasUnread ? 500 : 400 }}>
+            style={{ fontSize: 12.5, color: hasUnread ? "#1C231F" : "#6B7268", fontWeight: hasUnread ? 500 : 400 }}>
             {sanitizeConversationPreview(conversation.lastMessage)}
           </p>
         </div>
@@ -563,7 +561,7 @@ function ConversationItem({
   );
 }
 
-/* ─── Message bubble ─────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Message bubble â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (text: string) => void }) {
   const isOwn = message.senderRole === "agency";
@@ -579,7 +577,7 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
 
       <div className="min-w-0 flex flex-col">
         {!isOwn && (
-          <p className="mb-1 pl-1 font-semibold flex items-center gap-1.5" style={{ fontSize: 12, color: "#374151" }}>
+          <p className="mb-1 pl-1 font-semibold flex items-center gap-1.5" style={{ fontSize: 12, color: "#6B7268" }}>
             {message.senderName}
             {isBot && (
               <span className="rounded-full px-1.5 py-px font-black tracking-wider"
@@ -602,7 +600,7 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
             <button
               onClick={() => onCopy(message.message)}
               className={`absolute -top-2.5 ${isOwn ? "-left-2.5" : "-right-2.5"} hidden group-hover:flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-lg transition-all hover:scale-110 active:scale-90`}
-              style={{ color: "#374151", border: "1px solid #e5e7eb" }}>
+              style={{ color: "#6B7268", border: "1px solid #E3DFD4" }}>
               <Copy className="h-3 w-3" />
             </button>
           )}
@@ -610,9 +608,9 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
 
         {/* Timestamp */}
         <div className={`mt-1 flex items-center gap-1 ${isOwn ? "justify-end pr-1" : "pl-1"}`}
-          style={{ fontSize: 11, color: "#374151" }}>
+          style={{ fontSize: 11, color: "#6B7268" }}>
           {isPending
-            ? <span className="italic" style={{ color: "#6b7280" }}>Sending…</span>
+            ? <span className="italic" style={{ color: "#6b7280" }}>Sendingâ€¦</span>
             : <>
                 <span>{formatTime(message.createdAt)}</span>
                 {isOwn && <CheckCheck className="h-3 w-3" style={{ color: "#a5b4fc" }} />}
@@ -624,7 +622,7 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
   );
 }
 
-/* ─── Meta Card ─────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Meta Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function MetaCard({
   icon,
@@ -637,17 +635,17 @@ function MetaCard({
 }) {
   return (
     <div className="rounded-2xl px-3.5 py-3 flex flex-col gap-2"
-      style={{ background: "#fff", border: "1px solid #e5e7eb", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+      style={{ background: "#fff", border: "1px solid #E3DFD4", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
       <div className="flex items-center gap-1.5">
-        <span style={{ color: "#374151" }}>{icon}</span>
-        <p className="font-bold uppercase tracking-[0.1em]" style={{ fontSize: 11, color: "#374151" }}>{label}</p>
+        <span style={{ color: "#6B7268" }}>{icon}</span>
+        <p className="font-bold uppercase tracking-[0.1em]" style={{ fontSize: 11, color: "#6B7268" }}>{label}</p>
       </div>
       {children}
     </div>
   );
 }
 
-/* ─── Main component ─────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const AdminSupportChat = () => {
   const navigate = useNavigate();
@@ -761,7 +759,7 @@ const AdminSupportChat = () => {
               status: "OPEN",
               category: "General Inquiry",
               priority: "MEDIUM",
-              subject: "Agency Support · General Inquiry",
+              subject: "Agency Support Â· General Inquiry",
             });
             return queryKey;
           }
@@ -1154,36 +1152,36 @@ const AdminSupportChat = () => {
   return (
     <>
       <style>{`
-        /* ── Design tokens ── */
+        /* â”€â”€ Design tokens â”€â”€ */
         .asc-root {
-          --c-blue: #4f6ef7;
-          --c-blue-dark: #3d5bf5;
-          --c-blue-light: #eef1ff;
+          --c-blue: #1E6F52;
+          --c-blue-dark: #175C43;
+          --c-blue-light: #E4F1EA;
           --c-surface: #ffffff;
-          --c-bg: #f5f6fa;
-          --c-divider: #edf0f7;
-          --c-text-1: #111827;
-          --c-text-2: #374151;
-          --c-text-3: #6b7280;
-          --c-online: #10b981;
-          --c-unread: #ef4444;
-          font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+          --c-bg: #F6F4EF;
+          --c-divider: #E3DFD4;
+          --c-text-1: #1C231F;
+          --c-text-2: #6B7268;
+          --c-text-3: #8B8F86;
+          --c-online: #1E6F52;
+          --c-unread: #A23B3B;
+          font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
           font-size: 14px;
-          color: #111827;
+          color: #1C231F;
         }
 
-        /* ── Shimmer ── */
+        /* â”€â”€ Shimmer â”€â”€ */
         @keyframes asc-shimmer {
           0%   { background-position: -500px 0; }
           100% { background-position: 500px 0; }
         }
         .asc-skeleton {
-          background: linear-gradient(90deg, #f0f1f6 25%, #e8eaf2 50%, #f0f1f6 75%);
+          background: linear-gradient(90deg, #F0EEE7 25%, #E3DFD4 50%, #F0EEE7 75%);
           background-size: 1000px 100%;
           animation: asc-shimmer 1.8s ease-in-out infinite;
         }
 
-        /* ── Animations ── */
+        /* â”€â”€ Animations â”€â”€ */
         @keyframes asc-fade-up   { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
         @keyframes asc-slide-in  { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:none} }
         @keyframes asc-pop       { from{opacity:0;transform:scale(0.88)} to{opacity:1;transform:scale(1)} }
@@ -1194,67 +1192,65 @@ const AdminSupportChat = () => {
         .asc-badge-pop { animation: asc-badge-in 0.25s cubic-bezier(.34,1.56,.64,1) both; }
         .asc-float-panel { animation: asc-float-in 0.2s cubic-bezier(.22,1,.36,1) both; }
 
-        /* ── Scrollbars ── */
+        /* â”€â”€ Scrollbars â”€â”€ */
         .asc-scrollbar::-webkit-scrollbar { width: 4px; }
         .asc-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); border-radius: 8px; }
-        .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
+        .asc-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 8px; }
+        .asc-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.15); }
 
-        /* ── Bubbles ── */
+        /* â”€â”€ Bubbles â”€â”€ */
         .asc-bubble-out {
-          background: linear-gradient(135deg,#6580f8 0%,#4f6ef7 55%,#3d5bf5 100%);
+          background: #1E6F52;
           color: #ffffff;
-          box-shadow: 0 4px 16px rgba(79,110,247,0.28);
         }
         .asc-bubble-in {
           background: #ffffff;
-          color: #111827;
-          box-shadow: 0 1px 6px rgba(0,0,0,0.07), 0 0 0 1px #e5e7eb;
+          color: #1C231F;
+          border: 1px solid #E3DFD4;
         }
 
-        /* ── Send btn ── */
+        /* â”€â”€ Send btn â”€â”€ */
         @keyframes asc-spin { to{transform:rotate(360deg)} }
         .animate-spin { animation: asc-spin 0.8s linear infinite; }
         .asc-send-btn {
-          background: linear-gradient(135deg,#6580f8,#4f6ef7);
-          box-shadow: 0 3px 10px rgba(79,110,247,0.4);
-          transition: transform 0.12s, box-shadow 0.12s;
+          background: #1E6F52;
+          transition: transform 0.12s, background 0.12s;
         }
-        .asc-send-btn:not(:disabled):hover  { transform:scale(1.08); box-shadow:0 5px 16px rgba(79,110,247,0.5); }
-        .asc-send-btn:not(:disabled):active { transform:scale(0.93); }
-        .asc-send-btn:disabled { background:#e5e7eb; box-shadow:none; }
+        .asc-send-btn:not(:disabled):hover  { background: #175C43; }
+        .asc-send-btn:not(:disabled):active { transform:scale(0.95); }
+        .asc-send-btn:disabled { background:#E3DFD4; }
 
-        /* ── Online pulse ── */
+        /* â”€â”€ Online pulse â”€â”€ */
         @keyframes asc-pulse {
-          0%,100% { box-shadow:0 0 0 0 rgba(16,185,129,0.5); }
-          60%      { box-shadow:0 0 0 6px rgba(16,185,129,0); }
+          0%,100% { box-shadow:0 0 0 0 rgba(30,111,82,0.4); }
+          60%      { box-shadow:0 0 0 6px rgba(30,111,82,0); }
         }
         .asc-pulse-dot { animation: asc-pulse 2.4s ease infinite; }
 
-        /* ── Search focus ── */
-        .asc-search { font-size: 13.5px; color: #111827; }
-        .asc-search::placeholder { color: #6b7280; }
+        /* â”€â”€ Search focus â”€â”€ */
+        .asc-search { font-size: 13px; color: #1C231F; }
+        .asc-search::placeholder { color: #8B8F86; }
         .asc-search:focus {
-          border-color: #a5b4fc !important;
-          box-shadow: 0 0 0 3px rgba(79,110,247,0.10) !important;
+          border-color: #1E6F52 !important;
+          box-shadow: 0 0 0 3px rgba(30,111,82,0.08) !important;
           background: #fff !important;
         }
 
-        /* ── Compose focus ── */
+        /* â”€â”€ Compose focus â”€â”€ */
         .asc-compose:focus-within {
-          border-color: #a5b4fc !important;
-          box-shadow: 0 0 0 3px rgba(79,110,247,0.10) !important;
+          border-color: #1E6F52 !important;
+          box-shadow: 0 0 0 3px rgba(30,111,82,0.08) !important;
           background: #fff !important;
         }
 
-        /* ── Meta select ── */
+        /* â”€â”€ Meta select â”€â”€ */
         .asc-meta-select {
           appearance: none;
           cursor: pointer;
           transition: border-color 0.15s, background 0.15s;
           font-size: 12.5px;
           font-weight: 600;
-          color: #111827;
+          color: #1C231F;
         }
         .asc-meta-select:focus {
           outline: none;
@@ -1263,75 +1259,75 @@ const AdminSupportChat = () => {
         }
         .asc-meta-select:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* ── Global text readability ── */
+        /* â”€â”€ Global text readability â”€â”€ */
         .asc-root * { -webkit-font-smoothing: antialiased; }
         .asc-root p, .asc-root span, .asc-root button, .asc-root select, .asc-root textarea, .asc-root input {
           color: inherit;
         }
 
-        /* ── Horizontal scroll strips ── */
+        /* â”€â”€ Horizontal scroll strips â”€â”€ */
         .asc-hscroll { scrollbar-width: none; }
         .asc-hscroll::-webkit-scrollbar { display: none; }
       `}</style>
 
-      <div className="asc-root flex flex-col" style={{ height: "calc(100vh - 130px)", minHeight: 480, color: "#111827" }}>
+      <div className="asc-root flex flex-col" style={{ height: "calc(100vh - 130px)", minHeight: 480, color: "#1C231F" }}>
 
-        {/* ── Page header ── */}
+        {/* â”€â”€ Page header â”€â”€ */}
         <div className="mb-5 flex flex-shrink-0 items-center gap-3.5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl"
-            style={{ background: "linear-gradient(135deg,#6580f8 0%,#4f6ef7 50%,#3d5bf5 100%)", boxShadow: "0 4px 14px rgba(79,110,247,0.35)" }}>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl"
+            style={{ background: "#1E6F52" }}>
             <MessageCircle className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h2 className="leading-tight tracking-tight" style={{ fontSize: 20, fontWeight: 900, color: "#111827" }}>Messages</h2>
-            <p className="font-medium mt-0.5" style={{ fontSize: 13, color: "#374151" }}>Client support inbox</p>
+            <h2 className="leading-tight tracking-tight" style={{ fontSize: 20, fontWeight: 700, color: "#1C231F" }}>Messages</h2>
+            <p className="font-normal mt-0.5" style={{ fontSize: 13, color: "#6B7268" }}>Client support inbox</p>
           </div>
           {totalUnread > 0 && (
-            <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold text-white ml-1"
-              style={{ fontSize: 12, background: "linear-gradient(135deg,#f87171,#ef4444)", boxShadow: "0 2px 8px rgba(239,68,68,0.35)" }}>
+            <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold text-white ml-1"
+              style={{ fontSize: 12, background: "#A23B3B" }}>
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
               {totalUnread} unread
             </div>
           )}
         </div>
 
-        {/* ── Shell ── */}
+        {/* â”€â”€ Shell â”€â”€ */}
         <div className="flex flex-1 overflow-hidden rounded-2xl"
-          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid #e5e7eb", background: "#fff" }}>
+          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid #E3DFD4", background: "#fff" }}>
 
-          {/* ══════════════════════════════════════════════════════
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
               SIDEBAR
-          ══════════════════════════════════════════════════════ */}
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           <div className={`flex flex-col ${mobileView === "chat" ? "hidden md:flex md:w-[320px]" : "flex w-full md:w-[320px]"}`}
-            style={{ borderRight: "1px solid #e5e7eb", background: "#fcfcff", minWidth: 0 }}>
+            style={{ borderRight: "1px solid #E3DFD4", background: "#fcfcff", minWidth: 0 }}>
 
             {/* Sidebar header */}
-            <div className="px-5 pt-5 pb-4 flex-shrink-0" style={{ borderBottom: "1px solid #e5e7eb" }}>
+            <div className="px-5 pt-5 pb-4 flex-shrink-0" style={{ borderBottom: "1px solid #E3DFD4" }}>
               <p className="tracking-tight" style={{ fontSize: 18, fontWeight: 900, color: "#0f172a" }}>Conversations</p>
             </div>
 
             {/* Search */}
-            <div className="px-4 pt-3.5 pb-3 flex-shrink-0 space-y-3" style={{ borderBottom: "1px solid #e5e7eb" }}>
+            <div className="px-4 pt-3.5 pb-3 flex-shrink-0 space-y-3" style={{ borderBottom: "1px solid #E3DFD4" }}>
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: "#6b7280" }} />
                 <input
                   type="text"
-                  placeholder="Search conversations…"
+                  placeholder="Search conversationsâ€¦"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="asc-search h-10 w-full rounded-xl border pl-10 pr-4 font-medium outline-none transition-all"
-                  style={{ fontSize: 13.5, borderColor: "#d1d5db", background: "#f5f6fa", color: "#111827" }}
+                  style={{ fontSize: 13.5, borderColor: "#E3DFD4", background: "#F6F4EF", color: "#1C231F" }}
                 />
               </div>
 
               <div>
-                <p className="font-bold uppercase tracking-widest mb-2" style={{ fontSize: 11, color: "#374151" }}>Status</p>
+                <p className="font-bold uppercase tracking-widest mb-2" style={{ fontSize: 11, color: "#6B7268" }}>Status</p>
                 <StatusTabs value={statusFilter} onChange={setStatusFilter} />
               </div>
 
               {/* Filter pills */}
               <div>
-                <p className="font-bold uppercase tracking-widest mb-2" style={{ fontSize: 11, color: "#374151" }}>Type</p>
+                <p className="font-bold uppercase tracking-widest mb-2" style={{ fontSize: 11, color: "#6B7268" }}>Type</p>
                 <TypeFilterRow filter={filter} setFilter={setFilter} />
               </div>
 
@@ -1342,11 +1338,11 @@ const AdminSupportChat = () => {
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortOption)}
                   className="asc-meta-select h-9 w-full rounded-xl pl-9 pr-8"
-                  style={{ fontSize: 13, fontWeight: 600, border: "1px solid #d1d5db", background: "#f5f6fa", color: "#111827" }}
+                  style={{ fontSize: 13, fontWeight: 600, border: "1px solid #E3DFD4", background: "#F6F4EF", color: "#1C231F" }}
                 >
                   <option value="newest">Newest first</option>
                   <option value="unread">Unread first</option>
-                  <option value="name">Name A–Z</option>
+                  <option value="name">Name Aâ€“Z</option>
                   <option value="oldest">Oldest first</option>
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 pointer-events-none" style={{ color: "#6b7280" }} />
@@ -1359,11 +1355,11 @@ const AdminSupportChat = () => {
                 <LoadingDots />
               ) : errorMessage && conversations.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 p-6 text-center">
-                  <AlertCircle className="h-7 w-7" style={{ color: "#dc2626" }} />
-                  <p className="font-medium leading-snug max-w-[200px]" style={{ fontSize: 13, color: "#374151" }}>{errorMessage}</p>
+                  <AlertCircle className="h-7 w-7" style={{ color: "#A23B3B" }} />
+                  <p className="font-medium leading-snug max-w-[200px]" style={{ fontSize: 13, color: "#6B7268" }}>{errorMessage}</p>
                   <button onClick={() => { setErrorMessage(""); void loadConversations(false); }}
-                    className="rounded-full px-4 py-1.5 font-bold text-white transition-opacity hover:opacity-90"
-                    style={{ fontSize: 12, background: "linear-gradient(135deg,#6580f8,#4f6ef7)" }}>
+                    className="rounded-full px-4 py-1.5 font-semibold text-white transition-opacity hover:opacity-90"
+                    style={{ fontSize: 12, background: "#1E6F52" }}>
                     Retry
                   </button>
                 </div>
@@ -1379,36 +1375,36 @@ const AdminSupportChat = () => {
             </div>
 
             {/* Stats footer */}
-            <div className="flex-shrink-0 grid grid-cols-2 gap-2 p-3" style={{ borderTop: "1px solid #e5e7eb", background: "#f9fafb" }}>
+            <div className="flex-shrink-0 grid grid-cols-2 gap-2 p-3" style={{ borderTop: "1px solid #E3DFD4", background: "#f9fafb" }}>
               <div className="rounded-xl px-3 py-3 flex flex-col items-center justify-center gap-0.5"
-                style={{ background: "#fff", border: "1px solid #e5e7eb", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-                <p style={{ fontSize: 22, fontWeight: 900, color: "#111827", lineHeight: 1 }}>{effectiveConversations.length}</p>
-                <p className="font-semibold" style={{ fontSize: 11.5, color: "#374151" }}>Total</p>
+                style={{ background: "#fff", border: "1px solid #E3DFD4", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                <p style={{ fontSize: 22, fontWeight: 900, color: "#1C231F", lineHeight: 1 }}>{effectiveConversations.length}</p>
+                <p className="font-semibold" style={{ fontSize: 11.5, color: "#6B7268" }}>Total</p>
               </div>
               <div className="rounded-xl px-3 py-3 flex flex-col items-center justify-center gap-0.5"
                 style={{
                   background: totalUnread > 0 ? "#fff" : "#fff",
-                  border: `1px solid ${totalUnread > 0 ? "#fecaca" : "#e5e7eb"}`,
+                  border: `1px solid ${totalUnread > 0 ? "#fecaca" : "#E3DFD4"}`,
                   boxShadow: totalUnread > 0 ? "0 1px 3px rgba(239,68,68,0.08)" : "0 1px 3px rgba(0,0,0,0.04)",
                 }}>
-                <p style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, color: totalUnread > 0 ? "#4f6ef7" : "#374151" }}>{totalUnread}</p>
-                <p className="font-semibold" style={{ fontSize: 11.5, color: totalUnread > 0 ? "#4f6ef7" : "#374151" }}>Unread</p>
+                <p style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, color: totalUnread > 0 ? "#1E6F52" : "#1C231F" }}>{totalUnread}</p>
+                <p className="font-semibold" style={{ fontSize: 11.5, color: totalUnread > 0 ? "#1E6F52" : "#6B7268" }}>Unread</p>
               </div>
             </div>
           </div>
 
-          {/* ══════════════════════════════════════════════════════
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
               MESSAGE PANEL
-          ══════════════════════════════════════════════════════ */}
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           <div className={`flex min-w-0 flex-1 flex-col ${mobileView === "list" ? "hidden md:flex" : "flex"}`}>
 
             {/* Chat header */}
             <div className="flex flex-shrink-0 items-center gap-3 px-5 py-3.5"
-              style={{ borderBottom: "1px solid #e5e7eb", background: "#fff", minHeight: 68 }}>
+              style={{ borderBottom: "1px solid #E3DFD4", background: "#fff", minHeight: 68 }}>
               <button
                 onClick={() => setMobileView("list")}
                 className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors md:hidden hover:bg-gray-50"
-                style={{ color: "#4f6ef7" }}>
+                style={{ color: "#1E6F52" }}>
                 <ArrowLeft className="h-5 w-5" />
               </button>
 
@@ -1421,36 +1417,36 @@ const AdminSupportChat = () => {
                     </div>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-black" style={{ fontSize: 15.5, color: "#111827" }}>{activeConversation.clientName}</p>
+                    <p className="truncate font-black" style={{ fontSize: 15.5, color: "#1C231F" }}>{activeConversation.clientName}</p>
                     <p className="font-medium flex items-center gap-1.5 mt-0.5"
-                      style={{ fontSize: 12, color: activeConversation.clientOnline ? "#059669" : "#374151" }}>
+                      style={{ fontSize: 12, color: activeConversation.clientOnline ? "#1E6F52" : "#6B7268" }}>
                       <span className="inline-block w-1.5 h-1.5 rounded-full"
-                        style={{ background: activeConversation.clientOnline ? "#10b981" : "#d1d5db" }} />
+                        style={{ background: activeConversation.clientOnline ? "#1E6F52" : "#E3DFD4" }} />
                       {activeConversation.clientOnline ? "Active now" : "Offline"}
                     </p>
                   </div>
                   <div className="flex-shrink-0 text-right hidden sm:block">
-                    <p className="font-bold" style={{ fontSize: 13.5, color: "#111827" }}>{admin?.agencyName ?? "Agency"}</p>
-                    <p className="mt-0.5" style={{ fontSize: 12, color: "#374151" }}>{activeConversation.clientEmail}</p>
+                    <p className="font-bold" style={{ fontSize: 13.5, color: "#1C231F" }}>{admin?.agencyName ?? "Agency"}</p>
+                    <p className="mt-0.5" style={{ fontSize: 12, color: "#6B7268" }}>{activeConversation.clientEmail}</p>
                   </div>
-                  {/* ── Reload icon: BLACK ── */}
+                  {/* â”€â”€ Reload icon: BLACK â”€â”€ */}
                   <button
                     type="button"
                     onClick={handleRefreshMessages}
                     className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition-all hover:scale-105 hover:bg-gray-50"
-                    style={{ borderColor: "#d1d5db", color: "#111827" }}>
-                    <RefreshCw className="h-4 w-4" style={{ color: "#111827" }} />
+                    style={{ borderColor: "#E3DFD4", color: "#1C231F" }}>
+                    <RefreshCw className="h-4 w-4" style={{ color: "#1C231F" }} />
                   </button>
                 </>
               ) : (
-                <p className="font-medium" style={{ fontSize: 14, color: "#374151" }}>Select a conversation to begin</p>
+                <p className="font-medium" style={{ fontSize: 14, color: "#6B7268" }}>Select a conversation to begin</p>
               )}
             </div>
 
             {/* Meta bar */}
             {activeConversation && (
               <div className="flex-shrink-0 grid gap-2.5 px-5 py-3 sm:grid-cols-2 xl:grid-cols-4"
-                style={{ borderBottom: "1px solid #e5e7eb", background: "#fbfbfe" }}>
+                style={{ borderBottom: "1px solid #E3DFD4", background: "#fbfbfe" }}>
 
                 <MetaCard icon={<CircleDot className="h-3.5 w-3.5" />} label="Status">
                   <div className="relative">
@@ -1461,7 +1457,7 @@ const AdminSupportChat = () => {
                       disabled={isUpdatingMeta}
                       onChange={(e) => void updateConversationMeta({ status: e.target.value as SupportConversationStatus })}
                       className="asc-meta-select w-full rounded-xl border pl-7 pr-3 py-2"
-                      style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#e5e7eb", background: statusCfg.bg, color: statusCfg.color }}>
+                      style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#E3DFD4", background: statusCfg.bg, color: statusCfg.color }}>
                       {["OPEN","WAITING_SUPPORT","WAITING_CLIENT","RESOLVED","CLOSED"].map((s) => (
                         <option key={s} value={s}>{s.replace(/_/g," ")}</option>
                       ))}
@@ -1475,7 +1471,7 @@ const AdminSupportChat = () => {
                     disabled={isUpdatingMeta}
                     onChange={(e) => void updateConversationMeta({ category: e.target.value as SupportInquiryCategory })}
                     className="asc-meta-select w-full rounded-xl border px-3 py-2"
-                    style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#e5e7eb", background: "#f5f6fa", color: "#111827" }}>
+                    style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#E3DFD4", background: "#F6F4EF", color: "#1C231F" }}>
                     {["Booking Concern","Payment Concern","Contract Concern","Maid Replacement","Technical Support","General Inquiry"].map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
@@ -1485,14 +1481,14 @@ const AdminSupportChat = () => {
                 <MetaCard icon={<ShieldAlert className="h-3.5 w-3.5" />} label="Priority">
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <span style={{ fontSize: 9, fontWeight: 900, color: priorityCfg.color }}>●</span>
+                      <span style={{ fontSize: 9, fontWeight: 900, color: priorityCfg.color }}>â—</span>
                     </div>
                     <select
                       value={activeConversation.priority ?? "MEDIUM"}
                       disabled={isUpdatingMeta}
                       onChange={(e) => void updateConversationMeta({ priority: e.target.value as SupportPriority })}
                       className="asc-meta-select w-full rounded-xl border pl-7 pr-3 py-2"
-                      style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#e5e7eb", background: priorityCfg.bg, color: priorityCfg.color }}>
+                      style={{ fontSize: 12.5, fontWeight: 600, borderColor: "#E3DFD4", background: priorityCfg.bg, color: priorityCfg.color }}>
                       {["LOW","MEDIUM","HIGH","URGENT"].map((p) => (
                         <option key={p} value={p}>{p}</option>
                       ))}
@@ -1503,10 +1499,10 @@ const AdminSupportChat = () => {
                 <MetaCard icon={<UserCheck className="h-3.5 w-3.5" />} label="Owner">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-bold" style={{ fontSize: 12.5, color: "#111827" }}>
+                      <p className="truncate font-bold" style={{ fontSize: 12.5, color: "#1C231F" }}>
                         {activeConversation.assignedAdminName || admin?.username || admin?.agencyName || "Unassigned"}
                       </p>
-                      <p className="truncate mt-0.5" style={{ fontSize: 11, color: "#374151" }}>
+                      <p className="truncate mt-0.5" style={{ fontSize: 11, color: "#6B7268" }}>
                         {activeConversation.subject || "Trackable inquiry"}
                       </p>
                     </div>
@@ -1514,8 +1510,8 @@ const AdminSupportChat = () => {
                       type="button"
                       disabled={isUpdatingMeta}
                       onClick={() => void updateConversationMeta({ status: "RESOLVED" })}
-                      className="flex-shrink-0 inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
-                      style={{ fontSize: 11, color: "#ffffff", background: "linear-gradient(135deg,#34d399,#10b981)", boxShadow: "0 2px 8px rgba(16,185,129,0.3)", textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}>
+                      className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold transition-all hover:opacity-90 disabled:opacity-50"
+                      style={{ fontSize: 11, color: "#ffffff", background: "#1E6F52" }}>
                       <CheckCircle2 className="h-3 w-3" style={{ color: "#ffffff" }} />
                       Resolve
                     </button>
@@ -1527,7 +1523,7 @@ const AdminSupportChat = () => {
             {/* Messages */}
             <div ref={scrollRef} onScroll={handleMessagesScroll}
               className="asc-scrollbar flex flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-5"
-              style={{ background: "#f5f6fa" }}>
+              style={{ background: "#F6F4EF" }}>
               {isLoadingMessages ? (
                 <MessageSkeleton />
               ) : errorMessage ? (
@@ -1547,10 +1543,10 @@ const AdminSupportChat = () => {
                         onClick={() => void loadOlderMessages()}
                         disabled={isLoadingOlder}
                         className="flex items-center gap-2 rounded-full px-4 py-1.5 font-semibold transition-all hover:scale-105 disabled:opacity-60"
-                        style={{ fontSize: 12, background: "#fff", color: "#374151", border: "1px solid #d1d5db", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                        style={{ fontSize: 12, background: "#fff", color: "#6B7268", border: "1px solid #E3DFD4", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
                         {isLoadingOlder
-                          ? <><RefreshCw className="h-3 w-3 animate-spin" style={{ color: "#111827" }} /> Loading…</>
-                          : <><RefreshCw className="h-3 w-3" style={{ color: "#111827" }} /> Load earlier</>
+                          ? <><RefreshCw className="h-3 w-3 animate-spin" style={{ color: "#1C231F" }} /> Loadingâ€¦</>
+                          : <><RefreshCw className="h-3 w-3" style={{ color: "#1C231F" }} /> Load earlier</>
                         }
                       </button>
                     </div>
@@ -1568,22 +1564,22 @@ const AdminSupportChat = () => {
             </div>
 
             {/* Compose */}
-            <div className="flex-shrink-0 px-5 pt-2.5 pb-4" style={{ borderTop: "1px solid #e5e7eb", background: "#fff" }}>
+            <div className="flex-shrink-0 px-5 pt-2.5 pb-4" style={{ borderTop: "1px solid #E3DFD4", background: "#fff" }}>
               {/* Toolbar row */}
               <div className="flex items-center gap-2 mb-2.5">
                 <QuickReplyPanel onSelect={(text) => setDraft(text)} />
                 {draft.trim() && (
-                  <span className="ml-auto" style={{ fontSize: 11, color: "#374151" }}>
-                    {draft.length} chars · ↵ send
+                  <span className="ml-auto" style={{ fontSize: 11, color: "#6B7268" }}>
+                    {draft.length} chars Â· â†µ send
                   </span>
                 )}
               </div>
               {/* Input */}
               <div className="asc-compose flex items-end gap-2.5 rounded-2xl p-2"
-                style={{ background: "#f5f6fa", border: "1.5px solid #d1d5db", transition: "all 0.15s" }}>
+                style={{ background: "#F6F4EF", border: "1.5px solid #E3DFD4", transition: "all 0.15s" }}>
                 <textarea
                   ref={textareaRef}
-                  placeholder={activeConversation ? `Reply to ${activeConversation.clientName}…` : "Select a conversation…"}
+                  placeholder={activeConversation ? `Reply to ${activeConversation.clientName}â€¦` : "Select a conversationâ€¦"}
                   value={draft}
                   rows={1}
                   disabled={!activeConversation || isSending}
@@ -1594,7 +1590,7 @@ const AdminSupportChat = () => {
                   }}
                   onKeyDown={handleKeyDown}
                   className="asc-scrollbar flex-1 resize-none bg-transparent px-2 py-1.5 leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ fontSize: 14, maxHeight: 120, minHeight: 36, color: "#111827" }}
+                  style={{ fontSize: 14, maxHeight: 120, minHeight: 36, color: "#1C231F" }}
                 />
                 <button
                   onClick={() => void sendMessage()}
@@ -1617,3 +1613,5 @@ const AdminSupportChat = () => {
 };
 
 export default AdminSupportChat;
+
+

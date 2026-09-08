@@ -416,45 +416,45 @@ const HomePage = () => {
 
   // card palette: [accentColor, bgColor]
   const statRow1: [string, string][] = [
-    ["#0E4E5E", "#e8f3f6"],  // teal
-    ["#059669", "#e6f7f2"],  // green
-    ["#D97706", "#fef5e7"],  // amber
-    [s?.unreadAgencyChats ? "#DC2626" : "#059669",
-     s?.unreadAgencyChats ? "#fef2f2" : "#e6f7f2"],
+    ["#1E6F52", "#E4F1EA"],  // green
+    ["#1E6F52", "#E4F1EA"],  // green
+    ["#B8781E", "#FEF3E2"],  // amber
+    [s?.unreadAgencyChats ? "#A23B3B" : "#1E6F52",
+     s?.unreadAgencyChats ? "#FDE8E8" : "#E4F1EA"],
   ];
   const statRow2: [string, string][] = [
-    ["#7C3AED", "#f1eefe"],  // purple
-    ["#0891B2", "#e6f6fb"],  // cyan
-    ["#DB2777", "#fdf0f7"],  // pink
-    ["#B45309", "#fdf4e7"],  // orange-brown
+    ["#1E6F52", "#E4F1EA"],  // green
+    ["#6B7268", "#F0EEE7"],  // muted
+    ["#B8781E", "#FEF3E2"],  // amber
+    ["#6B7268", "#F0EEE7"],  // muted
   ];
 
   const slices = s ? [
-    { label: "Public",      value: s.publicMaids,     color: "#0E7490" },
-    { label: "Hidden",      value: s.hiddenMaids,     color: "#D97706" },
-    { label: "With Photos", value: s.maidsWithPhotos, color: "#059669" },
-    { label: "Enquiries",   value: s.enquiries,       color: "#7C3AED" },
-    { label: "Pending",     value: s.pendingRequests, color: "#DB2777" },
+    { label: "Public",      value: s.publicMaids,     color: "#1E6F52" },
+    { label: "Hidden",      value: s.hiddenMaids,     color: "#B8781E" },
+    { label: "With Photos", value: s.maidsWithPhotos, color: "#6B7268" },
+    { label: "Enquiries",   value: s.enquiries,       color: "#1C231F" },
+    { label: "Pending",     value: s.pendingRequests, color: "#A23B3B" },
   ] : [];
 
   const menuCards = [
-    { icon: <Building2 size={14} />,     label: "Agency Profile",  desc: "Branding & info",         path: adminPath("/agency-profile"),       accentColor: "#0E4E5E", bgColor: "#e8f3f6" },
-    { icon: <UserPlus size={14} />,      label: "Add Maid",        desc: "Expand your roster",       path: adminPath("/add-maid"),             accentColor: "#059669", bgColor: "#e6f7f2" },
-    { icon: <Pencil size={14} />,        label: "Manage Maids",    desc: "Edit or archive profiles", path: adminPath("/edit-maids"),           accentColor: "#B45309", bgColor: "#fdf4e7" },
-    { icon: <MessageSquare size={14} />, label: "Messages",        desc: "Reply to clients",         path: adminPath("/chat-support"),         accentColor: "#7C3AED", bgColor: "#f1eefe",
+    { icon: <Building2 size={14} />,     label: "Agency Profile",  desc: "Branding & info",         path: adminPath("/agency-profile"),       accentColor: "#1E6F52", bgColor: "#E4F1EA" },
+    { icon: <UserPlus size={14} />,      label: "Add Maid",        desc: "Expand your roster",       path: adminPath("/add-maid"),             accentColor: "#1E6F52", bgColor: "#E4F1EA" },
+    { icon: <Pencil size={14} />,        label: "Manage Maids",    desc: "Edit or archive profiles", path: adminPath("/edit-maids"),           accentColor: "#B8781E", bgColor: "#FEF3E2" },
+    { icon: <MessageSquare size={14} />, label: "Messages",        desc: "Reply to clients",         path: adminPath("/chat-support"),         accentColor: "#1E6F52", bgColor: "#E4F1EA",
       badge: s?.unreadAgencyChats ? `${s.unreadAgencyChats} unread` : undefined, badgeAlert: !!(s?.unreadAgencyChats) },
-    { icon: <Lock size={14} />,          label: "Security",        desc: "Change password",          path: adminPath("/change-password"),      accentColor: "#475569", bgColor: "#f0f3f5" },
-    { icon: <ScrollText size={14} />,    label: "Contracts",       desc: "Employment docs",          path: adminPath("/employment-contracts"), accentColor: "#0F766E", bgColor: "#e6f5f4" },
-    { icon: <PhoneIncoming size={14} />, label: "Enquiries",       desc: "See who's reaching out",  path: adminPath("/enquiry"),              accentColor: "#BE185D", bgColor: "#fdf0f7" },
-    { icon: <ClipboardList size={14} />, label: "Requests",        desc: "Track bookings",           path: adminPath("/requests"),             accentColor: "#0891B2", bgColor: "#e6f6fb" },
+    { icon: <Lock size={14} />,          label: "Security",        desc: "Change password",          path: adminPath("/change-password"),      accentColor: "#6B7268", bgColor: "#F0EEE7" },
+    { icon: <ScrollText size={14} />,    label: "Contracts",       desc: "Employment docs",          path: adminPath("/employment-contracts"), accentColor: "#1E6F52", bgColor: "#E4F1EA" },
+    { icon: <PhoneIncoming size={14} />, label: "Enquiries",       desc: "See who's reaching out",  path: adminPath("/enquiry"),              accentColor: "#B8781E", bgColor: "#FEF3E2" },
+    { icon: <ClipboardList size={14} />, label: "Requests",        desc: "Track bookings",           path: adminPath("/requests"),             accentColor: "#6B7268", bgColor: "#F0EEE7" },
   ];
 
   const waMetrics = s ? [
-    { label: "Sent",          value: s.whatsappMessagesSent,           sub: `${s.whatsappMessagesDelivered} delivered`, accentColor: "#0E4E5E", bgColor: "#e8f3f6" },
-    { label: "Read",          value: s.whatsappMessagesRead,           sub: "Messages opened",                          accentColor: "#059669", bgColor: "#e6f7f2" },
-    { label: "Response Rate", value: s.whatsappResponseRate,           sub: "% replied",                                accentColor: "#7C3AED", bgColor: "#f1eefe" },
-    { label: "Pending",       value: s.whatsappPendingReplies,         sub: "Awaiting reply",                           accentColor: "#D97706", bgColor: "#fef5e7" },
-    { label: "Docs / Intrvw", value: s.whatsappDocumentSubmissionRate, sub: `${s.whatsappInterviewConfirmations} confirmed`, accentColor: "#DB2777", bgColor: "#fdf0f7" },
+    { label: "Sent",          value: s.whatsappMessagesSent,           sub: `${s.whatsappMessagesDelivered} delivered`, accentColor: "#1E6F52", bgColor: "#E4F1EA" },
+    { label: "Read",          value: s.whatsappMessagesRead,           sub: "Messages opened",                          accentColor: "#1E6F52", bgColor: "#E4F1EA" },
+    { label: "Response Rate", value: s.whatsappResponseRate,           sub: "% replied",                                accentColor: "#6B7268", bgColor: "#F0EEE7" },
+    { label: "Pending",       value: s.whatsappPendingReplies,         sub: "Awaiting reply",                           accentColor: "#B8781E", bgColor: "#FEF3E2" },
+    { label: "Docs / Intrvw", value: s.whatsappDocumentSubmissionRate, sub: `${s.whatsappInterviewConfirmations} confirmed`, accentColor: "#A23B3B", bgColor: "#FDE8E8" },
   ] : [];
 
   return (

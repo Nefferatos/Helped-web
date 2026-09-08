@@ -421,7 +421,7 @@ export default function PublicAiReceptionist() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
 
-        .air-panel { font-family: 'DM Sans', system-ui, sans-serif; }
+        .air-panel { font-family: 'Inter', system-ui, sans-serif; }
 
         .air-panel-morph-in {
           animation: fabToPanel 0.38s cubic-bezier(0.34, 1.18, 0.64, 1) both;

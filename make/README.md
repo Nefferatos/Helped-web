@@ -1,11 +1,12 @@
 # Make.com scenarios for Helped Maids
 
-Two importable blueprints that wire the marketing → application → recruiter flow to the real web endpoints in this repo.
+Three importable blueprints that wire the marketing → application → recruiter flow to the real web endpoints in this repo.
 
 | File | Diagram half | Trigger |
 |------|-------------|---------|
 | `helped-content-engine.blueprint.json` | Scheduler → Claude → social channels | Schedule (time-based) |
 | `helped-applicant-intake.blueprint.json` | Application form → Supabase → recruiter | Poll Supabase every 15 min |
+| `helped-ai-receptionist.blueprint.json` | Webhook → AI Agent → response | Custom Webhook (from Worker) |
 
 Both use HTTP + Gmail/Sheets modules (the module family the existing `Helped Maids – Full Agentic Dispatcher` blueprint already imports), so they target the real REST surface instead of relying on per-network Make apps.
 
@@ -76,3 +77,115 @@ Every 15 minutes (module 1 polls a 20-min window; the dedupe makes the overlap s
 
 Stage ladder (`backend/src/atsStore.ts`):
 `New Applicant → Documents Submitted → Resume Parsed → Screening Interview → Background Check → Approved → Ready to Configure Public Profile → Placed / Rejected`
+
+---
+
+## 3. AI Receptionist (`helped-ai-receptionist.blueprint.json`)
+
+`Custom Webhook → AI Agent (LLM) → Response`
+
+The Helped Cloudflare Worker sends chat messages to a Make.com Custom Webhook. Make.com's AI Agent generates a natural, conversational response and returns structured JSON. The Worker handles maid card extraction, conversation persistence, and error fallback — Make only needs to generate the text response.
+
+### Setup
+
+1. **Create a Custom Webhook** in Make.com:
+   - Make → Scenarios → Create new scenario
+   - Add trigger: **Webhooks → Custom webhook**
+   - Copy the webhook URL
+
+2. **Set Worker secrets**:
+   ```bash
+   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_URL
+   # Paste your webhook URL when prompted
+
+   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
+   # Enter a long random secret (optional, for request validation)
+   ```
+
+3. **Add an AI Agent module** after the webhook:
+   - Provider: OpenAI, Anthropic, Groq, or any supported LLM
+   - System prompt: Use the agency personality from the blueprint
+   - User message: `{{1.message}}`
+   - Conversation history: `{{1.history}}`
+
+4. **Configure the response**:
+   - The AI Agent must return valid JSON:
+     ```json
+     {
+       "success": true,
+       "conversationId": "{{1.conversationId}}",
+       "response": "AI text response here",
+       "handoff": false
+     }
+     ```
+   - For human handoff (when user asks for a real person):
+     ```json
+     {
+       "success": true,
+       "conversationId": "{{1.conversationId}}",
+       "response": "I'll connect you with our support team.",
+       "handoff": true,
+       "actions": [{"type": "human_handoff"}]
+     }
+     ```
+
+5. **Test the flow**:
+   ```bash
+   # Local development (with wrangler dev)
+   curl -X POST http://localhost:8787/api/ai/receptionist \
+     -H "Content-Type: application/json" \
+     -d '{"message": "Hi, I need a maid"}'
+
+   # Production
+   curl -X POST https://findmaid.wow-aisolution.workers.dev/api/ai/receptionist \
+     -H "Content-Type: application/json" \
+     -d '{"message": "Hi, I need a maid"}'
+   ```
+
+### Webhook Payload (sent by Worker)
+
+The Worker sends this JSON to Make.com on every chat message:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `conversationId` | string | Stable conversation ID (persists across messages) |
+| `userId` | string? | Authenticated user ID (if logged in) |
+| `message` | string | Customer's chat message |
+| `page` | string | Current page path (e.g., `/client/maids`) |
+| `history` | array | Last 12 messages: `[{role, content}]` |
+| `context.company` | object | Agency name, phone, email, WhatsApp, hours, address |
+| `context.faqs` | array | Key FAQ knowledge `[{q, a}]` |
+| `context.maidSummary` | object | `{total, nationalities[], types[]}` |
+| `timestamp` | string | ISO 8601 timestamp |
+
+### Response Format (returned by Make.com)
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `success` | boolean | yes | Whether the request succeeded |
+| `conversationId` | string | yes | Same conversation ID from the request |
+| `response` | string | yes | AI text response (plain text, no markdown) |
+| `handoff` | boolean | no | `true` if customer requested human support |
+| `actions` | array | no | Actions for the frontend `[{type, ...}]` |
+| `maidReferences` | string[] | no | Reference codes mentioned (Worker attaches cards) |
+
+### Make.com AI Agent Personality
+
+The receptionist should:
+- Be warm, friendly, professional, helpful
+- Communicate naturally — never say "As an AI..."
+- Ask one question at a time — never dump ten questions
+- Use plain text — no markdown, no asterisks, no headers
+- Reference agency contact info when appropriate
+- Guide users to browse maids at `/search-maids` or `/enquiry2`
+- Remember conversation context — don't re-ask answered questions
+
+### Future: AI Agent Tools
+
+When ready, add these tools to the Make.com AI Agent:
+
+1. **Search Maids** → HTTP GET to Worker `/api/public-maids?nationality=X&skill=Y`
+2. **Get Maid Profile** → HTTP GET to Worker `/api/public-maids/{referenceCode}`
+3. **Create Enquiry** → HTTP POST to Worker `/api/enquiries`
+4. **Notify Admin** → Email/WhatsApp notification module
+5. **Transfer to Human** → Create support conversation via Worker API
