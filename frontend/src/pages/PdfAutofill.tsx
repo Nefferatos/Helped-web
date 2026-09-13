@@ -1399,14 +1399,6 @@ export function PdfAutofillBanner({
     if (!file.type.includes("pdf")) { toast.error("Please upload a PDF file"); return; }
     if (processingRef.current) return;
 
-    const currentUsage = loadUsage();
-    if (currentUsage.count >= DAILY_LIMIT) {
-      setUsedToday(currentUsage.count);
-      setStatus("limit");
-      setShowPopup(true);
-      return;
-    }
-
     processingRef.current = true;
     setFileName(file.name);
     setErrMsg("");
@@ -1465,13 +1457,6 @@ export function PdfAutofillBanner({
   }, [process]);
 
   const handleButtonClick = useCallback(() => {
-    const currentUsage = loadUsage();
-    if (currentUsage.count >= DAILY_LIMIT) {
-      setUsedToday(currentUsage.count);
-      setStatus("limit");
-      setShowPopup(true);
-      return;
-    }
     if (status === "idle") inputRef.current?.click();
     else setShowPopup(true);
   }, [status]);
@@ -1485,10 +1470,9 @@ export function PdfAutofillBanner({
   const isDone       = status === "done";
   const isError      = status === "error";
   const isLimit      = status === "limit";
-  const remaining    = Math.max(0, DAILY_LIMIT - usedToday);
   const pct          = liveProgress;
 
-  const BTN_SIZE = 44;
+  const BTN_SIZE = 52;
   const BTN_R    = (BTN_SIZE - 6) / 2;
   const BTN_CIRC = 2 * Math.PI * BTN_R;
   const BTN_OFF  = BTN_CIRC - (pct / 100) * BTN_CIRC;
@@ -1498,8 +1482,6 @@ export function PdfAutofillBanner({
     : isError   ? "linear-gradient(135deg,#e11d48,#f43f5e)"
     : isLimit   ? "linear-gradient(135deg,#7f1d1d,#991b1b)"
     : isProcessing ? "linear-gradient(135deg,#d97706,#f59e0b)"
-    : remaining <= 5  ? "linear-gradient(135deg,#b91c1c,#dc2626)"
-    : remaining <= 15 ? "linear-gradient(135deg,#92400e,#d97706)"
     : "linear-gradient(135deg,#b45309,#f59e0b)";
 
   const buttonShadow =
@@ -1512,7 +1494,7 @@ export function PdfAutofillBanner({
       <input
         ref={inputRef} type="file" accept="application/pdf"
         className="sr-only" onChange={handleFileChange}
-        disabled={isProcessing || isLimit}
+        disabled={isProcessing}
       />
 
       <section className={`mb-6 overflow-hidden rounded-2xl border shadow-sm transition-all ${
@@ -1527,30 +1509,29 @@ export function PdfAutofillBanner({
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm font-bold text-slate-900 sm:text-base">
-                  {isProcessing ? "Reading biodata PDF" : isDone ? `${fieldCount} fields are ready to review` : isError ? "PDF upload needs another try" : isLimit ? "Daily AI upload limit reached" : "Import biodata with AI"}
+                <h2 className="text-lg font-bold text-slate-950 sm:text-xl">
+                  {isProcessing ? "Reading biodata PDF" : isDone ? `${fieldCount} details are ready to review` : isError ? "PDF upload needs another try" : isLimit ? "PDF upload temporarily unavailable" : "Import biodata PDF"}
                 </h2>
-                {!isProcessing && !isError && !isLimit && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700"><Sparkles className="h-3 w-3" />Make AI</span>}
+                {!isProcessing && !isError && !isLimit && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800"><Sparkles className="h-3.5 w-3.5" />AI assisted</span>}
               </div>
-              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500 sm:text-sm">
+              <p className="mt-1.5 max-w-2xl text-base leading-relaxed text-slate-700">
                 {isProcessing ? STAGE_LABELS[status].sublabel : isDone ? "Review the form after auto-fill, then save the profile." : isError ? "Choose a text-based biodata PDF and try again." : isLimit ? `Available again in ${countdown}.` : "Upload a biodata PDF and we will extract its details into this profile."}
               </p>
-              {!isProcessing && !isLimit && <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500"><span>PDF only</span><span className="text-slate-300">•</span><span>Up to 10 MB</span><span className="text-slate-300">•</span><span>Up to 25 pages</span><span className="hidden items-center gap-1 text-emerald-700 sm:inline-flex"><ShieldCheck className="h-3.5 w-3.5" />Secure processing</span></div>}
+              {!isProcessing && !isLimit && <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-medium text-slate-700"><span>PDF only</span><span aria-hidden="true" className="text-slate-400">•</span><span>Up to 10 MB</span><span aria-hidden="true" className="text-slate-400">•</span><span>Up to 25 pages</span><span className="inline-flex items-center gap-1.5 text-emerald-800"><ShieldCheck className="h-4 w-4" />Secure processing</span></div>}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
-            <span className={`text-xs font-semibold ${remaining <= 5 ? "text-rose-600" : "text-slate-600"}`}>{remaining} of {DAILY_LIMIT} uploads left today</span>
-            <span className="text-[11px] text-slate-400">Text-based PDFs work best</span>
+          <div className="hidden shrink-0 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 sm:block">
+            Text-based PDFs work best
           </div>
         </div>
-        <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 bg-white/55 px-4 py-3 sm:px-5">
-          <span className="text-xs font-medium text-slate-500">{isProcessing ? `${pct}% complete — please keep this page open` : isDone ? "Open the result to see the detection summary" : "Your PDF text is sent securely to the Make AI Agent."}</span>
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 bg-white/55 px-4 py-4 sm:px-5">
+          <span className="text-sm font-medium text-slate-700">{isProcessing ? `${pct}% complete — please keep this page open` : isDone ? "Open the result to see the detected details." : "Your PDF is processed securely to fill in this form."}</span>
           <span className="shrink-0">
       <button
         type="button" onClick={handleButtonClick}
         className="relative inline-flex items-center gap-0 overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-500"
         style={{
-          height: 44, borderRadius: 14, padding: 0, border: "none",
+          height: 52, borderRadius: 14, padding: 0, border: "none",
           background: buttonBg, boxShadow: buttonShadow,
           cursor: isProcessing ? "default" : "pointer",
           transition: "all 0.2s ease",
@@ -1589,32 +1570,18 @@ export function PdfAutofillBanner({
             {isProcessing   ? "Analysing PDF…"
              : isDone        ? `Filled · ${fieldCount} fields`
              : isError       ? "Upload Failed"
-             : isLimit       ? "Daily limit reached"
-             :                 "AI PDF Upload"}
+             : isLimit       ? "Try again later"
+             :                 "Choose PDF"}
           </span>
           <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "rgba(255,255,255,0.72)" }}>
             {isProcessing   ? STAGE_LABELS[status].sublabel
              : isDone        ? "Click to view details"
              : isError       ? "Click to retry"
-             : isLimit       ? `Resets in ${countdown}`
-             : remaining <= 5 ? `Only ${remaining} left today`
-             :                  `${remaining} of ${DAILY_LIMIT} remaining today`}
+             : isLimit       ? `Available in ${countdown}`
+             :                  "Select biodata PDF"}
           </span>
         </span>
 
-        {/* Usage dots on idle/error */}
-        {!isProcessing && !isDone && !isLimit && (
-          <span className="pr-3 pl-1 self-center flex flex-col items-end gap-1" aria-hidden>
-            <div className="flex gap-[3px]">
-              {Array.from({ length: Math.min(DAILY_LIMIT, 10) }, (_, i) => (
-                <div key={i} style={{
-                  width: 4, height: 4, borderRadius: "50%",
-                  background: i < usedToday ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.2)",
-                }} />
-              ))}
-            </div>
-          </span>
-        )}
 
         {/* Hover overlay */}
         <span

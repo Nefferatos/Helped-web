@@ -481,20 +481,28 @@ const NavBadge = ({
 
 const getAgencyDisplayName = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Agency";
-  if (agencyAdmin.role === "admin") return agencyAdmin.agencyName || "Main Agency";
+  if (agencyAdmin.role === "admin") {
+    return agencyAdmin.agencyName === "Main Agency"
+      ? "Rinzin Agency"
+      : agencyAdmin.agencyName || "Rinzin Agency";
+  }
   return agencyAdmin.agencyName || agencyAdmin.username || "Agency";
 };
 
 const getAgencyDisplaySubtitle = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Management Suite";
-  if (agencyAdmin.role === "admin") return "Main Agency";
+  if (agencyAdmin.role === "admin") return "Rinzin Agency";
   if (agencyAdmin.role === "agency") return "Agency Account";
   return "Management Suite";
 };
 
 const getAgencyDisplayWelcomeName = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Agency";
-  if (agencyAdmin.role === "admin") return agencyAdmin.agencyName || "Main Agency";
+  if (agencyAdmin.role === "admin") {
+    return agencyAdmin.agencyName === "Main Agency"
+      ? "Rinzin Agency"
+      : agencyAdmin.agencyName || "Rinzin Agency";
+  }
   return agencyAdmin.username || agencyAdmin.agencyName || "Agency";
 };
 
@@ -607,7 +615,7 @@ const WelcomeModal = ({
               textTransform: "uppercase",
             }}
           >
-            Find Maids · Agency Portal
+            Agecy Portal
           </p>
           <p
             style={{
@@ -824,7 +832,7 @@ const SidebarContent = ({
               lineHeight: 1.2,
             }}
           >
-            Find Maids
+            Agecy Portal
           </p>
           <span style={{ fontSize: 11, fontWeight: 600, color: "#6B7280" }}>
             Agency Management
@@ -1487,7 +1495,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             >
               {isDesktop
                 ? "Dashboard"
-                : "Find Maids Admin"}
+                : "Agecy Portal Admin"}
             </span>
           </div>
 

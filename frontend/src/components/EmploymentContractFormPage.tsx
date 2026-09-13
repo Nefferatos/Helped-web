@@ -50,21 +50,27 @@ type MaidSearchResult = {
 type EmploymentContractPageMode = "create" | "edit" | "view";
 
 /* ─── constants ─── */
-const GENERATED_FORMS = [
-  { category: "Maid Biodata Form", hasTemplate: true },
-  { category: "Official Receipt", hasTemplate: false },
-  { category: "Standard Contract Between Employer and Employment Agency", hasTemplate: true },
-  { category: "Form A", hasTemplate: true },
-  { category: "Form C", hasTemplate: true },
-  { category: "Salary Schedule Form", hasTemplate: true },
-  { category: "Employee Income Tax Declaration", hasTemplate: true },
-  { category: "Insurance Forms", hasTemplate: true },
-  { category: "Standard Contract Between Maid and Employer", hasTemplate: true },
-  { category: "Rest Day Agreement Form Between Maid and Employer", hasTemplate: true },
-  { category: "Safety Agreement Form Between Maid And Employer", hasTemplate: true },
-  { category: "Handing and Taking Over Checklist", hasTemplate: true },
-  { category: "Form S10", hasTemplate: false },
+const DOCUMENT_SECTIONS = [
+  { title: "Maid Biodata Form", forms: ["Maid Biodata.pdf"] },
+  { title: "Official Receipt", forms: ["Official Receipt.pdf"] },
+  { title: "Standard Contract Between Employer & Employment Agency", forms: ["Service Contract Between Employer and Agency - Form 1.pdf", "Service Contract Between Employer and Agency - Form 2.pdf"] },
+  { title: "Form A", forms: ["Form A.pdf"] },
+  { title: "Form B", forms: ["Form B.pdf"] },
+  { title: "Salary Schedule Form", forms: ["Salary Form.pdf"] },
+  { title: "Prescribed Authorisation Form for Employment Agency (EA) for Foreign Domestic Worker", forms: ["Authorisation for EA for FDW.pdf"] },
+  { title: "Employer Income Tax Declaration", forms: ["Employer Income Tax Declaration.pdf"] },
+  { title: "Insurance Form", forms: ["Sompo 141 Insurance.pdf", "Sompo 201 Insurance.pdf", "Logix Domestic Maid Proposal Form.pdf", "Liberty Insurance Form.pdf", "Vantage Maid Proposal Form.pdf", "China Taiping MaidSure Insurance Proposal Form.pdf", "Liberty Maid Insurance.pdf", "HL_Maid Protect.pdf"] },
+  { title: "Government Bond Form", forms: ["Bond.pdf"] },
+  { title: "Standard Contract Between Maid and Employer", forms: ["Service Contract Between Maid and Employer.pdf"] },
+  { title: "Rest Day Agreement Form Between Maid and Employer", forms: ["Rest Day Agreement Form Between Maid and Employer.pdf"] },
+  { title: "Application for Internship", forms: ["Application for Internship - GIP.pdf"] },
+  { title: "Consent to Transfer Domestic Worker", forms: ["Consent To Transfer Domestic Worker.pdf"] },
+  { title: "Handing Taking Over Checklist", forms: ["Handing Taking Over Checklist.pdf"] },
+  { title: "Form S10", forms: ["Form S10.pdf"] },
+  { title: "Safety Agreement Form Between Maid and Employer", forms: ["Safety Agreement Form Between Maid and Employer - Tagalog.pdf", "Safety Agreement Form Between Maid and Employer - Indonesian.pdf", "Safety Agreement Form Between Maid and Employer - Burmese.pdf", "Safety Agreement Form Between Maid and Employer - Tamil.pdf"] },
+  { title: "Existing Employer's Authorisation Form", forms: ["Existing Employer Authorisation for EA for FDW.pdf"] },
 ];
+const GENERATED_FORMS = DOCUMENT_SECTIONS.map((section) => ({ category: section.title, hasTemplate: true }));
 const CATEGORY_NAMES = GENERATED_FORMS.map((f) => f.category);
 const NATIONALITY_OPTIONS = ["Singaporean","Singapore","Indian","Filipino","Indonesian","Myanmar","Sri Lankan","Bangladeshi","Malaysian","Chinese"];
 const INCOME_OPTIONS = ["$1,000 - $1,499","$1,500 - $1,999","$2,000 - $2,499","$2,500 - $2,999","$3,000 - $3,499","$3,500 - $3,999","$4,000 - $4,499","$4,500 - $4,999","$5,000 - $5,499","$5,500 - $5,999","$6,000 and above"];
@@ -219,9 +225,10 @@ function DatePicker({ day, month, year, onDay, onMonth, onYear }: {
 }
 
 /* ─── CategoryFileUpload ─── */
-const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload, readOnly = false }: {
+const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload, isSelected, onToggleSelection, readOnly = false }: {
   category: string; hasTemplate: boolean; refCode: string; uploads: UploadedFile[];
-  onUpload: (updater: (files: UploadedFile[]) => UploadedFile[]) => void; readOnly?: boolean;
+  onUpload: (updater: (files: UploadedFile[]) => UploadedFile[]) => void;
+  isSelected: (file: UploadedFile) => boolean; onToggleSelection: (file: UploadedFile) => void; readOnly?: boolean;
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -248,44 +255,50 @@ const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload,
   };
 
   const removeUpload = (idx: number) => onUpload((current) => current.filter((_, i) => i !== idx));
+  const hasUploads = uploads.length > 0;
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          <span className="ecp-document-label truncate text-[12px] font-semibold text-gray-700">{category}</span>
-        </div>
+    <div className="border-b border-slate-100 last:border-b-0">
+      <div className="flex min-h-[72px] items-center gap-3 px-4 py-2 sm:px-8">
+        {!hasUploads && (
+          <span className="h-10 w-10 shrink-0 rounded border border-slate-300 bg-white shadow-sm" aria-hidden="true" />
+        )}
+        {!hasUploads && <Printer className="h-9 w-9 shrink-0 text-emerald-600 stroke-[1.35]" aria-hidden="true" />}
+        {uploads.length > 0 && (
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            {uploads.map((u, i) => (
+              <div key={i} className="flex min-h-12 w-full min-w-0 items-center gap-2 rounded border border-blue-100 bg-blue-50/40 px-2.5 py-2">
+                <input
+                  type="checkbox"
+                  checked={isSelected(u)}
+                  onChange={() => onToggleSelection(u)}
+                  aria-label={`Select ${u.name} for bulk download`}
+                  className="h-7 w-7 shrink-0 cursor-pointer rounded border border-slate-300 bg-white accent-blue-600"
+                />
+                <Printer className="h-6 w-6 shrink-0 text-emerald-600 stroke-[1.35]" aria-hidden="true" />
+                <FileCheck2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                <a href={u.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-[11px] font-semibold text-sky-700 hover:underline">{u.name}</a>
+                <a href={u.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-0.5 rounded border border-sky-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50">
+                  <Eye className="h-2.5 w-2.5" />View
+                </a>
+                {!readOnly && (
+                  <button type="button" onClick={() => removeUpload(i)} className="shrink-0 text-gray-300 hover:text-red-400">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {!readOnly && (
           <button type="button" onClick={() => inputRef.current?.click()} disabled={isUploading}
-            className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors shrink-0">
-            {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-            {hasTemplate ? "Upload Signed" : "Upload"}
+            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors">
+            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Upload
           </button>
         )}
       </div>
       <input ref={inputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handleFileChange} />
-      {uploads.length > 0 && (
-        <div className="space-y-1 pl-5">
-          {uploads.map((u, i) => (
-            <div key={i} className="flex items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5">
-              <FileCheck2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-              <a href={u.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-[11px] font-semibold text-sky-700 hover:underline">{u.name}</a>
-              <a href={u.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 rounded border border-sky-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50">
-                <Eye className="h-2.5 w-2.5" />View
-              </a>
-              <a href={u.url} download={u.name} className="inline-flex items-center rounded border border-gray-200 bg-white p-0.5 text-gray-500 hover:bg-gray-50">
-                <Download className="h-3 w-3" />
-              </a>
-              {!readOnly && (
-                <button type="button" onClick={() => removeUpload(i)} className="text-gray-300 hover:text-red-400">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 };
@@ -311,7 +324,7 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
     return () => { document.body.style.overflow = orig; window.removeEventListener("keydown", onKey); };
   }, [open, handleClose]);
 
-  const addFiles = (files: File[]) => setPendingFiles((p) => [...p, ...files.map((f) => ({ id: `${f.name}-${Date.now()}-${Math.random()}`, file: f, category: CATEGORY_NAMES[0], status: "pending" as const }))]);
+  const addFiles = (files: File[]) => setPendingFiles((p) => [...p, ...files.map((f) => ({ id: `${f.name}-${Date.now()}-${Math.random()}`, file: f, category: "", status: "pending" as const }))]);
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); addFiles(Array.from(e.dataTransfer.files)); };
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ""; };
   const updateCategory = (id: string, cat: string) => setPendingFiles((p) => p.map((f) => f.id === id ? { ...f, category: cat } : f));
@@ -320,6 +333,10 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
   const uploadAll = async () => {
     const pending = pendingFiles.filter((f) => f.status === "pending");
     if (!pending.length) return;
+    if (pending.some((f) => !f.category)) {
+      toast.error("Assign a document category to every file before uploading.");
+      return;
+    }
     setIsUploading(true);
     const results: Record<string, UploadedFile[]> = {};
     for (const pf of pending) {
@@ -345,18 +362,18 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
-      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3.5">
+      <div className="flex max-h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="border-b border-gray-200 bg-blue-50 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20"><Upload className="h-4 w-4 text-white" /></div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100"><Upload className="h-5 w-5 text-black" /></div>
               <div>
-                <h2 className="text-[15px] font-bold text-white">Bulk File Upload</h2>
-                <p className="text-[11px] text-white/70">Assign each file to a document category</p>
+                <h2 className="text-[16px] font-bold text-black">Upload Documents</h2>
+                <p className="text-[16px] text-black">Add all PDF files, then assign a category to each one</p>
               </div>
             </div>
-            <button type="button" onClick={handleClose} disabled={isUploading} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white hover:bg-white/30 disabled:opacity-40">
-              <X className="h-4 w-4" />
+            <button type="button" onClick={handleClose} disabled={isUploading} className="flex h-8 w-8 items-center justify-center rounded-lg text-black hover:bg-blue-100 disabled:opacity-40">
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -366,7 +383,7 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isDragging ? "bg-emerald-100" : "bg-gray-200"}`}>
               <Upload className={`h-5 w-5 ${isDragging ? "text-emerald-600" : "text-gray-400"}`} />
             </div>
-            <p className="text-[14px] font-bold text-gray-600">{isDragging ? "Release to add files" : "Click or drag & drop PDF files"}</p>
+            <p className="text-[16px] font-medium text-black">{isDragging ? "Release to add files" : "Click or drag & drop PDF files"}</p>
             <input ref={bulkInputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handleFileInput} />
           </div>
           {pendingFiles.length > 0 && (
@@ -380,13 +397,17 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
                     {pf.status === "pending" && <FileText className="h-4 w-4 text-gray-400" />}
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate text-[13px] font-bold text-gray-800">{pf.file.name}</p>
-                    {pf.status === "error" && <p className="text-[12px] text-red-500">{pf.errorMsg}</p>}
+                    <p className="truncate text-[16px] font-medium text-black">{pf.file.name}</p>
+                    {pf.status === "error" && <p className="text-[16px] text-black">{pf.errorMsg}</p>}
                     {pf.status === "pending" && (
-                      <select value={pf.category} onChange={(e) => updateCategory(pf.id, e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-gray-700 focus:border-emerald-400 focus:outline-none">
-                        {CATEGORY_NAMES.map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <label className="block">
+                        <span className="mb-1 block text-[16px] font-medium text-black">Assign category</span>
+                        <select value={pf.category} onChange={(e) => updateCategory(pf.id, e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[16px] font-medium text-black focus:border-emerald-400 focus:outline-none">
+                          <option value="" disabled>Select a category</option>
+                          {CATEGORY_NAMES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </label>
                     )}
                     {pf.status === "done" && <p className="text-[12px] font-bold text-emerald-700">→ "{pf.category}"</p>}
                     {pf.status === "uploading" && <p className="text-[12px] text-sky-600">Uploading to "{pf.category}"…</p>}
@@ -402,11 +423,11 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
           )}
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-3">
-          <button type="button" onClick={handleClose} disabled={isUploading} className="text-[13px] font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-40">{allDone ? "Close" : "Cancel"}</button>
+          <button type="button" onClick={handleClose} disabled={isUploading} className="text-[16px] font-medium text-black hover:text-black disabled:opacity-40">{allDone ? "Close" : "Cancel"}</button>
           <div className="flex items-center gap-2">
-            {!allDone && doneCount > 0 && <span className="text-[12px] text-gray-400">{doneCount}/{pendingFiles.length} done</span>}
+            {!allDone && doneCount > 0 && <span className="text-[16px] text-black">{doneCount}/{pendingFiles.length} done</span>}
             <button type="button" onClick={uploadAll} disabled={pendingCount === 0 || isUploading}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold transition-all ${pendingCount > 0 && !isUploading ? "bg-emerald-600 text-white hover:bg-emerald-700" : "cursor-not-allowed bg-gray-100 text-gray-400"}`}>
+              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[16px] font-medium transition-all ${pendingCount > 0 && !isUploading ? "bg-emerald-600 text-white hover:bg-emerald-700" : "cursor-not-allowed bg-gray-100 text-black"}`}>
               {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
               {isUploading ? "Uploading…" : pendingCount === 0 && allDone ? "All Done ✓" : `Upload ${pendingCount} File${pendingCount !== 1 ? "s" : ""}`}
             </button>
@@ -689,7 +710,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
 
       const r = await fetch("/api/employers", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify(body),
       });
       const d = (await r.json().catch(() => ({}))) as { error?: string; employer?: { refCode?: string } };
@@ -1279,7 +1300,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
 
         {/* ═══ STEP 4: DOCUMENTS ═══ */}
         {showStepFour && (
-          <div className="ecp-section space-y-3">
+          <div className="ecp-section w-full space-y-3">
             <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1300,46 +1321,34 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
                 </div>
                 <button type="button" onClick={() => setBulkUploadOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-amber-700 shadow-sm transition-colors">
-                  <Upload className="h-3.5 w-3.5" /> Bulk Upload PDFs
+                  <Upload className="h-3.5 w-3.5" /> Bulk Upload Documents
                 </button>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-              <div className="bg-gradient-to-r from-slate-600 to-gray-700 px-4 py-2.5 flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20"><FilePlus2 className="h-3.5 w-3.5 text-white" /></div>
-                <h3 className="text-[14px] font-bold text-white">Documents &amp; Forms</h3>
+            <div className="-mx-4 w-[calc(100%+2rem)] overflow-hidden rounded-md border border-blue-300 bg-white shadow-sm">
+              <div className="flex items-center gap-2 border-b border-blue-300 bg-[#9fc5e8] px-3 py-2 sm:px-4">
+                <FilePlus2 className="h-4 w-4 text-blue-900" />
+                <h3 className="text-[13px] font-bold text-blue-950">Contract Documents &amp; Forms</h3>
+                <span className="ml-auto text-[11px] font-medium text-blue-900">Upload completed PDF forms</span>
               </div>
-              <div className="bg-white p-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {GENERATED_FORMS.map((cat) => {
-                    const uploads = categoryUploads[cat.category] ?? [];
-                    return (
-                      <div key={cat.category} className="rounded-lg border border-gray-100 p-3 hover:border-gray-200 transition-colors">
-                        <CategoryFileUpload
-                          category={cat.category}
-                          hasTemplate={cat.hasTemplate}
-                          refCode={refCode || agency.caseReferenceNumber || "temp"}
-                          uploads={uploads}
-                          onUpload={(updater) => updateCategoryUploads(cat.category, updater)}
-                        />
-                        {uploads.length > 0 && (
-                          <div className="mt-1.5 pl-5 space-y-1">
-                            {uploads.map((file) => {
-                              const key = docKey(file);
-                              return (
-                                <label key={key} className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500 font-medium select-none">
-                                  <input type="checkbox" checked={selectedDocs.has(key)} onChange={() => toggleDoc(key)} className="h-3.5 w-3.5 accent-emerald-600 rounded" />
-                                  Select for bulk download
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              <div>
+                {DOCUMENT_SECTIONS.map((section) => (
+                  <section key={section.title}>
+                    <h4 className="border-y border-blue-200 bg-[#c9def2] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 sm:px-4">
+                      {section.title}
+                    </h4>
+                    <CategoryFileUpload
+                      category={section.title}
+                      hasTemplate
+                      refCode={refCode || agency.caseReferenceNumber || "temp"}
+                      uploads={categoryUploads[section.title] ?? []}
+                      onUpload={(updater) => updateCategoryUploads(section.title, updater)}
+                      isSelected={(file) => selectedDocs.has(docKey(file))}
+                      onToggleSelection={(file) => toggleDoc(docKey(file))}
+                    />
+                  </section>
+                ))}
               </div>
             </div>
 
