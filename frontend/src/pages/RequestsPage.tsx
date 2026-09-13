@@ -109,7 +109,7 @@ type RequestsPageInfo = {
 /* ── Status config ─────────────────────────────────────────────────────── */
 const STATUS_CONFIG = {
   pending: {
-    label: "Pending",
+    label: "Under Review",
     icon: Clock,
     pill: "bg-amber-50 text-amber-800 border-amber-200",
     dot: "bg-amber-400",
@@ -117,7 +117,7 @@ const STATUS_CONFIG = {
     statBg: "bg-amber-50 border-amber-100",
   },
   interested: {
-    label: "Interested",
+    label: "Match Found",
     icon: Sparkles,
     pill: "bg-violet-50 text-violet-800 border-violet-200",
     dot: "bg-violet-400",
@@ -125,7 +125,7 @@ const STATUS_CONFIG = {
     statBg: "bg-violet-50 border-violet-100",
   },
   direct_hire: {
-    label: "Direct Hire",
+    label: "In Progress",
     icon: CheckCircle2,
     pill: "bg-emerald-50 text-emerald-800 border-emerald-200",
     dot: "bg-emerald-400",
@@ -474,7 +474,7 @@ const RequestsPageContent = () => {
                         {/* Info chips */}
                         <div>
                           <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Summary</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">What they need</p>
                             <p className="text-[12px] font-semibold leading-snug text-gray-900">{request.summary}</p>
                           </div>
                         </div>

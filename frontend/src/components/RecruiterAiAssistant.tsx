@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { readSafeJson } from "@/lib/safeJson";
+import { useApplicantAssistant, type AssistantMessage } from "@/hooks/useApplicantAssistant";
 import {
   Bot,
   Send,
@@ -30,6 +31,9 @@ import {
   UserCheck,
   UserX,
   SendHorizontal,
+  FileText,
+  ClipboardCheck,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -75,6 +79,10 @@ export interface RecruiterAiAssistantProps {
   onPostToWorkflow?: (summary: string) => Promise<void>;
   /** Called after bulk email operations to refresh data */
   onRefreshData?: () => void;
+  /** Current active filters on the applicant list */
+  currentFilters?: Record<string, unknown>;
+  /** Current search query on the applicant list */
+  currentSearch?: string;
   /** Render inline as a card instead of floating bubble */
   inline?: boolean;
 }
@@ -84,6 +92,9 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   type?: "insight" | "action" | "summary" | "error" | "success";
+  documentUrl?: string | null;
+  documentId?: string | null;
+  trackerId?: string | null;
 }
 
 interface EmailResult {
@@ -179,6 +190,8 @@ const RecruiterAiAssistant = ({
   onApplyFilter,
   onPostToWorkflow,
   onRefreshData,
+  currentFilters,
+  currentSearch,
   inline = false,
 }: RecruiterAiAssistantProps) => {
   const [isOpen, setIsOpen] = useState(inline);
@@ -192,6 +205,40 @@ const RecruiterAiAssistant = ({
   const [emailResults, setEmailResults] = useState<EmailResult[]>([]);
   const [showEmailResults, setShowEmailResults] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ─── Backend AI Assistant Hook ────────────────────────────────────────────
+
+  const selectedApplicantIds = useMemo(
+    () => (selectedId ? [selectedId] : []),
+    [selectedId],
+  );
+
+  const assistantHook = useApplicantAssistant({
+    selectedApplicantIds,
+    currentFilters,
+    currentSearch,
+    onTrackerCreated: (trackerId, googleDocUrl) => {
+      if (googleDocUrl) {
+        toast.success("Tracker synced to Google Docs", { description: googleDocUrl });
+      }
+    },
+  });
+
+  // Sync backend messages to local display (keep local messages too)
+  const combinedMessages = useMemo(() => {
+    if (assistantHook.messages.length > 0) {
+      return assistantHook.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        type: (m.action ? "action" : "insight") as ChatMessage["type"],
+        documentUrl: m.documentUrl,
+        documentId: m.documentId,
+        trackerId: m.trackerId,
+      }));
+    }
+    return messages;
+  }, [assistantHook.messages, messages]);
 
   // ─── Pipeline Analytics ─────────────────────────────────────────────────
 
@@ -258,12 +305,12 @@ const RecruiterAiAssistant = ({
   // ─── Welcome message ───────────────────────────────────────────────────
 
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
+    if (isOpen && messages.length === 0 && assistantHook.messages.length === 0) {
       setMessages([
         {
           id: `welcome-${Date.now()}`,
           role: "assistant",
-          content: `Welcome! I'm your AI recruiting assistant. I've analyzed **${analytics.total} applicants** across your pipeline.\n\n• **${analytics.highScore.length}** scoring 80+ and ready to fast-track\n• **${analytics.needsAttention.length}** need contact details fixed\n• **${analytics.readyForScreening.length}** waiting for screening\n\n**New!** I can now send emails to passing and failed candidates. Use the Actions tab to get started.`,
+          content: `Welcome! I'm your AI recruiting assistant powered by Make.com. I've analyzed **${analytics.total} applicants** across your pipeline.\n\n• **${analytics.highScore.length}** scoring 80+ and ready to fast-track\n• **${analytics.needsAttention.length}** need contact details fixed\n• **${analytics.readyForScreening.length}** waiting for screening\n\n**New!** I can now:\n• Analyze and compare applicants\n• Create applicant trackers\n• Sync trackers to Google Docs\n• Help with follow-up actions\n\nSelect an applicant and ask me anything!`,
           type: "summary",
         },
       ]);
@@ -492,108 +539,21 @@ const RecruiterAiAssistant = ({
     }
   }, [onPostToWorkflow, generateWorkflowSummary]);
 
-  // ─── NL Query Handler ──────────────────────────────────────────────────
-
-  const handleQuery = useCallback(
-    async (query: string): Promise<ChatMessage> => {
-      const id = `a-${Date.now()}-${Math.random()}`;
-
-      // Build applicant data context for the AI
-      const applicantLines = applications.slice(0, 20).map((a) => {
-        const p = a.profile || {};
-        return `- ${p.fullName || "Unnamed"} (${p.nationality || "N/A"}, ${p.yearsOfExperience ?? 0}y exp, score: ${a.score?.score ?? "N/A"}, status: ${a.status}) WhatsApp: ${p.whatsappNumber || "N/A"} Email: ${p.email || "N/A"} Phone: ${p.contactNumber || "N/A"}`;
-      });
-
-      const systemPrompt = `You are an intelligent AI recruiting assistant for a domestic worker (maid) agency. You help the admin manage applicants, analyze the recruitment pipeline, and provide actionable insights.
-
-Your personality: Professional, proactive, data-driven, concise but thorough. Use markdown formatting (bold, bullet points).
-
-Current pipeline data:
-- Total applicants: ${analytics.total}
-- Average score: ${analytics.avgScore}%
-- High score (80+): ${analytics.highScore.length}
-- Need contact fix: ${analytics.needsAttention.length}
-- Awaiting screening: ${analytics.readyForScreening.length}
-- Ready to approve: ${analytics.readyForApproval.length}
-- Top nationalities: ${analytics.topNationalities.map(([n, c]) => `${n}(${c})`).join(", ")}
-
-Applicant details:
-${applicantLines.join("\n") || "No applicants yet."}
-
-Always reference actual applicant names and data when responding. Be specific and helpful.`;
-
-      try {
-        const response = await fetch("/api/ai/command-center/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: query }],
-            system: systemPrompt,
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json() as { reply?: string; error?: string };
-          if (data.reply) {
-            return { id, role: "assistant", content: data.reply, type: "insight" };
-          }
-        }
-      } catch {
-        // Fall through to local fallback
-      }
-
-      // Fallback: local keyword-based responses
-      const lower = query.toLowerCase();
-      if (lower.includes("summary") || lower.includes("pipeline")) {
-        const lines = [
-          `📊 **Pipeline Summary** — ${analytics.total} applicants`,
-          "",
-          `🟢 **${analytics.byStage.get("New Applicant")?.length ?? 0}** new applicants`,
-          `📄 **${analytics.byStage.get("Documents Submitted")?.length ?? 0}** documents submitted`,
-          `🔍 **${analytics.byStage.get("Resume Parsed")?.length ?? 0}** parsed, awaiting screening`,
-          `💬 **${analytics.byStage.get("Screening Interview")?.length ?? 0}** in screening`,
-          `✅ **${analytics.byStage.get("Approved")?.length ?? 0}** approved`,
-          `🏠 **${analytics.byStage.get("Placed")?.length ?? 0}** placed`,
-          `❌ **${analytics.byStage.get("Rejected")?.length ?? 0}** rejected`,
-          "",
-          `Average qualification score: **${analytics.avgScore}%**`,
-        ];
-        return { id, role: "assistant", content: lines.join("\n"), type: "summary" };
-      }
-
-      return {
-        id,
-        role: "assistant",
-        content: `I analyzed your pipeline: **${analytics.total} applicants**, average score **${analytics.avgScore}%**.\n\nI'm having trouble connecting to the AI service. Please try again.`,
-        type: "insight",
-      };
-    },
-    [analytics, applications],
-  );
-
   const handleSubmit = useCallback(
     async (messageText?: string) => {
       const userMessage = (messageText ?? input).trim();
-      if (!userMessage || isThinking) return;
+      if (!userMessage || isThinking || assistantHook.isThinking) return;
 
       setInput("");
-      setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", content: userMessage }]);
-      setIsThinking(true);
-
+      // The hook owns the chat conversation; it adds user + assistant messages itself.
       try {
-        await new Promise((r) => setTimeout(r, 400 + Math.random() * 400));
-        const response = await handleQuery(userMessage);
-        setMessages((prev) => [...prev, response]);
-      } catch {
-        setMessages((prev) => [
-          ...prev,
-          { id: `e-${Date.now()}`, role: "assistant", content: "Something went wrong. Please try again.", type: "error" },
-        ]);
-      } finally {
-        setIsThinking(false);
+        await assistantHook.sendMessage(userMessage);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Something went wrong";
+        toast.error("AI Assistant error", { description: errorMessage });
       }
     },
-    [input, isThinking, handleQuery],
+    [input, isThinking, assistantHook],
   );
 
   // ─── Shared body content ────────────────────────────────────────────────
@@ -698,8 +658,31 @@ Always reference actual applicant names and data when responding. Be specific an
       {/* ── Chat Tab ── */}
       {activeTab === "chat" && (
         <>
+          {/* Context indicator — what the assistant is currently looking at */}
+          <div className="shrink-0 border-b border-slate-100 bg-white px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                <Filter className="h-3 w-3" />
+                {selectedId
+                  ? `Context: ${applications.find((a) => a.id === selectedId)?.profile?.fullName ?? "Selected applicant"}`
+                  : currentFilters && Object.keys(currentFilters).length > 0
+                  ? "Context: filtered list"
+                  : "Context: full applicant list"}
+              </span>
+              {selectedId && onSelectApplicant && (
+                <button
+                  type="button"
+                  onClick={() => onSelectApplicant(selectedId)}
+                  className="text-[10px] font-semibold text-emerald-600 hover:underline"
+                >
+                  Open profile
+                </button>
+              )}
+            </div>
+          </div>
+
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.map((msg) => {
+            {combinedMessages.map((msg) => {
               const isUser = msg.role === "user";
               return (
                 <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -722,54 +705,88 @@ Always reference actual applicant names and data when responding. Be specific an
                       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold ${
                         msg.type === "summary" ? "bg-emerald-50 text-emerald-700" :
                         msg.type === "insight" ? "bg-sky-50 text-sky-700" :
+                        msg.type === "action" ? "bg-violet-50 text-violet-700" :
                         msg.type === "success" ? "bg-emerald-50 text-emerald-700" :
                         msg.type === "error" ? "bg-rose-50 text-rose-700" :
                         "bg-slate-100 text-slate-600"
                       }`}>
                         {msg.type === "summary" ? <BarChart3 className="h-2.5 w-2.5" /> :
                          msg.type === "insight" ? <Brain className="h-2.5 w-2.5" /> :
+                         msg.type === "action" ? <Zap className="h-2.5 w-2.5" /> :
                          msg.type === "success" ? <CheckCircle2 className="h-2.5 w-2.5" /> :
                          msg.type === "error" ? <AlertCircle className="h-2.5 w-2.5" /> :
                          <Zap className="h-2.5 w-2.5" />}
                         {msg.type}
                       </span>
                     )}
+
+                    {/* Actionable results — clickable work actions */}
+                    {!isUser && (msg.documentUrl || msg.trackerId) && (
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {msg.documentUrl && (
+                          <a
+                            href={msg.documentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Open Google Doc
+                          </a>
+                        )}
+                        {msg.trackerId && (
+                          <button
+                            type="button"
+                            onClick={() => void assistantHook.loadTracker(msg.trackerId ?? undefined)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100"
+                          >
+                            <ClipboardCheck className="h-3 w-3" />
+                            View tracker
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             })}
-            {isThinking && (
+            {(isThinking || assistantHook.isThinking) && (
               <div className="flex items-center gap-2 pl-1">
                 <div className="flex gap-1">
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-bounce [animation-delay:0ms]" />
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-bounce [animation-delay:150ms]" />
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-bounce [animation-delay:300ms]" />
                 </div>
-                <span className="text-[11px] text-slate-400">Analyzing pipeline...</span>
+                <span className="text-[11px] text-slate-400">AI is analyzing via Make.com...</span>
               </div>
             )}
           </div>
 
-          {messages.length <= 1 && !isThinking && (
-            <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-3 py-2.5">
+          {/* Persistent work tools — always visible for quick actions */}
+          <div className="shrink-0 border-t border-slate-100 px-3 py-2">
+            <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-slate-400">Quick work actions</p>
+            <div className="flex flex-wrap gap-1.5">
               {[
-                { label: "Pipeline summary", icon: BarChart3 },
-                { label: "Top applicants", icon: Star },
-                { label: "Pass emails", icon: UserCheck },
-                { label: "Reject emails", icon: UserX },
+                { label: "Who needs follow-up?", icon: Clock, prompt: "Who needs follow-up today?" },
+                { label: "Compare selected", icon: Users, prompt: "Compare the selected applicants" },
+                { label: "Best matches", icon: Star, prompt: "Who are our best matches right now?" },
+                { label: "Create tracker", icon: ClipboardCheck, prompt: "Create an applicant tracker" },
+                { label: "Sync to Google Docs", icon: FileText, prompt: "Sync the tracker to Google Docs" },
+                { label: "Pipeline summary", icon: BarChart3, prompt: "Give me a pipeline summary" },
               ].map((q) => (
                 <button
                   key={q.label}
                   type="button"
-                  onClick={() => void handleSubmit(q.label)}
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                  onClick={() => void handleSubmit(q.prompt)}
+                  disabled={isThinking || assistantHook.isThinking}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10.5px] font-semibold text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
                 >
-                  <q.icon className="h-2.5 w-2.5" />
+                  <q.icon className="h-3 w-3" />
                   {q.label}
                 </button>
               ))}
             </div>
-          )}
+          </div>
 
           <div className="shrink-0 border-t border-slate-100 bg-slate-50/50 p-3">
             <form
@@ -782,14 +799,14 @@ Always reference actual applicant names and data when responding. Be specific an
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about your pipeline..."
+                placeholder="Ask about applicants, trackers, or next steps..."
                 className="flex-1 text-[12.5px] bg-white"
-                disabled={isThinking}
+                disabled={isThinking || assistantHook.isThinking}
               />
               <Button
                 type="submit"
                 size="sm"
-                disabled={isThinking || !input.trim()}
+                disabled={(isThinking || assistantHook.isThinking) || !input.trim()}
                 className="gap-1 bg-emerald-600 hover:bg-emerald-700"
               >
                 <Send className="h-3.5 w-3.5" />
@@ -930,6 +947,57 @@ Always reference actual applicant names and data when responding. Be specific an
               </Button>
             </div>
           )}
+
+          {/* Applicant Tracker */}
+          <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
+            <div className="mb-2 flex items-center gap-2">
+              <ClipboardCheck className="h-4 w-4 text-violet-600" />
+              <p className="text-xs font-bold text-violet-800">Applicant Tracker</p>
+            </div>
+            {assistantHook.trackerInfo?.tracker ? (
+              <div className="space-y-2">
+                <div className="rounded-lg bg-white/80 p-2.5">
+                  <p className="text-[11px] font-semibold text-slate-800">{assistantHook.trackerInfo.tracker.name}</p>
+                  <p className="text-[10px] text-slate-500">{assistantHook.trackerInfo.tracker.items.length} applicants tracked</p>
+                  <p className="text-[10px] text-slate-400">Updated: {new Date(assistantHook.trackerInfo.tracker.updatedAt).toLocaleString()}</p>
+                </div>
+                {assistantHook.trackerInfo.googleDocUrl && (
+                  <a
+                    href={assistantHook.trackerInfo.googleDocUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open Google Doc
+                  </a>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void assistantHook.sendMessage("Sync the tracker to Google Docs")}
+                  disabled={assistantHook.isThinking}
+                  className="w-full gap-1.5 text-[11px]"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Sync to Google Docs
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] text-slate-600">No active tracker. Create one to start tracking applicants.</p>
+                <Button
+                  size="sm"
+                  onClick={() => void assistantHook.createTracker()}
+                  disabled={assistantHook.isThinking}
+                  className="w-full gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+                >
+                  <ClipboardCheck className="h-3.5 w-3.5" />
+                  Create Tracker{selectedId ? " (Selected)" : " (All)"}
+                </Button>
+              </div>
+            )}
+          </div>
 
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3.5">
             <div className="mb-2 flex items-center gap-2">

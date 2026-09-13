@@ -263,10 +263,10 @@ const ENQUIRY_STATUS_META: Record<EnquiryStatus, { label: string; icon: React.El
 };
 
 const REQUEST_STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: "Pending", color: "text-amber-700", bg: "bg-amber-50" },
-  interested: { label: "Interested", color: "text-sky-700", bg: "bg-sky-50" },
-  direct_hire: { label: "Direct Hire", color: "text-emerald-700", bg: "bg-emerald-50" },
-  rejected: { label: "Rejected", color: "text-red-700", bg: "bg-red-50" },
+  pending: { label: "Under Review", color: "text-amber-700", bg: "bg-amber-50" },
+  interested: { label: "Match Found", color: "text-sky-700", bg: "bg-sky-50" },
+  direct_hire: { label: "In Progress", color: "text-emerald-700", bg: "bg-emerald-50" },
+  rejected: { label: "Closed", color: "text-red-700", bg: "bg-red-50" },
 };
 
 const SCORE_RANGES = [

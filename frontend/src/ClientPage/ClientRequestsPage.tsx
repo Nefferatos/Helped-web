@@ -914,7 +914,7 @@ const ClientRequestsPage = () => {
               <div className="px-8 py-7 space-y-6">
                 {/* Agency */}
                 <div className="grid gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Agency</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Our Agency</label>
                   <StyledSelect
                     value={form.agencyId || "No Preference"}
                     onChange={(v) => setForm((c) => ({ ...c, agencyId: v }))}
@@ -927,10 +927,10 @@ const ClientRequestsPage = () => {
                 {/* 4-col prefs */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {[
-                    { key: "nationality", label: "Nationality", opts: NATIONALITY_OPTIONS },
-                    { key: "primaryDuty", label: "Primary Duty", opts: PRIMARY_DUTY_OPTIONS },
-                    { key: "ageGroup",    label: "Age Group",    opts: AGE_GROUP_OPTIONS },
-                    { key: "language",    label: "Language",     opts: LANGUAGE_OPTIONS },
+                    { key: "nationality", label: "Preferred Nationality", opts: NATIONALITY_OPTIONS },
+                    { key: "primaryDuty", label: "What kind of help?",    opts: PRIMARY_DUTY_OPTIONS },
+                    { key: "ageGroup",    label: "Preferred Age Group",   opts: AGE_GROUP_OPTIONS },
+                    { key: "language",    label: "Language Required",     opts: LANGUAGE_OPTIONS },
                   ].map(({ key, label, opts }) => (
                     <div key={key} className="grid gap-1.5">
                       <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>{label}</label>
@@ -947,7 +947,7 @@ const ClientRequestsPage = () => {
                 {/* Budget + Notes */}
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="grid gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Budget</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Your Budget</label>
                     <input
                       className={inputCls} style={inputStyle}
                       value={form.budget}
@@ -958,7 +958,7 @@ const ClientRequestsPage = () => {
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Additional notes</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Anything else we should know?</label>
                     <textarea
                       className="min-h-[44px] w-full resize-none rounded-xl px-4 py-2.5 text-sm font-medium transition focus:outline-none"
                       style={{ border: `2px solid ${C.border}`, background: C.white, color: C.text }}
@@ -1371,7 +1371,7 @@ const ClientRequestsPage = () => {
                     {/* Inline maid rows */}
                     {selectedRequest.status !== "interested" && selectedRequest.maids.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Associated helpers</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Recommended Maids</p>
                         {selectedRequest.maids.map((maid) => (
                           <div
                             key={maid.referenceCode}

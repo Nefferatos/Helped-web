@@ -1,0 +1,252 @@
+{
+    "name": "Helped - PDF Autofill Make AI Agent",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "hook": 3679001,
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                },
+                "restore": {
+                    "parameters": {
+                        "hook": {
+                            "data": {
+                                "editable": "true"
+                            },
+                            "label": "WEBSITE AI WORKFLOW 2"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "hook",
+                        "type": "hook:gateway-webhook",
+                        "label": "Webhook",
+                        "required": true
+                    },
+                    {
+                        "name": "maxResults",
+                        "type": "number",
+                        "label": "Maximum number of results"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 2,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "mapper": null,
+            "metadata": {
+                "designer": {
+                    "x": 250,
+                    "y": 0
+                }
+            },
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 27,
+                            "module": "ai-local-agent:RunLocalAIAgent",
+                            "version": 0,
+                            "parameters": {
+                                "makeConnectionId": 9990574
+                            },
+                            "filter": {
+                                "name": "PDF biodata autofill - authorized",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{1.scenario}}",
+                                            "b": "pdf_autofill",
+                                            "o": "text:equal"
+                                        },
+                                        {
+                                            "a": "{{1.authToken}}",
+                                            "b": "REPLACE_WITH_AUTH_TOKEN",
+                                            "o": "text:equal"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "files": [],
+                                "message": "Website extraction instructions:\n{{1.systemPrompt}}\n\nPDF text and requested output schema:\n{{1.userPrompt}}",
+                                "threadId": "pdf-autofill-{{ifempty(1.requestId; \"anonymous\")}}",
+                                "outputType": "text",
+                                "tokenLimit": "100",
+                                "modelConfig": {
+                                    "timeout": "",
+                                    "recursionLimit": "300",
+                                    "iterationsFromHistoryCount": "1"
+                                },
+                                "defaultModel": "gpt-5-nano",
+                                "systemPrompt": "You extract domestic-helper biodata from PDF text. Follow the website extraction instructions exactly. Never invent values. Use null, an empty string, or an empty array when data is absent. Return only the requested JSON object. Do not use Markdown or comments.",
+                                "promptCaching": "none",
+                                "fallbackEnabled": false,
+                                "reasoningEffort": "low"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 550,
+                                    "y": -120
+                                },
+                                "notes": "Make AI Agent for PDF biodata autofill. Verify the Make AI Provider connection and model after import."
+                            },
+                            "tools": []
+                        },
+                        {
+                            "id": 28,
+                            "module": "gateway:WebhookRespond",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "body": "{\n  \"content\": \"{{escapeJSON(27.response)}}\",\n  \"finish_reason\": \"stop\"\n}",
+                                "status": "200",
+                                "headers": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ]
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 850,
+                                    "y": -120
+                                }
+                            }
+                        }
+                    ]
+                },
+
+                {
+                    "flow": [
+                        {
+                            "id": 30,
+                            "module": "gateway:WebhookRespond",
+                            "version": 1,
+                            "parameters": {},
+                            "filter": {
+                                "name": "PDF biodata autofill - unauthorized",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{1.scenario}}",
+                                            "b": "pdf_autofill",
+                                            "o": "text:equal"
+                                        },
+                                        {
+                                            "a": "{{1.authToken}}",
+                                            "b": "REPLACE_WITH_AUTH_TOKEN",
+                                            "o": "text:notEqual"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "body": "{\"error\":\"Unauthorized\"}",
+                                "status": "401",
+                                "headers": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ]
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 550,
+                                    "y": -220
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 29,
+                            "module": "gateway:WebhookRespond",
+                            "version": 1,
+                            "parameters": {},
+                            "filter": {
+                                "name": "Unsupported event",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{1.scenario}}",
+                                            "b": "pdf_autofill",
+                                            "o": "text:notEqual"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "body": "{\"error\":\"Unsupported website automation scenario\"}",
+                                "status": "400",
+                                "headers": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ]
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 550,
+                                    "y": 140
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": true,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "eu1.make.com",
+        "notes": [
+            "Helped - PDF Autofill Make AI Agent — import-ready blueprint.",
+            "",
+            "AFTER IMPORT:",
+            "1. WEBHOOK: Module 1 is bound to hook 'WEBSITE AI WORKFLOW 2'. If importing fresh, click Module 1, create a new webhook, and copy the URL.",
+            "2. AI AGENT: Click Module 27, verify the Make AI Provider connection and model (gpt-5-nano).",
+            "3. AUTH TOKEN: In Module 27 AND Module 30 filter conditions, replace REPLACE_WITH_AUTH_TOKEN with the exact same value as MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN.",
+            "4. WORKER SECRETS (Cloudflare):",
+            "   npx wrangler secret put MAKE_PDF_AUTOFILL_WEBHOOK_URL   (paste the webhook URL)",
+            "   npx wrangler secret put MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN (paste the auth token)",
+            "5. TEST: POST {scenario:\"pdf_autofill\", requestId, systemPrompt, userPrompt, authToken} to the webhook. Expect 200 + {\"content\", \"finish_reason\"}.",
+            "6. ACTIVATE: Toggle scenario ON.",
+            "",
+            "AUTH: requests with a missing or wrong authToken receive 401, unknown scenario receives 400."
+        ]
+    }
+}
+

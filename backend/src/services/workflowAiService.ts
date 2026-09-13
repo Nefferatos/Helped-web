@@ -16,6 +16,7 @@ import {
   normalizeWhitespace,
 } from './workflowNormalizationService'
 import { classifyFallback } from './fallbackClassifier'
+import { callMakeAiEngine } from './makeAiEngine'
 
 type AiResult<T> = {
   data: T
@@ -201,6 +202,22 @@ const runWorkflowAiJson = async <T>(
   systemPrompt: string,
   userPrompt: string
 ): Promise<T | null> => {
+  // 1) Make.com is the primary AI engine.
+  const makeResult = await callMakeAiEngine({
+    scenario: 'workflow',
+    systemPrompt,
+    userPrompt,
+  }).catch(() => null)
+
+  if (makeResult?.json) {
+    return makeResult.json as T
+  }
+  if (makeResult?.text) {
+    const parsed = extractJsonObject(makeResult.text) as T | null
+    if (parsed) return parsed
+  }
+
+  // 2) Fallback to direct Claude, then Gemini.
   const claudeResult = await runClaudeJson<T>(systemPrompt, userPrompt)
   if (claudeResult) {
     return claudeResult

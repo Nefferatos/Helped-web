@@ -89,25 +89,25 @@ export const requestStatusMeta: Record<
   { label: string; badgeClassName: string; dotClassName: string; accentClassName: string }
 > = {
   pending: {
-    label: "Pending",
+    label: "Under Review",
     badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
     dotClassName: "bg-amber-500",
     accentClassName: "text-amber-700",
   },
   interested: {
-    label: "Interested",
+    label: "Match Found",
     badgeClassName: "border-sky-200 bg-sky-50 text-sky-700",
     dotClassName: "bg-sky-500",
     accentClassName: "text-sky-700",
   },
   direct_hire: {
-    label: "Direct Hire",
+    label: "In Progress",
     badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
     dotClassName: "bg-emerald-500",
     accentClassName: "text-emerald-700",
   },
   rejected: {
-    label: "Rejected",
+    label: "Closed",
     badgeClassName: "border-red-200 bg-red-50 text-red-700",
     dotClassName: "bg-red-500",
     accentClassName: "text-red-700",
@@ -287,16 +287,114 @@ export const updateRequestMaids = async (id: string, maidReferences: string[]): 
 export const requestStateMessage = (status: RequestStatus) => {
   switch (status) {
     case "pending":
-      return "We are reviewing your request.";
+      return "Our agency is reviewing your request and looking for suitable candidates.";
     case "interested":
-      return "We found suitable maids for you to review.";
+      return "We found potential matches for you! Review the recommended candidates.";
     case "direct_hire":
-      return "Your request has moved into a direct hire outcome.";
+      return "Your request is moving forward. Our agency will guide you through the next steps.";
     case "rejected":
-      return "This request was closed. You can submit a new request anytime.";
+      return "This request has been closed. You can submit a new request anytime.";
     default:
       return "";
   }
+};
+
+/* ─────────────────────────────────────────
+   Progress Steps — visual timeline
+───────────────────────────────────────── */
+export interface ProgressStep {
+  key: string;
+  label: string;
+  description: string;
+}
+
+/** Returns ordered progress steps for a given request. */
+export const getRequestProgressSteps = (request: RequestRecord): ProgressStep[] => {
+  const isDirect = request.type === "direct";
+
+  if (request.status === "rejected") {
+    return [
+      { key: "submitted", label: "Request Submitted", description: "Your request was received." },
+      { key: "closed", label: "Request Closed", description: "This request has been closed. You can submit a new request anytime." },
+    ];
+  }
+
+  const base: ProgressStep[] = [
+    { key: "submitted", label: "Request Submitted", description: "We received your request and our agency team has been notified." },
+  ];
+
+  if (isDirect) {
+    base.push(
+      { key: "reviewing", label: "Our Agency Reviewing", description: "Our agency is checking the availability of your requested maid." },
+      { key: "matching", label: "Checking Availability", description: "We're confirming if this maid is available for your requirements." },
+    );
+  } else {
+    base.push(
+      { key: "reviewing", label: "Our Agency Reviewing", description: "Our agency is reviewing your requirements and checking available candidates." },
+      { key: "matching", label: "Finding Your Match", description: "We're looking for the best maid to match your household needs." },
+    );
+  }
+
+  base.push(
+    { key: "recommended", label: "Candidate Recommended", description: "We've found a potential match for you to review." },
+    { key: "interview", label: "Interview", description: "Meet and interview the candidate before making your decision." },
+    { key: "selected", label: "Maid Selected", description: "You've chosen your maid. Our agency handles the next steps." },
+    { key: "hiring", label: "Hiring & Documentation", description: "We're processing the paperwork and employment arrangements." },
+    { key: "placed", label: "Placement Complete", description: "Your maid has been successfully placed with your household." },
+  );
+
+  return base;
+};
+
+/** Returns the index of the current active step (0-based). */
+export const getRequestCurrentStepIndex = (status: RequestStatus): number => {
+  switch (status) {
+    case "pending": return 1;
+    case "interested": return 3;
+    case "direct_hire": return 5;
+    case "rejected": return -1;
+    default: return 0;
+  }
+};
+
+/** Returns the "what's happening now" explanation. */
+export const requestWhatsHappening = (request: RequestRecord): string => {
+  const isDirect = request.type === "direct";
+  switch (request.status) {
+    case "pending":
+      return isDirect
+        ? "Our agency is checking the availability of your requested maid and reviewing your requirements."
+        : "Our agency is reviewing your requirements and looking for suitable candidates for you.";
+    case "interested":
+      return "We found potential matches! Review the recommended candidates and let us know what you think.";
+    case "direct_hire":
+      return "Great news! Your request is moving forward. Our agency will guide you through the next steps.";
+    case "rejected":
+      return "This request has been closed. You can submit a new request anytime.";
+    default:
+      return "Our agency is working on your request.";
+  }
+};
+
+/** Returns the "what happens next" explanation. */
+export const requestWhatsNext = (request: RequestRecord): string => {
+  switch (request.status) {
+    case "pending":
+      return "We'll notify you as soon as we find suitable candidates or need more information.";
+    case "interested":
+      return "Review the recommended candidates and let us know if you'd like to proceed with an interview.";
+    case "direct_hire":
+      return "Our agency will contact you to arrange the next steps, including any interviews and documentation.";
+    case "rejected":
+      return "Feel free to submit a new request with updated preferences.";
+    default:
+      return "";
+  }
+};
+
+/** Whether the user needs to take action. */
+export const requestNeedsUserAction = (status: RequestStatus): boolean => {
+  return status === "interested";
 };
 
 export const fetchRequestConversation = async (requestId: string): Promise<RequestConversationRecord> => {

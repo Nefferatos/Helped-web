@@ -1857,7 +1857,7 @@ const AtsRecruitmentPage = () => {
 
       {/* ── AI Recruiting Assistant ───────────────────────────────────────── */}
       <RecruiterAiAssistant
-        applications={applications as unknown as import("@/components/RecruiterAiAssistant").RecruiterAiAssistantProps["applications"]}
+        applications={applications as any}
         dashboard={dashboard}
         selectedId={selectedId}
         onSelectApplicant={(id) => {
@@ -1865,6 +1865,8 @@ const AtsRecruitmentPage = () => {
           setProfileModalOpen(true);
         }}
         onApplyFilter={handleAiApplyFilter}
+        currentFilters={filters}
+        currentSearch={search}
       />
 
       {/* ── Profile Modal ─────────────────────────────────────────────────── */}

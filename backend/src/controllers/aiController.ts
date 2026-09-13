@@ -12,6 +12,7 @@ import {
 } from '../services/workflowNameService'
 import { buildWorkflowResponse } from '../services/workflowResponseService'
 import { getAllMaidsStore, getCompanyBundle, type CompanyProfileRecord, type MaidRecord } from '../store'
+import { callMakeAiEngine } from '../services/makeAiEngine'
 
 const GROQ_CHAT_COMPLETIONS_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant'
@@ -881,6 +882,26 @@ const callGroqGeneralAssistant = async (params: {
     ? `You are currently assisting users on the website of ${params.companyProfile.company_name || params.companyProfile.short_name || 'a maid agency'}, a Singapore-based domestic helper agency.`
     : 'You are currently assisting users on a maid agency website.'
 
+  // 1) Make.com AI engine (primary).
+  const makeResult = await callMakeAiEngine({
+    scenario: 'receptionist',
+    systemPrompt: [
+      'You are a helpful, warm, and professional AI assistant on a Singapore maid agency website.',
+      'CRITICAL — PLAIN TEXT ONLY, no markdown (no asterisks, underscores, backticks, or hash headers).',
+      'Write in short well-spaced paragraphs; use 2-4 paragraphs max unless more detail is needed.',
+      companyContext,
+    ].join('\n\n'),
+    userPrompt: [
+      ...(params.conversationHistory || []).slice(-6).map((msg) => `${msg.role}: ${msg.content}`),
+      `User: ${params.message}`,
+    ].join('\n'),
+  }).catch(() => null)
+
+  if (makeResult?.text) {
+    return stripMarkdownSyntax(makeResult.text)
+  }
+
+  // 2) Fallback to direct Groq.
   const messages = [
     {
       role: 'system',
@@ -1099,6 +1120,40 @@ const callGroqReceptionist = async (params: {
       ].join('\n')
     : 'No company profile context.'
 
+  // 1) Make.com AI engine (primary).
+  const makeResult = await callMakeAiEngine({
+    scenario: 'receptionist',
+    systemPrompt: [
+      'You are the AI Receptionist for a Singapore maid agency.',
+      'Always be warm, polite, professional, and helpful.',
+      'Answer naturally using only the supplied FAQ, company, and maid profile context.',
+      'CRITICAL — PLAIN TEXT ONLY: no markdown (no asterisks, backticks, or hash headers).',
+      'Write in short paragraphs separated by blank lines.',
+      'Introduce maids in warm natural sentences — never dump raw data.',
+      'For fee/salary/levy/insurance questions, never state specific dollar amounts; say "Contact us for an accurate fee breakdown."',
+      'Treat hiring intent (looking for a maid, need a helper, childcare/elderly care help, etc.) by showcasing available helpers.',
+    ].join('\n\n'),
+    userPrompt: [
+      `Customer question: ${params.message}`,
+      params.isPronounFollowUp
+        ? 'NOTE: This is a follow-up question about the currently discussed helper. Answer only that specific question.'
+        : '',
+      `FAQ context:\n${faqContext}`,
+      `Company context:\n${companyContext}`,
+      `Currently discussed helper context:\n${maidContext}`,
+      `Profile cards available: ${
+        params.featuredMaids.length > 0
+          ? params.featuredMaids.map((maid) => `${maid.fullName} (${maid.referenceCode})`).join(', ')
+          : 'none'
+      }`,
+    ].filter(Boolean).join('\n\n'),
+  }).catch(() => null)
+
+  if (makeResult?.text) {
+    return stripMarkdownSyntax(makeResult.text)
+  }
+
+  // 2) Fallback to direct Groq.
   const response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
     method: 'POST',
     headers: {

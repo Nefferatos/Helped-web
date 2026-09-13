@@ -7,6 +7,7 @@ import {
   getEnquiriesStore,
   type MaidRecord,
 } from '../store'
+import { callMakeAiEngine } from './makeAiEngine'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -419,12 +420,36 @@ export const generateMarketingCampaign = async (params: {
   let aiResult: { template: string; subject: string } | null = null
   let aiUsed = false
 
-  aiResult = await generateWithClaude(userPrompt).catch(() => null)
-  if (aiResult) {
+  // 1) Make.com is the primary AI engine.
+  const makeResult = await callMakeAiEngine({
+    scenario: 'marketing',
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt,
+  }).catch(() => null)
+
+  if (makeResult?.json && typeof makeResult.json.template === 'string') {
+    aiResult = {
+      template: makeResult.json.template,
+      subject: String(makeResult.json.subject ?? 'Helper Update'),
+    }
     aiUsed = true
-  } else {
-    aiResult = await generateWithGroq(userPrompt).catch(() => null)
-    if (aiResult) aiUsed = true
+  } else if (makeResult?.text) {
+    const parsed = parseAiJson(makeResult.text)
+    if (parsed) {
+      aiResult = parsed
+      aiUsed = true
+    }
+  }
+
+  // 2) Fallback to direct Claude, then Groq.
+  if (!aiResult) {
+    aiResult = await generateWithClaude(userPrompt).catch(() => null)
+    if (aiResult) {
+      aiUsed = true
+    } else {
+      aiResult = await generateWithGroq(userPrompt).catch(() => null)
+      if (aiResult) aiUsed = true
+    }
   }
 
   const template = aiResult?.template

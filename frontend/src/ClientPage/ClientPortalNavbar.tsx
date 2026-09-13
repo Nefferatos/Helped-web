@@ -9,6 +9,7 @@ import {
   MessageCircle,
   MessageSquarePlus,
   Search,
+  Star,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -22,11 +23,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
 import { fetchClientUnreadChatCount, markClientNotificationsRead, type SupportNotification } from "@/lib/chat";
 import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabaseAuth";
+import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
+import type { MaidProfile } from "@/lib/maids";
 import "./ClientTheme.css";
 
 type NavTab = { label: string; to: string; icon: LucideIcon };
@@ -89,6 +99,12 @@ const ClientPortalNavbar = () => {
   const [chatNotifications, setChatNotifications] = useState<SupportNotification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  /* ── Shortlist state ── */
+  const [shortlistRefs, setShortlistRefs] = useState<string[]>(() => getSavedShortlistRefs());
+  const [isShortlistOpen, setIsShortlistOpen] = useState(false);
+  const [shortlistMaids, setShortlistMaids] = useState<MaidProfile[]>([]);
+  const [shortlistLoading, setShortlistLoading] = useState(false);
 
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
@@ -188,6 +204,49 @@ const ClientPortalNavbar = () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
+
+  /* ── Shortlist subscription ── */
+  useEffect(() => {
+    setShortlistRefs(getSavedShortlistRefs());
+    return subscribeToShortlistRefs(setShortlistRefs);
+  }, []);
+
+  /* ── Load shortlisted maid profiles when dialog opens ── */
+  useEffect(() => {
+    if (!isShortlistOpen || shortlistRefs.length === 0) {
+      if (shortlistRefs.length === 0) setShortlistMaids([]);
+      return;
+    }
+    const controller = new AbortController();
+    const loadMaids = async () => {
+      setShortlistLoading(true);
+      try {
+        const results: MaidProfile[] = [];
+        for (const ref of shortlistRefs) {
+          try {
+            const res = await fetch(`/api/maids/${encodeURIComponent(ref)}`, { signal: controller.signal });
+            if (!res.ok) continue;
+            const data = await res.json() as { maid?: MaidProfile };
+            if (data.maid) results.push(data.maid);
+          } catch { /* skip */ }
+        }
+        if (!controller.signal.aborted) setShortlistMaids(results);
+      } finally {
+        if (!controller.signal.aborted) setShortlistLoading(false);
+      }
+    };
+    void loadMaids();
+    return () => controller.abort();
+  }, [isShortlistOpen, shortlistRefs]);
+
+  const handleToggleShortlist = (ref: string) => {
+    toggleShortlistRef(ref);
+  };
+
+  const getMaidPhoto = (maid: MaidProfile): string => {
+    if (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) return maid.photoDataUrls[0];
+    return maid.photoDataUrl || "";
+  };
 
   // Track scroll position to add a subtle elevation cue once the page
   // content starts moving under the sticky header.
@@ -434,6 +493,16 @@ const ClientPortalNavbar = () => {
               <DropdownMenuItem asChild>
                 <Link to="/client/profile">Profile</Link>
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setIsShortlistOpen(true); }}>
+                <div className="flex w-full items-center justify-between">
+                  <span>Shortlist</span>
+                  {shortlistRefs.length > 0 && (
+                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[11px] font-bold text-amber-700">
+                      {shortlistRefs.length}
+                    </span>
+                  )}
+                </div>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link to="/client/change-password">Change Password</Link>
               </DropdownMenuItem>
@@ -489,16 +558,112 @@ const ClientPortalNavbar = () => {
             {/* CTAs */}
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button asChild className="rounded-2xl">
-                <Link to="/client/maids?intent=request">Request Maid</Link>
+                <Link to="/client/maids?intent=request">Find a Maid</Link>
               </Button>
               <Button asChild variant="outline" className="rounded-2xl">
-                <Link to="/client/enquiry">Submit Enquiry</Link>
+                <Link to="/client/enquiry">Ask a Question</Link>
               </Button>
             </div>
 
           </div>
         </div>
       )}
+
+      {/* ── Shortlist Dialog ── */}
+      <Dialog open={isShortlistOpen} onOpenChange={setIsShortlistOpen}>
+        <DialogContent className="client-page-theme max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Star className="h-5 w-5 fill-amber-400 text-amber-500" />
+              My Shortlist
+              {shortlistRefs.length > 0 && (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[11px] font-bold text-amber-700">
+                  {shortlistRefs.length}
+                </span>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {shortlistRefs.length === 0
+                ? "No profiles saved yet"
+                : `${shortlistRefs.length} profile${shortlistRefs.length !== 1 ? "s" : ""} saved`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto -mx-6 px-6 pb-2">
+            {shortlistRefs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
+                  <Star className="h-7 w-7 text-amber-300" />
+                </div>
+                <p className="font-bold text-foreground mb-1">Your shortlist is empty</p>
+                <p className="text-sm text-muted-foreground max-w-xs">
+                  Browse maids and tap the star icon to save them here for easy comparison.
+                </p>
+                <Button asChild className="mt-4 rounded-2xl" onClick={() => setIsShortlistOpen(false)}>
+                  <Link to="/client/maids">Browse Maids</Link>
+                </Button>
+              </div>
+            ) : shortlistLoading ? (
+              <div className="space-y-3 py-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2 py-2">
+                {shortlistMaids.map((maid) => (
+                  <div key={maid.referenceCode} className="flex items-center gap-3 rounded-xl border p-3 transition-colors hover:bg-muted/50">
+                    <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
+                      {getMaidPhoto(maid) ? (
+                        <img src={getMaidPhoto(maid)} alt={maid.fullName} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-lg font-bold text-muted-foreground">
+                          {maid.fullName?.charAt(0) || "?"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-foreground truncate">{maid.fullName}</p>
+                      <p className="text-xs text-muted-foreground">{maid.nationality} · {maid.type || "Maid"}</p>
+                      {maid.status && (
+                        <span className="inline-block mt-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                          {maid.status}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button asChild variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => setIsShortlistOpen(false)}>
+                        <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`}>View</Link>
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleShortlist(maid.referenceCode)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-amber-500 hover:bg-amber-50 transition-colors"
+                        title="Remove from shortlist"
+                      >
+                        <Star className="h-4 w-4 fill-amber-400" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {shortlistRefs.length > 0 && shortlistMaids.length > 0 && (
+            <div className="flex items-center justify-between pt-3 border-t">
+              <p className="text-xs text-muted-foreground">
+                {shortlistMaids.length} {shortlistMaids.length === 1 ? "profile" : "profiles"} loaded
+              </p>
+              <div className="flex gap-2">
+                <Button asChild size="sm" className="rounded-xl" onClick={() => setIsShortlistOpen(false)}>
+                  <Link to="/client/maids">Browse More</Link>
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </header>
   );
 };

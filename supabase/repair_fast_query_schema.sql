@@ -157,7 +157,11 @@ as $$
     'hiddenMaids', (select count(*) from public.helped_query_maids m where m.app_id = p_app_id and not m.is_public),
     'totalMaids', (select count(*) from public.helped_query_maids m where m.app_id = p_app_id),
     'maidsWithPhotos', (select count(*) from public.helped_query_maids m where m.app_id = p_app_id and m.has_photo),
-    'enquiries', jsonb_array_length(coalesce(ad.data->'enquiries', '[]'::jsonb)),
+    'enquiries', (
+      select count(*)
+      from jsonb_array_elements(coalesce(ad.data->'enquiries', '[]'::jsonb)) as e
+      where e->>'viewedAt' is null
+    ),
     'requests', jsonb_array_length(coalesce(ad.data->'directSales', '[]'::jsonb)),
     'pendingRequests', (
       select count(*)

@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
-import { Camera, Loader2, Save, UserRound, MessageSquare, Clock } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Camera, Loader2, Save, UserRound, MessageSquare, Clock, Package, Compass, Search, BriefcaseBusiness, Clock3, MessageCircle, ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PhoneNumberInput, phoneFieldBaseClass } from "@/components/ui/phone-input";
 import { toast } from "@/components/ui/sonner";
-import { getStoredClient, saveClientAuth, type ClientUser } from "@/lib/clientAuth";
+import { getStoredClient, saveClientAuth, type ClientUser, clearClientAuth, getClientAuthHeaders, getClientToken } from "@/lib/clientAuth";
 import { clientFetch, hasActiveClientSession } from "@/lib/supabaseAuth";
+import type { MaidProfile } from "@/lib/maids";
+import { fetchRequests, type RequestRecord, type RequestListResponse } from "@/lib/requests";
+import { ProgressTimeline, StatusSummary, RequestSummary } from "@/components/RequestProgressTracker";
+import { useQuery as useRQ, type UseQueryResult } from "@tanstack/react-query";
 import "./ClientTheme.css";
 
 const ClientProfilePage = () => {
@@ -25,6 +32,50 @@ const ClientProfilePage = () => {
   const [mounted, setMounted] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+
+  /* ── Activity tab state ── */
+  type ActivityTab = "track" | "transactions";
+  const [activityTab, setActivityTab] = useState<ActivityTab>("track");
+  interface HistoryItem {
+    directSale: { id: number; maidReferenceCode: string; maidName: string; status: string; createdAt: string; requestDetails?: Record<string, string>; };
+    maid: MaidProfile | null;
+  }
+  const [txHistory, setTxHistory] = useState<HistoryItem[]>([]);
+  const [txSearch, setTxSearch] = useState("");
+  const [txLoading, setTxLoading] = useState(true);
+  const storedClient = useMemo(() => getStoredClient(), []);
+
+  const requestsQuery = useQuery({
+    queryKey: ["client-requests-profile", storedClient?.id],
+    enabled: typeof storedClient?.id === "number",
+    queryFn: () => fetchRequests({ clientId: storedClient?.id, page: 1, pageSize: 20 }),
+    refetchInterval: 10000,
+  });
+  const requests = requestsQuery.data?.data ?? [];
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const selectedRequest = requests.find((r) => r.id === selectedRequestId) ?? null;
+
+  const filteredTxHistory = useMemo(() => {
+    const term = txSearch.trim().toLowerCase();
+    if (!term) return txHistory;
+    return txHistory.filter((item) =>
+      [item.directSale.maidName, item.directSale.maidReferenceCode, item.directSale.status, Object.values(item.directSale.requestDetails || {}).join(" ")]
+        .join(" ").toLowerCase().includes(term),
+    );
+  }, [txHistory, txSearch]);
+
+  const getStatusBadge = (s: string) => {
+    if (s === "direct_hire" || s === "accepted") return "border-emerald-200 bg-emerald-100 text-emerald-700";
+    if (s === "rejected" || s === "declined") return "border-rose-200 bg-rose-100 text-rose-700";
+    return "border-amber-200 bg-amber-100 text-amber-700";
+  };
+  const getStatusLabel = (s: string) => {
+    if (s === "direct_hire") return "Accepted";
+    if (s === "rejected") return "Declined";
+    if (s === "interested") return "Match Found";
+    if (s === "pending") return "Under Review";
+    return "Pending";
+  };
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -67,6 +118,21 @@ const ClientProfilePage = () => {
 
     void loadProfile();
   }, [navigate, reloadToken]);
+
+  /* ── Load transaction history ── */
+  useEffect(() => {
+    const token = getClientToken();
+    if (!token) return;
+    const loadTx = async () => {
+      try {
+        setTxLoading(true);
+        const response = await fetch("/api/client/history", { headers: { ...getClientAuthHeaders() } });
+        const data = (await response.json().catch(() => ({}))) as { history?: HistoryItem[]; error?: string };
+        if (response.ok && data.history) setTxHistory(data.history);
+      } catch { /* silent */ } finally { setTxLoading(false); }
+    };
+    void loadTx();
+  }, []);
 
   const handleSave = async () => {
     if (!(await hasActiveClientSession())) {
@@ -240,28 +306,104 @@ const ClientProfilePage = () => {
 
           {/* ── Actions ── */}
           <div className="cp-actions">
-            <button
-              className="cp-btn cp-btn--primary"
-              onClick={() => void handleSave()}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <Loader2 size={16} className="cp-spin" />
-              ) : (
-                <Save size={16} />
-              )}
+            <button className="cp-btn cp-btn--primary" onClick={() => void handleSave()} disabled={isSaving}>
+              {isSaving ? <Loader2 size={16} className="cp-spin" /> : <Save size={16} />}
               {isSaving ? "Saving…" : "Save Changes"}
             </button>
-
-            <Link to="/client/history" className="cp-btn cp-btn--ghost">
-              <Clock size={16} />
-              Transaction History
-            </Link>
-
             <Link to="/client/support-chat" className="cp-btn cp-btn--ghost">
-              <MessageSquare size={16} />
-              Messages
+              <MessageSquare size={16} /> Messages
             </Link>
+          </div>
+
+          {/* ── Activity Section (placeholder) ── */}
+          <div className="cp-activity-section">
+            <div className="cp-activity-header">
+              <div className="cp-eyebrow">Activity</div>
+              <h2 className="cp-activity-title">Your Activity</h2>
+              <p className="cp-activity-subtitle">Track your requests and view transaction history.</p>
+            </div>
+            <div className="cp-activity-tabs">
+              {(["track", "transactions"] as ActivityTab[]).map((tab) => (
+                <button key={tab} type="button" onClick={() => setActivityTab(tab)}
+                  className={`cp-activity-tab ${activityTab === tab ? "cp-activity-tab--active" : ""}`}>
+                  {tab === "track" ? "Track Progress" : "Transactions"}
+                </button>
+              ))}
+            </div>
+
+            {/* Track Progress Tab */}
+            {activityTab === "track" && (
+              <div className="cp-activity-content">
+                {requestsQuery.isLoading ? (
+                  <div className="cp-activity-skeleton">{[1, 2].map((i) => <div key={i} className="cp-activity-skeleton-card" />)}</div>
+                ) : requests.length === 0 ? (
+                  <div className="cp-activity-empty">
+                    <Compass size={32} className="cp-activity-empty-icon" />
+                    <p className="cp-activity-empty-title">No Requests Yet</p>
+                    <p className="cp-activity-empty-text">When you request a maid, you will be able to track the progress here.</p>
+                    <Link to="/client/maids" className="cp-btn cp-btn--primary cp-btn--sm">Find a Maid</Link>
+                  </div>
+                ) : (
+                  <div className="cp-activity-request-list">
+                    {requests.map((req) => (
+                      <RequestSummary key={req.id} request={req} isSelected={selectedRequestId === req.id} onSelect={() => setSelectedRequestId(req.id)} />
+                    ))}
+                  </div>
+                )}
+                {selectedRequest && (
+                  <div className="cp-activity-detail">
+                    <p className="cp-activity-detail-label">Request #{String(selectedRequest.id).slice(-4).toUpperCase()}</p>
+                    <h3 className="cp-activity-detail-title">{selectedRequest.type === "direct" ? "Direct Maid Request" : "General Maid Request"}</h3>
+                    <StatusSummary request={selectedRequest} />
+                    <div style={{ marginTop: 16 }}>
+                      <p className="cp-activity-detail-label">Progress</p>
+                      <div style={{ marginTop: 8 }}><ProgressTimeline request={selectedRequest} /></div>
+                    </div>
+                    <div className="cp-activity-detail-actions">
+                      <Link to="/client/support-chat" className="cp-btn cp-btn--primary cp-btn--sm">Contact Agency</Link>
+                      <Link to="/client/maids" className="cp-btn cp-btn--ghost cp-btn--sm">Find More Maids</Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Transactions Tab */}
+            {activityTab === "transactions" && (
+              <div className="cp-activity-content">
+                <div className="cp-activity-search">
+                  <Search size={14} className="cp-activity-search-icon" />
+                  <input type="text" placeholder="Search transactions..." value={txSearch} onChange={(e) => setTxSearch(e.target.value)} className="cp-activity-search-input" />
+                </div>
+                {txLoading ? (
+                  <div className="cp-activity-skeleton">{[1, 2].map((i) => <div key={i} className="cp-activity-skeleton-card" />)}</div>
+                ) : filteredTxHistory.length === 0 ? (
+                  <div className="cp-activity-empty">
+                    <BriefcaseBusiness size={32} className="cp-activity-empty-icon" />
+                    <p className="cp-activity-empty-title">No Transactions Yet</p>
+                    <p className="cp-activity-empty-text">Your transaction and assignment activity will appear here once you start interacting with agencies.</p>
+                  </div>
+                ) : (
+                  <div className="cp-activity-tx-list">
+                    {filteredTxHistory.map((item) => (
+                      <div key={item.directSale.id} className="cp-activity-tx-card">
+                        <div className="cp-activity-tx-header">
+                          <div>
+                            <p className="cp-activity-tx-label">Transaction #{item.directSale.id}</p>
+                            <p className="cp-activity-tx-name">{item.directSale.maidName}</p>
+                          </div>
+                          <span className={`cp-activity-tx-badge ${getStatusBadge(item.directSale.status)}`}>{getStatusLabel(item.directSale.status)}</span>
+                        </div>
+                        <div className="cp-activity-tx-actions">
+                          {item.maid && <Link to={`/maids/${encodeURIComponent(item.directSale.maidReferenceCode)}`} className="cp-btn cp-btn--ghost cp-btn--sm">View Maid</Link>}
+                          <Link to="/client/support-chat" className="cp-btn cp-btn--ghost cp-btn--sm">Messages</Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
@@ -333,7 +475,7 @@ const styles = `
   .cp-shell {
     position: relative;
     width: 100%;
-    max-width: 520px;
+    max-width: 720px;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -606,6 +748,134 @@ const styles = `
     .cp-shell { transition: none !important; }
     .cp-field { animation: none !important; }
   }
+
+  /* ── Activity Section ── */
+  .cp-activity-section {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    padding: 28px 24px;
+    animation: cp-slideUp 0.5s cubic-bezier(.22,1,.36,1) both;
+    animation-delay: 0.45s;
+  }
+  .cp-activity-header { margin-bottom: 20px; }
+  .cp-activity-title {
+    font-size: 22px; font-weight: 800; color: var(--text-main);
+    margin: 4px 0 0;
+  }
+  .cp-activity-subtitle {
+    font-size: 13px; color: var(--text-muted); margin: 4px 0 0;
+  }
+  .cp-activity-tabs {
+    display: flex; gap: 6px; margin-bottom: 20px;
+    background: var(--off); border-radius: 14px; padding: 4px;
+  }
+  .cp-activity-tab {
+    flex: 1; padding: 10px 16px; border-radius: 11px;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    border: none; background: transparent; color: var(--text-muted);
+    transition: all 0.2s ease;
+  }
+  .cp-activity-tab--active {
+    background: var(--teal); color: var(--white);
+    box-shadow: 0 2px 8px rgba(14,78,94,0.25);
+  }
+  .cp-activity-content { min-height: 120px; }
+  .cp-activity-skeleton { display: flex; flex-direction: column; gap: 10px; }
+  .cp-activity-skeleton-card {
+    height: 80px; border-radius: 14px; background: var(--off);
+    animation: cp-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes cp-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .cp-activity-empty {
+    text-align: center; padding: 32px 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .cp-activity-empty-icon { color: var(--teal); opacity: 0.5; }
+  .cp-activity-empty-title {
+    font-size: 16px; font-weight: 800; color: var(--text-main); margin: 0;
+  }
+  .cp-activity-empty-text {
+    font-size: 13px; color: var(--text-muted); margin: 0; max-width: 280px;
+  }
+  .cp-activity-request-list { display: flex; flex-direction: column; gap: 8px; }
+  .cp-activity-detail {
+    margin-top: 16px; padding: 20px; border-radius: 14px;
+    border: 1px solid var(--border); background: var(--off);
+  }
+  .cp-activity-detail-label {
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--text-muted); margin: 0 0 4px;
+  }
+  .cp-activity-detail-title {
+    font-size: 18px; font-weight: 800; color: var(--text-main); margin: 0 0 12px;
+  }
+  .cp-activity-detail-actions {
+    display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;
+  }
+  .cp-activity-maid-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .cp-activity-maid-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px; border-radius: 11px; border: 1px solid var(--border);
+    text-decoration: none; transition: background 0.15s;
+  }
+  .cp-activity-maid-card:hover { background: var(--off); }
+  .cp-activity-maid-avatar {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--teal-light); color: var(--teal);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 800; flex-shrink: 0;
+  }
+  .cp-activity-maid-info { min-width: 0; }
+  .cp-activity-maid-name {
+    font-size: 13px; font-weight: 700; color: var(--text-main); margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cp-activity-maid-meta { font-size: 11px; color: var(--text-muted); margin: 2px 0 0; }
+  .cp-activity-search {
+    position: relative; margin-bottom: 12px;
+  }
+  .cp-activity-search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); pointer-events: none;
+  }
+  .cp-activity-search-input {
+    width: 100%; padding: 10px 12px 10px 34px;
+    border-radius: 11px; border: 1.5px solid var(--border);
+    font-size: 13px; font-weight: 600; color: var(--text-main);
+    background: var(--white); outline: none; transition: border-color 0.2s;
+  }
+  .cp-activity-search-input:focus { border-color: var(--teal); }
+  .cp-activity-search-input::placeholder { color: var(--text-muted); font-weight: 400; }
+  .cp-activity-tx-list { display: flex; flex-direction: column; gap: 10px; }
+  .cp-activity-tx-card {
+    padding: 16px; border-radius: 14px;
+    border: 1px solid var(--border); background: var(--white);
+  }
+  .cp-activity-tx-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .cp-activity-tx-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--text-muted); margin: 0;
+  }
+  .cp-activity-tx-name {
+    font-size: 16px; font-weight: 800; color: var(--text-main); margin: 2px 0 0;
+  }
+  .cp-activity-tx-ref { font-size: 11px; color: var(--text-muted); margin: 2px 0 0; }
+  .cp-activity-tx-badge {
+    display: inline-flex; align-items: center; padding: 3px 10px;
+    border-radius: 99px; font-size: 11px; font-weight: 700; border: 1px solid;
+    flex-shrink: 0;
+  }
+  .cp-activity-tx-meta {
+    display: flex; gap: 16px; font-size: 12px; color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+  .cp-activity-tx-meta span { display: flex; align-items: center; gap: 4px; }
+  .cp-activity-tx-actions { display: flex; gap: 8px; }
+  .cp-btn--sm { padding: 8px 16px !important; font-size: 12px !important; }
 `;
 
 export default ClientProfilePage;

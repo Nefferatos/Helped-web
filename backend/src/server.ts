@@ -34,6 +34,7 @@ import directMarketingRoutes from "./routes/directMarketingRoutes";
 import shareRoutes from "./routes/shareRoutes";
 import whatsappRoutes from "./routes/whatsappRoutes";
 import atsRoutes from "./routes/atsRoutes";
+import applicantAssistantRoutes from "./routes/applicantAssistantRoutes";
 import { initializeDatabase } from "./db";
 import {
   getAgencyAdminsStore,
@@ -150,6 +151,7 @@ app.post("/api/pdf-autofill", requireAgencyAuth, pdfAutofill);
 
 app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/ats", atsRoutes);
+app.use("/api/applicant-assistant", applicantAssistantRoutes);
 
 // ─── Share route ──────────────────────────────────────────────────────────────
 // IMPORTANT: Must be mounted BEFORE the generic /api catch-all routers below.

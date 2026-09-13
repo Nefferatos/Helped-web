@@ -364,7 +364,7 @@ const App = () => {
               <Route path="support-chat" element={withRouteLoader(<ClientSupportChat />)} />
               <Route path="profile" element={withRouteLoader(<ClientProfilePage />)} />
               <Route path="change-password" element={withRouteLoader(<ClientChangePasswordPage />)} />
-              <Route path="history" element={withRouteLoader(<ClientHistoryPage />)} />
+              <Route path="history" element={<Navigate to="/client/profile" replace />} />
               {/* Keep existing dashboard route working */}
               <Route path="dashboard" element={withRouteLoader(<ClientDashboard />)} />
             </Route>
