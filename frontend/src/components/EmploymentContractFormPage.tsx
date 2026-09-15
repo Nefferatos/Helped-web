@@ -108,6 +108,24 @@ const mergeUploadedFiles = (current: UploadedFile[], incoming: UploadedFile[]) =
   }
   return merged;
 };
+const readUploadedFileResponse = (
+  data: {
+    error?: string;
+    fileUrl?: string;
+    fileName?: string;
+    category?: string;
+    files?: Array<{ url?: string; name?: string; category?: string }>;
+  },
+  fallbackCategory: string,
+) => {
+  const firstFile = Array.isArray(data.files) ? data.files[0] : undefined;
+  return {
+    error: data.error,
+    fileUrl: data.fileUrl || firstFile?.url || "",
+    fileName: data.fileName || firstFile?.name || "",
+    category: data.category || firstFile?.category || fallbackCategory,
+  };
+};
 
 /**
  * Determine if a maid result is already assigned to a DIFFERENT employer.
@@ -243,9 +261,18 @@ const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload,
         const fd = new FormData();
         fd.append("file", file); fd.append("category", category); fd.append("refCode", refCode);
         const res = await fetch("/api/employer-files", { method: "POST", headers: getAgencyAdminAuthHeaders(), body: fd });
-        const data = (await res.json().catch(() => ({}))) as { error?: string; fileUrl?: string; fileName?: string; category?: string };
+        const data = readUploadedFileResponse(
+          (await res.json().catch(() => ({}))) as {
+            error?: string;
+            fileUrl?: string;
+            fileName?: string;
+            category?: string;
+            files?: Array<{ url?: string; name?: string; category?: string }>;
+          },
+          category,
+        );
         if (!res.ok || !data.fileUrl || !data.fileName) throw new Error(data.error || `Failed to upload ${file.name}`);
-        uploaded.push({ name: data.fileName, url: data.fileUrl, category: data.category || category });
+        uploaded.push({ name: data.fileName, url: data.fileUrl, category: data.category });
       }
       onUpload((current) => mergeUploadedFiles(current, uploaded));
       toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded`);
@@ -344,9 +371,18 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
       try {
         const fd = new FormData(); fd.append("file", pf.file); fd.append("category", pf.category); fd.append("refCode", refCode);
         const res = await fetch("/api/employer-files", { method: "POST", headers: getAgencyAdminAuthHeaders(), body: fd });
-        const data = (await res.json().catch(() => ({}))) as { error?: string; fileUrl?: string; fileName?: string };
+        const data = readUploadedFileResponse(
+          (await res.json().catch(() => ({}))) as {
+            error?: string;
+            fileUrl?: string;
+            fileName?: string;
+            category?: string;
+            files?: Array<{ url?: string; name?: string; category?: string }>;
+          },
+          pf.category,
+        );
         if (!res.ok || !data.fileUrl || !data.fileName) throw new Error(data.error || `Failed to upload ${pf.file.name}`);
-        results[pf.category] = [...(results[pf.category] ?? []), { name: data.fileName, url: data.fileUrl, category: pf.category }];
+        results[data.category] = [...(results[data.category] ?? []), { name: data.fileName, url: data.fileUrl, category: data.category }];
         setPendingFiles((p) => p.map((f) => f.id === pf.id ? { ...f, status: "done" } : f));
       } catch (err) {
         setPendingFiles((p) => p.map((f) => f.id === pf.id ? { ...f, status: "error", errorMsg: err instanceof Error ? err.message : "Upload failed" } : f));

@@ -7370,7 +7370,8 @@ app.post(
 
     await ensureSupabaseStorageBucket(storageConfig);
 
-    const uploaded: Array<{ name: string; url: string; size: number }> = [];
+    const category = toTrimmedString(formData.get("category"));
+    const uploaded: Array<{ name: string; url: string; size: number; category: string }> = [];
     for (const [, value] of formData.entries()) {
       if (!(value instanceof File)) continue;
       const ext = value.name.split(".").pop() ?? "bin";
@@ -7395,9 +7396,19 @@ app.post(
         name: value.name,
         url: buildSupabasePublicFileUrl(storageConfig, key),
         size: value.size,
+        category,
       });
     }
-    return c.json({ files: uploaded });
+    if (uploaded.length === 0) {
+      return c.json({ error: "file is required" }, 400);
+    }
+    const first = uploaded[0];
+    return c.json({
+      files: uploaded,
+      fileUrl: first?.url,
+      fileName: first?.name,
+      category: first?.category || category,
+    });
   }),
 );
 
