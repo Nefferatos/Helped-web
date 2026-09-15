@@ -225,7 +225,7 @@ const AiHrInterviewerPage = () => {
     setShowSetup(false);
     setIsThinking(true);
     if (aiEnabled) {
-      const aiResponse = await callAiInterviewer([]);
+      const aiResponse = await callAiInterviewer([{ id: `start-${Date.now()}`, role: "candidate", content: "Hello, I'm ready to start the interview." }]);
       if (aiResponse?.nextQuestion) {
         const stageIdx = interviewStages.findIndex((s) => s.id === aiResponse.stage);
         if (stageIdx >= 0) setCurrentStageIndex(stageIdx);

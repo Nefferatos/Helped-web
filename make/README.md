@@ -256,6 +256,7 @@ Every AI tool now routes its LLM call through one shared gateway — `backend/sr
 | `pdf-autofill` | PDF biodata extraction | `MAKE_WEBHOOK_URL_AI_ENGINE_PDF_AUTOFILL` | `MAKE_WEBHOOK_URL` |
 | `applicant-assistant` | Applicant AI Assistant bubble | `MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT` | `MAKE_WEBHOOK_URL` |
 | `hr-interviewer` | AI HR Interviewer chat (Worker) | `MAKE_AI_HR_INTERVIEWER_WEBHOOK_URL` | `MAKE_WEBHOOK_URL` |
+| `command-center` | AI Command Center bubble chat (AI Agents page) | `MAKE_AI_COMMAND_CENTER_WEBHOOK_URL` | `MAKE_WEBHOOK_URL` |
 
 > **Tip:** You can point every scenario at a single generic Make.com "AI Engine" scenario (which just takes `systemPrompt` + `userPrompt` in → text/JSON out) by setting only `MAKE_WEBHOOK_URL`. Or create dedicated scenarios per tool and set the more specific env vars.
 

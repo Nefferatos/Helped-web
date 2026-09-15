@@ -35,6 +35,10 @@ DEV_EXPOSE_CONFIRMATION_CODE=false
 # Make.com webhook for workflow automation (interview sessions, inquiry pipeline, etc.)
 MAKE_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-url
 
+# Dedicated HR Interview Email scenario webhook (Gmail send for pass/fail/invitation).
+# In production use: npx wrangler secret put MAKE_HR_EMAIL_WEBHOOK_URL
+MAKE_HR_EMAIL_WEBHOOK_URL=https://hook.eu1.make.com/your-hr-interview-email-webhook-url
+
 # Dedicated synchronous Make AI Agent webhook for PDF biodata autofill.
 # In production use `npx wrangler secret put MAKE_PDF_AUTOFILL_WEBHOOK_URL`.
 MAKE_PDF_AUTOFILL_WEBHOOK_URL=https://hook.eu1.make.com/your-pdf-autofill-webhook-url
@@ -49,3 +53,12 @@ MAKE_AI_RECEPTIONIST_WEBHOOK_URL=https://hook.eu1.make.com/your-receptionist-web
 # Optional shared secret sent as X-Webhook-Secret header for request validation.
 # In production use: npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
 MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET=YOUR_LONG_RANDOM_SHARED_SECRET
+
+# Make.com AI Command Center webhook — the AI Agents page bubble chat routes its
+# LLM calls EXCLUSIVELY through this webhook (no direct Cline/Claude APIs).
+# Create a Custom Webhook trigger in Make.com, then paste the URL here.
+# In production use: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_URL
+MAKE_AI_COMMAND_CENTER_WEBHOOK_URL=https://hook.eu1.make.com/your-command-center-webhook-url
+# Optional shared secret sent as X-Webhook-Secret header for request validation.
+# In production use: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET
+MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET=YOUR_LONG_RANDOM_SHARED_SECRET

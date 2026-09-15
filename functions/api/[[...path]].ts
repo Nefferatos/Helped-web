@@ -517,6 +517,13 @@ type Bindings = {
   // instead of calling OpenAI/Anthropic directly.
   // Set via: npx wrangler secret put MAKE_AI_HR_INTERVIEWER_WEBHOOK_URL
   MAKE_AI_HR_INTERVIEWER_WEBHOOK_URL?: string;
+  // Make.com AI Command Center webhook — the AI Agents page bubble chat routes
+  // its LLM calls exclusively through this webhook (no direct Cline/Claude APIs).
+  // Set via: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_URL
+  MAKE_AI_COMMAND_CENTER_WEBHOOK_URL?: string;
+  // Optional shared secret for validating Make.com command-center webhook responses.
+  // Set via: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET
+  MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET?: string;
   STORAGE_BACKEND?: string;
   // Server-only secret enabling POST /api/agency-auth/bootstrap-reset.
   // Set via: npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
@@ -9579,7 +9586,80 @@ app.post(
 );
 
 
-// AI Command Center Chat Proxy
+// ─── Make.com AI Command Center Chat Proxy ─────────────────────────────────────
+// The AI Command Center bubble chat uses Make.com as its primary AI engine and
+// falls back to the direct AI providers (Cline/OpenAI, then Anthropic) when the
+// Make webhook is not configured, fails, or returns an unrecognised/empty reply —
+// so an admin never sees a bare "I could not generate a response." message.
+
+/**
+ * Normalise a Make.com webhook response (or a direct AI provider response) into the
+ * reply text shown in the chat. Returns `null` when no usable reply can be found so
+ * the caller can fall back to the next AI provider instead of showing a dead-end.
+ */
+function extractCommandCenterReply(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const inner = extractCommandCenterReply(item);
+      if (inner) return inner;
+    }
+    return null;
+  }
+
+  if (typeof value === "string") {
+    let trimmed = value.trim();
+    if (!trimmed) return null;
+    // Strip ```json ... ``` fences that LLMs commonly add around replies.
+    trimmed = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    if (!trimmed) return null;
+    const firstBrace = trimmed.indexOf("{");
+    const lastBrace = trimmed.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        const nested = JSON.parse(trimmed.slice(firstBrace, lastBrace + 1)) as unknown;
+        const inner = extractCommandCenterReply(nested);
+        if (inner && inner !== trimmed) return inner;
+      } catch {
+        // Not a JSON object — return the raw string.
+      }
+    }
+    return trimmed;
+  }
+
+  if (!value || typeof value !== "object") return null;
+  const obj = value as Record<string, unknown>;
+
+  // Common reply-shaped fields (string, object, or array that nests one).
+  for (const key of ["reply", "response", "text", "content", "output", "result", "answer"]) {
+    const field = obj[key];
+    if (field == null) continue;
+    const inner = extractCommandCenterReply(field);
+    if (inner) return inner;
+  }
+
+  // OpenAI-style { message: "text" } or { message: { content: "..." } }.
+  if (obj.message != null) {
+    const inner = extractCommandCenterReply(obj.message);
+    if (inner) return inner;
+  }
+
+  // OpenAI / Cline style { choices: [{ message: { content } }] }.
+  if (Array.isArray(obj.choices)) {
+    for (const choice of obj.choices) {
+      const inner = extractCommandCenterReply(choice);
+      if (inner) return inner;
+    }
+  }
+
+  // Cline / Make wrapper { data: { ... } }.
+  if (obj.data != null) {
+    const inner = extractCommandCenterReply(obj.data);
+    if (inner) return inner;
+  }
+
+  return null;
+}
+
 app.post(
   "/api/ai/command-center/chat",
   safeApi(async (c) => {
@@ -9590,65 +9670,132 @@ app.post(
       return c.json({ error: "messages array is required" }, 400);
     }
 
-    const errors: string[] = [];
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const failures: string[] = [];
 
-    // Provider 1: Cline AI (api.cline.bot) — OpenAI-compatible with data wrapper
-    const clineKey = c.env.CLINE_API_KEY?.trim();
-    const clineUrl = c.env.CLINE_API_URL?.trim() || "https://api.cline.bot/api/v1";
-    const clineModel = c.env.CLINE_MODEL?.trim() || "openai/gpt-4o-mini";
-    if (clineKey) {
+    // 1) Primary engine: Make.com command-center webhook.
+    const webhookUrl =
+      c.env.MAKE_AI_COMMAND_CENTER_WEBHOOK_URL?.trim() || c.env.MAKE_WEBHOOK_URL?.trim();
+    if (webhookUrl) {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (c.env.MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET?.trim()) {
+        headers["X-Webhook-Secret"] = c.env.MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET.trim();
+      }
+
       try {
-        const response = await fetch(clineUrl + "/chat/completions", {
+        const response = await fetch(webhookUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + clineKey },
+          headers,
           body: JSON.stringify({
-            model: clineModel,
-            messages: [{ role: "system", content: systemPrompt }, ...messages.map((m) => ({ role: m.role, content: m.content }))],
-            max_tokens: 1024,
+            type: "ai_engine",
+            scenario: "command-center",
+            systemPrompt,
+            userPrompt: lastUserMessage,
+            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            context: {},
           }),
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(30_000),
         });
+
         if (response.ok) {
-          const raw = await response.json() as Record<string, unknown>;
-          // Cline API wraps response in { data: { choices: [...] } }
-          const data = (raw.data ?? raw) as { choices?: Array<{ message?: { content?: string } }> };
-          const reply = data.choices?.[0]?.message?.content || "I could not generate a response.";
-          return c.json({ reply });
+          const result = await response.json().catch(() => null);
+          const reply = extractCommandCenterReply(result);
+          // Make returns the literal "Accepted" when the webhook scenario is NOT
+          // instant (i.e. it runs on a schedule). Treat that as "no reply" so we
+          // fall through to the direct LLM providers instead of showing "Accepted".
+          if (reply && reply.trim().toLowerCase() !== "accepted") return c.json({ reply });
+          failures.push(
+            reply?.trim().toLowerCase() === "accepted"
+              ? "Make.com webhook is not instant (returned 'Accepted') — set the scenario to run Immediately"
+              : `Make.com returned an unrecognised/empty response: ${JSON.stringify(result).slice(0, 200)}`,
+          );
+        } else {
+          const errText = await response.text().catch(() => "");
+          console.error(`[Make Command Center] Webhook returned ${response.status}: ${errText.slice(0, 200)}`);
+          failures.push(`Make.com HTTP ${response.status}`);
         }
-        const errText = await response.text().catch(() => "");
-        errors.push("Cline (" + response.status + "): " + errText.slice(0, 200));
       } catch (err) {
-        errors.push("Cline: " + (err instanceof Error ? err.message : "unknown"));
+        const name = err instanceof DOMException ? err.name : "";
+        const msg =
+          name === "TimeoutError"
+            ? "Make.com webhook timed out"
+            : err instanceof Error
+              ? err.message
+              : "Make.com webhook failed";
+        console.error("[Make Command Center]", msg);
+        failures.push(msg);
       }
     } else {
-      errors.push("Cline: no API key");
+      failures.push("Make.com webhook not configured (set MAKE_AI_COMMAND_CENTER_WEBHOOK_URL or MAKE_WEBHOOK_URL)");
     }
 
-    // Provider 2: Anthropic Claude API
+    // 2) Fallback: Cline / OpenAI-compatible provider (same chain used by workflow AI).
+    const provider = getAiProviderConfig({
+      CLINE_API_KEY: c.env.CLINE_API_KEY,
+      CLINE_API_URL: c.env.CLINE_API_URL,
+      CLINE_MODEL: c.env.CLINE_MODEL,
+      OPENAI_API_KEY: c.env.OPENAI_API_KEY,
+      OPENAI_BASE_URL: c.env.OPENAI_BASE_URL,
+      OPENAI_MODEL: c.env.OPENAI_MODEL,
+    });
+    if (provider?.provider === "openai") {
+      try {
+        const result = await openaiChat({
+          apiKey: provider.apiKey,
+          baseUrl: provider.baseUrl,
+          model: provider.model,
+          maxTokens: 1024,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...messages.map((m) => ({
+              role: (m.role === "system" || m.role === "assistant" ? m.role : "user") as "user" | "assistant",
+              content: m.content,
+            })),
+          ],
+          signal: AbortSignal.timeout(30_000),
+        });
+        const reply = result.content?.trim();
+        if (reply) return c.json({ reply });
+        failures.push(`${provider.model}: empty response`);
+      } catch (err) {
+        failures.push(`${provider.model}: ${err instanceof Error ? err.message : "failed"}`);
+      }
+    }
+
+    // 3) Fallback: Anthropic Claude.
     const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
-    const anthropicModel = c.env.ANTHROPIC_MODEL?.trim() || "claude-haiku-4-5";
     if (anthropicKey) {
       try {
+        const anthropicModel = c.env.ANTHROPIC_MODEL?.trim() || "claude-haiku-4-5";
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-api-key": anthropicKey, "anthropic-version": "2023-06-01" },
           body: JSON.stringify({
-            model: anthropicModel, max_tokens: 1024, system: systemPrompt,
-            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            model: anthropicModel,
+            max_tokens: 1024,
+            system: systemPrompt,
+            messages: messages.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
           }),
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(30_000),
         });
         if (response.ok) {
-          const data = await response.json() as { content?: Array<{ text?: string }> };
-          return c.json({ reply: data.content?.[0]?.text || "I could not generate a response." });
+          const data = (await response.json().catch(() => null)) as { content?: Array<{ text?: string }> } | null;
+          const text = data?.content?.[0]?.text?.trim();
+          if (text) return c.json({ reply: text });
+          failures.push("Anthropic: empty response");
+        } else {
+          failures.push(`Anthropic HTTP ${response.status}`);
         }
-        errors.push("Anthropic (" + response.status + ")");
       } catch (err) {
-        errors.push("Anthropic: " + (err instanceof Error ? err.message : "unknown"));
+        failures.push(`Anthropic: ${err instanceof Error ? err.message : "failed"}`);
       }
     }
 
-    return c.json({ error: "All AI providers failed: " + errors.join("; ") }, 500);
+    console.error("[Command Center] all AI providers failed:", failures.join(" | "));
+    return c.json(
+      { error: "AI could not generate a response. " + failures.slice(0, 3).join("; ") },
+      502,
+    );
   }),
 );
 app.post(
@@ -9870,8 +10017,11 @@ app.post(
       }
     }
 
-    // Forward structured data to Make.com (generates its own HTML templates)
-    const makeUrl = c.env.MAKE_WEBHOOK_URL?.trim();
+    // Forward structured data to Make.com (generates its own HTML templates).
+    // Prefer the dedicated HR Interview Email scenario webhook (Gmail send for
+    // pass/fail/invitation); fall back to the generic router if unset.
+    const makeUrl =
+      c.env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim() || c.env.MAKE_WEBHOOK_URL?.trim();
     if (makeUrl) {
       try {
         // Forward the entire body so Make.com can use all structured fields

@@ -3,8 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
-import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
-import { readSafeJson } from "@/lib/safeJson";
 import { useApplicantAssistant, type AssistantMessage } from "@/hooks/useApplicantAssistant";
 import {
   Bot,
@@ -28,9 +26,6 @@ import {
   Clock,
   Loader2,
   Share2,
-  UserCheck,
-  UserX,
-  SendHorizontal,
   FileText,
   ClipboardCheck,
   ExternalLink,
@@ -77,8 +72,6 @@ export interface RecruiterAiAssistantProps {
   onSelectApplicant?: (id: string) => void;
   onApplyFilter?: (filter: Record<string, unknown>) => void;
   onPostToWorkflow?: (summary: string) => Promise<void>;
-  /** Called after bulk email operations to refresh data */
-  onRefreshData?: () => void;
   /** Current active filters on the applicant list */
   currentFilters?: Record<string, unknown>;
   /** Current search query on the applicant list */
@@ -95,14 +88,6 @@ interface ChatMessage {
   documentUrl?: string | null;
   documentId?: string | null;
   trackerId?: string | null;
-}
-
-interface EmailResult {
-  applicantId: string;
-  name: string;
-  email: string;
-  status: "sent" | "failed" | "skipped";
-  error?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -189,7 +174,6 @@ const RecruiterAiAssistant = ({
   onSelectApplicant,
   onApplyFilter,
   onPostToWorkflow,
-  onRefreshData,
   currentFilters,
   currentSearch,
   inline = false,
@@ -201,9 +185,6 @@ const RecruiterAiAssistant = ({
   const [isThinking, setIsThinking] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
-  const [isSendingEmails, setIsSendingEmails] = useState(false);
-  const [emailResults, setEmailResults] = useState<EmailResult[]>([]);
-  const [showEmailResults, setShowEmailResults] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // ─── Backend AI Assistant Hook ────────────────────────────────────────────
@@ -317,174 +298,6 @@ const RecruiterAiAssistant = ({
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Send Emails to Passing Candidates ──────────────────────────────────
-
-  const handleSendPassEmails = useCallback(async () => {
-    const passingCandidates = applications.filter(
-      (a) => (a.score?.score ?? 0) >= 70 && a.status === "Approved" && a.profile.email
-    );
-
-    if (passingCandidates.length === 0) {
-      toast.error("No approved candidates with email addresses found");
-      return;
-    }
-
-    setIsSendingEmails(true);
-    setEmailResults([]);
-    setShowEmailResults(true);
-
-    const results: EmailResult[] = [];
-
-    for (const candidate of passingCandidates) {
-      try {
-        const res = await fetch("/api/send-to-make", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAgencyAdminAuthHeaders(),
-          },
-          body: JSON.stringify({
-            scenario: "interview_pipeline",
-            payload: {
-              type: "pass",
-              to: candidate.profile.email,
-              candidateName: candidate.profile.fullName,
-              position: "Domestic Helper",
-              rating: candidate.score?.score,
-              strengthsHtml: "<li>Application approved based on the recruitment assessment.</li>",
-              applicantId: candidate.id,
-              applicationCode: candidate.applicationCode,
-            },
-          }),
-        });
-
-        if (res.ok) {
-          results.push({
-            applicantId: candidate.id,
-            name: (candidate.profile.fullName as string) || "Unknown",
-            email: candidate.profile.email as string,
-            status: "sent",
-          });
-        } else {
-          const d = await readSafeJson<{ error?: string }>(res);
-          results.push({
-            applicantId: candidate.id,
-            name: (candidate.profile.fullName as string) || "Unknown",
-            email: candidate.profile.email as string,
-            status: "failed",
-            error: d.error || "Failed to send",
-          });
-        }
-      } catch (err) {
-        results.push({
-          applicantId: candidate.id,
-          name: (candidate.profile.fullName as string) || "Unknown",
-          email: (candidate.profile.email as string) || "",
-          status: "failed",
-          error: err instanceof Error ? err.message : "Unknown error",
-        });
-      }
-    }
-
-    setEmailResults(results);
-    setIsSendingEmails(false);
-
-    const sentCount = results.filter((r) => r.status === "sent").length;
-    const failedCount = results.filter((r) => r.status === "failed").length;
-
-    if (sentCount > 0) {
-      toast.success(`Pass emails sent to ${sentCount} candidates`);
-      if (onRefreshData) onRefreshData();
-    }
-    if (failedCount > 0) {
-      toast.error(`Failed to send ${failedCount} emails`);
-    }
-  }, [applications, onRefreshData]);
-
-  // ─── Send Emails to Failed Candidates ───────────────────────────────────
-
-  const handleSendRejectEmails = useCallback(async () => {
-    const failedCandidates = applications.filter(
-      (a) => a.status === "Rejected" && a.profile.email
-    );
-
-    if (failedCandidates.length === 0) {
-      toast.error("No rejected candidates with email addresses found");
-      return;
-    }
-
-    setIsSendingEmails(true);
-    setEmailResults([]);
-    setShowEmailResults(true);
-
-    const results: EmailResult[] = [];
-
-    for (const candidate of failedCandidates) {
-      try {
-        const res = await fetch("/api/send-to-make", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAgencyAdminAuthHeaders(),
-          },
-          body: JSON.stringify({
-            scenario: "interview_pipeline",
-            payload: {
-              type: "fail",
-              to: candidate.profile.email,
-              candidateName: candidate.profile.fullName,
-              position: "Domestic Helper",
-              rating: candidate.score?.score,
-              weaknessesHtml: "<li>The application did not meet the current role requirements.</li>",
-              applicantId: candidate.id,
-              applicationCode: candidate.applicationCode,
-            },
-          }),
-        });
-
-        if (res.ok) {
-          results.push({
-            applicantId: candidate.id,
-            name: (candidate.profile.fullName as string) || "Unknown",
-            email: candidate.profile.email as string,
-            status: "sent",
-          });
-        } else {
-          const d = await readSafeJson<{ error?: string }>(res);
-          results.push({
-            applicantId: candidate.id,
-            name: (candidate.profile.fullName as string) || "Unknown",
-            email: candidate.profile.email as string,
-            status: "failed",
-            error: d.error || "Failed to send",
-          });
-        }
-      } catch (err) {
-        results.push({
-          applicantId: candidate.id,
-          name: (candidate.profile.fullName as string) || "Unknown",
-          email: (candidate.profile.email as string) || "",
-          status: "failed",
-          error: err instanceof Error ? err.message : "Unknown error",
-        });
-      }
-    }
-
-    setEmailResults(results);
-    setIsSendingEmails(false);
-
-    const sentCount = results.filter((r) => r.status === "sent").length;
-    const failedCount = results.filter((r) => r.status === "failed").length;
-
-    if (sentCount > 0) {
-      toast.success(`Rejection emails sent to ${sentCount} candidates`);
-      if (onRefreshData) onRefreshData();
-    }
-    if (failedCount > 0) {
-      toast.error(`Failed to send ${failedCount} emails`);
-    }
-  }, [applications, onRefreshData]);
-
   // ─── Generate summary for workflow posting ──────────────────────────────
 
   const generateWorkflowSummary = useCallback(() => {
@@ -515,7 +328,7 @@ const RecruiterAiAssistant = ({
       analytics.readyForScreening.length > 3 ? `• ${analytics.readyForScreening.length} candidates need screening — prioritize high scorers` : "",
       analytics.needsAttention.length > 0 ? `• ${analytics.needsAttention.length} profiles missing contact details — fix to enable outreach` : "",
       analytics.awaitingProfile.length > 0 ? `• ${analytics.awaitingProfile.length} approved candidates need public profiles configured` : "",
-      analytics.approvedWithScore.length > 0 ? `• ${analytics.approvedWithScore.length} approved candidates ready for pass emails` : "",
+      analytics.approvedWithScore.length > 0 ? `• ${analytics.approvedWithScore.length} approved candidates (score 70+)` : "",
     ].filter(Boolean);
 
     return lines.join("\n");
@@ -642,7 +455,7 @@ const RecruiterAiAssistant = ({
                 <p className="text-xs font-bold text-indigo-800">AI Recommendation</p>
                 <p className="mt-1 text-[11px] leading-5 text-indigo-700">
                   {analytics.approvedWithScore.length > 0
-                    ? `${analytics.approvedWithScore.length} approved candidates with score 70+ are ready for pass emails. Consider sending congratulatory emails to move them forward.`
+                    ? `${analytics.approvedWithScore.length} approved candidates have a score of 70+. Complete their interview on the AI HR Interviewer page to send pass/fail result emails.`
                     : analytics.readyForScreening.length > 3
                     ? `${analytics.readyForScreening.length} candidates are waiting for screening. Focus on those scoring above 70% first.`
                     : analytics.needsAttention.length > 0
@@ -848,58 +661,6 @@ const RecruiterAiAssistant = ({
             </div>
           )}
 
-          <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3.5">
-            <div className="mb-3 flex items-center gap-2">
-              <SendHorizontal className="h-4 w-4 text-blue-600" />
-              <p className="text-xs font-bold text-blue-800">Candidate Email Actions</p>
-            </div>
-            <div className="mb-2.5">
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-[11px] font-semibold text-slate-700">Passing Candidates</p>
-                <span className="text-[10px] font-bold text-emerald-600">{analytics.approvedWithScore.length} eligible</span>
-              </div>
-              <Button size="sm" onClick={() => void handleSendPassEmails()} disabled={isSendingEmails || analytics.approvedWithScore.length === 0} className="w-full gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
-                {isSendingEmails ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
-                {isSendingEmails ? "Sending..." : "Send Pass Emails"}
-              </Button>
-            </div>
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-[11px] font-semibold text-slate-700">Rejected Candidates</p>
-                <span className="text-[10px] font-bold text-rose-600">{analytics.rejected.length} candidates</span>
-              </div>
-              <Button size="sm" variant="outline" onClick={() => void handleSendRejectEmails()} disabled={isSendingEmails || analytics.rejected.length === 0} className="w-full gap-1.5 border-rose-200 text-rose-700 hover:bg-rose-50">
-                {isSendingEmails ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserX className="h-3.5 w-3.5" />}
-                {isSendingEmails ? "Sending..." : "Send Rejection Emails"}
-              </Button>
-            </div>
-          </div>
-
-          {showEmailResults && emailResults.length > 0 && (
-            <div className="rounded-xl border border-slate-100 bg-white p-3.5">
-              <div className="mb-2.5 flex items-center justify-between">
-                <p className="text-xs font-bold text-slate-800">Email Results</p>
-                <button type="button" onClick={() => setShowEmailResults(false)} className="text-[10px] text-slate-400 hover:text-slate-600">Hide</button>
-              </div>
-              <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                {emailResults.map((result) => (
-                  <div key={result.applicantId} className={`flex items-center gap-2 rounded-lg p-2 text-[11px] ${result.status === "sent" ? "bg-emerald-50 text-emerald-800" : result.status === "failed" ? "bg-rose-50 text-rose-800" : "bg-slate-50 text-slate-600"}`}>
-                    {result.status === "sent" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : result.status === "failed" ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : <Clock className="h-3.5 w-3.5 shrink-0" />}
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold truncate">{result.name}</p>
-                      <p className="text-[10px] opacity-75 truncate">{result.email}</p>
-                    </div>
-                    {result.error && <p className="text-[10px] opacity-75 truncate">{result.error}</p>}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex gap-2">
-                <span className="text-[10px] font-bold text-emerald-600">{emailResults.filter((r) => r.status === "sent").length} sent</span>
-                <span className="text-[10px] font-bold text-rose-600">{emailResults.filter((r) => r.status === "failed").length} failed</span>
-              </div>
-            </div>
-          )}
-
           {onApplyFilter && (
             <div className="rounded-xl border border-slate-100 bg-white p-3.5">
               <div className="mb-2.5 flex items-center gap-2">
@@ -1005,16 +766,10 @@ const RecruiterAiAssistant = ({
               <p className="text-xs font-bold text-indigo-800">AI Recommendations</p>
             </div>
             <div className="space-y-2">
-              {analytics.approvedWithScore.length > 0 && (
+              {(analytics.approvedWithScore.length > 0 || analytics.rejected.length > 0) && (
                 <div className="flex items-start gap-2 rounded-lg bg-white/80 p-2.5">
-                  <UserCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                  <p className="text-[11px] leading-4 text-slate-700"><strong>Send pass emails</strong> — {analytics.approvedWithScore.length} approved candidates with score 70+ are ready for congratulatory emails.</p>
-                </div>
-              )}
-              {analytics.rejected.length > 0 && (
-                <div className="flex items-start gap-2 rounded-lg bg-white/80 p-2.5">
-                  <UserX className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />
-                  <p className="text-[11px] leading-4 text-slate-700"><strong>Send rejection emails</strong> — {analytics.rejected.length} rejected candidates could receive polite closure emails.</p>
+                  <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-500" />
+                  <p className="text-[11px] leading-4 text-slate-700"><strong>Send pass/fail emails</strong> — complete the interview on the AI HR Interviewer page to send result emails.</p>
                 </div>
               )}
               {analytics.readyForScreening.length >= 3 && (

@@ -1612,8 +1612,8 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
     return parts.join("\n");
   }, [enquiries, requests, applicants, contracts]);
 
-  // Call AI API via backend proxy (avoids CORS issues from browser)
-  const callClaude = useCallback(async (conversationHistory: CommandCenterMessage[]): Promise<string> => {
+  // Call the Make.com AI engine via the backend proxy (avoids CORS issues from browser)
+  const callMakeCommandCenterAi = useCallback(async (conversationHistory: CommandCenterMessage[]): Promise<string> => {
     const dataContext = buildDataContext();
 
     const systemPrompt = `You are an intelligent AI assistant for a domestic worker (maid) agency. You are the agency admin's right-hand assistant — knowledgeable, proactive, and helpful. You have access to the agency's live operational data.
@@ -1673,7 +1673,7 @@ Always reference actual records from the data above when responding. Be specific
     setIsSubmitting(true);
 
     try {
-      const aiResponse = await callClaude(updatedMessages);
+      const aiResponse = await callMakeCommandCenterAi(updatedMessages);
       setMessages((prev) => [...prev, {
         id: `a-${Date.now()}`,
         role: "assistant",
@@ -1717,7 +1717,7 @@ Always reference actual records from the data above when responding. Be specific
                 <div>
                   <h3 className="text-sm font-bold text-white">AI Command Center</h3>
                   <p className="text-[11px] text-violet-100">
-                    {analytics.totalEnquiries + analytics.totalRequests + analytics.totalApplicants} records · Cline AI powered
+                    {analytics.totalEnquiries + analytics.totalRequests + analytics.totalApplicants} records · Make.com powered
                   </p>
                 </div>
               </div>

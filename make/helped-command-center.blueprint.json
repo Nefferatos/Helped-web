@@ -1,0 +1,127 @@
+{
+    "name": "Helped - AI Command Center",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                },
+                "notes": "AI Command Center chat webhook. After import: click this module, create a new webhook, name it 'AI Command Center Chat Webhook', copy the URL."
+            }
+        },
+        {
+            "id": 2,
+            "module": "ai-local-agent:RunLocalAIAgent",
+            "version": 0,
+            "parameters": {},
+            "mapper": {
+                "files": [],
+                "message": "{{1.userPrompt}}\n\nConversation history:\n{{join(map(slice(1.messages; -10); item.role + \": \" + item.content); \"\\n\")}}",
+                "threadId": "{{1.scenario}}",
+                "outputType": "text",
+                "tokenLimit": "80",
+                "modelConfig": {
+                    "timeout": "",
+                    "recursionLimit": "80",
+                    "iterationsFromHistoryCount": "1"
+                },
+                "defaultModel": "small",
+                "systemPrompt": "{{1.systemPrompt}}",
+                "promptCaching": "none",
+                "fallbackEnabled": false
+            },
+            "metadata": {
+                "designer": {
+                    "x": 450,
+                    "y": 0
+                },
+                "notes": "AI Command Center engine. After import: connect your Make AI Provider connection (same one used by your other AI scenarios)."
+            },
+            "tools": []
+        },
+        {
+            "id": 3,
+            "module": "json:CreateJSON",
+            "version": 1,
+            "parameters": {
+                "json": "{\n  \"reply\": \"\"\n}"
+            },
+            "mapper": {
+                "json": "{\"reply\": \"{{2.response}}\"}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 900,
+                    "y": 0
+                },
+                "notes": "Wrap the AI reply in { reply: \"...\" } so the Worker's extractCommandCenterReply can read it."
+            }
+        },
+        {
+            "id": 4,
+            "module": "gateway:WebhookRespond",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "body": "{{3.data}}",
+                "status": "200",
+                "headers": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ]
+            },
+            "metadata": {
+                "designer": {
+                    "x": 1350,
+                    "y": 0
+                },
+                "notes": "Return JSON reply to the Worker."
+            }
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "eu1.make.com",
+        "notes": [
+            "Helped - AI Command Center - Import-ready blueprint.",
+            "",
+            "AFTER IMPORT:",
+            "1. WEBHOOK: Click Module 1, create a new webhook named 'AI Command Center Chat Webhook', copy its URL.",
+            "2. AI AGENT: Click Module 2, connect your Make AI Provider connection.",
+            "3. CREATE JSON: Module 3 is pre-configured to return { reply: \"...\" }.",
+            "4. WEBHOOK RESPONSE: Module 4 is pre-configured.",
+            "5. WORKER SECRET: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_URL (paste the webhook URL).",
+            "6. ACTIVATE: Toggle the scenario ON.",
+            "",
+            "The Worker sends { type, scenario, systemPrompt, userPrompt, messages, context }.",
+            "The AI agent uses 1.systemPrompt (agency data + instructions) and 1.userPrompt + conversation history.",
+            "Returns { reply: \"...\" }, which extractCommandCenterReply reads back into the chat."
+        ]
+    }
+}
