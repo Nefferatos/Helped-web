@@ -69,6 +69,15 @@ interface ScheduledInterview {
   createdAt: string;
 }
 
+interface InterviewInvitationResponse {
+  ok?: boolean;
+  makeTriggered?: boolean;
+  meetLink?: string | null;
+  eventId?: string | null;
+  eventUrl?: string | null;
+  error?: string | null;
+}
+
 // ─── Interview Stages ─────────────────────────────────────────────────────────
 
 const interviewStages = [
@@ -197,6 +206,84 @@ const AiHrInterviewerPage = () => {
     setMessages((prev) => [...prev, { id: `${role}-${Date.now()}-${Math.random()}`, role, content, stage, evaluation }]);
   }, []);
 
+  const getImmediateSchedule = useCallback(() => {
+    const dt = new Date(Date.now() + 10 * 60 * 1000);
+    return {
+      date: dt.toISOString().slice(0, 10),
+      time: dt.toTimeString().slice(0, 5),
+    };
+  }, []);
+
+  const sendInterviewInvitation = useCallback(async (options?: { allowImmediate?: boolean; showToast?: boolean }) => {
+    const allowImmediate = options?.allowImmediate ?? false;
+    const showToast = options?.showToast ?? true;
+
+    if (!candidateName.trim() || !candidateEmail.trim() || !position.trim()) {
+      toast.error("Fill in candidate details first");
+      return null;
+    }
+
+    const immediate = allowImmediate ? getImmediateSchedule() : null;
+    const inviteDate = scheduledDate || immediate?.date || "";
+    const inviteTime = scheduledTime || immediate?.time || "";
+
+    if (!inviteDate || !inviteTime) {
+      toast.error("Select a date and time");
+      return null;
+    }
+
+    setIsScheduling(true);
+    try {
+      const dt = new Date(`${inviteDate}T${inviteTime}`);
+      const formattedDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      const formattedTime = dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+      const response = await fetch("/api/ai/hr-interview/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: candidateEmail,
+          candidateName,
+          position,
+          type: "interview_invitation",
+          scheduledDate: inviteDate,
+          scheduledTime: inviteTime,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          meetLink: meetLink.trim() || undefined,
+          source: allowImmediate ? "start_interview" : "schedule_interview",
+        }),
+      });
+
+      const data = (await response.json().catch(() => ({}))) as InterviewInvitationResponse;
+      if (!response.ok) throw new Error(data.error || "Failed to send invitation");
+
+      const returnedMeetLink = typeof data.meetLink === "string" && data.meetLink.trim() ? data.meetLink.trim() : "";
+      const finalMeetLink = returnedMeetLink || meetLink.trim() || undefined;
+      if (returnedMeetLink) setMeetLink(returnedMeetLink);
+
+      const newSchedule: ScheduledInterview = {
+        id: `sched-${Date.now()}`,
+        candidateName,
+        candidateEmail,
+        position,
+        scheduledDate: inviteDate,
+        scheduledTime: inviteTime,
+        meetLink: finalMeetLink,
+        status: "scheduled",
+        createdAt: new Date().toISOString(),
+      };
+
+      setScheduledInterviews((prev) => [newSchedule, ...prev]);
+      if (showToast) toast.success(`Make.com triggered: invitation sent for ${formattedDate} at ${formattedTime}`);
+      return newSchedule;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to schedule");
+      return null;
+    } finally {
+      setIsScheduling(false);
+    }
+  }, [candidateName, candidateEmail, position, scheduledDate, scheduledTime, meetLink, getImmediateSchedule]);
+
   // ── AI-powered interview call ─────────────────────────────────────────
   const callAiInterviewer = useCallback(async (conversationHistory: ChatMessage[]): Promise<{
     evaluation: { score: number; notes: string };
@@ -222,6 +309,7 @@ const AiHrInterviewerPage = () => {
 
   const startInterview = useCallback(async () => {
     if (!candidateName.trim() || !candidateEmail.trim() || !position.trim()) { toast.error("Please fill in all fields"); return; }
+    await sendInterviewInvitation({ allowImmediate: true, showToast: true });
     setShowSetup(false);
     setIsThinking(true);
     if (aiEnabled) {
@@ -233,7 +321,7 @@ const AiHrInterviewerPage = () => {
       } else { addMessage("interviewer", "Hello! Could you please tell me your full name and what position you're applying for?", "introduction"); }
     } else { addMessage("interviewer", stageQuestions.introduction[0], "introduction"); }
     setIsThinking(false);
-  }, [candidateName, candidateEmail, position, addMessage, aiEnabled, callAiInterviewer]);
+  }, [candidateName, candidateEmail, position, addMessage, aiEnabled, callAiInterviewer, sendInterviewInvitation]);
 
   const handleAiResponse = useCallback((aiResponse: { evaluation: { score: number; notes: string }; nextQuestion: string | null; stage: string; isComplete: boolean; result: InterviewSession["result"] | null }) => {
     const stageIdx = interviewStages.findIndex((s) => s.id === aiResponse.stage);
@@ -303,38 +391,8 @@ const AiHrInterviewerPage = () => {
 
   // ── Schedule Interview & Send Invitation (via Make.com) ───────────────
   const scheduleInterview = useCallback(async () => {
-    if (!candidateName.trim() || !candidateEmail.trim() || !position.trim()) { toast.error("Fill in candidate details first"); return; }
-    if (!scheduledDate || !scheduledTime) { toast.error("Select a date and time"); return; }
-    setIsScheduling(true);
-    try {
-      const dt = new Date(`${scheduledDate}T${scheduledTime}`);
-      const formattedDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-      const formattedTime = dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-
-      // Send structured data for Make.com workflow (generates its own HTML templates)
-      const response = await fetch("/api/ai/hr-interview/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: candidateEmail,
-          candidateName,
-          position,
-          type: "interview_invitation",
-          // Make's Google Calendar module needs the original ISO date and
-          // 24-hour time values, rather than the display-formatted strings.
-          scheduledDate,
-          scheduledTime,
-          meetLink: meetLink.trim() || undefined,
-        }),
-      });
-      if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || "Failed to send invitation"); }
-
-      const newSchedule: ScheduledInterview = { id: `sched-${Date.now()}`, candidateName, candidateEmail, position, scheduledDate, scheduledTime, meetLink: meetLink.trim() || undefined, status: "scheduled", createdAt: new Date().toISOString() };
-      setScheduledInterviews((prev) => [newSchedule, ...prev]);
-      toast.success(`Invitation sent to ${candidateEmail} for ${formattedDate} at ${formattedTime}`);
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to schedule"); }
-    finally { setIsScheduling(false); }
-  }, [candidateName, candidateEmail, position, scheduledDate, scheduledTime, meetLink]);
+    await sendInterviewInvitation({ allowImmediate: false, showToast: true });
+  }, [sendInterviewInvitation]);
 
   const sendResultEmail = useCallback(async (type: "pass" | "fail") => {
     if (!candidateEmail) return;

@@ -524,6 +524,10 @@ type Bindings = {
   // Optional shared secret for validating Make.com command-center webhook responses.
   // Set via: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET
   MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET?: string;
+  // Dedicated Make.com AI Agent webhook for the ATS / recruiting assistant bubble.
+  // Falls back to MAKE_WEBHOOK_URL when unset.
+  MAKE_APPLICANT_ASSISTANT_WEBHOOK_URL?: string;
+  MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT?: string;
   STORAGE_BACKEND?: string;
   // Server-only secret enabling POST /api/agency-auth/bootstrap-reset.
   // Set via: npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
@@ -9670,6 +9674,273 @@ function extractCommandCenterReply(value: unknown): string | null {
 
   return null;
 }
+
+const buildApplicantAssistantSummary = (data: AppData, agencyId: number) => {
+  const applications = data.ats.applications.filter((item) => item.agencyId === agencyId);
+  const byStage: Record<string, number> = {};
+  const byNationality: Record<string, number> = {};
+  let totalScore = 0;
+  let scoredCount = 0;
+  let needingFollowup = 0;
+  let recentlyAdded = 0;
+  const oneDayAgo = Date.now() - 86_400_000;
+
+  for (const application of applications) {
+    byStage[application.status] = (byStage[application.status] ?? 0) + 1;
+    const profile = getAtsProfileByApplicationId(data, application.id);
+    const nationality = toTrimmedString(profile?.nationality) || "Unknown";
+    byNationality[nationality] = (byNationality[nationality] ?? 0) + 1;
+    const score = data.ats.scores[application.id]?.score;
+    if (typeof score === "number" && Number.isFinite(score)) {
+      totalScore += score;
+      scoredCount += 1;
+    }
+    if (["New Applicant", "Documents Submitted"].includes(application.status)) {
+      needingFollowup += 1;
+    }
+    if (new Date(application.appliedAt).getTime() > oneDayAgo) {
+      recentlyAdded += 1;
+    }
+  }
+
+  return {
+    total: applications.length,
+    byStage,
+    byNationality,
+    averageScore: scoredCount > 0 ? Math.round(totalScore / scoredCount) : 0,
+    needingFollowup,
+    recentlyAdded,
+  };
+};
+
+const buildApplicantAssistantApplicantContext = (
+  data: AppData,
+  agencyId: number,
+  applicationId: string,
+) => {
+  const bundle = buildAtsBundle(data, applicationId);
+  if (!bundle || bundle.application.agencyId !== agencyId) return null;
+  return {
+    id: bundle.application.id,
+    applicationCode: bundle.application.applicationCode,
+    maidReferenceCode: bundle.application.maidReferenceCode,
+    status: bundle.application.status,
+    appliedAt: bundle.application.appliedAt,
+    aiParseSummary: bundle.application.aiParseSummary,
+    profile: bundle.application.profile,
+    score: bundle.score
+      ? {
+          score: bundle.score.score,
+          category: bundle.score.category,
+          strengths: bundle.score.strengths,
+          weaknesses: bundle.score.weaknesses,
+        }
+      : null,
+    documentsStatus: bundle.documents.map((document) => ({
+      type: document.type,
+      status: document.status,
+      required: document.required,
+    })),
+    recentHistory: bundle.history.slice(0, 5).map((item) => ({
+      toStage: item.toStage,
+      actor: item.actor,
+      reason: item.reason,
+      createdAt: item.createdAt,
+    })),
+  };
+};
+
+const normalizeApplicantAssistantMakeResponse = (
+  value: unknown,
+  fallbackRequestId: string,
+  fallbackConversationId: string,
+) => {
+  const obj = value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+  const messageSource =
+    (obj.message && typeof obj.message === "object"
+      ? (obj.message as Record<string, unknown>).text
+      : obj.message) ?? value;
+  const text = extractCommandCenterReply(messageSource);
+  const action = obj.action && typeof obj.action === "object"
+    ? (obj.action as { type?: string | null; status?: string; data?: Record<string, unknown> })
+    : null;
+  const result = obj.result && typeof obj.result === "object"
+    ? (obj.result as Record<string, unknown>)
+    : {};
+
+  return {
+    requestId: toTrimmedString(obj.requestId) || fallbackRequestId,
+    conversationId: toTrimmedString(obj.conversationId) || fallbackConversationId,
+    message: text || "I was unable to read the Make.com response. Please try again.",
+    action: action
+      ? {
+          type: typeof action.type === "string" ? action.type : null,
+          status: toTrimmedString(action.status) || "completed",
+          data: action.data && typeof action.data === "object" ? action.data : {},
+        }
+      : null,
+    result: {
+      trackerId: toTrimmedString(result.trackerId),
+      googleDocUrl:
+        toTrimmedString(result.googleDocUrl) ||
+        toTrimmedString(result.documentUrl),
+      documentId: toTrimmedString(result.documentId),
+    },
+    requiresHumanReview: Boolean(obj.requiresHumanReview),
+  };
+};
+
+app.post(
+  "/api/applicant-assistant/chat",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      conversationId?: string;
+      message?: string;
+      selectedApplicantIds?: string[];
+      currentFilters?: Record<string, unknown>;
+      currentSearch?: string;
+    }>(c.req.raw);
+    const message = toTrimmedString(body?.message);
+    if (!message) return c.json({ error: "message is required" }, 400);
+
+    const dedicatedWebhookUrl = (
+      c.env.MAKE_APPLICANT_ASSISTANT_WEBHOOK_URL ||
+      c.env.MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT
+    )?.trim();
+    const commandCenterWebhookUrl = c.env.MAKE_AI_COMMAND_CENTER_WEBHOOK_URL?.trim();
+    const webhookUrl = dedicatedWebhookUrl || commandCenterWebhookUrl || c.env.MAKE_WEBHOOK_URL?.trim();
+    if (!webhookUrl) {
+      return c.json({ error: "Make applicant assistant webhook is not configured" }, 503);
+    }
+
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const data = await loadData(c.env, { readOnly: true });
+    const requestId = crypto.randomUUID();
+    const conversationId = toTrimmedString(body?.conversationId) || crypto.randomUUID();
+    const selectedApplicantIds = Array.isArray(body?.selectedApplicantIds)
+      ? body.selectedApplicantIds.map(toTrimmedString).filter(Boolean)
+      : [];
+    const selectedApplicants = selectedApplicantIds
+      .slice(0, 10)
+      .map((id) => buildApplicantAssistantApplicantContext(data, admin.agencyId, id))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    const applicantAssistantPayload = {
+      scenario: "applicant-assistant",
+      type: "applicant_assistant",
+      requestId,
+      conversationId,
+      message,
+      context: {
+        user: {
+          id: String(admin.id ?? admin.username ?? "agency-admin"),
+          name: admin.username || admin.email || "Agency Staff",
+          email: admin.email || "",
+        },
+        agency: {
+          id: admin.agencyId,
+          name: admin.agencyName || "",
+        },
+        selectedApplicant: selectedApplicants.length === 1 ? selectedApplicants[0] : null,
+        selectedApplicants,
+        currentFilters: body?.currentFilters && typeof body.currentFilters === "object" ? body.currentFilters : {},
+        currentSearch: toTrimmedString(body?.currentSearch),
+        applicantSummary: buildApplicantAssistantSummary(data, admin.agencyId),
+      },
+      conversationHistory: [{ role: "user", content: message }],
+      trackerContext: { existingTracker: null, googleDocId: null },
+    };
+    const makePayload = !dedicatedWebhookUrl && commandCenterWebhookUrl
+      ? {
+          type: "ai_engine",
+          scenario: "applicant-assistant",
+          systemPrompt:
+            "You are an AI recruiting assistant for an agency ATS. Answer with concise, practical recruiting guidance. If useful, mention applicant stages, scores, follow-up risks, and next actions from the provided context.",
+          userPrompt: message,
+          messages: [{ role: "user", content: message }],
+          context: applicantAssistantPayload.context,
+        }
+      : applicantAssistantPayload;
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(makePayload),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const responseText = await response.text();
+    let parsed: unknown = responseText;
+    try {
+      parsed = JSON.parse(responseText) as unknown;
+    } catch {
+      parsed = responseText;
+    }
+
+    if (!response.ok) {
+      return c.json(
+        { error: `Make applicant assistant webhook failed (${response.status})` },
+        502,
+      );
+    }
+
+    const normalized = normalizeApplicantAssistantMakeResponse(parsed, requestId, conversationId);
+    if (normalized.message.trim().toLowerCase() === "accepted") {
+      return c.json(
+        {
+          error:
+            "Make applicant assistant webhook returned 'Accepted'. Set the Make scenario to respond immediately.",
+        },
+        502,
+      );
+    }
+
+    return c.json({
+      requestId: normalized.requestId,
+      conversationId: normalized.conversationId,
+      duplicate: false,
+      message: normalized.message,
+      action: normalized.action,
+      result: normalized.result,
+      requiresHumanReview: normalized.requiresHumanReview,
+      makeSuccess: true,
+    });
+  }),
+);
+
+app.get(
+  "/api/applicant-assistant/tracker",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    return c.json({ tracker: null, googleDocUrl: null });
+  }),
+);
+
+app.post(
+  "/api/applicant-assistant/tracker",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const body = await parseBody<{ name?: string; applicantIds?: string[] }>(c.req.raw);
+    const nowIso = now();
+    const applicantIds = Array.isArray(body?.applicantIds)
+      ? body.applicantIds.map(toTrimmedString).filter(Boolean)
+      : [];
+    return c.json(
+      {
+        id: crypto.randomUUID(),
+        name: toTrimmedString(body?.name) || "Applicant Tracker",
+        description: `Tracker for ${applicantIds.length} applicants`,
+        items: [],
+        googleDocUrl: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      },
+      201,
+    );
+  }),
+);
 
 app.post(
   "/api/ai/command-center/chat",
