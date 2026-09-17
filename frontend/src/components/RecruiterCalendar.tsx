@@ -41,6 +41,12 @@ interface CalendarEvent {
 interface RecruiterCalendarProps {
   /** Optional: link events to specific applicants */
   selectedApplicantName?: string;
+  /** A confirmed interview from the applicant workflow. Added once to the calendar. */
+  scheduledInterview?: {
+    applicationId: string;
+    applicantName: string;
+    date: string;
+  } | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -113,7 +119,7 @@ const getSafeMeetingLink = (value: string) => {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) => {
+const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: RecruiterCalendarProps) => {
   const today = useMemo(() => new Date(), []);
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -141,6 +147,34 @@ const RecruiterCalendar = ({ selectedApplicantName }: RecruiterCalendarProps) =>
     setEvents(updated);
     saveEvents(updated);
   }, []);
+
+  // A workflow booking should be visible right away, without asking the recruiter
+  // to create the same interview again in the calendar.
+  useEffect(() => {
+    if (!scheduledInterview) return;
+    const eventId = `interview-${scheduledInterview.applicationId}-${scheduledInterview.date}`;
+    setCurrentYear(Number(scheduledInterview.date.slice(0, 4)));
+    setCurrentMonth(Number(scheduledInterview.date.slice(5, 7)) - 1);
+    setSelectedDate(scheduledInterview.date);
+    setEvents((current) => {
+      if (current.some((event) => event.id === eventId)) return current;
+      const updated = [
+        ...current,
+        {
+          id: eventId,
+          date: scheduledInterview.date,
+          title: `Interview: ${scheduledInterview.applicantName}`,
+          description: "Scheduled from Applicant Command. Invitation email requested.",
+          type: "interview" as EventType,
+          applicantName: scheduledInterview.applicantName,
+          completed: false,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+      saveEvents(updated);
+      return updated;
+    });
+  }, [scheduledInterview]);
 
   // Calendar grid
   const calendarDays = useMemo(() => {

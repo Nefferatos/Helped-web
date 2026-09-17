@@ -9602,15 +9602,13 @@ app.post(
 
 
 // ─── Make.com AI Command Center Chat Proxy ─────────────────────────────────────
-// The AI Command Center bubble chat uses Make.com as its primary AI engine and
-// falls back to the direct AI providers (Cline/OpenAI, then Anthropic) when the
-// Make webhook is not configured, fails, or returns an unrecognised/empty reply —
-// so an admin never sees a bare "I could not generate a response." message.
+// The AI Command Center bubble chat uses Make.com as its only AI engine. The
+// Worker is a secure proxy: it keeps the Make webhook URL out of the browser and
+// rejects missing or malformed Make replies rather than using another AI provider.
 
 /**
- * Normalise a Make.com webhook response (or a direct AI provider response) into the
- * reply text shown in the chat. Returns `null` when no usable reply can be found so
- * the caller can fall back to the next AI provider instead of showing a dead-end.
+ * Normalise a Make.com webhook response into the reply text shown in the chat.
+ * Returns `null` when the Make scenario does not provide a usable reply.
  */
 function extractCommandCenterReply(value: unknown): string | null {
   if (Array.isArray(value)) {
@@ -9673,6 +9671,41 @@ function extractCommandCenterReply(value: unknown): string | null {
   }
 
   return null;
+}
+
+type CommandCenterAction = {
+  type: "approve_applicant" | "reject_applicant" | "schedule_interview";
+  applicationId: string;
+  date?: string;
+  label?: string;
+};
+
+function extractCommandCenterActions(value: unknown, depth = 0): CommandCenterAction[] {
+  if (depth > 4 || !value) return [];
+  if (typeof value === "string") {
+    try { return extractCommandCenterActions(JSON.parse(value) as unknown, depth + 1); } catch { return []; }
+  }
+  if (Array.isArray(value)) return value.flatMap((item) => extractCommandCenterActions(item, depth + 1));
+  if (typeof value !== "object") return [];
+  const obj = value as Record<string, unknown>;
+  const actions = Array.isArray(obj.actions) ? obj.actions : [];
+  const valid = actions.flatMap((action) => {
+    if (!action || typeof action !== "object") return [];
+    const item = action as Record<string, unknown>;
+    const type = toTrimmedString(item.type);
+    const applicationId = toTrimmedString(item.applicationId);
+    if (!applicationId || !["approve_applicant", "reject_applicant", "schedule_interview"].includes(type)) return [];
+    const date = toTrimmedString(item.date);
+    return [{ type: type as CommandCenterAction["type"], applicationId, date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined, label: toTrimmedString(item.label) || undefined }];
+  });
+  if (valid.length) return valid;
+  for (const key of ["data", "result", "response", "reply", "message", "content", "output"]) {
+    if (obj[key] != null) {
+      const nested = extractCommandCenterActions(obj[key], depth + 1);
+      if (nested.length) return nested;
+    }
+  }
+  return [];
 }
 
 const buildApplicantAssistantSummary = (data: AppData, agencyId: number) => {
@@ -9976,16 +10009,31 @@ app.post(
             messages: messages.map((m) => ({ role: m.role, content: m.content })),
             context: {},
           }),
-          signal: AbortSignal.timeout(30_000),
+          signal: AbortSignal.timeout(55_000),
         });
 
         if (response.ok) {
-          const result = await response.json().catch(() => null);
+          // Some Make scenarios return plain text while declaring
+          // application/json. Read the body once and accept either a JSON reply
+          // object (for example { "reply": "..." }) or a raw text reply.
+          const responseBody = await response.text().catch(() => "");
+          let result: unknown = responseBody;
+          if (responseBody.trim()) {
+            try {
+              result = JSON.parse(responseBody) as unknown;
+            } catch {
+              // A raw Make reply is a valid chat response too.
+            }
+          } else {
+            result = null;
+          }
           const reply = extractCommandCenterReply(result);
           // Make returns the literal "Accepted" when the webhook scenario is NOT
           // instant (i.e. it runs on a schedule). Treat that as "no reply" so we
           // fall through to the direct LLM providers instead of showing "Accepted".
-          if (reply && reply.trim().toLowerCase() !== "accepted") return c.json({ reply });
+          if (reply && reply.trim().toLowerCase() !== "accepted") {
+            return c.json({ reply, actions: extractCommandCenterActions(result) });
+          }
           failures.push(
             reply?.trim().toLowerCase() === "accepted"
               ? "Make.com webhook is not instant (returned 'Accepted') — set the scenario to run Immediately"
@@ -10011,71 +10059,9 @@ app.post(
       failures.push("Make.com webhook not configured (set MAKE_AI_COMMAND_CENTER_WEBHOOK_URL or MAKE_WEBHOOK_URL)");
     }
 
-    // 2) Fallback: Cline / OpenAI-compatible provider (same chain used by workflow AI).
-    const provider = getAiProviderConfig({
-      CLINE_API_KEY: c.env.CLINE_API_KEY,
-      CLINE_API_URL: c.env.CLINE_API_URL,
-      CLINE_MODEL: c.env.CLINE_MODEL,
-      OPENAI_API_KEY: c.env.OPENAI_API_KEY,
-      OPENAI_BASE_URL: c.env.OPENAI_BASE_URL,
-      OPENAI_MODEL: c.env.OPENAI_MODEL,
-    });
-    if (provider?.provider === "openai") {
-      try {
-        const result = await openaiChat({
-          apiKey: provider.apiKey,
-          baseUrl: provider.baseUrl,
-          model: provider.model,
-          maxTokens: 1024,
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages.map((m) => ({
-              role: (m.role === "system" || m.role === "assistant" ? m.role : "user") as "user" | "assistant",
-              content: m.content,
-            })),
-          ],
-          signal: AbortSignal.timeout(30_000),
-        });
-        const reply = result.content?.trim();
-        if (reply) return c.json({ reply });
-        failures.push(`${provider.model}: empty response`);
-      } catch (err) {
-        failures.push(`${provider.model}: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    }
-
-    // 3) Fallback: Anthropic Claude.
-    const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
-    if (anthropicKey) {
-      try {
-        const anthropicModel = c.env.ANTHROPIC_MODEL?.trim() || "claude-haiku-4-5";
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-api-key": anthropicKey, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({
-            model: anthropicModel,
-            max_tokens: 1024,
-            system: systemPrompt,
-            messages: messages.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-          }),
-          signal: AbortSignal.timeout(30_000),
-        });
-        if (response.ok) {
-          const data = (await response.json().catch(() => null)) as { content?: Array<{ text?: string }> } | null;
-          const text = data?.content?.[0]?.text?.trim();
-          if (text) return c.json({ reply: text });
-          failures.push("Anthropic: empty response");
-        } else {
-          failures.push(`Anthropic HTTP ${response.status}`);
-        }
-      } catch (err) {
-        failures.push(`Anthropic: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    }
-
-    console.error("[Command Center] all AI providers failed:", failures.join(" | "));
+    console.error("[Make Command Center] no usable reply:", failures.join(" | "));
     return c.json(
-      { error: "AI could not generate a response. " + failures.slice(0, 3).join("; ") },
+      { error: "Make.com could not generate a response. " + failures.slice(0, 2).join("; ") },
       502,
     );
   }),

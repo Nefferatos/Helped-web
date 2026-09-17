@@ -1,6 +1,92 @@
 {
   "conversations": [
     {
+      "id": "ec2202b4-b542-4298-84ff-825b570c1a59",
+      "agencyId": 1,
+      "candidateReferenceCode": "IND-DAR-SWE-9435",
+      "candidateId": 24,
+      "candidateName": "Pem Doma Sherpa",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-09-16T07:44:33.640Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-09-16T09:41:41.731Z",
+      "updatedAt": "2026-09-16T09:51:53.225Z"
+    },
+    {
+      "id": "2f2f0397-7e6a-4043-b50c-5d4e91528cf4",
+      "agencyId": 1,
+      "candidateReferenceCode": "34534",
+      "candidateId": 39,
+      "candidateName": "Meena Sunar Biswakarma",
+      "phoneNumber": "80730757",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-09-16T07:44:33.640Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-09-16T08:43:52.375Z",
+      "updatedAt": "2026-09-17T12:21:33.579Z"
+    },
+    {
       "id": "727c7190-9c05-42e6-9d9a-7b1734f1099e",
       "agencyId": 1,
       "candidateReferenceCode": "45646",
@@ -84,7 +170,7 @@
         }
       ],
       "createdAt": "2026-08-14T12:22:38.399Z",
-      "updatedAt": "2026-08-14T12:30:41.768Z"
+      "updatedAt": "2026-09-16T08:43:44.635Z"
     },
     {
       "id": "d54f0c09-1340-49ff-9d11-33af24efe510",

@@ -79,6 +79,7 @@ const TermsOfService = lazyRoute(() => import("@/pages/TermsOfService"));
 const DataDeletion = lazyRoute(() => import("@/pages/DataDeletion"));
 const AiAutomationPage = lazyRoute(() => import("@/pages/AiAutomationPage"));
 const AiAgentsPage = lazyRoute(() => import("@/pages/AiAgentsPage"));
+const GlobalAiCommandCenter = lazy(() => import("@/pages/AiAgentsPage").then((module) => ({ default: module.GlobalAiCommandCenter })));
 const AiDirectMarketingPage = lazyRoute(() => import("@/pages/AiDirectMarketingPage"));
 const AiHrInterviewerPage = lazyRoute(() => import("@/pages/AiHrInterviewerPage"));
 const ClientEmployerLogin = lazyRoute(() => import("@/ClientPage/ClientEmployerLogin"));
@@ -100,7 +101,29 @@ const ClientPortalLayout = lazyRoute(() => import("@/ClientPage/ClientPortalLayo
 const PublicAiReceptionist = lazyRoute(() => import("@/components/ai/PublicAiReceptionist"));
 ;
 
-const AdminShell = ({ children }: { children: ReactNode }) => <AppLayout>{children}</AppLayout>;
+export const shouldShowGlobalAiCommandCenter = (pathname: string) => {
+  const normalized = pathname.replace(/\/+$/, "");
+  return ![
+    "/agencyadmin/ai-agents",
+    "/agencyadmin/recruitment",
+    "/agencyadmin/chat-support",
+  ].includes(normalized);
+};
+
+const AdminShell = ({ children }: { children: ReactNode }) => {
+  const location = useLocation();
+  const shouldShow = shouldShowGlobalAiCommandCenter(location.pathname);
+  return (
+    <AppLayout>
+      {children}
+      {shouldShow && (
+        <Suspense fallback={null}>
+          <GlobalAiCommandCenter />
+        </Suspense>
+      )}
+    </AppLayout>
+  );
+};
 const withRouteLoader = (element: ReactNode) => <Suspense fallback={<RouteLoader />}>{element}</Suspense>;
 
 interface AgencyAdminMeResponse {

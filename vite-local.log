@@ -1,0 +1,109 @@
+
+> vite_react_shadcn_ts@0.0.0 dev
+> vite
+
+
+  VITE v5.4.21  ready in 1319 ms
+
+  ➜  Local:   http://localhost:8080/
+  ➜  Network: http://192.168.1.63:8080/
+12:35:15 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+12:35:15 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+12:39:15 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+12:39:35 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+12:39:41 PM [vite] hmr invalidate /src/pages/AiAgentsPage.tsx Could not Fast Refresh (new export)
+12:39:41 PM [vite] hmr update /src/App.tsx, /src/index.css
+12:41:26 PM [vite] hmr update /src/App.tsx, /src/index.css
+12:49:45 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+12:50:00 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+12:50:22 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:11:38 PM [vite] hmr update /src/App.tsx, /src/index.css
+1:11:40 PM [vite] hmr update /src/components/RecruiterAiAssistant.tsx, /src/index.css
+1:11:44 PM [vite] hmr update /src/pages/AtsRecruitmentPage.tsx, /src/index.css
+1:16:14 PM [vite] hmr update /src/components/RecruiterAiAssistant.tsx, /src/index.css
+1:16:38 PM [vite] hmr update /src/components/RecruiterAiAssistant.tsx, /src/index.css
+1:16:57 PM [vite] hmr update /src/pages/AtsRecruitmentPage.tsx, /src/index.css
+1:17:14 PM [vite] hmr update /src/pages/AtsRecruitmentPage.tsx, /src/index.css
+1:17:23 PM [vite] hmr update /src/pages/AtsRecruitmentPage.tsx, /src/index.css
+1:19:10 PM [vite] hmr update /src/components/RecruiterCalendar.tsx, /src/index.css
+1:19:13 PM [vite] hmr update /src/pages/AtsRecruitmentPage.tsx, /src/index.css
+1:19:36 PM [vite] hmr update /src/pages/AtsRecruitmentPage.tsx, /src/index.css
+1:25:00 PM [vite] hmr update /src/App.tsx, /src/index.css
+1:25:01 PM [vite] hmr invalidate /src/App.tsx Could not Fast Refresh (new export)
+1:25:01 PM [vite] page reload src/App.tsx
+1:35:18 PM [vite] page reload src/test/admin-shell.test.ts
+1:35:18 PM [vite] hmr update /src/App.tsx, /src/index.css
+1:35:19 PM [vite] hmr invalidate /src/App.tsx Could not Fast Refresh ("shouldShowGlobalAiCommandCenter" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react-swc#consistent-components-exports
+1:35:19 PM [vite] page reload src/App.tsx
+1:43:22 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:43:36 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:46:28 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:46:32 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:48:02 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:48:17 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:49:57 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:50:41 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:52:50 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:52:59 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:57:35 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+1:57:59 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+2:13:34 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+2:13:36 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+2:15:47 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+2:16:03 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+3:29:48 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+3:30:08 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+3:33:55 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+3:33:57 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+3:56:25 PM [vite] hmr update /src/pages/AgencyChatbotConfig.tsx, /src/index.css
+3:56:29 PM [vite] hmr update /src/pages/AgencyChatbotConfig.tsx, /src/index.css
+3:57:20 PM [vite] hmr update /src/pages/AgencyChatbotConfig.tsx, /src/index.css
+3:57:30 PM [vite] hmr update /src/pages/AgencyChatbotConfig.tsx, /src/index.css
+3:58:13 PM [vite] hmr update /src/pages/AgencyChatbotConfig.tsx, /src/index.css
+3:58:14 PM [vite] hmr update /src/pages/AgencyChatbotConfig.tsx, /src/index.css
+4:12:30 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:12:39 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:12:45 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:12:57 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:13:03 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:14:26 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:17:03 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:17:08 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:18:25 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:18:38 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:18:44 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:19:40 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:20:29 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:20:53 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:20:57 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:21:24 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:23:00 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:23:37 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:29:17 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:29:23 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:38:43 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:41:11 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:41:42 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:48:59 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:49:02 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:49:04 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:56:11 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+4:57:59 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:03:52 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:10:58 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:11:09 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:11:46 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:21:14 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:24:56 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:29:07 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:32:28 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:35:37 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:37:39 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:39:10 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:43:30 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:43:34 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:48:27 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:57:04 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+5:59:32 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+6:00:36 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css
+6:04:38 PM [vite] hmr update /src/pages/AiAgentsPage.tsx, /src/index.css

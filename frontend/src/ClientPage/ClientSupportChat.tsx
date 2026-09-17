@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   CheckCircle,
+  CreditCard,
   HelpCircle,
   MessageCircle,
   Search,
@@ -36,6 +38,30 @@ type TopicOption = AgencyChatbotTopicOption;
 const GUIDE_STORAGE_PREFIX = "sc_guide_seen";
 const seenGuideKeys = new Set<string>();
 
+const TOPIC_ICON_MAP = {
+  "message-circle": MessageCircle,
+  "calendar-days": CalendarDays,
+  "credit-card": CreditCard,
+  "alert-circle": AlertCircle,
+  "help-circle": HelpCircle,
+} as const;
+
+const getTopicIcon = (icon?: string) => {
+  const legacyIconMap: Record<string, keyof typeof TOPIC_ICON_MAP> = {
+    "📋": "message-circle",
+    "📅": "calendar-days",
+    "💳": "credit-card",
+    "🚨": "alert-circle",
+    "💬": "message-circle",
+  };
+  return TOPIC_ICON_MAP[icon && icon in TOPIC_ICON_MAP ? icon as keyof typeof TOPIC_ICON_MAP : legacyIconMap[icon || ""] || "message-circle"];
+};
+
+function TopicIcon({ icon, size = 18 }: { icon?: string; size?: number }) {
+  const Icon = getTopicIcon(icon);
+  return <Icon size={size} aria-hidden="true" />;
+}
+
 const defaultConversation: ClientConversation = {
   key: "support:0",
   clientId: 0,
@@ -51,7 +77,7 @@ const DEFAULT_TOPICS: TopicOption[] = [
   {
     id: "placement",
     label: "Placement Status",
-    icon: "📋",
+    icon: "message-circle",
     description: "Ask about your request status",
     suggestedMessage: "Hi, I'd like an update on my current placement request.",
     enabled: true,
@@ -59,7 +85,7 @@ const DEFAULT_TOPICS: TopicOption[] = [
   {
     id: "schedule",
     label: "Schedule Change",
-    icon: "📅",
+    icon: "calendar-days",
     description: "Request a schedule update",
     suggestedMessage: "Hi, I need to request a schedule change.",
     enabled: true,
@@ -67,7 +93,7 @@ const DEFAULT_TOPICS: TopicOption[] = [
   {
     id: "billing",
     label: "Billing",
-    icon: "💳",
+    icon: "credit-card",
     description: "Ask about invoice or fees",
     suggestedMessage: "Hi, I have a question about billing or invoice.",
     enabled: true,
@@ -75,7 +101,7 @@ const DEFAULT_TOPICS: TopicOption[] = [
   {
     id: "concern",
     label: "Raise Concern",
-    icon: "🚨",
+    icon: "alert-circle",
     description: "Report an issue or concern",
     suggestedMessage: "Hi, I'd like to raise a concern regarding my current arrangement.",
     enabled: true,
@@ -83,7 +109,7 @@ const DEFAULT_TOPICS: TopicOption[] = [
   {
     id: "other",
     label: "Other",
-    icon: "💬",
+    icon: "help-circle",
     description: "Type your own message",
     suggestedMessage: "",
     enabled: true,
@@ -690,7 +716,7 @@ function TopicPicker({
           What can we help you with?
           {!open && selectedTopic && (
             <span className="sc-topic-selected-pill">
-              {selectedTopic.icon} {selectedTopic.label}
+              <TopicIcon icon={selectedTopic.icon} size={16} /> {selectedTopic.label}
             </span>
           )}
         </div>
@@ -711,7 +737,7 @@ function TopicPicker({
                   setOpen(false);
                 }}
               >
-                <span className="sc-topic-icon">{topic.icon}</span>
+                <span className="sc-topic-icon"><TopicIcon icon={topic.icon} /></span>
                 <span className="sc-topic-name">{topic.label}</span>
               </button>
             ))}
@@ -1485,7 +1511,7 @@ const ClientSupportChat = () => {
           <div className="sc-compose">
             {selectedTopic && (
               <div className="sc-topic-tag">
-                {selectedTopic.icon} {selectedTopic.label}
+                <TopicIcon icon={selectedTopic.icon} size={16} /> {selectedTopic.label}
                 <button onClick={() => setSelectedTopic(null)} aria-label="Remove topic">
                   <X size={13} />
                 </button>

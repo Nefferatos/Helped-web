@@ -1,0 +1,510 @@
+{
+  "trackers": [],
+  "conversations": [
+    {
+      "id": "390dae5a-fab0-4deb-a46f-4199b29e48e0",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "f8f7d291-0622-4741-9216-ae688d30020f",
+          "role": "user",
+          "content": "Who are our best matches right now?",
+          "requestId": "40fe53b0-04fd-46bf-a7cb-ee6ee717a924",
+          "applicantIds": [],
+          "timestamp": "2026-09-16T05:15:51.588Z"
+        },
+        {
+          "id": "b7e2267d-47e5-46de-98d5-8f9f5a13b564",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "40fe53b0-04fd-46bf-a7cb-ee6ee717a924",
+          "applicantIds": [],
+          "timestamp": "2026-09-16T05:15:52.636Z"
+        },
+        {
+          "id": "a435523a-245b-46d9-b23b-823684de11f3",
+          "role": "user",
+          "content": "Compare the selected applicants",
+          "requestId": "84182ed8-7642-4767-9483-d95e446d8eed",
+          "applicantIds": [],
+          "timestamp": "2026-09-16T05:15:58.928Z"
+        },
+        {
+          "id": "524d9594-d67c-4628-bf5a-3a0073125563",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "84182ed8-7642-4767-9483-d95e446d8eed",
+          "applicantIds": [],
+          "timestamp": "2026-09-16T05:15:59.788Z"
+        },
+        {
+          "id": "2389b0ac-df05-4ab9-8f6d-0877b9722f3a",
+          "role": "user",
+          "content": "test",
+          "requestId": "d25da63f-5454-4383-916b-789ec0543f7e",
+          "applicantIds": [],
+          "timestamp": "2026-09-16T05:16:06.875Z"
+        },
+        {
+          "id": "c3176705-b56e-481b-aa74-6bfa1dfdf890",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "d25da63f-5454-4383-916b-789ec0543f7e",
+          "applicantIds": [],
+          "timestamp": "2026-09-16T05:16:07.786Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-16T05:15:51.579Z",
+      "updatedAt": "2026-09-16T05:16:07.786Z"
+    },
+    {
+      "id": "b4154b6a-eef6-426f-86f2-13e7cf0ab3ff",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "bd2bf3ce-0028-477d-b675-95323990283e",
+          "role": "user",
+          "content": "show me the current number of applicant",
+          "requestId": "4106531f-72ab-4a3c-bc0e-a89c3d9a2236",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:26:19.884Z"
+        },
+        {
+          "id": "41c82f82-a512-43a3-9498-bd9399b8adea",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "4106531f-72ab-4a3c-bc0e-a89c3d9a2236",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:26:21.229Z"
+        },
+        {
+          "id": "dc69bfba-7d75-4130-95a4-75ab7199152a",
+          "role": "user",
+          "content": "Who are our best matches right now?",
+          "requestId": "f4968b05-44cc-433a-8d81-bfe1c3170a96",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:26:26.172Z"
+        },
+        {
+          "id": "aab943f4-1e6a-4030-81a6-f7cd77d20c05",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "f4968b05-44cc-433a-8d81-bfe1c3170a96",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:26:27.344Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-17T12:26:19.874Z",
+      "updatedAt": "2026-09-17T12:26:27.344Z"
+    },
+    {
+      "id": "33c1a4e6-2dbb-4a82-bd75-a12c6a322cfa",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "9eb21190-2ef6-418b-8bbc-d65b55b913d5",
+          "role": "user",
+          "content": "Who needs follow-up today?",
+          "requestId": "c8452839-db9c-4dba-a5b2-b5468a388436",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:36:01.485Z"
+        },
+        {
+          "id": "5c730231-20db-4880-9e36-540c06a47c5a",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "c8452839-db9c-4dba-a5b2-b5468a388436",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:36:02.434Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-17T12:36:01.480Z",
+      "updatedAt": "2026-09-17T12:36:02.434Z"
+    },
+    {
+      "id": "a72a6638-6328-4031-88f8-9fbbab39110e",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "ed3af409-f3ab-4819-b719-301aad7bcb63",
+          "role": "user",
+          "content": "test",
+          "requestId": "448306a7-9db8-4163-970a-dd9d88dd728a",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:43:15.128Z"
+        },
+        {
+          "id": "d4e386b7-c707-4e2d-8f41-d4a47cc7109d",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "448306a7-9db8-4163-970a-dd9d88dd728a",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:43:16.524Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-17T12:43:15.122Z",
+      "updatedAt": "2026-09-17T12:43:16.525Z"
+    },
+    {
+      "id": "b2e95104-c0df-4cdc-9e5d-14ed5d806256",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "8ddbe1f6-51ad-40e3-9db5-1a3bff4dd32c",
+          "role": "user",
+          "content": "Give me a pipeline summary",
+          "requestId": "93215a12-1646-425d-89d4-7e11316555c8",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:47:18.186Z"
+        },
+        {
+          "id": "9799070f-08c1-446e-aff8-52ab7b6bb6e1",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "93215a12-1646-425d-89d4-7e11316555c8",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:47:19.127Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-17T12:47:18.182Z",
+      "updatedAt": "2026-09-17T12:47:19.127Z"
+    },
+    {
+      "id": "31985128-f5c4-48bf-a26d-cfc4f9e15c01",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "474592cb-a13d-4855-a286-8b54d756af2c",
+          "role": "user",
+          "content": "Give me a pipeline summary",
+          "requestId": "d66a6727-592a-49f7-b847-7708c22de2f3",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:48:10.149Z"
+        },
+        {
+          "id": "1bcbdfe8-7f42-44f8-a0d6-796abf0be619",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "d66a6727-592a-49f7-b847-7708c22de2f3",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T12:48:11.171Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-17T12:48:10.142Z",
+      "updatedAt": "2026-09-17T12:48:11.171Z"
+    },
+    {
+      "id": "6060a8c3-0702-469a-a6e7-f23f2c44b110",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "ed478df2-0b98-4d3b-8d91-2be0b7d31ece",
+          "role": "user",
+          "content": "Who are our best matches right now?",
+          "requestId": "844a220e-36b7-421d-b676-ea7ebd678d72",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T13:18:58.824Z"
+        },
+        {
+          "id": "eeb5c9db-4119-4d2e-a446-8f3a5f7d4ade",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "844a220e-36b7-421d-b676-ea7ebd678d72",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T13:19:00.038Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-17T13:18:58.820Z",
+      "updatedAt": "2026-09-17T13:19:00.038Z"
+    },
+    {
+      "id": "22e73f49-2233-4700-bab5-4d1b7f628be3",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "ced85b7a-1868-422c-a7d4-59cc994ee25b",
+          "role": "user",
+          "content": "Who needs follow-up today?",
+          "requestId": "97df7463-44ab-4026-b009-5f7247e10299",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T13:24:17.642Z"
+        },
+        {
+          "id": "ee0df59c-12cb-4b94-b35a-757c698f5c2a",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "97df7463-44ab-4026-b009-5f7247e10299",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T13:24:18.621Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-17T13:24:17.638Z",
+      "updatedAt": "2026-09-17T13:24:18.621Z"
+    },
+    {
+      "id": "fb18e03e-992f-442f-81c3-6a6ac9486fff",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "21c4358f-7fc9-465d-80db-1572ca416d32",
+          "role": "user",
+          "content": "Who needs follow-up today?",
+          "requestId": "37d9203a-2354-434d-bab8-0c0e0b299929",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T13:27:06.503Z"
+        },
+        {
+          "id": "140c0676-502f-4841-b399-989fb50c49b7",
+          "role": "assistant",
+          "content": "Accepted",
+          "requestId": "37d9203a-2354-434d-bab8-0c0e0b299929",
+          "applicantIds": [],
+          "timestamp": "2026-09-17T13:27:07.588Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-17T13:27:06.498Z",
+      "updatedAt": "2026-09-17T13:27:07.588Z"
+    }
+  ],
+  "auditLog": [
+    {
+      "id": "52dd816d-344e-4a12-8e6c-8f5ce42e78a3",
+      "timestamp": "2026-09-16T05:15:52.638Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "40fe53b0-04fd-46bf-a7cb-ee6ee717a924",
+      "conversationId": "390dae5a-fab0-4deb-a46f-4199b29e48e0",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "27",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "10cef512-8e3a-4978-8d5f-f1a5b47743bb",
+      "timestamp": "2026-09-16T05:15:59.790Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "84182ed8-7642-4767-9483-d95e446d8eed",
+      "conversationId": "390dae5a-fab0-4deb-a46f-4199b29e48e0",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "28",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "84f36a10-4931-404c-b7ee-1d534ef02fcb",
+      "timestamp": "2026-09-16T05:16:07.787Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "d25da63f-5454-4383-916b-789ec0543f7e",
+      "conversationId": "390dae5a-fab0-4deb-a46f-4199b29e48e0",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "29",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "cc0ca1dd-5756-4fa7-9eb4-880d628042df",
+      "timestamp": "2026-09-17T12:26:21.299Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "4106531f-72ab-4a3c-bc0e-a89c3d9a2236",
+      "conversationId": "b4154b6a-eef6-426f-86f2-13e7cf0ab3ff",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "32",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "66f9ed5f-d5c5-4932-a90a-9ee6c0224b37",
+      "timestamp": "2026-09-17T12:26:27.345Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "f4968b05-44cc-433a-8d81-bfe1c3170a96",
+      "conversationId": "b4154b6a-eef6-426f-86f2-13e7cf0ab3ff",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "33",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "1cda04cc-0e3b-47bf-896d-a9a619cdd707",
+      "timestamp": "2026-09-17T12:36:02.435Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "c8452839-db9c-4dba-a5b2-b5468a388436",
+      "conversationId": "33c1a4e6-2dbb-4a82-bd75-a12c6a322cfa",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "34",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "69578888-ffed-4da6-a2b4-59045ca315f7",
+      "timestamp": "2026-09-17T12:43:16.527Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "448306a7-9db8-4163-970a-dd9d88dd728a",
+      "conversationId": "a72a6638-6328-4031-88f8-9fbbab39110e",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "35",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "932ae04e-2734-4b9c-9646-dfc132ff5735",
+      "timestamp": "2026-09-17T12:47:19.128Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "93215a12-1646-425d-89d4-7e11316555c8",
+      "conversationId": "b2e95104-c0df-4cdc-9e5d-14ed5d806256",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "36",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "491b66f4-6ea9-49b1-bc3d-2e82485acb67",
+      "timestamp": "2026-09-17T12:48:11.172Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "d66a6727-592a-49f7-b847-7708c22de2f3",
+      "conversationId": "31985128-f5c4-48bf-a26d-cfc4f9e15c01",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "37",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "676c1119-01f2-4682-9d27-326fa8cb924b",
+      "timestamp": "2026-09-17T13:19:00.040Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "844a220e-36b7-421d-b676-ea7ebd678d72",
+      "conversationId": "6060a8c3-0702-469a-a6e7-f23f2c44b110",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "38",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "7c80e60d-b495-4b9c-869e-d466a27509ed",
+      "timestamp": "2026-09-17T13:24:18.623Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "97df7463-44ab-4026-b009-5f7247e10299",
+      "conversationId": "22e73f49-2233-4700-bab5-4d1b7f628be3",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "39",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "546163c2-8a16-4cf0-9d45-a1eb0217d58f",
+      "timestamp": "2026-09-17T13:27:07.590Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "37d9203a-2354-434d-bab8-0c0e0b299929",
+      "conversationId": "fb18e03e-992f-442f-81c3-6a6ac9486fff",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "40",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    }
+  ],
+  "googleDocLinks": [],
+  "processedRequestIds": [
+    "40fe53b0-04fd-46bf-a7cb-ee6ee717a924",
+    "84182ed8-7642-4767-9483-d95e446d8eed",
+    "d25da63f-5454-4383-916b-789ec0543f7e",
+    "4106531f-72ab-4a3c-bc0e-a89c3d9a2236",
+    "f4968b05-44cc-433a-8d81-bfe1c3170a96",
+    "c8452839-db9c-4dba-a5b2-b5468a388436",
+    "448306a7-9db8-4163-970a-dd9d88dd728a",
+    "93215a12-1646-425d-89d4-7e11316555c8",
+    "d66a6727-592a-49f7-b847-7708c22de2f3",
+    "844a220e-36b7-421d-b676-ea7ebd678d72",
+    "97df7463-44ab-4026-b009-5f7247e10299",
+    "37d9203a-2354-434d-bab8-0c0e0b299929"
+  ],
+  "counters": {
+    "trackers": 1,
+    "conversations": 10,
+    "auditLog": 13
+  }
+}

@@ -72,6 +72,7 @@ export interface RecruiterAiAssistantProps {
   onSelectApplicant?: (id: string) => void;
   onApplyFilter?: (filter: Record<string, unknown>) => void;
   onPostToWorkflow?: (summary: string) => Promise<void>;
+  onApplicantWorkflowAction?: (applicationId: string, action: "approve" | "reject" | "schedule_interview") => void;
   /** Current active filters on the applicant list */
   currentFilters?: Record<string, unknown>;
   /** Current search query on the applicant list */
@@ -174,6 +175,7 @@ const RecruiterAiAssistant = ({
   onSelectApplicant,
   onApplyFilter,
   onPostToWorkflow,
+  onApplicantWorkflowAction,
   currentFilters,
   currentSearch,
   inline = false,
@@ -274,6 +276,17 @@ const RecruiterAiAssistant = ({
     () => (selectedId ? applications.find((a) => a.id === selectedId) : null),
     [selectedId, applications],
   );
+
+  const selectedWorkflow = useMemo(() => {
+    if (!selectedApp) return null;
+    if (["Approved", "Rejected", "Placed"].includes(selectedApp.status)) {
+      return { title: selectedApp.status, detail: "This applicant has already reached a decision stage.", actions: [] as Array<"approve" | "reject" | "schedule_interview"> };
+    }
+    if (["Screening Interview", "Background Check"].includes(selectedApp.status)) {
+      return { title: "Decision required", detail: "Review the interview and documents, then approve or reject the applicant.", actions: ["approve", "reject"] as Array<"approve" | "reject" | "schedule_interview"> };
+    }
+    return { title: "Next step: interview", detail: "Choose an interview date. The applicant will receive an invitation email after you confirm.", actions: ["schedule_interview"] as Array<"approve" | "reject" | "schedule_interview"> };
+  }, [selectedApp]);
 
   // ─── Auto-scroll ────────────────────────────────────────────────────────
 
@@ -643,6 +656,17 @@ const RecruiterAiAssistant = ({
                 {selectedApp.score?.score ?? 0}% · {getScoreLabel(selectedApp.score?.score ?? 0)}
               </div>
               <div className="space-y-1.5">
+                {onApplicantWorkflowAction && selectedWorkflow && (
+                  <>
+                    <div className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{selectedWorkflow.title}</p>
+                      <p className="mt-0.5 text-[11px] leading-4 text-slate-600">{selectedWorkflow.detail}</p>
+                    </div>
+                    {selectedWorkflow.actions.includes("schedule_interview") && <button type="button" onClick={() => onApplicantWorkflowAction(selectedApp.id, "schedule_interview")} className="flex w-full items-center gap-2.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-left text-xs transition hover:bg-sky-100"><Clock className="h-3.5 w-3.5 text-sky-600" /><span className="font-medium text-sky-800">Set interview date & send invitation</span><ArrowRight className="ml-auto h-3 w-3 text-sky-500" /></button>}
+                    {selectedWorkflow.actions.includes("approve") && <button type="button" onClick={() => onApplicantWorkflowAction(selectedApp.id, "approve")} className="flex w-full items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs transition hover:bg-emerald-100"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /><span className="font-medium text-emerald-800">Approve applicant</span><ArrowRight className="ml-auto h-3 w-3 text-emerald-500" /></button>}
+                    {selectedWorkflow.actions.includes("reject") && <button type="button" onClick={() => onApplicantWorkflowAction(selectedApp.id, "reject")} className="flex w-full items-center gap-2.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-left text-xs transition hover:bg-rose-100"><X className="h-3.5 w-3.5 text-rose-600" /><span className="font-medium text-rose-800">Reject applicant</span><ArrowRight className="ml-auto h-3 w-3 text-rose-500" /></button>}
+                  </>
+                )}
                 {(selectedApp.profile.contactNumber as string) && (
                   <button type="button" onClick={() => window.open(`https://wa.me/${(selectedApp.profile.contactNumber as string).replace(/\D/g, "")}`, "_blank")} className="flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs transition hover:border-emerald-300 hover:bg-emerald-50">
                     <MessageCircle className="h-3.5 w-3.5 text-emerald-600" /><span className="font-medium text-slate-700">WhatsApp</span><ArrowRight className="ml-auto h-3 w-3 text-slate-400" />
@@ -854,7 +878,7 @@ const RecruiterAiAssistant = ({
           aria-label="Open AI Recruiting Assistant"
         >
           <Bot className="h-5 w-5 shrink-0" />
-          <span className="hidden whitespace-nowrap text-sm font-bold sm:inline">AI Assistant</span>
+          <span className="hidden whitespace-nowrap text-sm font-bold sm:inline">Applicant Command</span>
           <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white/25 text-[10px] font-bold tabular-nums">{analytics.total}</span>
         </button>
       )}

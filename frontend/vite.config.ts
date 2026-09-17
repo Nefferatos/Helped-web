@@ -8,12 +8,20 @@ export default defineConfig(({ mode }) => {
   // The local Express API defaults to port 3000 (see backend/src/server.ts).
   // VITE_API_PROXY_TARGET can be set when developing against another API host.
   const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:3000";
+  // The AI Command Center is implemented by the Cloudflare Worker, where it
+  // securely calls the Make.com AI-agent webhook. Keep this separate from the
+  // legacy Express API so Vite development matches the deployed route.
+  const workerApiProxyTarget = process.env.VITE_WORKER_API_PROXY_TARGET || "http://127.0.0.1:8787";
 
   return {
   server: {
     host: "::",
     port: 8080,
     proxy: {
+      "/api/ai/command-center": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       "/api": {
         target: apiProxyTarget,
         changeOrigin: true,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { readSafeJson } from "@/lib/safeJson";
+import { adminPath } from "@/lib/routes";
 import { useAiInquiry, type InquiryConversationItem } from "@/hooks/useAiAutomation";
 import {
   AlertCircle,
@@ -110,6 +111,249 @@ interface RequestMaid {
   type?: string;
   photoDataUrl?: string;
 }
+
+interface CommandCenterMaid {
+  referenceCode?: string;
+  fullName?: string;
+  nationality?: string;
+  type?: string;
+  status?: string;
+  expectedSalary?: number | string | null;
+  yearsOfExperience?: number | string | null;
+  languageSkills?: string[];
+  skillsPreferences?: Record<string, unknown>;
+  introduction?: Record<string, unknown>;
+  isPublic?: boolean;
+  createdAt?: string;
+}
+
+interface AgencyCompanyProfile {
+  company_name?: string;
+  short_name?: string;
+  about_us?: string;
+  address_line1?: string;
+  address_line2?: string;
+  postal_code?: string;
+  country?: string;
+  contact_person?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  contact_website?: string;
+  office_hours_regular?: string;
+  office_hours_other?: string;
+  social_facebook?: string;
+  social_whatsapp_number?: string;
+  logo_data_url?: string;
+}
+
+interface AgencyContextSummary {
+  publicMaids?: number;
+  hiddenMaids?: number;
+  totalMaids?: number;
+  maidsWithPhotos?: number;
+  enquiries?: number;
+  momPersonnel?: number;
+  testimonials?: number;
+  galleryImages?: number;
+}
+
+interface SupportChatSummaryItem {
+  key?: string;
+  clientName?: string;
+  conversationType?: "support" | "agency";
+  status?: string;
+  unreadCount?: number;
+  lastMessage?: string;
+  lastMessageAt?: string;
+}
+
+type MaidListResponse = {
+  maids?: CommandCenterMaid[];
+  total?: number;
+};
+
+const loadAllMaidRecords = async (
+  visibility: "public" | "hidden" | undefined,
+  headers: HeadersInit,
+): Promise<CommandCenterMaid[]> => {
+  const pageSize = 100;
+  const firstParams = new URLSearchParams({ page: "1", pageSize: String(pageSize), noPhotos: "true" });
+  if (visibility) firstParams.set("visibility", visibility);
+  const firstResponse = await fetch(`/api/maids?${firstParams.toString()}`, { headers });
+  if (!firstResponse.ok) return [];
+  const firstPage = await readSafeJson<MaidListResponse>(firstResponse);
+  const firstMaids = Array.isArray(firstPage.maids) ? firstPage.maids : [];
+  const total = Math.max(firstMaids.length, Number(firstPage.total) || firstMaids.length);
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return firstMaids;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, async (_, index) => {
+      const params = new URLSearchParams({
+        page: String(index + 2),
+        pageSize: String(pageSize),
+        noPhotos: "true",
+      });
+      if (visibility) params.set("visibility", visibility);
+      const response = await fetch(`/api/maids?${params.toString()}`, { headers });
+      if (!response.ok) return [];
+      const data = await readSafeJson<MaidListResponse>(response);
+      return Array.isArray(data.maids) ? data.maids : [];
+    }),
+  );
+  return [...firstMaids, ...remainingPages.flat()];
+};
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const enforceMaidNationality = (reply: string, maidRecords: CommandCenterMaid[]) => {
+  let corrected = reply;
+  const knownNationalities = Array.from(
+    new Set(maidRecords.map((maid) => maid.nationality?.trim()).filter(Boolean)),
+  ) as string[];
+  if (knownNationalities.length === 0) return corrected;
+  const nationalityPattern = knownNationalities.map(escapeRegExp).join("|");
+
+  for (const maid of maidRecords) {
+    const name = maid.fullName?.trim();
+    const nationality = maid.nationality?.trim();
+    if (!name || !nationality) continue;
+
+    const nearbyNationality = new RegExp(
+      `(${escapeRegExp(name)}|${escapeRegExp(maid.referenceCode || "NO_REFERENCE")})([^.!?\\n]{0,140}?)\\b(${nationalityPattern})\\b`,
+      "gi",
+    );
+    corrected = corrected.replace(nearbyNationality, (match, identity, context, mentionedNationality) => {
+      if (mentionedNationality.toLowerCase() === nationality.toLowerCase()) return match;
+      return `${identity}${context}${nationality}`;
+    });
+  }
+  return corrected;
+};
+
+const isMaidProfileRequest = (text: string) =>
+  /\b(show|open|display|view)\b.*\b(profile|details?)\b/i.test(text) ||
+  /\b(show|open|display|view)\b.*\b(profile|details?)\b.*\b(maid|helper)\b/i.test(text) ||
+  /\b(show|open|display|view)\b.*\b(maid|helper)\b.*\b(profile|details?)\b/i.test(text) ||
+  /\b(profile|details?)\b.*\b(of|for)\b.*\b(maid|helper)\b/i.test(text) ||
+  /\b(maid|helper)\b.*\b(profile|details?)\b/i.test(text);
+
+const profileWords = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((word) => word.length > 2);
+
+const editDistance = (left: string, right: string) => {
+  const row = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = row[0];
+    row[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const previous = row[rightIndex];
+      row[rightIndex] = left[leftIndex - 1] === right[rightIndex - 1]
+        ? diagonal
+        : Math.min(row[rightIndex] + 1, row[rightIndex - 1] + 1, diagonal + 1);
+      diagonal = previous;
+    }
+  }
+  return row[right.length];
+};
+
+const findRequestedMaid = (request: string, maidRecords: CommandCenterMaid[]) => {
+  const normalizedRequest = request.toLowerCase();
+  const exact = maidRecords.find((item) => {
+    const name = item.fullName?.trim().toLowerCase();
+    const reference = item.referenceCode?.trim().toLowerCase();
+    return Boolean((name && normalizedRequest.includes(name)) || (reference && normalizedRequest.includes(reference)));
+  });
+  if (exact) return exact;
+
+  const requestWords = profileWords(request);
+  return maidRecords
+    .filter((maid) => maid.fullName && maid.referenceCode)
+    .map((maid) => {
+      const nameWords = profileWords(maid.fullName!);
+      const matchedWords = nameWords.filter((nameWord) => requestWords.some((word) => {
+        const distance = editDistance(nameWord, word);
+        return word === nameWord || (nameWord.length >= 5 && distance <= 1) || (nameWord.length >= 8 && distance <= 2);
+      }));
+      return { maid, score: matchedWords.length / Math.max(nameWords.length, 1) };
+    })
+    .sort((left, right) => right.score - left.score)[0]?.score === 1
+    ? maidRecords
+      .filter((maid) => maid.fullName && maid.referenceCode)
+      .map((maid) => {
+        const nameWords = profileWords(maid.fullName!);
+        const score = nameWords.filter((nameWord) => requestWords.some((word) => editDistance(nameWord, word) <= (nameWord.length >= 8 ? 2 : nameWord.length >= 5 ? 1 : 0))).length / Math.max(nameWords.length, 1);
+        return { maid, score };
+      })
+      .sort((left, right) => right.score - left.score)[0]?.maid
+    : undefined;
+};
+
+const addVerifiedMaidProfileAction = (
+  request: string,
+  reply: string,
+  maidRecords: CommandCenterMaid[],
+): { reply: string; action?: CommandCenterAction } => {
+  if (!isMaidProfileRequest(request)) return { reply };
+  const maid = findRequestedMaid(request, maidRecords) || findRequestedMaid(reply, maidRecords);
+  if (!maid?.referenceCode) return { reply };
+
+  const details = [
+    `**Verified maid profile**`,
+    `**Name:** ${maid.fullName || "Not recorded"}`,
+    `**Reference code:** ${maid.referenceCode}`,
+    `**Nationality:** ${maid.nationality || "Not recorded"}`,
+    `**Type:** ${maid.type || "Not recorded"}`,
+    `**Status:** ${maid.status || "Not recorded"}`,
+  ].join("\n");
+  const profileReply = reply.includes(maid.referenceCode) ? reply : `${reply.trim()}\n\n${details}`;
+  return {
+    reply: profileReply,
+    action: { type: "open_maid_profile", maidReferenceCode: maid.referenceCode, label: "Open maid profile" },
+  };
+};
+
+const isMaidMatchRequest = (text: string) =>
+  /\b(match|matching|recommend|suggest)\b.*\bmaid|\bmaid\b.*\b(match|matching|recommend|suggest)\b/i.test(text);
+
+const validateAiMaidMatchReply = (reply: string, maidRecords: CommandCenterMaid[]) => {
+  const verifiedByReference = new Map(
+    maidRecords
+      .filter((maid) => maid.referenceCode)
+      .map((maid) => [maid.referenceCode!.toLowerCase(), maid]),
+  );
+  const verifiedReferences = Array.from(verifiedByReference.keys());
+  const verifiedByName = new Map(
+    maidRecords
+      .filter((maid) => maid.fullName && maid.referenceCode)
+      .map((maid) => [maid.fullName!.trim().toLowerCase(), maid]),
+  );
+  const verifiedNames = Array.from(verifiedByName.keys()).filter((name) => name.length > 2);
+  if (verifiedReferences.length === 0) return "**No verified maid profiles are available.**";
+
+  const lines = reply.split("\n");
+  const candidateLines = lines.filter((line) => {
+    const normalized = line.toLowerCase();
+    return verifiedReferences.some((reference) => normalized.includes(`[${reference}]`) || normalized.includes(reference)) ||
+      verifiedNames.some((name) => normalized.includes(name));
+  });
+  if (candidateLines.length === 0) return "**No verified maid matches were returned by the AI.** Please check the employer description or try again.";
+
+  const header = "**AI-selected maid matches verified against the live website catalog**";
+  const note = "\n\nThe AI selected these profiles using the employer/enquiry description. Every listed maid was verified against Manage Maids.";
+  const safeLines = candidateLines.map((line) => {
+    const normalizedLine = line.toLowerCase();
+    const reference = verifiedReferences.find((item) => normalizedLine.includes(item));
+    const matchedName = verifiedNames.find((name) => normalizedLine.includes(name));
+    const maid = reference ? verifiedByReference.get(reference) : matchedName ? verifiedByName.get(matchedName) : undefined;
+    if (!maid) return line;
+    const hasReference = normalizedLine.includes(maid.referenceCode!.toLowerCase());
+    return hasReference
+      ? line.replace(new RegExp(`\\[?${escapeRegExp(maid.referenceCode || "")}\\]?`, "ig"), `[${maid.referenceCode}]`)
+      : `${line} [${maid.referenceCode}]`;
+  });
+  return `${header}\n\n${safeLines.join("\n")}${note}`;
+};
 
 interface RequestRecord {
   id: string;
@@ -1521,17 +1765,163 @@ interface CommandCenterMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  actions?: CommandCenterAction[];
 }
 
-function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
+interface CommandCenterAction {
+  type: "approve_applicant" | "reject_applicant" | "schedule_interview" | "open_maid_profile";
+  applicationId?: string;
+  maidReferenceCode?: string;
+  date?: string;
+  label?: string;
+}
+
+const COMMAND_CENTER_HISTORY_KEY = "helped:ai-command-center:history";
+
+const loadCommandCenterHistory = (): CommandCenterMessage[] => {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(COMMAND_CENTER_HISTORY_KEY) || "[]") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is CommandCenterMessage =>
+      Boolean(item) && typeof item === "object" &&
+      ((item as CommandCenterMessage).role === "user" || (item as CommandCenterMessage).role === "assistant") &&
+      typeof (item as CommandCenterMessage).id === "string" && typeof (item as CommandCenterMessage).content === "string",
+    ).slice(-40);
+  } catch { return []; }
+};
+
+function formatCommandCenterInlineText(text: string): ReactNode[] {
+  const parts = text.split(/(\*\*.*?\*\*|__.*?__)/g);
+
+  return parts.flatMap((part, index) => {
+    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
+      return [
+        <strong key={`${part}-${index}`} className="font-extrabold text-inherit">
+          {part.replace(/^\*\*|\*\*$|^__|__$/g, "")}
+        </strong>,
+      ];
+    }
+
+    const labelMatch = part.match(/^([^:]{1,40}):\s*(.*)$/);
+    if (labelMatch && labelMatch[1].trim().length > 2 && labelMatch[2].trim().length > 0) {
+      const [, label, rest] = labelMatch;
+      return [
+        <strong key={`${label}-${index}`} className="font-extrabold text-inherit">{label}:</strong>,
+        " ",
+        <span key={`${rest}-${index}`}>{rest}</span>,
+      ];
+    }
+
+    return [<span key={`${part}-${index}`}>{part}</span>];
+  });
+}
+
+function formatCommandCenterText(content: string, isUser: boolean): ReactNode {
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return null;
+
+  const lines = normalized.split("\n");
+  const output: ReactNode[] = [];
+  let paragraph: string[] = [];
+  let listItems: string[] = [];
+  let listType: "ul" | "ol" | null = null;
+  let previousWasList = false;
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    output.push(
+      <p key={`p-${output.length}`} className={`${isUser ? "text-white" : "text-slate-800"} my-1.5 leading-relaxed`}>
+        <span className="font-medium">{formatCommandCenterInlineText(paragraph.join(" "))}</span>
+      </p>,
+    );
+    paragraph = [];
+    previousWasList = false;
+  };
+
+  const flushList = () => {
+    if (!listItems.length || !listType) return;
+    const ListTag = listType === "ul" ? "ul" : "ol";
+    output.push(
+      <ListTag key={`list-${output.length}`} className={`my-2 space-y-2 pl-5 ${isUser ? "text-white" : "text-slate-800"}`}>
+        {listItems.map((item, idx) => (
+          <li key={`${listType}-${idx}`} className="leading-relaxed">
+            <span className="font-medium">{formatCommandCenterInlineText(item)}</span>
+          </li>
+        ))}
+      </ListTag>,
+    );
+    listItems = [];
+    listType = null;
+    previousWasList = true;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      flushParagraph();
+      if (listType !== "ul") {
+        flushList();
+        listType = "ul";
+      }
+      listItems.push(line.replace(/^[-*]\s+/, ""));
+      continue;
+    }
+
+    if (/^\d+[.)]\s+/.test(line)) {
+      flushParagraph();
+      if (listType !== "ol") {
+        flushList();
+        listType = "ol";
+      }
+      listItems.push(line.replace(/^\d+[.)]\s+/, ""));
+      continue;
+    }
+
+    if (/^#{1,3}\s+/.test(line)) {
+      flushParagraph();
+      flushList();
+      output.push(
+        <p key={`heading-${output.length}`} className={`mt-3 mb-1 text-sm font-bold ${isUser ? "text-white" : "text-slate-900"}`}>
+          {formatCommandCenterInlineText(line.replace(/^#{1,3}\s+/, ""))}
+        </p>,
+      );
+      previousWasList = false;
+      continue;
+    }
+
+    if (previousWasList && paragraph.length === 0) {
+      output.push(<div key={`spacer-${output.length}`} className="h-1" />);
+    }
+
+    paragraph.push(line);
+    previousWasList = false;
+  }
+
+  flushParagraph();
+  flushList();
+
+  return <>{output}</>;
+}
+
+function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, maids, publicMaids, agencyProfile, agencySummary, supportChats }: {
   enquiries: EnquiryRecord[];
   requests: RequestRecord[];
   applicants: AtsApplication[];
   contracts: EmployerRow[];
+  maids: CommandCenterMaid[];
+  publicMaids: CommandCenterMaid[];
+  agencyProfile?: AgencyCompanyProfile | null;
+  agencySummary?: AgencyContextSummary | null;
+  supportChats?: SupportChatSummaryItem[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"insights" | "chat" | "actions">("insights");
-  const [messages, setMessages] = useState<CommandCenterMessage[]>([]);
+  const [messages, setMessages] = useState<CommandCenterMessage[]>(loadCommandCenterHistory);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1555,10 +1945,27 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
   }, [enquiries, requests, applicants, contracts]);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (!isOpen || !scrollRef.current) return;
+    let secondFrame = 0;
+    const scrollToLatest = () => {
+      if (!scrollRef.current) return;
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, isSubmitting]);
+    };
+    const frame = window.requestAnimationFrame(() => {
+      scrollToLatest();
+      secondFrame = window.requestAnimationFrame(scrollToLatest);
+    });
+    const timer = window.setTimeout(scrollToLatest, 180);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(secondFrame);
+      window.clearTimeout(timer);
+    };
+  }, [isOpen, messages, isSubmitting]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(COMMAND_CENTER_HISTORY_KEY, JSON.stringify(messages.slice(-40))); } catch { /* storage unavailable */ }
+  }, [messages]);
 
   useEffect(() => {
     if (isOpen && messages.length === 0) {
@@ -1575,6 +1982,35 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
     const parts: string[] = [];
     const safeSlice = (v: unknown, len: number) => String(v ?? "").slice(0, len);
 
+    if (agencyProfile || agencySummary) {
+      const agencyName = agencyProfile?.company_name || agencyProfile?.short_name || "This agency";
+      const agencyIntro = agencyProfile?.about_us ? safeSlice(agencyProfile.about_us, 220) : "No agency profile summary available.";
+      const location = [agencyProfile?.address_line1, agencyProfile?.address_line2, agencyProfile?.postal_code, agencyProfile?.country].filter(Boolean).join(", ") || "Location not provided";
+      const contactLine = [agencyProfile?.contact_person, agencyProfile?.contact_phone, agencyProfile?.contact_email, agencyProfile?.contact_website].filter(Boolean).join(" | ") || "Contact details not provided";
+      parts.push(`AGENCY PROFILE (${agencyName}):`);
+      parts.push(`  - About: ${agencyIntro}`);
+      parts.push(`  - Location: ${location}`);
+      parts.push(`  - Contact: ${contactLine}`);
+      if (agencySummary) {
+        parts.push(`  - Agency summary: ${agencySummary.totalMaids ?? 0} total maids, ${agencySummary.publicMaids ?? 0} public, ${agencySummary.hiddenMaids ?? 0} hidden, ${agencySummary.enquiries ?? 0} enquiries, ${agencySummary.testimonials ?? 0} reviews, ${agencySummary.galleryImages ?? 0} gallery images.`);
+      }
+      parts.push("");
+    }
+
+    if (supportChats && supportChats.length > 0) {
+      const recent = supportChats.slice(0, 8);
+      parts.push("SUPPORT CHAT SUMMARY:");
+      recent.forEach((chat) => {
+        const label = chat.conversationType === "agency" ? "agency chat" : "support chat";
+        const clientName = chat.clientName || "Client";
+        const lastMessage = chat.lastMessage ? safeSlice(chat.lastMessage, 120) : "No preview available";
+        const unread = chat.unreadCount ? ` • unread: ${chat.unreadCount}` : "";
+        const timestamp = chat.lastMessageAt ? ` • ${formatDate(chat.lastMessageAt)}` : "";
+        parts.push(`  - ${clientName} (${label})${unread}${timestamp}: ${lastMessage}`);
+      });
+      parts.push("");
+    }
+
     const urgentEnqs = enquiries.filter((e) => e.status === "new" || e.status === "in_progress");
     if (enquiries.length > 0) {
       parts.push(`ENQUIRIES (${enquiries.length} total, ${urgentEnqs.length} urgent):`);
@@ -1583,12 +2019,50 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
       });
     }
 
+    if (maids.length > 0) {
+      parts.push(`\nMAID PROFILES FOR ENQUIRY MATCHING (${maids.length} available to review):`);
+      maids.forEach((maid) => {
+        const skills = maid.skillsPreferences || {};
+        const intro = maid.introduction || {};
+        const languages = Array.isArray(maid.languageSkills)
+          ? maid.languageSkills.join(", ")
+          : safeSlice(skills.languages ?? intro.languages ?? skills.languageSkills, 80);
+        const experience = maid.yearsOfExperience ?? skills.yearsOfExperience ?? intro.yearsOfExperience ?? "N/A";
+        const salary = maid.expectedSalary ?? skills.expectedSalary ?? intro.expectedSalary;
+        const specialties = safeSlice(skills.specialties ?? skills.skills ?? intro.skills ?? intro.experience ?? "", 140);
+        parts.push(`  - ${maid.fullName || "Unnamed"} [${maid.referenceCode || "no ref"}] — NATIONALITY (AUTHORITATIVE): ${maid.nationality || "not recorded"}; ${maid.type || "type N/A"}, ${experience}y experience${salary ? `, salary $${salary}` : ""}${languages ? `, languages: ${languages}` : ""}${specialties ? `, skills: ${specialties}` : ""}`);
+      });
+    }
+
+    if (publicMaids.length > 0) {
+      parts.push(`\nPUBLIC MAID CATALOG (${publicMaids.length} public profiles available):`);
+      publicMaids.forEach((maid) => {
+        const created = maid.createdAt ? formatDate(maid.createdAt) : "date N/A";
+        const region = maid.type || maid.nationality || "N/A";
+        parts.push(`  - ${maid.fullName || "Unnamed"} [${maid.referenceCode || "no ref"}] — NATIONALITY (AUTHORITATIVE): ${maid.nationality || "not recorded"}; ${region}, created: ${created}${maid.status ? `, status: ${maid.status}` : ""}`);
+      });
+    }
+
     const pendingReqs = requests.filter((r) => r.status === "pending");
     if (requests.length > 0) {
       parts.push(`\nREQUESTS (${requests.length} total, ${pendingReqs.length} pending):`);
-      requests.slice(0, 10).forEach((r) => {
+      requests.forEach((r) => {
         const maidNames = (r.maids || []).map((m) => m.fullName || m.referenceCode).join(", ");
-        parts.push(`  - [${r.status || "pending"}] ${r.client?.name || "Unknown"}: ${safeSlice(r.summary, 120)}${maidNames ? ` (Maids: ${maidNames})` : ""}${r.budget ? ` Budget: $${r.budget}` : ""}`);
+        const details = Object.entries(r.details || {})
+          .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+          .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`)
+          .join("; ");
+        const clientDetails = [
+          r.client?.name ? `client: ${r.client.name}` : "",
+          r.client?.company ? `company: ${r.client.company}` : "",
+          r.client?.email ? `email: ${r.client.email}` : "",
+          r.client?.phone ? `phone: ${r.client.phone}` : "",
+        ].filter(Boolean).join(", ");
+        parts.push(`  - REQUEST ID: ${r.id}`);
+        parts.push(`    Status: ${r.status || "pending"}; Type: ${r.type || "not recorded"}; ${clientDetails || "client: Unknown"}`);
+        parts.push(`    Employer request description: ${r.summary || "Not provided"}`);
+        parts.push(`    Budget: ${r.budget || "Not specified"}; Requested maid references: ${maidNames || "None"}`);
+        parts.push(`    Structured requirements: ${details || "Not provided"}`);
       });
     }
 
@@ -1596,7 +2070,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
       parts.push(`\nAPPLICANTS (${applicants.length} total):`);
       applicants.slice(0, 10).forEach((a) => {
         const p: Partial<AtsProfile> = a.profile || {};
-        parts.push(`  - ${p.fullName || "Unnamed"} (${p.nationality || "N/A"}, ${p.yearsOfExperience ?? 0}y exp, score: ${a.score?.score ?? "N/A"}, ${a.status || "pending"}) - Skills: ${(p.languageSkills || []).join(", ") || "N/A"}, Childcare: ${p.childcareExperience ?? 0}y, Elderly: ${p.elderlyCareExperience ?? 0}y`);
+        parts.push(`  - ${p.fullName || "Unnamed"} [app ID: ${a.id}] (${p.nationality || "N/A"}, ${p.yearsOfExperience ?? 0}y exp, score: ${a.score?.score ?? "N/A"}, ${a.status || "pending"}) - Skills: ${(p.languageSkills || []).join(", ") || "N/A"}, Childcare: ${p.childcareExperience ?? 0}y, Elderly: ${p.elderlyCareExperience ?? 0}y`);
       });
     }
 
@@ -1610,10 +2084,10 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts }: {
     }
 
     return parts.join("\n");
-  }, [enquiries, requests, applicants, contracts]);
+  }, [agencyProfile, agencySummary, supportChats, enquiries, requests, applicants, contracts, maids, publicMaids]);
 
   // Call the Make.com AI engine via the backend proxy (avoids CORS issues from browser)
-  const callMakeCommandCenterAi = useCallback(async (conversationHistory: CommandCenterMessage[]): Promise<string> => {
+  const callMakeCommandCenterAi = useCallback(async (conversationHistory: CommandCenterMessage[]): Promise<{ reply: string; actions: CommandCenterAction[] }> => {
     const dataContext = buildDataContext();
 
     const systemPrompt = `You are an intelligent AI assistant for a domestic worker (maid) agency. You are the agency admin's right-hand assistant — knowledgeable, proactive, and helpful. You have access to the agency's live operational data.
@@ -1626,19 +2100,31 @@ Your personality:
 - Use markdown formatting for readability (bold, bullet points, etc.)
 
 Your capabilities:
-- Analyze enquiries, requests, applicants, and contracts
+- Analyze enquiries, requests, applicants, contracts, public maids, support conversations, and the agency's full operational profile
+- Answer agency-wide questions using the agency profile, summary, support chat activity, and current live data as the source of truth
 - Draft professional replies to client enquiries
-- Suggest maid matches for pending requests
+- Match maid profiles to enquiries and pending requests using nationality, care needs, language, experience, availability, and stated budget
 - Identify urgent items that need attention
 - Provide pipeline health summaries
 - Draft marketing content
 - Suggest workflow improvements
+- Answer public maid listing questions using the PUBLIC MAID CATALOG only when the user asks about public profiles, newly added maids, or specific maid groups such as Darjeeling, Manipur, Philippine, Indonesian, Myanmar, Nepalese, etc.
+- For “newly added” requests, prioritize recent createdAt dates in the public maid catalog and clearly label the most recent profiles.
+- Only recommend or list maids whose exact name or reference code appears in the live maid data above. Never invent a maid, reference code, nationality, or availability.
+- When asked about maids from Manage Maids, search the complete MAID PROFILES and PUBLIC MAID CATALOG sections before answering. If no exact match exists, say that no matching record was found instead of guessing.
+- Include the exact reference code for every maid recommendation so the agency can verify it in Manage Maids.
+- Understand normal conversational wording, incomplete grammar, spelling mistakes, and minor typos in maid names. Use the live maid catalog to resolve the intended profile; if more than one profile could match, ask the user to clarify instead of guessing.
+- For maid matching, make the decision using the employer/request/enquiry description, including care needs, nationality, languages, skills, experience, salary, availability, and other stated preferences. Do not use a fixed rotation or alphabetical selection.
+- For pending requests, read the REQUEST ID, employer request description, budget, and structured requirements fields before selecting matches. Treat the request details as the employer's actual requirements, not as optional metadata.
+- Nationality is an exact database field, not an inference from the name, region, category, language, or user wording. Never change or infer it. For example, if a record says "NATIONALITY (AUTHORITATIVE): Indian", it must be described as Indian, never Filipino.
 
 --- LIVE AGENCY DATA ---
 ${dataContext || "No data available yet."}
 --- END DATA ---
 
 Always reference actual records from the data above when responding. Be specific with names, scores, and statuses. If the user asks about something not in the data, let them know what you can see and suggest how to get the information they need.`;
+
+    const actionContract = `\n\nWhen the user asks to show or open a maid profile, include an action using the exact reference code from the live maid data: {"reply":"profile summary","actions":[{"type":"open_maid_profile","maidReferenceCode":"exact maid reference code","label":"Open maid profile"}]}. Never invent a maid reference code. For applicant status changes use: {"reply":"your explanation","actions":[{"type":"approve_applicant"|"reject_applicant"|"schedule_interview","applicationId":"exact applicant ID from the data","date":"YYYY-MM-DD only for schedule_interview","label":"short confirmation label"}]}. Return an empty actions array when no action is needed.`;
 
     const apiMessages = conversationHistory
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -1648,7 +2134,10 @@ Always reference actual records from the data above when responding. Be specific
     const response = await fetch("/api/ai/command-center/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: apiMessages, system: systemPrompt }),
+      body: JSON.stringify({ messages: apiMessages, system: systemPrompt + actionContract }),
+      // Never leave the chat UI in its loading state if a local Worker or Make
+      // scenario stops responding. The Worker itself has a shorter Make timeout.
+      signal: AbortSignal.timeout(55_000),
     });
 
     if (!response.ok) {
@@ -1656,10 +2145,46 @@ Always reference actual records from the data above when responding. Be specific
       throw new Error(errData.error || `AI request failed (${response.status})`);
     }
 
-    const data = await response.json() as { reply?: string; error?: string };
+    const data = await response.json() as { reply?: string; actions?: CommandCenterAction[]; error?: string };
     if (data.error) throw new Error(data.error);
-    return data.reply || "I couldn't generate a response. Please try again.";
+    return { reply: data.reply || "I couldn't generate a response. Please try again.", actions: Array.isArray(data.actions) ? data.actions : [] };
   }, [buildDataContext]);
+
+  const runApplicantAction = async (action: CommandCenterAction) => {
+    const actionLabel = action.type === "approve_applicant" ? "approve" : action.type === "reject_applicant" ? "reject" : "schedule an interview for";
+    if (!window.confirm(`Confirm: ${actionLabel} this applicant${action.date ? ` on ${action.date}` : ""}?`)) return;
+    const headers = { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() };
+    const response = action.type === "schedule_interview"
+      ? await fetch(`/api/ats/applications/${encodeURIComponent(action.applicationId)}/stage`, { method: "PATCH", headers, body: JSON.stringify({ stage: "Screening Interview", reason: `Interview scheduled for ${action.date || "date to be confirmed"}` }) })
+      : await fetch("/api/ats/bulk-actions", { method: "POST", headers, body: JSON.stringify({ applicationIds: [action.applicationId], action: action.type === "approve_applicant" ? "approve" : "reject" }) });
+    const data = await readSafeJson<{ error?: string }>(response);
+    if (!response.ok) throw new Error(data.error || "Could not update applicant");
+    setMessages((previous) => previous.map((message) => message.actions?.includes(action) ? { ...message, actions: [] } : message));
+  };
+
+  const openMaidProfile = (action: CommandCenterAction) => {
+    const referenceCode = action.maidReferenceCode?.trim();
+    const maid = referenceCode
+      ? [...maids, ...publicMaids].find((item) => item.referenceCode === referenceCode)
+      : undefined;
+    if (!referenceCode || !maid) {
+      setError("That maid profile could not be verified in the live maid catalog.");
+      return;
+    }
+    window.location.assign(adminPath(`/maid/${encodeURIComponent(referenceCode)}`));
+  };
+
+  const clearChat = () => {
+    setMessages([]);
+    setError(null);
+    setMessage("");
+    setIsSubmitting(false);
+  };
+
+  const triggerQuickAction = (text: string) => {
+    setActiveTab("chat");
+    void handleSubmit(text);
+  };
 
   const handleSubmit = async (text?: string) => {
     const msg = (text ?? message).trim();
@@ -1673,14 +2198,24 @@ Always reference actual records from the data above when responding. Be specific
     setIsSubmitting(true);
 
     try {
-      const aiResponse = await callMakeCommandCenterAi(updatedMessages);
+      const verifiedProfile = addVerifiedMaidProfileAction(msg, "", [...maids, ...publicMaids]);
+      const aiResponse = verifiedProfile.action
+        ? { reply: verifiedProfile.reply, actions: [verifiedProfile.action] }
+        : await callMakeCommandCenterAi(updatedMessages);
+      const profileReply = verifiedProfile.action
+        ? verifiedProfile.reply
+        : isMaidMatchRequest(msg)
+          ? validateAiMaidMatchReply(aiResponse.reply, [...maids, ...publicMaids])
+          : aiResponse.reply;
       setMessages((prev) => [...prev, {
         id: `a-${Date.now()}`,
         role: "assistant",
-        content: aiResponse,
+        content: enforceMaidNationality(profileReply, [...maids, ...publicMaids]),
+        actions: verifiedProfile.action ? [verifiedProfile.action] : aiResponse.actions,
       }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to get AI response");
+      const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
+      setError(isTimeout ? "The AI is taking longer than expected. Please try again." : err instanceof Error ? err.message : "Failed to get AI response");
     } finally {
       setIsSubmitting(false);
     }
@@ -1692,7 +2227,10 @@ Always reference actual records from the data above when responding. Be specific
       {!isOpen && (
         <button
           type="button"
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setActiveTab("chat");
+            setIsOpen(true);
+          }}
           className="fixed bottom-6 right-6 z-50 group flex h-14 items-center gap-2.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 pl-5 pr-4 text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30 hover:scale-[1.03] active:scale-[0.97]"
           aria-label="Open AI Command Center"
         >
@@ -1721,9 +2259,20 @@ Always reference actual records from the data above when responding. Be specific
                   </p>
                 </div>
               </div>
-              <button type="button" onClick={() => setIsOpen(false)} className="rounded-lg p-1.5 text-violet-100 transition hover:bg-white/15" aria-label="Close">
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                {messages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearChat}
+                    className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-semibold tracking-wide text-white transition hover:bg-white/15"
+                  >
+                    Clear chat
+                  </button>
+                )}
+                <button type="button" onClick={() => setIsOpen(false)} className="rounded-lg p-1.5 text-violet-100 transition hover:bg-white/15" aria-label="Close">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Tab bar */}
@@ -1823,16 +2372,25 @@ Always reference actual records from the data above when responding. Be specific
                     return (
                       <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
                         <div className={`max-w-[88%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}>
-                          <div className={`rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap ${
+                          <div className={`rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed ${
                             isUser ? "bg-violet-600 text-white rounded-br-md" : "bg-slate-50 border border-slate-200 text-slate-800 rounded-bl-md"
                           }`}>
-                            {msg.content.split(/(\*\*.*?\*\*)/).map((part, i) => {
-                              if (part.startsWith("**") && part.endsWith("**")) {
-                                return <strong key={i} className={isUser ? "text-white" : "text-slate-950"}>{part.slice(2, -2)}</strong>;
-                              }
-                              return <span key={i}>{part}</span>;
-                            })}
+                            <div className="space-y-2">
+                              {formatCommandCenterText(msg.content, isUser)}
+                            </div>
                           </div>
+                          {!isUser && msg.actions?.map((action) => (
+                            <button
+                              key={`${action.type}-${action.applicationId || action.maidReferenceCode || action.label}`}
+                              type="button"
+                              onClick={() => action.type === "open_maid_profile"
+                                ? openMaidProfile(action)
+                                : void runApplicantAction(action).catch((err) => setError(err instanceof Error ? err.message : "Could not update applicant"))}
+                              className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold ${action.type === "reject_applicant" ? "border-red-200 bg-red-50 text-red-700" : "border-violet-200 bg-violet-50 text-violet-700"}`}
+                            >
+                              {action.label || (action.type === "open_maid_profile" ? "Open maid profile" : action.type === "approve_applicant" ? "Confirm approval" : action.type === "reject_applicant" ? "Confirm rejection" : `Set interview${action.date ? `: ${action.date}` : ""}`)}
+                            </button>
+                          ))}
                         </div>
                       </div>
                     );
@@ -1857,13 +2415,14 @@ Always reference actual records from the data above when responding. Be specific
                     {[
                       { label: "Pipeline summary", icon: BarChart3 },
                       { label: "Draft enquiry reply", icon: Mail },
+                      { label: "Match maids to enquiries", icon: Sparkles },
                       { label: "Show pending requests", icon: Inbox },
                       { label: "Top applicants", icon: Users },
                     ].map((q) => (
                       <button
                         key={q.label}
                         type="button"
-                        onClick={() => void handleSubmit(q.label)}
+                        onClick={() => triggerQuickAction(q.label)}
                         className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-700 transition hover:bg-violet-100"
                       >
                         <q.icon className="h-2.5 w-2.5" />
@@ -1901,9 +2460,9 @@ Always reference actual records from the data above when responding. Be specific
                   </div>
                   <div className="space-y-1.5">
                     {[
-                      { label: "Generate ad copy", desc: "AI-powered marketing content", action: () => void handleSubmit("Generate a promotional ad for our maid agency services") },
-                      { label: "Draft enquiry reply", desc: "AI writes professional responses", action: () => void handleSubmit("Draft a professional reply to the latest enquiry") },
-                      { label: "Write maid description", desc: "Create compelling maid profiles", action: () => void handleSubmit("Help me write a compelling maid profile description") },
+                      { label: "Generate ad copy", desc: "AI-powered marketing content", action: () => triggerQuickAction("Generate a promotional ad for our maid agency services") },
+                      { label: "Draft enquiry reply", desc: "AI writes professional responses", action: () => triggerQuickAction("Draft a professional reply to the latest enquiry") },
+                      { label: "Write maid description", desc: "Create compelling maid profiles", action: () => triggerQuickAction("Help me write a compelling maid profile description") },
                     ].map((item) => (
                       <button key={item.label} type="button" onClick={item.action} className="flex w-full items-center gap-2.5 rounded-lg border border-slate-100 bg-white px-3 py-2 text-left transition hover:border-amber-200 hover:bg-amber-50">
                         <div className="flex-1">
@@ -1924,9 +2483,10 @@ Always reference actual records from the data above when responding. Be specific
                   </div>
                   <div className="space-y-1.5">
                     {[
-                      { label: "Post to Make workflow", desc: "Send AI report to automation", action: () => void handleSubmit("Generate a pipeline report and post to Make workflow") },
-                      { label: "Triage enquiries", desc: "AI prioritizes all open leads", action: () => void handleSubmit("Triage all open enquiries by priority and suggest actions") },
-                      { label: "Match maids to requests", desc: "AI matches pending requests", action: () => void handleSubmit("Review pending requests and suggest maid matches") },
+                      { label: "Post to Make workflow", desc: "Send AI report to automation", action: () => triggerQuickAction("Generate a pipeline report and post to Make workflow") },
+                      { label: "Triage enquiries", desc: "AI prioritizes all open leads", action: () => triggerQuickAction("Triage all open enquiries by priority and suggest actions") },
+                      { label: "Match maids to enquiries", desc: "Match current maid profiles to open enquiries", action: () => triggerQuickAction("Match suitable maid profiles to every new and in-progress enquiry. For each enquiry, list the best 3 matches with their reference code and a brief reason.") },
+                      { label: "Match maids to requests", desc: "AI matches pending requests", action: () => triggerQuickAction("Review pending requests and suggest maid matches") },
                     ].map((item) => (
                       <button key={item.label} type="button" onClick={item.action} className="flex w-full items-center gap-2.5 rounded-lg border border-slate-100 bg-white px-3 py-2 text-left transition hover:border-violet-200 hover:bg-violet-50">
                         <div className="flex-1">
@@ -1947,9 +2507,9 @@ Always reference actual records from the data above when responding. Be specific
                   </div>
                   <div className="space-y-1.5">
                     {[
-                      { label: "Show urgent enquiries", desc: `${analytics.urgentEnquiries} need attention`, action: () => void handleSubmit("Show me all urgent enquiries that need attention") },
-                      { label: "Applicant screening", desc: `${analytics.topApplicants} scoring 80+`, action: () => void handleSubmit("Screen top applicants and summarize their profiles") },
-                      { label: "Contract status", desc: `${analytics.missingContracts} missing docs`, action: () => void handleSubmit("Show me contracts with missing documents") },
+                      { label: "Show urgent enquiries", desc: `${analytics.urgentEnquiries} need attention`, action: () => triggerQuickAction("Show me all urgent enquiries that need attention") },
+                      { label: "Applicant screening", desc: `${analytics.topApplicants} scoring 80+`, action: () => triggerQuickAction("Screen top applicants and summarize their profiles") },
+                      { label: "Contract status", desc: `${analytics.missingContracts} missing docs`, action: () => triggerQuickAction("Show me contracts with missing documents") },
                     ].map((item) => (
                       <button key={item.label} type="button" onClick={item.action} className="flex w-full items-center gap-2.5 rounded-lg border border-slate-100 bg-white px-3 py-2 text-left transition hover:border-emerald-200 hover:bg-emerald-50">
                         <div className="flex-1">
@@ -2387,6 +2947,48 @@ function AddApplicantModal({ onClose, onCreated }: { onClose: () => void; onCrea
   );
 }
 
+/** Floating Command Center for authenticated agency-admin routes outside this page. */
+export function GlobalAiCommandCenter() {
+  const [enquiries, setEnquiries] = useState<EnquiryRecord[]>([]);
+  const [requests, setRequests] = useState<RequestRecord[]>([]);
+  const [maids, setMaids] = useState<CommandCenterMaid[]>([]);
+  const [publicMaids, setPublicMaids] = useState<CommandCenterMaid[]>([]);
+  const [applicants, setApplicants] = useState<AtsApplication[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadContext = async () => {
+      const headers = getAgencyAdminAuthHeaders();
+      const [enquiryResult, requestResult, maidResult, publicMaidResult, applicantResult] = await Promise.allSettled([
+        fetch("/api/enquiries?pageSize=100", { headers }),
+        fetch("/api/requests?pageSize=100", { headers }),
+        loadAllMaidRecords(undefined, headers),
+        loadAllMaidRecords("public", headers),
+        fetch("/api/ats/applications?pageSize=100", { headers }),
+      ]);
+      if (cancelled) return;
+      if (enquiryResult.status === "fulfilled") {
+        const data = await readSafeJson<{ enquiries?: EnquiryRecord[] }>(enquiryResult.value);
+        if (data.enquiries) setEnquiries(data.enquiries);
+      }
+      if (requestResult.status === "fulfilled") {
+        const data = await readSafeJson<{ data?: RequestRecord[] }>(requestResult.value);
+        if (data.data) setRequests(data.data);
+      }
+      if (maidResult.status === "fulfilled") setMaids(maidResult.value);
+      if (publicMaidResult.status === "fulfilled") setPublicMaids(publicMaidResult.value);
+      if (applicantResult.status === "fulfilled") {
+        const data = await readSafeJson<{ data?: AtsApplication[] }>(applicantResult.value);
+        if (data.data) setApplicants(data.data.filter((applicant) => applicant.source === "resume_upload"));
+      }
+    };
+    void loadContext();
+    return () => { cancelled = true; };
+  }, []);
+
+  return <AiCommandCenterBubble enquiries={enquiries} requests={requests} applicants={applicants} contracts={[]} maids={maids} publicMaids={publicMaids} agencyProfile={null} agencySummary={null} supportChats={[]} />;
+}
+
 export default function AiAgentsPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [dashboardView, setDashboardView] = useState<ModalType | null>(null);
@@ -2395,6 +2997,11 @@ export default function AiAgentsPage() {
   const [requests, setRequests] = useState<RequestRecord[]>([]);
   const [applicants, setApplicants] = useState<AtsApplication[]>([]);
   const [contracts, setContracts] = useState<EmployerRow[]>([]);
+  const [maids, setMaids] = useState<CommandCenterMaid[]>([]);
+  const [publicMaids, setPublicMaids] = useState<CommandCenterMaid[]>([]);
+  const [agencyProfile, setAgencyProfile] = useState<AgencyCompanyProfile | null>(null);
+  const [agencySummary, setAgencySummary] = useState<AgencyContextSummary | null>(null);
+  const [supportChats, setSupportChats] = useState<SupportChatSummaryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Detail modal states
@@ -2406,11 +3013,16 @@ export default function AiAgentsPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [enqRes, reqRes, atsRes, empRes] = await Promise.allSettled([
+      const [enqRes, reqRes, atsRes, empRes, maidsRes, publicMaidsRes, companyRes, companySummaryRes, supportChatsRes] = await Promise.allSettled([
         fetch("/api/enquiries?pageSize=100", { headers: getAgencyAdminAuthHeaders() }),
         fetch("/api/requests?pageSize=100", { headers: getAgencyAdminAuthHeaders() }),
         fetch("/api/ats/applications?pageSize=100", { headers: getAgencyAdminAuthHeaders() }),
         fetch("/api/employers", { headers: getAgencyAdminAuthHeaders() }),
+        loadAllMaidRecords(undefined, getAgencyAdminAuthHeaders()),
+        loadAllMaidRecords("public", getAgencyAdminAuthHeaders()),
+        fetch("/api/company", { headers: getAgencyAdminAuthHeaders() }),
+        fetch("/api/company/summary", { headers: getAgencyAdminAuthHeaders() }),
+        fetch("/api/chats/admin", { headers: getAgencyAdminAuthHeaders() }),
       ]);
 
       if (enqRes.status === "fulfilled") {
@@ -2463,6 +3075,46 @@ export default function AiAgentsPage() {
             };
           });
           setContracts(rows.filter((r) => r.ref));
+        }
+      }
+      if (maidsRes.status === "fulfilled") {
+        setMaids(maidsRes.value);
+      }
+      if (publicMaidsRes.status === "fulfilled") {
+        setPublicMaids(publicMaidsRes.value.filter((maid) => maid.referenceCode || maid.fullName));
+      }
+      if (companyRes.status === "fulfilled") {
+        const d = await readSafeJson<{ companyProfile?: AgencyCompanyProfile; error?: string }>(companyRes.value);
+        if (d.companyProfile) setAgencyProfile(d.companyProfile);
+      }
+      if (companySummaryRes.status === "fulfilled") {
+        const d = await readSafeJson<AgencyContextSummary & { error?: string }>(companySummaryRes.value);
+        if (d) {
+          setAgencySummary({
+            publicMaids: d.publicMaids,
+            hiddenMaids: d.hiddenMaids,
+            totalMaids: d.totalMaids,
+            maidsWithPhotos: d.maidsWithPhotos,
+            enquiries: d.enquiries,
+            momPersonnel: d.momPersonnel,
+            testimonials: d.testimonials,
+            galleryImages: d.galleryImages,
+          });
+        }
+      }
+      if (supportChatsRes.status === "fulfilled") {
+        const d = await readSafeJson<{ conversations?: Array<Record<string, unknown>>; error?: string }>(supportChatsRes.value);
+        if (Array.isArray(d.conversations)) {
+          const nextChats = d.conversations.slice(0, 10).map((chat) => ({
+            key: String(chat.key ?? chat.id ?? ""),
+            clientName: String(chat.clientName ?? chat.clientEmail ?? chat.clientCompany ?? "Client"),
+            conversationType: (chat.conversationType === "agency" ? "agency" : "support") as "support" | "agency",
+            status: String(chat.status ?? "OPEN"),
+            unreadCount: Number(chat.unreadCount ?? 0),
+            lastMessage: String(chat.lastMessage ?? chat.description ?? ""),
+            lastMessageAt: String(chat.lastMessageAt ?? ""),
+          }));
+          setSupportChats(nextChats);
         }
       }
     } catch {
@@ -2649,7 +3301,7 @@ export default function AiAgentsPage() {
         </TabsContent>
 
         {/* AI Command Center Bubble rendered outside tabs */}
-        <AiCommandCenterBubble enquiries={enquiries} requests={requests} applicants={applicants} contracts={contracts} />
+        <AiCommandCenterBubble enquiries={enquiries} requests={requests} applicants={applicants} contracts={contracts} maids={maids} publicMaids={publicMaids} agencyProfile={agencyProfile} agencySummary={agencySummary} supportChats={supportChats} />
         {/* Marketing Tab */}
         <TabsContent value="marketing" className="mt-0 space-y-3">
           <MarketingMessaging />

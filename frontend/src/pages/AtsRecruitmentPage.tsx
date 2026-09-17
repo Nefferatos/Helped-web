@@ -446,6 +446,11 @@ const AtsRecruitmentPage = () => {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [sopModalOpen, setSopModalOpen] = useState(false);
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
+  const [scheduledInterview, setScheduledInterview] = useState<{
+    applicationId: string;
+    applicantName: string;
+    date: string;
+  } | null>(null);
   const [activeDocumentIndex, setActiveDocumentIndex] = useState(0);
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
   const [activeStageTab, setActiveStageTab] = useState<string>(ALL_STAGE_TAB);
@@ -511,7 +516,8 @@ const AtsRecruitmentPage = () => {
     }: {
       applicationId: string;
       stage: string;
-    }) => updateAtsStage(applicationId, stage),
+      reason?: string;
+    }) => updateAtsStage(applicationId, stage, reason),
     onSuccess: () => {
       toast.success("Candidate stage updated");
       void queryClient.invalidateQueries({ queryKey: ["ats-dashboard"] });
@@ -1851,6 +1857,7 @@ const AtsRecruitmentPage = () => {
                 ? applications.find((a) => a.id === selectedId)?.profile.fullName || undefined
                 : undefined
             }
+            scheduledInterview={scheduledInterview}
           />
         </DialogContent>
       </Dialog>
@@ -1867,6 +1874,63 @@ const AtsRecruitmentPage = () => {
         onApplyFilter={handleAiApplyFilter}
         currentFilters={filters}
         currentSearch={search}
+        onApplicantWorkflowAction={(applicationId, action) => {
+          const applicant = applications.find((item) => item.id === applicationId);
+          const name = applicant?.profile.fullName || "this applicant";
+          if (action === "schedule_interview") {
+            const date = window.prompt("Interview date (YYYY-MM-DD):", new Date().toISOString().slice(0, 10));
+            if (!date) return;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+              toast.error("Please enter the date as YYYY-MM-DD");
+              return;
+            }
+            if (!window.confirm(`Schedule ${name}'s interview for ${date} and send the invitation email?`)) return;
+            stageMutation.mutate({ applicationId, stage: "Screening Interview", reason: `Interview scheduled for ${date}` });
+            setScheduledInterview({ applicationId, applicantName: name, date });
+            setSelectedId(applicationId);
+            setCalendarDialogOpen(true);
+            const email = applicant?.profile.email?.trim();
+            if (email) {
+              void fetch("/api/ai/hr-interview/email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+                body: JSON.stringify({
+                  to: email,
+                  subject: "Interview invitation",
+                  body: `Dear ${name},\n\nWe would like to invite you for an interview on ${date}. Our recruitment team will contact you with the time and meeting details.\n\nBest regards,\nRecruitment Team`,
+                }),
+              }).then((response) => {
+                if (response.ok) toast.success("Interview invitation sent");
+                else toast.warning("Interview scheduled, but the invitation email could not be sent");
+              }).catch(() => toast.warning("Interview scheduled, but the invitation email could not be sent"));
+            } else {
+              toast.warning("Interview scheduled. No applicant email is available for an invitation.");
+            }
+            return;
+          }
+          if (!window.confirm(`${action === "approve" ? "Approve" : "Reject"} ${name} and send the applicant an email?`)) return;
+          bulkMutation.mutate({ applicationIds: [applicationId], action });
+          const email = applicant?.profile.email?.trim();
+          if (email) {
+            const approved = action === "approve";
+            void fetch("/api/ai/hr-interview/email", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+              body: JSON.stringify({
+                to: email,
+                subject: approved ? "Your application has been approved" : "Update on your application",
+                body: approved
+                  ? `Dear ${name},\n\nWe are pleased to confirm that your application has been approved. Our recruitment team will contact you about the next steps.\n\nBest regards,\nRecruitment Team`
+                  : `Dear ${name},\n\nThank you for your application. After review, we are unable to proceed at this time. We appreciate your interest and wish you well.\n\nBest regards,\nRecruitment Team`,
+              }),
+            }).then((response) => {
+              if (response.ok) toast.success(`${approved ? "Approval" : "Rejection"} email sent`);
+              else toast.warning("Applicant status was updated, but the email could not be sent");
+            }).catch(() => toast.warning("Applicant status was updated, but the email could not be sent"));
+          } else {
+            toast.warning("Applicant status was updated. No applicant email is available.");
+          }
+        }}
       />
 
       {/* ── Profile Modal ─────────────────────────────────────────────────── */}
