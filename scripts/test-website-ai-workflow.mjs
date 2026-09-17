@@ -3,14 +3,20 @@
  * Test all routes of the "WEBSITE AI WORKFLOW" Make.com blueprint.
  *
  * Usage:
- *   node scripts/test-website-ai-workflow.mjs                    # test all routes
- *   node scripts/test-website-ai-workflow.mjs inquiry_pipeline   # test one route
+ *   node --env-file=.env scripts/test-website-ai-workflow.mjs                    # test all routes
+ *   node --env-file=.env scripts/test-website-ai-workflow.mjs inquiry_pipeline   # test one route
  *
- * Webhook URL: https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
+ * The webhook URL comes from MAKE_WEBHOOK_URL (the "WEBSITE AI WORKFLOW" webhook)
+ * — never hardcode it here.
  */
 
-const WEBHOOK_URL =
-  "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1";
+const WEBHOOK_URL = process.env.MAKE_WEBHOOK_URL?.trim() || "";
+
+if (!WEBHOOK_URL) {
+  console.error("❌ Set MAKE_WEBHOOK_URL (WEBSITE AI WORKFLOW webhook), then re-run:");
+  console.error("     node --env-file=.env scripts/test-website-ai-workflow.mjs");
+  process.exit(1);
+}
 
 // ─── Test payloads for each route ────────────────────────────────────────────
 

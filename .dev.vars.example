@@ -1,6 +1,6 @@
-SUPABASE_URL=https://etdbexgrsenjznxbbnbd.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0ZGJleGdyc2VuanpueGJibmJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjY3MjAsImV4cCI6MjA5MDcwMjcyMH0.vtop8R2up7ItNoGXoU1Bx1VAVq23gimj-21nBX4LAg4
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0ZGJleGdyc2VuanpueGJibmJkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTEyNjcyMCwiZXhwIjoyMDkwNzAyNzIwfQ.oBiRg2swMsO30BeqPPQmV1Q8Ug_ChgLHAK2ZF9poQsU
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_APP_DATA_TABLE=app_data
 SUPABASE_APP_DATA_ID=default
 
@@ -8,44 +8,44 @@ SUPABASE_APP_DATA_ID=default
 # RESEND_API_KEY should be set as a Wrangler secret, not committed.
 RESEND_FROM="Helped <no-reply@yourdomain.com>"
 DEV_EXPOSE_CONFIRMATION_CODE=false
-ANTHROPIC_API_KEY=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
+ANTHROPIC_API_KEY=sk-ant-...your-anthropic-key...
 
 # Cline AI provider (Kimi K2.6 Code — primary AI for all features)
-CLINE_API_KEY=sk_ebe5232158ba55c078255cd7715f91339b122d55d8614239133a6bc42dc306bd
+CLINE_API_KEY=YOUR_CLINE_API_KEY
 CLINE_API_URL=https://api.cline.bot/api/v1
 CLINE_MODEL=moonshotai/kimi-k2.6
 
 # Fallback: OpenAI-compatible API for PDF autofill
-OPENAI_API_KEY=sk_ebe5232158ba55c078255cd7715f91339b122d55d8614239133a6bc42dc306bd
+OPENAI_API_KEY=YOUR_OPENAI_COMPATIBLE_API_KEY
 OPENAI_BASE_URL=https://api.cline.bot/api/v1
 OPENAI_MODEL=openai/gpt-4o-mini
 
 AI_AUTOPILOT_ENABLED=true
 
 # WEBSITE AI WORKFLOW webhook — backend sends email/calendar/results here
-MAKE_WEBHOOK_URL=https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
+MAKE_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-id
 
 # Workflow web orchestra webhook — website sends AI classification requests here
-MAKE_ORCHESTRATOR_WEBHOOK_URL=https://hook.eu1.make.com/sqbr8h9q73743rl9wa32iynyqai87cbn
+MAKE_ORCHESTRATOR_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-id
 
 # Dedicated HR Interview Email scenario webhook — HR interview emails (pass/fail/invitation)
 # are delivered via this Gmail-enabled Make scenario, not the generic router.
-MAKE_HR_EMAIL_WEBHOOK_URL=https://hook.eu1.make.com/5xuqrj1epsuf3gova4ba4jvbsrc0bd2s
+MAKE_HR_EMAIL_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-id
 
 # Dedicated synchronous Make AI Agent webhook for PDF biodata autofill
-MAKE_PDF_AUTOFILL_WEBHOOK_URL=https://hook.eu1.make.com/sjaq1fvmsaf62tmbmh16blosid24lw30
-MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN=Jr8vQp4mX2kL9sN7dF6wC1yT5aB3eH0z
+MAKE_PDF_AUTOFILL_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-id
+MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN=your-long-random-secret-here
 
 # Make.com AI Receptionist webhook — when set, the receptionist endpoint
 # forwards conversations to Make.com's AI Agent instead of calling the AI directly.
 # Create a Custom Webhook in Make.com and paste the URL here.
-MAKE_AI_RECEPTIONIST_WEBHOOK_URL=https://hook.eu1.make.com/9gsvq2b93embr8eteg94d7e4x1zvqmrt
+MAKE_AI_RECEPTIONIST_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-id
 # Optional shared secret sent as X-Webhook-Secret header for validation.
 # MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET=your-long-random-secret-here
 
 # Make.com AI Command Center webhook — the AI Agents page bubble chat routes its
 # LLM calls EXCLUSIVELY through this webhook (no direct Cline/Claude APIs).
-MAKE_AI_COMMAND_CENTER_WEBHOOK_URL=https://hook.eu1.make.com/w2x4iqj7tbwe1dgt7kkke9srixuvxc8y
+MAKE_AI_COMMAND_CENTER_WEBHOOK_URL=https://hook.eu1.make.com/your-webhook-id
 # MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET=your-long-random-secret-here
 
 # RESEND_API_KEY=re_...   # uncomment + paste your Resend key to test email dispatch locally

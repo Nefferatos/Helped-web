@@ -299,7 +299,7 @@ submitInterviewSession({
 ### Make.com Webhook
 ```
 VITE_MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE
-→ https://hook.eu1.make.com/a5mi0ks7tnbnhtvfvivhfnjnaw6lwiel
+→ https://hook.eu1.make.com/<interview-pipeline-webhook-id>
 ```
 
 ---

@@ -11,3 +11,4 @@ backend/dist/
 .vercel
 .wrangler/
 .wrangler-dry/
+.claude/settings.local.json

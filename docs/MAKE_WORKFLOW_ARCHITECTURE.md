@@ -6,8 +6,8 @@ The Helped-web platform uses **two Make.com blueprints** that work together as a
 
 | Blueprint | Role | Direction | Webhook URL |
 |-----------|------|-----------|-------------|
-| **Workflow web orchestra** | AI Classifier + Router | Website → Backend | `sqbr8h9q73743rl9wa32iynyqai87cbn` |
-| **WEBSITE AI WORKFLOW** | Email + Calendar + Responses | Backend → External | `ms7gknazwsiqxyx41miqivon94vgspr1` |
+| **Workflow web orchestra** | AI Classifier + Router | Website → Backend | `<orchestrator-webhook-id>` |
+| **WEBSITE AI WORKFLOW** | Email + Calendar + Responses | Backend → External | `<website-ai-workflow-webhook-id>` |
 
 ---
 
@@ -22,7 +22,7 @@ The Helped-web platform uses **two Make.com blueprints** that work together as a
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                BLUEPRINT 1: "Workflow web orchestra"                    │
-│                Webhook: sqbr8h9q73743rl9wa32iynyqai87cbn                │
+│                Webhook: <orchestrator-webhook-id>                       │
 │                                                                         │
 │   1. Webhook ──▶ 2. AI Agent (classifies) ──▶ 3. Parse JSON ──▶ 4. Router│
 │                                                                         │
@@ -51,7 +51,7 @@ The Helped-web platform uses **two Make.com blueprints** that work together as a
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                BLUEPRINT 2: "WEBSITE AI WORKFLOW"                       │
-│                Webhook: ms7gknazwsiqxyx41miqivon94vgspr1               │
+│                Webhook: <website-ai-workflow-webhook-id>               │
 │                                                                         │
 │   1. Webhook ──▶ 2. Router (by scenario field)                         │
 │                                                                         │
@@ -102,7 +102,7 @@ Receives raw requests from the website/frontend, uses a Make.com AI Agent to cla
 
 ### Webhook URL
 ```
-https://hook.eu1.make.com/sqbr8h9q73743rl9wa32iynyqai87cbn
+https://hook.eu1.make.com/<orchestrator-webhook-id>
 ```
 
 ---
@@ -152,7 +152,7 @@ Receives processed results from the backend and handles external actions: sendin
 
 ### Webhook URL
 ```
-https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
+https://hook.eu1.make.com/<website-ai-workflow-webhook-id>
 ```
 
 ---
@@ -166,7 +166,7 @@ https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
    "I need a maid for childcare in Woodlands, budget $500-$700"
 
 2. Frontend sends to Workflow web orchestra
-   POST sqbr8h9q73743rl9wa32iynyqai87cbn
+   POST <orchestrator-webhook-id>
    { action: "find_match", customer: {...}, message: "..." }
 
 3. AI Agent classifies → "inquiry_match"
@@ -177,7 +177,7 @@ https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
 5. Backend runs AI matching, finds top 3 maids, saves to database
 
 6. Backend sends results to WEBSITE AI WORKFLOW
-   POST ms7gknazwsiqxyx41miqivon94vgspr1
+   POST <website-ai-workflow-webhook-id>
    { scenario: "inquiry_pipeline", inquiryId: 123, matches: [...] }
 
 7. WEBSITE AI WORKFLOW responds 200 OK
@@ -195,7 +195,7 @@ https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
    { applicationId: "...", rating: 85, recommendation: "pass" }
 
 3. Frontend triggers Make directly
-   POST ms7gknazwsiqxyx41miqivon94vgspr1
+   POST <website-ai-workflow-webhook-id>
    { scenario: "interview_pipeline", type: "pass",
      to: "candidate@gmail.com", candidateName: "Maria",
      position: "Domestic Worker", rating: 85 }
@@ -211,7 +211,7 @@ https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
 1. HR admin schedules interview for candidate
 
 2. Frontend triggers Make
-   POST ms7gknazwsiqxyx41miqivon94vgspr1
+   POST <website-ai-workflow-webhook-id>
    { scenario: "interview_pipeline", type: "interview_invitation",
      to: "candidate@gmail.com", candidateName: "Ana",
      position: "Domestic Worker", scheduledDate: "2026-09-01",
@@ -232,23 +232,23 @@ https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `MAKE_WEBHOOK_URL` | `ms7gknazwsiqxyx41miqivon94vgspr1` | Backend → WEBSITE AI WORKFLOW |
-| `MAKE_ORCHESTRATOR_WEBHOOK_URL` | `sqbr8h9q73743rl9wa32iynyqai87cbn` | Reference for orchestrator |
+| `MAKE_WEBHOOK_URL` | `<website-ai-workflow-webhook-id>` | Backend → WEBSITE AI WORKFLOW |
+| `MAKE_ORCHESTRATOR_WEBHOOK_URL` | `<orchestrator-webhook-id>` | Reference for orchestrator |
 
 ### Cloudflare Workers (`.dev.vars`)
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `MAKE_WEBHOOK_URL` | `ms7gknazwsiqxyx41miqivon94vgspr1` | Worker → WEBSITE AI WORKFLOW |
-| `MAKE_ORCHESTRATOR_WEBHOOK_URL` | `sqbr8h9q73743rl9wa32iynyqai87cbn` | Reference for orchestrator |
+| `MAKE_WEBHOOK_URL` | `<website-ai-workflow-webhook-id>` | Worker → WEBSITE AI WORKFLOW |
+| `MAKE_ORCHESTRATOR_WEBHOOK_URL` | `<orchestrator-webhook-id>` | Reference for orchestrator |
 
 ### Frontend (`.env`)
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `VITE_MAKE_WEBHOOK_URL_INQUIRY_PIPELINE` | `ms7gknazwsiqxyx41miqivon94vgspr1` | Direct inquiry webhook |
-| `VITE_MAKE_WEBHOOK_URL_LEAD_PIPELINE` | `ms7gknazwsiqxyx41miqivon94vgspr1` | Direct lead webhook |
-| `VITE_MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE` | `3d9ngjcns5mljp3vhnppepfjuuvrcrut` | HR interview email (dedicated) |
+| `VITE_MAKE_WEBHOOK_URL_INQUIRY_PIPELINE` | `<website-ai-workflow-webhook-id>` | Direct inquiry webhook |
+| `VITE_MAKE_WEBHOOK_URL_LEAD_PIPELINE` | `<website-ai-workflow-webhook-id>` | Direct lead webhook |
+| `VITE_MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE` | `<hr-email-webhook-id>` | HR interview email (dedicated) |
 
 ---
 
@@ -256,9 +256,9 @@ https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1
 
 | URL | Blueprint | Used By |
 |-----|-----------|---------|
-| `sqbr8h9q73743rl9wa32iynyqai87cbn` | Workflow web orchestra | Website, frontend |
-| `ms7gknazwsiqxyx41miqivon94vgspr1` | WEBSITE AI WORKFLOW | Backend, frontend (inquiry/lead) |
-| `3d9ngjcns5mljp3vhnppepfjuuvrcrut` | HR Interview Email | Frontend (interview pipeline) |
+| `<orchestrator-webhook-id>` | Workflow web orchestra | Website, frontend |
+| `<website-ai-workflow-webhook-id>` | WEBSITE AI WORKFLOW | Backend, frontend (inquiry/lead) |
+| `<hr-email-webhook-id>` | HR Interview Email | Frontend (interview pipeline) |
 
 ---
 

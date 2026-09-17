@@ -3,12 +3,19 @@
  * Full HR Interview Email Test Suite
  * Tests scheduling, pass, and fail emails for two job applicants.
  * 
- * Usage: node scripts/test-hr-interview-full.mjs
- * 
+ * Usage: node --env-file=.env scripts/test-hr-interview-full.mjs
+ *
+ * Reads the webhook URL from MAKE_HR_EMAIL_WEBHOOK_URL — never hardcode it here.
  * Calls the Make.com webhook directly (same as the Cloudflare Function endpoint does).
  */
 
-const MAKE_WEBHOOK_URL = "https://hook.eu1.make.com/3d9ngjcns5mljp3vhnppepfjuuvrcrut";
+const MAKE_WEBHOOK_URL = process.env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim() || "";
+
+if (!MAKE_WEBHOOK_URL) {
+  console.error("❌ Set MAKE_HR_EMAIL_WEBHOOK_URL, then re-run:");
+  console.error("     node --env-file=.env scripts/test-hr-interview-full.mjs");
+  process.exit(1);
+}
 
 const candidates = [
   {

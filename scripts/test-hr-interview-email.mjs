@@ -1,10 +1,18 @@
 #!/usr/bin/env node
 /**
  * Test HR Interview Email webhook — simulates a completed interview result.
- * Usage: node scripts/test-hr-interview-email.mjs [pass|fail|invitation]
+ *
+ * The webhook URL comes from MAKE_HR_EMAIL_WEBHOOK_URL — never hardcode it here.
+ * Usage: node --env-file=.env scripts/test-hr-interview-email.mjs [pass|fail|invitation]
  */
 
-const webhookUrl = "https://hook.eu1.make.com/3d9ngjcns5mljp3vhnppepfjuuvrcrut";
+const webhookUrl = process.env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim() || "";
+
+if (!webhookUrl) {
+  console.error("❌ Set MAKE_HR_EMAIL_WEBHOOK_URL, then re-run:");
+  console.error("     node --env-file=.env scripts/test-hr-interview-email.mjs");
+  process.exit(1);
+}
 const testType = process.argv[2] || "pass";
 
 const payloads = {

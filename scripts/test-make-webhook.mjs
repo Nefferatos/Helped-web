@@ -1,10 +1,28 @@
 #!/usr/bin/env node
 /**
  * Test Make.com webhook connectivity.
- * Usage: node scripts/test-make-webhook.mjs [webhook-url]
+ *
+ * The webhook URL is read from the environment — never hardcode it here:
+ *   MAKE_ORCHESTRATOR_WEBHOOK_URL (preferred) or MAKE_WEBHOOK_URL
+ *
+ * Usage:
+ *   node --env-file=.env scripts/test-make-webhook.mjs
+ *   node scripts/test-make-webhook.mjs https://hook.eu1.make.com/<your-id>
  */
 
-const url = process.argv[2] || "https://hook.eu1.make.com/sqbr8h9q73743rl9wa32iynyqai87cbn";
+const url =
+  process.argv[2] ||
+  process.env.MAKE_ORCHESTRATOR_WEBHOOK_URL?.trim() ||
+  process.env.MAKE_WEBHOOK_URL?.trim() ||
+  "";
+
+if (!url) {
+  console.error("❌ No Make.com webhook URL supplied.");
+  console.error("   Set MAKE_ORCHESTRATOR_WEBHOOK_URL (or MAKE_WEBHOOK_URL), or pass one:");
+  console.error("     node --env-file=.env scripts/test-make-webhook.mjs");
+  console.error("     node scripts/test-make-webhook.mjs https://hook.eu1.make.com/<your-id>");
+  process.exit(1);
+}
 
 const payload = {
   action: "inquiry",

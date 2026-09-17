@@ -9,7 +9,7 @@ declare namespace Cloudflare {
 		APP_DATA: KVNamespace;
 		ASSETS: Fetcher;
 		STORAGE_BACKEND: "kv";
-		MAKE_WEBHOOK_URL: "https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig";
+		MAKE_WEBHOOK_URL: string;
 		SUPABASE_URL: string;
 		SUPABASE_ANON_KEY: string;
 		SUPABASE_SERVICE_ROLE_KEY: string;

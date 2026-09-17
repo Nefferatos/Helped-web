@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./loadRootEnv";
 
 import express, {
   Express,

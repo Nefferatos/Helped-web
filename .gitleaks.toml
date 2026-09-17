@@ -1,0 +1,38 @@
+# Gitleaks config for Helped-web.
+#
+# OPTIONAL. The enforced gate is the dependency-free scanner in
+# scripts/scan-secrets.mjs (wired to the pre-commit hook via `npm run
+# secrets:install-hook`), so secrets are blocked without installing anything.
+#
+# If you do have the gitleaks binary, run it with the same policy:
+#   gitleaks detect --config .gitleaks.toml --redact
+#   gitleaks protect --staged --config .gitleaks.toml --redact   # pre-commit style
+title = "Helped-web secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-safe, intentionally public values and the scanner itself"
+
+# The Supabase *anon* key is public by design (it is shipped to browsers and is
+# enforced by Row Level Security). It lives in these files on purpose — only the
+# service_role key is a secret.
+paths = [
+  '''^wrangler\.toml$''',
+  '''^frontend/\.env\.production$''',
+  '''^frontend/\.env\.example$''',
+  '''^\.env\.example$''',
+  '''^\.dev\.vars\.example$''',
+  '''^scripts/scan-secrets\.mjs$''',
+]
+
+regexes = [
+  '''YOUR_[A-Z_]+''',
+  '''your-[a-z-]+''',
+  '''<[a-z-]+-webhook-id>''',
+  '''hook\.eu1\.make\.com/REDACTED''',
+  '''hook\.eu1\.make\.com/your-webhook-id''',
+  '''sk-ant-\.\.\..*''',
+  '''re_\.\.\..*''',
+]

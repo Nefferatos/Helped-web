@@ -11,7 +11,7 @@ Copy ONE of the following blocks into your `.dev.vars` file (for Cloudflare Work
 ```bash
 # ─── AI Provider: Cline ───
 # Get your API key from your Cline subscription dashboard
-OPENAI_API_KEY=sk_9a8ee110f028bba65f74ce51374bb2b2aaffbb6f302960ec5d3b0912ff9cdeed
+OPENAI_API_KEY=your-cline-api-key-here
 OPENAI_BASE_URL=https://api.cline.ai/v1
 OPENAI_MODEL=claude-sonnet-4-20250514
 
@@ -30,7 +30,7 @@ DEV_EXPOSE_CONFIRMATION_CODE=false
 AI_AUTOPILOT_ENABLED=true
 
 # ─── Make.com ───
-MAKE_WEBHOOK_URL=https://hook.eu1.make.com/0nf8vrsqwxtgmfugk7s6n983lxtgtiig
+MAKE_WEBHOOK_URL=https://hook.eu1.make.com/<make-webhook-id>
 ```
 
 ---

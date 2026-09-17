@@ -1,0 +1,11 @@
+#!/bin/sh
+# Blocks commits that contain secrets.
+#
+# Install with:  npm run secrets:install-hook
+# (equivalent to:  git config core.hooksPath .githooks)
+#
+# Scans ONLY the content that is about to be committed (staged blobs), using the
+# dependency-free scanner in scripts/scan-secrets.mjs — no gitleaks install needed.
+# Emergency bypass (please avoid):  git commit --no-verify
+
+exec node "$(git rev-parse --show-toplevel)/scripts/scan-secrets.mjs" --staged

@@ -2,14 +2,13 @@
 // This file establishes and manages the connection to the PostgreSQL database using the pg library
 
 import pkg from 'pg'
-import dotenv from 'dotenv'
 import { readFile } from 'fs/promises'
 import path from 'path'
+// Loads backend/.env, then the gitignored repo-root .env for anything missing
+// (shared API keys and Make.com webhooks live there).
+import './loadRootEnv'
 
 const { Pool } = pkg
-
-// Load environment variables from .env file
-dotenv.config()
 
 const connectionString = process.env.DATABASE_URL?.trim()
 const localDbHost = process.env.DB_HOST?.trim() || 'localhost'

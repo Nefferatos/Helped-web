@@ -1,0 +1,3 @@
+# Git hooks are executed by sh (even on Windows) — they MUST use LF line endings,
+# otherwise the shebang line ends with a stray CR and the hook fails to run.
+.githooks/* text eol=lf
