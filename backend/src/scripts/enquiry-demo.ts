@@ -5,8 +5,11 @@
  * Run with: npm run demo:enquiry
  */
 
-import { extractEnquiry, formatEnquiryJson } from "./enquiryExtractor";
-import { SAMPLE_ENQUIRIES } from "./enquiryTestData";
+// Both modules live in src/lib/ — this script sits in src/scripts/, so the
+// paths go up one level. They were previously written as "./…", which resolved
+// to src/scripts/ and broke the build with TS2307.
+import { extractEnquiry, formatEnquiryJson } from "../lib/enquiryExtractor";
+import { SAMPLE_ENQUIRIES } from "../lib/enquiryTestData";
 
 console.log("\n" + "=".repeat(80));
 console.log("HELPED MAIDS - ENQUIRY INTAKE SYSTEM DEMO");

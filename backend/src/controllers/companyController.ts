@@ -83,12 +83,21 @@ export const getCompanySummary = async (req: Request, res: Response) => {
         )
     ).length
 
+    // `enquiries` stays the UNVIEWED count for the notification bell, while
+    // `unreadEnquiries` names that same value and `totalEnquiries` exposes the
+    // full pipeline size the dashboard tile shows. Without totalEnquiries the
+    // dashboard read 0 as soon as the admin opened the enquiry inbox, because
+    // that page acknowledges every enquiry it displays.
+    const unreadEnquiries = enquiries.filter((enquiry) => !enquiry.viewedAt).length
+
     res.status(200).json({
       publicMaids,
       hiddenMaids,
       totalMaids: maids.length,
       maidsWithPhotos,
-      enquiries: enquiries.filter((enquiry) => !enquiry.viewedAt).length,
+      enquiries: unreadEnquiries,
+      unreadEnquiries,
+      totalEnquiries: enquiries.length,
       requests: requestMetrics.total,
       pendingRequests: unreadRequests,
       unreadAgencyChats,

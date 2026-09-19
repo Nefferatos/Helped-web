@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { adminPath } from "@/lib/routes";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
+import { subscribeToRequestsChanged } from "@/lib/requests";
 import {
   Building2, UserPlus, Pencil, MessageSquare, Lock,
   PhoneIncoming, Users, Eye, EyeOff, Image, MessageCircle,
@@ -12,7 +13,20 @@ import {
 
 interface DashboardSummary {
   publicMaids: number; hiddenMaids: number; totalMaids: number;
-  maidsWithPhotos: number; enquiries: number; requests: number;
+  maidsWithPhotos: number;
+  /**
+   * Unread enquiries only. Kept for parity with the notification bell, which is
+   * fed by the same /api/company/summary payload — do NOT render it as the
+   * "Enquiries" tile value: opening /agencyadmin/enquiry acknowledges every
+   * enquiry (mark-viewed), so it legitimately drops to 0 while the inbox still
+   * lists them.
+   */
+  enquiries: number;
+  /** Unread (unacknowledged) enquiries — same number as `enquiries`, named clearly. */
+  unreadEnquiries: number;
+  /** Every enquiry on file, acknowledged or not. This is the tile's value. */
+  totalEnquiries: number;
+  requests: number;
   pendingRequests: number; unreadAgencyChats: number;
   momPersonnel: number; testimonials: number; galleryImages: number;
   whatsappMessagesSent: number; whatsappMessagesDelivered: number;
@@ -21,6 +35,15 @@ interface DashboardSummary {
   whatsappPendingReplies: number; whatsappInterviewConfirmations: number;
   whatsappDocumentSubmissionRate: number;
 }
+
+/**
+ * How often the dashboard re-reads /api/company/summary while the tab is
+ * visible. Polling (not a push channel) is what keeps these counters honest:
+ * they all derive from the single app_data JSON blob, so a Supabase Realtime
+ * subscription on that row would stream the whole roster - photos included - to
+ * every open dashboard on every write.
+ */
+const DASHBOARD_POLL_MS = 5_000;
 
 const useWindowWidth = () => {
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
@@ -34,17 +57,37 @@ const useWindowWidth = () => {
 
 const useCountUp = (target: number, duration = 900) => {
   const [value, setValue] = useState(0);
+  // The live dashboard re-fetches every few seconds, so counting always from 0
+  // would make every stat flash 0 → N on each poll. Instead the ref remembers
+  // where the counter currently is and each change tweens from there, which also
+  // gives a natural count-down animation when a maid/enquiry is deleted.
+  const displayedRef = useRef(0);
+
   useEffect(() => {
-    if (target === 0) { setValue(0); return; }
-    let start = 0;
-    const step = Math.ceil(target / (duration / 16));
+    const from = displayedRef.current;
+    if (from === target) return;
+
+    const delta = target - from;
+    const steps = Math.max(1, Math.round(duration / 16));
+    let tick = 0;
+
     const timer = setInterval(() => {
-      start += step;
-      if (start >= target) { setValue(target); clearInterval(timer); }
-      else setValue(start);
+      tick += 1;
+      if (tick >= steps) {
+        displayedRef.current = target;
+        setValue(target);
+        clearInterval(timer);
+        return;
+      }
+      const next = from + delta * (tick / steps);
+      const rounded = delta > 0 ? Math.floor(next) : Math.ceil(next);
+      displayedRef.current = rounded;
+      setValue(rounded);
     }, 16);
+
     return () => clearInterval(timer);
   }, [target, duration]);
+
   return value;
 };
 
@@ -368,46 +411,110 @@ const HomePage = () => {
   const isMd = width < 1024;
   const location = useLocation();
 
+  const loadSummary = useCallback(async (options: { showLoading?: boolean; showError?: boolean } = {}) => {
+    const { showLoading = false, showError = false } = options;
+    if (showLoading) setLoading(true);
+
+    try {
+      const res = await fetch("/api/company/summary", { headers: { ...getAgencyAdminAuthHeaders() }, cache: "no-store" });
+      const data = (await res.json().catch(() => ({}))) as Partial<DashboardSummary> & { error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to load");
+      setSummary({
+        publicMaids:                        data.publicMaids ?? 0,
+        hiddenMaids:                        data.hiddenMaids ?? 0,
+        totalMaids:                         data.totalMaids ?? 0,
+        maidsWithPhotos:                    data.maidsWithPhotos ?? 0,
+        enquiries:                          data.enquiries ?? 0,
+        unreadEnquiries:                    data.unreadEnquiries ?? data.enquiries ?? 0,
+        totalEnquiries:                     data.totalEnquiries ?? 0,
+        requests:                           data.requests ?? 0,
+        pendingRequests:                    data.pendingRequests ?? 0,
+        unreadAgencyChats:                  data.unreadAgencyChats ?? 0,
+        momPersonnel:                       data.momPersonnel ?? 0,
+        testimonials:                       data.testimonials ?? 0,
+        galleryImages:                      data.galleryImages ?? 0,
+        whatsappMessagesSent:               data.whatsappMessagesSent ?? 0,
+        whatsappMessagesDelivered:          data.whatsappMessagesDelivered ?? 0,
+        whatsappMessagesRead:               data.whatsappMessagesRead ?? 0,
+        whatsappResponseRate:               data.whatsappResponseRate ?? 0,
+        whatsappAverageResponseTimeMinutes: data.whatsappAverageResponseTimeMinutes ?? 0,
+        whatsappActiveConversations:        data.whatsappActiveConversations ?? 0,
+        whatsappPendingReplies:             data.whatsappPendingReplies ?? 0,
+        whatsappInterviewConfirmations:     data.whatsappInterviewConfirmations ?? 0,
+        whatsappDocumentSubmissionRate:     data.whatsappDocumentSubmissionRate ?? 0,
+      });
+    } catch (e) {
+      if (showError) toast.error(e instanceof Error ? e.message : "Failed to load dashboard");
+      throw e;
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch("/api/company/summary", { headers: { ...getAgencyAdminAuthHeaders() }, cache: "no-store" });
-        const data = (await res.json().catch(() => ({}))) as Partial<DashboardSummary> & { error?: string };
-        if (!res.ok) throw new Error(data.error || "Failed to load");
-        if (cancelled) return;
-        setSummary({
-          publicMaids:                        data.publicMaids ?? 0,
-          hiddenMaids:                        data.hiddenMaids ?? 0,
-          totalMaids:                         data.totalMaids ?? 0,
-          maidsWithPhotos:                    data.maidsWithPhotos ?? 0,
-          enquiries:                          data.enquiries ?? 0,
-          requests:                           data.requests ?? 0,
-          pendingRequests:                    data.pendingRequests ?? 0,
-          unreadAgencyChats:                  data.unreadAgencyChats ?? 0,
-          momPersonnel:                       data.momPersonnel ?? 0,
-          testimonials:                       data.testimonials ?? 0,
-          galleryImages:                      data.galleryImages ?? 0,
-          whatsappMessagesSent:               data.whatsappMessagesSent ?? 0,
-          whatsappMessagesDelivered:          data.whatsappMessagesDelivered ?? 0,
-          whatsappMessagesRead:               data.whatsappMessagesRead ?? 0,
-          whatsappResponseRate:               data.whatsappResponseRate ?? 0,
-          whatsappAverageResponseTimeMinutes: data.whatsappAverageResponseTimeMinutes ?? 0,
-          whatsappActiveConversations:        data.whatsappActiveConversations ?? 0,
-          whatsappPendingReplies:             data.whatsappPendingReplies ?? 0,
-          whatsappInterviewConfirmations:     data.whatsappInterviewConfirmations ?? 0,
-          whatsappDocumentSubmissionRate:     data.whatsappDocumentSubmissionRate ?? 0,
-        });
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load dashboard");
-      } finally {
-        setLoading(false);
+    void loadSummary({ showLoading: true, showError: true }).catch(() => undefined);
+  }, [loadSummary, location.pathname]);
+
+  // Live counters. Every number here comes from the single app_data JSON blob,
+  // so no push channel can carry them: subscribing to that row would ship the
+  // entire roster (photos included) to every open dashboard on each write.
+  // Polling keeps the counters honest, backed by an immediate refresh when
+  // another page reports a change and whenever the tab regains focus.
+  useEffect(() => {
+    let active = true;
+    let intervalId: number | undefined;
+    let refreshTimer: number | null = null;
+
+    const refresh = () => {
+      if (!active) return;
+      void loadSummary().catch(() => undefined);
+    };
+
+    // Collapses a burst of triggers (poll tick + focus + in-app event) into one
+    // request so the dashboard never fans out duplicate fetches.
+    const scheduleRefresh = () => {
+      if (!active) return;
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(refresh, 350);
+    };
+
+    const startPolling = () => {
+      if (intervalId !== undefined) return;
+      intervalId = window.setInterval(refresh, DASHBOARD_POLL_MS);
+    };
+
+    const stopPolling = () => {
+      if (intervalId === undefined) return;
+      window.clearInterval(intervalId);
+      intervalId = undefined;
+    };
+
+    // Paused while the tab is hidden so background tabs stop polling, and
+    // refreshed the moment it returns so nothing looks stale.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refresh();
+        startPolling();
+      } else {
+        stopPolling();
       }
     };
-    void load();
-    return () => { cancelled = true; };
-  }, [location.pathname]);
+
+    const unsubscribeRequestsChanged = subscribeToRequestsChanged(scheduleRefresh);
+    window.addEventListener("focus", scheduleRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    if (document.visibilityState === "visible") startPolling();
+
+    return () => {
+      active = false;
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      stopPolling();
+      window.removeEventListener("focus", scheduleRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribeRequestsChanged();
+    };
+  }, [loadSummary]);
 
   const s = summary;
   const cols = isSm ? 2 : 4;
@@ -429,12 +536,16 @@ const HomePage = () => {
     ["#6B7280", "#F8FAFC"],  // muted
   ];
 
+  // A donut must be a partition of ONE quantity. These two slices sum to exactly
+  // totalMaids, which is the figure the ring centre and the "{n} total" badge show.
+  // The old slice list also included "With Photos", "Enquiries" and "Pending", which
+  // are not parts of the roster (with-photos overlaps Public/Hidden, and the other two
+  // are not maids at all). That made the arcs and the % chips add up to 100% of a
+  // different total than the centre number. Those three values are still displayed on
+  // the stat cards above, so nothing is lost by keeping the ring to the roster split.
   const slices = s ? [
-    { label: "Public",      value: s.publicMaids,     color: "#0D6E56" },
-    { label: "Hidden",      value: s.hiddenMaids,     color: "#B8781E" },
-    { label: "With Photos", value: s.maidsWithPhotos, color: "#6B7280" },
-    { label: "Enquiries",   value: s.enquiries,       color: "#111827" },
-    { label: "Pending",     value: s.pendingRequests, color: "#EF4444" },
+    { label: "Public", value: s.publicMaids, color: "#0D6E56" },
+    { label: "Hidden", value: s.hiddenMaids, color: "#B8781E" },
   ] : [];
 
   const menuCards = [
@@ -499,7 +610,21 @@ const HomePage = () => {
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols},1fr)`, gap, marginBottom: gap }}>
         {loading ? Array.from({ length: 4 }).map((_, i) => <Skel key={i} h={98} />) : (
           <>
-            <StatCard icon={<PhoneIncoming size={14} />} label="Enquiries"     value={s?.enquiries ?? 0}     loading={loading} accentColor={statRow2[0][0]} bgColor={statRow2[0][1]} delay={0}   to={adminPath("/enquiry")} />
+            {/* Value = every enquiry on file. The unread count is the sub-line,
+                because viewing the inbox acknowledges all of them (and would
+                otherwise make this tile permanently show 0). */}
+            <StatCard
+              icon={<PhoneIncoming size={14} />}
+              label="Enquiries"
+              value={s?.totalEnquiries ?? 0}
+              loading={loading}
+              accentColor={statRow2[0][0]}
+              bgColor={statRow2[0][1]}
+              sub={s?.unreadEnquiries ? `${s.unreadEnquiries} unread` : "All read"}
+              subAlert={!!s?.unreadEnquiries}
+              delay={0}
+              to={adminPath("/enquiry")}
+            />
             <StatCard icon={<FileText size={14} />}      label="Requests"      value={s?.requests ?? 0}      loading={loading} accentColor={statRow2[1][0]} bgColor={statRow2[1][1]} sub={`${s?.pendingRequests ?? 0} pending`} delay={60} to={adminPath("/requests")} />
             <StatCard icon={<Image size={14} />}         label="Gallery"       value={s?.galleryImages ?? 0} loading={loading} accentColor={statRow2[2][0]} bgColor={statRow2[2][1]} sub="Agency photos" delay={120} to={adminPath("/agency-profile")} />
             <StatCard icon={<Users size={14} />}         label="MOM Personnel" value={s?.momPersonnel ?? 0}  loading={loading} accentColor={statRow2[3][0]} bgColor={statRow2[3][1]} delay={180} to={adminPath("/agency-profile")} />

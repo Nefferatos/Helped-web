@@ -28,7 +28,11 @@ interface CompanyResponse {
 }
 interface AgencySummary {
   publicMaids: number; hiddenMaids: number; totalMaids: number; maidsWithPhotos: number;
-  enquiries: number; momPersonnel: number; testimonials: number; galleryImages: number;
+  /** Unread enquiries (notification-bell number), as returned by the summary API. */
+  enquiries: number; unreadEnquiries: number;
+  /** Every enquiry on file — what the ledger cell must show. */
+  totalEnquiries: number;
+  momPersonnel: number; testimonials: number; galleryImages: number;
 }
 
 /* ─── Responsive hook ────────────────────────────────────────────────── */
@@ -439,7 +443,9 @@ const statDef = [
   { key: "publicMaids",    label: "Public",        icon: Eye },
   { key: "hiddenMaids",    label: "Hidden",        icon: EyeOff },
   { key: "maidsWithPhotos",label: "With Photos",  icon: Camera },
-  { key: "enquiries",      label: "Enquiries",    icon: MessageCircle },
+  // totalEnquiries (not `enquiries`) — the API's `enquiries` is the unread
+  // count and reads 0 as soon as the inbox is opened.
+  { key: "totalEnquiries", label: "Enquiries",    icon: MessageCircle },
   { key: "momPersonnel",   label: "MOM Staff",    icon: Shield },
   { key: "testimonials",   label: "Reviews",      icon: Star },
   { key: "galleryImages",  label: "Gallery",      icon: ImageIcon },
@@ -476,7 +482,8 @@ const AgencyProfile = () => {
         setSummary({
           publicMaids: s.publicMaids ?? 0, hiddenMaids: s.hiddenMaids ?? 0,
           totalMaids: s.totalMaids ?? 0, maidsWithPhotos: s.maidsWithPhotos ?? 0,
-          enquiries: s.enquiries ?? 0, momPersonnel: s.momPersonnel ?? 0,
+          enquiries: s.enquiries ?? 0, unreadEnquiries: s.unreadEnquiries ?? s.enquiries ?? 0,
+          totalEnquiries: s.totalEnquiries ?? 0, momPersonnel: s.momPersonnel ?? 0,
           testimonials: s.testimonials ?? 0, galleryImages: s.galleryImages ?? 0,
         });
       }

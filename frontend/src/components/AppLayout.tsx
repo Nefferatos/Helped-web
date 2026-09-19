@@ -1069,6 +1069,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         let summaryData: {
           unreadAgencyChats?: number;
           enquiries?: number;
+          unreadEnquiries?: number;
+          totalEnquiries?: number;
           pendingRequests?: number;
           error?: string;
         } | null = null;
@@ -1091,12 +1093,15 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           const [summaryResult, companyResult, applicantsResult] = await Promise.allSettled([
             fetch("/api/company/summary", {
               headers: authHeaders,
+              cache: "no-store",
             }),
             fetch("/api/company", {
               headers: authHeaders,
+              cache: "no-store",
             }),
             fetch("/api/ats/applications/unread-count", {
               headers: authHeaders,
+              cache: "no-store",
             }),
           ]);
 
@@ -1104,6 +1109,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             summaryData = (await summaryResult.value.json().catch(() => ({}))) as {
               unreadAgencyChats?: number;
               enquiries?: number;
+              unreadEnquiries?: number;
+              totalEnquiries?: number;
               pendingRequests?: number;
               error?: string;
             };
@@ -1136,8 +1143,13 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         const current = badgeCountsRef.current;
         const nextBadgeCounts = {
           unreadChats,
+          // The bell counts work that still needs a human, so it reads the
+          // unread value. `enquiries` is the legacy name for that same number;
+          // `totalEnquiries` is the dashboard tile and must never feed a badge.
           unreadEnquiries:
-            summaryData?.enquiries ?? (summaryData === null ? current.unreadEnquiries : 0),
+            summaryData?.unreadEnquiries ??
+            summaryData?.enquiries ??
+            (summaryData === null ? current.unreadEnquiries : 0),
           unreadApplicants,
           unreadRequests:
             summaryData?.pendingRequests ?? (summaryData === null ? current.unreadRequests : 0),

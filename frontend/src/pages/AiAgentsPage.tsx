@@ -151,7 +151,11 @@ interface AgencyContextSummary {
   hiddenMaids?: number;
   totalMaids?: number;
   maidsWithPhotos?: number;
+  /** Unread enquiries. Used for "needs follow-up" copy, not for pipeline totals. */
   enquiries?: number;
+  unreadEnquiries?: number;
+  /** Total enquiries on file — the number the AI should reason about. */
+  totalEnquiries?: number;
   momPersonnel?: number;
   testimonials?: number;
   galleryImages?: number;
@@ -170,6 +174,9 @@ interface SupportChatSummaryItem {
 type MaidListResponse = {
   maids?: CommandCenterMaid[];
   total?: number;
+  // readSafeJson() constrains T to `{ error?: string }`; a response type without
+  // an `error` member trips TS2559 (weak-type detection) at the call site.
+  error?: string;
 };
 
 const loadAllMaidRecords = async (
@@ -2968,17 +2975,17 @@ export function GlobalAiCommandCenter() {
       ]);
       if (cancelled) return;
       if (enquiryResult.status === "fulfilled") {
-        const data = await readSafeJson<{ enquiries?: EnquiryRecord[] }>(enquiryResult.value);
+        const data = await readSafeJson<{ enquiries?: EnquiryRecord[]; error?: string }>(enquiryResult.value);
         if (data.enquiries) setEnquiries(data.enquiries);
       }
       if (requestResult.status === "fulfilled") {
-        const data = await readSafeJson<{ data?: RequestRecord[] }>(requestResult.value);
+        const data = await readSafeJson<{ data?: RequestRecord[]; error?: string }>(requestResult.value);
         if (data.data) setRequests(data.data);
       }
       if (maidResult.status === "fulfilled") setMaids(maidResult.value);
       if (publicMaidResult.status === "fulfilled") setPublicMaids(publicMaidResult.value);
       if (applicantResult.status === "fulfilled") {
-        const data = await readSafeJson<{ data?: AtsApplication[] }>(applicantResult.value);
+        const data = await readSafeJson<{ data?: AtsApplication[]; error?: string }>(applicantResult.value);
         if (data.data) setApplicants(data.data.filter((applicant) => applicant.source === "resume_upload"));
       }
     };
@@ -3095,7 +3102,9 @@ export default function AiAgentsPage() {
             hiddenMaids: d.hiddenMaids,
             totalMaids: d.totalMaids,
             maidsWithPhotos: d.maidsWithPhotos,
-            enquiries: d.enquiries,
+            enquiries: d.totalEnquiries ?? d.enquiries,
+            unreadEnquiries: d.unreadEnquiries ?? d.enquiries,
+            totalEnquiries: d.totalEnquiries,
             momPersonnel: d.momPersonnel,
             testimonials: d.testimonials,
             galleryImages: d.galleryImages,

@@ -513,6 +513,7 @@ const AtsRecruitmentPage = () => {
     mutationFn: ({
       applicationId,
       stage,
+      reason,
     }: {
       applicationId: string;
       stage: string;
@@ -1864,7 +1865,7 @@ const AtsRecruitmentPage = () => {
 
       {/* ── AI Recruiting Assistant ───────────────────────────────────────── */}
       <RecruiterAiAssistant
-        applications={applications as any}
+        applications={applications}
         dashboard={dashboard}
         selectedId={selectedId}
         onSelectApplicant={(id) => {

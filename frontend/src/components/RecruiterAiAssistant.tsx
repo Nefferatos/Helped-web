@@ -33,6 +33,16 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * Minimal applicant shape consumed by the assistant.
+ *
+ * Deliberately a closed structural type (no `[key: string]: unknown` index
+ * signatures): interfaces such as `AtsApplicationListItem` do not get implicit
+ * index signatures, so an index signature here would make real ATS data
+ * unassignable and force unsafe `as any` casts at the call sites. Every field
+ * is optional except the ones the assistant always relies on, which keeps the
+ * component reusable across list payloads.
+ */
 interface ApplicantLike {
   id: string;
   applicationCode?: string;
@@ -41,7 +51,11 @@ interface ApplicantLike {
   source?: string;
   appliedAt?: string;
   clientMatchScore?: number;
-  score?: { score?: number | null; explanation?: string } | null;
+  score?: {
+    score?: number | null;
+    category?: string;
+    explanation?: string;
+  } | null;
   profile: {
     fullName?: string;
     email?: string;
@@ -54,9 +68,7 @@ interface ApplicantLike {
     childcareExperience?: number;
     elderlyCareExperience?: number;
     strengthsTags?: string[];
-    [key: string]: unknown;
   };
-  [key: string]: unknown;
 }
 
 export interface RecruiterAiAssistantProps {

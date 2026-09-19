@@ -267,7 +267,7 @@ const RequestsPageContent = () => {
         status: "all",
         query: deferredSearch,
       }),
-    refetchInterval: 15000,
+    refetchInterval: 5000,
     placeholderData: (previous) => previous,
   });
 

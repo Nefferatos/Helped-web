@@ -11,6 +11,20 @@ import {
   buildRecommendationQuery,
 } from "./services/ai/embeddings";
 import { getAiProviderConfig, openaiChat, type OpenAIMessage } from "./services/ai/openai";
+import {
+  buildSpreadsheetUrl,
+  extractSpreadsheetId,
+  parseGoogleServiceAccount,
+  resolveGoogleSheetsCredentials,
+  testGoogleSheetsConnection,
+  writeGoogleSheetsTabs,
+} from "./services/googleSheets";
+import {
+  AGENCY_REPORT_SECTION_IDS,
+  buildAgencyReportTabs,
+  listAgencyReportSections,
+  type AgencyReportData,
+} from "./services/agencyReports";
 
 type AssetsBinding = {
   fetch: (request: Request) => Promise<Response>;
@@ -534,6 +548,15 @@ type Bindings = {
   ADMIN_BOOTSTRAP_TOKEN?: string;
   TIKTOK_CLIENT_KEY?: string;
   TIKTOK_CLIENT_SECRET?: string;
+  // ─── Google Sheets reporting ────────────────────────────────────────────
+  // Full service-account key JSON (Google Cloud -> Service Accounts -> Keys ->
+  // JSON). Must be a Worker secret — it contains an RSA private key:
+  //   npx wrangler secret put GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON
+  GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON?: string;
+  // Default spreadsheet id or URL. Agencies can override this per-agency from
+  // the Reports page. Safe to keep as a plain var:
+  //   npx wrangler secret put GOOGLE_SHEETS_SPREADSHEET_ID
+  GOOGLE_SHEETS_SPREADSHEET_ID?: string;
 };
 
 type Variables = {
@@ -5815,36 +5838,49 @@ app.get(
 app.get(
   "/api/company/summary",
   safeApi(async (c) => {
-    const config = getSupabaseAppDataConfig(c.env);
-    if (config) {
-      const fastSummary = await tryCallSupabaseRpc<Record<string, unknown>>(
-        config,
-        "get_helped_company_summary",
-        { p_app_id: config.rowId },
-      );
-      if (fastSummary) {
-        // OVERRIDE: The Supabase RPC may return total enquiry count instead of
-        // unread count. Always compute the correct unread count from the data blob.
-        const data = await loadData(c.env);
-        fastSummary.enquiries = data.enquiries.filter((e) => !e.viewedAt).length;
-        return c.json(fastSummary);
-      }
-    }
-
-    const data = await loadData(c.env);
+    // Every counter is derived from the live app-data blob here, never from a
+    // precomputed table. The old fast path trusted public.helped_query_maids /
+    // helped_query_enquiries, which are rebuilt out-of-band by a DB trigger, so a
+    // delete that updated only app_data left them stale and the dashboard
+    // counters never went down. loadData() is already required for this endpoint
+    // (write paths call saveData -> bustAppDataCache), so the blob is the only
+    // source that is guaranteed to reflect the latest deletion.
+    const data = await loadData(c.env, { readOnly: true });
     const publicMaids = data.maids.filter((maid) => maid.isPublic).length;
     const hiddenMaids = data.maids.length - publicMaids;
-    const maidsWithPhotos = data.maids.filter((maid) => maid.hasPhoto).length;
+    const maidsWithPhotos = data.maids.filter(
+      (maid) =>
+        maid.hasPhoto ||
+        Boolean(
+          (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0) ||
+            maid.photoDataUrl,
+        ),
+    ).length;
     const unreadAgencyChats = data.chatMessages.filter(
       (message) => message.senderRole === "client" && !message.readByAgency,
     ).length;
+    const whatsappMetrics = await getWhatsAppMetricsForAgency(c.env, data.maids);
+
+    // Two enquiry numbers, because two UI surfaces need different things:
+    //   - the dashboard's "Enquiries" tile is a pipeline total (how many leads
+    //     exist). It must NOT be the unviewed count, or it would read 0 the
+    //     moment the admin opens the inbox — POST /api/enquiries/mark-viewed
+    //     stamps viewedAt on every enquiry the page displayed.
+    //   - the sidebar bell / "needs follow-up" popover tracks outstanding work,
+    //     so it uses the unviewed count.
+    // `enquiries` keeps the unviewed value for backwards compatibility (the
+    // layout already reads it that way); the explicit names below remove the
+    // ambiguity that caused the dashboard to look broken.
+    const unreadEnquiries = data.enquiries.filter((e) => !e.viewedAt).length;
 
     return c.json({
       publicMaids,
       hiddenMaids,
       totalMaids: data.maids.length,
       maidsWithPhotos,
-      enquiries: data.enquiries.filter((e) => !e.viewedAt).length,
+      enquiries: unreadEnquiries,
+      unreadEnquiries,
+      totalEnquiries: data.enquiries.length,
       requests: data.directSales.length,
       pendingRequests: data.directSales.filter(
         (item) => item.status === "pending",
@@ -5853,6 +5889,16 @@ app.get(
       momPersonnel: data.momPersonnel.length,
       testimonials: data.testimonials.length,
       galleryImages: data.companyProfile.gallery_image_data_urls?.length ?? 0,
+      whatsappMessagesSent: whatsappMetrics.messagesSent,
+      whatsappMessagesDelivered: whatsappMetrics.messagesDelivered,
+      whatsappMessagesRead: whatsappMetrics.messagesRead,
+      whatsappResponseRate: whatsappMetrics.responseRate,
+      whatsappAverageResponseTimeMinutes:
+        whatsappMetrics.averageResponseTimeMinutes,
+      whatsappActiveConversations: whatsappMetrics.activeConversations,
+      whatsappPendingReplies: whatsappMetrics.pendingReplies,
+      whatsappInterviewConfirmations: whatsappMetrics.interviewConfirmations,
+      whatsappDocumentSubmissionRate: whatsappMetrics.documentSubmissionRate,
     });
   }),
 );
@@ -11877,6 +11923,172 @@ const buildWaBundle = (store: WaStore, maid: MaidRecord) => ({
   events: store.events,
 });
 
+/**
+ * Aggregated WhatsApp dashboard metrics. Mirrors getWhatsAppDashboardMetrics()
+ * in backend/src/whatsappStore.ts so the worker dashboard and the Express
+ * dashboard report the same numbers for the same semantics.
+ */
+type WhatsAppDashboardMetrics = {
+  messagesSent: number;
+  messagesDelivered: number;
+  messagesRead: number;
+  responseRate: number;
+  averageResponseTimeMinutes: number;
+  activeConversations: number;
+  pendingReplies: number;
+  interviewConfirmations: number;
+  documentSubmissionRate: number;
+};
+
+const EMPTY_WHATSAPP_METRICS: WhatsAppDashboardMetrics = {
+  messagesSent: 0,
+  messagesDelivered: 0,
+  messagesRead: 0,
+  responseRate: 0,
+  averageResponseTimeMinutes: 0,
+  activeConversations: 0,
+  pendingReplies: 0,
+  interviewConfirmations: 0,
+  documentSubmissionRate: 0,
+};
+
+// One KV list plus a read per candidate that actually has a store keeps this
+// cheap. The cap stops a large roster from turning the 5s dashboard poll into a
+// fan-out of hundreds of KV reads.
+const WHATSAPP_METRICS_MAX_STORES = 200;
+
+const getWhatsAppMetricsForAgency = async (
+  env: Bindings,
+  maids: MaidRecord[],
+): Promise<WhatsAppDashboardMetrics> => {
+  const kv = env.APP_DATA;
+  if (!kv) return EMPTY_WHATSAPP_METRICS;
+
+  try {
+    const knownRefs = new Set(maids.map((maid) => maid.referenceCode));
+    const listed = await kv.list({
+      prefix: "whatsapp:",
+      limit: WHATSAPP_METRICS_MAX_STORES,
+    });
+    // Skip stores whose maid no longer exists, so deleting a maid also drops its
+    // conversation from the live counters.
+    const candidates = listed.keys
+      .map((key) => key.name.slice("whatsapp:".length))
+      .filter((ref) => knownRefs.has(ref));
+
+    if (candidates.length === 0) return EMPTY_WHATSAPP_METRICS;
+
+    const stores = (
+      await Promise.all(
+        candidates.map(async (ref) => {
+          const raw = await kv.get(kvWhatsAppKey(ref));
+          if (!raw) return null;
+          try {
+            return JSON.parse(raw) as WaStore;
+          } catch {
+            return null;
+          }
+        }),
+      )
+    )
+      .filter((store): store is WaStore => Boolean(store))
+      .map((store) => ({
+        conversation: store.conversation,
+        messages: Array.isArray(store.messages) ? store.messages : [],
+        events: Array.isArray(store.events) ? store.events : [],
+      }));
+
+    if (stores.length === 0) return EMPTY_WHATSAPP_METRICS;
+
+    const conversations = stores.map((store) => store.conversation);
+    const messages = stores.flatMap((store) => store.messages);
+    const outgoing = messages.filter((message) => message.direction === "outgoing");
+    const delivered = outgoing.filter(
+      (message) => message.status === "delivered" || message.status === "read",
+    );
+    const read = outgoing.filter((message) => message.status === "read");
+
+    let responseWindowTotalMs = 0;
+    let responseWindowCount = 0;
+    let conversationsWithOutgoing = 0;
+    let conversationsWithReply = 0;
+
+    for (const store of stores) {
+      const timeline = [...store.messages].sort(
+        (left, right) =>
+          new Date(left.createdAt).getTime() -
+          new Date(right.createdAt).getTime(),
+      );
+      if (!timeline.some((message) => message.direction === "outgoing")) continue;
+      conversationsWithOutgoing += 1;
+      if (!timeline.some((message) => message.direction === "incoming")) continue;
+      conversationsWithReply += 1;
+
+      for (let index = 0; index < timeline.length; index += 1) {
+        const current = timeline[index];
+        if (current.direction !== "outgoing") continue;
+        const nextInbound = timeline
+          .slice(index + 1)
+          .find((message) => message.direction === "incoming");
+        if (!nextInbound) continue;
+        responseWindowTotalMs +=
+          new Date(nextInbound.createdAt).getTime() -
+          new Date(current.createdAt).getTime();
+        responseWindowCount += 1;
+      }
+    }
+
+    const completedChecklist = conversations.reduce(
+      (sum, conversation) =>
+        sum +
+        (conversation.documentChecklist ?? []).filter((item) => item.completed)
+          .length,
+      0,
+    );
+    const totalChecklist = conversations.reduce(
+      (sum, conversation) => sum + (conversation.documentChecklist ?? []).length,
+      0,
+    );
+    const interviewConfirmations = stores.reduce(
+      (sum, store) =>
+        sum +
+        store.events.filter((event) => event.type === "interview_confirmed")
+          .length,
+      0,
+    );
+
+    return {
+      messagesSent: outgoing.length,
+      messagesDelivered: delivered.length,
+      messagesRead: read.length,
+      responseRate:
+        conversationsWithOutgoing > 0
+          ? Math.round((conversationsWithReply / conversationsWithOutgoing) * 100)
+          : 0,
+      averageResponseTimeMinutes:
+        responseWindowCount > 0
+          ? Math.round(
+              responseWindowTotalMs / responseWindowCount / 60000,
+            )
+          : 0,
+      activeConversations: conversations.filter(
+        (conversation) => conversation.status !== "closed",
+      ).length,
+      pendingReplies: conversations.filter(
+        (conversation) => conversation.unreadRecruiterCount > 0,
+      ).length,
+      interviewConfirmations,
+      documentSubmissionRate:
+        totalChecklist > 0
+          ? Math.round((completedChecklist / totalChecklist) * 100)
+          : 0,
+    };
+  } catch (error) {
+    console.warn("WhatsApp dashboard metrics aggregation failed", error);
+    return EMPTY_WHATSAPP_METRICS;
+  }
+};
+
 app.get(
   "/api/whatsapp/candidates/:referenceCode",
   requireAgencyAdminAuth,
@@ -11987,17 +12199,8 @@ app.get(
   "/api/whatsapp/dashboard/metrics",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
-    return c.json({
-      messagesSent: 0,
-      messagesDelivered: 0,
-      messagesRead: 0,
-      responseRate: 0,
-      averageResponseTimeMinutes: 0,
-      activeConversations: 0,
-      pendingReplies: 0,
-      interviewConfirmations: 0,
-      documentSubmissionRate: 0,
-    });
+    const data = await loadData(c.env, { readOnly: true });
+    return c.json(await getWhatsAppMetricsForAgency(c.env, data.maids));
   }),
 );
 
@@ -13289,19 +13492,12 @@ app.get("/api/chats/admin", requireAgencyAdminAuth, async (c) => {
 });
 
 app.get("/api/chats/admin/summary", requireAgencyAdminAuth, async (c) => {
-  const config = getSupabaseAppDataConfig(c.env);
-  if (config) {
-    const fastSummary = await tryCallSupabaseRpc<{ unreadCount: number }>(
-      config,
-      "get_helped_chat_admin_summary",
-      { p_app_id: config.rowId },
-    );
-    if (fastSummary) {
-      return c.json(fastSummary);
-    }
-  }
-
-  const data = await loadData(c.env);
+  // Derived from the live app-data blob for the same reason as
+  // /api/company/summary: the Supabase RPC reads a precomputed query table that
+  // can lag behind writes, so this sidebar badge and the dashboard's "Unread
+  // Chats" card could show different numbers. Both now use the same blob and the
+  // same filter, so they can no longer disagree.
+  const data = await loadData(c.env, { readOnly: true });
   const unreadCount = data.chatMessages.filter(
     (message) => message.senderRole === "client" && !message.readByAgency,
   ).length;
@@ -14518,6 +14714,265 @@ app.post("/api/tiktok/disconnect", requireAgencyAdminAuth, async (c) => {
   await saveData(c.env, data);
   return c.json({ ok: true, message: "TikTok account disconnected" });
 });
+
+// ─── Google Sheets agency reports ────────────────────────────────────────────
+//
+// Every data category in the agency portal is exported to its OWN tab in the
+// target spreadsheet — categories are never blended into one sheet. See
+// services/agencyReports.ts for the per-category section definitions.
+//
+// Config is stored per-agency on the shared companyProfile blob (the same place
+// chatbotConfig lives), keyed by agencyId, so two agencies never share a
+// spreadsheet target or a section selection.
+
+const REPORT_CONFIG_FIELD = "googleSheetReportConfigs";
+
+type AgencyReportConfig = {
+  agencyId: number;
+  /** Spreadsheet id or full URL. Empty falls back to GOOGLE_SHEETS_SPREADSHEET_ID. */
+  spreadsheetIdOrUrl: string;
+  /** Sections to export. Empty array means "every section". */
+  includedSectionIds: string[];
+  updatedAt: string;
+  lastRunAt: string;
+  lastRunSummary: string;
+};
+
+const emptyAgencyReportConfig = (agencyId: number): AgencyReportConfig => ({
+  agencyId,
+  spreadsheetIdOrUrl: "",
+  includedSectionIds: [],
+  updatedAt: "",
+  lastRunAt: "",
+  lastRunSummary: "",
+});
+
+const readReportConfigStore = (data: AppData): Record<string, unknown> => {
+  const profile = data.companyProfile as unknown as Record<string, unknown>;
+  const raw = profile[REPORT_CONFIG_FIELD];
+  return raw && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
+};
+
+const readAgencyReportConfig = (
+  data: AppData,
+  agencyId: number,
+): AgencyReportConfig => {
+  const store = readReportConfigStore(data);
+  const raw = store[String(agencyId)] as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== "object") return emptyAgencyReportConfig(agencyId);
+
+  const includedSectionIds = Array.isArray(raw.includedSectionIds)
+    ? raw.includedSectionIds
+        .map((id) => toTrimmedString(id))
+        .filter((id) => AGENCY_REPORT_SECTION_IDS.includes(id))
+    : [];
+
+  return {
+    agencyId,
+    spreadsheetIdOrUrl: toTrimmedString(raw.spreadsheetIdOrUrl),
+    includedSectionIds,
+    updatedAt: toTrimmedString(raw.updatedAt),
+    lastRunAt: toTrimmedString(raw.lastRunAt),
+    lastRunSummary: toTrimmedString(raw.lastRunSummary),
+  };
+};
+
+const writeAgencyReportConfig = (
+  data: AppData,
+  config: AgencyReportConfig,
+) => {
+  const profile = data.companyProfile as unknown as Record<string, unknown>;
+  const store = readReportConfigStore(data);
+  store[String(config.agencyId)] = { ...config };
+  profile[REPORT_CONFIG_FIELD] = store;
+};
+
+/**
+ * The public shape returned to the Reports page. The service-account private
+ * key is never returned — only enough to show "connected as <email>".
+ */
+const buildReportStatus = (
+  env: Bindings,
+  config: AgencyReportConfig,
+) => {
+  const resolved = resolveGoogleSheetsCredentials(
+    env,
+    config.spreadsheetIdOrUrl,
+  );
+  const serviceAccount = parseGoogleServiceAccount(
+    env.GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON,
+  );
+  const spreadsheetId =
+    extractSpreadsheetId(config.spreadsheetIdOrUrl) ||
+    extractSpreadsheetId(env.GOOGLE_SHEETS_SPREADSHEET_ID);
+
+  return {
+    serviceAccountConfigured: Boolean(serviceAccount),
+    serviceAccountEmail: toTrimmedString(serviceAccount?.client_email),
+    spreadsheetConfigured: Boolean(spreadsheetId),
+    spreadsheetId,
+    spreadsheetUrl: spreadsheetId ? buildSpreadsheetUrl(spreadsheetId) : "",
+    /** Empty string means "export every section". */
+    includedSectionIds: config.includedSectionIds,
+    savedSpreadsheetIdOrUrl: config.spreadsheetIdOrUrl,
+    /** Source of the effective spreadsheet: agency override or Worker var. */
+    spreadsheetSource: config.spreadsheetIdOrUrl
+      ? "agency"
+      : env.GOOGLE_SHEETS_SPREADSHEET_ID
+        ? "worker"
+        : "none",
+    ready: Boolean(resolved.credentials),
+    blockingReason: resolved.credentials ? "" : resolved.reason ?? "",
+    updatedAt: config.updatedAt,
+    lastRunAt: config.lastRunAt,
+    lastRunSummary: config.lastRunSummary,
+  };
+};
+
+// GET /api/reports/status — Connection + config readiness for the Reports page.
+// Never returns the service-account private key, only the client_email.
+app.get(
+  "/api/reports/status",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const data = await loadData(c.env, { readOnly: true });
+    const config = readAgencyReportConfig(data, admin.agencyId);
+    return c.json({ status: buildReportStatus(c.env, config) });
+  }),
+);
+
+// GET /api/reports/sections — Catalogue of every exportable data category.
+// Each entry becomes its own Google Sheet tab; the UI lets the agency pick.
+app.get(
+  "/api/reports/sections",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    return c.json({ sections: listAgencyReportSections() });
+  }),
+);
+
+// PUT /api/reports/config — Save this agency's spreadsheet target + section picks.
+app.put(
+  "/api/reports/config",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const body = await parseBody<{
+      spreadsheetIdOrUrl?: unknown;
+      includedSectionIds?: unknown;
+    }>(c.req.raw);
+    if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+
+    const spreadsheetIdOrUrl = toTrimmedString(body.spreadsheetIdOrUrl).slice(0, 500);
+    if (spreadsheetIdOrUrl && !extractSpreadsheetId(spreadsheetIdOrUrl)) {
+      return c.json(
+        {
+          error:
+            "Could not read a spreadsheet id from that value. Paste the spreadsheet id or a https://docs.google.com/spreadsheets/d/<id>/edit URL.",
+        },
+        400,
+      );
+    }
+
+    const includedSectionIds = Array.isArray(body.includedSectionIds)
+      ? Array.from(
+          new Set(
+            body.includedSectionIds
+              .map((id) => toTrimmedString(id))
+              .filter((id) => AGENCY_REPORT_SECTION_IDS.includes(id)),
+          ),
+        )
+      : [];
+
+    const data = await loadData(c.env);
+    const existing = readAgencyReportConfig(data, admin.agencyId);
+    const nextConfig: AgencyReportConfig = {
+      ...existing,
+      agencyId: admin.agencyId,
+      spreadsheetIdOrUrl,
+      includedSectionIds,
+      updatedAt: now(),
+    };
+    writeAgencyReportConfig(data, nextConfig);
+    await saveData(c.env, data);
+
+    return c.json({
+      config: nextConfig,
+      status: buildReportStatus(c.env, nextConfig),
+    });
+  }),
+);
+
+// POST /api/reports/google-sheet/test — Verify credentials + spreadsheet access.
+app.post(
+  "/api/reports/google-sheet/test",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const data = await loadData(c.env, { readOnly: true });
+    const config = readAgencyReportConfig(data, admin.agencyId);
+
+    const resolved = resolveGoogleSheetsCredentials(
+      c.env,
+      config.spreadsheetIdOrUrl,
+    );
+    if (!resolved.credentials) {
+      return c.json({ error: resolved.reason ?? "Google Sheets is not configured" }, 400);
+    }
+
+    const result = await testGoogleSheetsConnection(resolved.credentials);
+    return c.json(result);
+  }),
+);
+
+// POST /api/reports/google-sheet — Push the full per-category report.
+// Each selected data category is written to its own dedicated tab.
+app.post(
+  "/api/reports/google-sheet",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const data = await loadData(c.env);
+    const config = readAgencyReportConfig(data, admin.agencyId);
+
+    const resolved = resolveGoogleSheetsCredentials(
+      c.env,
+      config.spreadsheetIdOrUrl,
+    );
+    if (!resolved.credentials) {
+      return c.json({ error: resolved.reason ?? "Google Sheets is not configured" }, 400);
+    }
+
+    // One tab per data category — nothing is blended together.
+    const { tabs, skipped } = buildAgencyReportTabs(
+      { data: data as unknown as AgencyReportData, agencyId: admin.agencyId },
+      config.includedSectionIds,
+    );
+
+    if (tabs.length === 0) {
+      return c.json({ error: "No report sections selected" }, 400);
+    }
+
+    const result = await writeGoogleSheetsTabs(resolved.credentials, tabs);
+
+    const summary = `${result.tabsWritten} tabs · ${result.rowsWritten} rows${
+      skipped.length > 0 ? ` · ${skipped.length} skipped` : ""
+    }`;
+    const nextConfig: AgencyReportConfig = {
+      ...config,
+      agencyId: admin.agencyId,
+      lastRunAt: now(),
+      lastRunSummary: summary,
+    };
+    writeAgencyReportConfig(data, nextConfig);
+    await saveData(c.env, data);
+
+    return c.json({ ...result, skippedSectionIds: skipped, config: nextConfig });
+  }),
+);
 
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
