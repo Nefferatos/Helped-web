@@ -446,9 +446,11 @@ export const writeGoogleSheetsTabs = async (
 
   const liveTitles = await readSheetTitles(accessToken, spreadsheetId);
   const liveTitleSet = new Set(liveTitles);
-  // Seeded with the live titles, so sanitizeSheetTitle never reuses an existing
-  // tab name and never collides with another section in the same run.
-  const titleReservation = new Set(liveTitles);
+  // Starts EMPTY on purpose: a section whose tab already exists must keep its
+  // exact name so it is refreshed in place instead of spawning "Maids (2)".
+  // sanitizeSheetTitle adds each planned title as it goes, which is what stops
+  // two sections in the same run from colliding with each other.
+  const titleReservation = new Set<string>();
 
   const planned = tabs.map((tab) => ({
     title: sanitizeSheetTitle(tab.title, titleReservation),

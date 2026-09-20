@@ -22,6 +22,13 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // Google Sheets agency reports live in the Cloudflare Worker, not the
+      // legacy Express API. Keep this above the generic "/api" entry so Vite
+      // matches the more specific prefix first.
+      "/api/reports": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       "/api": {
         target: apiProxyTarget,
         changeOrigin: true,

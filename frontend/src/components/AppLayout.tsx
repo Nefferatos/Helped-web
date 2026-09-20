@@ -23,6 +23,7 @@ import {
   Megaphone,
   Zap,
   CheckCircle,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -166,6 +167,16 @@ const navItems = [
     iconShadowActive: "0 2px 0 #1D4ED8, 0 3px 8px rgba(37,99,235,0.4)",
     iconColor: "#fff",
     badgeKey: "unreadRequests" as const,
+  },
+  {
+    label: "Reports",
+    path: adminPath("/reports"),
+    icon: FileSpreadsheet,
+    iconBg: "linear-gradient(145deg, #86EFAC, #16A34A)",
+    iconShadow: "0 4px 0 #15803D, 0 6px 12px rgba(22,163,74,0.45)",
+    iconShadowActive: "0 2px 0 #15803D, 0 3px 8px rgba(22,163,74,0.4)",
+    iconColor: "#fff",
+    badgeKey: null,
   },
   {
     label: "AI Agents",

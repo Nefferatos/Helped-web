@@ -69,6 +69,7 @@ const EditEmployer = lazyRoute(() => import("@/pages/EditEmployer"));
 const AdminSupportChat = lazyRoute(() => import("@/pages/AdminSupportChat"));
 const RequestsPage = lazyRoute(() => import("@/pages/RequestsPage"));
 const AtsRecruitmentPage = lazyRoute(() => import("@/pages/AtsRecruitmentPage"));
+const AgencyReportsPage = lazyRoute(() => import("@/pages/AgencyReportsPage"));
 const PublicMaidApplicationPage = lazyRoute(() => import("@/pages/PublicMaidApplicationPage"));
 const PublicMaidApplicationStatusPage = lazyRoute(() => import("@/pages/PublicMaidApplicationStatusPage"));
 const NotFound = lazyRoute(() => import("@/pages/NotFound"));
@@ -363,6 +364,7 @@ const App = () => {
             <Route path="/agencyadmin/ai-hr-interviewer" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiHrInterviewerPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-marketing" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiDirectMarketingPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/recruitment" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AtsRecruitmentPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/reports" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyReportsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/chat-support" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminSupportChat /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContracts /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/new" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddEmployment /></AdminShell></ProtectedAdminRoute>)} />
