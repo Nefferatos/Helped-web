@@ -29,7 +29,9 @@
     "test:website-ai": "node --env-file=.env scripts/test-website-ai-workflow.mjs",
     "test:hr-email": "node --env-file=.env scripts/test-hr-interview-email.mjs",
     "test:hr-full": "node --env-file=.env scripts/test-hr-interview-full.mjs",
-    "test:orchestrator": "node --env-file=.env scripts/test-workflow-orchestrator.mjs"
+    "test:orchestrator": "node --env-file=.env scripts/test-workflow-orchestrator.mjs",
+    "test:events": "node --env-file=.env scripts/test-events.mjs",
+    "test:events:prod": "node --env-file=.env scripts/test-events.mjs --target=prod"
   },
   "keywords": [
     "react",

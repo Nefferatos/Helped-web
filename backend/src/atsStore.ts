@@ -2,6 +2,7 @@ import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { getMaidsStore, type MaidRecord } from "./store";
+import { recordWorkflowEvent } from "./services/eventService";
 
 export type RecruitmentStage =
   | "New Applicant"
@@ -1154,6 +1155,23 @@ export const createPublicAtsApplication = async (
   application.notificationLogIds = notifications.map((item) => item.id);
 
   await writeData(data);
+
+  // Event spine: record the trigger that downstream automation (Make.com
+  // applicant-intake) and the #4 health detector key off. Fire-and-forget —
+  // a logging failure must never block an application submission.
+  void recordWorkflowEvent({
+    eventType: "candidate.created",
+    entityType: "application",
+    entityId: applicationId,
+    actor: "applicant",
+    payload: {
+      applicationCode: application.applicationCode,
+      agencyId: payload.agencyId,
+      fullName: payload.fullName,
+      nationality: payload.nationality,
+      attachmentCount: payload.files.length,
+    },
+  });
 
   return {
     applicationId,

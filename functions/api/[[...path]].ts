@@ -5754,6 +5754,63 @@ app.get("/api/health", (c) =>
   c.json({ status: "Server is running", storage: getStorageMode(c.env) }),
 );
 
+// ─── Event spine (operator/machine model) ──────────────────────────────────
+// Production write path for workflow events. The browser and any client of the
+// Worker record events here; Make.com can also report results to the Express
+// backend's POST /api/events. Both write to the same public.workflow_events
+// table so the audit trail is unified regardless of entry point.
+app.post("/api/events", async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) {
+    return c.json({ error: "Event storage not configured (Supabase service role required)" }, 503);
+  }
+
+  const body = (await c.req.raw.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const eventType = String(body.event_type ?? body.eventType ?? "").trim();
+  const entityType = String(body.entity_type ?? body.entityType ?? "").trim();
+  const entityId = String(body.entity_id ?? body.entityId ?? "").trim();
+  if (!eventType || !entityType || !entityId) {
+    return c.json({ error: "event_type, entity_type and entity_id are required" }, 400);
+  }
+
+  const statusRaw = String(body.status ?? "completed").trim();
+  const status = ["pending", "completed", "failed"].includes(statusRaw) ? statusRaw : "completed";
+  const payload =
+    body.payload && typeof body.payload === "object" ? (body.payload as Record<string, unknown>) : {};
+
+  const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST",
+    headers: supabaseHeaders(config, {
+      "content-type": "application/json",
+      accept: "application/json",
+      prefer: "return=representation",
+    }),
+    body: JSON.stringify([
+      {
+        event_type: eventType,
+        entity_type: entityType,
+        entity_id: entityId,
+        actor: String(body.actor ?? "system"),
+        payload,
+        status,
+      },
+    ]),
+  });
+
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    console.error("workflow_events insert failed:", response.status, details);
+    return c.json({ error: "Failed to record event" }, 500);
+  }
+
+  const rows = (await response.json().catch(() => [])) as Array<{ id?: string }>;
+  return c.json({ id: rows?.[0]?.id ?? null, recorded: true }, 201);
+});
+
 app.get("/api/diagnostics", requireAgencyAdminAuth, (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   return c.json({

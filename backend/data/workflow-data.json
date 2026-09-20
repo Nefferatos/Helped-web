@@ -9031,6 +9031,48 @@
   ],
   "makeDeliveries": [
     {
+      "id": 42,
+      "createdAt": "2026-09-20T09:21:15.871Z",
+      "scenario": "APPLICANT_INTAKE",
+      "url": "#",
+      "payload": {
+        "application_id": "smoke-abe3bc1b",
+        "application_code": "SMK-002",
+        "status": "New Applicant",
+        "agency_id": 1,
+        "full_name": "Smoke Dispatch",
+        "nationality": "Test",
+        "event_type": "candidate.created",
+        "actor": "script:smoke"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1022,
+      "responseBody": "Accepted",
+      "error": ""
+    },
+    {
+      "id": 41,
+      "createdAt": "2026-09-20T09:19:34.432Z",
+      "scenario": "APPLICANT_INTAKE",
+      "url": "#",
+      "payload": {
+        "application_id": "smoke-9950d915",
+        "application_code": "SMK-001",
+        "status": "New Applicant",
+        "agency_id": 1,
+        "full_name": "Smoke Test",
+        "nationality": "Test",
+        "event_type": "candidate.created",
+        "actor": "script:smoke"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1302,
+      "responseBody": "Accepted",
+      "error": ""
+    },
+    {
       "id": 40,
       "createdAt": "2026-09-17T13:27:07.583Z",
       "scenario": "applicant-assistant",
@@ -10794,6 +10836,6 @@
     "notifications": 24,
     "automationLogs": 224,
     "decisionLogs": 83,
-    "makeDeliveries": 41
+    "makeDeliveries": 43
   }
 }

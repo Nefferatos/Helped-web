@@ -1,0 +1,233 @@
+
+> supabase\helped_full_production_schema.sql:173:CREATE TABLE public.helped_query_meta (
+  supabase\helped_full_production_schema.sql:174:  app_id            TEXT        PRIMARY KEY,
+  supabase\helped_full_production_schema.sql:175:  refreshed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:176:  source_updated_at TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:177:  source_bytes      INTEGER     NOT NULL DEFAULT 0
+  supabase\helped_full_production_schema.sql:178:);
+  supabase\helped_full_production_schema.sql:179:
+> supabase\helped_full_production_schema.sql:180:CREATE TABLE public.helped_query_maids (
+  supabase\helped_full_production_schema.sql:181:  app_id         TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:182:  record_id      INTEGER     NOT NULL,
+  supabase\helped_full_production_schema.sql:183:  agency_id      INTEGER,
+  supabase\helped_full_production_schema.sql:184:  reference_code TEXT,
+  supabase\helped_full_production_schema.sql:185:  full_name      TEXT,
+  supabase\helped_full_production_schema.sql:186:  status         TEXT,
+  supabase\helped_full_production_schema.sql:187:  maid_type      TEXT,
+  supabase\helped_full_production_schema.sql:188:  nationality    TEXT,
+  supabase\helped_full_production_schema.sql:189:  is_public      BOOLEAN     NOT NULL DEFAULT FALSE,
+  supabase\helped_full_production_schema.sql:190:  has_photo      BOOLEAN     NOT NULL DEFAULT FALSE,
+  supabase\helped_full_production_schema.sql:191:  created_at     TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:192:  updated_at     TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:193:  payload        JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:194:  row_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:195:  row_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:196:  PRIMARY KEY (app_id, record_id),
+  supabase\helped_full_production_schema.sql:197:  CONSTRAINT helped_query_maids_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:198:);
+  supabase\helped_full_production_schema.sql:199:
+> supabase\helped_full_production_schema.sql:200:CREATE TABLE public.helped_query_clients (
+  supabase\helped_full_production_schema.sql:201:  app_id           TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:202:  record_id        INTEGER     NOT NULL,
+  supabase\helped_full_production_schema.sql:203:  supabase_user_id TEXT,
+  supabase\helped_full_production_schema.sql:204:  email            TEXT,
+  supabase\helped_full_production_schema.sql:205:  name             TEXT,
+  supabase\helped_full_production_schema.sql:206:  company          TEXT,
+  supabase\helped_full_production_schema.sql:207:  phone            TEXT,
+  supabase\helped_full_production_schema.sql:208:  created_at       TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:209:  payload          JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:210:  row_created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:211:  row_updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:212:  PRIMARY KEY (app_id, record_id),
+  supabase\helped_full_production_schema.sql:213:  CONSTRAINT helped_query_clients_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:214:);
+  supabase\helped_full_production_schema.sql:215:
+> supabase\helped_full_production_schema.sql:216:CREATE TABLE public.helped_query_agency_admins (
+  supabase\helped_full_production_schema.sql:217:  app_id           TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:218:  record_id        INTEGER     NOT NULL,
+  supabase\helped_full_production_schema.sql:219:  agency_id        INTEGER,
+  supabase\helped_full_production_schema.sql:220:  username         TEXT,
+  supabase\helped_full_production_schema.sql:221:  email            TEXT,
+  supabase\helped_full_production_schema.sql:222:  supabase_user_id TEXT,
+  supabase\helped_full_production_schema.sql:223:  agency_name      TEXT,
+  supabase\helped_full_production_schema.sql:224:  created_at       TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:225:  payload          JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:226:  row_created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:227:  row_updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:228:  PRIMARY KEY (app_id, record_id),
+  supabase\helped_full_production_schema.sql:229:  CONSTRAINT helped_query_agency_admins_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:230:);
+  supabase\helped_full_production_schema.sql:231:
+> supabase\helped_full_production_schema.sql:232:CREATE TABLE public.helped_query_enquiries (
+  supabase\helped_full_production_schema.sql:233:  app_id         TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:234:  record_id      INTEGER     NOT NULL,
+  supabase\helped_full_production_schema.sql:235:  username       TEXT,
+  supabase\helped_full_production_schema.sql:236:  email          TEXT,
+  supabase\helped_full_production_schema.sql:237:  phone          TEXT,
+  supabase\helped_full_production_schema.sql:238:  created_at     TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:239:  payload        JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:240:  row_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:241:  row_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:242:  PRIMARY KEY (app_id, record_id),
+  supabase\helped_full_production_schema.sql:243:  CONSTRAINT helped_query_enquiries_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:244:);
+  supabase\helped_full_production_schema.sql:245:
+> supabase\helped_full_production_schema.sql:246:CREATE TABLE public.helped_query_direct_sales (
+  supabase\helped_full_production_schema.sql:247:  app_id              TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:248:  record_id           INTEGER     NOT NULL,
+  supabase\helped_full_production_schema.sql:249:  agency_id           INTEGER,
+  supabase\helped_full_production_schema.sql:250:  client_id           INTEGER,
+  supabase\helped_full_production_schema.sql:251:  maid_reference_code TEXT,
+  supabase\helped_full_production_schema.sql:252:  status              TEXT,
+  supabase\helped_full_production_schema.sql:253:  created_at          TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:254:  payload             JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:255:  row_created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:256:  row_updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:257:  PRIMARY KEY (app_id, record_id),
+  supabase\helped_full_production_schema.sql:258:  CONSTRAINT helped_query_direct_sales_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:259:);
+  supabase\helped_full_production_schema.sql:260:
+  supabase\helped_full_production_schema.sql:261:-- Primary fast-query table for GET /api/requests
+> supabase\helped_full_production_schema.sql:262:CREATE TABLE public.helped_query_requests (
+  supabase\helped_full_production_schema.sql:263:  app_id          TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:264:  request_id      UUID        NOT NULL,
+  supabase\helped_full_production_schema.sql:265:  client_id       INTEGER,
+  supabase\helped_full_production_schema.sql:266:  agency_id       INTEGER,
+  supabase\helped_full_production_schema.sql:267:  request_type    TEXT,
+  supabase\helped_full_production_schema.sql:268:  status          TEXT,
+  supabase\helped_full_production_schema.sql:269:  maid_references TEXT[]      NOT NULL DEFAULT ARRAY[]::TEXT[],
+  supabase\helped_full_production_schema.sql:270:  summary         TEXT,
+  supabase\helped_full_production_schema.sql:271:  updated_by      TEXT,
+  supabase\helped_full_production_schema.sql:272:  created_at      TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:273:  updated_at      TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:274:  payload         JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:275:  row_created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:276:  row_updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:277:  PRIMARY KEY (app_id, request_id),
+  supabase\helped_full_production_schema.sql:278:  CONSTRAINT helped_query_requests_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:279:);
+  supabase\helped_full_production_schema.sql:280:
+> supabase\helped_full_production_schema.sql:281:CREATE TABLE public.helped_query_request_conversations (
+  supabase\helped_full_production_schema.sql:282:  app_id          TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:283:  conversation_id UUID        NOT NULL,
+  supabase\helped_full_production_schema.sql:284:  request_id      UUID        NOT NULL,
+  supabase\helped_full_production_schema.sql:285:  agency_id       INTEGER,
+  supabase\helped_full_production_schema.sql:286:  client_id       INTEGER,
+  supabase\helped_full_production_schema.sql:287:  created_at      TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:288:  payload         JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:289:  row_created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:290:  row_updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:291:  PRIMARY KEY (app_id, conversation_id),
+  supabase\helped_full_production_schema.sql:292:  CONSTRAINT helped_query_request_conversations_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:293:);
+  supabase\helped_full_production_schema.sql:294:
+> supabase\helped_full_production_schema.sql:295:CREATE TABLE public.helped_query_request_messages (
+  supabase\helped_full_production_schema.sql:296:  app_id          TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:297:  message_id      UUID        NOT NULL,
+  supabase\helped_full_production_schema.sql:298:  conversation_id UUID        NOT NULL,
+  supabase\helped_full_production_schema.sql:299:  sender_type     TEXT,
+  supabase\helped_full_production_schema.sql:300:  sender_id       INTEGER,
+  supabase\helped_full_production_schema.sql:301:  message         TEXT,
+  supabase\helped_full_production_schema.sql:302:  created_at      TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:303:  payload         JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:304:  row_created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:305:  row_updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:306:  PRIMARY KEY (app_id, message_id),
+  supabase\helped_full_production_schema.sql:307:  CONSTRAINT helped_query_request_messages_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:308:);
+  supabase\helped_full_production_schema.sql:309:
+> supabase\helped_full_production_schema.sql:310:CREATE TABLE public.helped_query_chat_messages (
+  supabase\helped_full_production_schema.sql:311:  app_id            TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:312:  record_id         INTEGER     NOT NULL,
+  supabase\helped_full_production_schema.sql:313:  client_id         INTEGER,
+  supabase\helped_full_production_schema.sql:314:  agency_id         INTEGER,
+  supabase\helped_full_production_schema.sql:315:  conversation_type TEXT,
+  supabase\helped_full_production_schema.sql:316:  sender_role       TEXT,
+  supabase\helped_full_production_schema.sql:317:  created_at        TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:318:  payload           JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:319:  row_created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:320:  row_updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:321:  PRIMARY KEY (app_id, record_id),
+  supabase\helped_full_production_schema.sql:322:  CONSTRAINT helped_query_chat_messages_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:323:);
+  supabase\helped_full_production_schema.sql:324:
+> supabase\helped_full_production_schema.sql:325:CREATE TABLE public.helped_query_employers (
+  supabase\helped_full_production_schema.sql:326:  app_id              TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:327:  record_id           INTEGER     NOT NULL,
+  supabase\helped_full_production_schema.sql:328:  agency_id           INTEGER,
+  supabase\helped_full_production_schema.sql:329:  ref_code            TEXT,
+  supabase\helped_full_production_schema.sql:330:  maid_reference_code TEXT,
+  supabase\helped_full_production_schema.sql:331:  employer_name       TEXT,
+  supabase\helped_full_production_schema.sql:332:  created_at          TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:333:  updated_at          TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:334:  payload             JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:335:  row_created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:336:  row_updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:337:  PRIMARY KEY (app_id, record_id),
+  supabase\helped_full_production_schema.sql:338:  CONSTRAINT helped_query_employers_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:339:);
+  supabase\helped_full_production_schema.sql:340:
+> supabase\helped_full_production_schema.sql:341:CREATE TABLE public.helped_query_employment_contracts (
+  supabase\helped_full_production_schema.sql:342:  app_id              TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:343:  record_id           INTEGER     NOT NULL,
+  supabase\helped_full_production_schema.sql:344:  agency_id           INTEGER,
+  supabase\helped_full_production_schema.sql:345:  ref_code            TEXT,
+  supabase\helped_full_production_schema.sql:346:  employer_ref_code   TEXT,
+  supabase\helped_full_production_schema.sql:347:  maid_reference_code TEXT,
+  supabase\helped_full_production_schema.sql:348:  maid_name           TEXT,
+  supabase\helped_full_production_schema.sql:349:  employer_name       TEXT,
+  supabase\helped_full_production_schema.sql:350:  created_at          TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:351:  updated_at          TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:352:  payload             JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:353:  row_created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:354:  row_updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:355:  PRIMARY KEY (app_id, record_id),
+  supabase\helped_full_production_schema.sql:356:  CONSTRAINT helped_query_employment_contracts_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:357:);
+  supabase\helped_full_production_schema.sql:358:
+> supabase\helped_full_production_schema.sql:359:CREATE TABLE public.helped_query_ats_applications (
+  supabase\helped_full_production_schema.sql:360:  app_id           TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:361:  application_id   TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:362:  agency_id        INTEGER,
+  supabase\helped_full_production_schema.sql:363:  profile_id       TEXT,
+  supabase\helped_full_production_schema.sql:364:  application_code TEXT,
+  supabase\helped_full_production_schema.sql:365:  status           TEXT,
+  supabase\helped_full_production_schema.sql:366:  source           TEXT,
+  supabase\helped_full_production_schema.sql:367:  applied_at       TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:368:  updated_at       TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:369:  payload          JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:370:  row_created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:371:  row_updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:372:  PRIMARY KEY (app_id, application_id),
+  supabase\helped_full_production_schema.sql:373:  CONSTRAINT helped_query_ats_applications_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:374:);
+  supabase\helped_full_production_schema.sql:375:
+> supabase\helped_full_production_schema.sql:376:CREATE TABLE public.helped_query_ats_profiles (
+  supabase\helped_full_production_schema.sql:377:  app_id              TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:378:  profile_id          TEXT        NOT NULL,
+  supabase\helped_full_production_schema.sql:379:  application_id      TEXT,
+  supabase\helped_full_production_schema.sql:380:  full_name           TEXT,
+  supabase\helped_full_production_schema.sql:381:  email               TEXT,
+  supabase\helped_full_production_schema.sql:382:  contact_number      TEXT,
+  supabase\helped_full_production_schema.sql:383:  nationality         TEXT,
+  supabase\helped_full_production_schema.sql:384:  years_of_experience NUMERIC,
+  supabase\helped_full_production_schema.sql:385:  expected_salary     NUMERIC,
+  supabase\helped_full_production_schema.sql:386:  created_at          TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:387:  updated_at          TIMESTAMPTZ,
+  supabase\helped_full_production_schema.sql:388:  payload             JSONB       NOT NULL,
+  supabase\helped_full_production_schema.sql:389:  row_created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:390:  row_updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  supabase\helped_full_production_schema.sql:391:  PRIMARY KEY (app_id, profile_id),
+  supabase\helped_full_production_schema.sql:392:  CONSTRAINT helped_query_ats_profiles_payload_object CHECK (JSONB_TYPEOF(payload) = 'object')
+  supabase\helped_full_production_schema.sql:393:);
+  supabase\helped_full_production_schema.sql:394:
+  supabase\helped_full_production_schema.sql:395:-- ---------------------------------------------------------------------------
+  supabase\helped_full_production_schema.sql:396:-- 6. INDEXES
+  supabase\helped_full_production_schema.sql:397:-- ---------------------------------------------------------------------------
+  supabase\helped_full_production_schema.sql:398:
+  supabase\helped_full_production_schema.sql:399:-- Maids
+  supabase\helped_full_production_schema.sql:400:CREATE INDEX helped_query_maids_agency_idx
+  supabase\helped_full_production_schema.sql:401:  ON public.helped_query_maids (app_id, agency_id, is_public, updated_at DESC);
+
+
+

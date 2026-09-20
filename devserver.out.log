@@ -1,0 +1,8 @@
+
+> helped-backend@0.0.1 dev
+> ts-node-dev --respawn --transpile-only src/server.ts
+
+[INFO] 17:20:17 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+[db] Patched Supabase pooler connection string
+[db] Connected using DATABASE_URL
+Server is running at http://localhost:3000
