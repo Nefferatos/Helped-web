@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { calculateAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
-import { getClientToken } from "@/lib/clientAuth";
+import { getClientToken, refreshClientToken } from "@/lib/clientAuth";
 import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
@@ -1036,7 +1036,20 @@ const MaidSearchPage = ({
   const [isShortlistOpen, setIsShortlistOpen] = useState(false);
   const [shortlistRefs, setShortlistRefs] = useState<string[]>(() => getSavedShortlistRefs());
   const shortlist = useMemo(() => new Set(shortlistRefs), [shortlistRefs]);
-  const isLoggedIn = !!getClientToken();
+  const [authToken, setAuthToken] = useState<string | null>(() => getClientToken());
+  const [authReady, setAuthReady] = useState(false);
+  const isLoggedIn = Boolean(authToken);
+
+  // Wait for Supabase to restore the employer session before loading cards.
+  // Otherwise this page fetches public preview URLs first and they remain blurred.
+  useEffect(() => {
+    let active = true;
+    void refreshClientToken()
+      .then((token) => { if (active) setAuthToken(token); })
+      .catch(() => { if (active) setAuthToken(null); })
+      .finally(() => { if (active) setAuthReady(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setShortlistRefs(getSavedShortlistRefs());
@@ -1046,11 +1059,16 @@ const MaidSearchPage = ({
   const handleToggleShortlist = (ref: string) => { setShortlistRefs(toggleShortlistRef(ref)); };
 
   useEffect(() => {
+    if (!authReady) return;
     const controller = new AbortController();
     const load = async () => {
       try {
         setIsLoading(true);
-        const res = await fetch("/api/maids?visibility=public", { signal: controller.signal });
+        const res = await fetch("/api/maids?visibility=public", {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        });
         const data = (await res.json()) as { maids?: MaidProfile[]; error?: string };
         if (!res.ok || !data.maids) throw new Error(data.error || "Failed to load");
         setAllMaids(data.maids.filter((m) => m.isPublic && hasPhoto(m)));
@@ -1061,7 +1079,7 @@ const MaidSearchPage = ({
     };
     void load();
     return () => controller.abort();
-  }, []);
+  }, [authReady, authToken]);
 
   useEffect(() => {
     const adv = parseAdvancedFilters(searchParams);
