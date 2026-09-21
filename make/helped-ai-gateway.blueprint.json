@@ -1,0 +1,44 @@
+{
+  "name": "Helped - Unified AI Gateway",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": false },
+    "notes": ["Use this one scenario for ai.chat, AI workflow classification, matching, translation, and document extraction. Create a custom webhook, set its URL in MAKE_WEBHOOK_URL_AI_ENGINE_WORKFLOW (or the more specific AI engine variables), choose your Make AI provider/model, then activate it."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create a webhook named Helped AI Gateway." }
+    },
+    {
+      "id": 2,
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "parameters": {},
+      "mapper": {
+        "defaultModel": "gpt-4o-mini",
+        "reasoningEffort": "low",
+        "systemPrompt": "{{1.systemPrompt}}",
+        "message": "{{1.userPrompt}}",
+        "threadId": "helped-{{ifempty(1.scenario; \"general\")}}",
+        "modelConfig": { "recursionLimit": 20, "iterationsFromHistoryCount": "0" },
+        "outputType": "text"
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": {}, "notes": "Select a Make AI Provider connection after import. The backend supplies the system and user prompts; return only the requested text or JSON." },
+      "tools": []
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{{2.response}}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {}, "notes": "Returns raw text/JSON to backend/src/services/aiGateway.ts." }
+    }
+  ]
+}

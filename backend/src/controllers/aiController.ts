@@ -13,9 +13,23 @@ import {
 import { buildWorkflowResponse } from '../services/workflowResponseService'
 import { getAllMaidsStore, getCompanyBundle, type CompanyProfileRecord, type MaidRecord } from '../store'
 import { callMakeAiEngine } from '../services/makeAiEngine'
+import { retrieveKnowledgeSnippets } from '../services/vectorService'
+import { getRequestAgencyId } from '../auth'
+import { recordAiAction, startAiSession } from '../services/aiAuditService'
 
 const GROQ_CHAT_COMPLETIONS_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant'
+
+const receptionistDeniedCapability = (message: string) => {
+  const text = message.toLowerCase()
+  if (/approve.*(contract|work permit)|submit.*(mom|work permit)|sign.*contract/.test(text)) return 'regulated_approval'
+  if (/passport|nr ic|nric|bank account|full personal data/.test(text)) return 'sensitive_personal_data'
+  if (/change.*(salary|fee)|refund.*(approve|process)/.test(text)) return 'financial_decision'
+  return null
+}
+
+const receptionistCapabilityMessage =
+  'I can provide information, explain procedures, and help with suitable helper profiles. I cannot approve contracts, submit regulated applications, make financial decisions, or disclose sensitive personal information. A staff member can help with that request.'
 
 const buildWhatsAppLink = (profile: CompanyProfileRecord | null): string => {
   if (!profile) return ''
@@ -1379,6 +1393,16 @@ export const receptionist = async (req: Request, res: Response) => {
   try {
     const message = requiredString(req.body.message, 'message')
     const conversationId = optionalString(req.body.conversationId, 120) || randomUUID()
+    const agencyId = await getRequestAgencyId(req)
+    const aiSessionId = await startAiSession({ agencyId, sessionKey: conversationId, actorType: 'public_receptionist' }).catch(() => '')
+    const deniedCapability = receptionistDeniedCapability(message)
+    if (deniedCapability) {
+      await recordAiAction({
+        sessionId: aiSessionId, agencyId, action: 'receptionist_response', capability: deniedCapability,
+        outcome: 'denied', metadata: { messageLength: message.length },
+      }).catch(() => undefined)
+      return res.status(200).json({ conversationId, response: receptionistCapabilityMessage, featuredMaids: [] })
+    }
     const currentMaidReference = extractMaidReferenceFromPath(req.body.currentPath)
     const conversationHistory = Array.isArray(req.body.history)
       ? req.body.history
@@ -1386,12 +1410,17 @@ export const receptionist = async (req: Request, res: Response) => {
           .map((msg: { role: string; content: string }) => ({ role: msg.role, content: msg.content }))
           .slice(-12)
       : []
-    const [maids, companyBundle] = await Promise.all([
+    const [maids, companyBundle, knowledgeSnippets] = await Promise.all([
       getAllMaidsStore(undefined, 'public'),
       getCompanyBundle().catch(() => null),
+      retrieveKnowledgeSnippets(agencyId, message)
+        .catch(() => []),
     ])
     const companyProfile = companyBundle?.companyProfile ?? null
-    const relevantFaqs = findRelevantFaqs(message)
+    const relevantFaqs = [
+      ...findRelevantFaqs(message),
+      ...knowledgeSnippets.map((snippet) => ({ q: `[${snippet.category}] ${snippet.title}`, a: snippet.content })),
+    ]
 
     const isFeeQuestion = isFeeOrPricingQuestion(message)
 
@@ -1475,6 +1504,11 @@ export const receptionist = async (req: Request, res: Response) => {
     } else if (featuredMaids.length === 1) {
       setLastDiscussedMaidReference(conversationId, featuredMaids[0]!.referenceCode)
     }
+
+    await recordAiAction({
+      sessionId: aiSessionId, agencyId, action: 'receptionist_response', capability: 'information_and_matching',
+      outcome: 'completed', metadata: { messageLength: message.length, knowledgeSnippetCount: knowledgeSnippets.length, featuredMaidCount: featuredMaids.length },
+    }).catch(() => undefined)
 
     res.status(200).json({
       conversationId,

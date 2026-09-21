@@ -8,6 +8,7 @@ import {
   normalizeUrgency,
 } from '../services/workflowNormalizationService'
 import { retrieveSemanticMaids } from '../services/vectorService'
+import { applyEmployerRequirements } from '../services/employerRequirementsService'
 
 type ScreenedCriteria = {
   serviceType: string
@@ -19,6 +20,9 @@ type ScreenedCriteria = {
   employerId?: number
   leadId?: number
   inquiryId?: number
+  preferredNationalities: string[]
+  preferredLanguages: string[]
+  minimumExperienceYears?: number
 }
 
 const coerceString = (value: unknown) =>
@@ -98,6 +102,9 @@ const normalizeCriteria = (criteria: MatchCriteria): ScreenedCriteria => ({
   budget: criteria.budget ?? extractBudgetFromText(criteria.message ?? ''),
   salary: criteria.salary ?? extractBudgetFromText(criteria.message ?? ''),
   availability: normalizeUrgency(criteria.availability ?? criteria.message ?? ''),
+  preferredNationalities: criteria.preferredNationalities ?? [],
+  preferredLanguages: criteria.preferredLanguages ?? [],
+  minimumExperienceYears: criteria.minimumExperienceYears,
 })
 
 const missingFields = (criteria: ScreenedCriteria) =>
@@ -108,6 +115,24 @@ const complianceValidation = (maid: MaidRecord, criteria: ScreenedCriteria) => {
   const maidSalary = extractSalaryFromMaid(maid)
   const salaryCap = criteria.salary.max ?? criteria.budget.max ?? null
   const availability = extractAvailabilityFromMaid(maid)
+
+  if (
+    criteria.preferredNationalities.length > 0 &&
+    !criteria.preferredNationalities.some((nationality) =>
+      maid.nationality.toLowerCase().includes(nationality.toLowerCase())
+    )
+  ) {
+    issues.push('nationality_preference_mismatch')
+  }
+
+  if (
+    criteria.preferredLanguages.length > 0 &&
+    !criteria.preferredLanguages.some((language) =>
+      JSON.stringify(maid.languageSkills ?? {}).toLowerCase().includes(language.toLowerCase())
+    )
+  ) {
+    issues.push('language_preference_mismatch')
+  }
 
   if (maid.status && /rejected|inactive|blacklist/i.test(maid.status)) {
     issues.push('maid_status_restricted')
@@ -189,9 +214,10 @@ const scoreStructuredCompatibility = (
 }
 
 export const runSemanticMatchingAgent = async (criteria: MatchCriteria) => {
-  const normalized = normalizeCriteria(criteria)
+  const structuredCriteria = await applyEmployerRequirements(criteria)
+  const normalized = normalizeCriteria(structuredCriteria)
   const requiredMissingFields = missingFields(normalized)
-  const retrieval = await retrieveSemanticMaids(criteria, 14)
+  const retrieval = await retrieveSemanticMaids(structuredCriteria, 14)
 
   const filtered = retrieval.candidates
     .map((candidate) => {

@@ -28,7 +28,7 @@ import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PhoneNumberInput } from "@/components/ui/phone-input";
 import { toast } from "@/components/ui/sonner";
-import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
+import { getClientAuthHeaders, getClientToken, getStoredClient, refreshClientToken } from "@/lib/clientAuth";
 import { fetchAgencyOptions, type PublicAgencyOption } from "@/lib/agencies";
 import { readSafeJson } from "@/lib/safeJson";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
@@ -99,12 +99,64 @@ interface Filters {
   relMuslim:boolean; relHindu:boolean; relSikh:boolean; relOthers:boolean; relNoPreference:boolean;
 }
 export interface MaidProfile {
-  id: number|string; refCode?: string; name: string; photoUrl?: string;
+  id: number|string; agencyId?: number|string; refCode?: string; name: string; photoUrl?: string;
   nationality: string; age?: number; maidType?: string; duties?: string[];
   languages?: string[]; experience?: string[]; maritalStatus?: string;
   education?: string; height?: string; religion?: string; hasVideo?: boolean;
   biodataCreatedAt?: string;
 }
+
+/** Normalise the API's full profile shape to the compact search-card shape. */
+const toSearchCardMaid = (value: unknown): MaidProfile => {
+  const maid = value as Record<string, unknown>;
+  const photos = Array.isArray(maid.photoDataUrls) ? maid.photoDataUrls : [];
+  return {
+    ...(maid as MaidProfile),
+    id: (maid.id ?? "") as number | string,
+    agencyId: maid.agencyId as number | string | undefined,
+    refCode: String(maid.refCode ?? maid.referenceCode ?? ""),
+    name: String(maid.name ?? maid.fullName ?? "Profile available"),
+    // Authenticated list responses deliberately use photoDataUrl.  Mapping it
+    // here prevents a stale guest-only photoUrl from keeping the card blurred.
+    photoUrl: String(maid.photoDataUrl ?? photos[0] ?? maid.photoUrl ?? "") || undefined,
+    nationality: String(maid.nationality ?? ""),
+    maidType: String(maid.maidType ?? maid.type ?? "") || undefined,
+    education: String(maid.education ?? maid.educationLevel ?? "") || undefined,
+  };
+};
+
+const AuthenticatedMaidImage = ({ maid }: { maid: MaidProfile }) => {
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = getClientToken();
+    if (!token || !maid.refCode) {
+      setOriginalUrl(null);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | null = null;
+    const params = maid.agencyId != null ? `?agencyId=${encodeURIComponent(String(maid.agencyId))}` : "";
+    void fetch(`/api/maids/${encodeURIComponent(maid.refCode)}/photo-authenticated${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Authenticated photo is unavailable");
+        objectUrl = URL.createObjectURL(await response.blob());
+        if (active) setOriginalUrl(objectUrl);
+      })
+      .catch(() => { if (active) setOriginalUrl(null); });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [maid.agencyId, maid.refCode]);
+
+  return <img src={originalUrl ?? maid.photoUrl} alt={maid.name} loading="lazy" decoding="async" />;
+};
 type RequirementsState = {
   noOffDay:boolean; hasChildren:boolean; married:boolean;
   newMaid:boolean; transferMaid:boolean; exSingaporeMaid:boolean;
@@ -1315,8 +1367,8 @@ const MaidCard = ({ maid, onViewProfile, locked, onLoginClick }:{
       }}
     >
       <div className="cm-maid-photo">
-        {maid.photoUrl
-          ? <img src={maid.photoUrl} alt={maid.name} loading="lazy" decoding="async" />
+        {(maid.photoUrl || maid.refCode)
+          ? <AuthenticatedMaidImage maid={maid} />
           : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",
               justifyContent:"center",background:"linear-gradient(135deg,#e0edf1,#c8dde4)"}}>
               <Users size={24} style={{color:"var(--teal-4)",opacity:0.4}} />
@@ -1861,8 +1913,19 @@ const ClientMaidsPage = ({
   const [searchResults,   setSearchResults]   = useState<MaidProfile[]>([]);
   const [isSearching,     setIsSearching]     = useState(false);
   const [hasSearched,     setHasSearched]     = useState(false);
-  const isLoggedIn = !!getClientToken();
+  const [isLoggedIn,      setIsLoggedIn]      = useState(() => Boolean(getClientToken()));
+  const refreshedPhotosForSession = useRef(false);
   const isPublicSearchPage = resultsPath === "/search-maids/results";
+
+  // The navbar restores the employer profile asynchronously. Restore the token here
+  // as well so the first maid search is authenticated and receives original photos.
+  useEffect(() => {
+    let active = true;
+    void refreshClientToken()
+      .then((token) => { if (active) setIsLoggedIn(Boolean(token)); })
+      .catch(() => { if (active) setIsLoggedIn(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(()=>{
     const next=parseDraftFromSearchParams(searchParams);
@@ -1940,15 +2003,32 @@ const ClientMaidsPage = ({
     const params=buildSearchParamsFromFilters(draft);
     navigate(`${resultsPath}?${params.toString()}`);
     try {
+      // Refresh before each search: the in-memory auth cache may be empty after a
+      // direct navigation or a page refresh even when the employer has a session.
+      const token = await refreshClientToken().catch(() => getClientToken());
+      setIsLoggedIn(Boolean(token));
       const resp=await fetch(`/api/maids?${params.toString()}`,{
-        headers:{...(getClientToken()?{Authorization:`Bearer ${getClientToken()}`}:{})},
+        headers: token ? { Authorization:`Bearer ${token}` } : {},
+        cache: "no-store",
       });
       const data=await readSafeJson<{maids?:MaidProfile[];data?:MaidProfile[];error?:string}>(resp);
       if(!resp.ok) throw new Error(data.error||"Search failed");
-      setSearchResults(data.maids??data.data??[]);
+      setSearchResults((data.maids ?? data.data ?? []).map(toSearchCardMaid));
     } catch { toast.error("Failed to load profiles. Please try again."); setSearchResults([]); }
     finally { setIsSearching(false); }
   };
+
+  // A guest result can remain on screen while the login callback is completing.
+  // Replace that response once per employer session with authenticated image URLs.
+  useEffect(() => {
+    if (!isLoggedIn) {
+      refreshedPhotosForSession.current = false;
+      return;
+    }
+    if (!hasSearched || refreshedPhotosForSession.current) return;
+    refreshedPhotosForSession.current = true;
+    void handleSearch();
+  }, [hasSearched, isLoggedIn]);
 
   const handleViewProfile=(m:MaidProfile)=>{
     const p=getPublicProfilePath(m);

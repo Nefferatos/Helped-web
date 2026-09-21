@@ -5,6 +5,8 @@
 
 export interface ExtractedEnquiry {
   employer_summary: string;
+  category: EnquiryCategory;
+  severity: EnquirySeverity;
   requirements: {
     nationality_preference: string | null;
     live_in_out: string | null;
@@ -16,6 +18,17 @@ export interface ExtractedEnquiry {
   urgency: "High" | "Medium" | "Low";
   suggested_tags: string[];
 }
+
+export type EnquiryCategory =
+  | "BOOKING"
+  | "PAYMENT"
+  | "CONTRACT"
+  | "REPLACEMENT"
+  | "TECHNICAL"
+  | "SAFETY"
+  | "GENERAL";
+
+export type EnquirySeverity = "CRITICAL" | "HIGH" | "NORMAL" | "LOW";
 
 /**
  * Extract structured enquiry data from raw text
@@ -42,16 +55,43 @@ export function extractEnquiry(rawText: string): ExtractedEnquiry {
 
   // Determine urgency
   const urgency = determineUrgency(text);
+  const category = determineCategory(text);
+  const severity = determineSeverity(text, urgency, category);
 
   // Generate tags
   const tags = generateTags(requirements, urgency, text);
 
   return {
     employer_summary: summary,
+    category,
+    severity,
     requirements,
     urgency,
     suggested_tags: tags,
   };
+}
+
+function determineCategory(text: string): EnquiryCategory {
+  const lowerText = text.toLowerCase();
+  if (/abuse|violence|injur|unsafe|police|hospital|emergency|run away|missing/.test(lowerText)) return "SAFETY";
+  if (/payment|salary|wage|cost|budget|price|refund|invoice/.test(lowerText)) return "PAYMENT";
+  if (/contract|agreement|terms|condition|renewal/.test(lowerText)) return "CONTRACT";
+  if (/replace|change helper|different helper|swap|another helper/.test(lowerText)) return "REPLACEMENT";
+  if (/technical|system|bug|error|page|website|login/.test(lowerText)) return "TECHNICAL";
+  if (/book|booking|hire|request|apply|available helper/.test(lowerText)) return "BOOKING";
+  return "GENERAL";
+}
+
+function determineSeverity(
+  text: string,
+  urgency: "High" | "Medium" | "Low",
+  category: EnquiryCategory,
+): EnquirySeverity {
+  const lowerText = text.toLowerCase();
+  if (category === "SAFETY" || /emergency|immediate danger|urgent medical|police/.test(lowerText)) return "CRITICAL";
+  if (urgency === "High" || /complaint|overdue|breach|cancel/.test(lowerText)) return "HIGH";
+  if (urgency === "Low" || /no rush|general question|just wondering/.test(lowerText)) return "LOW";
+  return "NORMAL";
 }
 
 function extractSummary(text: string): string {

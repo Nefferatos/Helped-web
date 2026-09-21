@@ -8,6 +8,7 @@ import {
   type MaidRecord,
 } from '../store'
 import { callMakeAiEngine } from './makeAiEngine'
+import { hasActiveConsent } from './consentService'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -382,11 +383,18 @@ export const generateMarketingCampaign = async (params: {
   audienceType: AudienceType
   customNote?: string
 }): Promise<MarketingCampaign> => {
-  const [allMaids, companyBundle, contacts] = await Promise.all([
+  const [allMaids, companyBundle, audience] = await Promise.all([
     getAllMaidsStore(undefined, 'public'),
     getCompanyBundle().catch(() => null),
     buildAudience(params.audienceType, params.agencyId),
   ])
+  // This is the final gate before a WhatsApp deeplink or email recipient is
+  // returned to the UI. No explicit opt-in means no marketing delivery.
+  const contacts = (await Promise.all(audience.map(async (contact) => ({
+    contact,
+    whatsappAllowed: await hasActiveConsent(params.agencyId, contact.phone, 'whatsapp'),
+    emailAllowed: await hasActiveConsent(params.agencyId, contact.email, 'email'),
+  })))).filter(({ whatsappAllowed, emailAllowed }) => whatsappAllowed || emailAllowed)
 
   const companyProfile = companyBundle?.companyProfile ?? null
   const agencyName = companyProfile?.company_name || companyProfile?.short_name || 'Our Agency'
@@ -456,7 +464,7 @@ export const generateMarketingCampaign = async (params: {
     ?? buildFallbackTemplate(params.goal, params.tone, selectedMaids, agencyName, agencyPhone)
   const subject = aiResult?.subject ?? meta.subject
 
-  const messages: MarketingMessage[] = contacts.map((contact) => {
+  const messages: MarketingMessage[] = contacts.map(({ contact, whatsappAllowed, emailAllowed }) => {
     const personalized = template
       .replace(/\{\{name\}\}/g, contact.name || 'there')
       .replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName)
@@ -464,13 +472,13 @@ export const generateMarketingCampaign = async (params: {
     return {
       contactId: contact.id,
       contactName: contact.name,
-      contactPhone: contact.phone,
-      contactEmail: contact.email,
+      contactPhone: whatsappAllowed ? contact.phone : '',
+      contactEmail: emailAllowed ? contact.email : '',
       contactSource: contact.source,
       message: personalized,
-      whatsappLink: contact.phone ? buildWhatsAppLink(contact.phone, personalized) : '',
+      whatsappLink: whatsappAllowed ? buildWhatsAppLink(contact.phone, personalized) : '',
       charCount: personalized.length,
-      whatsappReady: Boolean(contact.phone),
+      whatsappReady: whatsappAllowed,
     }
   })
 

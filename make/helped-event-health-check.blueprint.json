@@ -1,0 +1,63 @@
+{
+  "name": "Helped - Workflow Event Health Check",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "mapper": {
+        "url": "https://YOUR-DOMAIN/api/events/health",
+        "serializeUrl": false,
+        "method": "get",
+        "headers": [{ "name": "x-event-secret", "value": "EVENT_INGEST_SECRET" }],
+        "qs": [
+          { "name": "triggerEvent", "value": "candidate.created" },
+          { "name": "expectedEvent", "value": "screening.completed" },
+          { "name": "windowHours", "value": "24" }
+        ],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json"
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": {}, "notes": "Checks for candidate.created events that have no screening.completed event within 24 hours. Replace YOUR-DOMAIN and EVENT_INGEST_SECRET." }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": null,
+      "metadata": { "designer": { "x": 300, "y": 0 } },
+      "routes": [
+        {
+          "filter": { "name": "Missing follow-up events", "conditions": [[{ "a": "{{1.data.missingCount}}", "o": "number:greater", "b": "0" }]] },
+          "flow": [
+            {
+              "id": 3,
+              "module": "google-email:ActionSendEmail",
+              "version": 2,
+              "parameters": { "account": "" },
+              "mapper": {
+                "cc": [], "to": ["wow.aisolution@gmail.com"], "bcc": [], "from": "",
+                "subject": "Action needed: {{1.data.missingCount}} applicant workflow event(s) missing",
+                "html": "<p><strong>Workflow exception detected.</strong></p><p>{{1.data.missingCount}} applicant event(s) started but did not complete within {{1.data.windowHours}} hours.</p><pre>{{toJSON(1.data.missing)}}</pre><p>Review the applicant intake Make scenario and retry or handle each applicant manually.</p>",
+                "attachments": []
+              },
+              "metadata": { "designer": { "x": 620, "y": -90 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "After import, select your Gmail connection and alert recipient." }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "sequential": true, "confidential": false, "dataloss": false, "dlq": false },
+    "notes": ["After import: set this scenario's schedule in Make to run every 60 minutes; set the HTTP URL, event secret, Gmail connection, and alert recipient."]
+  }
+}

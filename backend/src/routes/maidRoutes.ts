@@ -8,6 +8,9 @@ import {
   exportMaidsXls,
   importMaidsBatch,
   getMaidByReferenceCode,
+  getMaidAuthenticatedPhoto,
+  getMaidOriginalPhoto,
+  getMaidPhotoPreview,
   getMaidList,
   getMaidPhotosBatch,
   importMaidsCsv,
@@ -26,6 +29,9 @@ router.get('/export.xls', exportMaidsXls)
 router.post('/import.batch', importMaidsBatch)
 router.post('/import.csv', importMaidsCsv)
 router.post('/photos-batch', getMaidPhotosBatch)
+router.get('/:referenceCode/photo-authenticated', getMaidAuthenticatedPhoto)
+router.get('/:referenceCode/photo-preview', getMaidPhotoPreview)
+router.get('/:referenceCode/photo-original', getMaidOriginalPhoto)
 router.patch('/:referenceCode/bring-to-top', bringMaidToTop)
 router.get('/:referenceCode', getMaidByReferenceCode)
 router.post('/', createMaid)

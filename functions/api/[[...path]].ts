@@ -511,6 +511,9 @@ type Bindings = {
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
   MAKE_WEBHOOK_URL?: string;
+  // Shared synchronous Make AI gateway. This must be the webhook for
+  // helped-ai-gateway.blueprint.json, not the legacy workflow orchestrator.
+  MAKE_AI_ENGINE_WEBHOOK_URL?: string;
   // Dedicated synchronous Make AI Agent webhook for PDF biodata extraction.
   // Set its URL as a Worker secret; do not expose it to the browser.
   MAKE_PDF_AUTOFILL_WEBHOOK_URL?: string;
@@ -10175,8 +10178,14 @@ app.post(
   safeApi(async (c) => {
     const openaiKey = c.env.OPENAI_API_KEY?.trim();
     const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
+    const makeInterviewUrl =
+      c.env.MAKE_AI_HR_INTERVIEWER_WEBHOOK_URL?.trim() ||
+      c.env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim() ||
+      c.env.MAKE_WEBHOOK_URL?.trim();
 
-    if (!openaiKey && !anthropicKey) {
+    // A Make AI Agent is a complete AI provider. Do not require a direct LLM
+    // key when it is configured, otherwise the Make-first path is unreachable.
+    if (!makeInterviewUrl && !openaiKey && !anthropicKey) {
       return c.json({ error: "AI service is not configured" }, 503);
     }
 
@@ -10243,8 +10252,6 @@ When concluding (isComplete=true), include:
       let content: string;
 
       // 1) Make.com is the primary AI engine for the interview itself.
-      const makeInterviewUrl =
-        c.env.MAKE_AI_HR_INTERVIEWER_WEBHOOK_URL?.trim() || c.env.MAKE_WEBHOOK_URL?.trim();
       if (makeInterviewUrl) {
         try {
           const makeResponse = await fetch(makeInterviewUrl, {
@@ -10274,7 +10281,11 @@ When concluding (isComplete=true), include:
               let parsedMake: Record<string, unknown> | null = null;
               if (typeof rawText === "string" && rawText.trim()) {
                 const match = rawText.match(/\{[\s\S]*\}/);
-                parsedMake = match ? (JSON.parse(match[0]) as Record<string, unknown>) : null;
+                try {
+                  parsedMake = match ? (JSON.parse(match[0]) as Record<string, unknown>) : null;
+                } catch {
+                  parsedMake = null;
+                }
               } else if ((makeJson as Record<string, unknown>).evaluation || (makeJson as Record<string, unknown>).nextQuestion) {
                 parsedMake = makeJson as Record<string, unknown>;
               }
@@ -14459,7 +14470,7 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
     const userPrompt = msgs.filter((message) => message.role !== "system")
       .map((message) => message.content ?? "").filter(Boolean).join("\n\n");
     try {
-      console.log(`[pdf-autofill] Calling Make webhook at ${makePdfWebhookUrl.slice(0, 40)}...`);
+      console.log("[pdf-autofill] Calling configured Make webhook");
       const response = await fetch(makePdfWebhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

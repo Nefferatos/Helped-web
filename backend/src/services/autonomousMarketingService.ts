@@ -200,6 +200,8 @@ export const executeOpportunity = async (
   agencyId: number,
   opportunity: AdvertisingOpportunity,
 ): Promise<MarketingCampaign> => {
+  // generateMarketingCampaign applies the database-backed opt-in gate before
+  // it returns any delivery link. Autonomous runs therefore cannot bypass it.
   return generateMarketingCampaign({
     agencyId,
     goal: opportunity.goal,

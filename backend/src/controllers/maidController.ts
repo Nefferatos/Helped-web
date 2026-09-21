@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { getAuthenticatedAgencyAdmin, getRequestAgencyId } from '../auth'
+import { getAuthenticatedAgencyAdmin, getAuthenticatedClient, getRequestAgencyId } from '../auth'
 import {
   addMaidPhotoStore,
   bulkUpsertMaidRecordsStore,
@@ -19,6 +19,12 @@ import {
   updateMaidStore,
   updateMaidVisibilityStore,
 } from '../store'
+import {
+  consumeOriginalPhotoToken,
+  createBlurredPhotoPreview,
+  issueOriginalPhotoToken,
+  readMaidPhotoBytes,
+} from '../services/maidPhotoService'
 
 interface MaidProfile {
   fullName: string
@@ -233,6 +239,40 @@ const withAgencyNames = async (maids: MaidRecord[]): Promise<MaidListPayload> =>
       agencyNameMap.get(maid.agencyId) ?? `Agency ${maid.agencyId}`
     ),
   }))
+}
+
+const primaryPhotoSource = (maid: Pick<MaidRecord, 'photoDataUrl' | 'photoDataUrls'>) =>
+  (Array.isArray(maid.photoDataUrls) ? maid.photoDataUrls[0] : '') || maid.photoDataUrl || ''
+
+const publicPreviewUrl = (maid: Pick<MaidRecord, 'referenceCode' | 'agencyId'>) =>
+  `/api/maids/${encodeURIComponent(maid.referenceCode)}/photo-preview?agencyId=${maid.agencyId}`
+
+const originalPhotoUrl = (maid: Pick<MaidRecord, 'referenceCode' | 'agencyId'>, photoIndex = 0) => {
+  const token = issueOriginalPhotoToken({
+    agencyId: maid.agencyId,
+    referenceCode: maid.referenceCode,
+    photoIndex,
+  })
+  return `/api/maids/${encodeURIComponent(maid.referenceCode)}/photo-original?token=${encodeURIComponent(token)}`
+}
+
+const withPhotoAccessUrls = <T extends Pick<MaidRecord, 'photoDataUrl' | 'photoDataUrls' | 'referenceCode' | 'agencyId'>>(
+  maid: T,
+  allowOriginal: boolean
+): T => {
+  const photos = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
+    ? maid.photoDataUrls
+    : maid.photoDataUrl
+    ? [maid.photoDataUrl]
+    : []
+  const mapped = photos.map((_, index) =>
+    allowOriginal ? originalPhotoUrl(maid, index) : publicPreviewUrl(maid)
+  )
+  return {
+    ...maid,
+    photoDataUrl: mapped[0] ?? '',
+    photoDataUrls: mapped,
+  }
 }
 
 const requiredFields: Array<keyof MaidProfile> = [
@@ -505,6 +545,8 @@ export const getMaidList = async (req: Request, res: Response) => {
     const offset = parsePositiveInteger(req.query.offset) ?? 0
     const limit = pageSize ?? parsePositiveInteger(req.query.limit)
     const admin = await getAuthenticatedAgencyAdmin(req)
+    const client = await getAuthenticatedClient(req)
+    const allowOriginalPhotos = Boolean(admin || client)
     const noPhotos = req.query.noPhotos === '1' || req.query.noPhotos === 'true'
     const shouldUseAllPublic =
       !admin &&
@@ -526,7 +568,9 @@ export const getMaidList = async (req: Request, res: Response) => {
     const cachedPayload = useCache ? getCachedMaidList(cacheKey) : null
     if (cachedPayload) {
       return res.status(200).json({
-        maids: cachedPayload,
+        maids: noPhotos
+          ? cachedPayload.map((maid) => ({ ...maid, photoDataUrl: '', photoDataUrls: [] }))
+          : cachedPayload.map((maid) => withPhotoAccessUrls(maid, allowOriginalPhotos)),
         total: cachedPayload.length,
         page: 1,
         pageSize: cachedPayload.length,
@@ -561,7 +605,7 @@ export const getMaidList = async (req: Request, res: Response) => {
     const payload = await withAgencyNames(listResult.maids)
     const maids = noPhotos
       ? payload.map((m) => ({ ...m, photoDataUrl: '', photoDataUrls: [] }))
-      : payload
+      : payload.map((maid) => withPhotoAccessUrls(maid, allowOriginalPhotos))
     const responsePayload = {
       maids,
       total,
@@ -1006,6 +1050,7 @@ export const importMaidsBatch = async (req: Request, res: Response) => {
 export const getMaidByReferenceCode = async (req: Request, res: Response) => {
   try {
     const admin = await getAuthenticatedAgencyAdmin(req)
+    const client = await getAuthenticatedClient(req)
     const requestedAgencyId = parsePositiveInteger(req.query.agencyId)
     const referenceCode = String(req.params.referenceCode ?? '').trim()
     const result = requestedAgencyId != null
@@ -1020,13 +1065,88 @@ export const getMaidByReferenceCode = async (req: Request, res: Response) => {
 
     res.status(200).json({
       maid: {
-        ...result,
+        ...withPhotoAccessUrls(result, Boolean(admin || client)),
         agencyName: await getAgencyNameByIdStore(result.agencyId),
       },
     })
   } catch (error) {
     console.error('Error fetching maid:', error)
     res.status(500).json({ error: 'Failed to fetch maid' })
+  }
+}
+
+/** Public, irreversible preview. The original bytes never leave this route. */
+export const getMaidPhotoPreview = async (req: Request, res: Response) => {
+  try {
+    const referenceCode = String(req.params.referenceCode ?? '').trim()
+    const requestedAgencyId = parsePositiveInteger(req.query.agencyId)
+    const maid = requestedAgencyId != null
+      ? await getMaidByReferenceCodeStore(referenceCode, requestedAgencyId)
+      : await getPublicMaidByReferenceCodeStore(referenceCode)
+    if (!maid || !maid.isPublic) return res.status(404).end()
+    const source = primaryPhotoSource(maid)
+    if (!source) return res.status(404).end()
+    const preview = await createBlurredPhotoPreview(source)
+    res.setHeader('Content-Type', 'image/webp')
+    res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
+    return res.status(200).send(preview)
+  } catch (error) {
+    console.warn('Unable to create public maid photo preview:', error instanceof Error ? error.message : error)
+    return res.status(404).end()
+  }
+}
+
+/** Serve original photo bytes to an authenticated employer without exposing them publicly. */
+export const getMaidAuthenticatedPhoto = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    const client = await getAuthenticatedClient(req)
+    if (!admin && !client) {
+      return res.status(401).end()
+    }
+
+    const referenceCode = String(req.params.referenceCode ?? '').trim()
+    const requestedAgencyId = parsePositiveInteger(req.query.agencyId)
+    const maid = requestedAgencyId != null
+      ? await getMaidByReferenceCodeStore(referenceCode, requestedAgencyId)
+      : admin
+      ? await getMaidByReferenceCodeStore(referenceCode, admin.agencyId)
+      : await getPublicMaidByReferenceCodeStore(referenceCode)
+    if (!maid) return res.status(404).end()
+
+    const source = primaryPhotoSource(maid)
+    if (!source) return res.status(404).end()
+    const bytes = await readMaidPhotoBytes(source)
+    res.setHeader('Content-Type', 'image/jpeg')
+    res.setHeader('Cache-Control', 'private, no-store')
+    return res.status(200).send(bytes)
+  } catch {
+    return res.status(404).end()
+  }
+}
+
+/** A short-lived image URL is issued only in authenticated API responses. */
+export const getMaidOriginalPhoto = async (req: Request, res: Response) => {
+  try {
+    const token = String(req.query.token ?? '').trim()
+    const grant = consumeOriginalPhotoToken(token)
+    if (!grant || grant.referenceCode !== String(req.params.referenceCode ?? '').trim()) {
+      return res.status(403).end()
+    }
+    const maid = await getMaidByReferenceCodeStore(grant.referenceCode, grant.agencyId)
+    const photos = Array.isArray(maid?.photoDataUrls) && maid.photoDataUrls.length > 0
+      ? maid.photoDataUrls
+      : maid?.photoDataUrl
+      ? [maid.photoDataUrl]
+      : []
+    const source = photos[grant.photoIndex]
+    if (!source) return res.status(404).end()
+    const bytes = await readMaidPhotoBytes(source)
+    res.setHeader('Content-Type', 'image/jpeg')
+    res.setHeader('Cache-Control', 'private, no-store')
+    return res.status(200).send(bytes)
+  } catch {
+    return res.status(404).end()
   }
 }
 

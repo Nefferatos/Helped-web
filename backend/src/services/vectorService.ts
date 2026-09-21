@@ -1,5 +1,6 @@
 import { MaidRecord, getMaidsStore } from '../store'
 import { MatchCriteria } from '../types/workflow'
+import { query, sql } from '../db'
 import {
   extractBudgetFromText,
   extractLocationFromText,
@@ -25,6 +26,17 @@ export interface VectorMatchCandidate {
   vector: number[]
   document: string
 }
+
+export interface KnowledgeSnippet {
+  id: string
+  title: string
+  category: string
+  content: string
+  similarity: number
+  sourceKey: string
+}
+
+const KNOWLEDGE_COLLECTION = 'agency_knowledge'
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value))
 
@@ -144,4 +156,63 @@ export const retrieveSemanticMaids = async (
     candidates,
     vectorUsed: queryText.length > 0,
   }
+}
+
+const splitKnowledgeContent = (content: string, size = 900) => {
+  const normalized = normalizeWhitespace(content)
+  const chunks: string[] = []
+  for (let index = 0; index < normalized.length; index += size) {
+    chunks.push(normalized.slice(index, index + size))
+  }
+  return chunks.filter(Boolean)
+}
+
+/** Stores SOP/FAQ/MOM text in its own collection; it never participates in maid matching. */
+export const indexKnowledgeDocument = async (input: {
+  agencyId: number
+  sourceKey: string
+  title: string
+  category: 'SOP' | 'FAQ' | 'MOM'
+  content: string
+  metadata?: Record<string, unknown>
+}) => {
+  const result = await query(sql`
+    INSERT INTO knowledge_documents (agency_id, collection, source_key, title, category, content, metadata, active)
+    VALUES (${input.agencyId}, ${KNOWLEDGE_COLLECTION}, ${input.sourceKey}, ${input.title}, ${input.category}, ${input.content}, ${JSON.stringify(input.metadata ?? {})}::jsonb, TRUE)
+    ON CONFLICT (agency_id, collection, source_key) DO UPDATE SET
+      title = EXCLUDED.title, category = EXCLUDED.category, content = EXCLUDED.content,
+      metadata = EXCLUDED.metadata, active = TRUE, updated_at = NOW()
+    RETURNING id
+  `)
+  const documentId = result.rows[0]?.id as string
+  await query(sql`DELETE FROM knowledge_chunks WHERE document_id = ${documentId}`)
+  for (const [index, chunk] of splitKnowledgeContent(input.content).entries()) {
+    await query(sql`
+      INSERT INTO knowledge_chunks (document_id, chunk_index, content, embedding)
+      VALUES (${documentId}, ${index}, ${chunk}, ${JSON.stringify(embedText(chunk))}::jsonb)
+    `)
+  }
+  return documentId
+}
+
+export const retrieveKnowledgeSnippets = async (
+  agencyId: number,
+  searchText: string,
+  limit = 4
+): Promise<KnowledgeSnippet[]> => {
+  const queryVector = embedText(searchText)
+  const result = await query(sql`
+    SELECT d.id, d.title, d.category, d.source_key, c.content, c.embedding
+    FROM knowledge_chunks c
+    JOIN knowledge_documents d ON d.id = c.document_id
+    WHERE d.agency_id = ${agencyId} AND d.collection = ${KNOWLEDGE_COLLECTION} AND d.active = TRUE
+  `)
+  return result.rows
+    .map((row: { id: string; title: string; category: string; source_key: string; content: string; embedding: unknown }) => {
+      const embedding = Array.isArray(row.embedding) ? row.embedding.map(Number) : []
+      return { id: row.id, title: row.title, category: row.category, sourceKey: row.source_key, content: row.content, similarity: cosineSimilarity(queryVector, embedding) }
+    })
+    .filter((snippet: KnowledgeSnippet) => snippet.similarity >= 0.53)
+    .sort((left: KnowledgeSnippet, right: KnowledgeSnippet) => right.similarity - left.similarity)
+    .slice(0, Math.max(1, Math.min(limit, 10)))
 }

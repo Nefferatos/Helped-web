@@ -11,6 +11,7 @@ import {
   getEmployerContractFileStore,
   getEmployerContractFilesStore,
 } from '../store'
+import { downloadPrivateObject, isPrivateStorageRef } from '../services/privateStorageService'
 
 const MAX_FILES = 10
 const MAX_BYTES_PER_FILE = 100 * 1024 * 1024
@@ -356,7 +357,9 @@ const sendEmployerContractFile = async (
     const file = await getEmployerContractFileStore(id, agencyId)
     if (!file) return res.status(404).json({ error: 'File not found' })
     let buffer: Buffer
-    if (file.storagePath) {
+    if (file.storagePath && isPrivateStorageRef(file.storagePath)) {
+      buffer = (await downloadPrivateObject(file.storagePath)) ?? Buffer.alloc(0)
+    } else if (file.storagePath) {
       const resolvedPath = path.resolve(uploadsRoot, file.storagePath)
       if (!resolvedPath.startsWith(uploadsRoot + path.sep) && resolvedPath !== uploadsRoot) {
         return res.status(400).json({ error: 'Invalid file path' })

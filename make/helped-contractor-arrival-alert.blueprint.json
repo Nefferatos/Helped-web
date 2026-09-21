@@ -1,0 +1,40 @@
+{
+  "name": "Helped - Contractor Arrival Completion Alert",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": false },
+    "notes": ["Triggered when a contractor completes an arrival task. Create its custom webhook and set MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT in the backend. Reconnect Gmail and replace the recipient."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create webhook: Contractor Arrival Alert." }
+    },
+    {
+      "id": 2,
+      "module": "google-email:ActionSendEmail",
+      "version": 2,
+      "parameters": { "account": "" },
+      "mapper": {
+        "cc": [], "bcc": [], "from": "", "to": ["wow.aisolution@gmail.com"],
+        "subject": "Arrival task completed - placement {{1.placement_id}}",
+        "html": "<p><strong>A contractor marked an arrival task complete.</strong></p><p><strong>Placement:</strong> {{1.placement_id}}<br><strong>Contractor job:</strong> {{1.contractor_job_id}}<br><strong>Notes:</strong> {{1.notes}}</p><p>Open the Operations Center to review the next task.</p>",
+        "attachments": []
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "After import, choose a Gmail connection and replace the recipient." }
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{\"ok\":true}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {} }
+    }
+  ]
+}

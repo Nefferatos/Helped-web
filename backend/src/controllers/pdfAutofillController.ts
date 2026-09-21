@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
 import { randomUUID } from 'crypto'
+import { query, sql } from '../db'
+import { getRequestAgencyId } from '../auth'
 
 type MsgLike = { role?: string; content?: string }
 
@@ -14,12 +16,21 @@ export const pdfAutofill = async (req: Request, res: Response) => {
     return res.status(503).json({ error: 'PDF autofill is not configured' })
   }
 
-  const { model, messages } = req.body ?? {}
+  const { model, messages, templateKey } = req.body ?? {}
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages are required' })
   }
 
-  const msgs = messages as MsgLike[]
+  let msgs = messages as MsgLike[]
+  if (typeof templateKey === 'string' && templateKey.trim()) {
+    try {
+      const agencyId = await getRequestAgencyId(req)
+      const result = await query(sql`SELECT prompt FROM public.document_templates WHERE agency_id = ${agencyId} AND template_key = ${templateKey.trim()} AND active = TRUE ORDER BY version DESC LIMIT 1`)
+      const prompt = String(result.rows?.[0]?.prompt ?? '').trim()
+      if (!prompt) return res.status(404).json({ error: 'Document template not found' })
+      msgs = [{ role: 'system', content: prompt }, ...msgs]
+    } catch (error) { console.error('Template lookup failed:', error); return res.status(500).json({ error: 'Failed to load document template' }) }
+  }
 
   if (makePdfWebhookUrl) {
     try {

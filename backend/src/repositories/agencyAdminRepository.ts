@@ -10,13 +10,14 @@ import {
   getAgencySummariesStore,
   type AgencyAdminRecord,
 } from '../store'
+import { normalizeAgencyRole } from '../types/roles'
 
 type AgencyAdminRow = {
   id: number
   agency_id: number
   email: string
   password_hash: string
-  role: 'admin' | 'agency' | 'staff' | string
+  role: 'admin' | 'agency' | 'staff' | 'contractor' | string
   username: string | null
   agency_name: string | null
   profile_image_url: string | null
@@ -82,7 +83,7 @@ const mapAgencyAdminRow = (row: AgencyAdminRow): AgencyAdminRecord => ({
   email: isSyntheticEmail(row.email) ? undefined : row.email,
   password: '',
   passwordHash: row.password_hash,
-  role: row.role === 'staff' || row.role === 'agency' ? row.role : 'admin',
+  role: normalizeAgencyRole(row.role),
   agencyName: row.agency_name?.trim() || `Agency ${row.agency_id}`,
   profileImageUrl: row.profile_image_url ?? '',
   createdAt: nowIso(row.created_at),
@@ -132,7 +133,7 @@ export const syncAgencyAdminsFromStoreRecords = async (records: AgencyAdminRecor
             admin.agencyId,
             email,
             passwordHash,
-            admin.role === 'staff' || admin.role === 'agency' ? admin.role : 'admin',
+            normalizeAgencyRole(admin.role),
             admin.username?.trim() || null,
             admin.agencyName?.trim() || null,
             admin.profileImageUrl?.trim() || null,

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { query, sql } from '../db'
 import { getAuthenticatedAgencyAdmin, getRequestAgencyId } from '../auth'
 import {
   bulkUpdateApplications,
@@ -445,6 +446,15 @@ export const createPublicAtsApplicationController = async (req: Request, res: Re
       fdwFormData,
       files,
     })
+    const referralCode = String(formData.get('referralCode') ?? '').trim()
+    if (referralCode) {
+      void query(sql`
+        INSERT INTO public.referrals (agency_id, referrer_id, application_id)
+        SELECT ${agencyId}, id, ${created.applicationId} FROM public.referrers
+        WHERE agency_id = ${agencyId} AND referral_code = ${referralCode} AND active = TRUE
+        ON CONFLICT (referrer_id, application_id) DO NOTHING
+      `).catch((error) => console.warn('Referral recording failed (non-fatal):', error))
+    }
 
     res.status(201).json(created)
   } catch (error) {

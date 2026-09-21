@@ -10,10 +10,12 @@ import {
 } from '../services/workflowValidationService'
 import { normalizeBudget } from '../services/workflowNormalizationService'
 import { buildWorkflowResponse } from '../services/workflowResponseService'
+import { getRequestAgencyId } from '../auth'
 
 export const matchMaids = async (req: Request, res: Response) => {
   try {
     const result = await runDirectMatchingWorkflow({
+      agencyId: await getRequestAgencyId(req),
       leadId:
         req.body.leadId === undefined ? undefined : positiveInteger(req.body.leadId, 'leadId'),
       inquiryId:

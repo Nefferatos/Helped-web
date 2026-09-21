@@ -12,7 +12,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import PublicSiteFooter from "@/components/PublicSiteFooter";
 import { toast } from "@/components/ui/sonner";
-import { getStoredClient, getClientToken, type ClientUser } from "@/lib/clientAuth";
+import { getStoredClient, getClientAuthHeaders, getClientToken, type ClientUser } from "@/lib/clientAuth";
 import { calculateAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
 import { syncClientProfileFromSession } from "@/lib/supabaseAuth";
@@ -1348,9 +1348,9 @@ const MAID_TYPES = [
 ] as const;
 
 const ITEMS_PER_PAGE = 12;
-// Versioned to discard any browser-session cache created before guest photos
-// were removed from the public API response.
-const MAIDS_CACHE_KEY = "landing_maids_cache";
+// Versioned to discard browser-session data containing the former raw
+// /uploads/maids URLs. Public cards now receive blurred API previews only.
+const MAIDS_CACHE_KEY = "landing_maids_cache_v2";
 const MAIDS_CACHE_TTL = 5 * 60 * 1000;
 
 const getPrimaryPhoto = (maid: MaidProfile): string => {
@@ -1399,19 +1399,26 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     const load = async () => {
       try {
         setIsLoading(true);
-        const cached = sessionStorage.getItem(MAIDS_CACHE_KEY);
+        // Guest cache intentionally contains only blurred preview URLs. A logged
+        // in employer must always get a fresh authenticated response containing
+        // short-lived original-photo URLs instead.
+        const cached = !isLoggedIn ? sessionStorage.getItem(MAIDS_CACHE_KEY) : null;
         if (cached) {
           const { data, ts } = JSON.parse(cached) as { data: MaidProfile[]; ts: number };
           if (Date.now() - ts < MAIDS_CACHE_TTL) {
             setAllPublicMaids(data); setIsLoading(false); return;
           }
         }
-        const mr = await fetch("/api/maids?visibility=public");
+        const mr = await fetch("/api/maids?visibility=public", {
+          headers: getClientAuthHeaders(),
+        });
         const md = (await mr.json().catch(() => ({}))) as { error?: string; maids?: MaidProfile[] };
         if (!mr.ok || !md.maids) throw new Error(md.error || "Failed to load");
         const filtered = md.maids.filter(m => m.isPublic && hasPhoto(m));
         setAllPublicMaids(filtered);
-        sessionStorage.setItem(MAIDS_CACHE_KEY, JSON.stringify({ data: filtered, ts: Date.now() }));
+        if (!isLoggedIn) {
+          sessionStorage.setItem(MAIDS_CACHE_KEY, JSON.stringify({ data: filtered, ts: Date.now() }));
+        }
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load public maids");
       } finally {
@@ -1419,7 +1426,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       }
     };
     void load();
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (!isLoggedIn) return;

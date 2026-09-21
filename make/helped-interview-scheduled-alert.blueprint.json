@@ -1,0 +1,40 @@
+{
+  "name": "Helped - Interview Scheduled Staff Alert",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": false },
+    "notes": ["Immediate internal alert for a newly scheduled interview. It deliberately does not contact an applicant because the current interview event has no verified participant email. Reconnect Gmail and replace the recipient after import."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create webhook: Interview Scheduled Staff Alert." }
+    },
+    {
+      "id": 2,
+      "module": "google-email:ActionSendEmail",
+      "version": 2,
+      "parameters": { "account": "" },
+      "mapper": {
+        "cc": [], "bcc": [], "from": "", "to": ["wow.aisolution@gmail.com"],
+        "subject": "Interview scheduled - {{1.interview_id}}",
+        "html": "<p><strong>A recruiter scheduled an interview.</strong></p><p><strong>Interview:</strong> {{1.interview_id}}<br><strong>Scheduled:</strong> {{1.scheduled_at}}<br><strong>Application:</strong> {{1.application_id}}<br><strong>Placement:</strong> {{1.placement_id}}</p><p>Open the Operations Center to review the interview and arrange participant communication.</p>",
+        "attachments": []
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "Choose your Gmail connection and the internal recipient." }
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{\"ok\":true}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {} }
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import {
 } from "../lib/enquiryExtractor";
 import {
   formatEnquiryForSupport,
+  createSupportConversationFromEnquiry,
   generateSupportMessage,
   mapEnquiryToCategory,
   mapUrgencyToPriority,
@@ -122,6 +123,18 @@ export const createEnquiry = async (req: Request, res: Response) => {
       agencyId,
     );
 
+    const extracted = extractEnquiry(message);
+    const ticket = await createSupportConversationFromEnquiry({
+      enquiryId: enquiry.id,
+      extractedData: extracted,
+      clientId: matchedClient?.id,
+      agencyId,
+      email,
+      username,
+      phone,
+      message,
+    });
+
     if (matchedClient) {
       await createChatMessageStore({
         clientId: matchedClient.id,
@@ -133,7 +146,7 @@ export const createEnquiry = async (req: Request, res: Response) => {
       });
     }
 
-    res.status(201).json({ enquiry });
+    res.status(201).json({ enquiry, triage: { category: extracted.category, severity: extracted.severity, ticket } });
   } catch (error) {
     console.error("Error creating enquiry:", error);
     res.status(500).json({ error: "Failed to create enquiry" });
@@ -280,6 +293,17 @@ export const extractRawEnquiry = async (req: Request, res: Response) => {
           message: supportMessage,
         });
       }
+
+      await createSupportConversationFromEnquiry({
+        enquiryId: savedEnquiry.id,
+        extractedData: extracted,
+        clientId: matchedClient?.id,
+        agencyId,
+        email: body.email,
+        username: body.username,
+        phone: body.phone,
+        message: body.rawText,
+      });
     }
 
     res.status(200).json({

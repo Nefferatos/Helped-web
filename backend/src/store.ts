@@ -15,6 +15,8 @@ import {
   updateMaidVisibilitySql,
   upsertMaidRecordsSql,
 } from './repositories/maidRepository'
+import { makePrivateStoragePath, newPrivateObjectName, uploadPrivateObject } from './services/privateStorageService'
+import type { StoredAgencyRole } from './types/roles'
 
 const DEFAULT_AGENCY_ID = 1
 
@@ -146,7 +148,7 @@ export interface AgencyAdminRecord {
   email?: string
   passwordHash?: string
   password: string
-  role?: 'admin' | 'agency' | 'staff'
+  role?: StoredAgencyRole
   agencyName: string
   profileImageUrl?: string
   createdAt: string
@@ -538,12 +540,11 @@ const persistMaidMediaValue = async (
   const safeRef = sanitizePathSegment(referenceCode, 'maid')
   const extension = extensionForMimeType(decoded.mimeType)
   const fileName = `${kind.slice(0, -1)}-${index + 1}-${randomUUID()}${extension}`
-  await writeUploadBuffer(
-    ['maids', `agency-${agencyId}`, safeRef, kind],
-    fileName,
-    decoded.buffer
-  )
-  return toUploadUrl('uploads', 'maids', `agency-${agencyId}`, safeRef, kind, fileName)
+  return await uploadPrivateObject({
+    objectPath: makePrivateStoragePath('maids', `agency-${agencyId}`, safeRef, kind, fileName),
+    body: decoded.buffer,
+    contentType: decoded.mimeType,
+  })
 }
 
 const persistMaidMediaFields = async (
@@ -635,17 +636,11 @@ const persistEmployerContractFilePayload = async (
   const extension = path.extname(safeName) || extensionForMimeType(file.type) || '.bin'
   const baseName = path.basename(safeName, path.extname(safeName)) || 'document'
   const fileName = `${baseName}-${randomUUID()}${extension}`
-  const relativePath = toUploadRelativePath(
-    'employer-contract-files',
-    `agency-${agencyId}`,
-    safeRef,
-    fileName
-  )
-  await writeUploadBuffer(
-    ['employer-contract-files', `agency-${agencyId}`, safeRef],
-    fileName,
-    buffer
-  )
+  const relativePath = await uploadPrivateObject({
+    objectPath: makePrivateStoragePath('employer-contract-files', `agency-${agencyId}`, safeRef, newPrivateObjectName(fileName)),
+    body: buffer,
+    contentType: file.type || 'application/octet-stream',
+  })
   return {
     storagePath: relativePath,
     size: buffer.length,
@@ -1576,12 +1571,13 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         typeof (admin as { passwordHash?: unknown }).passwordHash === 'string'
           ? (admin as { passwordHash: string }).passwordHash
           : '',
-      role:
-        (admin as { role?: unknown }).role === 'staff'
-          ? 'staff'
-          : (admin as { role?: unknown }).role === 'agency'
-          ? 'agency'
-          : 'admin',
+      role: (() => {
+        const rawRole = (admin as { role?: unknown }).role
+        return rawRole === 'staff' || rawRole === 'agency' || rawRole === 'admin' || rawRole === 'contractor' ||
+          rawRole === 'SUPER_ADMIN' || rawRole === 'DOCUMENT_REVIEWER' || rawRole === 'RECRUITER' ||
+          rawRole === 'CONTRACTOR' || rawRole === 'EMPLOYER' || rawRole === 'CANDIDATE'
+          ? rawRole : 'RECRUITER'
+      })(),
       supabaseUserId: admin.supabaseUserId || undefined,
     })),
     raw.counters?.agencyAdmins ?? defaults.counters.agencyAdmins
@@ -2699,7 +2695,7 @@ export const registerAgencyAdminStore = async (payload: {
   password: string
   agencyName: string
   agencyId?: number
-  role?: 'admin' | 'agency' | 'staff'
+  role?: StoredAgencyRole
 }) => {
   const data = await loadData()
   const agencyId = normalizeAgencyId(payload.agencyId)

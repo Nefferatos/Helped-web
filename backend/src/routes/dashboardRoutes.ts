@@ -1,10 +1,11 @@
 import { Router } from 'express'
-import { getWorkflowDashboardMetrics } from '../controllers/dashboardController'
+import { getOperationsBoard, getWorkflowDashboardMetrics } from '../controllers/dashboardController'
 import { requireSupabaseAuth } from '../middleware/requireSupabaseAuth'
 
 const router = Router()
 
 router.get('/dashboard', getWorkflowDashboardMetrics)
+router.get('/operations-board', getOperationsBoard)
 
 router.get('/dashboard/authenticated', requireSupabaseAuth, (req, res) => {
   res.status(200).json({

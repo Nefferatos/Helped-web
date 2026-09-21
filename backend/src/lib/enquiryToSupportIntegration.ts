@@ -4,6 +4,7 @@
  */
 
 import { ExtractedEnquiry } from "./enquiryExtractor";
+import { query, sql } from "../db";
 
 export interface EnquiryToSupportParams {
   enquiryId: number;
@@ -77,6 +78,8 @@ export function formatEnquiryForSupport(params: EnquiryToSupportParams): {
   category: string;
   priority: string;
   tags: string[];
+  severity: ExtractedEnquiry["severity"];
+  requiresHuman: boolean;
 } {
   const { extractedData, username, email, phone } = params;
 
@@ -112,6 +115,8 @@ export function formatEnquiryForSupport(params: EnquiryToSupportParams): {
     category: mapEnquiryToCategory(extractedData),
     priority: mapUrgencyToPriority(extractedData.urgency),
     tags: extractedData.suggested_tags,
+    severity: extractedData.severity,
+    requiresHuman: extractedData.severity === "CRITICAL" || extractedData.severity === "HIGH",
   };
 }
 
@@ -128,21 +133,29 @@ export async function createSupportConversationFromEnquiry(
   try {
     const formatted = formatEnquiryForSupport(params);
 
-    // In production, this would call the actual support conversation API
-    // For now, returning a structured response that can be used to create the conversation
-
-    console.log("[EnquiryIntegration] Creating support conversation:", {
-      clientId: params.clientId,
-      agencyId: params.agencyId,
-      subject: formatted.subject,
-      category: formatted.category,
-      priority: formatted.priority,
-      tags: formatted.tags,
-    });
+    const result = await query(sql`
+      INSERT INTO support_tickets (
+        agency_id, enquiry_id, client_id, subject, description, category, severity,
+        priority, tags, routing, requires_human, status
+      ) VALUES (
+        ${params.agencyId}, ${params.enquiryId}, ${params.clientId ?? null},
+        ${formatted.subject}, ${formatted.description}, ${params.extractedData.category},
+        ${formatted.severity}, ${formatted.priority}, ${JSON.stringify(formatted.tags)}::jsonb,
+        ${formatted.requiresHuman ? "HUMAN" : "AI_DRAFT"}, ${formatted.requiresHuman}, "OPEN"
+      )
+      ON CONFLICT (agency_id, enquiry_id) DO UPDATE SET
+        subject = EXCLUDED.subject, description = EXCLUDED.description, category = EXCLUDED.category,
+        severity = EXCLUDED.severity, priority = EXCLUDED.priority, tags = EXCLUDED.tags,
+        routing = EXCLUDED.routing, requires_human = EXCLUDED.requires_human, updated_at = NOW()
+      RETURNING id
+    `);
 
     return {
       success: true,
-      message: "Support conversation data formatted successfully",
+      conversationId: result.rows[0]?.id,
+      message: formatted.requiresHuman
+        ? "Critical/high-priority ticket routed to a human"
+        : "Low-risk ticket queued for an AI reply draft",
     };
   } catch (error) {
     console.error(

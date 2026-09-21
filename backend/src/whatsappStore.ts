@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { getMaidByReferenceCodeStore, type MaidRecord } from './store'
+import { createPrivateSignedUrl, makePrivateStoragePath, newPrivateObjectName, uploadPrivateObject } from './services/privateStorageService'
 
 export type WhatsAppConversationStatus = 'active' | 'needs_attention' | 'closed'
 export type WhatsAppMessageDirection = 'incoming' | 'outgoing'
@@ -386,11 +387,13 @@ const persistAttachment = async (input: {
 }) => {
   const safeReference = sanitizePathSegment(input.candidateReferenceCode, 'candidate')
   const safeName = sanitizePathSegment(input.fileName, 'attachment')
-  const dir = await ensureUploadDir(`agency-${input.agencyId}`, safeReference)
-  const filePath = path.join(dir, `${randomUUID()}-${safeName}`)
-  await writeFile(filePath, Buffer.from(input.dataBase64, 'base64'))
-  const size = Buffer.byteLength(input.dataBase64, 'base64')
-  const storagePath = path.relative(path.resolve(__dirname, '../data/uploads'), filePath).replace(/\\/g, '/')
+  const body = Buffer.from(input.dataBase64, 'base64')
+  const storagePath = await uploadPrivateObject({
+    objectPath: makePrivateStoragePath('whatsapp', `agency-${input.agencyId}`, safeReference, input.conversationId, newPrivateObjectName(safeName)),
+    body,
+    contentType: input.mimeType || 'application/octet-stream',
+  })
+  const size = body.length
   return {
     id: randomUUID(),
     agencyId: input.agencyId,
@@ -402,7 +405,7 @@ const persistAttachment = async (input: {
     size,
     kind: input.kind,
     storagePath,
-    publicUrl: `/uploads/${storagePath}`,
+    publicUrl: await createPrivateSignedUrl(storagePath),
     uploadedAt: now(),
   } satisfies WhatsAppAttachmentRecord
 }

@@ -1,0 +1,49 @@
+{
+  "name": "Helped - Private Media Transcription Provider Adapter",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": false },
+    "notes": ["This is an adapter template: select one transcription provider, replace the endpoint, authentication and response mapping in module 2, then activate it. The backend sends a short-lived signed mediaUrl and expects { transcript } back. Do not expose the private storage reference or a permanent public URL."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create webhook: Helped Media Transcription." }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "mapper": {
+        "url": "https://YOUR-TRANSCRIPTION-PROVIDER/transcribe-from-url",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [{ "name": "Authorization", "value": "Bearer YOUR_PROVIDER_API_KEY" }],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "data": "{\n  \"audio_url\": \"{{1.mediaUrl}}\",\n  \"language\": \"{{1.language}}\"\n}"
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": {}, "notes": "Replace this placeholder with a provider that accepts an HTTPS audio URL. Store its credential in a Make connection/keychain where available. If its response field is not data.transcript or data.text, update module 3." }
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{\n  \"ok\": true,\n  \"syncJobId\": \"{{1.syncJobId}}\",\n  \"transcript\": {{toJSON(ifempty(2.data.transcript; 2.data.text))}}\n}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {}, "notes": "Return a transcript string. Test this response before setting MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE." }
+    }
+  ]
+}

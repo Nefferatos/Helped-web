@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -711,6 +711,7 @@ const ReviewSection = ({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const PublicMaidApplicationPage = () => {
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [form, setForm] = useState<ApplicantFormState>(initialState);
   const [files, setFiles] = useState<Record<string, File[]>>({});
@@ -883,6 +884,8 @@ const PublicMaidApplicationPage = () => {
     mutationFn: async () => {
       setSubmitting(true);
       const formData = new FormData();
+      const referralCode = searchParams.get("ref")?.trim();
+      if (referralCode) formData.set("referralCode", referralCode);
       Object.entries(form).forEach(([key, value]) => formData.set(key, value));
       Object.entries(serializeEmploymentHistory()).forEach(([key, value]) =>
         formData.set(key, value)

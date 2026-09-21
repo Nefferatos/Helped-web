@@ -80,6 +80,25 @@ const MAKE_DISPATCH: Record<string, MakeDispatch> = {
       actor: e.actor ?? 'system',
     }),
   },
+  'arrival.completed': {
+    scenario: 'CONTRACTOR_ARRIVAL_ALERT',
+    buildBody: (e) => ({
+      event_type: e.eventType,
+      placement_id: e.entityId,
+      contractor_job_id: e.payload?.contractorJobId ?? '',
+      notes: e.payload?.notes ?? '',
+    }),
+  },
+  'interview.scheduled': {
+    scenario: 'INTERVIEW_SCHEDULED_ALERT',
+    buildBody: (e) => ({
+      event_type: e.eventType,
+      interview_id: e.entityId,
+      application_id: e.payload?.applicationId ?? '',
+      placement_id: e.payload?.placementId ?? '',
+      scheduled_at: e.payload?.scheduledAt ?? '',
+    }),
+  },
 }
 
 const dispatchMakeForEvent = (input: WorkflowEventInput) => {

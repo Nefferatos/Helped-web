@@ -70,6 +70,10 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 #   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
 # When unset, the receptionist falls back to the existing Cline/OpenAI/CF-AI pipeline.
 
+# Shared Make AI gateway for Worker AI routes such as the HR interviewer.
+# Set with: npx wrangler secret put MAKE_AI_ENGINE_WEBHOOK_URL
+# Use the webhook created from make/helped-ai-gateway.blueprint.json.
+
 # Email confirmations — requires Resend account + verified domain.
 # Steps: 1) Sign up at resend.com  2) Verify your domain  3) Run:
 #   npx wrangler secret put RESEND_API_KEY

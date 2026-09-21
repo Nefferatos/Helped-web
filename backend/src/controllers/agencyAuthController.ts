@@ -14,13 +14,14 @@ import {
   deleteAgencyAdminSessionRecord,
   syncAgencyAdminsFromStoreRecords,
 } from '../repositories/agencyAdminRepository'
+import { isAgencyAdministrator, normalizeAgencyRole, type StoredAgencyRole } from '../types/roles'
 
 const toSafeAgencyAdmin = (admin: {
   id: number
   agencyId: number
   username: string
   email?: string
-  role?: 'admin' | 'agency' | 'staff'
+  role?: StoredAgencyRole
   agencyName: string
   profileImageUrl?: string
   createdAt: string
@@ -177,6 +178,9 @@ export const createAgencyAdminForAgency = async (req: Request, res: Response) =>
     if (!currentAdmin) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
+    if (!isAgencyAdministrator(currentAdmin.role)) {
+      return res.status(403).json({ error: 'Only an agency administrator can create staff accounts' })
+    }
 
     const body = (req.body ?? null) as {
       email?: unknown
@@ -192,8 +196,10 @@ export const createAgencyAdminForAgency = async (req: Request, res: Response) =>
     const username =
       typeof body.username === 'string' ? body.username.trim() : email.split('@')[0] || ''
     const password = typeof body.password === 'string' ? body.password.trim() : ''
-    const role =
-      body.role === 'staff' ? 'staff' : body.role === 'agency' ? 'agency' : 'admin'
+    const role = normalizeAgencyRole(body.role)
+    if (role === 'SUPER_ADMIN' && currentAdmin.role !== 'SUPER_ADMIN' && currentAdmin.role !== 'admin') {
+      return res.status(403).json({ error: 'Only a super administrator can assign the SUPER_ADMIN role' })
+    }
 
     if (!email || !password) {
       return res.status(400).json({ error: 'email and password are required' })

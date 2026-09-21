@@ -1,0 +1,43 @@
+{
+  "name": "Helped - Private Document to Google Drive",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": false },
+    "notes": ["Receives a 15-minute signed URL for a private Supabase object, downloads it in Make, uploads it to Google Drive, then returns the Drive file details. Choose the Google Drive connection and destination folder after import."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create webhook: Helped Google Drive Sync." }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionGetFile",
+      "version": 3,
+      "parameters": { "handleErrors": true },
+      "mapper": { "url": "{{1.downloadUrl}}", "serializeUrl": false, "method": "get", "shareCookies": false },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": {}, "notes": "Downloads only the time-limited signed URL supplied by the backend; the Supabase bucket remains private." }
+    },
+    {
+      "id": 3,
+      "module": "google-drive:uploadAFile",
+      "version": 4,
+      "parameters": { "__IMTCONN__": "" },
+      "mapper": { "select": "value", "title": "{{1.fileName}}", "filename": "{{1.fileName}}", "data": "{{2.data}}", "convert": false, "destination": "drive", "folderId": "" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": { "parameters": { "__IMTCONN__": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "Select the Google Drive connection and destination folder. You can replace the blank folderId with a mapped folder lookup later if you use folderKey." }
+    },
+    {
+      "id": 4,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{\n  \"ok\": true,\n  \"syncJobId\": \"{{1.syncJobId}}\",\n  \"fileId\": \"{{3.id}}\",\n  \"fileName\": \"{{3.name}}\",\n  \"webViewLink\": \"{{3.webViewLink}}\"\n}", "status": "200" },
+      "metadata": { "designer": { "x": 600, "y": 0 }, "restore": {}, "notes": "The backend saves this response against external_sync_jobs." }
+    }
+  ]
+}

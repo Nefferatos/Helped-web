@@ -4,6 +4,175 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+-- Immutable operator/machine timeline. Make.com and AI workers report their
+-- work here; entity_id is TEXT to support UUIDs and reference codes.
+CREATE TABLE IF NOT EXISTS workflow_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_type TEXT NOT NULL CHECK (LENGTH(BTRIM(event_type)) > 0),
+  entity_type TEXT NOT NULL CHECK (LENGTH(BTRIM(entity_type)) > 0),
+  entity_id TEXT NOT NULL CHECK (LENGTH(BTRIM(entity_id)) > 0),
+  actor TEXT NOT NULL DEFAULT 'system' CHECK (LENGTH(BTRIM(actor)) > 0),
+  payload JSONB NOT NULL DEFAULT '{}'::JSONB CHECK (JSONB_TYPEOF(payload) = 'object'),
+  status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'failed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_events_entity_created
+  ON workflow_events (entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workflow_events_type_created
+  ON workflow_events (event_type, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS document_metadata (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agency_id INTEGER NOT NULL DEFAULT 1,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'other',
+  original_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+  size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
+  storage_ref TEXT NOT NULL UNIQUE,
+  uploaded_by TEXT NOT NULL DEFAULT 'system',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_document_metadata_entity
+  ON document_metadata (agency_id, entity_type, entity_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS placements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agency_id INTEGER NOT NULL DEFAULT 1,
+  candidate_application_id TEXT,
+  maid_reference_code TEXT,
+  employer_id TEXT,
+  placement_type TEXT NOT NULL DEFAULT 'EA_MATCHED' CHECK (placement_type IN ('EA_MATCHED','ADMIN_ONLY','TRANSFER','DIRECT_SOURCE')),
+  status TEXT NOT NULL DEFAULT 'CANDIDATE_SELECTED',
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  target_start_date DATE,
+  completed_at TIMESTAMPTZ,
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_placements_agency_status ON placements (agency_id, status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS placement_status_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  placement_id UUID NOT NULL REFERENCES placements(id) ON DELETE CASCADE,
+  from_status TEXT,
+  to_status TEXT NOT NULL,
+  actor TEXT NOT NULL DEFAULT 'system',
+  reason TEXT NOT NULL DEFAULT '',
+  metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_placement_status_history_placement_created
+  ON placement_status_history (placement_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS flights (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), placement_id UUID NOT NULL REFERENCES placements(id) ON DELETE CASCADE,
+  airline TEXT NOT NULL DEFAULT '', flight_number TEXT NOT NULL DEFAULT '', departure_airport TEXT NOT NULL DEFAULT '', arrival_airport TEXT NOT NULL DEFAULT '',
+  departure_at TIMESTAMPTZ, arrival_at TIMESTAMPTZ, status TEXT NOT NULL DEFAULT 'PENDING', notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS arrival_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), placement_id UUID NOT NULL REFERENCES placements(id) ON DELETE CASCADE, task_type TEXT NOT NULL, assigned_to TEXT, due_at TIMESTAMPTZ, completed_at TIMESTAMPTZ, status TEXT NOT NULL DEFAULT 'PENDING', notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS medical_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), placement_id UUID NOT NULL REFERENCES placements(id) ON DELETE CASCADE, task_type TEXT NOT NULL DEFAULT 'medical_exam', clinic_name TEXT NOT NULL DEFAULT '', appointment_at TIMESTAMPTZ, assigned_to TEXT, completed_at TIMESTAMPTZ, status TEXT NOT NULL DEFAULT 'PENDING', result TEXT, notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS mom_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), placement_id UUID NOT NULL REFERENCES placements(id) ON DELETE CASCADE, task_type TEXT NOT NULL, reference_number TEXT, appointment_at TIMESTAMPTZ, assigned_to TEXT, completed_at TIMESTAMPTZ, status TEXT NOT NULL DEFAULT 'PENDING', notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS interviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, application_id TEXT, placement_id UUID REFERENCES placements(id) ON DELETE SET NULL,
+  scheduled_at TIMESTAMPTZ NOT NULL, duration_minutes INTEGER NOT NULL DEFAULT 30, mode TEXT NOT NULL DEFAULT 'video', meeting_url TEXT, status TEXT NOT NULL DEFAULT 'SCHEDULED', notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS interview_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), interview_id UUID NOT NULL REFERENCES interviews(id) ON DELETE CASCADE, participant_type TEXT NOT NULL, name TEXT NOT NULL, email TEXT, phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS document_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, template_key TEXT NOT NULL, name TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
+  document_type TEXT NOT NULL DEFAULT 'pdf_autofill', prompt TEXT NOT NULL DEFAULT '', field_schema JSONB NOT NULL DEFAULT '{}'::jsonb,
+  active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (agency_id, template_key, version)
+);
+CREATE TABLE IF NOT EXISTS financial_transactions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, placement_id UUID REFERENCES placements(id) ON DELETE SET NULL, transaction_type TEXT NOT NULL, amount NUMERIC(12,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'SGD', status TEXT NOT NULL DEFAULT 'PENDING', description TEXT NOT NULL DEFAULT '', occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS agency_fees (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), placement_id UUID REFERENCES placements(id) ON DELETE CASCADE, fee_type TEXT NOT NULL, amount NUMERIC(12,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'SGD', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS placement_loans (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), placement_id UUID REFERENCES placements(id) ON DELETE CASCADE, principal NUMERIC(12,2) NOT NULL, interest_rate_percent NUMERIC(6,3) NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'SGD', started_at DATE NOT NULL DEFAULT CURRENT_DATE, status TEXT NOT NULL DEFAULT 'ACTIVE', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS salary_schedules (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), placement_id UUID REFERENCES placements(id) ON DELETE CASCADE, due_date DATE NOT NULL, gross_amount NUMERIC(12,2) NOT NULL, deductions NUMERIC(12,2) NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'SGD', status TEXT NOT NULL DEFAULT 'PENDING', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS referrers (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, referral_code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, phone TEXT, email TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS referrals (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, referrer_id UUID NOT NULL REFERENCES referrers(id), application_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(referrer_id, application_id));
+CREATE TABLE IF NOT EXISTS referral_rewards (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), referral_id UUID NOT NULL REFERENCES referrals(id) ON DELETE CASCADE, amount NUMERIC(12,2) NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'SGD', status TEXT NOT NULL DEFAULT 'PENDING', paid_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+
+-- Explicit opt-in ledger for all marketing delivery channels. Recipients are
+-- normalized before storage (lowercase email; digits-only phone) by the service.
+CREATE TABLE IF NOT EXISTS consents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agency_id INTEGER NOT NULL DEFAULT 1,
+  subject TEXT NOT NULL,
+  channel TEXT NOT NULL CHECK (channel IN ('marketing', 'whatsapp', 'sms', 'email')),
+  source TEXT NOT NULL DEFAULT 'manual',
+  consented_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  unsubscribed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (agency_id, subject, channel)
+);
+CREATE INDEX IF NOT EXISTS idx_consents_active_lookup ON consents (agency_id, subject, channel) WHERE unsubscribed_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, enquiry_id INTEGER NOT NULL,
+  client_id INTEGER, subject TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL CHECK (category IN ('BOOKING','PAYMENT','CONTRACT','REPLACEMENT','TECHNICAL','SAFETY','GENERAL')),
+  severity TEXT NOT NULL CHECK (severity IN ('CRITICAL','HIGH','NORMAL','LOW')),
+  priority TEXT NOT NULL DEFAULT 'MEDIUM', tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  routing TEXT NOT NULL CHECK (routing IN ('HUMAN','AI_DRAFT')), requires_human BOOLEAN NOT NULL DEFAULT FALSE,
+  status TEXT NOT NULL DEFAULT 'OPEN', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (agency_id, enquiry_id)
+);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_queue ON support_tickets (agency_id, routing, severity, status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS employer_requirements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, employer_id INTEGER NOT NULL,
+  service_type TEXT, location TEXT, max_monthly_salary NUMERIC(12,2), availability TEXT,
+  preferred_nationalities TEXT[] NOT NULL DEFAULT '{}', preferred_languages TEXT[] NOT NULL DEFAULT '{}',
+  minimum_experience_years INTEGER CHECK (minimum_experience_years >= 0), notes TEXT,
+  active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (agency_id, employer_id)
+);
+CREATE INDEX IF NOT EXISTS idx_employer_requirements_active ON employer_requirements (agency_id, employer_id) WHERE active = TRUE;
+
+CREATE TABLE IF NOT EXISTS knowledge_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, collection TEXT NOT NULL DEFAULT 'agency_knowledge',
+  source_key TEXT NOT NULL, title TEXT NOT NULL, category TEXT NOT NULL CHECK (category IN ('SOP','FAQ','MOM')), content TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (agency_id, collection, source_key)
+);
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), document_id UUID NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL, content TEXT NOT NULL, embedding JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (document_id, chunk_index)
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_documents_active ON knowledge_documents (agency_id, collection) WHERE active = TRUE;
+
+CREATE TABLE IF NOT EXISTS ai_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, session_key TEXT NOT NULL,
+  actor_type TEXT NOT NULL, actor_id TEXT, started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (agency_id, session_key)
+);
+CREATE TABLE IF NOT EXISTS ai_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), session_id UUID REFERENCES ai_sessions(id) ON DELETE SET NULL, agency_id INTEGER NOT NULL DEFAULT 1,
+  action TEXT NOT NULL, capability TEXT, outcome TEXT NOT NULL CHECK (outcome IN ('allowed','denied','completed','failed')),
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_actions_agency_created ON ai_actions (agency_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS external_sync_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1,
+  provider TEXT NOT NULL CHECK (provider IN ('GOOGLE_DRIVE','MAKE_MEDIA')), action TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('PENDING','COMPLETED','FAILED')), payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  result JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_external_sync_jobs_agency_created ON external_sync_jobs (agency_id, created_at DESC);
+
 -- Create company_profile table
 CREATE TABLE IF NOT EXISTS company_profile (
   id SERIAL PRIMARY KEY,

@@ -37,6 +37,10 @@ import whatsappRoutes from "./routes/whatsappRoutes";
 import atsRoutes from "./routes/atsRoutes";
 import applicantAssistantRoutes from "./routes/applicantAssistantRoutes";
 import eventRoutes from "./routes/eventRoutes";
+import contractorRoutes from "./routes/contractorRoutes";
+import knowledgeRoutes from "./routes/knowledgeRoutes";
+import integrationRoutes from "./routes/integrationRoutes";
+import { handleMcp } from './controllers/mcpController'
 import { initializeDatabase } from "./db";
 import {
   getAgencyAdminsStore,
@@ -90,6 +94,14 @@ app.use(express.json({ limit: "120mb" }));
 app.use(express.urlencoded({ extended: true, limit: "120mb" }));
 app.use(
   "/uploads",
+  (req, res, next) => {
+    // Legacy maid images were public static files. Public previews and original
+    // access are now served through the dedicated /api/maids image endpoints.
+    if (req.path.replace(/\\/g, '/').toLowerCase().startsWith('/maids/')) {
+      return res.status(404).end()
+    }
+    return next()
+  },
   express.static(uploadsDir, {
     maxAge: "30d",
     immutable: true,
@@ -155,6 +167,10 @@ app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/ats", atsRoutes);
 app.use("/api/applicant-assistant", applicantAssistantRoutes);
 app.use("/api/events", eventRoutes);
+app.use("/api/contractor", contractorRoutes);
+app.use("/api/knowledge", knowledgeRoutes);
+app.use("/api/integrations", integrationRoutes);
+app.post('/api/mcp', handleMcp);
 
 // ─── Share route ──────────────────────────────────────────────────────────────
 // IMPORTANT: Must be mounted BEFORE the generic /api catch-all routers below.

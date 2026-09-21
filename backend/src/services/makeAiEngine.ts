@@ -32,6 +32,18 @@ export interface MakeAiEngineResult {
   makeExecutionId: string | null
 }
 
+const makeAiScenarioEnvKey = (scenario: MakeAiEngineScenario) =>
+  `MAKE_WEBHOOK_URL_AI_ENGINE_${scenario.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
+
+/**
+ * `MAKE_WEBHOOK_URL` may point at the legacy workflow orchestrator, which
+ * accepts a different payload. Only route AI calls to the dedicated gateway.
+ */
+const resolveMakeAiUrl = (scenario: MakeAiEngineScenario) =>
+  process.env[makeAiScenarioEnvKey(scenario)]?.trim() ||
+  process.env.MAKE_WEBHOOK_URL_AI_ENGINE?.trim() ||
+  ''
+
 const extractJsonObject = (value: string): Record<string, unknown> | null => {
   const firstBrace = value.indexOf('{')
   const lastBrace = value.lastIndexOf('}')
@@ -85,9 +97,12 @@ export const callMakeAiEngine = async (
   input: MakeAiEngineInput,
 ): Promise<MakeAiEngineResult | null> => {
   const scenarioKey = `ai-engine-${input.scenario}`
+  const url = resolveMakeAiUrl(input.scenario)
+  if (!url) return null
 
   const result = await sendToMakeWebhook({
     scenario: scenarioKey,
+    url,
     payload: {
       type: 'ai_engine',
       scenario: input.scenario,

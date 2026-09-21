@@ -24,6 +24,7 @@ import {
   Zap,
   CheckCircle,
   FileSpreadsheet,
+  Settings2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -117,6 +118,16 @@ const navItems = [
     iconShadowActive: "0 2px 0 #059669, 0 3px 8px rgba(16,185,129,0.4)",
     iconColor: "#fff",
     badgeKey: "unreadApplicants" as const,
+  },
+  {
+    label: "Operations Center",
+    path: adminPath("/operations-center"),
+    icon: Settings2,
+    iconBg: "linear-gradient(145deg, #A5B4FC, #4F46E5)",
+    iconShadow: "0 4px 0 #3730A3, 0 6px 12px rgba(79,70,229,0.45)",
+    iconShadowActive: "0 2px 0 #3730A3, 0 3px 8px rgba(79,70,229,0.4)",
+    iconColor: "#fff",
+    badgeKey: null,
   },
   {
     label: "Messages",

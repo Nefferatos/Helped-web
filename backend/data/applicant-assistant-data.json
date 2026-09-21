@@ -291,6 +291,33 @@
       "currentTrackerId": null,
       "createdAt": "2026-09-17T13:27:06.498Z",
       "updatedAt": "2026-09-17T13:27:07.588Z"
+    },
+    {
+      "id": "235ed015-9e82-4fe7-83c5-b7c41859b3bc",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "12069d84-4f54-4f3e-a493-7ebb6830892c",
+          "role": "user",
+          "content": "Who are our best matches right now?",
+          "requestId": "60f4059c-0121-48ed-8b52-0ef1f7cd141b",
+          "applicantIds": [],
+          "timestamp": "2026-09-20T15:25:54.559Z"
+        },
+        {
+          "id": "d8602880-e169-4491-bf59-3d8d10f9a820",
+          "role": "assistant",
+          "content": "I was unable to process your request. Please try again.",
+          "requestId": "60f4059c-0121-48ed-8b52-0ef1f7cd141b",
+          "applicantIds": [],
+          "timestamp": "2026-09-20T15:25:54.572Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-20T15:25:54.556Z",
+      "updatedAt": "2026-09-20T15:25:54.572Z"
     }
   ],
   "auditLog": [
@@ -485,6 +512,22 @@
       "errorMessage": null,
       "humanApprovalRequired": false,
       "humanApprovalGiven": null
+    },
+    {
+      "id": "9a7d34a1-1af9-4ad0-8605-375db6861984",
+      "timestamp": "2026-09-20T15:25:54.573Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "60f4059c-0121-48ed-8b52-0ef1f7cd141b",
+      "conversationId": "235ed015-9e82-4fe7-83c5-b7c41859b3bc",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "failure",
+      "makeExecutionId": "43",
+      "googleDocId": null,
+      "errorMessage": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT and MAKE_WEBHOOK_URL",
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
     }
   ],
   "googleDocLinks": [],
@@ -500,11 +543,12 @@
     "d66a6727-592a-49f7-b847-7708c22de2f3",
     "844a220e-36b7-421d-b676-ea7ebd678d72",
     "97df7463-44ab-4026-b009-5f7247e10299",
-    "37d9203a-2354-434d-bab8-0c0e0b299929"
+    "37d9203a-2354-434d-bab8-0c0e0b299929",
+    "60f4059c-0121-48ed-8b52-0ef1f7cd141b"
   ],
   "counters": {
     "trackers": 1,
-    "conversations": 10,
-    "auditLog": 13
+    "conversations": 11,
+    "auditLog": 14
   }
 }

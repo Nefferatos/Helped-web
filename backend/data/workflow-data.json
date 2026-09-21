@@ -9031,6 +9031,66 @@
   ],
   "makeDeliveries": [
     {
+      "id": 43,
+      "createdAt": "2026-09-20T15:25:54.566Z",
+      "scenario": "applicant-assistant",
+      "url": "",
+      "payload": {
+        "conversationId": "235ed015-9e82-4fe7-83c5-b7c41859b3bc",
+        "requestId": "60f4059c-0121-48ed-8b52-0ef1f7cd141b",
+        "message": "Who are our best matches right now?",
+        "type": "applicant_assistant",
+        "context": {
+          "user": {
+            "id": "2",
+            "name": "attheagency",
+            "email": ""
+          },
+          "agency": {
+            "id": 1,
+            "name": ""
+          },
+          "selectedApplicant": null,
+          "selectedApplicants": [],
+          "currentFilters": {},
+          "currentSearch": "",
+          "applicantSummary": {
+            "total": 41,
+            "byStage": {
+              "New Applicant": 1,
+              "Rejected": 40
+            },
+            "byNationality": {
+              "Filipino maid": 6,
+              "Indonesian maid": 7,
+              "Indian maid": 15,
+              "Indian": 2,
+              "Myanmar maid": 3,
+              "": 8
+            },
+            "averageScore": 15,
+            "needingFollowup": 1,
+            "recentlyAdded": 0
+          }
+        },
+        "conversationHistory": [
+          {
+            "role": "user",
+            "content": "Who are our best matches right now?"
+          }
+        ],
+        "trackerContext": {
+          "existingTracker": null,
+          "googleDocId": null
+        }
+      },
+      "success": false,
+      "statusCode": null,
+      "durationMs": 0,
+      "responseBody": "",
+      "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT and MAKE_WEBHOOK_URL"
+    },
+    {
       "id": 42,
       "createdAt": "2026-09-20T09:21:15.871Z",
       "scenario": "APPLICANT_INTAKE",
@@ -10836,6 +10896,6 @@
     "notifications": 24,
     "automationLogs": 224,
     "decisionLogs": 83,
-    "makeDeliveries": 43
+    "makeDeliveries": 44
   }
 }

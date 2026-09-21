@@ -5,6 +5,7 @@ import {
   hrInterviewChat,
   hrInterviewEmail,
   hrInterviewSession,
+  scheduleInterview,
 } from '../controllers/hrInterviewController'
 import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
 
@@ -16,5 +17,6 @@ router.post('/pdf-autofill', requireAgencyAuth, pdfAutofill)
 router.post('/hr-interview/chat', hrInterviewChat)
 router.post('/hr-interview/session', hrInterviewSession)
 router.post('/hr-interview/email', hrInterviewEmail)
+router.post('/hr-interview/schedule', requireAgencyAuth, scheduleInterview)
 
 export default router

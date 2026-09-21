@@ -1,6 +1,9 @@
 import { Request, Response } from 'express'
 import { sendWorkflowToMake } from '../services/workflowOrchestrationService'
 import { optionalString, requiredString, sanitizePayload } from '../services/workflowValidationService'
+import { query, sql } from '../db'
+import { getRequestAgencyId } from '../auth'
+import { recordWorkflowEvent } from '../services/eventService'
 
 type ChatRole = 'assistant' | 'user'
 
@@ -276,4 +279,22 @@ export const hrInterviewEmail = async (req: Request, res: Response) => {
     const message = error instanceof Error ? error.message : 'Failed to send interview email'
     res.status(/required/i.test(message) ? 400 : 500).json({ error: message })
   }
+}
+
+export const scheduleInterview = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const scheduledAt = requiredString(req.body.scheduledAt, 'scheduledAt', 80)
+    if (Number.isNaN(Date.parse(scheduledAt))) return res.status(400).json({ error: 'scheduledAt must be a valid date' })
+    const applicationId = optionalString(req.body.applicationId, 200)
+    const placementId = optionalString(req.body.placementId, 80)
+    const result = await query(sql`
+      INSERT INTO public.interviews (agency_id, application_id, placement_id, scheduled_at, duration_minutes, mode, meeting_url, notes)
+      VALUES (${agencyId}, ${applicationId || null}, ${placementId || null}::uuid, ${scheduledAt}::timestamptz, ${Number(req.body.durationMinutes) || 30}, ${optionalString(req.body.mode, 20) || 'video'}, ${optionalString(req.body.meetingUrl, 1000) || null}, ${optionalString(req.body.notes, 4000) || ''})
+      RETURNING id, scheduled_at, application_id, placement_id
+    `)
+    const interview = result.rows[0]
+    void recordWorkflowEvent({ eventType: 'interview.scheduled', entityType: 'interview', entityId: String(interview.id), actor: 'user:recruiter', payload: { applicationId, placementId, scheduledAt: interview.scheduled_at } })
+    res.status(201).json({ interview })
+  } catch (error) { console.error('Error scheduling interview:', error); res.status(500).json({ error: 'Failed to schedule interview' }) }
 }

@@ -14,6 +14,70 @@ export type WorkflowAssignment =
 export type NotificationChannel = 'email' | 'sms' | 'whatsapp' | 'internal'
 export type AutomationStatus = 'success' | 'warning' | 'failed'
 
+/** The only valid operational stages for an overseas FDW placement. */
+export type PlacementStatus =
+  | 'CANDIDATE_SELECTED'
+  | 'EMPLOYER_INTRODUCTION'
+  | 'INTERVIEW_SCHEDULED'
+  | 'INTERVIEW_COMPLETED'
+  | 'OFFER_ACCEPTED'
+  | 'CONTRACT_PREPARATION'
+  | 'CONTRACT_SIGNED'
+  | 'WORK_PERMIT_APPLICATION'
+  | 'IPA_APPROVED'
+  | 'PRE_DEPARTURE_TRAINING'
+  | 'FLIGHT_BOOKED'
+  | 'ARRIVAL_SCHEDULED'
+  | 'ARRIVED'
+  | 'MEDICAL_SCHEDULED'
+  | 'MEDICAL_CLEARED'
+  | 'SIP_SCHEDULED'
+  | 'SIP_COMPLETED'
+  | 'MOM_APPOINTMENT'
+  | 'HANDOVER'
+  | 'ACTIVE_EMPLOYMENT'
+  | 'RENEWAL'
+
+export interface PlacementRecord {
+  id: string
+  agencyId: number
+  candidateApplicationId?: string
+  maidReferenceCode?: string
+  employerId?: string
+  placementType: 'EA_MATCHED' | 'ADMIN_ONLY' | 'TRANSFER' | 'DIRECT_SOURCE'
+  status: PlacementStatus
+  startedAt: string
+  targetStartDate?: string
+  completedAt?: string
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PlacementStatusHistoryRecord {
+  id: string
+  placementId: string
+  fromStatus?: PlacementStatus
+  toStatus: PlacementStatus
+  actor: string
+  reason: string
+  metadata: Record<string, unknown>
+  createdAt: string
+}
+
+export type LogisticsTaskStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED' | 'CANCELLED'
+
+export interface FlightRecord {
+  id: string; placementId: string; airline: string; flightNumber: string
+  departureAirport: string; arrivalAirport: string; departureAt?: string; arrivalAt?: string
+  status: LogisticsTaskStatus; notes: string
+}
+
+export interface PlacementLogisticsTask {
+  id: string; placementId: string; status: LogisticsTaskStatus; assignedTo?: string
+  dueAt?: string; completedAt?: string; notes: string
+}
+
 export interface BudgetRange {
   min: number | null
   max: number | null
@@ -154,6 +218,7 @@ export interface InquiryAutomationResult {
 }
 
 export interface MatchCriteria {
+  agencyId?: number
   leadId?: number
   inquiryId?: number
   employerId?: number
@@ -163,6 +228,9 @@ export interface MatchCriteria {
   budget?: BudgetRange
   salary?: BudgetRange
   availability?: string
+  preferredNationalities?: string[]
+  preferredLanguages?: string[]
+  minimumExperienceYears?: number
 }
 
 export interface MatchCandidate {
