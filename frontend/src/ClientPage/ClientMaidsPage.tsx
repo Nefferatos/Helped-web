@@ -129,8 +129,7 @@ const AuthenticatedMaidImage = ({ maid }: { maid: MaidProfile }) => {
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = getClientToken();
-    if (!token || !maid.refCode) {
+    if (!maid.refCode) {
       setOriginalUrl(null);
       return;
     }
@@ -138,16 +137,21 @@ const AuthenticatedMaidImage = ({ maid }: { maid: MaidProfile }) => {
     let active = true;
     let objectUrl: string | null = null;
     const params = maid.agencyId != null ? `?agencyId=${encodeURIComponent(String(maid.agencyId))}` : "";
-    void fetch(`/api/maids/${encodeURIComponent(maid.refCode)}/photo-authenticated${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Authenticated photo is unavailable");
-        objectUrl = URL.createObjectURL(await response.blob());
-        if (active) setOriginalUrl(objectUrl);
-      })
-      .catch(() => { if (active) setOriginalUrl(null); });
+    void (async () => {
+      const token = await refreshClientToken().catch(() => getClientToken());
+      if (!token) {
+        if (active) setOriginalUrl(null);
+        return;
+      }
+
+      const response = await fetch(`/api/maids/${encodeURIComponent(maid.refCode)}/photo-authenticated${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Authenticated photo is unavailable");
+      objectUrl = URL.createObjectURL(await response.blob());
+      if (active) setOriginalUrl(objectUrl);
+    })().catch(() => { if (active) setOriginalUrl(null); });
 
     return () => {
       active = false;

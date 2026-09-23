@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, ExternalLink, Loader2, FileSpreadsheet, AlertTriangle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Loader2, FileSpreadsheet, AlertTriangle, KeyRound, LayoutGrid, Circle } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { clearAgencyAdminAuth, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
@@ -25,6 +24,12 @@ import {
  * Each data category in the portal (Maids, Enquiries, Requests, Contracts,
  * Applicants, Chat Messages, ...) is written to its OWN Google Sheet tab, so
  * categories are never blended into one shared sheet.
+ *
+ * Layout note: this is presented as a 3-step setup flow (Connect → Choose
+ * data → Send) since that's the actual sequence an agency admin follows the
+ * first time, and the primary actions live in a sticky bar so they're
+ * reachable no matter how many categories are on screen. All data-fetching,
+ * handlers, and API calls are unchanged from before.
  */
 
 const SECTION_ORDER_HINTS = [
@@ -65,6 +70,91 @@ const formatTimestamp = (value: string) => {
   return parsed.toLocaleString();
 };
 
+// Same accent colors the page already used: emerald for good/connected,
+// amber for needs-attention, slate for neutral text and chrome.
+const primaryButton = 'rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50'
+const secondaryButton = 'rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50'
+
+// Every subject on the page is one of these — same soft shape, same accent, no clutter.
+function Card({
+  icon: Icon,
+  title,
+  description,
+  right,
+  children,
+}: {
+  icon: React.ElementType
+  title: string
+  description: string
+  right?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+            <Icon className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+            <p className="text-sm text-slate-500">{description}</p>
+          </div>
+        </div>
+        {right}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+// The three-step rail at the top of the page — purely visual, driven by the
+// same status/exportMode/selection state the page already tracks.
+function SetupRail({
+  step1Done,
+  step2Done,
+  step3Done,
+  activeStep,
+}: {
+  step1Done: boolean
+  step2Done: boolean
+  step3Done: boolean
+  activeStep: 1 | 2 | 3
+}) {
+  const steps = [
+    { n: 1 as const, label: "Connect", done: step1Done },
+    { n: 2 as const, label: "Choose data", done: step2Done },
+    { n: 3 as const, label: "Send", done: step3Done },
+  ]
+
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:gap-3">
+      {steps.map((step, index) => {
+        const isActive = step.n === activeStep
+        return (
+          <div key={step.n} className="flex shrink-0 items-center gap-2">
+            <span
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                step.done
+                  ? "bg-emerald-600 text-white"
+                  : isActive
+                    ? "bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200"
+                    : "bg-slate-100 text-slate-400"
+              }`}
+            >
+              {step.done ? <CheckCircle2 className="h-4 w-4" /> : step.n}
+            </span>
+            <span className={`text-sm font-medium ${isActive ? "text-slate-900" : step.done ? "text-slate-600" : "text-slate-400"}`}>
+              {step.label}
+            </span>
+            {index < steps.length - 1 ? <span className="mx-1 h-px w-6 shrink-0 bg-slate-200 sm:w-10" /> : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 const AgencyReportsPage = () => {
   const navigate = useNavigate();
   const agencyAdmin = getStoredAgencyAdmin();
@@ -81,6 +171,10 @@ const AgencyReportsPage = () => {
   const [exportMode, setExportMode] = useState<"all" | "selected">("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [spreadsheetInput, setSpreadsheetInput] = useState("");
+
+  // Purely visual: which category groups are expanded. Defaults to all open
+  // so behavior on first load matches the old always-expanded layout.
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const handleUnauthorized = () => {
     clearAgencyAdminAuth();
@@ -143,6 +237,10 @@ const AgencyReportsPage = () => {
         ? Array.from(new Set([...prev, ...ids]))
         : prev.filter((id) => !ids.includes(id)),
     );
+  };
+
+  const toggleGroupCollapsed = (group: string) => {
+    setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
   };
 
   const buildPayload = () => ({
@@ -235,95 +333,73 @@ const AgencyReportsPage = () => {
   if (isLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-6">
-        <div className="flex items-center gap-2 rounded-xl border bg-card px-5 py-4 text-sm text-muted-foreground shadow-sm">
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading report settings...
+          Loading report settings…
         </div>
       </div>
     );
   }
 
   const isReady = Boolean(status?.ready);
+  const step1Done = Boolean(status?.serviceAccountConfigured && status?.spreadsheetConfigured);
+  const step2Done = exportMode === "all" || selectedIds.length > 0;
+  const step3Done = Boolean(status?.lastRunAt);
+  const activeStep: 1 | 2 | 3 = !step1Done ? 1 : !step2Done ? 2 : 3;
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-slate-900">Google Sheet Reports</h1>
-        <p className="text-sm text-slate-600">
-          Push every data category in your portal to Google Sheets. Each category is
-          written to its{" "}
-          <span className="font-medium text-slate-800">own separate tab</span> — maids,
-          enquiries, requests, contracts and applicants are never mixed together.
-        </p>
+    <div className="mx-auto max-w-5xl space-y-6 p-4 pb-28 pt-8 md:p-8 md:pb-28">
+      {/* ── Page header ───────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Google Sheet Reports</h1>
+          <p className="mt-1 text-sm text-slate-500">Push your data to Sheets — one tab per category, nothing mixed.</p>
+        </div>
+        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium ${isReady ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${isReady ? "bg-emerald-500" : "bg-amber-500"}`} />
+          {isReady ? "Ready to run" : "Setup needed"}
+        </span>
       </div>
 
-      {/* ── Connection status ─────────────────────────────────────────── */}
-      <section className="rounded-3xl border bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
-          <h2 className="text-lg font-semibold text-slate-900">Google Sheets connection</h2>
-        </div>
+      {/* ── Setup progress rail ───────────────────────────────────── */}
+      <SetupRail step1Done={step1Done} step2Done={step2Done} step3Done={step3Done} activeStep={activeStep} />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Service account
-            </p>
+      {/* ── Connection ────────────────────────────────────────────── */}
+      <Card icon={KeyRound} title="1. Connection" description="A service account and a spreadsheet, both set up">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-xs font-medium text-slate-500">Service account</p>
             {status?.serviceAccountConfigured ? (
-              <p className="mt-1 flex items-center gap-1.5 text-sm text-emerald-700">
-                <CheckCircle2 className="h-4 w-4" />
-                {status.serviceAccountEmail || "Configured"}
+              <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                {status.serviceAccountEmail || "Connected"}
               </p>
             ) : (
               <p className="mt-1 flex items-start gap-1.5 text-sm text-amber-700">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  Not configured. Set the Worker secret{" "}
-                  <code className="rounded bg-slate-100 px-1">
-                    GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON
-                  </code>
-                  .
-                </span>
+                <span>Not set up yet — ask your developer to add the service account.</span>
               </p>
             )}
             {status?.serviceAccountEmail ? (
-              <p className="mt-2 text-xs text-slate-500">
-                Share your spreadsheet with this address as an{" "}
-                <span className="font-medium">Editor</span>, or writes will be rejected.
-              </p>
+              <p className="mt-2 text-xs text-slate-500">Share your spreadsheet with this address as an Editor.</p>
             ) : null}
           </div>
 
-          <div className="rounded-2xl border p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Target spreadsheet
-            </p>
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-xs font-medium text-slate-500">Spreadsheet</p>
             {status?.spreadsheetConfigured ? (
-              <>
-                <p className="mt-1 flex items-center gap-1.5 text-sm text-emerald-700">
-                  <CheckCircle2 className="h-4 w-4" />
-                  {status.spreadsheetId}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Source:{" "}
-                  {status.spreadsheetSource === "agency"
-                    ? "saved below for this agency"
-                    : "Worker default (GOOGLE_SHEETS_SPREADSHEET_ID)"}
-                </p>
-              </>
+              <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                Connected
+              </p>
             ) : (
               <p className="mt-1 flex items-start gap-1.5 text-sm text-amber-700">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                No spreadsheet set. Paste an id or URL below.
+                <span>Paste a spreadsheet link below.</span>
               </p>
             )}
             {status?.spreadsheetUrl ? (
-              <a
-                href={status.spreadsheetUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline"
-              >
+              <a href={status.spreadsheetUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline">
                 Open spreadsheet <ExternalLink className="h-3 w-3" />
               </a>
             ) : null}
@@ -331,257 +407,179 @@ const AgencyReportsPage = () => {
         </div>
 
         {status && !isReady && status.blockingReason ? (
-          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            {status.blockingReason}
-          </p>
+          <p className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">{status.blockingReason}</p>
         ) : null}
 
-        <div className="mt-4 space-y-2">
-          <Label htmlFor="spreadsheet">Spreadsheet id or URL for this agency</Label>
+        <div className="mt-5 space-y-1.5">
+          <Label htmlFor="spreadsheet" className="text-sm text-slate-600">Spreadsheet link for this agency</Label>
           <Input
             id="spreadsheet"
             value={spreadsheetInput}
             onChange={(event) => setSpreadsheetInput(event.target.value)}
             placeholder="https://docs.google.com/spreadsheets/d/1AbC.../edit"
+            className="rounded-2xl border-slate-200 px-4 py-5"
           />
-          <p className="text-xs text-slate-500">
-            Optional — leave blank to use the Worker-wide default spreadsheet. Saving
-            here only affects {agencyAdmin?.agencyName || "this agency"}.
+          <p className="text-xs text-slate-400">
+            Optional — leave blank to use the shared default. This only affects {agencyAdmin?.agencyName || "this agency"}.
           </p>
         </div>
-      </section>
+      </Card>
 
-      {/* ── Data categories (one Google Sheet tab each) ───────────────── */}
-      <section className="rounded-3xl border bg-white p-6 shadow-sm">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Data categories</h2>
-            <p className="text-sm text-slate-600">
-              Every category below becomes its own tab in the spreadsheet. Pick exactly
-              what you want — nothing is merged.
-            </p>
+      {/* ── Data categories ───────────────────────────────────────── */}
+      <Card
+        icon={LayoutGrid}
+        title="2. What to send"
+        description={`Each category becomes its own tab · ${effectiveSectionCount} ${effectiveSectionCount === 1 ? "tab" : "tabs"} selected`}
+        right={
+          <div className="flex shrink-0 rounded-full bg-slate-100 p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setExportMode("all")}
+              className={`rounded-full px-4 py-2 font-medium transition-colors ${exportMode === "all" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+            >
+              Everything
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportMode("selected")}
+              className={`rounded-full px-4 py-2 font-medium transition-colors ${exportMode === "selected" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+            >
+              Just a few
+            </button>
           </div>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="radio"
-                name="report-mode"
-                checked={exportMode === "all"}
-                onChange={() => setExportMode("all")}
-              />
-              All data ({sections.length} tabs)
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="radio"
-                name="report-mode"
-                checked={exportMode === "selected"}
-                onChange={() => setExportMode("selected")}
-              />
-              Selected only ({selectedIds.length})
-            </label>
-          </div>
-        </div>
-
-        <div className="space-y-5">
+        }
+      >
+        <div className="divide-y divide-slate-100">
           {groupedSections.map(([group, groupList]) => {
-            const selectedInGroup = groupList.filter((section) =>
-              selectedIds.includes(section.id),
-            ).length;
+            const isCollapsed = Boolean(collapsedGroups[group]);
+            const selectedInGroup = groupList.filter((s) => exportMode === "all" || selectedIds.includes(s.id)).length;
 
             return (
-              <div key={group}>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    {group}
-                    <span className="ml-2 font-normal normal-case text-slate-400">
-                      {selectedInGroup}/{groupList.length} selected
+              <div key={group} className="py-4 first:pt-0 last:pb-0">
+                <button
+                  type="button"
+                  onClick={() => toggleGroupCollapsed(group)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-700">{group}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                      {selectedInGroup}/{groupList.length}
                     </span>
-                  </h3>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={exportMode !== "selected"}
-                      onClick={() => selectGroup(groupList, true)}
-                    >
-                      Select
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={exportMode !== "selected"}
-                      onClick={() => selectGroup(groupList, false)}
-                    >
-                      Clear
-                    </Button>
+                  </span>
+                  <span className="text-xs font-medium text-slate-400">{isCollapsed ? "Show" : "Hide"}</span>
+                </button>
+
+                {!isCollapsed ? (
+                  <div className="mt-3 grid gap-2.5 md:grid-cols-2">
+                    {groupList.map((section) => {
+                      const checked = exportMode === "all" || selectedIds.includes(section.id);
+
+                      return (
+                        <label
+                          key={section.id}
+                          className={`flex cursor-pointer items-center gap-3 rounded-2xl p-4 transition-colors ${
+                            checked ? "bg-emerald-50" : "bg-slate-50 hover:bg-slate-100"
+                          } ${exportMode === "all" ? "cursor-default opacity-80" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 shrink-0 accent-emerald-600"
+                            disabled={exportMode === "all"}
+                            checked={checked}
+                            onChange={() => toggleSection(section.id)}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-slate-800">{section.title}</span>
+                            <span className="block text-xs text-slate-500">{section.description}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
-                </div>
+                ) : null}
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  {groupList.map((section) => {
-                    const checked =
-                      exportMode === "all" || selectedIds.includes(section.id);
-
-                    return (
-                      <label
-                        key={section.id}
-                        className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
-                          checked
-                            ? "border-emerald-300 bg-emerald-50/60"
-                            : "border-slate-200 bg-white hover:border-slate-300"
-                        } ${exportMode === "all" ? "opacity-90" : ""}`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="mt-0.5"
-                          disabled={exportMode === "all"}
-                          checked={checked}
-                          onChange={() => toggleSection(section.id)}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-medium text-slate-900">
-                              {section.title}
-                            </span>
-                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                              Tab: {section.title}
-                            </span>
-                          </span>
-                          <span className="mt-1 block text-xs text-slate-600">
-                            {section.description}
-                          </span>
-                          <span className="mt-1 block text-[11px] text-slate-400">
-                            {section.columnCount} columns · section id{" "}
-                            <code className="rounded bg-slate-100 px-1">{section.id}</code>
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+                {!isCollapsed && exportMode === "selected" && groupList.length > 1 ? (
+                  <div className="mt-2 flex gap-3 pl-1">
+                    <button type="button" className="text-xs font-medium text-emerald-700 hover:underline" onClick={() => selectGroup(groupList, true)}>
+                      Select all in {group}
+                    </button>
+                    <button type="button" className="text-xs font-medium text-slate-400 hover:underline" onClick={() => selectGroup(groupList, false)}>
+                      Clear
+                    </button>
+                  </div>
+                ) : null}
               </div>
             );
           })}
         </div>
 
         {exportMode === "selected" && selectedIds.length === 0 ? (
-          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            No categories selected. Tick at least one, or switch back to “All data”.
+          <p className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+            Pick at least one category, or switch back to "Everything".
           </p>
         ) : null}
-      </section>
+      </Card>
 
-      {/* ── Actions ───────────────────────────────────────────────────── */}
-      <section className="rounded-3xl border bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Run the report</h2>
-            <p className="text-sm text-slate-600">
-              Writing <span className="font-medium">{effectiveSectionCount}</span>{" "}
-              {effectiveSectionCount === 1 ? "tab" : "tabs"} — one per data category.
-              Existing tabs are refreshed in place; tabs you did not select are left
-              untouched.
-            </p>
-            {status?.lastRunAt ? (
-              <p className="mt-1 text-xs text-slate-500">
-                Last run: {formatTimestamp(status.lastRunAt)} · {status.lastRunSummary}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…
-                </>
-              ) : (
-                "Save settings"
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleTest}
-              disabled={isTesting || !status?.serviceAccountConfigured}
-            >
-              {isTesting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Testing…
-                </>
-              ) : (
-                "Test connection"
-              )}
-            </Button>
-            <Button
-              type="button"
-              onClick={handleRun}
-              disabled={isRunning || !isReady}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              {isRunning ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Pushing to Google Sheets…
-                </>
-              ) : (
-                <>
-                  <FileSpreadsheet className="mr-2 h-4 w-4" /> Push report to Google Sheets
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-
+      {/* ── Send history / result ────────────────────────────────── */}
+      <Card icon={FileSpreadsheet} title="3. Send" description={status?.lastRunAt ? `Last sent ${formatTimestamp(status.lastRunAt)} · ${status.lastRunSummary}` : "Nothing sent yet"}>
         {!isReady ? (
-          <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-            Configure the service account secret and a target spreadsheet above before
-            running the report.
+          <p className="flex items-center gap-2 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+            <Circle className="h-3.5 w-3.5 shrink-0" />
+            Finish the connection above before you can send a report.
           </p>
-        ) : null}
-
-        {lastResult ? (
-          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+        ) : lastResult ? (
+          <div className="rounded-2xl bg-emerald-50 p-5">
             <p className="flex items-center gap-2 text-sm font-medium text-emerald-800">
               <CheckCircle2 className="h-4 w-4" />
-              Report written to {lastResult.tabsWritten} tab(s) · {lastResult.rowsWritten} row(s)
+              Sent — {lastResult.tabsWritten} tab(s), {lastResult.rowsWritten} row(s)
             </p>
-            <a
-              href={lastResult.spreadsheetUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline"
-            >
+            <a href={lastResult.spreadsheetUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline">
               Open the spreadsheet <ExternalLink className="h-3 w-3" />
             </a>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {lastResult.tabs.map((tab) => (
-                <div
-                  key={tab.title}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs"
-                >
+                <div key={tab.title} className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-xs">
                   <span className="truncate font-medium text-slate-700">{tab.title}</span>
-                  <span className="shrink-0 text-slate-500">
-                    {tab.rows} {tab.rows === 1 ? "row" : "rows"}
-                  </span>
+                  <span className="shrink-0 text-slate-400">{tab.rows} {tab.rows === 1 ? "row" : "rows"}</span>
                 </div>
               ))}
             </div>
 
             {lastResult.skippedSectionIds.length > 0 ? (
-              <p className="mt-3 text-xs text-amber-700">
-                Skipped (could not be built): {lastResult.skippedSectionIds.join(", ")}
-              </p>
+              <p className="mt-3 text-xs text-amber-700">Skipped: {lastResult.skippedSectionIds.join(", ")}</p>
             ) : null}
           </div>
-        ) : null}
-      </section>
+        ) : (
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+            Everything's connected. Use “Push to Google Sheets” below whenever you're ready.
+          </p>
+        )}
+      </Card>
+
+      {/* ── Sticky action bar — always reachable, whatever is on screen ── */}
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-xs text-slate-500">
+            {effectiveSectionCount} {effectiveSectionCount === 1 ? "tab" : "tabs"} will be written
+            {agencyAdmin?.agencyName ? ` for ${agencyAdmin.agencyName}` : ""}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={handleTest} disabled={isTesting || !status?.serviceAccountConfigured} className={secondaryButton}>
+              {isTesting ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Testing…</span>) : "Test connection"}
+            </button>
+            <button type="button" onClick={handleSave} disabled={isSaving} className={secondaryButton}>
+              {isSaving ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Saving…</span>) : "Save settings"}
+            </button>
+            <button type="button" onClick={handleRun} disabled={isRunning || !isReady} className={primaryButton}>
+              {isRunning ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Sending…</span>) : "Push to Google Sheets"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
 export default AgencyReportsPage;
-
