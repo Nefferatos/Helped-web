@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
@@ -40,6 +41,7 @@ import {
   requestStateMessage,
   updateRequestMaids,
   updateRequestStatus,
+  deleteRequests,
 } from "@/lib/requests";
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
 import { toast } from "@/components/ui/sonner";
@@ -233,6 +235,7 @@ class RequestsPageErrorBoundary extends Component<
 /* ── Main content ──────────────────────────────────────────────────────── */
 const RequestsPageContent = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const admin = useMemo(() => getStoredAgencyAdmin(), []);
   const isMainAdmin = admin?.role === "admin";
   const agencyId = typeof admin?.agencyId === "number" ? admin.agencyId : undefined;
@@ -245,6 +248,8 @@ const RequestsPageContent = () => {
   const [selectedRequest, setSelectedRequest] = useState<RequestRecord | null>(null);
   const [maidSearch, setMaidSearch] = useState("");
   const [selectedMaidReferences, setSelectedMaidReferences] = useState<string[]>([]);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
 
   const deferredSearch = useDeferredValue(search);
   const deferredMaidSearch = useDeferredValue(maidSearch);
@@ -358,6 +363,20 @@ const RequestsPageContent = () => {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (ids: string[]) => deleteRequests(ids),
+    onSuccess: (deleted) => {
+      setSelectedRequestIds(new Set());
+      setConfirmingBulkDelete(false);
+      queryClient.invalidateQueries({ queryKey: ["agency-requests"] });
+      toast.success(`${deleted} request${deleted === 1 ? "" : "s"} deleted`);
+    },
+    onError: (error) => {
+      setConfirmingBulkDelete(false);
+      toast.error(error instanceof Error ? error.message : "Could not delete selected requests");
+    },
+  });
+
   const filteredMaids = useMemo(() => {
     const term = deferredMaidSearch.trim().toLowerCase();
     const items = maidOptionsQuery.data ?? [];
@@ -373,6 +392,25 @@ const RequestsPageContent = () => {
     setSelectedMaidReferences(request.maidReferences);
     setMaidSearch("");
     setSheetOpen(true);
+  };
+
+  const toggleRequestSelection = (requestId: string) => {
+    setSelectedRequestIds((current) => {
+      const next = new Set(current);
+      next.has(requestId) ? next.delete(requestId) : next.add(requestId);
+      return next;
+    });
+    setConfirmingBulkDelete(false);
+  };
+
+  const toggleVisibleSelection = () => {
+    const everyVisibleSelected = requests.length > 0 && requests.every((request) => selectedRequestIds.has(request.id));
+    setSelectedRequestIds((current) => {
+      const next = new Set(current);
+      requests.forEach((request) => everyVisibleSelected ? next.delete(request.id) : next.add(request.id));
+      return next;
+    });
+    setConfirmingBulkDelete(false);
   };
 
   return (
@@ -415,6 +453,25 @@ const RequestsPageContent = () => {
               />
             </div>
           </div>
+          {requests.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+                <Checkbox checked={requests.every((request) => selectedRequestIds.has(request.id))} onCheckedChange={toggleVisibleSelection} />
+                Select this page
+              </label>
+              {selectedRequestIds.size > 0 && (
+                <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800">
+                  <span>{selectedRequestIds.size} selected</span>
+                  {confirmingBulkDelete ? (
+                    <>
+                      <button type="button" onClick={() => deleteMutation.mutate(Array.from(selectedRequestIds))} disabled={deleteMutation.isPending} className="rounded-lg bg-rose-600 px-2.5 py-1 text-white hover:bg-rose-700 disabled:opacity-50">{deleteMutation.isPending ? "Deleting…" : "Confirm delete"}</button>
+                      <button type="button" onClick={() => setConfirmingBulkDelete(false)} className="rounded-lg px-2 py-1 hover:bg-rose-100">Cancel</button>
+                    </>
+                  ) : <button type="button" onClick={() => setConfirmingBulkDelete(true)} className="rounded-lg bg-rose-600 px-2.5 py-1 text-white hover:bg-rose-700">Delete selected</button>}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* ── Request cards ── */}
@@ -454,6 +511,13 @@ const RequestsPageContent = () => {
                       {/* Left: identity + info grid */}
                       <div className="min-w-0 space-y-3">
                         <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedRequestIds.has(request.id)}
+                            onClick={(event) => event.stopPropagation()}
+                            onCheckedChange={() => toggleRequestSelection(request.id)}
+                            aria-label={`Select request from ${request.client?.name || "client"}`}
+                            className="mt-1 shrink-0"
+                          />
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
                             <UserRound className="h-4 w-4" />
                           </div>
@@ -479,8 +543,7 @@ const RequestsPageContent = () => {
                           </div>
                         </div>
 
-                        {/* Matched maids */}
-                        {request.maids.length > 0 && (
+                        {false && request.maids.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
                             {request.maids.map((maid) => (
                               <span
@@ -498,7 +561,7 @@ const RequestsPageContent = () => {
                       <div className="mt-auto flex shrink-0 border-t border-slate-100 pt-3">
                         <button
                           type="button"
-                          onClick={() => openSheet(request, "details")}
+                          onClick={() => navigate(`/agencyadmin/requests/${encodeURIComponent(request.id)}`)}
                           className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-bold text-slate-800 shadow-sm transition-all hover:border-slate-400 hover:bg-slate-50 hover:shadow"
                         >
                           <BriefcaseBusiness className="h-3.5 w-3.5" />

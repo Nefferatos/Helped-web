@@ -891,7 +891,6 @@ const RecruiterAiAssistant = ({
         >
           <Bot className="h-5 w-5 shrink-0" />
           <span className="hidden whitespace-nowrap text-sm font-bold sm:inline">Applicant Command</span>
-          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white/25 text-[10px] font-bold tabular-nums">{analytics.total}</span>
         </button>
       )}
       {isOpen && (

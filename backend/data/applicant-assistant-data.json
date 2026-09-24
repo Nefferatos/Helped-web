@@ -318,6 +318,33 @@
       "currentTrackerId": null,
       "createdAt": "2026-09-20T15:25:54.556Z",
       "updatedAt": "2026-09-20T15:25:54.572Z"
+    },
+    {
+      "id": "9ad02856-a838-4a6c-9323-73bbf26ed76d",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "b217c75d-9cd5-48e5-8bb8-7f871baeb0de",
+          "role": "user",
+          "content": "Who needs follow-up today?",
+          "requestId": "003c833c-c5a3-411e-9657-61977afa7567",
+          "applicantIds": [],
+          "timestamp": "2026-09-24T06:32:33.296Z"
+        },
+        {
+          "id": "0a1d7c0f-8281-4fb5-af1d-c99379b208d7",
+          "role": "assistant",
+          "content": "I was unable to process your request. Please try again.",
+          "requestId": "003c833c-c5a3-411e-9657-61977afa7567",
+          "applicantIds": [],
+          "timestamp": "2026-09-24T06:32:34.544Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-09-24T06:32:33.292Z",
+      "updatedAt": "2026-09-24T06:32:34.544Z"
     }
   ],
   "auditLog": [
@@ -528,6 +555,22 @@
       "errorMessage": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT and MAKE_WEBHOOK_URL",
       "humanApprovalRequired": false,
       "humanApprovalGiven": null
+    },
+    {
+      "id": "9638f27b-9f24-4234-951f-699275b70689",
+      "timestamp": "2026-09-24T06:32:34.547Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "003c833c-c5a3-411e-9657-61977afa7567",
+      "conversationId": "9ad02856-a838-4a6c-9323-73bbf26ed76d",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "failure",
+      "makeExecutionId": "46",
+      "googleDocId": null,
+      "errorMessage": "UNKNOWN: unknown error, open 'C:\\Users\\JIM\\Desktop\\Maid Website\\Helped-web\\backend\\data\\workflow-data.json'",
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
     }
   ],
   "googleDocLinks": [],
@@ -544,11 +587,12 @@
     "844a220e-36b7-421d-b676-ea7ebd678d72",
     "97df7463-44ab-4026-b009-5f7247e10299",
     "37d9203a-2354-434d-bab8-0c0e0b299929",
-    "60f4059c-0121-48ed-8b52-0ef1f7cd141b"
+    "60f4059c-0121-48ed-8b52-0ef1f7cd141b",
+    "003c833c-c5a3-411e-9657-61977afa7567"
   ],
   "counters": {
     "trackers": 1,
-    "conversations": 11,
-    "auditLog": 14
+    "conversations": 12,
+    "auditLog": 15
   }
 }

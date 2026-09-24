@@ -714,7 +714,8 @@ const GLOBAL_STYLES = `
   .nationality-preview { width: 100%; min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: #fff; color: #0b1f25; text-align: left; text-decoration: none; font: inherit; cursor: pointer; appearance: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
   .nationality-preview-photo { width: 100%; overflow: hidden; border-bottom: 1px solid var(--border); background: #f5f7f8; }
   .nationality-preview-photo img { width: 100%; height: auto; display: block; }
-  .nationality-preview.is-locked .nationality-preview-photo img { filter: blur(9px); transform: scale(1.08); }
+  /* Logged-out cards receive an already blurred, irreversible image from
+     /photo-preview. Do not apply a second CSS blur or expose the source URL. */
   .nationality-preview p { margin: 8px 12px 0; font: 500 13px/1.35 'Inter', sans-serif; }
   .nationality-preview p + p { margin-top: 1px; }
   .nationality-preview p:last-child { margin-bottom: 12px; }

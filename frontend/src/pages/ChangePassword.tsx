@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import {
   KeyRound,
   RefreshCw,
@@ -74,18 +75,34 @@ const ChangePassword = () => {
   const passwordsMatch = form.newPw && form.confirm && form.newPw === form.confirm;
   const passwordsMismatch = form.newPw && form.confirm && form.newPw !== form.confirm;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.current) { toast.error("Please enter your current password."); return; }
     if (!form.newPw || !form.confirm) { toast.error("Please enter and confirm your new password."); return; }
     if (form.newPw !== form.confirm) { toast.error("New passwords do not match."); return; }
-    if (form.newPw.length < 6) { toast.error("New password must be at least 6 characters."); return; }
+    if (form.newPw.length < 8) { toast.error("New password must be at least 8 characters."); return; }
     if (form.captcha !== CAPTCHA_CODE) { toast.error("Invalid security code. Please try again."); return; }
     setSubmitted(true);
-    toast.success("Password changed successfully.");
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/agency-auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAgencyAdminAuthHeaders(),
+        },
+        body: JSON.stringify({
+          currentPassword: form.current,
+          newPassword: form.newPw,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not change password.");
       setForm({ current: "", newPw: "", confirm: "", captcha: "" });
+      toast.success("Password changed successfully.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not change password.");
+    } finally {
       setSubmitted(false);
-    }, 2000);
+    }
   };
 
   const handleReset = () => {
@@ -474,7 +491,7 @@ const ChangePassword = () => {
             }}
           >
             <p style={{ fontSize: isSm ? 12 : 13, color: "#000000", fontWeight: 700, margin: 0 }}>
-              Minimum 6 characters required
+              Minimum 8 characters required
             </p>
 
             <div style={{ display: "flex", gap: 8, flexDirection: isSm ? "column" : "row" }}>

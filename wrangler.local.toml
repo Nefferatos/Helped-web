@@ -1,0 +1,32 @@
+# Local Worker configuration for the Vite development proxy.
+#
+# Command Center delegates to Make.com, so it does not need the production
+# Cloudflare AI binding. Omitting that binding lets `wrangler dev` start without
+# a Cloudflare API token while still loading secrets from .dev.vars.
+name = "findmaid-local"
+main = "functions/api/[[...path]].ts"
+compatibility_date = "2024-10-01"
+
+[assets]
+directory = "./frontend/dist"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "APP_DATA"
+id = "62a5ada5801547b5b0895fec94ab0b12"
+preview_id = "595830971f4f4125975ddcdeb627de67"
+
+[vars]
+STORAGE_BACKEND = "supabase"
+ANTHROPIC_MODEL = "claude-haiku-4-5"
+CLINE_API_URL = "https://api.cline.bot/api/v1"
+CLINE_MODEL = "openai/gpt-4o-mini"
+OPENAI_BASE_URL = "https://api.cline.bot/api/v1"
+OPENAI_MODEL = "openai/gpt-4o-mini"
+AI_AUTOPILOT_ENABLED = "true"
+RESEND_FROM = "Find Maid <no-reply@rinzinagency.com>"
+DEV_EXPOSE_CONFIRMATION_CODE = "false"
+
+[observability.logs]
+enabled = false
+invocation_logs = true

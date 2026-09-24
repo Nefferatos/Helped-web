@@ -14,6 +14,7 @@ import {
 } from '../store'
 import {
   createRequestRecord,
+  deleteRequestRecords,
   getRequestRecordById,
   getRequestMetricsByAgencyId,
   getUnreadRequestCountByAgencyId,
@@ -511,6 +512,25 @@ export const patchRequestStatus = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error updating request status:', error)
     res.status(500).json({ error: 'Failed to update request status' })
+  }
+}
+
+export const deleteRequests = async (req: Request, res: Response) => {
+  try {
+    const admin = await getAuthenticatedAgencyAdmin(req)
+    if (!admin) return res.status(401).json({ error: 'Unauthorized' })
+    const rawIds: string[] = Array.isArray(req.body?.ids)
+      ? req.body.ids.map((id: unknown) => String(id).trim())
+      : []
+    const ids = Array.from(new Set(rawIds.filter((id) => isUuid(id))))
+    if (ids.length === 0) return res.status(400).json({ error: 'Select at least one request' })
+
+    const deleted = await deleteRequestRecords(ids, admin.agencyId)
+    if (deleted === 0) return res.status(404).json({ error: 'No matching requests found' })
+    return res.status(200).json({ deleted })
+  } catch (error) {
+    console.error('Error deleting requests:', error)
+    return res.status(500).json({ error: 'Failed to delete requests' })
   }
 }
 

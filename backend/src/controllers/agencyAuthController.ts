@@ -10,6 +10,7 @@ import {
 } from '../store'
 import {
   authenticateAgencyAdminRecord,
+  changeAgencyAdminPasswordRecord,
   createAgencyAdminSessionRecord,
   deleteAgencyAdminSessionRecord,
   syncAgencyAdminsFromStoreRecords,
@@ -169,6 +170,41 @@ export const logoutAgencyAdmin = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error logging out agency admin:', error)
     res.status(500).json({ error: 'Failed to logout agency admin' })
+  }
+}
+
+export const changeAgencyAdminPassword = async (req: Request, res: Response) => {
+  try {
+    const currentAdmin = await getAuthenticatedAgencyAdmin(req)
+    if (!currentAdmin) return res.status(401).json({ error: 'Unauthorized' })
+
+    const body = (req.body ?? null) as {
+      currentPassword?: unknown
+      newPassword?: unknown
+    } | null
+    const currentPassword = typeof body?.currentPassword === 'string' ? body.currentPassword.trim() : ''
+    const newPassword = typeof body?.newPassword === 'string' ? body.newPassword.trim() : ''
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' })
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' })
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'Choose a different new password' })
+    }
+
+    const verifiedAdmin = await authenticateAgencyAdminRecord(currentAdmin.username, currentPassword)
+    if (!verifiedAdmin || verifiedAdmin.id !== currentAdmin.id) {
+      return res.status(401).json({ error: 'Current password is incorrect' })
+    }
+
+    const updated = await changeAgencyAdminPasswordRecord(currentAdmin.id, newPassword)
+    if (!updated) return res.status(404).json({ error: 'Agency administrator not found' })
+    return res.status(200).json({ ok: true, message: 'Password changed successfully' })
+  } catch (error) {
+    console.error('Error changing agency admin password:', error)
+    return res.status(500).json({ error: 'Could not change password' })
   }
 }
 

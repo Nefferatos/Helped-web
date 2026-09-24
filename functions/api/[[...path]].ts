@@ -6163,6 +6163,69 @@ app.delete(
   }),
 );
 
+const publicMaidPhotoPreviewUrl = (maid: Pick<MaidRecord, "referenceCode" | "agencyId">) =>
+  `/api/maids/${encodeURIComponent(maid.referenceCode)}/photo-preview?agencyId=${maid.agencyId}`;
+
+const withPublicMaidPhotoPreviews = <T extends MaidRecord>(maids: T[]): T[] =>
+  maids.map((maid) => {
+    const photoCount = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
+      ? maid.photoDataUrls.filter(Boolean).length
+      : maid.photoDataUrl ? 1 : 0;
+    if (photoCount === 0) return maid;
+    const previewUrl = publicMaidPhotoPreviewUrl(maid);
+    return {
+      ...maid,
+      // Never return a Supabase storage URL to a logged-out visitor. The preview
+      // endpoint applies the irreversible low-resolution blur at the edge.
+      photoDataUrl: previewUrl,
+      photoDataUrls: Array.from({ length: photoCount }, () => previewUrl),
+    };
+  });
+
+const publicPreviewPlaceholder = () =>
+  new Response(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="400" viewBox="0 0 320 400"><rect width="320" height="400" fill="#dce8ea"/><circle cx="160" cy="138" r="62" fill="#a9c0c4"/><path d="M46 374c13-95 68-143 114-143s101 48 114 143" fill="#a9c0c4"/></svg>`,
+    { status: 404, headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=300" } },
+  );
+
+// Public, irreversible photo preview. This route is deliberately placed before
+// /api/maids/:referenceCode so a published Worker cannot leak original storage
+// URLs to logged-out visitors. Cloudflare transforms the fetched image before
+// it reaches the browser; failures return a neutral placeholder, never source.
+app.get(
+  "/api/maids/:referenceCode/photo-preview",
+  safeApi(async (c) => {
+    const referenceCode = normalizeReferenceCode(c.req.param("referenceCode"));
+    const agencyId = Number(c.req.query("agencyId"));
+    const config = getSupabaseAppDataConfig(c.env);
+    let maid: MaidRecord | null = null;
+    if (config) {
+      maid = isNormalizedSupabaseEnabled(c.env)
+        ? await getMaidFromSupabaseNormalized(config, referenceCode)
+        : await getMaidFromSupabaseAppView(config, referenceCode);
+    }
+    if (!maid) {
+      const data = await loadData(c.env, { readOnly: true });
+      maid = data.maids.find((item) => item.referenceCode === referenceCode && (!Number.isInteger(agencyId) || item.agencyId === agencyId)) ?? null;
+    }
+    if (!maid?.isPublic) return publicPreviewPlaceholder();
+    const source = (maid.photoDataUrls || []).find(Boolean) || maid.photoDataUrl;
+    if (!source || source.startsWith("data:")) return publicPreviewPlaceholder();
+
+    const preview = await fetch(source, {
+      cf: { image: { width: 320, quality: 55, blur: 12, format: "webp", fit: "scale-down" } },
+    } as RequestInit);
+    if (!preview.ok || !preview.body) return publicPreviewPlaceholder();
+    return new Response(preview.body, {
+      headers: {
+        "content-type": "image/webp",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }),
+);
+
 app.get(
   "/api/maids",
   safeApi(async (c) => {
@@ -6214,7 +6277,7 @@ app.get(
               noPhotos,
             })
         return c.json({
-          maids: stripPhotos(result.maids),
+          maids: stripPhotos(isAdminRequest ? result.maids : withPublicMaidPhotoPreviews(result.maids)),
           total: result.total,
           page: page ?? 1,
           pageSize: limit ?? result.total,
@@ -6255,7 +6318,7 @@ app.get(
     const pagedMaids = limit != null ? maids.slice(effectiveOffset, effectiveOffset + limit) : maids
 
     return c.json({
-      maids: stripPhotos(pagedMaids),
+      maids: stripPhotos(isAdminRequest ? pagedMaids : withPublicMaidPhotoPreviews(pagedMaids)),
       total,
       page: page ?? 1,
       pageSize: limit ?? total,
@@ -8126,6 +8189,46 @@ app.post("/api/requests/mark-viewed", requireAgencyAdminAuth, async (c) => {
   }
   return c.json({ ok: true, markedCount });
 });
+
+// Delete selected requests belonging to the signed-in agency. Related
+// conversations and messages are removed as well, preventing orphan records.
+app.delete(
+  "/api/requests/bulk",
+  safeApi(async (c) => {
+    const body = await parseBody<{ ids?: unknown }>(c.req.raw);
+    const ids = Array.isArray(body?.ids)
+      ? Array.from(new Set(body.ids.map((id) => toTrimmedString(id)).filter(Boolean)))
+      : [];
+    if (ids.length === 0) return c.json({ error: "Select at least one request" }, 400);
+    if (!parseAuthorizationToken(c.req.raw)) return c.json({ error: "Unauthorized" }, 401);
+
+    const data = await loadData(c.env);
+    const { actor } = await resolveRequestActor(c.env, c.req.raw, data);
+    if (!actor || actor.type !== "admin") return c.json({ error: "Unauthorized" }, 401);
+
+    const idsToDelete = new Set(
+      data.requests
+        .filter((request) => ids.includes(request.id) && request.agencyId === actor.admin.agencyId)
+        .map((request) => request.id),
+    );
+    if (idsToDelete.size === 0) return c.json({ error: "No matching requests found" }, 404);
+
+    const conversationIds = new Set(
+      data.requestConversations
+        .filter((conversation) => idsToDelete.has(conversation.requestId))
+        .map((conversation) => conversation.id),
+    );
+    data.requests = data.requests.filter((request) => !idsToDelete.has(request.id));
+    data.requestConversations = data.requestConversations.filter(
+      (conversation) => !conversationIds.has(conversation.id),
+    );
+    data.requestMessages = data.requestMessages.filter(
+      (message) => !conversationIds.has(message.conversationId),
+    );
+    await saveData(c.env, data);
+    return c.json({ deleted: idsToDelete.size });
+  }),
+);
 
 app.get(
   "/api/requests/:id",
@@ -12641,6 +12744,65 @@ app.post("/api/agency-auth/logout", requireAgencyAdminAuth, async (c) => {
   await deleteAgencyAdminSession(c.env, token);
   return c.json({ message: "Logged out successfully" });
 });
+
+// Change the signed-in agency administrator's password. This is intentionally
+// separate from the operator-only bootstrap reset: the caller must prove both
+// a valid session and knowledge of their existing password.
+app.post(
+  "/api/agency-auth/change-password",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      currentPassword?: unknown;
+      newPassword?: unknown;
+    }>(c.req.raw);
+    const currentPassword = toTrimmedString(body?.currentPassword);
+    const newPassword = toTrimmedString(body?.newPassword);
+
+    if (!currentPassword || !newPassword) {
+      return c.json({ error: "Current password and new password are required" }, 400);
+    }
+    if (newPassword.length < 8) {
+      return c.json({ error: "New password must be at least 8 characters" }, 400);
+    }
+    if (currentPassword === newPassword) {
+      return c.json({ error: "Choose a different new password" }, 400);
+    }
+
+    const signedInAdmin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const data = await loadData(c.env);
+    const storedAdmin = data.agencyAdmins.find(
+      (admin) => admin.id === signedInAdmin.id,
+    );
+    if (!storedAdmin) {
+      return c.json({ error: "Agency administrator not found" }, 404);
+    }
+
+    const validCurrentPassword = storedAdmin.password.startsWith("pbkdf2:")
+      ? await verifyPassword(currentPassword, storedAdmin.password)
+      : Boolean(storedAdmin.password) && storedAdmin.password.trim() === currentPassword;
+    if (!validCurrentPassword) {
+      return c.json({ error: "Current password is incorrect" }, 401);
+    }
+
+    storedAdmin.password = await hashPassword(newPassword);
+    await saveData(c.env, data);
+
+    // Agency credentials may be read from the dedicated Supabase auth store,
+    // so refresh it before responding. The plaintext password never leaves the
+    // Worker; only its PBKDF2 hash is persisted.
+    const supabase = getSupabaseAppDataConfig(c.env);
+    if (supabase) {
+      if (isNormalizedSupabaseEnabled(c.env)) {
+        await saveAgencyAdminAuthToSupabaseNormalized(supabase, data.agencyAdmins);
+      } else {
+        await saveAgencyAdminAuthToSupabase(supabase, data.agencyAdmins);
+      }
+    }
+
+    return c.json({ ok: true, message: "Password changed successfully" });
+  }),
+);
 
 app.get("/api/client/my-maids", requireClientAuth, async (c) => {
   const client = c.get("client");

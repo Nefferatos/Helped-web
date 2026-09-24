@@ -2760,6 +2760,20 @@ export const authenticateAgencyAdminStore = async (
   )
 }
 
+export const changeAgencyAdminPasswordStore = async (
+  adminId: number,
+  newPassword: string
+) => {
+  const data = await loadData()
+  const admin = data.agencyAdmins.find((item) => item.id === Number(adminId))
+  if (!admin) return null
+
+  admin.password = ''
+  admin.passwordHash = hashPassword(newPassword)
+  await saveData(data)
+  return admin
+}
+
 export const createAgencyAdminSessionStore = async (adminId: number) => {
   const session: AgencyAdminSessionRecord = {
     token: randomBytes(24).toString('hex'),

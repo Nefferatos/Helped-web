@@ -350,6 +350,16 @@ export const updateRequestMaidsRecord = async (
   return result.rows[0] ? mapRequestRow(result.rows[0]) : null
 }
 
+export const deleteRequestRecords = async (ids: string[], agencyId: number) => {
+  if (ids.length === 0) return 0
+  const result = (await query(
+    `DELETE FROM requests
+     WHERE id = ANY($1::uuid[]) AND COALESCE(agency_id, 1) = $2`,
+    [ids, agencyId]
+  )) as { rowCount?: number }
+  return Number(result.rowCount ?? 0)
+}
+
 export const getRequestStatusCountsRecord = async (filters: {
   agencyId?: number
   clientId?: number

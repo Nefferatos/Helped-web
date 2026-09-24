@@ -3801,6 +3801,37 @@
   ],
   "automationLogs": [
     {
+      "id": 224,
+      "createdAt": "2026-09-24T05:31:17.572Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 44,
+        "createdAt": "2026-09-24T05:31:17.558Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Maria",
+          "position": "Domestic",
+          "type": "interview_invitation",
+          "scheduledDate": "2027-02-23",
+          "scheduledTime": "02:11",
+          "timezone": "Asia/Manila",
+          "meetLink": "https://meet.google.com/krk-sdxh-omu",
+          "source": "schedule_interview",
+          "requestedAt": "2026-09-24T05:31:16.295Z"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 1261,
+        "responseBody": "Accepted",
+        "error": ""
+      }
+    },
+    {
       "id": 223,
       "createdAt": "2026-08-29T14:24:01.847Z",
       "workflow": "inquiry_pipeline",
@@ -9031,6 +9062,149 @@
   ],
   "makeDeliveries": [
     {
+      "id": 46,
+      "createdAt": "2026-09-24T06:32:34.535Z",
+      "scenario": "applicant-assistant",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "conversationId": "9ad02856-a838-4a6c-9323-73bbf26ed76d",
+        "requestId": "003c833c-c5a3-411e-9657-61977afa7567",
+        "message": "Who needs follow-up today?",
+        "type": "applicant_assistant",
+        "context": {
+          "user": {
+            "id": "2",
+            "name": "attheagency",
+            "email": ""
+          },
+          "agency": {
+            "id": 1,
+            "name": ""
+          },
+          "selectedApplicant": null,
+          "selectedApplicants": [],
+          "currentFilters": {},
+          "currentSearch": "",
+          "applicantSummary": {
+            "total": 41,
+            "byStage": {
+              "New Applicant": 1,
+              "Rejected": 40
+            },
+            "byNationality": {
+              "Filipino maid": 6,
+              "Indonesian maid": 7,
+              "Indian maid": 15,
+              "Indian": 2,
+              "Myanmar maid": 3,
+              "": 8
+            },
+            "averageScore": 15,
+            "needingFollowup": 1,
+            "recentlyAdded": 0
+          }
+        },
+        "conversationHistory": [
+          {
+            "role": "user",
+            "content": "Who needs follow-up today?"
+          }
+        ],
+        "trackerContext": {
+          "existingTracker": null,
+          "googleDocId": null
+        }
+      },
+      "success": false,
+      "statusCode": null,
+      "durationMs": 1233,
+      "responseBody": "",
+      "error": "UNKNOWN: unknown error, open 'C:\\Users\\JIM\\Desktop\\Maid Website\\Helped-web\\backend\\data\\workflow-data.json'"
+    },
+    {
+      "id": 45,
+      "createdAt": "2026-09-24T06:32:34.526Z",
+      "scenario": "applicant-assistant",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "conversationId": "9ad02856-a838-4a6c-9323-73bbf26ed76d",
+        "requestId": "003c833c-c5a3-411e-9657-61977afa7567",
+        "message": "Who needs follow-up today?",
+        "type": "applicant_assistant",
+        "context": {
+          "user": {
+            "id": "2",
+            "name": "attheagency",
+            "email": ""
+          },
+          "agency": {
+            "id": 1,
+            "name": ""
+          },
+          "selectedApplicant": null,
+          "selectedApplicants": [],
+          "currentFilters": {},
+          "currentSearch": "",
+          "applicantSummary": {
+            "total": 41,
+            "byStage": {
+              "New Applicant": 1,
+              "Rejected": 40
+            },
+            "byNationality": {
+              "Filipino maid": 6,
+              "Indonesian maid": 7,
+              "Indian maid": 15,
+              "Indian": 2,
+              "Myanmar maid": 3,
+              "": 8
+            },
+            "averageScore": 15,
+            "needingFollowup": 1,
+            "recentlyAdded": 0
+          }
+        },
+        "conversationHistory": [
+          {
+            "role": "user",
+            "content": "Who needs follow-up today?"
+          }
+        ],
+        "trackerContext": {
+          "existingTracker": null,
+          "googleDocId": null
+        }
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1224,
+      "responseBody": "Accepted",
+      "error": ""
+    },
+    {
+      "id": 44,
+      "createdAt": "2026-09-24T05:31:17.558Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Maria",
+        "position": "Domestic",
+        "type": "interview_invitation",
+        "scheduledDate": "2027-02-23",
+        "scheduledTime": "02:11",
+        "timezone": "Asia/Manila",
+        "meetLink": "https://meet.google.com/krk-sdxh-omu",
+        "source": "schedule_interview",
+        "requestedAt": "2026-09-24T05:31:16.295Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1261,
+      "responseBody": "Accepted",
+      "error": ""
+    },
+    {
       "id": 43,
       "createdAt": "2026-09-20T15:25:54.566Z",
       "scenario": "applicant-assistant",
@@ -10894,8 +11068,8 @@
     "schedules": 6,
     "contracts": 7,
     "notifications": 24,
-    "automationLogs": 224,
+    "automationLogs": 225,
     "decisionLogs": 83,
-    "makeDeliveries": 44
+    "makeDeliveries": 47
   }
 }

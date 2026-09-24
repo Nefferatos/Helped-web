@@ -2,6 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { getClient, query } from '../db'
 import {
   authenticateAgencyAdminStore,
+  changeAgencyAdminPasswordStore,
   createAgencyAdminSessionStore,
   deleteAgencyAdminSessionStore,
   getAgencyAdminByTokenStore,
@@ -196,6 +197,28 @@ export const authenticateAgencyAdminRecord = async (
     )
     return null
   }
+}
+
+export const changeAgencyAdminPasswordRecord = async (
+  adminId: number,
+  newPassword: string
+) => {
+  const updated = await changeAgencyAdminPasswordStore(adminId, newPassword)
+  if (!updated) return null
+
+  try {
+    await query(
+      `UPDATE agency_admins SET password_hash = $2 WHERE id = $1`,
+      [adminId, updated.passwordHash]
+    )
+  } catch (error) {
+    console.warn(
+      '[agency-admin-repo] SQL password update unavailable, local agency admin store updated:',
+      error instanceof Error ? error.message : error
+    )
+  }
+
+  return updated
 }
 
 export const createAgencyAdminSessionRecord = async (adminId: number) => {

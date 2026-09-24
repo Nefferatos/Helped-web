@@ -1,6 +1,7 @@
 import express, { Router } from 'express'
 import {
   createRequest,
+  deleteRequests,
   getRequest,
   getRequestStatusCounts,
   getUnreadRequestCount,
@@ -17,6 +18,7 @@ router.post('/', createRequest)
 router.get('/unread-count', getUnreadRequestCount)
 router.post('/mark-viewed', markRequestsViewed)
 router.get('/status-counts', getRequestStatusCounts)
+router.delete('/bulk', deleteRequests)
 router.get('/:id', getRequest)
 router.patch('/:id/status', patchRequestStatus)
 router.patch('/:id/maids', patchRequestMaids)

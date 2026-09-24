@@ -284,6 +284,20 @@ export const updateRequestMaids = async (id: string, maidReferences: string[]): 
   return data.data;
 };
 
+export const deleteRequests = async (ids: string[]): Promise<number> => {
+  const response = await fetch("/api/requests/bulk", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAgencyAdminAuthHeaders(),
+    },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await ensureOk<{ deleted?: number; error?: string }>(response);
+  notifyRequestsChanged();
+  return data.deleted ?? 0;
+};
+
 export const requestStateMessage = (status: RequestStatus) => {
   switch (status) {
     case "pending":

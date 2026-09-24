@@ -1936,12 +1936,21 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
 
   const analytics = useMemo(() => {
     const urgentEnquiries = enquiries.filter((e) => e.status === "new" || e.status === "in_progress");
+    const today = new Date();
+    const todayEnquiries = enquiries.filter((enquiry) => {
+      const submittedAt = new Date(enquiry.createdAt || enquiry.date);
+      return !Number.isNaN(submittedAt.getTime())
+        && submittedAt.getFullYear() === today.getFullYear()
+        && submittedAt.getMonth() === today.getMonth()
+        && submittedAt.getDate() === today.getDate();
+    });
     const pendingRequests = requests.filter((r) => r.status === "pending");
     const topApplicants = applicants.filter((a) => (a.score?.score ?? 0) >= 80);
     const noContract = contracts.filter((c) => !c.hasContract);
     return {
       totalEnquiries: enquiries.length,
       urgentEnquiries: urgentEnquiries.length,
+      todayEnquiries: todayEnquiries.length,
       totalRequests: requests.length,
       pendingRequests: pendingRequests.length,
       totalApplicants: applicants.length,
@@ -2018,11 +2027,16 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
       parts.push("");
     }
 
-    const urgentEnqs = enquiries.filter((e) => e.status === "new" || e.status === "in_progress");
+    // The inbox UI order is not a reliable date order. Make the complete
+    // context deterministic so "latest enquiries" always means newest first.
+    const newestFirstEnquiries = [...enquiries].sort(
+      (left, right) => Date.parse(right.createdAt || right.date || "") - Date.parse(left.createdAt || left.date || ""),
+    );
+    const urgentEnqs = newestFirstEnquiries.filter((e) => e.status === "new" || e.status === "in_progress");
     if (enquiries.length > 0) {
-      parts.push(`ENQUIRIES (${enquiries.length} total, ${urgentEnqs.length} urgent):`);
-      urgentEnqs.slice(0, 10).forEach((e) => {
-        parts.push(`  - [${e.status || "new"}] ${e.username || "Anonymous"}: "${safeSlice(e.message, 120)}" (${e.email || e.phone || "no contact"}) - ${formatDate(e.createdAt)}`);
+      parts.push(`ENQUIRIES - COMPLETE, NEWEST FIRST (${enquiries.length} total, ${urgentEnqs.length} needing attention):`);
+      newestFirstEnquiries.forEach((e, index) => {
+        parts.push(`  ${index + 1}. ENQUIRY ID: ${e.id}; status: ${e.status || "new"}; received: ${formatDate(e.createdAt || e.date)}; client: ${e.username || e.clientName || "Anonymous"}; contact: ${e.email || e.phone || "not supplied"}; message: "${safeSlice(e.message, 500)}"${e.note ? `; staff note: "${safeSlice(e.note, 240)}"` : ""}${e.assignedTo ? `; assigned to: ${e.assignedTo}` : ""}`);
       });
     }
 
@@ -2047,6 +2061,38 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
         const created = maid.createdAt ? formatDate(maid.createdAt) : "date N/A";
         const region = maid.type || maid.nationality || "N/A";
         parts.push(`  - ${maid.fullName || "Unnamed"} [${maid.referenceCode || "no ref"}] — NATIONALITY (AUTHORITATIVE): ${maid.nationality || "not recorded"}; ${region}, created: ${created}${maid.status ? `, status: ${maid.status}` : ""}`);
+      });
+    }
+
+    // This normalized roster is the source for availability and origin queries.
+    // Public profiles are already included in the internal list, so de-duplicate
+    // by reference code before describing them to the model.
+    const completeRoster = Array.from(
+      new Map(
+        [...maids, ...publicMaids]
+          .filter((maid) => maid.referenceCode || maid.fullName)
+          .map((maid) => [maid.referenceCode || `name:${maid.fullName}`, maid]),
+      ).values(),
+    );
+    if (completeRoster.length > 0) {
+      const availableCount = completeRoster.filter((maid) => /\bavailable\b/i.test(String(maid.status || "available"))).length;
+      parts.push(`\nCOMPLETE MAID ROSTER - AUTHORITATIVE (${completeRoster.length} profiles; ${availableCount} status=available):`);
+      completeRoster.forEach((maid) => {
+        const details = maid as CommandCenterMaid & Record<string, unknown>;
+        const skills = maid.skillsPreferences || {};
+        const intro = maid.introduction || {};
+        const languages = Array.isArray(maid.languageSkills)
+          ? maid.languageSkills.join(", ")
+          : safeSlice(skills.languages ?? intro.languages ?? skills.languageSkills, 100);
+        const experience = maid.yearsOfExperience ?? skills.yearsOfExperience ?? intro.yearsOfExperience ?? "N/A";
+        const salary = maid.expectedSalary ?? skills.expectedSalary ?? intro.expectedSalary;
+        const specialties = safeSlice(skills.specialties ?? skills.skills ?? intro.skills ?? intro.experience ?? "", 160);
+        const origin = [details.placeOfBirth, details.birthPlace, details.region, details.workAreas, details.workArea]
+          .flatMap((value) => Array.isArray(value) ? value : [value])
+          .map((value) => safeSlice(value, 100))
+          .filter(Boolean)
+          .join(", ");
+        parts.push(`  - MAID REF: ${maid.referenceCode || "not recorded"}; name: ${maid.fullName || "Unnamed"}; STATUS (AUTHORITATIVE): ${maid.status || "available"}; VISIBILITY: ${maid.isPublic ? "public" : "hidden/internal"}; NATIONALITY (AUTHORITATIVE): ${maid.nationality || "not recorded"}; TYPE/ORIGIN (AUTHORITATIVE): ${[maid.type, origin].filter(Boolean).join(" | ") || "not recorded"}; available date: ${safeSlice(details.availableDate, 40) || "not recorded"}; ${experience}y experience${salary ? `; expected salary: $${salary}` : ""}${languages ? `; languages: ${languages}` : ""}${specialties ? `; skills: ${specialties}` : ""}`);
       });
     }
 
@@ -2124,6 +2170,10 @@ Your capabilities:
 - For maid matching, make the decision using the employer/request/enquiry description, including care needs, nationality, languages, skills, experience, salary, availability, and other stated preferences. Do not use a fixed rotation or alphabetical selection.
 - For pending requests, read the REQUEST ID, employer request description, budget, and structured requirements fields before selecting matches. Treat the request details as the employer's actual requirements, not as optional metadata.
 - Nationality is an exact database field, not an inference from the name, region, category, language, or user wording. Never change or infer it. For example, if a record says "NATIONALITY (AUTHORITATIVE): Indian", it must be described as Indian, never Filipino.
+- The ENQUIRIES section is complete and ordered newest first. For "latest enquiries", list the first records from that section with their ID, received date, status, client, and enquiry text. Never call an enquiry latest without comparing its stored received date.
+- The COMPLETE MAID ROSTER is the authoritative source for availability, public/hidden visibility, nationality, type, and origin. For "all available maids/helpers/girls", include only records whose STATUS (AUTHORITATIVE) contains "available" and state the exact count. "Girls" means maid profiles in this product; do not infer a gender or other attribute.
+- For origin requests such as "Darjeeling maids", match the requested place only against TYPE/ORIGIN (AUTHORITATIVE). Never guess origin from a name, nationality, language, or appearance. If no stored TYPE/ORIGIN contains the place, say no matching record was found.
+- When the user says "all", do not silently replace it with a shortlist. Return every matching MAID REF, or state the exact total and ask to continue in the next message if the complete answer is too long.
 
 --- LIVE AGENCY DATA ---
 ${dataContext || "No data available yet."}
@@ -2243,9 +2293,6 @@ Always reference actual records from the data above when responding. Be specific
         >
           <Bot className="h-5 w-5 shrink-0" />
           <span className="hidden whitespace-nowrap text-sm font-bold sm:inline">AI Command</span>
-          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white/25 text-[10px] font-bold tabular-nums">
-            {analytics.totalEnquiries + analytics.totalRequests + analytics.totalApplicants}
-          </span>
         </button>
       )}
 
@@ -2261,9 +2308,7 @@ Always reference actual records from the data above when responding. Be specific
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">AI Command Center</h3>
-                  <p className="text-[11px] text-violet-100">
-                    {analytics.totalEnquiries + analytics.totalRequests + analytics.totalApplicants} records · Make.com powered
-                  </p>
+                  <p className="text-[11px] text-violet-100">Make.com powered</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -2514,7 +2559,7 @@ Always reference actual records from the data above when responding. Be specific
                   </div>
                   <div className="space-y-1.5">
                     {[
-                      { label: "Show urgent enquiries", desc: `${analytics.urgentEnquiries} need attention`, action: () => triggerQuickAction("Show me all urgent enquiries that need attention") },
+                      { label: "Show today's enquiries", desc: `${analytics.todayEnquiries} received today`, action: () => triggerQuickAction("Show me all enquiries received today, including the newest first") },
                       { label: "Applicant screening", desc: `${analytics.topApplicants} scoring 80+`, action: () => triggerQuickAction("Screen top applicants and summarize their profiles") },
                       { label: "Contract status", desc: `${analytics.missingContracts} missing docs`, action: () => triggerQuickAction("Show me contracts with missing documents") },
                     ].map((item) => (
