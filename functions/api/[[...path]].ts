@@ -9735,6 +9735,16 @@ app.post(
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const body = await parseAiBody(c.req.raw);
+    if (body.healthCheck === true) {
+      return c.json({
+        online: Boolean(
+          c.env.MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT ||
+            c.env.MAKE_APPLICANT_ASSISTANT_WEBHOOK_URL ||
+            c.env.CLINE_API_KEY ||
+            c.env.ANTHROPIC_API_KEY,
+        ),
+      });
+    }
     const data = await loadData(c.env, { readOnly: true });
     return runAiEndpoint(
       c,
@@ -10048,9 +10058,10 @@ app.post(
     const message = toTrimmedString(body?.message);
     if (!message) return c.json({ error: "message is required" }, 400);
 
+    // Prefer the documented environment variable so production matches local setup.
     const dedicatedWebhookUrl = (
-      c.env.MAKE_APPLICANT_ASSISTANT_WEBHOOK_URL ||
-      c.env.MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT
+      c.env.MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT ||
+      c.env.MAKE_APPLICANT_ASSISTANT_WEBHOOK_URL
     )?.trim();
     const commandCenterWebhookUrl = c.env.MAKE_AI_COMMAND_CENTER_WEBHOOK_URL?.trim();
     const webhookUrl = dedicatedWebhookUrl || commandCenterWebhookUrl || c.env.MAKE_WEBHOOK_URL?.trim();
@@ -10070,30 +10081,40 @@ app.post(
       .map((id) => buildApplicantAssistantApplicantContext(data, admin.agencyId, id))
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
+    const assistantContext = {
+      user: {
+        id: String(admin.id ?? admin.username ?? "agency-admin"),
+        name: admin.username || admin.email || "Agency Staff",
+        email: admin.email || "",
+      },
+      agency: {
+        id: admin.agencyId,
+        name: admin.agencyName || "",
+      },
+      selectedApplicant: selectedApplicants.length === 1 ? selectedApplicants[0] : null,
+      selectedApplicants,
+      currentFilters: body?.currentFilters && typeof body.currentFilters === "object" ? body.currentFilters : {},
+      currentSearch: toTrimmedString(body?.currentSearch),
+      applicantSummary: buildApplicantAssistantSummary(data, admin.agencyId),
+    };
+    const assistantSystemPrompt =
+      "You are an AI recruitment operations assistant for a domestic worker agency. " +
+      "Give concise, specific recruiting guidance using only the supplied applicant data. " +
+      "Prioritize suitable candidates, follow-up risks, pipeline stages, and practical next actions.";
+
     const applicantAssistantPayload = {
       scenario: "applicant-assistant",
       type: "applicant_assistant",
       requestId,
       conversationId,
       message,
-      context: {
-        user: {
-          id: String(admin.id ?? admin.username ?? "agency-admin"),
-          name: admin.username || admin.email || "Agency Staff",
-          email: admin.email || "",
-        },
-        agency: {
-          id: admin.agencyId,
-          name: admin.agencyName || "",
-        },
-        selectedApplicant: selectedApplicants.length === 1 ? selectedApplicants[0] : null,
-        selectedApplicants,
-        currentFilters: body?.currentFilters && typeof body.currentFilters === "object" ? body.currentFilters : {},
-        currentSearch: toTrimmedString(body?.currentSearch),
-        applicantSummary: buildApplicantAssistantSummary(data, admin.agencyId),
-      },
+      context: assistantContext,
       conversationHistory: [{ role: "user", content: message }],
       trackerContext: { existingTracker: null, googleDocId: null },
+      // Compatibility with the simpler Make AI-agent blueprint currently in use.
+      systemPrompt: assistantSystemPrompt,
+      userPrompt: `RECRUITER MESSAGE:\n${message}\n\nAPPLICANT CONTEXT:\n${JSON.stringify(assistantContext)}`,
+      messages: [{ role: "user", content: message }],
     };
     const makePayload = !dedicatedWebhookUrl && commandCenterWebhookUrl
       ? {

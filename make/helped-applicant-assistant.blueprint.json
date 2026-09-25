@@ -1,117 +1,332 @@
 {
-    "name": "Helped – Applicant AI Assistant",
+    "name": "Ai Recruiting Assistant",
     "flow": [
         {
             "id": 1,
             "module": "gateway:CustomWebHook",
             "version": 1,
-            "parameters": { "maxResults": 1 },
+            "parameters": {
+                "hook": 3739683,
+                "maxResults": 1
+            },
             "mapper": {},
             "metadata": {
-                "designer": { "x": 0, "y": 0 },
-                "notes": "Applicant AI Assistant Webhook. After import: click this module, create a new webhook, name it 'Applicant AI Assistant', then copy the URL and set it as MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT in your backend .env file."
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                },
+                "setupValidation": {
+                    "version": 1,
+                    "configuration": "f9fd47a82bcf4b3d",
+                    "result": {
+                        "valid": true,
+                        "fields": []
+                    }
+                },
+                "restore": {
+                    "parameters": {
+                        "hook": {
+                            "data": {
+                                "editable": "true"
+                            },
+                            "label": "Ai Recruiting Assistant"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "hook",
+                        "type": "hook:gateway-webhook",
+                        "label": "Webhook",
+                        "required": true
+                    },
+                    {
+                        "name": "maxResults",
+                        "type": "number",
+                        "label": "Maximum number of results"
+                    }
+                ]
             }
         },
         {
             "id": 2,
-            "module": "json:ParseJSON",
-            "version": 1,
-            "parameters": {},
-            "mapper": { "json": "{{1.data}}" },
-            "metadata": {
-                "designer": { "x": 300, "y": 0 },
-                "notes": "Parse incoming webhook JSON payload from the backend."
-            }
-        },
-        {
-            "id": 3,
             "module": "ai-local-agent:RunLocalAIAgent",
             "version": 0,
-            "parameters": {},
+            "parameters": {
+                "makeConnectionId": 9990574
+            },
             "mapper": {
-                "defaultModel": "gpt-4o-mini",
-                "reasoningEffort": "low",
-                "systemPrompt": "You are an AI recruitment operations assistant for a domestic worker (maid) agency. You help the recruiter manage applicants from the Applicant List. You are NOT a generic chatbot.\n\nCAPABILITIES:\n- Analyze applicant profiles (strengths, weaknesses, suitability)\n- Compare applicants and rank them for specific roles\n- Recommend suitable applicants based on employer needs\n- Identify applicants that need follow-up\n- Create applicant trackers with recruitment columns\n- Sync trackers to Google Docs when requested\n- Prepare interview and follow-up communications\n- Track applicant progress through the pipeline\n- Summarize pipeline statistics\n\nPERSONALITY:\n- Professional, proactive, data-driven\n- Concise but thorough\n- Reference actual applicant names and data from the context\n- Be specific and actionable in recommendations\n\nOUTPUT FORMAT:\nReturn valid JSON matching this exact schema:\n{\"success\":true,\"requestId\":\"<from input>\",\"conversationId\":\"<from input>\",\"type\":\"applicant_assistant\",\"message\":{\"text\":\"Your response\"},\"action\":{\"type\":null,\"status\":\"completed\",\"data\":{}},\"result\":{\"documentId\":null,\"documentUrl\":null,\"trackerData\":null},\"requiresHumanReview\":false}\n\nACTION TYPES (set action.type when performing an action):\n- create_applicant_tracker\n- update_applicant_tracker\n- add_applicant_to_tracker\n- sync_applicants_to_google_doc\n- create_google_doc_tracker\n- update_google_doc_tracker\n- find_applicants_needing_followup\n- analyze_applicant\n- compare_applicants\n- prepare_screening_list\n- prepare_followup_list\n- recommend_applicants\n\nRULES:\n- Always use actual applicant data from context\n- Never invent applicant names, scores, or details\n- When creating trackers, set action.type to create_applicant_tracker or create_google_doc_tracker\n- When syncing to Google Docs, set action.type to create_google_doc_tracker or sync_applicants_to_google_doc\n- Set requiresHumanReview true for external actions (emails, sharing docs)\n- The first character must be { and last must be }\n- Never use markdown in message.text",
-                "message": "RECRUITER MESSAGE:\n{{2.message}}\n\nREQUEST ID: {{2.requestId}}\nCONVERSATION ID: {{2.conversationId}}\n\nSELECTED APPLICANT:\n{{if(2.context.selectedApplicant; toJSON(2.context.selectedApplicant); \"None selected\")}}\n\nSELECTED APPLICANTS (multiple):\n{{if(2.context.selectedApplicants; toJSON(2.context.selectedApplicants); \"None\")}}\n\nCURRENT FILTERS:\n{{if(2.context.currentFilters; toJSON(2.context.currentFilters); \"None\")}}\n\nCURRENT SEARCH: {{if(2.context.currentSearch; 2.context.currentSearch; \"None\")}}\n\nPIPELINE SUMMARY:\nTotal: {{2.context.applicantSummary.total}}\nAvg Score: {{2.context.applicantSummary.averageScore}}\nNeeding Follow-up: {{2.context.applicantSummary.needingFollowup}}\nRecent (24h): {{2.context.applicantSummary.recentlyAdded}}\n\nBy Stage: {{toJSON(2.context.applicantSummary.byStage)}}\nBy Nationality: {{toJSON(2.context.applicantSummary.byNationality)}}\n\nEXISTING TRACKER:\n{{if(2.trackerContext.existingTracker; toJSON(2.trackerContext.existingTracker); \"None\")}}\n\nGOOGLE DOC ID: {{if(2.trackerContext.googleDocId; 2.trackerContext.googleDocId; \"None\")}}\n\nRECRUITER: {{2.context.user.name}} (Agency {{2.context.agency.id}})\n\nCONVERSATION HISTORY:\n{{join(map(slice(2.conversationHistory; -10); item.role + \": \" + item.content); \"\\n\")}}",
-                "threadId": "{{2.conversationId}}",
-                "modelConfig": { "recursionLimit": 300, "iterationsFromHistoryCount": "12" },
-                "outputType": "text"
+                "files": [],
+                "message": "{{1.userPrompt}}\n\nConversation history:\n{{join(map(slice(1.messages; -10); item.role + \": \" + item.content); \"\\n\")}}",
+                "threadId": "{{1.conversationId}}",
+                "outputType": "text",
+                "tokenLimit": "80",
+                "modelConfig": {
+                    "timeout": "120",
+                    "recursionLimit": "80",
+                    "iterationsFromHistoryCount": "10"
+                },
+                "defaultModel": "small",
+                "systemPrompt": "{{1.systemPrompt}}",
+                "promptCaching": "none",
+                "fallbackEnabled": false
             },
             "metadata": {
-                "designer": { "x": 600, "y": 0 },
-                "notes": "AI Recruitment Assistant. After import: connect your OpenAI/Anthropic API key."
+                "designer": {
+                    "x": 450,
+                    "y": 0
+                },
+                "setupValidation": {
+                    "version": 1,
+                    "configuration": "b963e5bfed99f7e3",
+                    "result": {
+                        "valid": true,
+                        "fields": []
+                    }
+                },
+                "restore": {
+                    "expect": {
+                        "files": {
+                            "mode": "chose"
+                        },
+                        "outputType": {
+                            "label": "Text"
+                        },
+                        "defaultModel": {
+                            "mode": "chose",
+                            "label": "SmallModel: gpt-5-nano. Reasoning: minimal. Efficiently handles long conversations and reasoning, delivering smart conclusions quickly"
+                        },
+                        "promptCaching": {
+                            "label": "Automatic (always on)"
+                        }
+                    },
+                    "parameters": {
+                        "makeConnectionId": {
+                            "data": {
+                                "scoped": "true",
+                                "connection": "ai-provider"
+                            },
+                            "label": "IT's Make's AI Provider connection"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "makeConnectionId",
+                        "type": "account:ai-provider,openai-gpt-3,anthropic-claude,gemini-ai-q9zyjp,ai-agent-foundry-openai,ai-agent-foundry-non-openai,mistral-ai,cohere,groq,ai-agent-xai,amazon-bedrock,ai-agent-openai-compatible",
+                        "label": "Connection",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "defaultModel",
+                        "type": "select",
+                        "label": "Model",
+                        "required": true
+                    },
+                    {
+                        "name": "tokenLimit",
+                        "type": "number",
+                        "label": "Maximum output length (%)",
+                        "validate": {
+                            "max": 100,
+                            "min": 20
+                        }
+                    },
+                    {
+                        "name": "promptCaching",
+                        "type": "select",
+                        "label": "Prompt caching",
+                        "validate": {
+                            "enum": [
+                                "none"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "fallbackEnabled",
+                        "type": "boolean",
+                        "label": "Enable fallback connection",
+                        "required": true
+                    },
+                    {
+                        "name": "systemPrompt",
+                        "type": "text",
+                        "label": "Instructions"
+                    },
+                    {
+                        "name": "message",
+                        "type": "text",
+                        "label": "Input",
+                        "required": true
+                    },
+                    {
+                        "name": "files",
+                        "spec": [
+                            {
+                                "name": "fileName",
+                                "type": "filename",
+                                "label": "File name",
+                                "semantic": "file:name"
+                            },
+                            {
+                                "name": "data",
+                                "type": "buffer",
+                                "label": "Data",
+                                "semantic": "file:data"
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Input files"
+                    },
+                    {
+                        "name": "threadId",
+                        "type": "text",
+                        "label": "Conversation ID",
+                        "validate": {
+                            "max": 256
+                        }
+                    },
+                    {
+                        "name": "modelConfig",
+                        "spec": [
+                            {
+                                "name": "recursionLimit",
+                                "type": "number",
+                                "label": "Steps per agent call"
+                            },
+                            {
+                                "name": "iterationsFromHistoryCount",
+                                "type": "number",
+                                "label": "Maximum conversation history"
+                            },
+                            {
+                                "name": "timeout",
+                                "type": "number",
+                                "label": "Step timeout",
+                                "validate": {
+                                    "max": 600,
+                                    "min": 120
+                                }
+                            }
+                        ],
+                        "type": "collection",
+                        "label": "Model configuration"
+                    },
+                    {
+                        "name": "outputType",
+                        "type": "select",
+                        "label": "Response format",
+                        "required": true,
+                        "validate": {
+                            "enum": [
+                                "text",
+                                "make-schema",
+                                "udt-schema"
+                            ]
+                        }
+                    }
+                ]
             },
             "tools": []
         },
         {
-            "id": 4,
-            "module": "json:ParseJSON",
+            "id": 3,
+            "module": "gateway:WebhookRespond",
             "version": 1,
-            "mapper": { "json": "{{replace(replace(replace(trim(3.response); \"```json\"; \"\"); \"```\"; \"\"); \"`\"; \"\")}}" },
-            "metadata": { "designer": { "x": 900, "y": 0 }, "notes": "Parse AI JSON. Strips markdown fences." }
-        },
-        {
-            "id": 5,
-            "module": "builtin:BasicRouter",
-            "version": 1,
-            "routes": [
-                {
-                    "filter": {
-                        "name": "Google Doc Sync",
-                        "conditions": [
-                            [{ "a": "{{4.action.type}}", "o": "text:equal", "b": "create_google_doc_tracker" }],
-                            [{ "a": "{{4.action.type}}", "o": "text:equal", "b": "sync_applicants_to_google_doc" }],
-                            [{ "a": "{{4.action.type}}", "o": "text:equal", "b": "update_google_doc_tracker" }]
-                        ]
-                    },
-                    "flow": [
-                        {
-                            "id": 6, "module": "google-docs:createADocument", "version": 2,
-                            "mapper": { "title": "Applicant Tracker - {{formatDate(now; \"YYYY-MM-DD HH:mm\")}}", "content": "{{4.message.text}}" },
-                            "metadata": { "designer": { "x": 1200, "y": -100 }, "notes": "Create Google Doc. Connect your Google Docs account after import." }
-                        },
-                        {
-                            "id": 7, "module": "json:ComposeJSON", "version": 1,
-                            "mapper": { "json": "{\"success\":{{4.success}},\"requestId\":\"{{4.requestId}}\",\"conversationId\":\"{{4.conversationId}}\",\"type\":\"applicant_assistant\",\"message\":{\"text\":\"{{4.message.text}}\"},\"action\":{\"type\":\"{{4.action.type}}\",\"status\":\"completed\",\"data\":{{toJSON(ifempty(4.action.data;{}))}}},\"result\":{\"documentId\":\"{{6.documentId}}\",\"documentUrl\":\"{{6.url}}\",\"trackerData\":{{toJSON(ifempty(4.result.trackerData;null))}}},\"requiresHumanReview\":{{ifempty(4.requiresHumanReview;false)}}}" },
-                            "metadata": { "designer": { "x": 1500, "y": -100 } }
-                        }
-                    ]
+            "parameters": {},
+            "mapper": {
+                "body": "{{2.response}}",
+                "status": "200",
+                "headers": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ]
+            },
+            "metadata": {
+                "designer": {
+                    "x": 900,
+                    "y": 0
                 },
-                {
-                    "filter": {
-                        "name": "Standard Response",
-                        "conditions": [[
-                            { "a": "{{4.action.type}}", "o": "text:notEqual", "b": "create_google_doc_tracker" },
-                            { "a": "{{4.action.type}}", "o": "text:notEqual", "b": "sync_applicants_to_google_doc" },
-                            { "a": "{{4.action.type}}", "o": "text:notEqual", "b": "update_google_doc_tracker" }
-                        ]]
-                    },
-                    "flow": [
-                        {
-                            "id": 8, "module": "json:ComposeJSON", "version": 1,
-                            "mapper": { "json": "{\"success\":{{ifempty(4.success;true)}},\"requestId\":\"{{ifempty(4.requestId;2.requestId)}}\",\"conversationId\":\"{{ifempty(4.conversationId;2.conversationId)}}\",\"type\":\"applicant_assistant\",\"message\":{\"text\":\"{{ifempty(4.message.text;3.response)}}\"},\"action\":{\"type\":{{if(4.action.type;\"\\\"\"+4.action.type+\"\\\"\";\"null\")}},\"status\":\"{{ifempty(4.action.status;\"completed\")}}\",\"data\":{{toJSON(ifempty(4.action.data;{}))}}},\"result\":{\"documentId\":null,\"documentUrl\":null,\"trackerData\":{{toJSON(ifempty(4.result.trackerData;null))}}},\"requiresHumanReview\":{{ifempty(4.requiresHumanReview;false)}}}" },
-                            "metadata": { "designer": { "x": 1200, "y": 200 } }
+                "restore": {
+                    "expect": {
+                        "headers": {
+                            "mode": "chose",
+                            "items": [
+                                null
+                            ]
                         }
-                    ]
+                    }
                 },
-                {
-                    "filter": { "name": "Fallback", "conditions": [[{ "a": "{{4.success}}", "o": "text:empty", "b": "" }]] },
-                    "flow": [
-                        {
-                            "id": 9, "module": "json:ComposeJSON", "version": 1,
-                            "mapper": { "json": "{\"success\":true,\"requestId\":\"{{2.requestId}}\",\"conversationId\":\"{{2.conversationId}}\",\"type\":\"applicant_assistant\",\"message\":{\"text\":\"I encountered an issue processing your request. Please try again.\"},\"action\":{\"type\":null,\"status\":\"failed\",\"data\":{}},\"result\":{\"documentId\":null,\"documentUrl\":null,\"trackerData\":null},\"requiresHumanReview\":false}" },
-                            "metadata": { "designer": { "x": 1200, "y": 400 } }
+                "expect": [
+                    {
+                        "name": "status",
+                        "type": "uinteger",
+                        "label": "Status",
+                        "required": true,
+                        "validate": {
+                            "min": 100
                         }
-                    ]
-                }
-            ],
-            "metadata": { "designer": { "x": 1050, "y": 100 } }
-        },
-        {
-            "id": 10, "module": "gateway:WebhookRespond", "version": 1,
-            "mapper": { "body": "{{if(7.json;7.json;if(8.json;8.json;9.json))}}", "status": "200" },
-            "metadata": { "designer": { "x": 1800, "y": 100 } }
+                    },
+                    {
+                        "name": "body",
+                        "type": "any",
+                        "label": "Body"
+                    },
+                    {
+                        "name": "headers",
+                        "spec": [
+                            {
+                                "name": "key",
+                                "type": "text",
+                                "label": "Key",
+                                "required": true,
+                                "validate": {
+                                    "max": 256
+                                }
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value",
+                                "required": true,
+                                "validate": {
+                                    "max": 4096
+                                }
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Custom headers",
+                        "validate": {
+                            "maxItems": 16
+                        }
+                    }
+                ]
+            }
         }
     ],
-    "metadata": { "version": 1, "scenario": { "name": "Helped – Applicant AI Assistant", "roundtrips": 1, "maxErrors": 3, "autoCommit": true } }
+    "metadata": {
+        "instant": false,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "eu1.make.com",
+        "notes": []
+    }
 }
