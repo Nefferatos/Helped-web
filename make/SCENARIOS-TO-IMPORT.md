@@ -5,8 +5,8 @@ Import each JSON file as its own Make scenario. Do not combine webhook-triggered
 | Scenario | Blueprint | Backend environment variable | Finish in Make |
 |---|---|---|
 | Applicant intake and AI screening | `helped-applicant-intake.blueprint.json` | `MAKE_WEBHOOK_URL_APPLICANT_INTAKE` | Create the webhook, select Make AI Agent and Gmail connections; optionally configure Telegram. |
-| Workflow health check | `helped-event-health-check.blueprint.json` | none | Set the URL and `EVENT_INGEST_SECRET`, connect Gmail, then schedule every 60 minutes. |
-| Unified AI gateway | `helped-ai-gateway.blueprint.json` | `MAKE_WEBHOOK_URL_AI_ENGINE` plus optional specific `MAKE_WEBHOOK_URL_AI_ENGINE_WORKFLOW`, `..._MARKETING`, or `..._RECEPTIONIST` | Create webhook and select a Make AI Agent connection/model. Do not use the legacy generic `MAKE_WEBHOOK_URL` unless it points to this exact gateway. |
+| Workflow health check | `helped-event-health-check.blueprint.json` | none | Set the URL to `https://YOUR-DOMAIN/api/events/health`, use the same `EVENT_INGEST_SECRET` configured on the website, connect Gmail, then schedule every 60 minutes. It monitors `candidate.created` → `screening.completed`. |
+| Unified AI gateway | `helped-ai-gateway.blueprint.json` | Express: `MAKE_WEBHOOK_URL_AI_ENGINE`; Worker: `MAKE_AI_ENGINE_WEBHOOK_URL` | Create one webhook, select a Make AI Agent connection/model, and set both variables to the same URL. Do not use the legacy generic `MAKE_WEBHOOK_URL` unless it points to this exact gateway. |
 | Contractor arrival alert | `helped-contractor-arrival-alert.blueprint.json` | `MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT` | Create webhook, reconnect Gmail, set internal recipient. |
 | Interview scheduled staff alert | `helped-interview-scheduled-alert.blueprint.json` | `MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT` | Create webhook, reconnect Gmail, set internal recipient. |
 | Private document to Google Drive | `helped-google-drive-sync.blueprint.json` | `MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC` | Create webhook, connect Google Drive, select destination folder. |

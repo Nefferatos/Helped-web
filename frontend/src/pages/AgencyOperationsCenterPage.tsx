@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { BookOpen, FileAudio, FolderSync, Search, ShieldCheck, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList } from 'lucide-react'
 import { getAgencyAdminAuthHeaders } from '@/lib/agencyAdminAuth'
 
@@ -91,10 +92,20 @@ export default function AgencyOperationsCenterPage() {
   const [knowledge, setKnowledge] = useState({ sourceKey: '', title: '', category: 'SOP', content: '' })
   const [knowledgeQuery, setKnowledgeQuery] = useState('')
   const [snippets, setSnippets] = useState<KnowledgeSnippet[]>([])
-  const [drive, setDrive] = useState({ storageRef: '', fileName: '', folderKey: '' })
+  const [driveFile, setDriveFile] = useState<File | null>(null)
+  const [driveFolderKey, setDriveFolderKey] = useState('')
+  const [driveSyncing, setDriveSyncing] = useState(false)
   const [mediaRef, setMediaRef] = useState('')
 
-  const loadPlacements = () => api<{ placements: Placement[] }>('/api/operations-board').then((data) => setPlacements(data.placements ?? [])).catch((error) => setNotice(error.message))
+  const loadPlacements = async () => {
+    try {
+      const data = await api<{ placements: Placement[] }>('/api/operations-board')
+      setPlacements(data.placements ?? [])
+      setNotice('')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to load operations board')
+    }
+  }
   useEffect(() => { void loadPlacements() }, [])
 
   const loadRequirements = async () => {
@@ -135,8 +146,11 @@ export default function AgencyOperationsCenterPage() {
 
   const syncDrive = async (event: FormEvent) => {
     event.preventDefault()
-    try { const data = await api<{ jobId: string }>('/api/integrations/google-drive/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(drive) }); setNotice(`Google Drive sync job ${data.jobId} submitted.`) }
+    if (!driveFile) return setNotice('Choose a document first.')
+    setDriveSyncing(true)
+    try { const body = new FormData(); body.append('file', driveFile); if (driveFolderKey.trim()) body.append('folderKey', driveFolderKey.trim()); const data = await api<{ jobId: string; result?: { webViewLink?: string } }>('/api/integrations/google-drive/upload-and-sync', { method: 'POST', body }); setNotice(data.result?.webViewLink ? `Uploaded to Google Drive. Open it: ${data.result.webViewLink}` : `Uploaded ${driveFile.name} and started Google Drive sync (${data.jobId}).`); setDriveFile(null) }
     catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to start Drive sync') }
+    finally { setDriveSyncing(false) }
   }
 
   const transcribe = async () => {
@@ -168,6 +182,10 @@ export default function AgencyOperationsCenterPage() {
         {notice && (
           <p className="rounded-2xl border border-primary/20 bg-primary/5 px-5 py-3 text-sm text-foreground">{notice}</p>
         )}
+
+        <Link to="/agencyadmin/contractor-tasks" className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-base font-semibold text-emerald-950 hover:bg-emerald-100">
+          <span>Contractor arrival tasks</span><span>Open task queue →</span>
+        </Link>
 
         {/* ── KPI strip — always visible, whatever tab is open ────────── */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -322,18 +340,17 @@ export default function AgencyOperationsCenterPage() {
           <div className="space-y-6">
             <Card icon={FolderSync} title="Google Drive sync" description="Send a private document to your Drive workflow">
               <form onSubmit={syncDrive} className="space-y-4">
-                <Field label="Storage reference">
-                  <input className={fieldClass} placeholder="storage://helped-private/..." value={drive.storageRef} onChange={(e) => setDrive({ ...drive, storageRef: e.target.value })} />
-                </Field>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="File name">
-                    <input className={fieldClass} value={drive.fileName} onChange={(e) => setDrive({ ...drive, fileName: e.target.value })} />
+                  <Field label="Choose document">
+                    <input className={fieldClass} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png" onChange={(e) => setDriveFile(e.target.files?.[0] ?? null)} />
                   </Field>
                   <Field label="Drive folder key (optional)">
-                    <input className={fieldClass} value={drive.folderKey} onChange={(e) => setDrive({ ...drive, folderKey: e.target.value })} />
+                    <input className={fieldClass} value={driveFolderKey} onChange={(e) => setDriveFolderKey(e.target.value)} placeholder="Uses your scenario default when blank" />
                   </Field>
                 </div>
-                <button className={primaryButton}>Start Drive sync</button>
+                {driveFile && <p className="text-sm text-muted-foreground">Selected: {driveFile.name} ({Math.ceil(driveFile.size / 1024)} KB)</p>}
+                <p className="text-xs text-muted-foreground">Your document stays private. A short-lived link is sent to Make only for the upload.</p>
+                <button className={primaryButton} disabled={driveSyncing}>{driveSyncing ? 'Uploading securely…' : 'Upload to Google Drive'}</button>
               </form>
             </Card>
 

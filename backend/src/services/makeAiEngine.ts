@@ -42,6 +42,9 @@ const makeAiScenarioEnvKey = (scenario: MakeAiEngineScenario) =>
 const resolveMakeAiUrl = (scenario: MakeAiEngineScenario) =>
   process.env[makeAiScenarioEnvKey(scenario)]?.trim() ||
   process.env.MAKE_WEBHOOK_URL_AI_ENGINE?.trim() ||
+  // Keep the Worker and local Express names interoperable. This lets one
+  // Unified AI Gateway scenario serve both deployment targets.
+  process.env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim() ||
   ''
 
 const extractJsonObject = (value: string): Record<string, unknown> | null => {

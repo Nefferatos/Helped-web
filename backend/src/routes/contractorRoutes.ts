@@ -1,6 +1,10 @@
 import { Router } from 'express'
-import { completeContractorJob } from '../controllers/contractorController'
-import { requireContractor } from '../middleware/requireAgencyAuth'
+import { completeContractorJob, listContractorJobs } from '../controllers/contractorController'
+import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
 const router = Router()
-router.post('/tasks/:id/complete', requireContractor, completeContractorJob)
+// Operations Center uses an agency-admin session locally. The deployment has
+// an equivalent Worker route, but this keeps local development on the same
+// Express authentication store as the rest of the portal.
+router.get('/tasks', requireAgencyAuth, listContractorJobs)
+router.post('/tasks/:id/complete', requireAgencyAuth, completeContractorJob)
 export default router

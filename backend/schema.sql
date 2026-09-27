@@ -83,6 +83,34 @@ CREATE TABLE IF NOT EXISTS mom_tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), placement_id UUID NOT NULL REFERENCES placements(id) ON DELETE CASCADE, task_type TEXT NOT NULL, reference_number TEXT, appointment_at TIMESTAMPTZ, assigned_to TEXT, completed_at TIMESTAMPTZ, status TEXT NOT NULL DEFAULT 'PENDING', notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Contractor work queue. A task belongs to a contractor and placement; this
+-- is separate from the broader arrival/medical/MOM checklists above so the
+-- assigned person can confirm completion and trigger the Make alert.
+CREATE TABLE IF NOT EXISTS contractors (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agency_id INTEGER NOT NULL DEFAULT 1,
+  agency_admin_id INTEGER,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS contractor_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  contractor_id UUID NOT NULL REFERENCES contractors(id) ON DELETE CASCADE,
+  placement_id UUID NOT NULL REFERENCES placements(id) ON DELETE CASCADE,
+  task_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
+  due_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  completion_notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_contractor_jobs_assignee_status
+  ON contractor_jobs (contractor_id, status, due_at);
+
 CREATE TABLE IF NOT EXISTS interviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, application_id TEXT, placement_id UUID REFERENCES placements(id) ON DELETE SET NULL,
   scheduled_at TIMESTAMPTZ NOT NULL, duration_minutes INTEGER NOT NULL DEFAULT 30, mode TEXT NOT NULL DEFAULT 'video', meeting_url TEXT, status TEXT NOT NULL DEFAULT 'SCHEDULED', notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

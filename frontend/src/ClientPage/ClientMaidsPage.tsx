@@ -111,7 +111,7 @@ const toSearchCardMaid = (value: unknown): MaidProfile => {
   const maid = value as Record<string, unknown>;
   const photos = Array.isArray(maid.photoDataUrls) ? maid.photoDataUrls : [];
   return {
-    ...(maid as MaidProfile),
+    ...(maid as unknown as MaidProfile),
     id: (maid.id ?? "") as number | string,
     agencyId: maid.agencyId as number | string | undefined,
     refCode: String(maid.refCode ?? maid.referenceCode ?? ""),

@@ -15,6 +15,23 @@ const config = () => {
 const encodeObjectPath = (objectPath: string) =>
   objectPath.split('/').map(encodeURIComponent).join('/')
 
+/** Ensure the application-owned bucket exists and is never made public. */
+const ensurePrivateBucket = async () => {
+  const { baseUrl, serviceKey } = config()
+  const response = await fetch(`${baseUrl}/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
+    headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}` },
+  })
+  if (response.ok) return
+  if (response.status !== 404) throw new Error(`PRIVATE_STORAGE_BUCKET_CHECK_FAILED:${response.status}`)
+  const create = await fetch(`${baseUrl}/storage/v1/bucket`, {
+    method: 'POST',
+    headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ id: bucket, name: bucket, public: false }),
+  })
+  // A concurrent first upload can create the same bucket; that is safe.
+  if (!create.ok && create.status !== 409) throw new Error(`PRIVATE_STORAGE_BUCKET_CREATE_FAILED:${create.status}`)
+}
+
 export const makePrivateStoragePath = (...parts: string[]) =>
   parts.filter(Boolean).join('/').replace(/^\/+|\/+$/g, '')
 
@@ -30,6 +47,7 @@ export const uploadPrivateObject = async (input: {
   contentType: string
 }) => {
   const { baseUrl, serviceKey } = config()
+  await ensurePrivateBucket()
   const objectPath = input.objectPath.replace(/^\/+/, '')
   const response = await fetch(
     `${baseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeObjectPath(objectPath)}`,

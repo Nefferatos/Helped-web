@@ -545,6 +545,15 @@ type Bindings = {
   // Falls back to MAKE_WEBHOOK_URL when unset.
   MAKE_APPLICANT_ASSISTANT_WEBHOOK_URL?: string;
   MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT?: string;
+  // Event-driven Make scenario fired when a public maid applicant submits.
+  // Set via: npx wrangler secret put MAKE_WEBHOOK_URL_APPLICANT_INTAKE
+  MAKE_WEBHOOK_URL_APPLICANT_INTAKE?: string;
+  // Event-driven Make scenario fired when an arrival contractor task is completed.
+  // Set via: npx wrangler secret put MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT
+  MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT?: string;
+  // Shared secret for Make.com workflow callbacks and health probes.
+  // Set via: npx wrangler secret put EVENT_INGEST_SECRET
+  EVENT_INGEST_SECRET?: string;
   STORAGE_BACKEND?: string;
   // Server-only secret enabling POST /api/agency-auth/bootstrap-reset.
   // Set via: npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
@@ -5758,11 +5767,18 @@ app.get("/api/health", (c) =>
 );
 
 // ─── Event spine (operator/machine model) ──────────────────────────────────
-// Production write path for workflow events. The browser and any client of the
-// Worker record events here; Make.com can also report results to the Express
-// backend's POST /api/events. Both write to the same public.workflow_events
-// table so the audit trail is unified regardless of entry point.
+// Make.com is the only external caller of these endpoints. A shared secret
+// prevents the audit log from becoming a public write/read surface.
+const hasValidEventSecret = (c: { env: Bindings; req: { header: (name: string) => string | undefined } }) => {
+  const expected = c.env.EVENT_INGEST_SECRET?.trim();
+  const provided = c.req.header("x-event-secret")?.trim();
+  return Boolean(expected && provided && expected === provided);
+};
+
 app.post("/api/events", async (c) => {
+  if (!hasValidEventSecret(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) {
     return c.json({ error: "Event storage not configured (Supabase service role required)" }, 503);
@@ -5812,6 +5828,68 @@ app.post("/api/events", async (c) => {
 
   const rows = (await response.json().catch(() => [])) as Array<{ id?: string }>;
   return c.json({ id: rows?.[0]?.id ?? null, recorded: true }, 201);
+});
+
+/** Scheduled exception detector for the Workflow Event Health Check blueprint. */
+app.get("/api/events/health", async (c) => {
+  if (!hasValidEventSecret(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const triggerEvent = (c.req.query("triggerEvent") ?? "").trim();
+  const expectedEvent = (c.req.query("expectedEvent") ?? "").trim();
+  const requestedHours = Number(c.req.query("windowHours") ?? 24);
+  const windowHours = Number.isFinite(requestedHours) && requestedHours > 0
+    ? Math.min(requestedHours, 24 * 30)
+    : 24;
+  if (!triggerEvent || !expectedEvent) {
+    return c.json({ error: "triggerEvent and expectedEvent are required" }, 400);
+  }
+
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) {
+    return c.json({ error: "Event storage not configured (Supabase service role required)" }, 503);
+  }
+
+  const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
+  const getEvents = (eventType: string) => {
+    const params = new URLSearchParams({
+      select: "entity_type,entity_id,created_at",
+      event_type: `eq.${eventType}`,
+      created_at: `gte.${windowStart}`,
+      order: "created_at.desc",
+      limit: "1000",
+    });
+    return fetch(`${config.baseUrl}/rest/v1/workflow_events?${params.toString()}`, {
+      headers: supabaseHeaders(config, { accept: "application/json" }),
+    });
+  };
+  const [triggerResponse, expectedResponse] = await Promise.all([
+    getEvents(triggerEvent),
+    getEvents(expectedEvent),
+  ]);
+  if (!triggerResponse.ok || !expectedResponse.ok) {
+    console.error("workflow health query failed", triggerResponse.status, expectedResponse.status);
+    return c.json({ error: "Unable to check workflow events" }, 502);
+  }
+
+  type HealthEvent = { entity_type: string; entity_id: string; created_at: string };
+  const triggers = (await triggerResponse.json()) as HealthEvent[];
+  const expected = (await expectedResponse.json()) as HealthEvent[];
+  const expectedByEntity = new Map<string, number[]>();
+  for (const event of expected) {
+    const key = `${event.entity_type}:${event.entity_id}`;
+    const timestamps = expectedByEntity.get(key) ?? [];
+    timestamps.push(Date.parse(event.created_at));
+    expectedByEntity.set(key, timestamps);
+  }
+  const missing = triggers.filter((trigger) => {
+    const triggerTime = Date.parse(trigger.created_at);
+    const timestamps = expectedByEntity.get(`${trigger.entity_type}:${trigger.entity_id}`) ?? [];
+    return !timestamps.some((timestamp) => Number.isFinite(timestamp) && timestamp >= triggerTime);
+  });
+
+  return c.json({ triggerEvent, expectedEvent, windowHours, missingCount: missing.length, missing });
 });
 
 app.get("/api/diagnostics", requireAgencyAdminAuth, (c) => {
@@ -8190,6 +8268,83 @@ app.post("/api/requests/mark-viewed", requireAgencyAdminAuth, async (c) => {
   return c.json({ ok: true, markedCount });
 });
 
+// Operations Center board. The Worker does not use the local Express
+// placements table, so return a stable agency-scoped board rather than a 404.
+// Placement records can be added later without changing the page contract.
+app.get(
+  "/api/operations-board",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    return c.json({ placements: [], count: 0 });
+  }),
+);
+
+// Contractor task queue. Tasks are scoped through the contractor relation, so
+// an authenticated agency cannot read or complete another agency's tasks.
+type ContractorTaskRow = {
+  id: string;
+  placement_id: string;
+  task_type: string;
+  status: string;
+  due_at: string | null;
+  completed_at: string | null;
+  completion_notes: string | null;
+  created_at: string;
+  contractors?: { name?: string; agency_id?: number } | null;
+  placements?: { maid_reference_code?: string | null; employer_id?: string | null; status?: string } | null;
+};
+
+const contractorTaskSelect = "id,placement_id,task_type,status,due_at,completed_at,completion_notes,created_at,contractors!inner(name,agency_id),placements(maid_reference_code,employer_id,status)";
+
+app.get("/api/contractor/tasks", requireAgencyAdminAuth, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Contractor tasks require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const tasks = await fetchSupabaseTableRows<ContractorTaskRow>(config, "contractor_jobs", {
+    select: contractorTaskSelect,
+    filters: { "contractors.agency_id": admin.agencyId },
+    orderBy: "due_at.asc.nullslast,created_at.desc",
+    limit: 200,
+  });
+  return c.json({ tasks, count: tasks.length });
+}));
+
+app.post("/api/contractor/tasks/:taskId/complete", requireAgencyAdminAuth, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Contractor tasks require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const taskId = toTrimmedString(c.req.param("taskId"));
+  if (!taskId) return c.json({ error: "Task ID is required" }, 400);
+  const body = await parseBody<{ notes?: unknown }>(c.req.raw);
+  const notes = toTrimmedString(body?.notes).slice(0, 2_000);
+  const rows = await fetchSupabaseTableRows<ContractorTaskRow>(config, "contractor_jobs", {
+    select: contractorTaskSelect,
+    filters: { id: taskId, "contractors.agency_id": admin.agencyId },
+    limit: 1,
+  });
+  const task = rows[0];
+  if (!task) return c.json({ error: "Contractor task not found" }, 404);
+  if (task.status === "COMPLETED" || task.status === "CANCELLED") return c.json({ error: `This task is already ${task.status.toLowerCase()}` }, 409);
+  const completedAt = now();
+  const updateResponse = await fetch(`${config.baseUrl}/rest/v1/contractor_jobs?id=eq.${encodeURIComponent(taskId)}`, {
+    method: "PATCH",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ status: "COMPLETED", completed_at: completedAt, completion_notes: notes, updated_at: completedAt }),
+  });
+  if (!updateResponse.ok) throw new Error(`Unable to complete contractor task (${updateResponse.status}): ${await readSupabaseError(updateResponse)}`);
+  const updated = ((await updateResponse.json()) as ContractorTaskRow[])[0] ?? { ...task, status: "COMPLETED", completed_at: completedAt, completion_notes: notes };
+  if (task.task_type.toLowerCase().includes("arrival")) {
+    const webhookUrl = c.env.MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT?.trim();
+    if (webhookUrl) runChatBackgroundTask(c, fetch(webhookUrl, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event_type: "arrival.completed", placement_id: task.placement_id, contractor_job_id: task.id, notes }),
+      signal: AbortSignal.timeout(15_000),
+    }).then(async (response) => { if (!response.ok) throw new Error(`Make arrival alert returned HTTP ${response.status}`); })
+      .catch((error) => console.error("Contractor arrival alert failed (task remains completed):", error)));
+  }
+  return c.json({ task: updated, alertTriggered: task.task_type.toLowerCase().includes("arrival") });
+}));
+
 // Delete selected requests belonging to the signed-in agency. Related
 // conversations and messages are removed as well, preventing orphan records.
 app.delete(
@@ -10220,7 +10375,9 @@ app.post(
 
     // 1) Primary engine: Make.com command-center webhook.
     const webhookUrl =
-      c.env.MAKE_AI_COMMAND_CENTER_WEBHOOK_URL?.trim() || c.env.MAKE_WEBHOOK_URL?.trim();
+      c.env.MAKE_AI_COMMAND_CENTER_WEBHOOK_URL?.trim() ||
+      c.env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim() ||
+      c.env.MAKE_WEBHOOK_URL?.trim();
     if (webhookUrl) {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (c.env.MAKE_AI_COMMAND_CENTER_WEBHOOK_SECRET?.trim()) {
@@ -14148,6 +14305,69 @@ app.post(
   }),
 )
 
+const dispatchApplicantIntakeToMake = async (
+  env: Bindings,
+  application: AtsApplicationRecord,
+  profile: AtsApplicationProfileRecord,
+) => {
+  const webhookUrl = env.MAKE_WEBHOOK_URL_APPLICANT_INTAKE?.trim();
+  if (!webhookUrl) return;
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_type: "candidate.created",
+      application_id: application.id,
+      application_code: application.applicationCode,
+      status: application.status,
+      agency_id: application.agencyId,
+      full_name: profile.fullName,
+      nationality: profile.nationality,
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Applicant-intake Make webhook failed (${response.status})`);
+  }
+};
+
+// The public application form runs through this Worker in production, so it
+// must write the start event itself. The scheduled health check can then detect
+// a Make screening run that never calls back with screening.completed.
+const recordApplicantCreatedEvent = async (
+  env: Bindings,
+  application: AtsApplicationRecord,
+  profile: AtsApplicationProfileRecord,
+) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return;
+
+  const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST",
+    headers: supabaseHeaders(config, {
+      "content-type": "application/json",
+      prefer: "return=minimal",
+    }),
+    body: JSON.stringify([{
+      event_type: "candidate.created",
+      entity_type: "application",
+      entity_id: application.id,
+      actor: "website:public-application",
+      payload: {
+        applicationCode: application.applicationCode,
+        agencyId: application.agencyId,
+        fullName: profile.fullName,
+        nationality: profile.nationality,
+      },
+      status: "completed",
+    }]),
+  });
+  if (!response.ok) {
+    console.error("candidate.created event write failed", response.status, await readSupabaseError(response));
+  }
+};
+
 app.post(
   "/api/ats/public/apply",
   safeApi(async (c) => {
@@ -14167,6 +14387,8 @@ app.post(
 
     if (supabase && isNormalizedSupabaseEnabled(c.env)) {
       await savePublicAtsApplicationToSupabaseNormalized(supabase, parsed);
+      runChatBackgroundTask(c, recordApplicantCreatedEvent(c.env, parsed.application, parsed.profile));
+      runChatBackgroundTask(c, dispatchApplicantIntakeToMake(c.env, parsed.application, parsed.profile));
       return c.json(
         {
           applicationId: parsed.application.id,
@@ -14188,6 +14410,8 @@ app.post(
     data.ats.notifications[parsed.application.id] = parsed.notifications;
 
     await saveData(c.env, data);
+    runChatBackgroundTask(c, recordApplicantCreatedEvent(c.env, parsed.application, parsed.profile));
+    runChatBackgroundTask(c, dispatchApplicantIntakeToMake(c.env, parsed.application, parsed.profile));
 
     return c.json(
       {

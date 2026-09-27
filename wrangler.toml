@@ -70,6 +70,9 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 #   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
 # When unset, the receptionist falls back to the existing Cline/OpenAI/CF-AI pipeline.
 
+# Workflow health check: set this as a secret, never as a plain [vars] value:
+#   npx wrangler secret put EVENT_INGEST_SECRET
+
 # Shared Make AI gateway for Worker AI routes such as the HR interviewer.
 # Set with: npx wrangler secret put MAKE_AI_ENGINE_WEBHOOK_URL
 # Use the webhook created from make/helped-ai-gateway.blueprint.json.
