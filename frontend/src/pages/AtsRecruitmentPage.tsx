@@ -74,6 +74,19 @@ type AtsDocument = {
   url?: string;
 };
 
+type ApplicantWorkflowTarget = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+type WorkflowActivity = {
+  tone: "success" | "warning";
+  title: string;
+  detail: string;
+  meetingLink?: string;
+};
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const READY_TO_POST_PUBLIC_STAGE = "Ready to Configure Public Profile";
@@ -446,10 +459,21 @@ const AtsRecruitmentPage = () => {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [sopModalOpen, setSopModalOpen] = useState(false);
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
+  const [interviewTarget, setInterviewTarget] = useState<ApplicantWorkflowTarget | null>(null);
+  const [decisionTarget, setDecisionTarget] = useState<(ApplicantWorkflowTarget & { decision: "approve" | "reject" }) | null>(null);
+  const [interviewDateTime, setInterviewDateTime] = useState("");
+  const [interviewMode, setInterviewMode] = useState("video");
+  const [interviewMeetingLink, setInterviewMeetingLink] = useState("");
+  const [decisionNote, setDecisionNote] = useState("");
+  const [sendApplicantEmail, setSendApplicantEmail] = useState(true);
+  const [workflowSaving, setWorkflowSaving] = useState(false);
+  const [workflowActivity, setWorkflowActivity] = useState<WorkflowActivity | null>(null);
   const [scheduledInterview, setScheduledInterview] = useState<{
     applicationId: string;
     applicantName: string;
     date: string;
+    time?: string;
+    meetingLink?: string;
   } | null>(null);
   const [activeDocumentIndex, setActiveDocumentIndex] = useState(0);
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
@@ -547,6 +571,211 @@ const AtsRecruitmentPage = () => {
         error instanceof Error ? error.message : "Bulk action failed"
       ),
   });
+
+  const workflowTargetFromApplicant = (applicant: AtsApplicationListItem): ApplicantWorkflowTarget => ({
+    id: applicant.id,
+    name: getApplicantDisplayName(applicant),
+    email: applicant.profile.email?.trim() || "",
+  });
+
+  const refreshApplicantData = () => {
+    void queryClient.invalidateQueries({ queryKey: ["ats-dashboard"] });
+    void queryClient.invalidateQueries({ queryKey: ["ats-applications"] });
+    if (selectedId) void queryClient.invalidateQueries({ queryKey: ["ats-application", selectedId] });
+  };
+
+  const deliverApplicantEmail = async (payload: {
+    to: string;
+    candidateName: string;
+    type: string;
+    subject: string;
+    body: string;
+    scheduledDate?: string;
+    scheduledTime?: string;
+    scheduledTime24?: string;
+    meetingUrl?: string;
+    interviewMode?: string;
+    applicationId?: string;
+  }): Promise<{ meetLink?: string; eventUrl?: string; eventId?: string }> => {
+    const response = await fetch("/api/ai/hr-interview/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+      body: JSON.stringify({ ...payload, position: "Domestic helper recruitment" }),
+    });
+    const data = await response.json().catch(() => ({})) as { error?: string; meetLink?: string; eventUrl?: string; eventId?: string };
+    if (!response.ok) throw new Error(data.error || "Email could not be sent. Check the interview email Make workflow.");
+    return data;
+  };
+
+  const openInterviewScheduler = (applicant: AtsApplicationListItem) => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    setInterviewTarget(workflowTargetFromApplicant(applicant));
+    setInterviewDateTime(tomorrow.toISOString().slice(0, 16));
+    setInterviewMode("video");
+    setInterviewMeetingLink("");
+    setSendApplicantEmail(Boolean(applicant.profile.email?.trim()));
+  };
+
+  const openDecisionDialog = (applicant: AtsApplicationListItem, decision: "approve" | "reject") => {
+    setDecisionTarget({ ...workflowTargetFromApplicant(applicant), decision });
+    setDecisionNote("");
+    setSendApplicantEmail(Boolean(applicant.profile.email?.trim()));
+  };
+
+  const saveInterviewAndInvitation = async () => {
+    if (!interviewTarget || !interviewDateTime) {
+      toast.error("Choose an interview date and time first");
+      return;
+    }
+    setWorkflowSaving(true);
+    let interviewSaved = false;
+    let generatedMeetLink: string | undefined;
+    try {
+      const scheduledDate = interviewDateTime.slice(0, 10);
+      const scheduledTime24 = interviewDateTime.slice(11, 16);
+      const scheduledTime = new Date(`${interviewDateTime}:00`).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const scheduleResponse = await fetch("/api/ai/hr-interview/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+        body: JSON.stringify({
+          applicationId: interviewTarget.id,
+          scheduledAt: new Date(interviewDateTime).toISOString(),
+          mode: interviewMode,
+          meetingUrl: interviewMeetingLink.trim() || undefined,
+        }),
+      });
+      const scheduleData = await scheduleResponse.json().catch(() => ({})) as { error?: string; interview?: { id?: number | string } };
+      if (!scheduleResponse.ok) throw new Error(scheduleData.error || "Could not save the interview schedule");
+      await updateAtsStage(interviewTarget.id, "Screening Interview", `Interview scheduled for ${interviewDateTime.replace("T", " ")}`);
+      setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: interviewMeetingLink.trim() || undefined });
+      interviewSaved = true;
+      if (sendApplicantEmail && interviewTarget.email) {
+        const makeResult = await deliverApplicantEmail({
+          to: interviewTarget.email,
+          candidateName: interviewTarget.name,
+          type: "interview_invitation",
+          subject: "Interview invitation",
+          // WEBSITE AI WORKFLOW's Google Calendar module parses these as
+          // `YYYY-MM-DD HH:mm` in Asia/Singapore. Do not use locale-formatted
+          // values such as 9/30/2026 or 2:00 AM here.
+          scheduledDate,
+          scheduledTime,
+          scheduledTime24,
+          meetingUrl: interviewMeetingLink.trim() || undefined,
+          interviewMode,
+          applicationId: interviewTarget.id,
+          body: `Dear ${interviewTarget.name},\n\nWe would like to invite you to an interview on ${new Date(interviewDateTime).toLocaleString()}. Interview format: ${{ video: "Video call", phone: "Phone call", in_person: "In-person" }[interviewMode] ?? interviewMode}.${interviewMeetingLink.trim() ? `\nMeeting link: ${interviewMeetingLink.trim()}` : " Our recruitment team will send the joining details."}\n\nBest regards,\nRecruitment Team`,
+        });
+        const makeMeetLink = makeResult.meetLink?.trim();
+        if (makeMeetLink) {
+          generatedMeetLink = makeMeetLink;
+          setInterviewMeetingLink(makeMeetLink);
+          setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: makeMeetLink });
+          if (scheduleData.interview?.id) {
+            const saveMeetResponse = await fetch(`/api/ai/hr-interview/schedule/${encodeURIComponent(String(scheduleData.interview.id))}/meeting-link`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+              body: JSON.stringify({
+                meetingUrl: makeMeetLink,
+                candidateName: interviewTarget.name,
+                candidateEmail: interviewTarget.email,
+                scheduledDate,
+                scheduledTime,
+                interviewMode,
+              }),
+            });
+            if (!saveMeetResponse.ok) {
+              toast.warning("Invitation was sent, but the Meet link could not be saved to the calendar.");
+            }
+          }
+        }
+      }
+      setWorkflowActivity({
+        tone: "success",
+        title: sendApplicantEmail && interviewTarget.email ? "Interview booked and invitation sent" : "Interview schedule saved",
+        detail: sendApplicantEmail && interviewTarget.email
+          ? generatedMeetLink
+            ? `The Google Meet link is ready for ${interviewTarget.name}. Use “Join Google Meet” now, or find it later in Recruiter Calendar.`
+            : `Make created the interview workflow for ${interviewTarget.name}. Check the applicant's email and your selected Google Calendar.`
+          : `The interview for ${interviewTarget.name} is saved. You can send the invitation later when the email workflow is ready.`,
+        meetingLink: generatedMeetLink,
+      });
+      toast.success(sendApplicantEmail && interviewTarget.email ? "Interview scheduled and invitation sent" : "Interview scheduled");
+      setInterviewTarget(null);
+      refreshApplicantData();
+    } catch (error) {
+      if (interviewSaved) {
+        setWorkflowActivity({
+          tone: "warning",
+          title: "Interview saved — invitation needs attention",
+          detail: error instanceof Error ? error.message : "The Make workflow could not create the calendar invitation. Fix the workflow, then send the invitation again.",
+        });
+        toast.warning("Interview was scheduled, but the invitation was not sent.", {
+          description: error instanceof Error ? error.message : "Configure the HR interview email Make webhook and try sending again.",
+        });
+        setInterviewTarget(null);
+        refreshApplicantData();
+      } else {
+        toast.error(error instanceof Error ? error.message : "Could not save the interview");
+      }
+    } finally {
+      setWorkflowSaving(false);
+    }
+  };
+
+  const saveDecisionAndEmail = async () => {
+    if (!decisionTarget) return;
+    setWorkflowSaving(true);
+    const approved = decisionTarget.decision === "approve";
+    let decisionSaved = false;
+    try {
+      await bulkAtsAction({ applicationIds: [decisionTarget.id], action: decisionTarget.decision });
+      decisionSaved = true;
+      if (sendApplicantEmail && decisionTarget.email) {
+        await deliverApplicantEmail({
+          to: decisionTarget.email,
+          candidateName: decisionTarget.name,
+          // These values match the filters in helped-hr-interview-email.blueprint.json.
+          type: approved ? "pass" : "fail",
+          subject: approved ? "Your application has been approved" : "Update on your application",
+          body: approved
+            ? `Dear ${decisionTarget.name},\n\nWe are pleased to confirm that your application has been approved. Our recruitment team will contact you about the next steps.${decisionNote.trim() ? `\n\nNote: ${decisionNote.trim()}` : ""}\n\nBest regards,\nRecruitment Team`
+            : `Dear ${decisionTarget.name},\n\nThank you for your application. After review, we are unable to proceed at this time.${decisionNote.trim() ? `\n\nNote: ${decisionNote.trim()}` : ""}\n\nWe appreciate your interest and wish you well.\n\nBest regards,\nRecruitment Team`,
+        });
+      }
+      setWorkflowActivity({
+        tone: "success",
+        title: approved ? "Applicant approved" : "Applicant rejected",
+        detail: sendApplicantEmail && decisionTarget.email
+          ? `The ${approved ? "approval" : "rejection"} was saved and Make sent the applicant email.`
+          : `The applicant stage was updated. No email was requested.`,
+      });
+      toast.success(sendApplicantEmail && decisionTarget.email ? `${approved ? "Approval" : "Rejection"} saved and email sent` : `${approved ? "Approval" : "Rejection"} saved`);
+      setDecisionTarget(null);
+      refreshApplicantData();
+    } catch (error) {
+      if (decisionSaved) {
+        setWorkflowActivity({
+          tone: "warning",
+          title: `${approved ? "Approval" : "Rejection"} saved — email needs attention`,
+          detail: error instanceof Error ? error.message : "Make could not send the applicant email. Fix the workflow and send the email again.",
+        });
+        toast.warning(`${approved ? "Approval" : "Rejection"} was saved, but the email was not sent.`);
+        setDecisionTarget(null);
+        refreshApplicantData();
+      } else {
+        toast.error(error instanceof Error ? error.message : "Could not save the applicant decision");
+      }
+    } finally {
+      setWorkflowSaving(false);
+    }
+  };
 
   // ─── Derived state ───────────────────────────────────────────────────────────
 
@@ -950,6 +1179,27 @@ const AtsRecruitmentPage = () => {
           </div>
         </div>
       </section>
+
+      <section className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 md:grid-cols-3">
+        {[
+          { step: "1", title: "Review the profile", detail: "Check experience, documents, score, and contact details before making a decision." },
+          { step: "2", title: "Schedule & invite", detail: "Pick a date and time. The website saves it, then Make creates the calendar booking and invitation." },
+          { step: "3", title: "Approve or reject", detail: "Choose the decision. The website updates the stage, then Make sends the matching applicant email." },
+        ].map((item) => (
+          <div key={item.step} className="flex gap-3 rounded-xl bg-white/80 p-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-black text-white">{item.step}</span>
+            <div><p className="text-sm font-bold text-slate-900">{item.title}</p><p className="mt-0.5 text-xs leading-5 text-slate-600">{item.detail}</p></div>
+          </div>
+        ))}
+      </section>
+
+      {workflowActivity && (
+        <section className={`flex items-start gap-3 rounded-2xl border p-4 ${workflowActivity.tone === "success" ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+          {workflowActivity.tone === "success" ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />}
+          <div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-900">{workflowActivity.title}</p><p className="mt-0.5 text-sm text-slate-600">{workflowActivity.detail}</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" className="bg-white" onClick={() => setCalendarDialogOpen(true)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Open Recruiter Calendar</Button>{workflowActivity.meetingLink && <a href={workflowActivity.meetingLink} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center rounded-md bg-violet-700 px-3 text-xs font-bold text-white hover:bg-violet-800"><Video className="mr-1.5 h-3.5 w-3.5" />Join Google Meet</a>}</div></div>
+          <button type="button" onClick={() => setWorkflowActivity(null)} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss workflow status"><X className="h-4 w-4" /></button>
+        </section>
+      )}
 
       {/* ── Applicants Table Card ─────────────────────────────────────────── */}
       <section>
@@ -1448,8 +1698,10 @@ const AtsRecruitmentPage = () => {
                           <p className="mt-0.5 text-xs leading-5 text-slate-500">{nextAction.detail}</p>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <Button size="sm" className="h-8 text-xs" onClick={() => nextAction.nextStage ? stageMutation.mutate({ applicationId: item.id, stage: nextAction.nextStage! }) : openProfileModal(item.id)} disabled={stageMutation.isPending}>{nextAction.cta}</Button>
+                          <Button size="sm" className="h-8 text-xs" onClick={() => item.status === "Resume Parsed" ? openInterviewScheduler(item) : item.status === "Background Check" ? openDecisionDialog(item, "approve") : nextAction.nextStage ? stageMutation.mutate({ applicationId: item.id, stage: nextAction.nextStage! }) : openProfileModal(item.id)} disabled={stageMutation.isPending || workflowSaving}>{item.status === "Resume Parsed" ? "Schedule & invite" : item.status === "Background Check" ? "Approve & email" : nextAction.cta}</Button>
                           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openProfileModal(item.id)}>View profile</Button>
+                          {['Screening Interview', 'Background Check'].includes(item.status) && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openInterviewScheduler(item)} disabled={workflowSaving}><CalendarDays className="mr-1 h-3 w-3" />Reschedule</Button>}
+                          {!['Placed', 'Rejected', READY_TO_POST_PUBLIC_STAGE, 'New Applicant', 'Documents Submitted'].includes(item.status) && <Button size="sm" variant="outline" className="h-8 text-xs border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => openDecisionDialog(item, "reject")} disabled={workflowSaving}>Reject & email</Button>}
                           {item.status === READY_TO_POST_PUBLIC_STAGE && <Button asChild size="sm" className="h-8 text-xs bg-fuchsia-600 hover:bg-fuchsia-700"><Link to={buildPublicProfileSetupPath(item)}>Set up public profile</Link></Button>}
                           {makeWhatsAppHref(item.profile.contactNumber) && <Button asChild size="sm" variant="outline" className="h-8 text-xs"><a href={makeWhatsAppHref(item.profile.contactNumber)} target="_blank" rel="noreferrer"><MessageCircle className="mr-1 h-3 w-3" />WhatsApp</a></Button>}
                           {makeEmailComposeHref(item.profile.email) && <Button asChild size="sm" variant="outline" className="h-8 text-xs"><a href={makeEmailComposeHref(item.profile.email)} target="_blank" rel="noreferrer"><Mail className="mr-1 h-3 w-3" />Email applicant</a></Button>}
@@ -1844,6 +2096,40 @@ const AtsRecruitmentPage = () => {
         </Card>
       </section>
 
+      <Dialog open={Boolean(interviewTarget)} onOpenChange={(open) => !open && !workflowSaving && setInterviewTarget(null)}>
+        <DialogContent className="max-w-lg rounded-2xl border-slate-200 bg-white p-0 overflow-hidden">
+          <div className="border-b border-violet-100 bg-violet-50 px-6 py-5">
+            <DialogTitle className="flex items-center gap-2 text-lg font-black text-slate-950"><CalendarDays className="h-5 w-5 text-violet-700" />Schedule interview</DialogTitle>
+            <DialogDescription className="mt-1 text-sm text-slate-600">Set the time, save it to the applicant record, then create the calendar booking and send the invitation in one step.</DialogDescription>
+          </div>
+          <div className="space-y-4 px-6 py-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Applicant</p><p className="mt-0.5 text-sm font-bold text-slate-900">{interviewTarget?.name}</p></div>
+            <div className="grid gap-2 sm:grid-cols-2"><div className="rounded-xl border border-violet-100 bg-violet-50 p-3"><p className="text-xs font-bold text-violet-900">1. Save interview</p><p className="mt-0.5 text-xs leading-5 text-violet-700">The selected date, time, and format are saved to this applicant.</p></div><div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3"><p className="text-xs font-bold text-emerald-900">2. Send to Make</p><p className="mt-0.5 text-xs leading-5 text-emerald-700">Make creates the calendar event, Google Meet link, and invitation email.</p></div></div>
+            <label className="block text-sm font-semibold text-slate-800">Interview date and time<Input type="datetime-local" className="mt-1.5" value={interviewDateTime} min={new Date().toISOString().slice(0, 16)} onChange={(event) => setInterviewDateTime(event.target.value)} /></label>
+            <label className="block text-sm font-semibold text-slate-800">Interview format<select className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={interviewMode} onChange={(event) => setInterviewMode(event.target.value)}><option value="video">Video call</option><option value="phone">Phone call</option><option value="in_person">In-person</option></select></label>
+            <label className="block text-sm font-semibold text-slate-800">Use an existing meeting link <span className="font-normal text-slate-400">(optional)</span><Input className="mt-1.5" type="url" placeholder="Leave blank to let Make create a Google Meet link" value={interviewMeetingLink} onChange={(event) => setInterviewMeetingLink(event.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Leave this blank for a new Google Meet link from the Make calendar workflow.</span></label>
+            <label className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendApplicantEmail} disabled={!interviewTarget?.email} onChange={(event) => setSendApplicantEmail(event.target.checked)} /><span><span className="font-bold">Create calendar event and send invitation</span><span className="mt-0.5 block text-xs text-emerald-700">{interviewTarget?.email ? `Make will send the interview invitation to ${interviewTarget.email}.` : "No email is saved for this applicant, so only the interview record can be saved."}</span></span></label>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4"><Button variant="outline" onClick={() => setInterviewTarget(null)} disabled={workflowSaving}>Cancel</Button><Button className="bg-violet-600 hover:bg-violet-700" onClick={() => void saveInterviewAndInvitation()} disabled={workflowSaving}>{workflowSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}{sendApplicantEmail && interviewTarget?.email ? "Schedule, book & send" : "Save interview"}</Button></div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(decisionTarget)} onOpenChange={(open) => !open && !workflowSaving && setDecisionTarget(null)}>
+        <DialogContent className="max-w-lg rounded-2xl border-slate-200 bg-white p-0 overflow-hidden">
+          <div className={`border-b px-6 py-5 ${decisionTarget?.decision === "approve" ? "border-emerald-100 bg-emerald-50" : "border-rose-100 bg-rose-50"}`}>
+            <DialogTitle className="flex items-center gap-2 text-lg font-black text-slate-950">{decisionTarget?.decision === "approve" ? <CheckCircle2 className="h-5 w-5 text-emerald-700" /> : <XCircle className="h-5 w-5 text-rose-700" />}{decisionTarget?.decision === "approve" ? "Approve applicant" : "Reject applicant"}</DialogTitle>
+            <DialogDescription className="mt-1 text-sm text-slate-600">This updates the applicant’s stage. You can send the matching email at the same time.</DialogDescription>
+          </div>
+          <div className="space-y-4 px-6 py-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Applicant</p><p className="mt-0.5 text-sm font-bold text-slate-900">{decisionTarget?.name}</p></div>
+            <div className={`rounded-xl border p-3 ${decisionTarget?.decision === "approve" ? "border-emerald-100 bg-emerald-50" : "border-rose-100 bg-rose-50"}`}><p className="text-xs font-bold text-slate-900">What happens when you confirm?</p><ol className="mt-1.5 space-y-1 text-xs leading-5 text-slate-600"><li>1. The applicant stage changes to <strong>{decisionTarget?.decision === "approve" ? "Approved" : "Rejected"}</strong>.</li><li>2. {decisionTarget?.decision === "approve" ? "Make receives a pass result and sends the shortlisted email." : "Make receives a fail result and sends the application-update email."}</li></ol></div>
+            <label className="block text-sm font-semibold text-slate-800">Note for the email <span className="font-normal text-slate-400">(optional)</span><textarea className="mt-1.5 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder={decisionTarget?.decision === "approve" ? "For example: Please prepare your documents for the next step." : "For example: We will keep your details for future opportunities."} value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} /></label>
+            <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendApplicantEmail} disabled={!decisionTarget?.email} onChange={(event) => setSendApplicantEmail(event.target.checked)} /><span><span className="font-bold">Send applicant email through Make</span><span className="mt-0.5 block text-xs text-slate-500">{decisionTarget?.email ? `Make will send the ${decisionTarget?.decision === "approve" ? "approval" : "rejection"} email to ${decisionTarget.email}.` : "No email is saved for this applicant."}</span></span></label>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4"><Button variant="outline" onClick={() => setDecisionTarget(null)} disabled={workflowSaving}>Cancel</Button><Button variant={decisionTarget?.decision === "reject" ? "destructive" : "default"} className={decisionTarget?.decision === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : ""} onClick={() => void saveDecisionAndEmail()} disabled={workflowSaving}>{workflowSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}{decisionTarget?.decision === "approve" ? "Approve" : "Reject"}{sendApplicantEmail && decisionTarget?.email ? " & send" : ""}</Button></div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={calendarDialogOpen} onOpenChange={setCalendarDialogOpen}>
         <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto p-0 sm:rounded-2xl [&>button]:hidden">
           <DialogHeader className="sr-only">
@@ -1877,60 +2163,12 @@ const AtsRecruitmentPage = () => {
         currentSearch={search}
         onApplicantWorkflowAction={(applicationId, action) => {
           const applicant = applications.find((item) => item.id === applicationId);
-          const name = applicant?.profile.fullName || "this applicant";
-          if (action === "schedule_interview") {
-            const date = window.prompt("Interview date (YYYY-MM-DD):", new Date().toISOString().slice(0, 10));
-            if (!date) return;
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-              toast.error("Please enter the date as YYYY-MM-DD");
-              return;
-            }
-            if (!window.confirm(`Schedule ${name}'s interview for ${date} and send the invitation email?`)) return;
-            stageMutation.mutate({ applicationId, stage: "Screening Interview", reason: `Interview scheduled for ${date}` });
-            setScheduledInterview({ applicationId, applicantName: name, date });
-            setSelectedId(applicationId);
-            setCalendarDialogOpen(true);
-            const email = applicant?.profile.email?.trim();
-            if (email) {
-              void fetch("/api/ai/hr-interview/email", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-                body: JSON.stringify({
-                  to: email,
-                  subject: "Interview invitation",
-                  body: `Dear ${name},\n\nWe would like to invite you for an interview on ${date}. Our recruitment team will contact you with the time and meeting details.\n\nBest regards,\nRecruitment Team`,
-                }),
-              }).then((response) => {
-                if (response.ok) toast.success("Interview invitation sent");
-                else toast.warning("Interview scheduled, but the invitation email could not be sent");
-              }).catch(() => toast.warning("Interview scheduled, but the invitation email could not be sent"));
-            } else {
-              toast.warning("Interview scheduled. No applicant email is available for an invitation.");
-            }
+          if (!applicant) {
+            toast.error("Applicant could not be found. Refresh the list and try again.");
             return;
           }
-          if (!window.confirm(`${action === "approve" ? "Approve" : "Reject"} ${name} and send the applicant an email?`)) return;
-          bulkMutation.mutate({ applicationIds: [applicationId], action });
-          const email = applicant?.profile.email?.trim();
-          if (email) {
-            const approved = action === "approve";
-            void fetch("/api/ai/hr-interview/email", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-              body: JSON.stringify({
-                to: email,
-                subject: approved ? "Your application has been approved" : "Update on your application",
-                body: approved
-                  ? `Dear ${name},\n\nWe are pleased to confirm that your application has been approved. Our recruitment team will contact you about the next steps.\n\nBest regards,\nRecruitment Team`
-                  : `Dear ${name},\n\nThank you for your application. After review, we are unable to proceed at this time. We appreciate your interest and wish you well.\n\nBest regards,\nRecruitment Team`,
-              }),
-            }).then((response) => {
-              if (response.ok) toast.success(`${approved ? "Approval" : "Rejection"} email sent`);
-              else toast.warning("Applicant status was updated, but the email could not be sent");
-            }).catch(() => toast.warning("Applicant status was updated, but the email could not be sent"));
-          } else {
-            toast.warning("Applicant status was updated. No applicant email is available.");
-          }
+          if (action === "schedule_interview") openInterviewScheduler(applicant);
+          else openDecisionDialog(applicant, action);
         }}
       />
 

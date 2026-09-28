@@ -5,6 +5,7 @@ import {
   hrInterviewChat,
   hrInterviewEmail,
   hrInterviewSession,
+  saveInterviewMeetingLink,
   scheduleInterview,
 } from '../controllers/hrInterviewController'
 import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
@@ -18,5 +19,6 @@ router.post('/hr-interview/chat', hrInterviewChat)
 router.post('/hr-interview/session', hrInterviewSession)
 router.post('/hr-interview/email', hrInterviewEmail)
 router.post('/hr-interview/schedule', requireAgencyAuth, scheduleInterview)
+router.patch('/hr-interview/schedule/:interviewId/meeting-link', requireAgencyAuth, saveInterviewMeetingLink)
 
 export default router

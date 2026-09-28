@@ -18,5 +18,8 @@ import path from "path";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
+// Local Worker development uses .dev.vars. Loading it last fills in shared
+// Make webhook URLs for Express without overriding backend/.env or root .env.
+dotenv.config({ path: path.resolve(__dirname, "..", "..", ".dev.vars") });
 
 export {};

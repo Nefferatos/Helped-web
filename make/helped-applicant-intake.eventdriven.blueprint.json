@@ -90,7 +90,7 @@
         "method": "post",
         "headers": [
           { "name": "content-type", "value": "application/json" },
-          { "name": "x-event-secret", "value": "EVENT_INGEST_SECRET" }
+          { "name": "x-event-secret", "value": "PASTE_THE_REAL_EVENT_INGEST_SECRET_HERE" }
         ],
         "qs": [],
         "bodyType": "raw",
@@ -105,7 +105,7 @@
       "metadata": {
         "designer": { "x": 300, "y": -150 },
         "restore": {},
-        "notes": "REPORT BACK TO THE OPERATOR. Records screening.completed in public.workflow_events so the backend and the #4 health detector know the machine finished. Replace YOUR-DOMAIN with your site origin and EVENT_INGEST_SECRET with the shared secret from the backend .env. Closes the loop: candidate.created -> screening.completed."
+        "notes": "REPORT BACK TO THE OPERATOR. Records screening.completed in public.workflow_events so the backend and the #4 health detector know the machine finished. Replace YOUR-DOMAIN with your site origin. For x-event-secret, paste the real EVENT_INGEST_SECRET value from the deployed Worker secret; do not send the literal text EVENT_INGEST_SECRET. Closes the loop: candidate.created -> screening.completed."
       }
     },
     {

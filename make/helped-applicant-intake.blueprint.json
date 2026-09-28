@@ -74,7 +74,7 @@
         "method": "post",
         "headers": [
           { "name": "content-type", "value": "application/json" },
-          { "name": "x-event-secret", "value": "EVENT_INGEST_SECRET" }
+          { "name": "x-event-secret", "value": "PASTE_THE_REAL_EVENT_INGEST_SECRET_HERE" }
         ],
         "qs": [],
         "bodyType": "raw",
@@ -86,7 +86,7 @@
         "contentType": "application/json",
         "data": "{\n  \"event_type\": \"screening.completed\",\n  \"entity_type\": \"application\",\n  \"entity_id\": \"{{2.application_id}}\",\n  \"actor\": \"make:applicant-intake\",\n  \"status\": \"completed\",\n  \"payload\": {\n    \"application_code\": \"{{2.application_code}}\",\n    \"full_name\": \"{{9.data.1.full_name}}\",\n    \"screening\": {{toJSON(4.response)}}\n  }\n}"
       },
-      "metadata": { "designer": { "x": 300, "y": -150 }, "restore": {}, "notes": "Report screening.completed to the operator. Replace YOUR-DOMAIN and EVENT_INGEST_SECRET." }
+      "metadata": { "designer": { "x": 300, "y": -150 }, "restore": {}, "notes": "Report screening.completed to the operator. Replace YOUR-DOMAIN. For x-event-secret, paste the real deployed EVENT_INGEST_SECRET value; do not send the literal text EVENT_INGEST_SECRET." }
     },
     {
       "id": 3,

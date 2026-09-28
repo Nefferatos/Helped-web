@@ -929,6 +929,99 @@
   ],
   "matches": [
     {
+      "id": 163,
+      "createdAt": "2026-09-28T15:12:08.486Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 72,
+      "maidReferenceCode": "MYR-ISL9785",
+      "maidName": "Ji Mai",
+      "score": 61,
+      "reasons": [
+        "Currently available",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 164,
+      "createdAt": "2026-09-28T15:12:08.486Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 88,
+      "maidReferenceCode": "IND-DAR-SAR-9732",
+      "maidName": "Amrita Rai Uphadaya",
+      "score": 59,
+      "reasons": [
+        "Currently available",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 165,
+      "createdAt": "2026-09-28T15:12:08.486Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 111,
+      "maidReferenceCode": "INA-PAT-9652",
+      "maidName": "Nurida Yanti",
+      "score": 59,
+      "reasons": [
+        "Currently available",
+        "Location fit for Singapore",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 160,
+      "createdAt": "2026-09-28T15:02:24.165Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 86,
+      "maidReferenceCode": "INA-PAK-9723",
+      "maidName": "Suyati",
+      "score": 56,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 161,
+      "createdAt": "2026-09-28T15:02:24.165Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 17,
+      "maidReferenceCode": "IND-DAR-YUS-9377",
+      "maidName": "Prabitra Rai",
+      "score": 56,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 162,
+      "createdAt": "2026-09-28T15:02:24.165Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": null,
+      "maidId": 7,
+      "maidReferenceCode": "IND-DAR-SUS-9353",
+      "maidName": "Aarati Rai",
+      "score": 56,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
       "id": 157,
       "createdAt": "2026-09-16T05:44:54.115Z",
       "leadId": null,
@@ -3800,6 +3893,484 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 239,
+      "createdAt": "2026-09-28T17:42:54.713Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 79,
+        "createdAt": "2026-09-28T17:42:54.701Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "2026-09-30",
+          "scheduledTime": "2:00 AM",
+          "scheduledTime24": "02:00",
+          "interviewMode": "video",
+          "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T17:42:51.942Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 2759,
+        "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\",\n  \"meetLink\": \"https://meet.google.com/gos-wzto-eyi\",\n  \"eventUrl\": \"https://www.google.com/calendar/event?eid=MjI1aHI2dWNnNzQ3YTRobW5wc2Mzb3Z2ZDggd293LmFpc29sdXRpb25AbQ\",\n  \"eventId\": \"225hr6ucg747a4hmnpsc3ovvd8\"\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 238,
+      "createdAt": "2026-09-28T17:41:46.023Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 77,
+        "createdAt": "2026-09-28T17:41:46.006Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "2026-09-30",
+          "scheduledTime": "5:00 AM",
+          "scheduledTime24": "05:00",
+          "interviewMode": "video",
+          "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 5:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T17:41:42.711Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3294,
+        "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\",\n  \"meetLink\": \"https://meet.google.com/rzv-vjwv-saa\",\n  \"eventUrl\": \"https://www.google.com/calendar/event?eid=aHVuMGsxbmw0N2FuNGZ1MmR2MzJpdHBwdGMgd293LmFpc29sdXRpb25AbQ\",\n  \"eventId\": \"hun0k1nl47an4fu2dv32itpptc\"\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 237,
+      "createdAt": "2026-09-28T17:10:24.076Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 74,
+        "createdAt": "2026-09-28T17:10:24.058Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "2026-09-30",
+          "scheduledTime": "04:00",
+          "meetingUrl": "https://meet.google.com/xkm-awdi-oau",
+          "interviewMode": "video",
+          "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 4:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/xkm-awdi-oau\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T17:10:20.828Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3228,
+        "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\"\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 236,
+      "createdAt": "2026-09-28T17:05:52.857Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 72,
+        "createdAt": "2026-09-28T17:05:52.841Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "pass",
+          "subject": "Your application has been approved",
+          "body": "Dear Florante Del pilar,\n\nWe are pleased to confirm that your application has been approved. Our recruitment team will contact you about the next steps.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T17:05:50.662Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 2178,
+        "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"pass\"\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 235,
+      "createdAt": "2026-09-28T17:01:50.832Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 71,
+        "createdAt": "2026-09-28T17:01:50.822Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "2026-09-30",
+          "scheduledTime": "02:00",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T17:01:47.484Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 3337,
+        "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\"\n}",
+        "error": ""
+      }
+    },
+    {
+      "id": 234,
+      "createdAt": "2026-09-28T16:59:43.450Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 68,
+        "createdAt": "2026-09-28T16:59:43.438Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "2026-09-30",
+          "scheduledTime": "02:00",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:59:42.096Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": false,
+        "statusCode": 500,
+        "durationMs": 1341,
+        "responseBody": "Scenario failed to complete.",
+        "error": "HTTP 500"
+      }
+    },
+    {
+      "id": 233,
+      "createdAt": "2026-09-28T16:56:36.440Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 66,
+        "createdAt": "2026-09-28T16:56:36.427Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "2026-09-30",
+          "scheduledTime": "02:00",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:56:34.925Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": false,
+        "statusCode": 500,
+        "durationMs": 1501,
+        "responseBody": "Scenario failed to complete.",
+        "error": "HTTP 500"
+      }
+    },
+    {
+      "id": 232,
+      "createdAt": "2026-09-28T16:54:07.688Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 64,
+        "createdAt": "2026-09-28T16:54:07.674Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "2026-09-30 ",
+          "scheduledTime": "02:00",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:54:06.439Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": false,
+        "statusCode": 500,
+        "durationMs": 1234,
+        "responseBody": "Scenario failed to complete.",
+        "error": "HTTP 500"
+      }
+    },
+    {
+      "id": 231,
+      "createdAt": "2026-09-28T16:50:23.635Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 62,
+        "createdAt": "2026-09-28T16:50:23.617Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "9/30/2026",
+          "scheduledTime": "02:00 AM",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:50:22.541Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": false,
+        "statusCode": 500,
+        "durationMs": 1075,
+        "responseBody": "Scenario failed to complete.",
+        "error": "HTTP 500"
+      }
+    },
+    {
+      "id": 230,
+      "createdAt": "2026-09-28T16:41:39.854Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 60,
+        "createdAt": "2026-09-28T16:41:39.841Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "9/30/2026",
+          "scheduledTime": "02:00 AM",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:41:38.624Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": false,
+        "statusCode": 500,
+        "durationMs": 1215,
+        "responseBody": "Scenario failed to complete.",
+        "error": "HTTP 500"
+      }
+    },
+    {
+      "id": 229,
+      "createdAt": "2026-09-28T16:37:27.320Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 58,
+        "createdAt": "2026-09-28T16:37:27.306Z",
+        "scenario": "interview_pipeline",
+        "url": "",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "9/30/2026",
+          "scheduledTime": "02:00 AM",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:37:27.305Z"
+        },
+        "success": false,
+        "statusCode": null,
+        "durationMs": 0,
+        "responseBody": "",
+        "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+      }
+    },
+    {
+      "id": 228,
+      "createdAt": "2026-09-28T16:34:50.038Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 56,
+        "createdAt": "2026-09-28T16:34:50.024Z",
+        "scenario": "interview_pipeline",
+        "url": "",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "9/30/2026",
+          "scheduledTime": "02:00 AM",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:34:50.023Z"
+        },
+        "success": false,
+        "statusCode": null,
+        "durationMs": 0,
+        "responseBody": "",
+        "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+      }
+    },
+    {
+      "id": 227,
+      "createdAt": "2026-09-28T16:29:21.039Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 54,
+        "createdAt": "2026-09-28T16:29:21.023Z",
+        "scenario": "interview_pipeline",
+        "url": "",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "scheduledDate": "9/30/2026",
+          "scheduledTime": "02:00 AM",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:29:21.023Z"
+        },
+        "success": false,
+        "statusCode": null,
+        "durationMs": 0,
+        "responseBody": "",
+        "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+      }
+    },
+    {
+      "id": 226,
+      "createdAt": "2026-09-28T16:23:45.604Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 52,
+        "createdAt": "2026-09-28T16:23:45.591Z",
+        "scenario": "interview_pipeline",
+        "url": "",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:23:45.590Z"
+        },
+        "success": false,
+        "statusCode": null,
+        "durationMs": 0,
+        "responseBody": "",
+        "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+      }
+    },
+    {
+      "id": 225,
+      "createdAt": "2026-09-28T16:18:37.731Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "failed",
+      "message": "Make scenario interview_pipeline failed",
+      "payload": {
+        "id": 50,
+        "createdAt": "2026-09-28T16:18:37.719Z",
+        "scenario": "interview_pipeline",
+        "url": "",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "interview_invitation",
+          "subject": "Interview invitation",
+          "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-28T16:18:37.718Z"
+        },
+        "success": false,
+        "statusCode": null,
+        "durationMs": 0,
+        "responseBody": "",
+        "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+      }
+    },
     {
       "id": 224,
       "createdAt": "2026-09-24T05:31:17.572Z",
@@ -7859,6 +8430,34 @@
   ],
   "decisionLogs": [
     {
+      "id": 84,
+      "createdAt": "2026-09-28T15:12:08.492Z",
+      "requestId": "1f7a9231-fad6-4f62-9444-468d52ba65fb",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 6340,
+      "fallbackUsed": false
+    },
+    {
+      "id": 83,
+      "createdAt": "2026-09-28T15:02:24.172Z",
+      "requestId": "8f1b55f0-8657-4312-9f74-2a5e0edc2b1c",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 7180,
+      "fallbackUsed": false
+    },
+    {
       "id": 82,
       "createdAt": "2026-09-16T05:44:54.143Z",
       "requestId": "3b178dfb-467e-4398-883d-044d877d5661",
@@ -9061,6 +9660,719 @@
     }
   ],
   "makeDeliveries": [
+    {
+      "id": 80,
+      "createdAt": "2026-09-28T17:42:56.236Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "fef0a7b8-d337-41cd-bb6e-0b5afb17ff4c",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "candidate_name": "Florante Del pilar",
+        "candidate_email": "saturog350@gmail.com",
+        "scheduled_at": "2026-09-29T18:00:00.000Z",
+        "scheduled_date": "2026-09-30",
+        "scheduled_time": "2:00 AM",
+        "interview_mode": "video",
+        "meeting_url": "https://meet.google.com/gos-wzto-eyi"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1333,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 79,
+      "createdAt": "2026-09-28T17:42:54.701Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "2026-09-30",
+        "scheduledTime": "2:00 AM",
+        "scheduledTime24": "02:00",
+        "interviewMode": "video",
+        "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T17:42:51.942Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2759,
+      "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\",\n  \"meetLink\": \"https://meet.google.com/gos-wzto-eyi\",\n  \"eventUrl\": \"https://www.google.com/calendar/event?eid=MjI1aHI2dWNnNzQ3YTRobW5wc2Mzb3Z2ZDggd293LmFpc29sdXRpb25AbQ\",\n  \"eventId\": \"225hr6ucg747a4hmnpsc3ovvd8\"\n}",
+      "error": ""
+    },
+    {
+      "id": 78,
+      "createdAt": "2026-09-28T17:41:47.861Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "39d85dd0-0444-4233-9e76-c301d4463b88",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "candidate_name": "Florante Del pilar",
+        "candidate_email": "saturog350@gmail.com",
+        "scheduled_at": "2026-09-29T21:00:00.000Z",
+        "scheduled_date": "2026-09-30",
+        "scheduled_time": "5:00 AM",
+        "interview_mode": "video",
+        "meeting_url": "https://meet.google.com/rzv-vjwv-saa"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1669,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 77,
+      "createdAt": "2026-09-28T17:41:46.006Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "2026-09-30",
+        "scheduledTime": "5:00 AM",
+        "scheduledTime24": "05:00",
+        "interviewMode": "video",
+        "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 5:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T17:41:42.711Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3294,
+      "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\",\n  \"meetLink\": \"https://meet.google.com/rzv-vjwv-saa\",\n  \"eventUrl\": \"https://www.google.com/calendar/event?eid=aHVuMGsxbmw0N2FuNGZ1MmR2MzJpdHBwdGMgd293LmFpc29sdXRpb25AbQ\",\n  \"eventId\": \"hun0k1nl47an4fu2dv32itpptc\"\n}",
+      "error": ""
+    },
+    {
+      "id": 76,
+      "createdAt": "2026-09-28T17:12:06.661Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "1d27533b-2a64-41b5-bd22-59d59a597aae",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2139,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 75,
+      "createdAt": "2026-09-28T17:10:36.874Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "351fdb15-3fa4-4138-ad16-ad00671ac48e",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T20:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1837,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 74,
+      "createdAt": "2026-09-28T17:10:24.058Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "2026-09-30",
+        "scheduledTime": "04:00",
+        "meetingUrl": "https://meet.google.com/xkm-awdi-oau",
+        "interviewMode": "video",
+        "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 4:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/xkm-awdi-oau\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T17:10:20.828Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3228,
+      "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\"\n}",
+      "error": ""
+    },
+    {
+      "id": 73,
+      "createdAt": "2026-09-28T17:10:23.053Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "77c61643-7c8f-4720-b401-5f9372336ebf",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T20:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2140,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 72,
+      "createdAt": "2026-09-28T17:05:52.841Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "pass",
+        "subject": "Your application has been approved",
+        "body": "Dear Florante Del pilar,\n\nWe are pleased to confirm that your application has been approved. Our recruitment team will contact you about the next steps.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T17:05:50.662Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2178,
+      "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"pass\"\n}",
+      "error": ""
+    },
+    {
+      "id": 71,
+      "createdAt": "2026-09-28T17:01:50.822Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "2026-09-30",
+        "scheduledTime": "02:00",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T17:01:47.484Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 3337,
+      "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\"\n}",
+      "error": ""
+    },
+    {
+      "id": 70,
+      "createdAt": "2026-09-28T17:01:49.579Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "1450aab3-458a-4ce9-9a8d-1379402d8d14",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2038,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 69,
+      "createdAt": "2026-09-28T16:59:44.302Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "5e6a626f-e42a-4ae1-b4e5-d9b42afbe60f",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2146,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 68,
+      "createdAt": "2026-09-28T16:59:43.438Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "2026-09-30",
+        "scheduledTime": "02:00",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:59:42.096Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": false,
+      "statusCode": 500,
+      "durationMs": 1341,
+      "responseBody": "Scenario failed to complete.",
+      "error": "HTTP 500"
+    },
+    {
+      "id": 67,
+      "createdAt": "2026-09-28T16:56:37.270Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "581e8974-29a7-492a-afea-4de9a12758af",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2289,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 66,
+      "createdAt": "2026-09-28T16:56:36.427Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "2026-09-30",
+        "scheduledTime": "02:00",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:56:34.925Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": false,
+      "statusCode": 500,
+      "durationMs": 1501,
+      "responseBody": "Scenario failed to complete.",
+      "error": "HTTP 500"
+    },
+    {
+      "id": 65,
+      "createdAt": "2026-09-28T16:54:08.314Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "81f55b3c-2440-4267-83b8-d3847058969f",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1824,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 64,
+      "createdAt": "2026-09-28T16:54:07.674Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "2026-09-30 ",
+        "scheduledTime": "02:00",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:54:06.439Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": false,
+      "statusCode": 500,
+      "durationMs": 1234,
+      "responseBody": "Scenario failed to complete.",
+      "error": "HTTP 500"
+    },
+    {
+      "id": 63,
+      "createdAt": "2026-09-28T16:50:24.492Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "fdf5d865-a063-4e12-8c54-fb4037f84def",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1913,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 62,
+      "createdAt": "2026-09-28T16:50:23.617Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "9/30/2026",
+        "scheduledTime": "02:00 AM",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:50:22.541Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": false,
+      "statusCode": 500,
+      "durationMs": 1075,
+      "responseBody": "Scenario failed to complete.",
+      "error": "HTTP 500"
+    },
+    {
+      "id": 61,
+      "createdAt": "2026-09-28T16:41:40.612Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "f28cff40-77c6-4c53-8e20-e9643957f96f",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1914,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 60,
+      "createdAt": "2026-09-28T16:41:39.841Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "9/30/2026",
+        "scheduledTime": "02:00 AM",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call. Our recruitment team will send the joining details.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:41:38.624Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": false,
+      "statusCode": 500,
+      "durationMs": 1215,
+      "responseBody": "Scenario failed to complete.",
+      "error": "HTTP 500"
+    },
+    {
+      "id": 59,
+      "createdAt": "2026-09-28T16:37:29.202Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "beeefed9-4880-4888-b97c-e6b3961f9a8f",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1847,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 58,
+      "createdAt": "2026-09-28T16:37:27.306Z",
+      "scenario": "interview_pipeline",
+      "url": "",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "9/30/2026",
+        "scheduledTime": "02:00 AM",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:37:27.305Z"
+      },
+      "success": false,
+      "statusCode": null,
+      "durationMs": 0,
+      "responseBody": "",
+      "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+    },
+    {
+      "id": 57,
+      "createdAt": "2026-09-28T16:34:52.034Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "cb24c1bf-02c7-49df-a011-6edac1cb563e",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1976,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 56,
+      "createdAt": "2026-09-28T16:34:50.024Z",
+      "scenario": "interview_pipeline",
+      "url": "",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "9/30/2026",
+        "scheduledTime": "02:00 AM",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:34:50.023Z"
+      },
+      "success": false,
+      "statusCode": null,
+      "durationMs": 0,
+      "responseBody": "",
+      "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+    },
+    {
+      "id": 55,
+      "createdAt": "2026-09-28T16:29:23.008Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "73eaa032-bdbc-43db-a694-81e71f167466",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1917,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 54,
+      "createdAt": "2026-09-28T16:29:21.023Z",
+      "scenario": "interview_pipeline",
+      "url": "",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "scheduledDate": "9/30/2026",
+        "scheduledTime": "02:00 AM",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:29:21.023Z"
+      },
+      "success": false,
+      "statusCode": null,
+      "durationMs": 0,
+      "responseBody": "",
+      "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+    },
+    {
+      "id": 53,
+      "createdAt": "2026-09-28T16:23:47.821Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "7ad0f98a-a943-464d-bda0-913236dd2335",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2165,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 52,
+      "createdAt": "2026-09-28T16:23:45.591Z",
+      "scenario": "interview_pipeline",
+      "url": "",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:23:45.590Z"
+      },
+      "success": false,
+      "statusCode": null,
+      "durationMs": 0,
+      "responseBody": "",
+      "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+    },
+    {
+      "id": 51,
+      "createdAt": "2026-09-28T16:18:39.696Z",
+      "scenario": "INTERVIEW_SCHEDULED_ALERT",
+      "url": "https://hook.eu1.make.com/62spsiuvysxtn156qlsose6xa8k8xorq",
+      "payload": {
+        "event_type": "interview.scheduled",
+        "interview_id": "1a02cf2b-7477-4903-a7f8-bebe213cfa69",
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "placement_id": "",
+        "scheduled_at": "2026-09-29T18:00:00.000Z"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 1903,
+      "responseBody": "{\"ok\":true}",
+      "error": ""
+    },
+    {
+      "id": 50,
+      "createdAt": "2026-09-28T16:18:37.719Z",
+      "scenario": "interview_pipeline",
+      "url": "",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "interview_invitation",
+        "subject": "Interview invitation",
+        "body": "Dear Florante Del pilar,\n\nWe would like to invite you to an interview on 9/30/2026, 2:00:00 AM. Interview format: Video call.\nMeeting link: https://meet.google.com/kgv-kwwr-ods\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-28T16:18:37.718Z"
+      },
+      "success": false,
+      "statusCode": null,
+      "durationMs": 0,
+      "responseBody": "",
+      "error": "No Make webhook configured. Checked MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE and MAKE_WEBHOOK_URL"
+    },
+    {
+      "id": 49,
+      "createdAt": "2026-09-28T16:16:18.349Z",
+      "scenario": "APPLICANT_INTAKE",
+      "url": "https://hook.eu1.make.com/4ctxtdz1srh63cwt2g3w3w63eva1iip8",
+      "payload": {
+        "application_id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+        "application_code": "APP-824B0546",
+        "status": "New Applicant",
+        "agency_id": 1,
+        "full_name": "Florante Del pilar",
+        "nationality": "Sri Lankan",
+        "event_type": "candidate.created",
+        "actor": "applicant"
+      },
+      "success": false,
+      "statusCode": 410,
+      "durationMs": 821,
+      "responseBody": "Webhook is no longer active.",
+      "error": "HTTP 410"
+    },
+    {
+      "id": 48,
+      "createdAt": "2026-09-28T15:12:08.476Z",
+      "scenario": "ai-engine-workflow",
+      "url": "https://hook.eu1.make.com/fn9c0hh8ixcqedp5h2p1un91vvz5afpg",
+      "payload": {
+        "type": "ai_engine",
+        "scenario": "workflow",
+        "systemPrompt": "Rank the best maid matches. Return JSON with matches array containing maidId, maidReferenceCode, maidName, score, reasons.",
+        "userPrompt": "{\"criteria\":{\"agencyId\":1,\"employerId\":1,\"message\":\"\",\"serviceType\":\"general_housekeeping\",\"location\":\"Singapore\",\"budget\":{\"min\":null,\"max\":null,\"currency\":\"SGD\",\"text\":\"\"},\"salary\":{\"min\":null,\"max\":null,\"currency\":\"SGD\",\"text\":\"\"},\"availability\":\"normal\",\"preferredNationalities\":[],\"preferredLanguages\":[]},\"candidates\":[{\"maidId\":72,\"maidReferenceCode\":\"MYR-ISL9785\",\"maidName\":\"Ji Mai\",\"score\":61,\"reasons\":[\"Currently available\",\"Location fit for Singapore\",\"Language profile available\"]},{\"maidId\":88,\"maidReferenceCode\":\"IND-DAR-SAR-9732\",\"maidName\":\"Amrita Rai Uphadaya\",\"score\":59,\"reasons\":[\"Currently available\",\"Location fit for Singapore\",\"Language profile available\"]},{\"maidId\":111,\"maidReferenceCode\":\"INA-PAT-9652\",\"maidName\":\"Nurida Yanti\",\"score\":59,\"reasons\":[\"Currently available\",\"Location fit for Singapore\",\"Language profile available\"]},{\"maidId\":75,\"maidReferenceCode\":\"MYR-ALL-9695\",\"maidName\":\"Tin Tin Than\",\"score\":51,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":65,\"maidReferenceCode\":\"IND-MP-NGA-9715\",\"maidName\":\"Tinglalchoi\",\"score\":51,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":56,\"maidReferenceCode\":\"FIL-GIN-9638\",\"maidName\":\"Lizalyn Dosdos Barrios\",\"score\":51,\"reasons\":[\"Currently available\",\"Language profile available\"]}]}",
+        "context": {}
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 5399,
+      "responseBody": "{\n  \"matches\": [\n    {\n      \"maidId\": 72,\n      \"maidReferenceCode\": \"MYR-ISL9785\",\n      \"maidName\": \"Ji Mai\",\n      \"score\": 61,\n      \"reasons\": [\n        \"Currently available\",\n        \"Location fit for Singapore\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 88,\n      \"maidReferenceCode\": \"IND-DAR-SAR-9732\",\n      \"maidName\": \"Amrita Rai Uphadaya\",\n      \"score\": 59,\n      \"reasons\": [\n        \"Currently available\",\n        \"Location fit for Singapore\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 111,\n      \"maidReferenceCode\": \"INA-PAT-9652\",\n      \"maidName\": \"Nurida Yanti\",\n      \"score\": 59,\n      \"reasons\": [\n        \"Currently available\",\n        \"Location fit for Singapore\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 75,\n      \"maidReferenceCode\": \"MYR-ALL-9695\",\n      \"maidName\": \"Tin Tin Than\",\n      \"score\": 51,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 65,\n      \"maidReferenceCode\": \"IND-MP-NGA-9715\",\n      \"maidName\": \"Tinglalchoi\",\n      \"score\": 51,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 56,\n      \"maidReferenceCode\": \"FIL-GIN-9638\",\n      \"maidName\": \"Lizalyn Dosdos Barrios\",\n      \"score\": 51,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    }\n  ]\n}",
+      "error": ""
+    },
+    {
+      "id": 47,
+      "createdAt": "2026-09-28T15:02:24.153Z",
+      "scenario": "ai-engine-workflow",
+      "url": "https://hook.eu1.make.com/fn9c0hh8ixcqedp5h2p1un91vvz5afpg",
+      "payload": {
+        "type": "ai_engine",
+        "scenario": "workflow",
+        "systemPrompt": "Rank the best maid matches. Return JSON with matches array containing maidId, maidReferenceCode, maidName, score, reasons.",
+        "userPrompt": "{\"criteria\":{\"agencyId\":1,\"message\":\"I need  hin my enquiries replying client is replying in client char support not email, also after replying it displays what enquiries it display\",\"serviceType\":\"general_housekeeping\",\"location\":\"Singapore\",\"budget\":{\"min\":null,\"max\":null,\"currency\":\"SGD\",\"text\":\"\"},\"salary\":{\"min\":null,\"max\":null,\"currency\":\"SGD\",\"text\":\"\"},\"availability\":\"normal\",\"preferredNationalities\":[],\"preferredLanguages\":[]},\"candidates\":[{\"maidId\":86,\"maidReferenceCode\":\"INA-PAK-9723\",\"maidName\":\"Suyati\",\"score\":56,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":17,\"maidReferenceCode\":\"IND-DAR-YUS-9377\",\"maidName\":\"Prabitra Rai\",\"score\":56,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":7,\"maidReferenceCode\":\"IND-DAR-SUS-9353\",\"maidName\":\"Aarati Rai\",\"score\":56,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":25,\"maidReferenceCode\":\"INA-JEN-9702\",\"maidName\":\"Sri Widayati\",\"score\":56,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":42,\"maidReferenceCode\":\"IND-ASA-VAL-9422\",\"maidName\":\"Komala Lama\",\"score\":56,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":99,\"maidReferenceCode\":\"INA-PAT-96661q\",\"maidName\":\"Sri Astuti\",\"score\":56,\"reasons\":[\"Currently available\",\"Language profile available\"]}]}",
+        "context": {}
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 5828,
+      "responseBody": "{\n  \"matches\": [\n    {\n      \"maidId\": 86,\n      \"maidReferenceCode\": \"INA-PAK-9723\",\n      \"maidName\": \"Suyati\",\n      \"score\": 56,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 17,\n      \"maidReferenceCode\": \"IND-DAR-YUS-9377\",\n      \"maidName\": \"Prabitra Rai\",\n      \"score\": 56,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 7,\n      \"maidReferenceCode\": \"IND-DAR-SUS-9353\",\n      \"maidName\": \"Aarati Rai\",\n      \"score\": 56,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 25,\n      \"maidReferenceCode\": \"INA-JEN-9702\",\n      \"maidName\": \"Sri Widayati\",\n      \"score\": 56,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 42,\n      \"maidReferenceCode\": \"IND-ASA-VAL-9422\",\n      \"maidName\": \"Komala Lama\",\n      \"score\": 56,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 99,\n      \"maidReferenceCode\": \"INA-PAT-96661q\",\n      \"maidName\": \"Sri Astuti\",\n      \"score\": 56,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\"\n      ]\n    }\n  ]\n}",
+      "error": ""
+    },
     {
       "id": 46,
       "createdAt": "2026-09-24T06:32:34.535Z",
@@ -11064,12 +12376,12 @@
   "counters": {
     "leads": 8,
     "inquiries": 65,
-    "matches": 160,
+    "matches": 166,
     "schedules": 6,
     "contracts": 7,
     "notifications": 24,
-    "automationLogs": 225,
-    "decisionLogs": 83,
-    "makeDeliveries": 47
+    "automationLogs": 240,
+    "decisionLogs": 85,
+    "makeDeliveries": 81
   }
 }

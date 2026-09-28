@@ -70,3 +70,32 @@ export const transcribeMedia = async (req: Request, res: Response) => {
     return res.status(202).json(await transcribePrivateMedia({ agencyId: await getRequestAgencyId(req), storageRef, language: typeof language === 'string' ? language : undefined }))
   } catch (error) { return res.status(502).json({ error: error instanceof Error ? error.message : 'Media transcription failed' }) }
 }
+
+/** Upload a staff-selected audio/video file privately, then send a short-lived link to Make for transcription. */
+export const uploadAndTranscribeMedia = async (req: Request, res: Response) => {
+  try {
+    if (!/multipart\/form-data/i.test(String(req.headers['content-type'] ?? ''))) return res.status(400).json({ error: 'An audio or video file is required' })
+    const formData = await parseMultipartRequest(req)
+    const upload = formData.get('file')
+    const language = String(formData.get('language') ?? '').trim()
+    if (!upload || typeof upload !== 'object' || typeof (upload as { name?: unknown }).name !== 'string' || typeof (upload as { arrayBuffer?: unknown }).arrayBuffer !== 'function') return res.status(400).json({ error: 'Choose an audio or video file' })
+    const file = upload as { name: string; type: string; size?: number; arrayBuffer: () => Promise<ArrayBuffer> }
+    if (!file.name.trim()) return res.status(400).json({ error: 'Choose a valid audio or video file' })
+    if (typeof file.size === 'number' && file.size > MAX_DRIVE_UPLOAD_BYTES) return res.status(400).json({ error: 'Media must be 25 MB or smaller' })
+    const bytes = Buffer.from(await file.arrayBuffer())
+    if (bytes.length === 0) return res.status(400).json({ error: 'The selected media file is empty' })
+    if (bytes.length > MAX_DRIVE_UPLOAD_BYTES) return res.status(400).json({ error: 'Media must be 25 MB or smaller' })
+    const agencyId = await getRequestAgencyId(req)
+    const storageRef = await uploadPrivateObject({
+      objectPath: makePrivateStoragePath('media-transcription', `agency-${agencyId}`, `${randomUUID()}-${safeFileName(file.name)}`),
+      body: bytes,
+      contentType: file.type || 'application/octet-stream',
+    })
+    const transcription = await transcribePrivateMedia({ agencyId, storageRef, language: language || undefined })
+    return res.status(202).json({ ...transcription, fileName: file.name, storageRef })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Media transcription failed'
+    const friendly = message === 'PRIVATE_STORAGE_NOT_CONFIGURED' ? 'Private media storage is not configured' : message === 'MEDIA_TRANSCRIBE_NOT_CONFIGURED' ? 'Media transcription workflow is not configured' : message
+    return res.status(502).json({ error: friendly })
+  }
+}

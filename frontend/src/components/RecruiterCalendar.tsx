@@ -46,6 +46,8 @@ interface RecruiterCalendarProps {
     applicationId: string;
     applicantName: string;
     date: string;
+    time?: string;
+    meetingLink?: string;
   } | null;
 }
 
@@ -157,7 +159,20 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
     setCurrentMonth(Number(scheduledInterview.date.slice(5, 7)) - 1);
     setSelectedDate(scheduledInterview.date);
     setEvents((current) => {
-      if (current.some((event) => event.id === eventId)) return current;
+      const existing = current.find((event) => event.id === eventId);
+      if (existing) {
+        if (existing.meetingLink === scheduledInterview.meetingLink && existing.time === scheduledInterview.time) return current;
+        const updated = current.map((event) => event.id === eventId ? {
+          ...event,
+          time: scheduledInterview.time || event.time,
+          meetingLink: scheduledInterview.meetingLink || event.meetingLink,
+          description: scheduledInterview.meetingLink
+            ? "Scheduled from Applicant Command. Google Meet link is ready."
+            : event.description,
+        } : event);
+        saveEvents(updated);
+        return updated;
+      }
       const updated = [
         ...current,
         {
@@ -167,6 +182,8 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
           description: "Scheduled from Applicant Command. Invitation email requested.",
           type: "interview" as EventType,
           applicantName: scheduledInterview.applicantName,
+          time: scheduledInterview.time,
+          meetingLink: scheduledInterview.meetingLink,
           completed: false,
           createdAt: new Date().toISOString(),
         },
@@ -549,7 +566,7 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
                           className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900"
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
-                          Open meeting
+                          Join Google Meet
                         </a>
                       )}
                       {event.description && (
@@ -597,6 +614,17 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
                   <span className="flex-1 truncate font-semibold text-black">{event.title}</span>
                   <span className="shrink-0 text-black">{formatDateDisplay(event.date)}</span>
                   {event.time && <span className="shrink-0 text-black">{event.time}</span>}
+                  {getSafeMeetingLink(event.meetingLink || "") && (
+                    <a
+                      href={getSafeMeetingLink(event.meetingLink || "")}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-violet-700 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-violet-800"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Join Meet
+                    </a>
+                  )}
                 </div>
               );
             })}

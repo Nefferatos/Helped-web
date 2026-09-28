@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { sendWorkflowToMake } from '../services/workflowOrchestrationService'
+import { sendToMakeWebhook } from '../services/workflowMakeService'
 import { optionalString, requiredString, sanitizePayload } from '../services/workflowValidationService'
 import { query, sql } from '../db'
 import { getRequestAgencyId } from '../auth'
@@ -256,7 +257,14 @@ export const hrInterviewEmail = async (req: Request, res: Response) => {
 
     const result = await sendWorkflowToMake({
       scenario: 'interview_pipeline',
-      payload,
+      // WEBSITE AI WORKFLOW uses `scenario` to choose its email route.
+      // Keep it inside the webhook body as well as the delivery log label.
+      payload: { ...payload, scenario: 'interview_pipeline' },
+      // Prefer the shared WEBSITE AI WORKFLOW webhook when it is configured.
+      // The dedicated HR webhook remains a backwards-compatible fallback.
+      url:
+        process.env.MAKE_WEBHOOK_URL?.trim() ||
+        process.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim(),
     })
 
     const responseData = parseMakeResponse(result.delivery.responseBody)
@@ -294,7 +302,59 @@ export const scheduleInterview = async (req: Request, res: Response) => {
       RETURNING id, scheduled_at, application_id, placement_id
     `)
     const interview = result.rows[0]
-    void recordWorkflowEvent({ eventType: 'interview.scheduled', entityType: 'interview', entityId: String(interview.id), actor: 'user:recruiter', payload: { applicationId, placementId, scheduledAt: interview.scheduled_at } })
+    // The staff alert is sent after Make returns the Google Meet link, not here.
+    // This prevents an incomplete alert with only internal database identifiers.
+    void recordWorkflowEvent({ eventType: 'interview.schedule_saved', entityType: 'interview', entityId: String(interview.id), actor: 'user:recruiter', payload: { applicationId, placementId, scheduledAt: interview.scheduled_at } })
     res.status(201).json({ interview })
   } catch (error) { console.error('Error scheduling interview:', error); res.status(500).json({ error: 'Failed to schedule interview' }) }
+}
+
+// Make creates the Google Meet URL after the initial schedule record exists.
+// Store that returned URL on the same interview instead of creating a duplicate.
+export const saveInterviewMeetingLink = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const interviewId = requiredString(req.params.interviewId, 'interviewId', 100)
+    const meetingUrl = requiredString(req.body.meetingUrl, 'meetingUrl', 1000)
+    const candidateName = optionalString(req.body.candidateName, 200)
+    const candidateEmail = optionalString(req.body.candidateEmail, 300)
+    const scheduledDate = optionalString(req.body.scheduledDate, 30)
+    const scheduledTime = optionalString(req.body.scheduledTime, 30)
+    const interviewMode = optionalString(req.body.interviewMode, 40) || 'video'
+    const result = await query(sql`
+      UPDATE public.interviews
+      SET meeting_url = ${meetingUrl}
+      WHERE id = ${interviewId} AND agency_id = ${agencyId}
+      RETURNING id, scheduled_at, application_id, meeting_url
+    `)
+    if (!result.rows[0]) return res.status(404).json({ error: 'Interview was not found' })
+    const interview = result.rows[0]
+    const alert = await sendToMakeWebhook({
+      scenario: 'INTERVIEW_SCHEDULED_ALERT',
+      payload: {
+        event_type: 'interview.scheduled',
+        interview_id: interview.id,
+        application_id: interview.application_id || '',
+        candidate_name: candidateName || 'Applicant',
+        candidate_email: candidateEmail || '',
+        scheduled_at: interview.scheduled_at,
+        scheduled_date: scheduledDate || '',
+        scheduled_time: scheduledTime || '',
+        interview_mode: interviewMode,
+        meeting_url: meetingUrl,
+      },
+    })
+    void recordWorkflowEvent({
+      eventType: 'interview.meeting_created',
+      entityType: 'interview',
+      entityId: String(interview.id),
+      actor: 'make:interview_pipeline',
+      payload: { applicationId: interview.application_id, scheduledAt: interview.scheduled_at, meetingUrl, staffAlertSent: alert.ok },
+      status: alert.ok ? 'completed' : 'failed',
+    })
+    res.status(200).json({ interview, staffAlertSent: alert.ok })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save Google Meet link'
+    res.status(/required/i.test(message) ? 400 : 500).json({ error: message })
+  }
 }
