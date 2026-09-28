@@ -1,0 +1,129 @@
+
+🧪 Testing 13 Make webhook(s) with real POST requests
+   probe id: probe-1790593546980
+   deduplicated: MAKE_WEBHOOK_URL_AI_ENGINE = MAKE_AI_ENGINE_WEBHOOK_URL
+   ⚠️  real side effects possible: emails (HR + alerts) and a Drive upload
+
+[ 1/13] MAKE_WEBHOOK_URL  → https://hook.eu1.make.com/ms7gknaz…
+        Legacy workflow dispatcher (WEBSITE AI WORKFLOW routes)
+        payload: {"scenario":"inquiry_pipeline","inquiryId":1001,"name":"Webhook Probe","contact":"test@test.com","message":"webhook probe probe-1790593546980 — please ignore"}
+        result : HTTP 200 · 1.3s · - · 103 bytes
+        body   : {
+  "ok": true,
+  "scenario": "inquiry_pipeline",
+  "event": "inquiry.processed",
+  "inquiryId": 1001
+}
+        verdict: ✅ PASS
+
+[ 2/13] MAKE_ORCHESTRATOR_WEBHOOK_URL  → https://hook.eu1.make.com/sqbr8h9q…
+        Workflow orchestrator (AI Agent classifies, then routes to API)
+        payload: {"action":"new_inquiry","actor":{"role":"guest","id":""},"customer":{"name":"Webhook Probe","contact":"test@test.com"},"message":"webhook probe probe-1790593546980 — please ignore","context":{}}
+        result : HTTP 200 · 0.9s · text/plain; charset=utf-8 · 8 bytes
+        body   : Accepted
+        verdict: ✅ PASS
+
+[ 3/13] MAKE_HR_EMAIL_WEBHOOK_URL  → https://hook.eu1.make.com/3d9ngjcn…
+        HR interview email (Gmail send) — WILL EMAIL the 'to' address
+        payload: {"scenario":"interview_pipeline","type":"pass","to":"test@test.com","candidateName":"Webhook Probe","position":"Probe","rating":85,"recommendation":"pass","summary":"webhook probe probe-1790593546980 — please ignore","strengthsHtml":"<li>probe</li>","weaknessesHtml":""}
+        result : HTTP 200 · 0.4s · text/plain; charset=utf-8 · 8 bytes
+        body   : Accepted
+        verdict: ✅ PASS
+
+[ 4/13] MAKE_PDF_AUTOFILL_WEBHOOK_URL  → https://hook.eu1.make.com/sjaq1fvm…
+        PDF autofill (Make AI Agent, expects JSON { content })
+        payload: {"scenario":"pdf_autofill","requestId":"probe-1790593546980","systemPrompt":"You are a connectivity probe. Always answer with a short JSON object.","userPrompt":"Reply with exactly: {\"content\":\"probe-ok\"}"}
+        result : HTTP 200 · 1.6s · application/json; charset=utf-8 · 72 bytes
+        body   : {
+  "content": "{\"content\":\"probe-ok\"}",
+  "finish_reason": "stop"
+}
+        verdict: ✅ PASS
+
+[ 5/13] MAKE_AI_RECEPTIONIST_WEBHOOK_URL  → https://hook.eu1.make.com/9gsvq2b9…
+        Public AI receptionist (Make AI Agent answer, JSON response)
+        payload: {"conversationId":"probe-1790593546980","message":"webhook probe probe-1790593546980 — please ignore","page":"/","history":[],"context":{},"timestamp":"2026-09-28T11:05:46.980Z"}
+        result : HTTP 200 · 4.8s · text/plain; charset=utf-8 · 8 bytes
+        body   : Accepted
+        verdict: ✅ PASS
+
+[ 6/13] MAKE_AI_COMMAND_CENTER_WEBHOOK_URL  → https://hook.eu1.make.com/w2x4iqj7…
+        AI command center / unified gateway (ai_engine payload)
+        payload: {"type":"ai_engine","scenario":"applicant-assistant","systemPrompt":"You are a connectivity probe. Reply with one short sentence.","userPrompt":"webhook probe probe-1790593546980 — please ignore","messages":[{"role":"user","content":"webhook probe probe-1790593546980 — please ignore"}],"context":{}}
+        result : HTTP 200 · 2.5s · application/json; charset=utf-8 · 39 bytes
+        body   : Webhook probe received; I’ll ignore it.
+        verdict: ✅ PASS
+
+[ 7/13] MAKE_WEBHOOK_URL_AI_ENGINE + MAKE_AI_ENGINE_WEBHOOK_URL  → https://hook.eu1.make.com/fn9c0hh8…
+        Unified AI gateway (ai_engine payload)
+        payload: {"type":"ai_engine","scenario":"workflow","systemPrompt":"You are a connectivity probe. Reply with one short sentence.","userPrompt":"webhook probe probe-1790593546980 — please ignore","context":{}}
+        result : HTTP 200 · 1.5s · - · 83 bytes
+        body   : Probe received: focusing on connectivity checks only; no date/time handling needed.
+        verdict: ✅ PASS
+
+[ 8/13] MAKE_WEBHOOK_URL_APPLICANT_INTAKE  → https://hook.eu1.make.com/4ctxtdz1…
+        Applicant intake & AI screening (candidate.created)
+        payload: {"event_type":"candidate.created","application_id":"probe-1790593546980","application_code":"PROBE-probe-1790593546980","status":"SUBMITTED","agency_id":0,"full_name":"Webhook Probe","nationality":"Filipino"}
+        result : HTTP 410 · 0.3s · text/plain; charset=utf-8 · 28 bytes
+        body   : Webhook is no longer active.
+        verdict: ❌ FAIL — no scenario listening on this webhook (turn it on / Run once)
+
+[ 9/13] MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT  → https://hook.eu1.make.com/byf7n2l8…
+        Applicant assistant (dedicated scenario)
+        payload: {"scenario":"applicant-assistant","type":"applicant_assistant","requestId":"probe-1790593546980","conversationId":"probe-1790593546980","message":"webhook probe probe-1790593546980 — please ignore","context":{"currentFilters":{},"selectedApplicants":[],"applicantSummary":{}},"conversationHistory":[{"role":"user","content":"webhook probe probe-1790593546980 — please ignore"}],"trackerContext":{"existingTracker":null,"googleDocId":null},"systemPrompt":"You are a connectivity probe. Reply with OK.","userPrompt":"webhook probe probe-1790593546980 — please ignore","messages":[{"role":"user","content":"webhook probe probe-1790593546980 — please ignore"}]}
+        result : HTTP 200 · 2.4s · application/json; charset=utf-8 · 2 bytes
+        body   : OK
+        verdict: ✅ PASS
+
+[10/13] MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT  → https://hook.eu1.make.com/jh2d9shr…
+        Contractor arrival alert — may EMAIL internal staff
+        payload: {"event_type":"arrival.completed","placement_id":"probe-1790593546980","contractor_job_id":"probe-1790593546980","notes":"webhook probe probe-1790593546980 — please ignore"}
+        result : HTTP 200 · 1.4s · - · 11 bytes
+        body   : {"ok":true}
+        verdict: ✅ PASS
+
+[11/13] MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT  → https://hook.eu1.make.com/62spsiuv…
+        Interview scheduled alert — may EMAIL internal staff (no code reference)
+        payload: {"event_type":"interview.scheduled","application_id":"probe-1790593546980","candidate_name":"Webhook Probe","scheduled_date":"2026-01-01","scheduled_time":"10:00","notes":"webhook probe probe-1790593546980 — please ignore"}
+        result : HTTP 200 · 1.5s · - · 11 bytes
+        body   : {"ok":true}
+        verdict: ✅ PASS
+
+[12/13] MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC  → https://hook.eu1.make.com/0k3ljmfb…
+        Private document to Google Drive (UPLOADS a small test file)
+        payload: {"agencyId":0,"storageRef":"private/probe/helped-webhook-probe.txt","fileName":"helped-webhook-probe.txt","folderKey":"","entityType":"webhook_probe","syncJobId":"probe-1790593546980","downloadUrl":"https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore"}
+        result : HTTP 200 · 2.9s · - · 253 bytes
+        body   : {
+  "ok": true,
+  "syncJobId": "probe-1790593546980",
+  "fileId": "1S8YoN9-t0UYbvXIVhK-tcdhPxOQX5HV_",
+  "fileName": "helped-webhook-probe.txt.txt",
+  "webViewLink": "https://drive.google.com/file/d/1S8YoN9-t0UYbvXIVhK-tcdhPxOQX5HV_/view?usp=drivesdk"
+}
+        verdict: ✅ PASS
+
+[13/13] MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE  → https://hook.eu1.make.com/33ru2wf5…
+        Private media transcription (real speech clip)
+        payload: {"agencyId":0,"storageRef":"private/probe/probe.wav","language":"en-US","syncJobId":"probe-1790593546980","mediaUrl":"https://raw.githubusercontent.com/ggerganov/whisper.cpp/master/samples/jfk.wav"}
+        result : HTTP 200 · 1.6s · application/json; charset=utf-8 · 168 bytes
+        body   : {"ok":true,"syncJobId":"probe-1790593546980","transcript":"And so my fellow Americans, ask not what your country can do for you, ask what you can do for your country."}
+        verdict: ✅ PASS
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+SUMMARY
+  ✅ 200    1.3s  MAKE_WEBHOOK_URL
+  ✅ 200    0.9s  MAKE_ORCHESTRATOR_WEBHOOK_URL  — text/plain; charset=utf-8
+  ✅ 200    0.4s  MAKE_HR_EMAIL_WEBHOOK_URL  — text/plain; charset=utf-8
+  ✅ 200    1.6s  MAKE_PDF_AUTOFILL_WEBHOOK_URL  — application/json; charset=utf-8
+  ✅ 200    4.8s  MAKE_AI_RECEPTIONIST_WEBHOOK_URL  — text/plain; charset=utf-8
+  ✅ 200    2.5s  MAKE_AI_COMMAND_CENTER_WEBHOOK_URL  — application/json; charset=utf-8
+  ✅ 200    1.5s  MAKE_WEBHOOK_URL_AI_ENGINE + MAKE_AI_ENGINE_WEBHOOK_URL
+  ❌ 410    0.3s  MAKE_WEBHOOK_URL_APPLICANT_INTAKE  — no scenario listening on this webhook (turn it on / Run once)
+  ✅ 200    2.4s  MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT  — application/json; charset=utf-8
+  ✅ 200    1.4s  MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT
+  ✅ 200    1.5s  MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT
+  ✅ 200    2.9s  MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC
+  ✅ 200    1.6s  MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE  — application/json; charset=utf-8
+
+❌ 1 of 13 Make webhook(s) FAILED — raw bodies above.
+

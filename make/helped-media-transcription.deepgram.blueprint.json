@@ -1,0 +1,55 @@
+{
+  "name": "Helped - Private Media Transcription (Deepgram, URL-based)",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": true },
+    "notes": [
+      "Ready-to-use replacement for helped-media-transcription.blueprint.json, which ships an intentional provider placeholder.",
+      "Deepgram is used because its listen endpoint is synchronous and accepts an HTTPS audio URL directly, so no file upload is needed: POST https://api.deepgram.com/v1/listen with body {\"url\": \"<mediaUrl>\"}.",
+      "Setup: (1) open the webhook module and SELECT YOUR EXISTING 'Helped Media Transcription' webhook so MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE keeps working unchanged, (2) replace YOUR_DEEPGRAM_API_KEY with a real key, (3) click Run once, (4) verify with: npm run test:media-transcribe",
+      "This blueprint sets dlq:true so failed runs are stored under Incomplete executions — that is what makes 'Scenario failed to complete.' debuggable afterwards.",
+      "If the transcript comes back empty, open module 3 and click the transcript field in the mapping panel; Make writes the exact path for you (Make array indices are 1-based)."
+    ]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create or select the webhook: Helped Media Transcription." }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "mapper": {
+        "url": "https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language={{1.language}}",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [{ "name": "Authorization", "value": "Token YOUR_DEEPGRAM_API_KEY" }],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "data": "{\n  \"url\": \"{{1.mediaUrl}}\"\n}"
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": {}, "notes": "Deepgram transcribes the short-lived signed URL. Response: results.channels.1.alternatives.1.transcript. Move the key into a Make connection/keychain instead of the header if you prefer." }
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{\n  \"ok\": true,\n  \"syncJobId\": \"{{1.syncJobId}}\",\n  \"transcript\": {{toJSON(2.data.results.channels.1.alternatives.1.transcript)}}\n}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {}, "notes": "Exactly the shape transcribePrivateMedia() parses: it reads result.transcript ?? result.text." }
+    }
+  ]
+}

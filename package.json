@@ -31,7 +31,13 @@
     "test:hr-full": "node --env-file=.env scripts/test-hr-interview-full.mjs",
     "test:orchestrator": "node --env-file=.env scripts/test-workflow-orchestrator.mjs",
     "test:events": "node --env-file=.env scripts/test-events.mjs",
-    "test:events:prod": "node --env-file=.env scripts/test-events.mjs --target=prod"
+    "test:events:prod": "node --env-file=.env scripts/test-events.mjs --target=prod",
+    "test:media-transcribe": "node --env-file=.env scripts/test-media-transcribe-webhook.mjs",
+    "test:media-contract": "node scripts/verify-media-transcribe-contract.mjs",
+    "test:make-all": "node --env-file=.env scripts/test-all-make-webhooks.mjs",
+    "test:applicant-intake": "node --env-file=.env scripts/test-all-make-webhooks.mjs --only=MAKE_WEBHOOK_URL_APPLICANT_INTAKE",
+    "check:live-secrets": "node scripts/check-live-secrets.mjs",
+    "diagnose:make-webhook": "node --env-file=.env scripts/diagnose-make-webhook.mjs"
   },
   "keywords": [
     "react",

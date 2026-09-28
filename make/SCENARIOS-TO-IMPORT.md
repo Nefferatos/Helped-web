@@ -16,6 +16,17 @@ Import each JSON file as its own Make scenario. Do not combine webhook-triggered
 
 Existing blueprints for the public receptionist, applicant assistant, PDF autofill, content engine, command center, HR email notifications, and the legacy workflow dispatcher remain separate integrations. Import them only when you are enabling that feature.
 
+### Transcription adapter — ready-to-use provider variant
+
+`helped-media-transcription.deepgram.blueprint.json` is a drop-in replacement for the template above. It uses Deepgram's synchronous `listen` endpoint, which accepts an HTTPS audio URL directly, so the flow stays at three modules (webhook → HTTP → webhook response) and answers with `{ ok, syncJobId, transcript }` exactly as the backend expects.
+
+1. Import it as its own scenario.
+2. In the webhook module, select the existing **Helped Media Transcription** webhook, so `MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE` does not change.
+3. Replace `YOUR_DEEPGRAM_API_KEY` with a real key (or move it into a Make connection/keychain).
+4. Click **Run once**, then verify from the repo: `npm run test:media-transcribe`.
+
+The variant sets `dlq: true`, so failed runs are kept under **Incomplete executions** instead of being discarded — that is what makes a `Scenario failed to complete.` response diagnosable afterwards. If the transcript comes back empty, open module 3 and click the transcript field in the mapping panel: Make writes the exact array path for you (Make's array indices are 1-based, so the first channel is `channels.1`).
+
 ## Important setup
 
 - Paste generated webhook URLs only into `backend/.env`, never commit that file.
