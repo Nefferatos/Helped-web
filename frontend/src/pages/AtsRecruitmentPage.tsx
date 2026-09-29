@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -452,6 +452,8 @@ const ScoreBar = ({ label, value }: { label: string; value: number }) => (
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const AtsRecruitmentPage = () => {
+  const navigate = useNavigate();
+  const { applicantId } = useParams<{ applicantId?: string }>();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -504,6 +506,15 @@ const AtsRecruitmentPage = () => {
     enabled: Boolean(selectedId),
     queryFn: () => fetchAtsApplication(selectedId!),
   });
+
+  // A selected applicant has a dedicated URL, making the review workspace
+  // refreshable and navigable like a page rather than a transient popup.
+  useEffect(() => {
+    if (!applicantId) return;
+    setSelectedId(applicantId);
+    setActiveDocumentIndex(0);
+    setProfileModalOpen(true);
+  }, [applicantId]);
 
   // AI Health Check — ping the screening endpoint to verify AI is working
   const aiHealthQuery = useQuery({
@@ -929,9 +940,12 @@ const AtsRecruitmentPage = () => {
   };
 
   const openProfileModal = (applicationId: string) => {
-    setSelectedId(applicationId);
-    setActiveDocumentIndex(0);
-    setProfileModalOpen(true);
+    navigate(adminPath(`/recruitment/applicant/${encodeURIComponent(applicationId)}`));
+  };
+
+  const closeApplicantReview = () => {
+    setProfileModalOpen(false);
+    navigate(adminPath("/recruitment"));
   };
 
   const scoreFactors = detail?.score?.factors
@@ -2155,8 +2169,7 @@ const AtsRecruitmentPage = () => {
         dashboard={dashboard}
         selectedId={selectedId}
         onSelectApplicant={(id) => {
-          setSelectedId(id);
-          setProfileModalOpen(true);
+          openProfileModal(id);
         }}
         onApplyFilter={handleAiApplyFilter}
         currentFilters={filters}
@@ -2173,7 +2186,7 @@ const AtsRecruitmentPage = () => {
       />
 
       {/* ── Profile Modal ─────────────────────────────────────────────────── */}
-      <Dialog open={profileModalOpen} onOpenChange={setProfileModalOpen}>
+      <Dialog open={profileModalOpen} onOpenChange={(open) => open ? setProfileModalOpen(true) : closeApplicantReview()}>
         {/*
           Key fixes:
           - flex + flex-col so children fill height predictably
@@ -2182,18 +2195,41 @@ const AtsRecruitmentPage = () => {
           - [&>button]:hidden to suppress DialogContent's default close button
             (we render our own)
         */}
-        <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-[0_24px_64px_rgba(15,23,42,0.2)] [&>button]:hidden">
+        <DialogContent className="applicant-review-page flex h-[100dvh] max-h-none w-screen max-w-none flex-col overflow-hidden rounded-none border-0 bg-slate-50 p-0 shadow-none [&>button]:hidden">
+          <style>{`
+            .applicant-review-page :is(p, span, label, button, input, select, textarea, li, a) {
+              font-size: max(1rem, 1em) !important;
+            }
+            .applicant-review-page [class*="text-slate-"] { color: #172033 !important; }
+            .applicant-review-page [class*="text-emerald-7"],
+            .applicant-review-page [class*="text-emerald-8"],
+            .applicant-review-page [class*="text-emerald-9"] { color: #065f46 !important; }
+            .applicant-review-page [class*="text-rose-"] { color: #be123c !important; }
+            .applicant-review-page .applicant-document-viewer [class*="text-slate-"] { color: #cbd5e1 !important; }
+            .applicant-review-page .truncate {
+              overflow: visible !important;
+              white-space: normal !important;
+              text-overflow: clip !important;
+              overflow-wrap: anywhere;
+            }
+            .applicant-review-page .line-clamp-3 {
+              display: block !important;
+              -webkit-line-clamp: unset !important;
+              overflow: visible !important;
+            }
+            .applicant-review-page :is(p, span, a, h4, div) { overflow-wrap: anywhere; }
+          `}</style>
           {/* Modal header — always visible, never scrolls */}
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-5 py-3">
-            <div className="min-w-0 flex-1">
-              <DialogTitle className="truncate text-base font-black leading-tight text-slate-950">
+            <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+            <div className="min-w-0 flex-1 basis-56">
+              <DialogTitle className="text-base font-black leading-tight text-slate-950">
                 {String(
                   detail?.profile?.fullName ||
                     detail?.application.profile.fullName ||
                     "Applicant Profile"
                 )}
               </DialogTitle>
-              <DialogDescription className="mt-0.5 truncate text-[11px] text-slate-400">
+              <DialogDescription className="mt-1 text-[11px] leading-6 text-slate-500">
                 {detail
                   ? `${String(
                       detail.profile?.nationality ||
@@ -2223,9 +2259,9 @@ const AtsRecruitmentPage = () => {
               )}
               <button
                 type="button"
-                onClick={() => setProfileModalOpen(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Close"
+                onClick={closeApplicantReview}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Back to applicants"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -2233,9 +2269,9 @@ const AtsRecruitmentPage = () => {
           </div>
 
           {/* Modal body — three-panel layout, fills remaining height */}
-          <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
             {/* Left: contact summary + document list */}
-            <div className="flex w-64 shrink-0 flex-col overflow-hidden border-r border-slate-100 bg-slate-50">
+            <div className="flex w-full shrink-0 flex-col border-b border-slate-200 bg-slate-50 lg:w-72 lg:overflow-hidden lg:border-b-0 lg:border-r">
               {/* Contact quick-links — fixed */}
               {detail && (
                 <div className="shrink-0 space-y-2 border-b border-slate-100 bg-white p-4">
@@ -2335,7 +2371,7 @@ const AtsRecruitmentPage = () => {
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[11px] font-semibold text-slate-900">
+                            <p className="text-[11px] font-semibold leading-6 text-slate-900">
                               {doc.name}
                             </p>
                             <p className="text-[10px] text-slate-400">
@@ -2360,15 +2396,15 @@ const AtsRecruitmentPage = () => {
             </div>
 
             {/* Center: document viewer */}
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-h-[34rem] min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
               {/* Doc nav bar — fixed */}
-              <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-white px-4 py-2">
-                <p className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
+              <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="min-w-0 flex-1 text-[11px] leading-6 text-slate-600">
                   {activeDocument
                     ? `${activeDocumentIndex + 1} / ${documents.length} — ${activeDocument.name}`
                     : "Select a document from the list"}
                 </p>
-                <div className="ml-2 flex shrink-0 gap-1.5">
+                <div className="flex shrink-0 flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -2419,7 +2455,7 @@ const AtsRecruitmentPage = () => {
               </div>
 
               {/* Viewer area — fills remaining height */}
-              <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-slate-900 p-4">
+              <div className="applicant-document-viewer flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-slate-900 p-4">
                 {!activeDocument ? (
                   <div className="text-center text-slate-500">
                     <FileText className="mx-auto h-10 w-10 opacity-25" />
@@ -2475,7 +2511,7 @@ const AtsRecruitmentPage = () => {
             </div>
 
             {/* Right: score breakdown + history */}
-            <div className="flex w-56 shrink-0 flex-col overflow-hidden border-l border-slate-100 bg-white">
+            <div className="flex w-full shrink-0 flex-col border-t border-slate-200 bg-white lg:w-72 lg:overflow-hidden lg:border-l lg:border-t-0">
               <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
                 {detail ? (
                   <>

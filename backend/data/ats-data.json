@@ -6,10 +6,10 @@
       "profileId": "fb4ba984-0480-46fb-84d3-10c2bba16cbe",
       "applicationCode": "APP-824B0546",
       "applicantAccessToken": "7e88614c-5a5d-4f29-8337-ff5905c8db67",
-      "status": "Screening Interview",
+      "status": "Ready to Configure Public Profile",
       "source": "resume_upload",
       "appliedAt": "2026-09-28T16:16:17.332Z",
-      "updatedAt": "2026-09-28T17:42:51.914Z",
+      "updatedAt": "2026-09-29T14:41:01.775Z",
       "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
       "aiParseReviewRequired": true,
       "notificationLogIds": [
@@ -18,7 +18,7 @@
         "e282828e-a283-4663-82f0-1793c27e4023"
       ],
       "viewedAt": "2026-09-28T16:16:23.193Z",
-      "approvedAt": "2026-09-28T17:05:50.639Z"
+      "approvedAt": "2026-09-29T14:24:23.232Z"
     },
     {
       "id": "42b5a300-ef62-4e28-8032-fe2306ae7d63",
@@ -4490,6 +4490,60 @@
   "matches": [],
   "history": [
     {
+      "id": "15e3c7e0-5143-4e34-bdec-14c574b19096",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-09-29T14:41:01.775Z"
+    },
+    {
+      "id": "bbc7abe1-0d4a-402f-bc16-9dd548295b40",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-09-29T14:40:53.431Z"
+    },
+    {
+      "id": "8f111975-f155-4690-bb56-6c411f12b383",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "fromStage": "Ready to Configure Public Profile",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-09-29T14:40:51.340Z"
+    },
+    {
+      "id": "4d953014-5deb-4023-b520-42a031bba8d9",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "fromStage": "Approved",
+      "toStage": "Ready to Configure Public Profile",
+      "actor": "attheagency",
+      "reason": "Stage changed to Ready to Configure Public Profile",
+      "createdAt": "2026-09-29T14:24:29.771Z"
+    },
+    {
+      "id": "b3afc90b-198f-4efe-9287-1c95b838c84e",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "fromStage": "Background Check",
+      "toStage": "Approved",
+      "actor": "attheagency",
+      "reason": "Bulk approval",
+      "createdAt": "2026-09-29T14:24:23.232Z"
+    },
+    {
+      "id": "7733c7f1-0c53-4314-a1e5-0cf19119dd02",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "fromStage": "Screening Interview",
+      "toStage": "Background Check",
+      "actor": "attheagency",
+      "reason": "Stage changed to Background Check",
+      "createdAt": "2026-09-29T13:32:06.559Z"
+    },
+    {
       "id": "149fc110-da4d-4904-a491-48f94dc1b0e2",
       "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
       "fromStage": "Background Check",
@@ -5376,6 +5430,66 @@
     }
   ],
   "notifications": [
+    {
+      "id": "bc25f034-5276-47e0-8029-aed7f493bc34",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "application_received",
+      "message": "Florante Del pilar moved to Ready to Configure Public Profile",
+      "createdAt": "2026-09-29T14:41:01.775Z"
+    },
+    {
+      "id": "7c1031ae-9323-4366-845f-0b1a336b4468",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "application_received",
+      "message": "Florante Del pilar moved to Ready to Configure Public Profile",
+      "createdAt": "2026-09-29T14:40:53.431Z"
+    },
+    {
+      "id": "e966ffae-6359-4726-8872-f9d5d75a3aee",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "application_received",
+      "message": "Florante Del pilar moved to Ready to Configure Public Profile",
+      "createdAt": "2026-09-29T14:40:51.341Z"
+    },
+    {
+      "id": "56a86b53-9f55-4116-9fc3-353d01438c3e",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "application_received",
+      "message": "Florante Del pilar moved to Ready to Configure Public Profile",
+      "createdAt": "2026-09-29T14:24:29.772Z"
+    },
+    {
+      "id": "eae3072c-8359-4273-84af-e8c085b57b49",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "event": "Approved",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "approved",
+      "message": "Florante Del pilar moved to Approved",
+      "createdAt": "2026-09-29T14:24:23.232Z"
+    },
+    {
+      "id": "0ef17548-8ce0-49b7-a98b-6133862108b8",
+      "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+      "event": "Application Received",
+      "channel": "internal",
+      "recipient": "+6580730757",
+      "templateKey": "application_received",
+      "message": "Florante Del pilar moved to Background Check",
+      "createdAt": "2026-09-29T13:32:06.559Z"
+    },
     {
       "id": "ca76250d-2da3-4075-8a45-25bf7d0b029b",
       "applicationId": "8736335b-7d2b-4bea-88b4-02c9834f6c57",

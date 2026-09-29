@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { PhoneNumberInput } from "@/components/ui/phone-input";
 import { toast } from "@/components/ui/sonner";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
-import type { AtsApplicationListItem } from "@/lib/ats";
+import { fetchAtsApplication, type AtsApplicationListItem } from "@/lib/ats";
 import { defaultMaidProfile, getDialCodePrefillForNationality, type MaidProfile } from "@/lib/maids";
 import { startMaidSaveTask } from "@/lib/maidSaveProgress";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -864,6 +864,29 @@ const AddMaid = () => {
 
     const seedPrefill = buildAtsPrefill({ query: searchParams });
     setFormData((prev) => mergeAtsPrefillIntoMaid(prev, seedPrefill));
+
+    // The recruitment list contains only a compact profile. Load the complete
+    // ATS record as well, so all FDW application fields are available in Add Maid.
+    const applicationId = searchParams.get("applicationId")?.trim();
+    if (!applicationId) return;
+
+    let cancelled = false;
+    void fetchAtsApplication(applicationId)
+      .then((application) => {
+        if (cancelled) return;
+        const detailedPrefill = buildAtsPrefill({
+          query: searchParams,
+          applicationProfile: application.application.profile,
+          detailedProfile: application.profile,
+        });
+        setFormData((prev) => mergeAtsPrefillIntoMaid(prev, detailedPrefill));
+      })
+      .catch(() => {
+        // The basic query-string prefill remains usable if the detailed record
+        // is unavailable (for example, after an admin session expires).
+      });
+
+    return () => { cancelled = true; };
   }, [searchParams]);
 
   // ── Unsaved-changes guard ──
@@ -975,7 +998,6 @@ const AddMaid = () => {
   );
   const passportOrTwoByTwoPhoto = photos[0] ?? "";
   const fullBodyPhoto = photos[1] ?? "";
-  const extraPhotos = photos.slice(2);
 
   // ── Detect whether the current passport photo already has a frame burned in ──
   useEffect(() => {
@@ -1043,19 +1065,6 @@ const AddMaid = () => {
         const next = [...photos];
         next[index] = dataUrl;
         await savePhotos(next);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to read photo");
-      }
-    },
-    [fileToDataUrl, photos, savePhotos],
-  );
-
-  const addExtraPhoto = useCallback(
-    async (file?: File) => {
-      if (!file) return;
-      try {
-        const dataUrl = await fileToDataUrl(file);
-        await savePhotos([...photos, dataUrl]);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to read photo");
       }
@@ -1474,7 +1483,7 @@ const AddMaid = () => {
                     <Sparkles className="h-4 w-4 text-amber-300" />
                   </DialogTitle>
                   <DialogDescription className="text-[12px] text-teal-50/90 mt-0.5 font-medium">
-                    Slot 1 = passport &nbsp;·&nbsp; Slot 2 = full body &nbsp;·&nbsp; Slots 3–5 = extras
+                    Upload a passport-size photo and a full-body photo.
                   </DialogDescription>
                 </div>
               </div>
@@ -1482,10 +1491,10 @@ const AddMaid = () => {
               {/* photo count pill */}
               <div className="flex shrink-0 flex-col items-end gap-1.5">
                 <span className="text-[11px] font-bold text-white/90 tabular-nums">
-                  {photos.filter(Boolean).length}/5 photos
+                  {photos.slice(0, 2).filter(Boolean).length}/2 photos
                 </span>
                 <div className="flex gap-1 items-center">
-                  {Array.from({ length: 5 }).map((_, i) => (
+                  {Array.from({ length: 2 }).map((_, i) => (
                     <div
                       key={i}
                       className="h-2 w-6 rounded-full transition-colors"
@@ -1632,50 +1641,6 @@ const AddMaid = () => {
                     </div>
                   </div>
 
-                  {/* Extras */}
-                  <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-[11px] font-extrabold uppercase tracking-widest text-teal-700">Slots 3–5 · Extras</p>
-                      <span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                        {extraPhotos.length}/3
-                      </span>
-                    </div>
-                    <div className="flex gap-2.5 flex-wrap">
-                      {extraPhotos.map((photo, index) => (
-                        <div key={`${photo}-${index}`} className="group relative overflow-hidden rounded-lg bg-slate-900/5 border border-slate-200" style={{ width: 76, height: 76 }}>
-                          <img src={photo} alt={`extra ${index + 1}`} className="absolute inset-0 h-full w-full object-contain" />
-                          <button
-                            type="button"
-                            disabled={isUploadingPhoto}
-                            onClick={() => void removePhotoAt(index + 2)}
-                            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-slate-900/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                            aria-label={`Remove extra ${index + 1}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                      {extraPhotos.length < 3 && (
-                        <label
-                          className="cursor-pointer flex flex-col items-center justify-center gap-1 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors border-2 border-dashed border-amber-300"
-                          style={{ width: 76, height: 76 }}
-                        >
-                          <span className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center text-slate-900">
-                            <Plus className="h-4 w-4" />
-                          </span>
-                          <span className="text-[10px] font-bold text-amber-700">Add</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="sr-only"
-                            disabled={isUploadingPhoto || photos.length >= 5}
-                            onChange={(e) => void handleSingleFileSelection(e, addExtraPhoto)}
-                          />
-                        </label>
-                      )}
-                    </div>
-                    <p className="text-[11px] font-medium text-slate-500 mt-2.5">Max 3 extras · JPG / PNG</p>
-                  </div>
                 </div>
 
                 {/* ══ RIGHT COLUMN: frame picker ══ */}

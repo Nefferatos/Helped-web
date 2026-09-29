@@ -324,27 +324,27 @@ const publicInfoChecklist = [
 // ─── Shared class strings ─────────────────────────────────────────────────────
 
 const fieldCls =
-  "h-11 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-100";
+  "min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-950 placeholder:text-slate-500 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100";
 
 const fieldErrorCls =
-  "h-11 w-full rounded-lg border border-rose-300 bg-rose-50/50 px-3.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-none transition-colors focus-visible:outline-none focus-visible:border-rose-400 focus-visible:ring-2 focus-visible:ring-rose-100";
+  "min-h-12 w-full rounded-xl border border-rose-400 bg-rose-50 px-4 text-base text-slate-950 placeholder:text-slate-500 shadow-none transition-colors focus-visible:outline-none focus-visible:border-rose-600 focus-visible:ring-2 focus-visible:ring-rose-100";
 
 const selectCls =
-  "h-11 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-sm text-slate-900 shadow-none transition-colors focus-visible:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 appearance-none cursor-pointer";
+  "min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-950 shadow-none transition-colors focus-visible:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 appearance-none cursor-pointer";
 
 const selectErrorCls =
-  "h-11 w-full rounded-lg border border-rose-300 bg-rose-50/50 px-3.5 text-sm text-slate-900 shadow-none transition-colors focus-visible:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 appearance-none cursor-pointer";
+  "min-h-12 w-full rounded-xl border border-rose-400 bg-rose-50 px-4 text-base text-slate-950 shadow-none transition-colors focus-visible:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-100 appearance-none cursor-pointer";
 
 const textareaCls =
-  "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-100";
+  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 placeholder:text-slate-500 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100";
 
 const textareaErrorCls =
-  "w-full rounded-lg border border-rose-300 bg-rose-50/50 px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-rose-400 focus-visible:ring-2 focus-visible:ring-rose-100";
+  "w-full rounded-xl border border-rose-400 bg-rose-50 px-4 py-3 text-base text-slate-950 placeholder:text-slate-500 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-rose-600 focus-visible:ring-2 focus-visible:ring-rose-100";
 
 const dateCls =
-  "h-11 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-calendar-picker-indicator]:cursor-pointer";
+  "min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-950 placeholder:text-slate-500 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:cursor-pointer";
 
-const labelCls = "block text-xs font-semibold text-slate-600 mb-1.5 tracking-wide";
+const labelCls = "mb-2 block text-base font-semibold tracking-wide text-slate-900";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -776,9 +776,14 @@ const PublicMaidApplicationPage = () => {
       if (parsed.form) setForm({ ...initialState, ...parsed.form });
       if (parsed.selectedLanguages) setSelectedLanguages(parsed.selectedLanguages);
       if (parsed.employmentHistory) setEmploymentHistory(parsed.employmentHistory);
-      if (parsed.termsAccepted) setTermsAccepted(parsed.termsAccepted);
-      if (parsed.introCompleted) setIntroCompleted(parsed.introCompleted);
-      if (typeof parsed.activeStep === "number") setActiveStep(parsed.activeStep);
+      const restoredTermsAccepted = parsed.termsAccepted === true;
+      setTermsAccepted(restoredTermsAccepted);
+      // Consent is the source of truth for access to all later steps. A stale
+      // draft must never reopen the form beyond the consent screen unchecked.
+      setIntroCompleted(restoredTermsAccepted && parsed.introCompleted === true);
+      if (typeof parsed.activeStep === "number") {
+        setActiveStep(restoredTermsAccepted ? parsed.activeStep : 0);
+      }
       setHasDraft(false);
       toast.success("Draft restored — continue where you left off.");
     } catch {
@@ -1088,6 +1093,11 @@ const PublicMaidApplicationPage = () => {
       return;
     }
 
+    if (!termsAccepted) {
+      requireTerms();
+      return;
+    }
+
     // Validate current step before advancing
     const stepErrors = validateStep(activeStep);
     if (Object.keys(stepErrors).length > 0) {
@@ -1111,13 +1121,20 @@ const PublicMaidApplicationPage = () => {
   };
 
   const goPrev = () => {
-    setActiveStep((c) => Math.max(c - 1, 0));
+    // Once consent has been confirmed and the applicant has continued, keep
+    // the declaration screen out of the application workflow.
+    setActiveStep((c) => Math.max(c - 1, introCompleted ? 1 : 0));
     scrollToTop();
   };
 
   const handleStepClick = (i: number) => {
-    if (i === 0) { setActiveStep(0); scrollToTop(); return; }
-    if (!introCompleted) { requireTerms(); return; }
+    if (i === 0) {
+      if (introCompleted) return;
+      setActiveStep(0);
+      scrollToTop();
+      return;
+    }
+    if (!termsAccepted) { requireTerms(); return; }
     setActiveStep(i);
     scrollToTop();
   };
@@ -1136,7 +1153,17 @@ const PublicMaidApplicationPage = () => {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#ecfdf5_0,_#f8fafc_38rem,_#f8fafc_100%)]">
+    <div className="fdw-application min-h-screen bg-[radial-gradient(circle_at_top,_#ecfdf5_0,_#f8fafc_38rem,_#f8fafc_100%)] text-slate-950">
+      <style>{`
+        .fdw-application :is(p, span, label, button, input, select, textarea, li) { font-size: max(1rem, 1em) !important; }
+        .fdw-application [class*="text-slate-"] { color: #172033 !important; }
+        .fdw-application [class*="text-emerald-7"], .fdw-application [class*="text-emerald-8"], .fdw-application [class*="text-emerald-9"] { color: #065f46 !important; }
+        .fdw-application .fdw-dark-panel [class*="text-slate-"] { color: #cbd5e1 !important; }
+        @media (max-width: 1023px) {
+          .fdw-application .fdw-form-layout { grid-template-columns: minmax(0, 1fr); }
+          .fdw-application .fdw-sidebar { position: static; grid-template-columns: minmax(0, 1fr); }
+        }
+      `}</style>
       <PublicSiteNavbar />
 
       {/* Draft restore banner */}
@@ -1187,9 +1214,10 @@ const PublicMaidApplicationPage = () => {
 
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <form
-          className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]"
+          className="fdw-form-layout grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]"
           onSubmit={(e) => {
             e.preventDefault();
+            if (!termsAccepted) { requireTerms(); return; }
             if (!isReviewStep) { goNext(); return; }
             submitMutation.mutate();
           }}
@@ -1214,7 +1242,7 @@ const PublicMaidApplicationPage = () => {
                   const Icon = s.icon;
                   const isActive = i === activeStep;
                   const isDone = s.isComplete;
-                  const isLocked = i > 0 && !introCompleted;
+                  const isLocked = (i === 0 && introCompleted) || (i > 0 && !termsAccepted);
                   return (
                     <button
                       key={s.id}
@@ -1265,7 +1293,7 @@ const PublicMaidApplicationPage = () => {
                 <button
                   type="button"
                   onClick={() => handleStepClick(Math.max(0, activeStep - 1))}
-                  disabled={activeStep === 0}
+                  disabled={activeStep === 0 || (introCompleted && activeStep === 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-500 disabled:opacity-30 touch-manipulation"
                   aria-label="Previous step"
                 >
@@ -1282,7 +1310,7 @@ const PublicMaidApplicationPage = () => {
                 <button
                   type="button"
                   onClick={() => handleStepClick(Math.min(stepItems.length - 1, activeStep + 1))}
-                  disabled={activeStep === stepItems.length - 1 || (activeStep === 0 && !introCompleted)}
+                  disabled={activeStep === stepItems.length - 1 || !termsAccepted}
                   className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-500 disabled:opacity-30 touch-manipulation"
                   aria-label="Next step"
                 >
@@ -1297,6 +1325,7 @@ const PublicMaidApplicationPage = () => {
                     key={s.id}
                     type="button"
                     onClick={() => handleStepClick(i)}
+                    disabled={(i === 0 && introCompleted) || (i > 0 && !termsAccepted)}
                     className={`h-2 rounded-full transition-all touch-manipulation ${
                       i === activeStep ? "w-6 bg-emerald-600" : s.isComplete ? "w-2 bg-emerald-300" : "w-2 bg-slate-300"
                     }`}
@@ -1397,7 +1426,12 @@ const PublicMaidApplicationPage = () => {
                         checked={termsAccepted}
                         onChange={(e) => {
                           setTermsAccepted(e.target.checked);
-                          if (e.target.checked) setShowTermsAlert(false);
+                          if (e.target.checked) {
+                            setShowTermsAlert(false);
+                          } else {
+                            setIntroCompleted(false);
+                            setActiveStep(0);
+                          }
                           markChanged();
                         }}
                         className="mt-0.5 h-5 w-5 cursor-pointer rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 shrink-0"
@@ -2287,9 +2321,9 @@ const PublicMaidApplicationPage = () => {
           </div>
 
           {/* ── Sidebar ── */}
-          <div className="grid gap-4 xl:sticky xl:top-6 xl:self-start md:grid-cols-2 xl:grid-cols-1">
+          <div className="fdw-sidebar grid gap-4 xl:sticky xl:top-6 xl:self-start md:grid-cols-2 xl:grid-cols-1">
 
-            <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-md">
+            <div className="fdw-dark-panel rounded-2xl bg-slate-900 p-6 text-white shadow-md">
               <div className="flex items-center gap-3 mb-5">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
                   <Globe2 className="h-4 w-4" />

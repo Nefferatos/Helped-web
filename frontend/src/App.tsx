@@ -369,6 +369,7 @@ const App = () => {
             <Route path="/agencyadmin/ai-hr-interviewer" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiHrInterviewerPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-marketing" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiDirectMarketingPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/recruitment" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AtsRecruitmentPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/recruitment/applicant/:applicantId" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AtsRecruitmentPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/operations" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><OperationsBoardPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/operations-center" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyOperationsCenterPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/contractor-tasks" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ContractorTasksPage /></AdminShell></ProtectedAdminRoute>)} />

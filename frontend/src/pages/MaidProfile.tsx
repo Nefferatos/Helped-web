@@ -574,7 +574,6 @@ const MaidProfilePage = () => {
   const photos = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls : maid.photoDataUrl ? [maid.photoDataUrl] : [];
   const passportOrTwoByTwoPhoto = isEmptySlot(photos[0]) ? "" : photos[0];
   const fullBodyPhoto = isEmptySlot(photos[1]) ? "" : photos[1];
-  const extraPhotos = photos.slice(2).filter((p) => !isEmptySlot(p));
   const youtubeEmbedUrl = getYouTubeEmbedUrl(maid.videoDataUrl);
   const storedClient = getStoredClient() as (ReturnType<typeof getStoredClient> & { emailVerified?: boolean }) | null;
   const canViewPrivateIntro = Boolean(getClientToken() && storedClient?.emailVerified === true);
@@ -623,19 +622,6 @@ const MaidProfilePage = () => {
       // collapse into Slot 1's position.
       while (next.length < index) next.push(EMPTY_SLOT);
       next[index] = dataUrl;
-      await savePhotos(next);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
-  };
-  const addExtraPhoto = async (file?: File) => {
-    if (!file) return;
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      // Ensure Slot 1 and Slot 2 positions exist (as real or sentinel
-      // entries) before appending, so a new extra always lands at index
-      // 2+ instead of sliding into an unfilled fixed slot.
-      const next = [...photos];
-      while (next.length < 2) next.push(EMPTY_SLOT);
-      next.push(dataUrl);
       await savePhotos(next);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
   };
@@ -1383,7 +1369,7 @@ const MaidProfilePage = () => {
                   <Sparkles className="h-4 w-4 text-amber-300" />
                 </DialogTitle>
                 <DialogDescription className="text-[12px] text-teal-50/90 mt-0.5 font-medium">
-                  Slot 1 = passport &nbsp;·&nbsp; Slot 2 = full body &nbsp;·&nbsp; Slots 3–5 = extras
+                  Upload a passport-size photo and a full-body photo.
                 </DialogDescription>
               </div>
             </div>
@@ -1391,10 +1377,10 @@ const MaidProfilePage = () => {
             {/* photo count pill */}
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <span className="text-[11px] font-bold text-white/90 tabular-nums">
-                {photos.filter((p) => !isEmptySlot(p)).length}/5 photos
+                {photos.slice(0, 2).filter((p) => !isEmptySlot(p)).length}/2 photos
               </span>
               <div className="flex gap-1 items-center">
-                {Array.from({ length: 5 }).map((_, i) => (
+                {Array.from({ length: 2 }).map((_, i) => (
                   <div
                     key={i}
                     className="h-2 w-6 rounded-full transition-colors"
@@ -1530,44 +1516,6 @@ const MaidProfilePage = () => {
                   </div>
                 </div>
 
-                {/* Extras */}
-                <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-[11px] font-extrabold uppercase tracking-widest text-teal-700">Slots 3–5 · Extras</p>
-                    <span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                      {extraPhotos.length}/3
-                    </span>
-                  </div>
-                  <div className="flex gap-2.5 flex-wrap">
-                    {extraPhotos.map((photo, index) => (
-                      <div key={`${photo}-${index}`} className="group relative overflow-hidden rounded-lg bg-slate-900/5 border border-slate-200" style={{ width: 76, height: 76 }}>
-                        <img src={photo} alt={`extra ${index + 1}`} className="absolute inset-0 h-full w-full object-contain" />
-                        <button
-                          type="button"
-                          disabled={isMediaSaving}
-                          onClick={() => void removePhotoAt(index + 2)}
-                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-slate-900/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                          aria-label={`Remove extra ${index + 1}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                    {extraPhotos.length < 3 && (
-                      <label
-                        className="cursor-pointer flex flex-col items-center justify-center gap-1 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors border-2 border-dashed border-amber-300"
-                        style={{ width: 76, height: 76 }}
-                      >
-                        <span className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center text-slate-900">
-                          <Plus className="h-4 w-4" />
-                        </span>
-                        <span className="text-[10px] font-bold text-amber-700">Add</span>
-                        <input type="file" accept="image/*" className="sr-only" disabled={isMediaSaving || photos.length >= 5} onChange={(e) => void addExtraPhoto(e.target.files?.[0])} />
-                      </label>
-                    )}
-                  </div>
-                  <p className="text-[11px] font-medium text-slate-500 mt-2.5">Max 3 extras · JPG / PNG</p>
-                </div>
               </div>
 
               {/* ══ RIGHT COLUMN: frame picker, maximized ══ */}

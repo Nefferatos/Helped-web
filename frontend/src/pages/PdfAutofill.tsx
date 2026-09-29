@@ -1166,9 +1166,20 @@ const UploadPopup = ({ status, fileName, fieldCount, missingFields, errMsg, pct,
           @keyframes fdwPopIn   { from { opacity:0; transform:translateY(12px) scale(.94) } to { opacity:1; transform:translateY(0) scale(1) } }
           @keyframes fdwShimmer { 0%   { transform:translateX(-100%) } 100% { transform:translateX(220%) } }
           @keyframes fdwPulse   { 0%,100% { opacity:1 } 50% { opacity:.5 } }
+          @keyframes fdwScanLine { 0%,100% { top:12%; opacity:0 } 12%,88% { opacity:1 } 50% { top:82% } }
+          @keyframes fdwScanGlow { 0%,100% { opacity:.18; transform:scale(.92) } 50% { opacity:.48; transform:scale(1.08) } }
+          @keyframes fdwScanDot  { 0%,100% { opacity:.25; transform:translateY(0) } 50% { opacity:1; transform:translateY(-2px) } }
           .fdw-shimmer { position:relative; overflow:hidden }
           .fdw-shimmer::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent); animation:fdwShimmer 1.5s ease infinite }
           .fdw-pulse { animation:fdwPulse 1.8s ease infinite }
+          .fdw-scanner-line { animation:fdwScanLine 2.1s ease-in-out infinite }
+          .fdw-scanner-glow { animation:fdwScanGlow 2.1s ease-in-out infinite }
+          .fdw-scanner-dot { animation:fdwScanDot 1s ease-in-out infinite }
+          .fdw-scanner-dot:nth-child(2) { animation-delay:.14s }
+          .fdw-scanner-dot:nth-child(3) { animation-delay:.28s }
+          @media (prefers-reduced-motion: reduce) {
+            .fdw-scanner-line, .fdw-scanner-glow, .fdw-scanner-dot { animation:none }
+          }
         `}</style>
 
         {/* Header */}
@@ -1198,6 +1209,24 @@ const UploadPopup = ({ status, fileName, fieldCount, missingFields, errMsg, pct,
 
         {/* Body */}
         <div className="px-4 py-4 space-y-3.5">
+          {isActive && (
+            <div className="relative flex h-[104px] items-center justify-center overflow-hidden rounded-xl border border-amber-400/15 bg-slate-950/35" aria-label="Scanning PDF document">
+              <div className="fdw-scanner-glow absolute h-24 w-24 rounded-full bg-amber-400/10 blur-xl" aria-hidden />
+              <div className="relative h-[78px] w-[58px] overflow-hidden rounded-md border border-amber-200/40 bg-slate-100 shadow-lg shadow-black/30">
+                <FileText className="absolute left-1/2 top-3 h-7 w-7 -translate-x-1/2 text-slate-500" />
+                <span className="absolute left-2 right-2 top-[45px] h-1 rounded bg-slate-300" />
+                <span className="absolute left-2 right-4 top-[52px] h-1 rounded bg-slate-200" />
+                <span className="absolute left-2 right-2 top-[59px] h-1 rounded bg-slate-200" />
+                <span className="fdw-scanner-line absolute left-0 right-0 h-px bg-amber-400 shadow-[0_0_10px_3px_rgba(251,191,36,.65)]" />
+              </div>
+              <div className="absolute bottom-2.5 flex items-center gap-1 text-[9px] font-bold uppercase tracking-[.18em] text-amber-300/90">
+                <span>Scanning document</span>
+                <span className="fdw-scanner-dot h-1 w-1 rounded-full bg-amber-300" />
+                <span className="fdw-scanner-dot h-1 w-1 rounded-full bg-amber-300" />
+                <span className="fdw-scanner-dot h-1 w-1 rounded-full bg-amber-300" />
+              </div>
+            </div>
+          )}
           {fileName && !isLimit && (
             <div className="flex items-center gap-2.5 rounded-xl px-3 py-2 bg-white/[0.05] border border-white/[0.07]">
               <FileText className="h-3.5 w-3.5 text-amber-400/70 shrink-0" />

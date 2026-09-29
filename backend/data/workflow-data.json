@@ -929,6 +929,103 @@
   ],
   "matches": [
     {
+      "id": 169,
+      "createdAt": "2026-09-29T13:58:56.071Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 51,
+      "maidReferenceCode": "FIL-PHK-OVR-9463",
+      "maidName": "Jonalyn Bodomo",
+      "score": 85,
+      "reasons": [
+        "Currently available",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 170,
+      "createdAt": "2026-09-29T13:58:56.071Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 32,
+      "maidReferenceCode": "FIL-PHK-OVR-9462",
+      "maidName": "Divina Quintero",
+      "score": 77,
+      "reasons": [
+        "Currently available",
+        "Salary expectation fits budget",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 171,
+      "createdAt": "2026-09-29T13:58:56.071Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 77,
+      "maidReferenceCode": "FIL-PHK-OVR--9597",
+      "maidName": "Cristina Bacerra",
+      "score": 69,
+      "reasons": [
+        "Currently available",
+        "Language profile available"
+      ]
+    },
+    {
+      "id": 166,
+      "createdAt": "2026-09-29T13:43:12.868Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 51,
+      "maidReferenceCode": "FIL-PHK-OVR-9463",
+      "maidName": "Jonalyn Bodomo",
+      "score": 70,
+      "reasons": [
+        "Highest score among candidates",
+        "Currently available",
+        "Salary expectation fits budget",
+        "Good language profile available"
+      ]
+    },
+    {
+      "id": 167,
+      "createdAt": "2026-09-29T13:43:12.868Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 32,
+      "maidReferenceCode": "FIL-PHK-OVR-9462",
+      "maidName": "Divina Quintero",
+      "score": 69,
+      "reasons": [
+        "Second-highest score",
+        "Currently available",
+        "Salary expectation fits budget",
+        "Good language profile available"
+      ]
+    },
+    {
+      "id": 168,
+      "createdAt": "2026-09-29T13:43:12.868Z",
+      "leadId": null,
+      "inquiryId": null,
+      "employerId": 1,
+      "maidId": 77,
+      "maidReferenceCode": "FIL-PHK-OVR--9597",
+      "maidName": "Cristina Bacerra",
+      "score": 63,
+      "reasons": [
+        "Currently available",
+        "Language profile available",
+        "Strong childcare potential but slightly lower score"
+      ]
+    },
+    {
       "id": 163,
       "createdAt": "2026-09-28T15:12:08.486Z",
       "leadId": null,
@@ -3893,6 +3990,36 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": 240,
+      "createdAt": "2026-09-29T14:24:25.696Z",
+      "workflow": "make_pipeline",
+      "step": "webhook",
+      "status": "success",
+      "message": "Make scenario interview_pipeline triggered",
+      "payload": {
+        "id": 83,
+        "createdAt": "2026-09-29T14:24:25.679Z",
+        "scenario": "interview_pipeline",
+        "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+        "payload": {
+          "to": "saturog350@gmail.com",
+          "candidateName": "Florante Del pilar",
+          "type": "pass",
+          "subject": "Your application has been approved",
+          "body": "Dear Florante Del pilar,\n\nWe are pleased to confirm that your application has been approved. Our recruitment team will contact you about the next steps.\n\nBest regards,\nRecruitment Team",
+          "position": "Domestic helper recruitment",
+          "source": "ai_hr_interviewer",
+          "requestedAt": "2026-09-29T14:24:23.261Z",
+          "scenario": "interview_pipeline"
+        },
+        "success": true,
+        "statusCode": 200,
+        "durationMs": 2417,
+        "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"pass\"\n}",
+        "error": ""
+      }
+    },
     {
       "id": 239,
       "createdAt": "2026-09-28T17:42:54.713Z",
@@ -8430,6 +8557,34 @@
   ],
   "decisionLogs": [
     {
+      "id": 86,
+      "createdAt": "2026-09-29T13:58:56.080Z",
+      "requestId": "1c63d263-8a18-4dca-9b51-e86f78c42bc4",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 7635,
+      "fallbackUsed": true
+    },
+    {
+      "id": 85,
+      "createdAt": "2026-09-29T13:43:12.879Z",
+      "requestId": "030dc885-7a63-436c-a4f7-19b60ca22b33",
+      "workflow": "inquiry_match",
+      "classifierOutput": {
+        "serviceType": "",
+        "location": ""
+      },
+      "endpointCalled": "/api/match",
+      "status": "success",
+      "latency": 6868,
+      "fallbackUsed": false
+    },
+    {
       "id": 84,
       "createdAt": "2026-09-28T15:12:08.492Z",
       "requestId": "1f7a9231-fad6-4f62-9444-468d52ba65fb",
@@ -9660,6 +9815,64 @@
     }
   ],
   "makeDeliveries": [
+    {
+      "id": 83,
+      "createdAt": "2026-09-29T14:24:25.679Z",
+      "scenario": "interview_pipeline",
+      "url": "https://hook.eu1.make.com/ms7gknazwsiqxyx41miqivon94vgspr1",
+      "payload": {
+        "to": "saturog350@gmail.com",
+        "candidateName": "Florante Del pilar",
+        "type": "pass",
+        "subject": "Your application has been approved",
+        "body": "Dear Florante Del pilar,\n\nWe are pleased to confirm that your application has been approved. Our recruitment team will contact you about the next steps.\n\nBest regards,\nRecruitment Team",
+        "position": "Domestic helper recruitment",
+        "source": "ai_hr_interviewer",
+        "requestedAt": "2026-09-29T14:24:23.261Z",
+        "scenario": "interview_pipeline"
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2417,
+      "responseBody": "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"pass\"\n}",
+      "error": ""
+    },
+    {
+      "id": 82,
+      "createdAt": "2026-09-29T13:58:54.778Z",
+      "scenario": "ai-engine-workflow",
+      "url": "https://hook.eu1.make.com/fn9c0hh8ixcqedp5h2p1un91vvz5afpg",
+      "payload": {
+        "type": "ai_engine",
+        "scenario": "workflow",
+        "systemPrompt": "Rank the best maid matches. Return JSON with matches array containing maidId, maidReferenceCode, maidName, score, reasons.",
+        "userPrompt": "{\"criteria\":{\"agencyId\":1,\"employerId\":1,\"message\":\"Family of four. Needs childcare experience for two children aged 5 and 8. Start within one month.\",\"serviceType\":\"full_time_live_in_domestic_helper\",\"location\":\"Bukit Timah\",\"budget\":{\"min\":null,\"max\":null,\"currency\":\"SGD\",\"text\":\"\"},\"salary\":{\"min\":null,\"max\":700,\"currency\":\"SGD\",\"text\":\"SGD 700\"},\"availability\":\"normal\",\"preferredNationalities\":[\"Filipino\",\"Indonesian\"],\"preferredLanguages\":[\"English\",\"basic Mandarin\"],\"minimumExperienceYears\":2},\"candidates\":[{\"maidId\":51,\"maidReferenceCode\":\"FIL-PHK-OVR-9463\",\"maidName\":\"Jonalyn Bodomo\",\"score\":70,\"reasons\":[\"Currently available\",\"Salary expectation fits budget\",\"Language profile available\"]},{\"maidId\":32,\"maidReferenceCode\":\"FIL-PHK-OVR-9462\",\"maidName\":\"Divina Quintero\",\"score\":69,\"reasons\":[\"Currently available\",\"Salary expectation fits budget\",\"Language profile available\"]},{\"maidId\":77,\"maidReferenceCode\":\"FIL-PHK-OVR--9597\",\"maidName\":\"Cristina Bacerra\",\"score\":63,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":55,\"maidReferenceCode\":\"FIL-GIN-9637\",\"maidName\":\"Anna Marie Ladeza Panganoron\",\"score\":62,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":45,\"maidReferenceCode\":\"FIL-PHK-OVR-9468\",\"maidName\":\"Maricris Tornato\",\"score\":62,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":84,\"maidReferenceCode\":\"INA-JEN-9704\",\"maidName\":\"Leoni Sukmawati Rambu Day\",\"score\":61,\"reasons\":[\"Currently available\",\"Language profile available\"]}]}",
+        "context": {}
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 5750,
+      "responseBody": "Here are the ranked maid matches based on the provided criteria and candidate scores.\n\n[\n  {\n    \"maidId\": 51,\n    \"maidReferenceCode\": \"FIL-PHK-OVR-9463\",\n    \"maidName\": \"Jonalyn Bodomo\",\n    \"score\": 70,\n    \"reasons\": [\n      \"Currently available\",\n      \"Salary expectation fits budget\",\n      \"Language profile available\"\n    ]\n  },\n  {\n    \"maidId\": 32,\n    \"maidReferenceCode\": \"FIL-PHK-OVR-9462\",\n    \"maidName\": \"Divina Quintero\",\n    \"score\": 69,\n    \"reasons\": [\n      \"Currently available\",\n      \"Salary expectation fits budget\",\n      \"Language profile available\"\n    ]\n  },\n  {\n    \"maidId\": 77,\n    \"maidReferenceCode\": \"FIL-PHK-OVR--9597\",\n    \"maidName\": \"Cristina Bacerra\",\n    \"score\": 63,\n    \"reasons\": [\n      \"Currently available\",\n      \"Language profile available\"\n    ]\n  },\n  {\n    \"maidId\": 55,\n    \"maidReferenceCode\": \"FIL-GIN-9637\",\n    \"maidName\": \"Anna Marie Ladeza Panganoron\",\n    \"score\": 62,\n    \"reasons\": [\n      \"Currently available\",\n      \"Language profile available\"\n    ]\n  },\n  {\n    \"maidId\": 45,\n    \"maidReferenceCode\": \"FIL-PHK-OVR-9468\",\n    \"maidName\": \"Maricris Tornato\",\n    \"score\": 62,\n    \"reasons\": [\n      \"Currently available\",\n      \"Language profile available\"\n    ]\n  },\n  {\n    \"maidId\": 84,\n    \"maidReferenceCode\": \"INA-JEN-9704\",\n    \"maidName\": \"Leoni Sukmawati Rambu Day\",\n    \"score\": 61,\n    \"reasons\": [\n      \"Currently available\",\n      \"Language profile available\"\n    ]\n  }\n]\n\nNotes:\n- All candidates meet the general criteria (Filipino/Indonesian, English with basic Mandarin, minimum 2 years experience, available now).\n- Salary alignment: top two candidates explicitly noted as fitting the SGD 700 monthly budget.\n- Location suitability (Bukit Timah) and start within one month are assumed based on availability statements; please confirm with each candidate during interview.\n\nWould you like me to generate a formatted shortlist with interview questions and a suggested interview schedule, or proceed to contact the top candidates (Jonalyn Bodomo and Divina Quintero) for availability and next steps?",
+      "error": ""
+    },
+    {
+      "id": 81,
+      "createdAt": "2026-09-29T13:43:12.855Z",
+      "scenario": "ai-engine-workflow",
+      "url": "https://hook.eu1.make.com/fn9c0hh8ixcqedp5h2p1un91vvz5afpg",
+      "payload": {
+        "type": "ai_engine",
+        "scenario": "workflow",
+        "systemPrompt": "Rank the best maid matches. Return JSON with matches array containing maidId, maidReferenceCode, maidName, score, reasons.",
+        "userPrompt": "{\"criteria\":{\"agencyId\":1,\"employerId\":1,\"message\":\"Family of four. Needs childcare experience for two children aged 5 and 8. Start within one month.\",\"serviceType\":\"full_time_live_in_domestic_helper\",\"location\":\"Bukit Timah\",\"budget\":{\"min\":null,\"max\":null,\"currency\":\"SGD\",\"text\":\"\"},\"salary\":{\"min\":null,\"max\":700,\"currency\":\"SGD\",\"text\":\"SGD 700\"},\"availability\":\"normal\",\"preferredNationalities\":[\"Filipino\",\"Indonesian\"],\"preferredLanguages\":[\"English\",\"basic Mandarin\"],\"minimumExperienceYears\":2},\"candidates\":[{\"maidId\":51,\"maidReferenceCode\":\"FIL-PHK-OVR-9463\",\"maidName\":\"Jonalyn Bodomo\",\"score\":70,\"reasons\":[\"Currently available\",\"Salary expectation fits budget\",\"Language profile available\"]},{\"maidId\":32,\"maidReferenceCode\":\"FIL-PHK-OVR-9462\",\"maidName\":\"Divina Quintero\",\"score\":69,\"reasons\":[\"Currently available\",\"Salary expectation fits budget\",\"Language profile available\"]},{\"maidId\":77,\"maidReferenceCode\":\"FIL-PHK-OVR--9597\",\"maidName\":\"Cristina Bacerra\",\"score\":63,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":55,\"maidReferenceCode\":\"FIL-GIN-9637\",\"maidName\":\"Anna Marie Ladeza Panganoron\",\"score\":62,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":45,\"maidReferenceCode\":\"FIL-PHK-OVR-9468\",\"maidName\":\"Maricris Tornato\",\"score\":62,\"reasons\":[\"Currently available\",\"Language profile available\"]},{\"maidId\":84,\"maidReferenceCode\":\"INA-JEN-9704\",\"maidName\":\"Leoni Sukmawati Rambu Day\",\"score\":61,\"reasons\":[\"Currently available\",\"Language profile available\"]}]}",
+        "context": {}
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 5388,
+      "responseBody": "{\n  \"matches\": [\n    {\n      \"maidId\": 51,\n      \"maidReferenceCode\": \"FIL-PHK-OVR-9463\",\n      \"maidName\": \"Jonalyn Bodomo\",\n      \"score\": 70,\n      \"reasons\": [\n        \"Highest score among candidates\",\n        \"Currently available\",\n        \"Salary expectation fits budget\",\n        \"Good language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 32,\n      \"maidReferenceCode\": \"FIL-PHK-OVR-9462\",\n      \"maidName\": \"Divina Quintero\",\n      \"score\": 69,\n      \"reasons\": [\n        \"Second-highest score\",\n        \"Currently available\",\n        \"Salary expectation fits budget\",\n        \"Good language profile available\"\n      ]\n    },\n    {\n      \"maidId\": 77,\n      \"maidReferenceCode\": \"FIL-PHK-OVR--9597\",\n      \"maidName\": \"Cristina Bacerra\",\n      \"score\": 63,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\",\n        \"Strong childcare potential but slightly lower score\"\n      ]\n    },\n    {\n      \"maidId\": 55,\n      \"maidReferenceCode\": \"FIL-GIN-9637\",\n      \"maidName\": \"Anna Marie Ladeza Panganoron\",\n      \"score\": 62,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\",\n        \"Fits basic criteria but not highest score\"\n      ]\n    },\n    {\n      \"maidId\": 45,\n      \"maidReferenceCode\": \"FIL-PHK-OVR-9468\",\n      \"maidName\": \"Maricris Tornato\",\n      \"score\": 62,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\",\n        \"Solid candidate with relevant experience\"\n      ]\n    },\n    {\n      \"maidId\": 84,\n      \"maidReferenceCode\": \"INA-JEN-9704\",\n      \"maidName\": \"Leoni Sukmawati Rambu Day\",\n      \"score\": 61,\n      \"reasons\": [\n        \"Currently available\",\n        \"Language profile available\",\n        \"Indonesian candidate with good profile\"\n      ]\n    }\n  ]\n}",
+      "error": ""
+    },
     {
       "id": 80,
       "createdAt": "2026-09-28T17:42:56.236Z",
@@ -12376,12 +12589,12 @@
   "counters": {
     "leads": 8,
     "inquiries": 65,
-    "matches": 166,
+    "matches": 172,
     "schedules": 6,
     "contracts": 7,
     "notifications": 24,
-    "automationLogs": 240,
-    "decisionLogs": 85,
-    "makeDeliveries": 81
+    "automationLogs": 241,
+    "decisionLogs": 87,
+    "makeDeliveries": 84
   }
 }

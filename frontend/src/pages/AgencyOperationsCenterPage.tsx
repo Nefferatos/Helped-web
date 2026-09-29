@@ -248,8 +248,8 @@ export default function AgencyOperationsCenterPage() {
             </button>
             <button type="button" onClick={() => setActiveTab('contractor')} className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow">
               <ClipboardList className="h-5 w-5 text-primary" />
-              <p className="mt-3 font-semibold text-foreground">Manage arrival tasks</p>
-              <p className="mt-1 text-xs text-muted-foreground">Follow up on flight, arrival, and handover work.</p>
+              <p className="mt-3 font-semibold text-foreground">Manage placement tasks</p>
+              <p className="mt-1 text-xs text-muted-foreground">Mark flight, medical, SIP, and handover milestones complete.</p>
               <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Open task queue <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
             </button>
             <button type="button" onClick={() => setActiveTab('knowledge')} className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow">
@@ -309,6 +309,7 @@ export default function AgencyOperationsCenterPage() {
                       <span className="flex items-center gap-1"><Stethoscope className="h-3.5 w-3.5" />{placement.medical_completed ? 'Done' : 'Pending'}</span>
                       <span className="flex items-center gap-1"><HeartHandshake className="h-3.5 w-3.5" />{placement.handover_completed ? 'Done' : 'Pending'}</span>
                     </div>
+                    <button type="button" onClick={() => setActiveTab('contractor')} className="text-xs font-semibold text-primary hover:underline">Manage tasks</button>
                   </div>
                 ))}
               </div>

@@ -220,10 +220,11 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
       });
     }
 
-    // Next month padding
+    // Only pad to the end of the final calendar week. A fixed six-row grid
+    // makes short months feel unnecessarily tall and sparse.
     const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
     const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-    const remaining = 42 - days.length;
+    const remaining = (7 - (days.length % 7)) % 7;
     for (let d = 1; d <= remaining; d++) {
       days.push({
         day: d,
@@ -402,17 +403,27 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className={`rounded-2xl border border-violet-200 bg-white text-base text-black shadow-sm overflow-hidden ${isExpanded ? "col-span-full" : ""}`}>
+    <div className={`recruiter-calendar overflow-hidden rounded-[28px] border border-violet-100 bg-white text-base text-slate-950 shadow-[0_24px_70px_-35px_rgba(76,29,149,0.38)] ${isExpanded ? "col-span-full" : ""}`}>
+      <style>{`
+        .recruiter-calendar :is(p, span, label, button, input, textarea, a) {
+          font-size: max(1rem, 1em) !important;
+        }
+        .recruiter-calendar [class*="text-slate-"] { color: #1e293b !important; }
+      `}</style>
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <CalendarIcon className="h-4 w-4 text-violet-600" />
-          <h3 className="text-lg font-bold text-black">Recruiter Calendar</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-violet-100 bg-[radial-gradient(circle_at_top_left,_#ede9fe_0,_#f8faff_48%,_#ffffff_100%)] px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md shadow-violet-200">
+            <CalendarIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-xl font-black tracking-tight text-slate-950">Recruiter Calendar</h3>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Button
             size="sm"
-            className="h-10 gap-1.5 bg-violet-600 px-3 text-base hover:bg-violet-700"
+            className="h-10 gap-2 rounded-xl bg-violet-600 px-3 text-base font-bold shadow-md shadow-violet-200 hover:bg-violet-700"
             onClick={() =>
               openAddForm(
                 selectedDate ||
@@ -423,40 +434,28 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
             <Plus className="h-4 w-4" />
             Add event
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-10 px-2 text-base"
-            onClick={goToToday}
-            title="Go to today"
-          >
-            <span className="font-bold text-violet-600">Today</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="h-10 w-10 p-0" onClick={goToPrevMonth}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[150px] text-center text-base font-bold text-black">
-            {MONTH_NAMES[currentMonth]} {currentYear}
-          </span>
-          <Button variant="ghost" size="sm" className="h-10 w-10 p-0" onClick={goToNextMonth}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center rounded-xl border border-violet-100 bg-white p-1 shadow-sm">
+            <Button variant="ghost" size="sm" className="h-9 px-3 text-base font-bold text-violet-700 hover:bg-violet-50" onClick={goToToday}>Today</Button>
+            <Button variant="ghost" size="sm" className="h-9 w-9 rounded-lg p-0" onClick={goToPrevMonth} aria-label="Previous month"><ChevronLeft className="h-5 w-5" /></Button>
+            <span className="min-w-[145px] text-center text-base font-black text-slate-950">{MONTH_NAMES[currentMonth]} {currentYear}</span>
+            <Button variant="ghost" size="sm" className="h-9 w-9 rounded-lg p-0" onClick={goToNextMonth} aria-label="Next month"><ChevronRight className="h-5 w-5" /></Button>
+          </div>
         </div>
       </div>
 
       {/* Calendar Grid */}
-      <div className="p-3">
+      <div className="p-3 sm:p-4">
         {/* Day headers */}
-        <div className="grid grid-cols-7 gap-0.5 mb-1">
+        <div className="mb-1 grid grid-cols-7 gap-1">
           {DAYS_OF_WEEK.map((day) => (
-            <div key={day} className="text-center text-[10px] font-bold uppercase tracking-wide text-slate-400 py-1">
+            <div key={day} className="py-1 text-center text-base font-bold uppercase tracking-wide text-slate-500">
               {day}
             </div>
           ))}
         </div>
 
         {/* Days */}
-        <div className="grid grid-cols-7 gap-0.5">
+        <div className="grid grid-cols-7 gap-1">
           {calendarDays.map(({ day, dateKey, isCurrentMonth }) => {
             const count = eventCounts.get(dateKey) ?? 0;
             const isSelected = selectedDate === dateKey;
@@ -468,30 +467,21 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
                 key={dateKey}
                 type="button"
                 onClick={() => setSelectedDate(dateKey)}
-                className={`relative flex flex-col items-center justify-center h-10 rounded-lg text-xs transition-all ${
+                className={`relative flex h-11 flex-col items-start justify-between rounded-lg border p-1.5 text-left text-base transition-all sm:h-12 sm:p-2 ${
                   isSelected
-                    ? "bg-violet-600 text-white shadow-md"
-                    : isTodayDate
-                    ? "bg-violet-100 text-violet-800 font-bold"
-                    : isCurrentMonth
-                    ? "text-slate-700 hover:bg-slate-50"
-                    : "text-slate-300"
+                    ? "border-violet-600 bg-violet-600 text-white shadow-md shadow-violet-200"
+                  : isTodayDate
+                    ? "border-violet-300 bg-violet-50 text-violet-800 shadow-sm"
+                  : isCurrentMonth
+                    ? "border-slate-100 bg-white text-slate-800 hover:-translate-y-0.5 hover:border-violet-200 hover:bg-violet-50/60 hover:shadow-sm"
+                    : "border-transparent bg-slate-50/60 text-slate-300"
                 }`}
               >
-                <span className={`text-[11px] font-semibold ${isSelected ? "text-white" : ""}`}>
+                <span className={`font-bold ${isSelected ? "text-white" : ""}`}>
                   {day}
                 </span>
                 {hasEvents && (
-                  <div className="flex gap-0.5 mt-0.5">
-                    {Array.from({ length: Math.min(count, 3) }).map((_, i) => (
-                      <span
-                        key={i}
-                        className={`h-1 w-1 rounded-full ${
-                          isSelected ? "bg-white/80" : "bg-violet-400"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  <span className={`h-2 w-2 rounded-full ${isSelected ? "bg-white" : "bg-violet-500"}`} />
                 )}
               </button>
             );
@@ -501,7 +491,7 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
 
       {/* Selected Date Events */}
       {selectedDate && (
-        <div className="border-t border-slate-100 px-3 py-3">
+        <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
           <div className="flex items-center justify-between mb-2">
             <p className="text-base font-bold text-black">
               {formatDateDisplay(selectedDate)}
@@ -518,7 +508,7 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
           </div>
 
           {selectedDateEvents.length === 0 ? (
-            <p className="py-2 text-center text-base text-black">No events</p>
+            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-base text-slate-600">No events planned for this day.</p>
           ) : (
             <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
               {selectedDateEvents.map((event) => {
@@ -599,27 +589,34 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
 
       {/* Upcoming Events */}
       {upcomingEvents.length > 0 && !showAddForm && (
-        <div className="border-t border-slate-100 px-3 py-3">
-          <p className="mb-2 text-sm font-bold uppercase tracking-wide text-black">Upcoming</p>
-          <div className="space-y-1">
+        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-base font-black text-slate-950">Coming up</p>
+              <p className="hidden text-base text-slate-600 sm:block">Your next seven days at a glance.</p>
+            </div>
+            <span className="rounded-full bg-violet-100 px-3 py-1 text-base font-bold text-violet-700">{upcomingEvents.length} scheduled</span>
+          </div>
+          <div className="space-y-2">
             {upcomingEvents.map((event) => {
               const meta = EVENT_TYPE_META[event.type];
               const Icon = meta.icon;
               return (
                 <div
                   key={event.id}
-                  className={`flex items-center gap-3 rounded-lg border ${meta.border} ${meta.bg} p-3 text-base`}
+                  className={`flex flex-wrap items-center gap-2.5 rounded-xl border ${meta.border} ${meta.bg} p-3 text-base shadow-sm`}
                 >
-                  <Icon className={`h-3 w-3 shrink-0 ${meta.color}`} />
-                  <span className="flex-1 truncate font-semibold text-black">{event.title}</span>
-                  <span className="shrink-0 text-black">{formatDateDisplay(event.date)}</span>
-                  {event.time && <span className="shrink-0 text-black">{event.time}</span>}
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/80 ${meta.color}`}><Icon className="h-4 w-4" /></div>
+                  <div className="min-w-44 flex-1">
+                    <p className="font-bold text-slate-950">{event.title}</p>
+                    <p className="mt-0.5 text-base text-slate-700">{formatDateDisplay(event.date)}{event.time ? ` · ${event.time}` : ""}</p>
+                  </div>
                   {getSafeMeetingLink(event.meetingLink || "") && (
                     <a
                       href={getSafeMeetingLink(event.meetingLink || "")}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-violet-700 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-violet-800"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-1.5 text-base font-bold text-white hover:bg-violet-800"
                     >
                       <ExternalLink className="h-3 w-3" />
                       Join Meet
@@ -740,11 +737,11 @@ const RecruiterCalendar = ({ selectedApplicantName, scheduledInterview }: Recrui
 
       {/* Quick Add Button (when no date selected) */}
       {!selectedDate && !showAddForm && (
-        <div className="border-t border-slate-100 px-3 py-3">
+        <div className="border-t border-slate-100 px-4 py-4">
           <Button
             size="sm"
             variant="outline"
-            className="w-full gap-1.5 text-xs"
+            className="h-12 w-full gap-2 rounded-xl text-base font-bold"
             onClick={() => {
               const todayStr = formatDateKey(today.getFullYear(), today.getMonth(), today.getDate());
               openAddForm(todayStr);
