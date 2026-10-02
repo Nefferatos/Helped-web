@@ -574,6 +574,7 @@ const MaidProfilePage = () => {
   const photos = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls : maid.photoDataUrl ? [maid.photoDataUrl] : [];
   const passportOrTwoByTwoPhoto = isEmptySlot(photos[0]) ? "" : photos[0];
   const fullBodyPhoto = isEmptySlot(photos[1]) ? "" : photos[1];
+  const extraPhotos = photos.slice(2).filter((p) => !isEmptySlot(p));
   const youtubeEmbedUrl = getYouTubeEmbedUrl(maid.videoDataUrl);
   const storedClient = getStoredClient() as (ReturnType<typeof getStoredClient> & { emailVerified?: boolean }) | null;
   const canViewPrivateIntro = Boolean(getClientToken() && storedClient?.emailVerified === true);
