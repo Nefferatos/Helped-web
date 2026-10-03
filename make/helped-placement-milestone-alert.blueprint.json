@@ -1,0 +1,40 @@
+{
+  "name": "Helped - Placement Milestone Staff Alert",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": false },
+    "notes": ["Triggered by Operations Center when staff mark Flight, Medical, SIP, or Handover complete. Create a custom webhook, reconnect Gmail, set the recipient, then set MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT in the backend."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create a custom webhook named Placement Milestone Staff Alert." }
+    },
+    {
+      "id": 2,
+      "module": "google-email:ActionSendEmail",
+      "version": 2,
+      "parameters": { "account": "" },
+      "mapper": {
+        "cc": [], "bcc": [], "from": "", "to": ["replace-with-your-internal-email@example.com"],
+        "subject": "Placement update: {{1.event_type}}",
+        "html": "<p><strong>A placement milestone was updated in the Agency Portal.</strong></p><p><strong>Milestone:</strong> {{1.event_type}}<br><strong>Placement ID:</strong> {{1.placement_id}}<br><strong>Updated by:</strong> {{1.actor}}<br><strong>Staff note:</strong> {{1.notes}}</p><p>Open Operations Center to review the placement timeline.</p>",
+        "attachments": []
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "After import, choose a Gmail connection and replace the recipient address." }
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{\"ok\":true}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {} }
+    }
+  ]
+}

@@ -551,6 +551,10 @@ type Bindings = {
   // Event-driven Make scenario fired when an arrival contractor task is completed.
   // Set via: npx wrangler secret put MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT
   MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT?: string;
+  // Event-driven Make scenario fired when Operations Center marks a placement
+  // milestone (flight, medical, SIP, or handover) complete.
+  // Set via: npx wrangler secret put MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT
+  MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT?: string;
   // Shared secret for Make.com workflow callbacks and health probes.
   // Set via: npx wrangler secret put EVENT_INGEST_SECRET
   EVENT_INGEST_SECRET?: string;
@@ -8268,16 +8272,112 @@ app.post("/api/requests/mark-viewed", requireAgencyAdminAuth, async (c) => {
   return c.json({ ok: true, markedCount });
 });
 
-// Operations Center board. The Worker does not use the local Express
-// placements table, so return a stable agency-scoped board rather than a 404.
-// Placement records can be added later without changing the page contract.
+type PlacementBoardRow = {
+  id: string;
+  maid_reference_code: string | null;
+  status: string;
+  updated_at?: string;
+};
+
+type PlacementMilestoneEventRow = {
+  entity_id: string;
+  event_type: string;
+  actor?: string;
+  payload?: { notes?: string } | null;
+  created_at: string;
+};
+
+const placementMilestoneMap: Record<string, "flight" | "medical" | "sip" | "handover"> = {
+  "flight.booked": "flight",
+  "medical.completed": "medical",
+  "sip.completed": "sip",
+  "handover.completed": "handover",
+};
+
+const loadPlacementMilestoneEvents = async (config: SupabaseAppDataConfig, placementIds: string[]) => {
+  if (placementIds.length === 0) return [] as PlacementMilestoneEventRow[];
+  const params = new URLSearchParams({
+    select: "entity_id,event_type,actor,payload,created_at",
+    entity_type: "eq.placement",
+    event_type: "in.(flight.booked,medical.completed,sip.completed,handover.completed)",
+    order: "created_at.desc",
+    limit: "1000",
+  });
+  const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events?${params.toString()}`, {
+    headers: supabaseHeaders(config, { accept: "application/json" }),
+  });
+  if (!response.ok) throw new Error(`Unable to load placement milestones (${response.status}): ${await readSupabaseError(response)}`);
+  const allowed = new Set(placementIds);
+  return ((await response.json()) as PlacementMilestoneEventRow[]).filter((event) => allowed.has(event.entity_id));
+};
+
+// Operations Center board. Placement and milestone state are both read from
+// Supabase, so it is the same source of truth used by the staff action buttons.
 app.get(
   "/api/operations-board",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
-    return c.json({ placements: [], count: 0 });
+    const config = getSupabaseAppDataConfig(c.env);
+    if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const placements = await fetchSupabaseTableRows<PlacementBoardRow>(config, "placements", {
+      select: "id,maid_reference_code,status,updated_at",
+      filters: { agency_id: admin.agencyId }, orderBy: "updated_at.desc", limit: 200,
+    });
+    const events = await loadPlacementMilestoneEvents(config, placements.map((placement) => placement.id));
+    const byPlacement = new Map<string, Partial<Record<"flight" | "medical" | "sip" | "handover", PlacementMilestoneEventRow>>>();
+    for (const event of events) {
+      const key = placementMilestoneMap[event.event_type];
+      if (!key) continue;
+      const current = byPlacement.get(event.entity_id) ?? {};
+      if (!current[key]) current[key] = event;
+      byPlacement.set(event.entity_id, current);
+    }
+    const board = placements.map((placement) => {
+      const milestoneEvents = byPlacement.get(placement.id) ?? {};
+      const audit = Object.fromEntries(Object.entries(milestoneEvents).map(([key, event]) => [key, event ? {
+        actor: event.actor ?? "system", notes: event.payload?.notes ?? "", completedAt: event.created_at,
+      } : null]));
+      return {
+        ...placement,
+        flight_booked: Boolean(milestoneEvents.flight), medical_completed: Boolean(milestoneEvents.medical),
+        sip_completed: Boolean(milestoneEvents.sip), handover_completed: Boolean(milestoneEvents.handover),
+        milestone_events: audit,
+      };
+    });
+    return c.json({ placements: board, count: board.length });
   }),
 );
+
+// Sample data can be removed from the portal without exposing a destructive
+// control for real placements. The reference check is deliberately enforced
+// on the server as well as in the UI.
+app.delete("/api/operations-board/placements/:placementId/sample", requireAgencyAdminAuth, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  const placements = await fetchSupabaseTableRows<PlacementBoardRow>(config, "placements", {
+    select: "id,maid_reference_code,status,updated_at", filters: { id: placementId, agency_id: admin.agencyId }, limit: 1,
+  });
+  const placement = placements[0];
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
+  const reference = placement.maid_reference_code ?? "";
+  if (!/^(TEST-|LOCAL-OPS-TEST-)/.test(reference)) {
+    return c.json({ error: "Only clearly labelled sample placements can be removed here" }, 403);
+  }
+
+  const remove = async (table: string, query: string) => {
+    const response = await fetch(`${config.baseUrl}/rest/v1/${table}?${query}`, {
+      method: "DELETE", headers: supabaseHeaders(config, { prefer: "return=minimal" }),
+    });
+    if (!response.ok) throw new Error(`Unable to remove sample ${table} data (${response.status}): ${await readSupabaseError(response)}`);
+  };
+  await remove("contractor_jobs", `placement_id=eq.${encodeURIComponent(placementId)}`);
+  await remove("workflow_events", `entity_type=eq.placement&entity_id=eq.${encodeURIComponent(placementId)}`);
+  await remove("placements", `id=eq.${encodeURIComponent(placementId)}&agency_id=eq.${encodeURIComponent(String(admin.agencyId))}`);
+  return c.json({ ok: true, removedReference: reference });
+}));
 
 // Contractor task queue. Tasks are scoped through the contractor relation, so
 // an authenticated agency cannot read or complete another agency's tasks.
@@ -8343,6 +8443,52 @@ app.post("/api/contractor/tasks/:taskId/complete", requireAgencyAdminAuth, safeA
       .catch((error) => console.error("Contractor arrival alert failed (task remains completed):", error)));
   }
   return c.json({ task: updated, alertTriggered: task.task_type.toLowerCase().includes("arrival") });
+}));
+
+// Direct milestone updates cover older placements that never received a
+// contractor_jobs record. Each event is immutable, auditable, and unique per
+// placement/milestone so staff cannot accidentally mark it twice.
+app.post("/api/contractor/placements/:placementId/milestones/:milestone", requireAgencyAdminAuth, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Placement milestones require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  const milestone = toTrimmedString(c.req.param("milestone")).toLowerCase();
+  const eventTypes: Record<string, string> = {
+    flight: "flight.booked", medical: "medical.completed", sip: "sip.completed", handover: "handover.completed",
+  };
+  const eventType = eventTypes[milestone];
+  if (!eventType) return c.json({ error: "Unsupported placement milestone" }, 400);
+
+  const placements = await fetchSupabaseTableRows<PlacementBoardRow>(config, "placements", {
+    select: "id,maid_reference_code,status,updated_at", filters: { id: placementId, agency_id: admin.agencyId }, limit: 1,
+  });
+  if (!placements[0]) return c.json({ error: "Placement not found" }, 404);
+
+  const existing = await fetchSupabaseTableRows<{ id: string }>(config, "workflow_events", {
+    select: "id", filters: { entity_type: "placement", entity_id: placementId, event_type: eventType }, limit: 1,
+  });
+  if (existing[0]) return c.json({ error: "This placement milestone has already been completed" }, 409);
+
+  const body = await parseBody<{ notes?: unknown }>(c.req.raw);
+  const notes = toTrimmedString(body?.notes).slice(0, 2_000);
+  const completedAt = now();
+  const actorName = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency Staff";
+  const insert = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify([{ event_type: eventType, entity_type: "placement", entity_id: placementId, actor: `user:${actorName}`, payload: { notes, completedBy: actorName, source: "agency-portal" }, status: "completed" }]),
+  });
+  if (!insert.ok) throw new Error(`Unable to record placement milestone (${insert.status}): ${await readSupabaseError(insert)}`);
+
+  const webhookUrl = c.env.MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT?.trim();
+  if (webhookUrl) runChatBackgroundTask(c, fetch(webhookUrl, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ event_type: eventType, placement_id: placementId, actor: `user:${actorName}`, notes }), signal: AbortSignal.timeout(15_000),
+  }).then(async (response) => { if (!response.ok) throw new Error(`Make placement alert returned HTTP ${response.status}`); })
+    .catch((error) => console.error("Placement milestone alert failed (milestone remains completed):", error)));
+
+  return c.json({ ok: true, eventType, completedBy: actorName, completedAt, makeAlertTriggered: Boolean(webhookUrl) });
 }));
 
 // Delete selected requests belonging to the signed-in agency. Related

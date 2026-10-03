@@ -26,7 +26,13 @@ export const getOperationsBoard = async (req: Request, res: Response) => {
         EXISTS (SELECT 1 FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'flight.booked') AS flight_booked,
         EXISTS (SELECT 1 FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'medical.completed') AS medical_completed,
         EXISTS (SELECT 1 FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'sip.completed') AS sip_completed,
-        EXISTS (SELECT 1 FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'handover.completed') AS handover_completed
+        EXISTS (SELECT 1 FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'handover.completed') AS handover_completed,
+        jsonb_build_object(
+          'flight', (SELECT jsonb_build_object('actor', e.actor, 'notes', e.payload ->> 'notes', 'completedAt', e.created_at) FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'flight.booked' ORDER BY e.created_at DESC LIMIT 1),
+          'medical', (SELECT jsonb_build_object('actor', e.actor, 'notes', e.payload ->> 'notes', 'completedAt', e.created_at) FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'medical.completed' ORDER BY e.created_at DESC LIMIT 1),
+          'sip', (SELECT jsonb_build_object('actor', e.actor, 'notes', e.payload ->> 'notes', 'completedAt', e.created_at) FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'sip.completed' ORDER BY e.created_at DESC LIMIT 1),
+          'handover', (SELECT jsonb_build_object('actor', e.actor, 'notes', e.payload ->> 'notes', 'completedAt', e.created_at) FROM public.workflow_events e WHERE e.entity_type = 'placement' AND e.entity_id = p.id::text AND e.event_type = 'handover.completed' ORDER BY e.created_at DESC LIMIT 1)
+        ) AS milestone_events
       FROM public.placements p
       LEFT JOIN LATERAL (
         SELECT to_status, actor AS last_actor, created_at AS latest_status_at

@@ -23,7 +23,11 @@ type ContractorTask = {
   placements?: { maid_reference_code?: string | null } | null
 }
 
-type Placement = { id: string; maid_reference_code: string | null; flight_booked: boolean; medical_completed: boolean; sip_completed: boolean; handover_completed: boolean }
+type MilestoneEvent = { actor?: string; notes?: string; completedAt?: string }
+type Placement = {
+  id: string; maid_reference_code: string | null; flight_booked: boolean; medical_completed: boolean; sip_completed: boolean; handover_completed: boolean
+  milestone_events?: Partial<Record<'flight' | 'medical' | 'sip' | 'handover', MilestoneEvent | null>>
+}
 
 const milestoneForTask = (taskType: string) => {
   const value = taskType.toLowerCase()
@@ -132,8 +136,8 @@ export default function ContractorTasksPage() {
           <p className="text-sm text-slate-600">No generated tasks were found. You can still update each placement directly below.</p>
           {placements.map((placement) => {
             const milestones = [
-              ['flight', 'Flight booked', placement.flight_booked], ['medical', 'Medical completed', placement.medical_completed],
-              ['sip', 'SIP completed', placement.sip_completed], ['handover', 'Handover completed', placement.handover_completed],
+              ['flight', 'Flight booked', placement.flight_booked, placement.milestone_events?.flight], ['medical', 'Medical completed', placement.medical_completed, placement.milestone_events?.medical],
+              ['sip', 'SIP completed', placement.sip_completed, placement.milestone_events?.sip], ['handover', 'Handover completed', placement.handover_completed, placement.milestone_events?.handover],
             ] as const
             return <article key={placement.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-900">{placement.maid_reference_code || placement.id}</h3><p className="mt-1 text-sm text-slate-600">Add a staff note, then update the relevant placement milestone.</p><label className="mt-4 block text-sm font-semibold text-slate-700" htmlFor={`placement-note-${placement.id}`}>Staff update note <span className="font-normal text-slate-400">(optional)</span></label><textarea id={`placement-note-${placement.id}`} value={placementNotes[placement.id] || ''} onChange={(event) => setPlacementNotes((current) => ({ ...current, [placement.id]: event.target.value }))} rows={3} placeholder="Example: SQ123 booked for 12 Oct; medical cleared; handover documents signed…" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /><div className="mt-4 flex flex-wrap gap-2">{milestones.map(([key, label, done]) => <button key={key} type="button" disabled={done || savingId === `${placement.id}-${key}`} onClick={() => void completePlacementMilestone(placement, key)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${done ? 'cursor-default bg-emerald-100 text-emerald-800' : 'bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-60'}`}>{done ? `✓ ${label}` : savingId === `${placement.id}-${key}` ? 'Saving…' : `Mark ${label}`}</button>)}</div></article>
           })}

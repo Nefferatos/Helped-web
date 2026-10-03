@@ -46,7 +46,7 @@ export const completeContractorJob = async (req: Request, res: Response) => {
     const notes = String(req.body?.notes ?? '').trim()
     const result = await query(sql`
       UPDATE public.contractor_jobs j SET status = 'COMPLETED', completed_at = NOW(), completion_notes = ${notes}, updated_at = NOW()
-      FROM public.contractors c WHERE j.id = ${jobId}::uuid AND j.contractor_id = c.id AND c.agency_id = ${agencyId}
+      FROM public.contractors c WHERE j.id = ${jobId}::uuid AND j.contractor_id = c.id AND c.agency_id = ${agencyId} AND j.status <> 'COMPLETED'
       RETURNING j.id, j.placement_id, j.task_type, j.completed_at
     `)
     const job = result.rows?.[0]
@@ -92,6 +92,13 @@ export const completePlacementMilestone = async (req: Request, res: Response) =>
 
     const placement = await query(sql`SELECT id FROM public.placements WHERE id = ${placementId}::uuid AND agency_id = ${agencyId} LIMIT 1`)
     if (!placement.rows?.[0]) return res.status(404).json({ error: 'Placement not found' })
+
+    const existing = await query(sql`
+      SELECT id FROM public.workflow_events
+      WHERE entity_type = 'placement' AND entity_id = ${placementId} AND event_type = ${eventType}
+      LIMIT 1
+    `)
+    if (existing.rows?.[0]) return res.status(409).json({ error: 'This placement milestone has already been completed' })
 
     const completedBy = admin?.username?.trim() || admin?.email?.trim() || 'Agency Staff'
     await recordWorkflowEvent({ eventType, entityType: 'placement', entityId: placementId, actor: `user:${completedBy}`, payload: { notes, completedBy, source: 'agency-portal' } })

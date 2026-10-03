@@ -72,6 +72,9 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 
 # Workflow health check: set this as a secret, never as a plain [vars] value:
 #   npx wrangler secret put EVENT_INGEST_SECRET
+# Operations Center staff milestone notifications (Flight, Medical, SIP, Handover):
+# import make/helped-placement-milestone-alert.blueprint.json, then set:
+#   npx wrangler secret put MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT
 
 # Shared Make AI gateway for Worker AI routes such as the HR interviewer.
 # Set with: npx wrangler secret put MAKE_AI_ENGINE_WEBHOOK_URL

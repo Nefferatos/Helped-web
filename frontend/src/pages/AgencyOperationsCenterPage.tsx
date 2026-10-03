@@ -95,6 +95,7 @@ type TabKey = (typeof TABS)[number]['key']
 export default function AgencyOperationsCenterPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [placements, setPlacements] = useState<Placement[]>([])
+  const [removingPlacementId, setRemovingPlacementId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const [employerId, setEmployerId] = useState('')
   const [requirements, setRequirements] = useState<Requirements>({ preferred_nationalities: [], preferred_languages: [] })
@@ -121,6 +122,21 @@ export default function AgencyOperationsCenterPage() {
     }
   }
   useEffect(() => { void loadPlacements() }, [])
+
+  const removeSamplePlacement = async (placement: Placement) => {
+    const reference = placement.maid_reference_code || placement.id
+    if (!window.confirm(`Remove sample placement ${reference}? This cannot be undone.`)) return
+    setRemovingPlacementId(placement.id)
+    try {
+      await api(`/api/operations-board/placements/${placement.id}/sample`, { method: 'DELETE' })
+      setPlacements((current) => current.filter((item) => item.id !== placement.id))
+      setNotice(`Removed sample placement ${reference}.`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to remove sample placement')
+    } finally { setRemovingPlacementId(null) }
+  }
+
+  const isSamplePlacement = (placement: Placement) => /^(TEST-|LOCAL-OPS-TEST-)/.test(placement.maid_reference_code || '')
 
   const loadRequirements = async () => {
     const numericEmployerId = getPositiveEmployerId(employerId)
@@ -310,6 +326,7 @@ export default function AgencyOperationsCenterPage() {
                       <span className="flex items-center gap-1"><HeartHandshake className="h-3.5 w-3.5" />{placement.handover_completed ? 'Done' : 'Pending'}</span>
                     </div>
                     <button type="button" onClick={() => setActiveTab('contractor')} className="text-xs font-semibold text-primary hover:underline">Manage tasks</button>
+                    {isSamplePlacement(placement) ? <button type="button" onClick={() => void removeSamplePlacement(placement)} disabled={removingPlacementId === placement.id} className="text-xs font-semibold text-rose-700 hover:underline disabled:opacity-50">{removingPlacementId === placement.id ? 'Removing…' : 'Remove sample'}</button> : null}
                   </div>
                 ))}
               </div>

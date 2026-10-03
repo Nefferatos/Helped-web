@@ -89,6 +89,22 @@ const MAKE_DISPATCH: Record<string, MakeDispatch> = {
       notes: e.payload?.notes ?? '',
     }),
   },
+  'flight.booked': {
+    scenario: 'PLACEMENT_MILESTONE_ALERT',
+    buildBody: (e) => ({ event_type: e.eventType, placement_id: e.entityId, actor: e.actor ?? 'system', notes: e.payload?.notes ?? '' }),
+  },
+  'medical.completed': {
+    scenario: 'PLACEMENT_MILESTONE_ALERT',
+    buildBody: (e) => ({ event_type: e.eventType, placement_id: e.entityId, actor: e.actor ?? 'system', notes: e.payload?.notes ?? '' }),
+  },
+  'sip.completed': {
+    scenario: 'PLACEMENT_MILESTONE_ALERT',
+    buildBody: (e) => ({ event_type: e.eventType, placement_id: e.entityId, actor: e.actor ?? 'system', notes: e.payload?.notes ?? '' }),
+  },
+  'handover.completed': {
+    scenario: 'PLACEMENT_MILESTONE_ALERT',
+    buildBody: (e) => ({ event_type: e.eventType, placement_id: e.entityId, actor: e.actor ?? 'system', notes: e.payload?.notes ?? '' }),
+  },
   'interview.scheduled': {
     scenario: 'INTERVIEW_SCHEDULED_ALERT',
     buildBody: (e) => ({
