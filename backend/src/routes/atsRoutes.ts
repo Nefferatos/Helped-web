@@ -11,6 +11,7 @@ import {
   matchAtsApplicationsController,
   markAtsApplicationsViewedController,
   saveAtsPresetController,
+  submitPublicMaidReferralController,
   syncAtsFromMaidsController,
   updateAtsStageController,
   upsertBackgroundCheckController,
@@ -21,6 +22,7 @@ import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
 const router: Router = express.Router()
 
 router.post('/public/apply', createPublicAtsApplicationController)
+router.post('/public/referrals', submitPublicMaidReferralController)
 router.get('/public/applications/:applicationId', getPublicAtsApplicationSummaryController)
 router.get('/dashboard', requireAgencyAuth, getAtsDashboardController)
 router.get('/applications', requireAgencyAuth, listAtsApplicationsController)

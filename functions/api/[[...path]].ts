@@ -511,6 +511,8 @@ type Bindings = {
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
   MAKE_WEBHOOK_URL?: string;
+  // Dedicated Make webhook for public maid referrals; never expose it to browsers.
+  MAKE_WEBHOOK_URL_MAID_REFERRAL?: string;
   // Shared synchronous Make AI gateway. This must be the webhook for
   // helped-ai-gateway.blueprint.json, not the legacy workflow orchestrator.
   MAKE_AI_ENGINE_WEBHOOK_URL?: string;
@@ -14568,6 +14570,88 @@ app.post(
       },
       201,
     );
+  }),
+);
+
+app.post(
+  "/api/ats/public/referrals",
+  safeApi(async (c) => {
+    const body = await parseBody<Record<string, unknown>>(c.req.raw);
+    if (!body) return c.json({ error: "JSON referral details are required" }, 400);
+
+    const stringField = (value: unknown) =>
+      typeof value === "string" ? value.trim() : "";
+    const referrerName = stringField(body.referrerName);
+    const referrerPhone = stringField(body.referrerPhone);
+    const maidName = stringField(body.maidName);
+    const maidPhone = stringField(body.maidPhone);
+    const maidNationality = stringField(body.maidNationality);
+    const relationship = stringField(body.relationship);
+    const notes = stringField(body.notes);
+
+    if (!referrerName || referrerName.length > 160) {
+      return c.json({ error: "A valid referrer name is required" }, 400);
+    }
+    if (!maidName || maidName.length > 160) {
+      return c.json({ error: "A valid maid name is required" }, 400);
+    }
+    const isValidPhone = (value: string) =>
+      /^[+\d()\s.-]{7,40}$/.test(value) && value.replace(/\D/g, "").length >= 7;
+    if (!isValidPhone(referrerPhone)) {
+      return c.json({ error: "A valid referrer phone number is required" }, 400);
+    }
+    if (maidPhone && !isValidPhone(maidPhone)) {
+      return c.json({ error: "Enter a valid maid phone number or leave it blank" }, 400);
+    }
+    if (maidNationality.length > 100 || relationship.length > 160 || notes.length > 1000) {
+      return c.json({ error: "Referral details are too long" }, 400);
+    }
+    if (body.consent !== true) {
+      return c.json({ error: "Permission to share the maid’s contact details is required" }, 400);
+    }
+
+    const webhookUrl = c.env.MAKE_WEBHOOK_URL_MAID_REFERRAL?.trim();
+    if (!webhookUrl) {
+      return c.json({ error: "Maid referrals are temporarily unavailable" }, 503);
+    }
+    try {
+      if (new URL(webhookUrl).protocol !== "https:") {
+        return c.json({ error: "Maid referral webhook must use HTTPS" }, 503);
+      }
+    } catch {
+      return c.json({ error: "Maid referral webhook is not configured correctly" }, 503);
+    }
+
+    const referralId = crypto.randomUUID();
+    try {
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenario: "maid_referral",
+          referralId,
+          submittedAt: new Date().toISOString(),
+          source: "fdw_application_referral_chat",
+          referrerName,
+          referrerPhone,
+          maidName,
+          maidPhone,
+          maidNationality,
+          relationship,
+          notes,
+          consentToShareContact: true,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) {
+        console.error("Maid referral Make delivery failed", response.status);
+        return c.json({ error: "Referral could not be delivered. Please try again later." }, 502);
+      }
+      return c.json({ referralId, message: "Referral submitted successfully" }, 201);
+    } catch (error) {
+      console.error("Maid referral Make request failed", error);
+      return c.json({ error: "Referral could not be delivered. Please try again later." }, 502);
+    }
   }),
 );
 

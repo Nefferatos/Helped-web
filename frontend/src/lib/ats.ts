@@ -37,6 +37,10 @@ export interface AtsApplicationListItem {
     yearsOfExperience: number;
     expectedSalary: number | null;
     employmentPreference: string;
+    passportSizePhotoUrl?: string;
+    fullBodyPhotoUrl?: string;
+    workPermitCardUrl?: string;
+    requiresWorkPermitCard?: boolean;
     languageSkills: string[];
     cookingSkills: string[];
     childcareExperience: number;
@@ -76,7 +80,7 @@ export interface AtsApplicationBundle {
   interview: Record<string, unknown> | null;
   backgroundCheck: Record<string, unknown> | null;
   history: Array<{ id: string; fromStage?: string; toStage: string; actor: string; reason: string; createdAt: string }>;
-  documents: Array<{ id: string; type: string; name: string; status: string; required: boolean }>;
+  documents: Array<{ id: string; type: string; name: string; status: string; required: boolean; url: string }>;
   matches: Array<{ id: string; compatibilityScore: number; skillsMatched: string[]; missingRequirements: string[]; recommendation: string }>;
   notifications: Array<{ id: string; event: string; channel: string; message: string; createdAt: string }>;
   references: Array<{ name: string; relationship: string; contact: string; rating: number; verified: boolean }>;
@@ -210,6 +214,24 @@ export const submitPublicAtsApplication = async (formData: FormData) => {
     body: formData,
   });
   return ensureOk<PublicAtsApplicationCreated & { error?: string }>(response);
+};
+
+export const submitMaidReferral = async (payload: {
+  referrerName: string;
+  referrerPhone: string;
+  maidName: string;
+  maidPhone: string;
+  maidNationality: string;
+  relationship: string;
+  notes: string;
+  consent: boolean;
+}) => {
+  const response = await fetch("/api/ats/public/referrals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return ensureOk<{ referralId: string; message: string; error?: string }>(response);
 };
 
 export const fetchPublicAtsApplicationSummary = async (applicationId: string, token: string) => {

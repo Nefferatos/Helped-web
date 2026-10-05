@@ -345,6 +345,66 @@
       "currentTrackerId": null,
       "createdAt": "2026-09-24T06:32:33.292Z",
       "updatedAt": "2026-09-24T06:32:34.544Z"
+    },
+    {
+      "id": "2393ffe9-4d4d-4560-b121-b178fcdef450",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "80f5f7a2-d43b-44e1-a7c1-a704fbe09e9a",
+          "role": "user",
+          "content": "creat draft email for applicant requirements",
+          "requestId": "ba41e2b9-d1f7-477b-9ad2-f08b3970cdb6",
+          "applicantIds": [
+            "8736335b-7d2b-4bea-88b4-02c9834f6c57"
+          ],
+          "timestamp": "2026-10-05T05:20:18.012Z"
+        },
+        {
+          "id": "0bc78c57-b256-4cd6-8964-e589c57eebba",
+          "role": "assistant",
+          "content": "Hello! How can I help today? If you’d like, you can tell me what you need (e.g., draft a document, analyze data, create a file export, or answer a question), and I’ll assist. If you want a downloadable file, let me know the content, format (PDF, DOC, TXT, CSV), and filename.",
+          "requestId": "ba41e2b9-d1f7-477b-9ad2-f08b3970cdb6",
+          "applicantIds": [
+            "8736335b-7d2b-4bea-88b4-02c9834f6c57"
+          ],
+          "timestamp": "2026-10-05T05:20:20.321Z"
+        }
+      ],
+      "selectedApplicantIds": [
+        "8736335b-7d2b-4bea-88b4-02c9834f6c57"
+      ],
+      "currentTrackerId": null,
+      "createdAt": "2026-10-05T05:20:18.007Z",
+      "updatedAt": "2026-10-05T05:20:20.321Z"
+    },
+    {
+      "id": "c8a260e3-ece0-426c-8e26-641b9e556701",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "f45ad238-ef02-46e5-a9b6-36d39115830f",
+          "role": "user",
+          "content": "Give me a pipeline summary",
+          "requestId": "8b7afbc2-379e-47bf-9f04-fd8b96d5d460",
+          "applicantIds": [],
+          "timestamp": "2026-10-05T05:32:10.707Z"
+        },
+        {
+          "id": "5b0c8d3e-cea0-47d4-892b-8209619766d1",
+          "role": "assistant",
+          "content": "Hello! How can I help today? If you’d like, tell me what you want to do with the current date/time (2026-10-05T13:32:11.650+08:00). For example:\n- Convert to another time zone\n- Format in a specific style\n- Calculate duration until a future date\n- Generate a date-related document or CSV\n\nIf you have a specific task in mind, please share the details and any formatting or output preferences.",
+          "requestId": "8b7afbc2-379e-47bf-9f04-fd8b96d5d460",
+          "applicantIds": [],
+          "timestamp": "2026-10-05T05:32:13.152Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-10-05T05:32:10.699Z",
+      "updatedAt": "2026-10-05T05:32:13.152Z"
     }
   ],
   "auditLog": [
@@ -571,6 +631,40 @@
       "errorMessage": "UNKNOWN: unknown error, open 'C:\\Users\\JIM\\Desktop\\Maid Website\\Helped-web\\backend\\data\\workflow-data.json'",
       "humanApprovalRequired": false,
       "humanApprovalGiven": null
+    },
+    {
+      "id": "df817e7c-0f2d-498c-aa56-42a402cc12cd",
+      "timestamp": "2026-10-05T05:20:20.324Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "ba41e2b9-d1f7-477b-9ad2-f08b3970cdb6",
+      "conversationId": "2393ffe9-4d4d-4560-b121-b178fcdef450",
+      "action": "chat",
+      "applicantIds": [
+        "8736335b-7d2b-4bea-88b4-02c9834f6c57"
+      ],
+      "result": "success",
+      "makeExecutionId": "84",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
+    },
+    {
+      "id": "28b09684-bbd6-4fe5-99e4-eed16ef4ab8a",
+      "timestamp": "2026-10-05T05:32:13.156Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "8b7afbc2-379e-47bf-9f04-fd8b96d5d460",
+      "conversationId": "c8a260e3-ece0-426c-8e26-641b9e556701",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "85",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
     }
   ],
   "googleDocLinks": [],
@@ -588,11 +682,13 @@
     "97df7463-44ab-4026-b009-5f7247e10299",
     "37d9203a-2354-434d-bab8-0c0e0b299929",
     "60f4059c-0121-48ed-8b52-0ef1f7cd141b",
-    "003c833c-c5a3-411e-9657-61977afa7567"
+    "003c833c-c5a3-411e-9657-61977afa7567",
+    "ba41e2b9-d1f7-477b-9ad2-f08b3970cdb6",
+    "8b7afbc2-379e-47bf-9f04-fd8b96d5d460"
   ],
   "counters": {
     "trackers": 1,
-    "conversations": 12,
-    "auditLog": 15
+    "conversations": 14,
+    "auditLog": 17
   }
 }

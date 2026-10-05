@@ -27,6 +27,8 @@ export interface MaidApplicationDocumentRecord {
   type:
     | "resume"
     | "passport"
+    | "passport_photo"
+    | "full_body_photo"
     | "work_permit"
     | "medical"
     | "certificate"
@@ -232,6 +234,8 @@ export interface PublicApplicantFileInput {
   kind:
     | "resume"
     | "passport"
+    | "passport_photo"
+    | "full_body_photo"
     | "work_permit"
     | "medical"
     | "certificate"
@@ -729,13 +733,16 @@ const createPublicDocuments = (
   uploaded: Array<
     Pick<MaidApplicationDocumentRecord, "type" | "name" | "url" | "uploadedAt">
   >,
+  workPermitRequired: boolean,
 ): MaidApplicationDocumentRecord[] => {
   const defaults: Array<
     Pick<MaidApplicationDocumentRecord, "type" | "name" | "required">
   > = [
+    { type: "passport_photo", name: "Passport-size photo", required: true },
+    { type: "full_body_photo", name: "Full-body photo", required: true },
     { type: "resume", name: "Resume/CV", required: true },
     { type: "passport", name: "Passport", required: false },
-    { type: "work_permit", name: "Work Permit Documents", required: false },
+    { type: "work_permit", name: "Work Permit card", required: workPermitRequired },
     { type: "medical", name: "Medical Records", required: false },
     { type: "certificate", name: "Certificates", required: false },
     { type: "reference", name: "References", required: false },
@@ -747,9 +754,9 @@ const createPublicDocuments = (
     return {
       id: randomUUID(),
       type: item.type,
-      name: match?.name || item.name,
+      name: item.type === "work_permit" ? item.name : match?.name || item.name,
       url: match?.url || "",
-      required: item.required,
+      required: item.type === "work_permit" ? workPermitRequired : item.required,
       uploadedAt: match?.uploadedAt || now(),
       status: match ? "submitted" : "missing",
     };
@@ -1107,7 +1114,11 @@ export const createPublicAtsApplication = async (
 
   const score = computeScore(profile, null);
   const backgroundCheck = createDefaultBackgroundCheck(applicationId);
-  const documents = createPublicDocuments(uploadedDocs);
+  const workPermitRequired =
+    payload.employmentPreference.toLowerCase().includes("transfer") ||
+    payload.employmentPreference.toLowerCase().includes("singapore") ||
+    String(payload.fdwFormData.workedInSingapore ?? "").toLowerCase() === "yes";
+  const documents = createPublicDocuments(uploadedDocs, workPermitRequired);
 
   data.applications.unshift(application);
   data.profiles.unshift(profile);
@@ -1202,7 +1213,42 @@ const getApplicationBundleInternal = (
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  const documents = data.documents[application.id] ?? [];
+  const documents = [...(data.documents[application.id] ?? [])];
+  const workPermitRequired =
+    (profile?.employmentPreference ?? "").toLowerCase().includes("transfer") ||
+    (profile?.employmentPreference ?? "").toLowerCase().includes("singapore") ||
+    String(profile?.fdwFormData?.workedInSingapore ?? "").toLowerCase() === "yes";
+  const workPermitDocument = documents.find((document) => document.type === "work_permit");
+  if (workPermitDocument) {
+    workPermitDocument.name = "Work Permit card";
+    workPermitDocument.required = workPermitRequired;
+  } else {
+    documents.push({
+      id: `${application.id}-work_permit`,
+      type: "work_permit",
+      name: "Work Permit card",
+      url: "",
+      required: workPermitRequired,
+      uploadedAt: application.appliedAt,
+      status: "missing",
+    });
+  }
+  const requiredPhotoDocuments = [
+    { type: "passport_photo", name: "Passport-size photo" },
+    { type: "full_body_photo", name: "Full-body photo" },
+  ] as const;
+  for (const photo of requiredPhotoDocuments) {
+    if (documents.some((document) => document.type === photo.type)) continue;
+    documents.push({
+      id: `${application.id}-${photo.type}`,
+      type: photo.type,
+      name: photo.name,
+      url: "",
+      required: true,
+      uploadedAt: application.appliedAt,
+      status: "missing",
+    });
+  }
   const matches = data.matches
     .filter((item) => item.applicationId === application.id)
     .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
@@ -1527,9 +1573,19 @@ export const listAtsApplications = async (
       const profile = profilesByApplication.get(application.id)!;
       const score = scoresByApplication.get(application.id) ?? null;
       const interview = interviewsByApplication.get(application.id) ?? null;
+      const documents = data.documents[application.id] ?? [];
       return {
         ...application,
-        profile,
+        profile: {
+          ...profile,
+          passportSizePhotoUrl: documents.find((item) => item.type === "passport_photo")?.url ?? "",
+          fullBodyPhotoUrl: documents.find((item) => item.type === "full_body_photo")?.url ?? "",
+          workPermitCardUrl: documents.find((item) => item.type === "work_permit")?.url ?? "",
+          requiresWorkPermitCard:
+            profile.employmentPreference.toLowerCase().includes("transfer") ||
+            profile.employmentPreference.toLowerCase().includes("singapore") ||
+            String(profile.fdwFormData?.workedInSingapore ?? "").toLowerCase() === "yes",
+        },
         score,
         interview,
         clientMatchScore: matchesByApplication.get(application.id) ?? 0,

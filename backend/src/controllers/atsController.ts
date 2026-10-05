@@ -1,4 +1,6 @@
 import { Request, Response } from 'express'
+import { randomUUID } from 'crypto'
+import sharp from 'sharp'
 import { query, sql } from '../db'
 import { getAuthenticatedAgencyAdmin, getRequestAgencyId } from '../auth'
 import {
@@ -21,6 +23,81 @@ import {
   type PublicApplicantFileInput,
 } from '../atsStore'
 import { getMaidsStore } from '../store'
+import { sendWorkflowToMake } from '../services/workflowOrchestrationService'
+
+const publicMaidReferralController = async (req: Request, res: Response) => {
+  const stringField = (value: unknown) =>
+    typeof value === 'string' ? value.trim() : ''
+
+  const referrerName = stringField(req.body?.referrerName)
+  const referrerPhone = stringField(req.body?.referrerPhone)
+  const maidName = stringField(req.body?.maidName)
+  const maidPhone = stringField(req.body?.maidPhone)
+  const maidNationality = stringField(req.body?.maidNationality)
+  const relationship = stringField(req.body?.relationship)
+  const notes = stringField(req.body?.notes)
+
+  if (!referrerName || referrerName.length > 160) {
+    return res.status(400).json({ error: 'A valid referrer name is required' })
+  }
+  if (!maidName || maidName.length > 160) {
+    return res.status(400).json({ error: 'A valid maid name is required' })
+  }
+  if (!/^[+\d()\s.-]{7,40}$/.test(referrerPhone) || referrerPhone.replace(/\D/g, '').length < 7) {
+    return res.status(400).json({ error: 'A valid referrer phone number is required' })
+  }
+  if (maidPhone && (!/^[+\d()\s.-]{7,40}$/.test(maidPhone) || maidPhone.replace(/\D/g, '').length < 7)) {
+    return res.status(400).json({ error: 'Enter a valid maid phone number or leave it blank' })
+  }
+  if (maidNationality.length > 100 || relationship.length > 160 || notes.length > 1000) {
+    return res.status(400).json({ error: 'Referral details are too long' })
+  }
+  if (req.body?.consent !== true) {
+    return res.status(400).json({ error: 'Permission to share the maid’s contact details is required' })
+  }
+
+  const webhookUrl = process.env.MAKE_WEBHOOK_URL_MAID_REFERRAL?.trim()
+  if (!webhookUrl) {
+    return res.status(503).json({ error: 'Maid referrals are temporarily unavailable' })
+  }
+  try {
+    if (new URL(webhookUrl).protocol !== 'https:') {
+      return res.status(503).json({ error: 'Maid referral webhook must use HTTPS' })
+    }
+  } catch {
+    return res.status(503).json({ error: 'Maid referral webhook is not configured correctly' })
+  }
+
+  try {
+    const referralId = randomUUID()
+    const result = await sendWorkflowToMake({
+      scenario: 'maid_referral',
+      url: webhookUrl,
+      payload: {
+        scenario: 'maid_referral',
+        referralId,
+        submittedAt: new Date().toISOString(),
+        source: 'fdw_application_referral_chat',
+        referrerName,
+        referrerPhone,
+        maidName,
+        maidPhone,
+        maidNationality,
+        relationship,
+        notes,
+        consentToShareContact: true,
+      },
+    })
+    if (!result.ok) {
+      console.error('Maid referral Make delivery failed:', result.delivery.error)
+      return res.status(502).json({ error: 'Referral could not be delivered. Please try again later.' })
+    }
+    return res.status(201).json({ referralId, message: 'Referral submitted successfully' })
+  } catch (error) {
+    console.error('Maid referral submission failed:', error)
+    return res.status(500).json({ error: 'Referral could not be submitted. Please try again later.' })
+  }
+}
 
 const actorNameFromRequest = async (req: Request) => {
   const admin = await getAuthenticatedAgencyAdmin(req)
@@ -97,6 +174,54 @@ const toFileInput = async (
     type: entry.type || 'application/octet-stream',
     size: entry.size,
     buffer: Buffer.from(arrayBuffer),
+  }
+}
+
+const toRequiredPhotoInput = async (
+  formData: FormData,
+  field: string,
+  kind: PublicApplicantFileInput['kind'],
+  label: string,
+  width: number,
+  height: number,
+): Promise<PublicApplicantFileInput> => {
+  const entry = formData.get(field)
+  if (!(entry instanceof File) || entry.size === 0) {
+    throw new Error(`${label} is required`)
+  }
+  if (entry.size > 5 * 1024 * 1024) {
+    throw new Error(`${label} must be no larger than 5 MB`)
+  }
+
+  const source = Buffer.from(await entry.arrayBuffer())
+  const image = sharp(source, { limitInputPixels: 40_000_000 })
+  let metadata
+  try {
+    metadata = await image.metadata()
+  } catch {
+    throw new Error(`${label} must be a valid JPG or PNG image`)
+  }
+  if (metadata.format !== 'jpeg' && metadata.format !== 'png') {
+    throw new Error(`${label} must be a JPG or PNG image`)
+  }
+
+  let buffer: Buffer
+  try {
+    buffer = await sharp(source, { limitInputPixels: 40_000_000 })
+      .rotate()
+      .resize(width, height, { fit: 'cover', position: 'centre' })
+      .jpeg({ quality: 90 })
+      .toBuffer()
+  } catch {
+    throw new Error(`${label} could not be processed. Please upload another image.`)
+  }
+
+  return {
+    kind,
+    name: `${label}.jpg`,
+    type: 'image/jpeg',
+    size: buffer.length,
+    buffer,
   }
 }
 
@@ -310,6 +435,8 @@ export const saveAtsPresetController = async (req: Request, res: Response) => {
   }
 }
 
+export const submitPublicMaidReferralController = publicMaidReferralController
+
 export const createPublicAtsApplicationController = async (req: Request, res: Response) => {
   try {
     const formData = await parseMultipartRequest(req)
@@ -347,6 +474,40 @@ export const createPublicAtsApplicationController = async (req: Request, res: Re
     ]
 
     const files: PublicApplicantFileInput[] = []
+    for (const [field, kind, label, width, height] of [
+      ['passportPhoto', 'passport_photo', 'Passport-size photo', 100, 125],
+      ['fullBodyPhoto', 'full_body_photo', 'Full-body photo', 240, 400],
+    ] as const) {
+      try {
+        files.push(await toRequiredPhotoInput(formData, field, kind, label, width, height))
+      } catch (error) {
+        return res.status(400).json({
+          error: error instanceof Error ? error.message : `${label} is invalid`,
+        })
+      }
+    }
+
+    const employmentPreference = toTrimmedString(formData.get('employmentPreference')).toLowerCase()
+    const workedInSingapore = toTrimmedString(formData.get('workedInSingapore')).toLowerCase() === 'yes'
+    const workPermitRequired =
+      employmentPreference.includes('transfer') ||
+      employmentPreference.includes('singapore') ||
+      workedInSingapore
+    const hasValidWorkPermitFile = (file: File) =>
+      ['application/pdf', 'image/jpeg', 'image/png'].includes(file.type) ||
+      /\.(pdf|jpe?g|png)$/i.test(file.name)
+    let workPermitUploadCount = 0
+    for (const entry of formData.getAll('workPermit')) {
+      if (!(entry instanceof File) || entry.size === 0) continue
+      workPermitUploadCount += 1
+      if (!hasValidWorkPermitFile(entry)) {
+        return res.status(400).json({ error: 'Work Permit card must be a PDF, JPG, or PNG file' })
+      }
+    }
+    if (workPermitRequired && workPermitUploadCount === 0) {
+      return res.status(400).json({ error: 'Work Permit card is required for transfer and ex-Singapore applicants' })
+    }
+
     for (const [field, kind] of filePairs) {
       for (const entry of formData.getAll(field)) {
         const file = await toFileInput(entry, kind)

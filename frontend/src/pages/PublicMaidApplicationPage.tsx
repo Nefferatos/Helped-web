@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
+import MaidReferralChatbot from "@/components/MaidReferralChatbot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PhoneNumberInput } from "@/components/ui/phone-input";
@@ -38,6 +39,7 @@ import {
   AlertCircle,
   Save,
   Upload,
+  Camera,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -209,12 +211,82 @@ const createEmptyEntry = (): EmploymentEntry => ({
 const fileConfig = [
   { key: "resume", label: "Resume / CV", icon: FileText, hint: "PDF, DOC, DOCX, JPG, PNG", maxSizeMB: 10 },
   { key: "passport", label: "Passport copy", icon: CreditCard, hint: "PDF, JPG, PNG", maxSizeMB: 10 },
+  { key: "workPermit", label: "Work Permit card", icon: CreditCard, hint: "Required for transfer and ex-Singapore applicants · PDF, JPG, PNG", maxSizeMB: 10 },
   { key: "certificates", label: "Certificates / training records", icon: Award, hint: "PDF, DOC, DOCX, JPG, PNG", maxSizeMB: 10 },
   { key: "medical", label: "Medical documents", icon: Stethoscope, hint: "PDF, JPG, PNG", maxSizeMB: 10 },
   { key: "references", label: "Reference letters", icon: ClipboardList, hint: "PDF, DOC, DOCX", maxSizeMB: 10 },
   { key: "introVideo", label: "Introduction video", icon: Video, hint: "MP4, MOV — max 1 minute", maxSizeMB: 50 },
   { key: "otherDocuments", label: "Other supporting documents", icon: Paperclip, hint: "PDF, DOC, DOCX, JPG, PNG", maxSizeMB: 10 },
 ] as const;
+
+const requiresWorkPermitCard = (form: Pick<ApplicantFormState, "employmentPreference" | "workedInSingapore">) =>
+  form.employmentPreference.toLowerCase().includes("transfer") ||
+  form.employmentPreference.toLowerCase().includes("singapore") ||
+  form.workedInSingapore.toLowerCase() === "yes";
+
+const photoUploadConfig = [
+  { key: "passportPhoto", kind: "passport_photo", title: "SLOT 1 · PASSPORT SIZE", label: "Passport-size photo", width: 100, height: 125 },
+  { key: "fullBodyPhoto", kind: "full_body_photo", title: "SLOT 2 · FULL BODY", label: "Full-body photo", width: 240, height: 400 },
+] as const;
+
+type PhotoUploadCardProps = {
+  title: string;
+  label: string;
+  width: number;
+  height: number;
+  file?: File;
+  onChange: (file: File | undefined) => void;
+};
+
+const PhotoUploadCard = ({ title, label, width, height, file, onChange }: PhotoUploadCardProps) => {
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="mb-4 text-sm font-bold tracking-[0.12em] text-teal-700">{title}</p>
+      <div className="flex flex-wrap items-center gap-5">
+        <div className={`flex ${width === 100 ? "h-[240px] w-[192px]" : "h-[250px] w-[150px]"} shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-100`}>
+          {previewUrl ? (
+            <img src={previewUrl} alt={`${label} preview`} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex flex-col items-center gap-2 text-slate-400">
+              <Camera className="h-9 w-9" />
+              <span className="text-sm font-semibold">No photo</span>
+            </div>
+          )}
+        </div>
+        <div className="flex min-w-[170px] flex-1 flex-col items-start gap-3">
+          <label className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-xl bg-amber-400 px-5 font-bold text-slate-950 transition hover:bg-amber-500">
+            <Upload className="h-4 w-4" />
+            {file ? "Change photo" : "Upload photo"}
+            <input
+              className="sr-only"
+              type="file"
+              accept="image/jpeg,image/png"
+              onChange={(event) => {
+                onChange(event.currentTarget.files?.[0]);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+          <p className="text-sm text-slate-500">{width} × {height} px · JPG/PNG</p>
+          <p className="text-xs font-semibold text-slate-600">Required. Photo is cropped and resized to the specified dimensions.</p>
+          {file && <p className="max-w-full break-all text-xs font-medium text-emerald-700">{file.name}</p>}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const nationalityOptions = [
   "Filipino",
@@ -324,10 +396,10 @@ const publicInfoChecklist = [
 // ─── Shared class strings ─────────────────────────────────────────────────────
 
 const fieldCls =
-  "min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-950 placeholder:text-slate-500 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100";
+  "min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-950 placeholder:text-slate-700 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100";
 
 const fieldErrorCls =
-  "min-h-12 w-full rounded-xl border border-rose-400 bg-rose-50 px-4 text-base text-slate-950 placeholder:text-slate-500 shadow-none transition-colors focus-visible:outline-none focus-visible:border-rose-600 focus-visible:ring-2 focus-visible:ring-rose-100";
+  "min-h-12 w-full rounded-xl border border-rose-400 bg-rose-50 px-4 text-base text-slate-950 placeholder:text-slate-700 shadow-none transition-colors focus-visible:outline-none focus-visible:border-rose-600 focus-visible:ring-2 focus-visible:ring-rose-100";
 
 const selectCls =
   "min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-950 shadow-none transition-colors focus-visible:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 appearance-none cursor-pointer";
@@ -336,13 +408,13 @@ const selectErrorCls =
   "min-h-12 w-full rounded-xl border border-rose-400 bg-rose-50 px-4 text-base text-slate-950 shadow-none transition-colors focus-visible:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-100 appearance-none cursor-pointer";
 
 const textareaCls =
-  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 placeholder:text-slate-500 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100";
+  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 placeholder:text-slate-700 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100";
 
 const textareaErrorCls =
-  "w-full rounded-xl border border-rose-400 bg-rose-50 px-4 py-3 text-base text-slate-950 placeholder:text-slate-500 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-rose-600 focus-visible:ring-2 focus-visible:ring-rose-100";
+  "w-full rounded-xl border border-rose-400 bg-rose-50 px-4 py-3 text-base text-slate-950 placeholder:text-slate-700 shadow-none resize-none transition-colors focus-visible:outline-none focus-visible:border-rose-600 focus-visible:ring-2 focus-visible:ring-rose-100";
 
 const dateCls =
-  "min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-950 placeholder:text-slate-500 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:cursor-pointer";
+  "min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-950 placeholder:text-slate-700 shadow-none transition-colors focus-visible:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:cursor-pointer";
 
 const labelCls = "mb-2 block text-base font-semibold tracking-wide text-slate-900";
 
@@ -967,8 +1039,22 @@ const PublicMaidApplicationPage = () => {
   const removeLanguage = (lang: string) =>
     syncLanguages(selectedLanguages.filter((l) => l !== lang));
 
-  const handleFileChange = async (field: string, fileList: FileList | null) => {
+  const handleFileChange = async (field: string, fileList: FileList | File[] | null) => {
     const next = fileList ? Array.from(fileList) : [];
+
+    if (photoUploadConfig.some((photo) => photo.key === field) && next[0]) {
+      const photo = next[0];
+      const isJpegOrPng =
+        ["image/jpeg", "image/png"].includes(photo.type) ||
+        /\.(jpe?g|png)$/i.test(photo.name);
+      if (!isJpegOrPng || photo.size > 5 * 1024 * 1024) {
+        toast.error("Photos must be JPG or PNG files no larger than 5 MB.");
+        return;
+      }
+      setFiles((current) => ({ ...current, [field]: [photo] }));
+      markChanged();
+      return;
+    }
 
     // File size validation
     const config = fileConfig.find((c) => c.key === field);
@@ -1219,6 +1305,20 @@ const PublicMaidApplicationPage = () => {
             e.preventDefault();
             if (!termsAccepted) { requireTerms(); return; }
             if (!isReviewStep) { goNext(); return; }
+            const missingPhoto = photoUploadConfig.find((photo) => !files[photo.key]?.length);
+            if (missingPhoto) {
+              toast.error(`${missingPhoto.label} is required. Please upload both photos.`);
+              const documentsStep = stepItems.findIndex((step) => step.id === "documents");
+              if (documentsStep >= 0) setActiveStep(documentsStep);
+              scrollToTop();
+              return;
+            }
+            if (requiresWorkPermitCard(form) && !files.workPermit?.length) {
+              toast.error("A Work Permit card is required for transfer and ex-Singapore applicants.");
+              setActiveStep(stepItems.findIndex((step) => step.id === "documents"));
+              scrollToTop();
+              return;
+            }
             submitMutation.mutate();
           }}
         >
@@ -2059,6 +2159,26 @@ const PublicMaidApplicationPage = () => {
                     </label>
                   </div>
 
+                  <div className="mt-6 space-y-4">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">Required applicant photos</p>
+                      <p className="mt-0.5 text-xs text-slate-500">Both clear photos are required to submit your application.</p>
+                    </div>
+                    {photoUploadConfig.map((photo) => (
+                      <PhotoUploadCard
+                        key={photo.key}
+                        title={photo.title}
+                        label={photo.label}
+                        width={photo.width}
+                        height={photo.height}
+                        file={files[photo.key]?.[0]}
+                        onChange={(file) => {
+                          void handleFileChange(photo.key, file ? [file] : null);
+                        }}
+                      />
+                    ))}
+                  </div>
+
                   {/* Upload documents */}
                   <div className="mt-6">
                     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -2067,13 +2187,14 @@ const PublicMaidApplicationPage = () => {
                         <p className="mt-0.5 text-xs text-slate-500">Attach supporting documents recruiters usually request with the FDW form.</p>
                       </div>
                       <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 shrink-0">
-                        Optional except resume
+                        Photos required · Work Permit card required for transfer / ex-Singapore
                       </span>
                     </div>
                     <div className="grid gap-2">
                       {fileConfig.map(({ key, label, icon: Icon, hint, maxSizeMB }) => {
                         const selectedFiles = files[key] || [];
                         const hasFiles = selectedFiles.length > 0;
+                        const isRequired = key === "resume" || (key === "workPermit" && requiresWorkPermitCard(form));
                         return (
                           <div key={key}>
                             <label
@@ -2106,6 +2227,11 @@ const PublicMaidApplicationPage = () => {
                                     ? `${selectedFiles.length} file${selectedFiles.length > 1 ? "s" : ""} selected`
                                     : hint}
                                 </p>
+                                {key === "workPermit" && (
+                                  <p className={`mt-1 text-[11px] font-semibold ${isRequired ? "text-rose-600" : "text-slate-500"}`}>
+                                    {isRequired ? "Required for this application" : "Optional for other applicants"}
+                                  </p>
+                                )}
                               </div>
                               <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-emerald-400 hover:text-emerald-700 min-h-[44px] flex items-center">
                                 {hasFiles ? "Change" : "Choose"}
@@ -2113,8 +2239,14 @@ const PublicMaidApplicationPage = () => {
                               <input
                                 type="file"
                                 className="sr-only"
-                                accept={key === "introVideo" ? ".mp4,.mov,video/*" : ".pdf,.doc,.docx,.jpg,.jpeg,.png"}
-                                multiple={key !== "introVideo"}
+                                accept={
+                                  key === "introVideo"
+                                    ? ".mp4,.mov,video/*"
+                                    : key === "workPermit"
+                                    ? ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                                    : ".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                }
+                                multiple={key !== "introVideo" && key !== "workPermit"}
                                 onChange={(e) => void handleFileChange(key, e.target.files)}
                               />
                             </label>
@@ -2420,6 +2552,7 @@ const PublicMaidApplicationPage = () => {
 
           </div>
         </form>
+        <MaidReferralChatbot />
       </div>
     </div>
   );

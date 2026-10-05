@@ -70,6 +70,10 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 #   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
 # When unset, the receptionist falls back to the existing Cline/OpenAI/CF-AI pipeline.
 
+# Maid Referral chatbot — create a Make custom webhook, then add Google Sheets
+# > Add a Row to store the maid_referral payload. Keep the URL in a Worker secret:
+#   npx wrangler secret put MAKE_WEBHOOK_URL_MAID_REFERRAL
+
 # Workflow health check: set this as a secret, never as a plain [vars] value:
 #   npx wrangler secret put EVENT_INGEST_SECRET
 # Operations Center staff milestone notifications (Flight, Medical, SIP, Handover):

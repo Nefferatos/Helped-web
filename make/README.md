@@ -9,6 +9,7 @@ Importable blueprints that wire the marketing → application → recruiter → 
 | `helped-ai-receptionist.blueprint.json` | Webhook → AI Agent → response | Custom Webhook (from Worker) |
 | `helped-applicant-assistant.blueprint.json` | Webhook → AI → Tracker/Google Docs → response | Custom Webhook (from Backend) |
 | `helped-pdf-autofill.blueprint.json` | Webhook → Router (auth) → Make AI Agent → response | Custom Webhook (from Worker) |
+| `helped-maid-referrals-to-google-sheets.blueprint.json` | Referral chatbot → Google Sheets | Custom Webhook (from Worker) |
 
 Both use HTTP + Gmail/Sheets modules (the module family the existing `Helped Maids – Full Agentic Dispatcher` blueprint already imports), so they target the real REST surface instead of relying on per-network Make apps.
 
@@ -17,6 +18,29 @@ Both use HTTP + Gmail/Sheets modules (the module family the existing `Helped Mai
 Make → **Create a new scenario** → **⋯** menu → **Import Blueprint** → select the file. Repeat for each.
 
 On import Make will ask you to reconnect any module that needs an account (Gmail, Google Sheets). Reconnect them the same way you did for the existing Dispatcher scenario.
+
+---
+
+## Maid Referrals (`helped-maid-referrals-to-google-sheets.blueprint.json`)
+
+`Custom Webhook → Google Sheets Add a Row → Webhook Response`
+
+This scenario receives the consented referral payload sent by the FDW-page referral chatbot to `POST /api/ats/public/referrals` and appends it to the selected spreadsheet. The explicit response returns success to the Worker only after the row is added.
+
+### Setup
+
+1. Create a Google spreadsheet and a tab named **Maid Referrals**. Put this exact header row in row 1:
+   `referral_id | submitted_at | referrer_name | referrer_phone | maid_name | maid_phone | maid_nationality | relationship | notes | consent_to_share_contact | source`
+2. Import the blueprint. Open the Custom Webhook module, create a webhook named **Helped Maid Referrals**, and copy its URL.
+3. Open the Google Sheets module, reconnect your Google account, select the spreadsheet and **Maid Referrals** tab, and confirm the field mappings.
+4. Set the copied webhook URL as a server-side Worker secret:
+   ```bash
+   npx wrangler secret put MAKE_WEBHOOK_URL_MAID_REFERRAL
+   ```
+   Paste the Make webhook URL when prompted, then deploy the Worker. Do not put this URL in frontend code or a `VITE_` variable.
+5. Click **Run once** in Make, submit a test referral through the chatbot with permission to share, and verify the appended row. Turn the scenario on after the test.
+
+The mapped payload fields are `referralId`, `submittedAt`, `referrerName`, `referrerPhone`, `maidName`, `maidPhone`, `maidNationality`, `relationship`, `notes`, `consentToShareContact`, and `source`. The Make webhook URL is not part of the browser payload; the Worker forwards this data only after validating required details and consent.
 
 ---
 
@@ -371,4 +395,3 @@ npx wrangler secret put MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN # paste the auth token
 ```
 
 The Worker falls back to `OPENAI_API_KEY`/`CLINE_API_KEY` and then `ANTHROPIC_API_KEY` if the Make webhook is unset or fails.
-

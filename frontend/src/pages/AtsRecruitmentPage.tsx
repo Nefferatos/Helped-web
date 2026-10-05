@@ -1676,6 +1676,28 @@ const AtsRecruitmentPage = () => {
                             checked={isSelected}
                             onChange={() => toggleSelect(item.id)}
                           />
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {item.profile.passportSizePhotoUrl ? (
+                              <img
+                                src={item.profile.passportSizePhotoUrl}
+                                alt={`${getApplicantDisplayName(item)} passport-size photo`}
+                                title="Passport-size photo"
+                                className="h-16 w-12 rounded-lg border border-slate-200 object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-16 w-12 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-[10px] text-slate-400">
+                                No photo
+                              </div>
+                            )}
+                            {item.profile.fullBodyPhotoUrl && (
+                              <img
+                                src={item.profile.fullBodyPhotoUrl}
+                                alt={`${getApplicantDisplayName(item)} full-body photo`}
+                                title="Full-body photo"
+                                className="h-16 w-10 rounded-lg border border-slate-200 object-cover"
+                              />
+                            )}
+                          </div>
                           <button
                             type="button"
                             onClick={() => openProfileModal(item.id)}
@@ -1695,6 +1717,18 @@ const AtsRecruitmentPage = () => {
 
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           <Badge variant="outline" className={`text-[10px] ${statusTone(item.status)}`}>{getStageDisplayLabel(item.status)}</Badge>
+                          {(item.profile.requiresWorkPermitCard || item.profile.workPermitCardUrl) && (
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] ${
+                                item.profile.workPermitCardUrl
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-amber-200 bg-amber-50 text-amber-700"
+                              }`}
+                            >
+                              Work Permit card {item.profile.workPermitCardUrl ? "uploaded" : "missing"}
+                            </Badge>
+                          )}
                           {item.profile.strengthsTags.slice(0, 2).map((tag) => (
                             <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>
                           ))}
@@ -2378,6 +2412,13 @@ const AtsRecruitmentPage = () => {
                               {doc.type} · {doc.status}
                             </p>
                           </div>
+                          {kind === "image" && doc.url && (
+                            <img
+                              src={doc.url}
+                              alt={`${doc.name} preview`}
+                              className="h-10 w-8 shrink-0 rounded border border-slate-200 object-cover"
+                            />
+                          )}
                           <span
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                               isActive

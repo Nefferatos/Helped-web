@@ -9816,6 +9816,254 @@
   ],
   "makeDeliveries": [
     {
+      "id": 85,
+      "createdAt": "2026-10-05T05:32:13.139Z",
+      "scenario": "applicant-assistant",
+      "url": "https://hook.eu1.make.com/byf7n2l89q48wyw659ei8jz5877t4m18",
+      "payload": {
+        "conversationId": "c8a260e3-ece0-426c-8e26-641b9e556701",
+        "requestId": "8b7afbc2-379e-47bf-9f04-fd8b96d5d460",
+        "message": "Give me a pipeline summary",
+        "type": "applicant_assistant",
+        "context": {
+          "user": {
+            "id": "2",
+            "name": "attheagency",
+            "email": ""
+          },
+          "agency": {
+            "id": 1,
+            "name": ""
+          },
+          "selectedApplicant": null,
+          "selectedApplicants": [],
+          "currentFilters": {
+            "status": [
+              "Approved",
+              "Ready to Configure Public Profile"
+            ]
+          },
+          "currentSearch": "",
+          "applicantSummary": {
+            "total": 42,
+            "byStage": {
+              "New Applicant": 1,
+              "Rejected": 40,
+              "Ready to Configure Public Profile": 1
+            },
+            "byNationality": {
+              "Filipino maid": 6,
+              "Indonesian maid": 7,
+              "Indian maid": 15,
+              "Indian": 2,
+              "Sri Lankan": 1,
+              "Myanmar maid": 3,
+              "": 8
+            },
+            "averageScore": 15,
+            "needingFollowup": 1,
+            "recentlyAdded": 0
+          }
+        },
+        "conversationHistory": [
+          {
+            "role": "user",
+            "content": "Give me a pipeline summary"
+          }
+        ],
+        "trackerContext": {
+          "existingTracker": null,
+          "googleDocId": null
+        }
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2415,
+      "responseBody": "Hello! How can I help today? If you’d like, tell me what you want to do with the current date/time (2026-10-05T13:32:11.650+08:00). For example:\n- Convert to another time zone\n- Format in a specific style\n- Calculate duration until a future date\n- Generate a date-related document or CSV\n\nIf you have a specific task in mind, please share the details and any formatting or output preferences.",
+      "error": ""
+    },
+    {
+      "id": 84,
+      "createdAt": "2026-10-05T05:20:20.305Z",
+      "scenario": "applicant-assistant",
+      "url": "https://hook.eu1.make.com/byf7n2l89q48wyw659ei8jz5877t4m18",
+      "payload": {
+        "conversationId": "2393ffe9-4d4d-4560-b121-b178fcdef450",
+        "requestId": "ba41e2b9-d1f7-477b-9ad2-f08b3970cdb6",
+        "message": "creat draft email for applicant requirements",
+        "type": "applicant_assistant",
+        "context": {
+          "user": {
+            "id": "2",
+            "name": "attheagency",
+            "email": ""
+          },
+          "agency": {
+            "id": 1,
+            "name": ""
+          },
+          "selectedApplicant": {
+            "id": "8736335b-7d2b-4bea-88b4-02c9834f6c57",
+            "applicationCode": "APP-824B0546",
+            "status": "Ready to Configure Public Profile",
+            "appliedAt": "2026-09-28T16:16:17.332Z",
+            "source": "resume_upload",
+            "aiParseSummary": "Applicant self-submitted profile and 0 attachment(s). Review recruiter validation before advancing to Resume Parsed.",
+            "profile": {
+              "fullName": "Florante Del pilar",
+              "nationality": "Sri Lankan",
+              "age": 26,
+              "yearsOfExperience": 0,
+              "expectedSalary": 0,
+              "employmentPreference": "",
+              "languageSkills": [],
+              "cookingSkills": [],
+              "childcareExperience": 5,
+              "elderlyCareExperience": 5,
+              "housekeepingExperience": 5,
+              "certifications": [],
+              "availableDate": "",
+              "strengthsTags": [
+                "Childcare",
+                "Newborn care",
+                "Elderly care",
+                "Disabled care",
+                "Housekeeping"
+              ],
+              "weaknessesTags": [
+                "Passport missing",
+                "Certificates missing",
+                "Limited experience"
+              ],
+              "medicalStatus": "pending",
+              "passportStatus": "missing"
+            },
+            "score": {
+              "score": 24,
+              "category": "Not Qualified",
+              "strengths": [],
+              "weaknesses": [
+                "Passport not submitted",
+                "Certificates missing",
+                "Limited verified work experience"
+              ]
+            },
+            "interview": null,
+            "backgroundCheck": {
+              "result": "Pending"
+            },
+            "documentsStatus": [
+              {
+                "type": "resume",
+                "status": "missing",
+                "required": true
+              },
+              {
+                "type": "passport",
+                "status": "missing",
+                "required": false
+              },
+              {
+                "type": "work_permit",
+                "status": "missing",
+                "required": false
+              },
+              {
+                "type": "medical",
+                "status": "missing",
+                "required": false
+              },
+              {
+                "type": "certificate",
+                "status": "missing",
+                "required": false
+              },
+              {
+                "type": "reference",
+                "status": "missing",
+                "required": false
+              },
+              {
+                "type": "video",
+                "status": "missing",
+                "required": false
+              }
+            ],
+            "recentHistory": [
+              {
+                "toStage": "Ready to Configure Public Profile",
+                "actor": "attheagency",
+                "reason": "Stage changed to Ready to Configure Public Profile",
+                "createdAt": "2026-09-29T14:41:01.775Z"
+              },
+              {
+                "toStage": "Ready to Configure Public Profile",
+                "actor": "attheagency",
+                "reason": "Stage changed to Ready to Configure Public Profile",
+                "createdAt": "2026-09-29T14:40:53.431Z"
+              },
+              {
+                "toStage": "Ready to Configure Public Profile",
+                "actor": "attheagency",
+                "reason": "Stage changed to Ready to Configure Public Profile",
+                "createdAt": "2026-09-29T14:40:51.340Z"
+              },
+              {
+                "toStage": "Ready to Configure Public Profile",
+                "actor": "attheagency",
+                "reason": "Stage changed to Ready to Configure Public Profile",
+                "createdAt": "2026-09-29T14:24:29.771Z"
+              },
+              {
+                "toStage": "Approved",
+                "actor": "attheagency",
+                "reason": "Bulk approval",
+                "createdAt": "2026-09-29T14:24:23.232Z"
+              }
+            ]
+          },
+          "selectedApplicants": [],
+          "currentFilters": {},
+          "currentSearch": "",
+          "applicantSummary": {
+            "total": 42,
+            "byStage": {
+              "New Applicant": 1,
+              "Rejected": 40,
+              "Ready to Configure Public Profile": 1
+            },
+            "byNationality": {
+              "Filipino maid": 6,
+              "Indonesian maid": 7,
+              "Indian maid": 15,
+              "Indian": 2,
+              "Sri Lankan": 1,
+              "Myanmar maid": 3,
+              "": 8
+            },
+            "averageScore": 15,
+            "needingFollowup": 1,
+            "recentlyAdded": 0
+          }
+        },
+        "conversationHistory": [
+          {
+            "role": "user",
+            "content": "creat draft email for applicant requirements"
+          }
+        ],
+        "trackerContext": {
+          "existingTracker": null,
+          "googleDocId": null
+        }
+      },
+      "success": true,
+      "statusCode": 200,
+      "durationMs": 2271,
+      "responseBody": "Hello! How can I help today? If you’d like, you can tell me what you need (e.g., draft a document, analyze data, create a file export, or answer a question), and I’ll assist. If you want a downloadable file, let me know the content, format (PDF, DOC, TXT, CSV), and filename.",
+      "error": ""
+    },
+    {
       "id": 83,
       "createdAt": "2026-09-29T14:24:25.679Z",
       "scenario": "interview_pipeline",
@@ -12595,6 +12843,6 @@
     "notifications": 24,
     "automationLogs": 241,
     "decisionLogs": 87,
-    "makeDeliveries": 84
+    "makeDeliveries": 86
   }
 }

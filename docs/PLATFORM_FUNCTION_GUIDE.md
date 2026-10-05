@@ -968,13 +968,23 @@ Mount points are set in `backend/src/server.ts`; the live Worker serves the same
 | Supabase | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_APP_DATA_TABLE`, `SUPABASE_APP_DATA_ID`, `SUPABASE_USE_NORMALIZED` | Service-role key is a **secret** |
 | Storage backend | `STORAGE_BACKEND` (`supabase` or `kv`) | `wrangler.toml` currently `supabase` |
 | AI providers | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `CLAUDE_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `CLINE_API_KEY`, `CLINE_API_URL`, `CLINE_MODEL`, `AI_AUTOPILOT_ENABLED` | All keys are secrets |
-| Make.com | `MAKE_WEBHOOK_URL…` family incl. `_AI_ENGINE`, `_APPLICANT_INTAKE`, `_GOOGLE_DRIVE_SYNC`, `_MEDIA_TRANSCRIBE`, `_HR_EMAIL`, `_PDF_AUTOFILL`, `MAKE_ORCHESTRATOR_WEBHOOK_URL`, `MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN` | Set as Worker secrets |
+| Make.com | `MAKE_WEBHOOK_URL…` family incl. `_AI_ENGINE`, `_APPLICANT_INTAKE`, `_MAID_REFERRAL`, `_GOOGLE_DRIVE_SYNC`, `_MEDIA_TRANSCRIBE`, `_HR_EMAIL`, `_PDF_AUTOFILL`, `MAKE_ORCHESTRATOR_WEBHOOK_URL`, `MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN` | Set as Worker secrets |
 | Events | `EVENT_INGEST_SECRET` | Shared secret for `POST /api/events` (`x-event-secret`) |
 | Email | `RESEND_API_KEY`, `RESEND_FROM`, `DEV_EXPOSE_CONFIRMATION_CODE` | **Never** set `DEV_EXPOSE_CONFIRMATION_CODE=true` in production |
 | Google Sheets | `GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON` (secret, keep on one line), `GOOGLE_SHEETS_SPREADSHEET_ID` | Reports page |
 | TikTok | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | Login Kit |
 | Backend only | `DATABASE_URL`, `PORT`, `CORS_ORIGIN`, `MAIL_PROVIDER`, `SMTP_*`, `MAIL_*` | `backend/.env` |
 | Frontend (public!) | `VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_MAKE_WEBHOOK_URL_*` | Anything `VITE_*` ends up in the browser bundle — never a secret |
+
+### Maid referral chatbot → Make.com → Google Sheets
+
+The FDW application page's **Refer a maid** chat sends consented referral details
+to `POST /api/ats/public/referrals`. Configure the Make custom webhook as the
+Worker secret `MAKE_WEBHOOK_URL_MAID_REFERRAL` (and as the same environment
+variable for a local Express backend). In Make, add a Google Sheets **Add a Row**
+module and map `referralId`, `submittedAt`, `referrerName`, `referrerPhone`,
+`maidName`, `maidPhone`, `maidNationality`, `relationship`, `notes`, and
+`consentToShareContact` to spreadsheet columns. The webhook URL remains server-side.
 
 Useful commands:
 ```bash
@@ -1056,7 +1066,6 @@ npm run secrets:scan           # before committing
 | Source of truth | The code in this repository (`frontend/src`, `backend/src`, `functions/api`) |
 | Based on | A full read of the routes, controllers, services, stores, pages and components on the current `main` branch |
 | Maintenance rule | Whenever a page, endpoint or menu item is added, renamed or removed, update **Part 5** (staff-facing) and **Part 6** (technical) in the same commit |
-
 
 
 

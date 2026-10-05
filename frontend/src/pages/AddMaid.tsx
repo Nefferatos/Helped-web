@@ -22,6 +22,19 @@ import { PdfAutofillBanner } from "./PdfAutofill";
 
 const asTrimmedString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
+const fetchImageAsDataUrl = async (url: string) => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Image request failed (${response.status})`);
+  const image = await response.blob();
+  if (!image.type.startsWith("image/")) throw new Error("Uploaded photo is not an image");
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not load uploaded photo"));
+    reader.readAsDataURL(image);
+  });
+};
+
 const firstNonEmptyString = (...values: unknown[]) => {
   for (const value of values) {
     const text = asTrimmedString(value);
@@ -356,6 +369,23 @@ const mergeAtsPrefillIntoMaid = (current: MaidProfile, prefill: Partial<MaidProf
     (current.agencyContact as Record<string, unknown>) || {},
     (prefill.agencyContact as Record<string, unknown>) || {},
   ),
+  photoDataUrls:
+    Array.isArray(current.photoDataUrls) && current.photoDataUrls.some(Boolean)
+      ? current.photoDataUrls
+      : Array.isArray(prefill.photoDataUrls)
+      ? prefill.photoDataUrls
+      : current.photoDataUrls ?? [],
+  photoDataUrl:
+    current.photoDataUrl ||
+    (Array.isArray(prefill.photoDataUrls) ? prefill.photoDataUrls[0] : "") ||
+    prefill.photoDataUrl ||
+    "",
+  hasPhoto:
+    current.hasPhoto ||
+    Boolean(
+      (Array.isArray(prefill.photoDataUrls) && prefill.photoDataUrls.some(Boolean)) ||
+      prefill.photoDataUrl,
+    ),
 });
 
 // ─── Evaluation method constants ──────────────────────────────────────────────
@@ -872,18 +902,47 @@ const AddMaid = () => {
 
     let cancelled = false;
     void fetchAtsApplication(applicationId)
-      .then((application) => {
+      .then(async (application) => {
         if (cancelled) return;
         const detailedPrefill = buildAtsPrefill({
           query: searchParams,
           applicationProfile: application.application.profile,
           detailedProfile: application.profile,
         });
-        setFormData((prev) => mergeAtsPrefillIntoMaid(prev, detailedPrefill));
+        const photoSources = [
+          application.documents.find((document) => document.type === "passport_photo")?.url ||
+            application.application.profile.passportSizePhotoUrl ||
+            "",
+          application.documents.find((document) => document.type === "full_body_photo")?.url ||
+            application.application.profile.fullBodyPhotoUrl ||
+            "",
+        ];
+        const photoResults = await Promise.all(
+          photoSources.map(async (source) => {
+            if (!source) return { dataUrl: "", error: false };
+            try {
+              return { dataUrl: await fetchImageAsDataUrl(source), error: false };
+            } catch {
+              return { dataUrl: "", error: true };
+            }
+          }),
+        );
+        if (cancelled) return;
+        const photoDataUrls = photoResults.map((result) => result.dataUrl);
+        setFormData((prev) =>
+          mergeAtsPrefillIntoMaid(
+            prev,
+            photoDataUrls.some(Boolean)
+              ? { ...detailedPrefill, photoDataUrls, photoDataUrl: photoDataUrls[0] }
+              : detailedPrefill,
+          ),
+        );
+        if (photoResults.some((result) => result.error)) {
+          toast.warning("Applicant details loaded, but one or more photos could not be attached. Please check the photo slots.");
+        }
       })
-      .catch(() => {
-        // The basic query-string prefill remains usable if the detailed record
-        // is unavailable (for example, after an admin session expires).
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : "Could not load applicant details for profile setup.");
       });
 
     return () => { cancelled = true; };
