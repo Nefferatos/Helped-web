@@ -29,6 +29,13 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // FDW application chatbot + Make blueprint events live in the Worker
+      // (they need MAKE_WEBHOOK_URL_FDW_CHATBOT + the Google Sheets service
+      // account secret). Route to the Worker, not the Express API.
+      "/api/fdw": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       "/api": {
         target: apiProxyTarget,
         changeOrigin: true,

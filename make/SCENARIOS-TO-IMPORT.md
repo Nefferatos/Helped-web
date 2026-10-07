@@ -12,6 +12,7 @@ Import each JSON file as its own Make scenario. Do not combine webhook-triggered
 | Interview scheduled staff alert | `helped-interview-scheduled-alert.blueprint.json` | `MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT` | Create webhook, reconnect Gmail, set internal recipient. |
 | Private document to Google Drive | `helped-google-drive-sync.blueprint.json` | `MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC` | Create webhook, connect Google Drive, select destination folder. |
 | Private media transcription | `helped-media-transcription.blueprint.json` | `MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE` | Create webhook, choose/configure the transcription provider, and test that it returns `transcript`. |
+| FDW application chatbot + referral | `helped-fdw-application-chatbot.blueprint.json` | Worker: `MAKE_WEBHOOK_URL_FDW_CHATBOT` | Create the webhook, then reconnect the Make AI Agent connection and select your Google Sheets connection for both "Add a Row" modules (application + referral spreadsheets). See `docs/FDW_APPLICATION_CHATBOT.md`. |
 
 ## Scenarios already in the repository
 

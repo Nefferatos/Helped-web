@@ -74,6 +74,13 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 # > Add a Row to store the maid_referral payload. Keep the URL in a Worker secret:
 #   npx wrangler secret put MAKE_WEBHOOK_URL_MAID_REFERRAL
 
+# FDW Application Chatbot — import make/helped-fdw-application-chatbot.blueprint.json,
+# create its Custom Webhook, then set the URL as a secret (never in client code):
+#   npx wrangler secret put MAKE_WEBHOOK_URL_FDW_CHATBOT
+# Make is the engine: the Worker relays POST /api/fdw/chatbot to this webhook. The
+# scenario's AI Agent and Google Sheets "Add a Row" modules do all the work — the
+# Worker performs no AI or Google Sheets calls itself.
+
 # Workflow health check: set this as a secret, never as a plain [vars] value:
 #   npx wrangler secret put EVENT_INGEST_SECRET
 # Operations Center staff milestone notifications (Flight, Medical, SIP, Handover):

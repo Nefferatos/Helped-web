@@ -1,0 +1,1032 @@
+{
+    "name": "FDW Application Chatbot",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "hook": 3837981,
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": -500,
+                    "y": 0
+                },
+                "setupValidation": {
+                    "result": {
+                        "valid": true,
+                        "fields": []
+                    },
+                    "version": 1,
+                    "configuration": "c69b28d5e55af2d"
+                },
+                "restore": {
+                    "parameters": {
+                        "hook": {
+                            "data": {
+                                "editable": "true"
+                            },
+                            "label": "FDW Application Chatbot"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "hook",
+                        "type": "hook:gateway-webhook",
+                        "label": "Webhook",
+                        "required": true
+                    },
+                    {
+                        "name": "maxResults",
+                        "type": "number",
+                        "label": "Maximum number of results"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 2,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "mapper": null,
+            "metadata": {
+                "designer": {
+                    "x": -250,
+                    "y": 0
+                }
+            },
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 3,
+                            "module": "ai-local-agent:RunLocalAIAgent",
+                            "version": 0,
+                            "parameters": {
+                                "makeConnectionId": 9990574
+                            },
+                            "filter": {
+                                "name": "FDW chatbot message",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{1.scenario}}",
+                                            "b": "fdw_application_chat",
+                                            "o": "text:equal"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "files": [],
+                                "message": "Applicant answer: {{1.message}}\\nCollected details: {{escapeJSON(1.collected)}}\\nSuggested next prompt: {{1.fallback_reply}}",
+                                "threadId": "{{1.conversation_id}}",
+                                "outputType": "text",
+                                "tokenLimit": "50",
+                                "modelConfig": {
+                                    "timeout": "",
+                                    "recursionLimit": "20",
+                                    "aiCompactionEnabled": true,
+                                    "iterationsFromHistoryCount": "0"
+                                },
+                                "defaultModel": "small",
+                                "systemPrompt": "You are a warm, concise application assistant for a Singapore FDW agency. Acknowledge the applicant answer and ask one next question only. Never promise employment or give legal/medical advice. Return ONLY valid JSON in this exact shape: {\\\"reply\\\":\\\"your response\\\"}.",
+                                "promptCaching": "none",
+                                "fallbackEnabled": false
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 70,
+                                    "y": -250
+                                },
+                                "setupValidation": {
+                                    "result": {
+                                        "valid": true,
+                                        "fields": []
+                                    },
+                                    "version": 1,
+                                    "configuration": "685ca57368e1cbad"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "files": {
+                                            "mode": "chose"
+                                        },
+                                        "outputType": {
+                                            "label": "Text"
+                                        },
+                                        "defaultModel": {
+                                            "mode": "chose",
+                                            "label": "SmallModel: gpt-5-nano. Reasoning: minimal. Efficiently handles long conversations and reasoning, delivering smart conclusions quickly"
+                                        },
+                                        "promptCaching": {
+                                            "label": "Automatic (always on)"
+                                        }
+                                    },
+                                    "parameters": {
+                                        "makeConnectionId": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "ai-provider"
+                                            },
+                                            "label": "IT's Make's AI Provider connection"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "makeConnectionId",
+                                        "type": "account:ai-provider,openai-gpt-3,anthropic-claude,gemini-ai-q9zyjp,ai-agent-foundry-openai,ai-agent-foundry-non-openai,mistral-ai,cohere,groq,ai-agent-xai,amazon-bedrock,ai-agent-openai-compatible",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "defaultModel",
+                                        "type": "select",
+                                        "label": "Model",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "tokenLimit",
+                                        "type": "number",
+                                        "label": "Maximum output length (%)",
+                                        "validate": {
+                                            "max": 100,
+                                            "min": 20
+                                        }
+                                    },
+                                    {
+                                        "name": "promptCaching",
+                                        "type": "select",
+                                        "label": "Prompt caching",
+                                        "validate": {
+                                            "enum": [
+                                                "none"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "fallbackEnabled",
+                                        "type": "boolean",
+                                        "label": "Enable fallback connection",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "systemPrompt",
+                                        "type": "text",
+                                        "label": "Instructions"
+                                    },
+                                    {
+                                        "name": "message",
+                                        "type": "text",
+                                        "label": "Input",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "files",
+                                        "spec": [
+                                            {
+                                                "name": "fileName",
+                                                "type": "filename",
+                                                "label": "File name",
+                                                "semantic": "file:name"
+                                            },
+                                            {
+                                                "name": "data",
+                                                "type": "buffer",
+                                                "label": "Data",
+                                                "semantic": "file:data"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Input files"
+                                    },
+                                    {
+                                        "name": "threadId",
+                                        "type": "text",
+                                        "label": "Conversation ID",
+                                        "validate": {
+                                            "max": 256
+                                        }
+                                    },
+                                    {
+                                        "name": "modelConfig",
+                                        "spec": [
+                                            {
+                                                "name": "recursionLimit",
+                                                "type": "number",
+                                                "label": "Steps per agent call"
+                                            },
+                                            {
+                                                "name": "iterationsFromHistoryCount",
+                                                "type": "number",
+                                                "label": "Maximum conversation history"
+                                            },
+                                            {
+                                                "name": "timeout",
+                                                "type": "number",
+                                                "label": "Step timeout",
+                                                "validate": {
+                                                    "max": 600,
+                                                    "min": 120
+                                                }
+                                            },
+                                            {
+                                                "name": "aiCompactionEnabled",
+                                                "type": "boolean",
+                                                "label": "Enable compaction",
+                                                "required": true
+                                            }
+                                        ],
+                                        "type": "collection",
+                                        "label": "Model configuration"
+                                    },
+                                    {
+                                        "name": "outputType",
+                                        "type": "select",
+                                        "label": "Response format",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "text",
+                                                "make-schema",
+                                                "udt-schema"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "tools": []
+                        },
+                        {
+                            "id": 4,
+                            "module": "gateway:WebhookRespond",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "body": "{{3.response}}",
+                                "status": "200",
+                                "headers": []
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 380,
+                                    "y": -250
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 5,
+                            "module": "google-sheets:addRow",
+                            "version": 2,
+                            "parameters": {
+                                "__IMTCONN__": 11569061
+                            },
+                            "filter": {
+                                "name": "Completed FDW application",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{1.event_type}}",
+                                            "b": "fdw_application.completed",
+                                            "o": "text:equal"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "from": "drive",
+                                "mode": "select",
+                                "values": {
+                                    "0": "{{1.submitted_at}}",
+                                    "1": "{{1.application_code}}",
+                                    "2": "{{1.full_name}}",
+                                    "3": "{{1.email}}",
+                                    "4": "{{1.contact_number}}",
+                                    "5": "{{1.nationality}}",
+                                    "6": "{{1.years_of_experience}}",
+                                    "7": "{{1.languages}}",
+                                    "8": "{{1.employment_preference}}",
+                                    "9": "{{1.available_date}}",
+                                    "10": "{{1.note}}"
+                                },
+                                "sheetId": "Sheet1",
+                                "spreadsheetId": "/1b373I3pQUupwVZmS58FTJptsDXWsWyPH5ZQvWQKTvNY",
+                                "includesHeaders": true,
+                                "insertDataOption": "INSERT_ROWS",
+                                "useColumnHeaders": false,
+                                "valueInputOption": "USER_ENTERED",
+                                "insertUnformatted": false
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 70,
+                                    "y": 0
+                                },
+                                "setupValidation": {
+                                    "result": {
+                                        "valid": true,
+                                        "fields": []
+                                    },
+                                    "version": 1,
+                                    "configuration": "ff89d89de98e404f"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "from": {
+                                            "label": "My Drive"
+                                        },
+                                        "mode": {
+                                            "label": "Search by path"
+                                        },
+                                        "sheetId": {
+                                            "label": "Sheet1"
+                                        },
+                                        "spreadsheetId": {
+                                            "path": [
+                                                "FDW_APPLICATION_SHEET"
+                                            ]
+                                        },
+                                        "includesHeaders": {
+                                            "label": "Yes"
+                                        },
+                                        "insertDataOption": {
+                                            "mode": "chose",
+                                            "label": "Insert rows"
+                                        },
+                                        "useColumnHeaders": {
+                                            "label": "No"
+                                        },
+                                        "valueInputOption": {
+                                            "mode": "chose",
+                                            "label": "User entered"
+                                        },
+                                        "insertUnformatted": {
+                                            "mode": "chose"
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "google"
+                                            },
+                                            "label": "Jimmuel's Google connection"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:google",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "mode",
+                                        "type": "select",
+                                        "label": "Search Method",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "select",
+                                                "fromAll",
+                                                "map"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "insertUnformatted",
+                                        "type": "boolean",
+                                        "label": "Unformatted",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "valueInputOption",
+                                        "type": "select",
+                                        "label": "Value input option",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "USER_ENTERED",
+                                                "RAW"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "insertDataOption",
+                                        "type": "select",
+                                        "label": "Insert data option",
+                                        "validate": {
+                                            "enum": [
+                                                "INSERT_ROWS",
+                                                "OVERWRITE"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "from",
+                                        "type": "select",
+                                        "label": "Drive",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "drive",
+                                                "share",
+                                                "team"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "spreadsheetId",
+                                        "type": "file",
+                                        "label": "Spreadsheet Name",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "sheetId",
+                                        "type": "select",
+                                        "label": "Sheet Name",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "includesHeaders",
+                                        "type": "select",
+                                        "label": "Table contains headers",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                true,
+                                                false
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "useColumnHeaders",
+                                        "type": "select",
+                                        "label": "Use column headers as IDs of the columns",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                true,
+                                                false
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "values",
+                                        "spec": [
+                                            {
+                                                "name": "0",
+                                                "type": "text",
+                                                "label": "A"
+                                            },
+                                            {
+                                                "name": "1",
+                                                "type": "text",
+                                                "label": "B"
+                                            },
+                                            {
+                                                "name": "2",
+                                                "type": "text",
+                                                "label": "C"
+                                            },
+                                            {
+                                                "name": "3",
+                                                "type": "text",
+                                                "label": "D"
+                                            },
+                                            {
+                                                "name": "4",
+                                                "type": "text",
+                                                "label": "E"
+                                            },
+                                            {
+                                                "name": "5",
+                                                "type": "text",
+                                                "label": "F"
+                                            },
+                                            {
+                                                "name": "6",
+                                                "type": "text",
+                                                "label": "G"
+                                            },
+                                            {
+                                                "name": "7",
+                                                "type": "text",
+                                                "label": "H"
+                                            },
+                                            {
+                                                "name": "8",
+                                                "type": "text",
+                                                "label": "I"
+                                            },
+                                            {
+                                                "name": "9",
+                                                "type": "text",
+                                                "label": "J"
+                                            },
+                                            {
+                                                "name": "10",
+                                                "type": "text",
+                                                "label": "K"
+                                            },
+                                            {
+                                                "name": "11",
+                                                "type": "text",
+                                                "label": "L"
+                                            },
+                                            {
+                                                "name": "12",
+                                                "type": "text",
+                                                "label": "M"
+                                            },
+                                            {
+                                                "name": "13",
+                                                "type": "text",
+                                                "label": "N"
+                                            },
+                                            {
+                                                "name": "14",
+                                                "type": "text",
+                                                "label": "O"
+                                            },
+                                            {
+                                                "name": "15",
+                                                "type": "text",
+                                                "label": "P"
+                                            },
+                                            {
+                                                "name": "16",
+                                                "type": "text",
+                                                "label": "Q"
+                                            },
+                                            {
+                                                "name": "17",
+                                                "type": "text",
+                                                "label": "R"
+                                            },
+                                            {
+                                                "name": "18",
+                                                "type": "text",
+                                                "label": "S"
+                                            },
+                                            {
+                                                "name": "19",
+                                                "type": "text",
+                                                "label": "T"
+                                            },
+                                            {
+                                                "name": "20",
+                                                "type": "text",
+                                                "label": "U"
+                                            },
+                                            {
+                                                "name": "21",
+                                                "type": "text",
+                                                "label": "V"
+                                            },
+                                            {
+                                                "name": "22",
+                                                "type": "text",
+                                                "label": "W"
+                                            },
+                                            {
+                                                "name": "23",
+                                                "type": "text",
+                                                "label": "X"
+                                            },
+                                            {
+                                                "name": "24",
+                                                "type": "text",
+                                                "label": "Y"
+                                            },
+                                            {
+                                                "name": "25",
+                                                "type": "text",
+                                                "label": "Z"
+                                            }
+                                        ],
+                                        "type": "collection",
+                                        "label": "Values in columns"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 6,
+                            "module": "gateway:WebhookRespond",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "body": "{\\n  \\\"ok\\\": true\\n}",
+                                "status": "200",
+                                "headers": []
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 380,
+                                    "y": 0
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 7,
+                            "module": "google-sheets:addRow",
+                            "version": 2,
+                            "parameters": {
+                                "__IMTCONN__": 11569061
+                            },
+                            "filter": {
+                                "name": "FDW referral",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{1.event_type}}",
+                                            "b": "fdw_referral.created",
+                                            "o": "text:equal"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "from": "drive",
+                                "mode": "select",
+                                "values": {
+                                    "0": "{{1.submitted_at}}",
+                                    "1": "{{1.referral_id}}",
+                                    "2": "{{1.referrer_name}}",
+                                    "3": "{{1.referrer_contact}}",
+                                    "4": "{{1.relationship}}",
+                                    "5": "{{1.referred_name}}",
+                                    "6": "{{1.referred_contact}}",
+                                    "7": "{{1.note}}",
+                                    "8": "{{1.source_application_id}}"
+                                },
+                                "sheetId": "Sheet1",
+                                "spreadsheetId": "/1WeqdVdr_aPcXbuC8X8oTb3m1tVeOGQGEqiQpwYIq1hE",
+                                "includesHeaders": true,
+                                "insertDataOption": "INSERT_ROWS",
+                                "useColumnHeaders": false,
+                                "valueInputOption": "USER_ENTERED",
+                                "insertUnformatted": false
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 70,
+                                    "y": 250
+                                },
+                                "setupValidation": {
+                                    "result": {
+                                        "valid": true,
+                                        "fields": []
+                                    },
+                                    "version": 1,
+                                    "configuration": "53d34205491db702"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "from": {
+                                            "label": "My Drive"
+                                        },
+                                        "mode": {
+                                            "label": "Search by path"
+                                        },
+                                        "sheetId": {
+                                            "label": "Sheet1"
+                                        },
+                                        "spreadsheetId": {
+                                            "path": [
+                                                "FDW_REFERRAL_SHEET"
+                                            ]
+                                        },
+                                        "includesHeaders": {
+                                            "label": "Yes"
+                                        },
+                                        "insertDataOption": {
+                                            "mode": "chose",
+                                            "label": "Insert rows"
+                                        },
+                                        "useColumnHeaders": {
+                                            "label": "No"
+                                        },
+                                        "valueInputOption": {
+                                            "mode": "chose",
+                                            "label": "User entered"
+                                        },
+                                        "insertUnformatted": {
+                                            "mode": "chose"
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "google"
+                                            },
+                                            "label": "Jimmuel's Google connection (jimmuel.work@gmail.com)"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:google",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "mode",
+                                        "type": "select",
+                                        "label": "Search Method",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "select",
+                                                "fromAll",
+                                                "map"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "insertUnformatted",
+                                        "type": "boolean",
+                                        "label": "Unformatted",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "valueInputOption",
+                                        "type": "select",
+                                        "label": "Value input option",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "USER_ENTERED",
+                                                "RAW"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "insertDataOption",
+                                        "type": "select",
+                                        "label": "Insert data option",
+                                        "validate": {
+                                            "enum": [
+                                                "INSERT_ROWS",
+                                                "OVERWRITE"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "from",
+                                        "type": "select",
+                                        "label": "Drive",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "drive",
+                                                "share",
+                                                "team"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "spreadsheetId",
+                                        "type": "file",
+                                        "label": "Spreadsheet Name",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "sheetId",
+                                        "type": "select",
+                                        "label": "Sheet Name",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "includesHeaders",
+                                        "type": "select",
+                                        "label": "Table contains headers",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                true,
+                                                false
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "useColumnHeaders",
+                                        "type": "select",
+                                        "label": "Use column headers as IDs of the columns",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                true,
+                                                false
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "values",
+                                        "spec": [
+                                            {
+                                                "name": "0",
+                                                "type": "text",
+                                                "label": "A"
+                                            },
+                                            {
+                                                "name": "1",
+                                                "type": "text",
+                                                "label": "B"
+                                            },
+                                            {
+                                                "name": "2",
+                                                "type": "text",
+                                                "label": "C"
+                                            },
+                                            {
+                                                "name": "3",
+                                                "type": "text",
+                                                "label": "D"
+                                            },
+                                            {
+                                                "name": "4",
+                                                "type": "text",
+                                                "label": "E"
+                                            },
+                                            {
+                                                "name": "5",
+                                                "type": "text",
+                                                "label": "F"
+                                            },
+                                            {
+                                                "name": "6",
+                                                "type": "text",
+                                                "label": "G"
+                                            },
+                                            {
+                                                "name": "7",
+                                                "type": "text",
+                                                "label": "H"
+                                            },
+                                            {
+                                                "name": "8",
+                                                "type": "text",
+                                                "label": "I"
+                                            },
+                                            {
+                                                "name": "9",
+                                                "type": "text",
+                                                "label": "J"
+                                            },
+                                            {
+                                                "name": "10",
+                                                "type": "text",
+                                                "label": "K"
+                                            },
+                                            {
+                                                "name": "11",
+                                                "type": "text",
+                                                "label": "L"
+                                            },
+                                            {
+                                                "name": "12",
+                                                "type": "text",
+                                                "label": "M"
+                                            },
+
+                                            {
+                                                "name": "13",
+                                                "type": "text",
+                                                "label": "N"
+                                            },
+                                            {
+                                                "name": "14",
+                                                "type": "text",
+                                                "label": "O"
+                                            },
+                                            {
+                                                "name": "15",
+                                                "type": "text",
+                                                "label": "P"
+                                            },
+                                            {
+                                                "name": "16",
+                                                "type": "text",
+                                                "label": "Q"
+                                            },
+                                            {
+                                                "name": "17",
+                                                "type": "text",
+                                                "label": "R"
+                                            },
+                                            {
+                                                "name": "18",
+                                                "type": "text",
+                                                "label": "S"
+                                            },
+                                            {
+                                                "name": "19",
+                                                "type": "text",
+                                                "label": "T"
+                                            },
+                                            {
+                                                "name": "20",
+                                                "type": "text",
+                                                "label": "U"
+                                            },
+                                            {
+                                                "name": "21",
+                                                "type": "text",
+                                                "label": "V"
+                                            },
+                                            {
+                                                "name": "22",
+                                                "type": "text",
+                                                "label": "W"
+                                            },
+                                            {
+                                                "name": "23",
+                                                "type": "text",
+                                                "label": "X"
+                                            },
+                                            {
+                                                "name": "24",
+                                                "type": "text",
+                                                "label": "Y"
+                                            },
+                                            {
+                                                "name": "25",
+                                                "type": "text",
+                                                "label": "Z"
+                                            }
+                                        ],
+                                        "type": "collection",
+                                        "label": "Values in columns"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 8,
+                            "module": "gateway:WebhookRespond",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "body": "{\\n  \\\"ok\\\": true\\n}",
+                                "status": "200",
+                                "headers": []
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 380,
+                                    "y": 250
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": true,
+            "dataloss": true,
+            "dlq": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "eu1.make.com",
+        "notes": []
+    }
+}
+

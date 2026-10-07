@@ -513,6 +513,13 @@ type Bindings = {
   MAKE_WEBHOOK_URL?: string;
   // Dedicated Make webhook for public maid referrals; never expose it to browsers.
   MAKE_WEBHOOK_URL_MAID_REFERRAL?: string;
+  // ─── FDW application chatbot + referral (make/helped-fdw-application-chatbot.blueprint.json) ──
+  // Make is the engine: the Worker only relays to this one custom webhook, whose
+  // router handles three payload shapes (chat → AI Agent reply; application /
+  // referral → Google Sheets "Add a Row"). No direct AI or Sheets calls happen
+  // in the Worker. Keep the URL server-side only:
+  //   npx wrangler secret put MAKE_WEBHOOK_URL_FDW_CHATBOT
+  MAKE_WEBHOOK_URL_FDW_CHATBOT?: string;
   // Shared synchronous Make AI gateway. This must be the webhook for
   // helped-ai-gateway.blueprint.json, not the legacy workflow orchestrator.
   MAKE_AI_ENGINE_WEBHOOK_URL?: string;
@@ -14516,6 +14523,182 @@ const recordApplicantCreatedEvent = async (
   }
 };
 
+/* ─── FDW application chatbot + referral (Make.com is the engine) ─────────── */
+// The web app is only a vessel: every request is relayed to the "FDW Application
+// Chatbot" Make scenario (make/helped-fdw-application-chatbot.blueprint.json),
+// whose router runs the AI Agent and the Google Sheets "Add a Row" modules.
+// No direct AI provider (Cline/OpenAI/Anthropic) and no direct Google Sheets
+// writes happen here — Make does all of it.
+//
+//   { scenario: "fdw_application_chat", ... }        -> AI Agent reply ({ reply })
+//   { event_type: "fdw_application.completed", ... } -> Google Sheets "Add a Row"
+//   { event_type: "fdw_referral.created", ... }      -> Google Sheets "Add a Row"
+//
+// Set the webhook URL as a Worker secret (or in .dev.vars locally):
+//   npx wrangler secret put MAKE_WEBHOOK_URL_FDW_CHATBOT
+
+type FdwMakeResult = { ok: boolean; status: number; text: string; body: unknown };
+
+const callFdwMakeEngine = async (
+  env: Bindings,
+  payload: Record<string, unknown>,
+): Promise<FdwMakeResult> => {
+  const webhookUrl = env.MAKE_WEBHOOK_URL_FDW_CHATBOT?.trim();
+  if (!webhookUrl) throw new Error("FDW chatbot Make webhook is not configured");
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
+  return { ok: response.ok, status: response.status, text, body };
+};
+
+const extractFdwReply = (result: FdwMakeResult): string => {
+  const { body } = result;
+  if (body && typeof body === "object") {
+    const obj = body as Record<string, unknown>;
+    for (const key of ["reply", "response", "message", "text", "output", "result"]) {
+      const value = obj[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  const raw = result.text.trim();
+  if (!raw) return "";
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0]) as Record<string, unknown>;
+      for (const key of ["reply", "response", "message"]) {
+        const value = parsed[key];
+        if (typeof value === "string" && value.trim()) return value.trim();
+      }
+    } catch {
+      /* fall through to raw text */
+    }
+  }
+  return raw;
+};
+
+const fdwWebhookConfigured = (env: Bindings) => Boolean(env.MAKE_WEBHOOK_URL_FDW_CHATBOT?.trim());
+
+// Relays a completed-application / referral event to Make's router.
+const forwardFdwEventToMake = async (env: Bindings, payload: Record<string, unknown>) => {
+  const result = await callFdwMakeEngine(env, payload);
+  if (!result.ok) throw new Error(`Make FDW event engine returned ${result.status}`);
+  return result;
+};
+
+// One chat turn -> Make's AI Agent. Returns Make's reply.
+const runFdwApplicationChat = async (
+  env: Bindings,
+  body: Record<string, unknown>,
+): Promise<{ reply: string; conversationId: string; source: "make" }> => {
+  const message = toTrimmedString(body.message);
+  if (!message) throw new Error("message is required");
+  const collected = isPlainObject(body.collected) ? body.collected : {};
+  const fallbackReply = toTrimmedString(body.fallback_reply);
+  const conversationId =
+    toTrimmedString(body.conversation_id) || toTrimmedString(body.conversationId) || crypto.randomUUID();
+
+  const result = await callFdwMakeEngine(env, {
+    scenario: "fdw_application_chat",
+    conversation_id: conversationId,
+    message,
+    collected,
+    fallback_reply: fallbackReply,
+  });
+  if (!result.ok) throw new Error(`Make FDW chatbot engine returned ${result.status}`);
+  const reply = extractFdwReply(result);
+  if (!reply) throw new Error("Make FDW chatbot returned an empty reply");
+  return { reply, conversationId, source: "make" };
+};
+
+// Fired when a public application is submitted. Relays the completed application
+// to Make; the blueprint's router writes the Google Sheets row.
+const dispatchFdwApplicationCompleted = async (
+  env: Bindings,
+  application: AtsApplicationRecord,
+  profile: AtsApplicationProfileRecord,
+) => {
+  await forwardFdwEventToMake(env, {
+    event_type: "fdw_application.completed",
+    submitted_at: application.appliedAt,
+    application_code: application.applicationCode,
+    application_id: application.id,
+    full_name: profile.fullName,
+    email: profile.email,
+    contact_number: profile.contactNumber,
+    nationality: profile.nationality,
+    years_of_experience: String(profile.yearsOfExperience ?? ""),
+    languages: (profile.languageSkills ?? []).join(", "),
+    employment_preference: profile.employmentPreference,
+    available_date: profile.availableDate,
+    note: profile.coverNote,
+  });
+};
+
+// Fired when a public maid referral is submitted.
+const dispatchFdwReferralCreated = async (
+  env: Bindings,
+  referralId: string,
+  referral: Record<string, unknown>,
+) => {
+  await forwardFdwEventToMake(env, {
+    event_type: "fdw_referral.created",
+    referral_id: referralId,
+    ...referral,
+  });
+};
+
+// Public FDW application chatbot + event sink. Relays to Make; the web app is
+// only a vessel and never calls the Make webhook or any AI/Sheets directly.
+app.post(
+  "/api/fdw/chatbot",
+  safeApi(async (c) => {
+    const body = await parseBody<Record<string, unknown>>(c.req.raw);
+    if (!body) return c.json({ error: "JSON body is required" }, 400);
+
+    const scenario = toTrimmedString(body.scenario);
+    const eventType = toTrimmedString(body.event_type) || toTrimmedString(body.eventType);
+    const isChat = scenario === "fdw_application_chat";
+    const isEvent =
+      eventType === "fdw_application.completed" || eventType === "fdw_referral.created";
+
+    if (!isChat && !isEvent) {
+      return c.json(
+        {
+          error:
+            "Unrecognised payload. Expected scenario='fdw_application_chat' or event_type in {'fdw_application.completed','fdw_referral.created'}",
+        },
+        400,
+      );
+    }
+
+    if (!fdwWebhookConfigured(c.env)) {
+      return c.json(
+        { error: "FDW chatbot is not configured. Set MAKE_WEBHOOK_URL_FDW_CHATBOT." },
+        503,
+      );
+    }
+
+    if (isChat) {
+      const { reply, conversationId, source } = await runFdwApplicationChat(c.env, body);
+      return c.json({ response: reply, reply, conversationId, source });
+    }
+
+    await forwardFdwEventToMake(c.env, body);
+    return c.json({ ok: true, engine: "make" });
+  }),
+);
+
 app.post(
   "/api/ats/public/apply",
   safeApi(async (c) => {
@@ -14537,6 +14720,7 @@ app.post(
       await savePublicAtsApplicationToSupabaseNormalized(supabase, parsed);
       runChatBackgroundTask(c, recordApplicantCreatedEvent(c.env, parsed.application, parsed.profile));
       runChatBackgroundTask(c, dispatchApplicantIntakeToMake(c.env, parsed.application, parsed.profile));
+      runChatBackgroundTask(c, dispatchFdwApplicationCompleted(c.env, parsed.application, parsed.profile));
       return c.json(
         {
           applicationId: parsed.application.id,
@@ -14560,6 +14744,7 @@ app.post(
     await saveData(c.env, data);
     runChatBackgroundTask(c, recordApplicantCreatedEvent(c.env, parsed.application, parsed.profile));
     runChatBackgroundTask(c, dispatchApplicantIntakeToMake(c.env, parsed.application, parsed.profile));
+    runChatBackgroundTask(c, dispatchFdwApplicationCompleted(c.env, parsed.application, parsed.profile));
 
     return c.json(
       {
@@ -14647,6 +14832,22 @@ app.post(
         console.error("Maid referral Make delivery failed", response.status);
         return c.json({ error: "Referral could not be delivered. Please try again later." }, 502);
       }
+      // Also feed the FDW application-chatbot scenario (fdw_referral.created) so
+      // referrals land in its Google Sheet. Independent of the maid-referral webhook.
+      runChatBackgroundTask(
+        c,
+        dispatchFdwReferralCreated(c.env, referralId, {
+          submitted_at: new Date().toISOString(),
+          referrer_name: referrerName,
+          referrer_contact: referrerPhone,
+          relationship,
+          referred_name: maidName,
+          referred_contact: maidPhone,
+          note: [maidNationality, notes].filter(Boolean).join(" · "),
+          source_application_id:
+            toTrimmedString(body.sourceApplicationId) || toTrimmedString(body.source_application_id),
+        }),
+      );
       return c.json({ referralId, message: "Referral submitted successfully" }, 201);
     } catch (error) {
       console.error("Maid referral Make request failed", error);

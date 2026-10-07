@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { fetchAgencyOptions } from "@/lib/agencies";
 import { submitPublicAtsApplication } from "@/lib/ats";
+import { MAID_APPLICATION_DRAFT_KEY, MAID_DRAFT_SOURCE_CHAT } from "@/lib/maidApplicationDraft";
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -127,7 +128,9 @@ type FieldErrors = Record<string, string>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DRAFT_KEY = "maid-application-draft";
+// Shared with the FDW chat (frontend/src/lib/maidApplicationDraft.ts) so a
+// finished chat can pre-fill this form.
+const DRAFT_KEY = MAID_APPLICATION_DRAFT_KEY;
 
 const initialState: ApplicantFormState = {
   agencyId: "1",
@@ -815,7 +818,16 @@ const PublicMaidApplicationPage = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.form && parsed.form.fullName) {
-          setHasDraft(true);
+          // A draft written by the FDW chat pre-fills the form automatically so
+          // the applicant never retypes what they already told the assistant.
+          if (parsed.source === MAID_DRAFT_SOURCE_CHAT) {
+            setForm({ ...initialState, ...parsed.form });
+            if (parsed.selectedLanguages) setSelectedLanguages(parsed.selectedLanguages);
+            setHasDraft(false);
+            toast.success("We pre-filled your details from the chat — please review and continue.");
+          } else {
+            setHasDraft(true);
+          }
         }
       }
     } catch {
@@ -1299,6 +1311,25 @@ const PublicMaidApplicationPage = () => {
       )}
 
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <Link
+          to="/apply-as-maid/chat"
+          className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#0E4E5E]/20 bg-[#E0F4F7] p-4 transition hover:bg-[#d3eef3] sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0E4E5E] text-white">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-black text-[#0E4E5E]">Prefer to apply in a chat?</p>
+              <p className="mt-0.5 text-xs leading-5 text-slate-700">
+                Fill in a short chat-style form and we&apos;ll register your details — faster than the full form.
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-[#FCD34D] px-4 py-2 text-xs font-bold text-[#3d2800] shadow-[0_3px_0_#C49A00] sm:self-auto">
+            Open the quick form <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </Link>
         <form
           className="fdw-form-layout grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]"
           onSubmit={(e) => {

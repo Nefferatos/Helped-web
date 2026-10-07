@@ -76,6 +76,7 @@ const ContractorTasksPage = lazyRoute(() => import("@/pages/ContractorTasksPage"
 const AgencyReportsPage = lazyRoute(() => import("@/pages/AgencyReportsPage"));
 const PublicMaidApplicationPage = lazyRoute(() => import("@/pages/PublicMaidApplicationPage"));
 const PublicMaidApplicationStatusPage = lazyRoute(() => import("@/pages/PublicMaidApplicationStatusPage"));
+const FdwApplicationChatPage = lazyRoute(() => import("@/pages/FdwApplicationChatPage"));
 const NotFound = lazyRoute(() => import("@/pages/NotFound"));
 const AuthCallback = lazyRoute(() => import("@/pages/AuthCallback"));
 const TikTokCallback = lazyRoute(() => import("@/pages/TikTokCallback"));
@@ -414,6 +415,7 @@ const App = () => {
             <Route path="/search-maids" element={withRouteLoader(<ClientMaidsPage resultsPath="/search-maids/results" />)} />
             <Route path="/search-maids/results" element={withRouteLoader(<MaidSearchPage basePath="/search-maids" />)} />
             <Route path="/apply-as-maid" element={withRouteLoader(<PublicMaidApplicationPage />)} />
+            <Route path="/apply-as-maid/chat" element={withRouteLoader(<FdwApplicationChatPage />)} />
             <Route path="/apply-as-maid/status/:applicationId" element={withRouteLoader(<PublicMaidApplicationStatusPage />)} />
             <Route path="/privacy-policy" element={withRouteLoader(<PrivacyPolicy />)} />
             <Route path="/terms-of-service" element={withRouteLoader(<TermsOfService />)} />
