@@ -1988,7 +1988,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
       setMessages([{
         id: `welcome-${Date.now()}`,
         role: "assistant",
-        content: `Welcome! I'm your AI Command Center assistant. I've analyzed your entire agency pipeline:\n\n• **${analytics.totalEnquiries}** enquiries (${analytics.urgentEnquiries} urgent)\n• **${analytics.totalRequests}** requests (${analytics.pendingRequests} pending)\n• **${analytics.totalApplicants}** applicants (${analytics.topApplicants} scoring 80+)\n• **${analytics.totalContracts}** contracts (${analytics.missingContracts} missing docs)\n\nAsk me anything about your operations — I can analyze data, draft replies, suggest actions, and more.`,
+        content: `Welcome! I'm your AI Command Center assistant. Current dashboard totals:\n\n• **${analytics.totalEnquiries}** enquiries (${analytics.urgentEnquiries} urgent)\n• **${analytics.totalRequests}** requests (${analytics.pendingRequests} pending)\n• **${analytics.totalApplicants}** applicants (${analytics.topApplicants} scoring 80+)\n• **${analytics.totalContracts}** contracts (${analytics.missingContracts} missing docs)\n\nI can summarize dashboard totals and workflow statuses or recommend public helper profiles from recorded skills and ratings. For a specific private record or action, use its dashboard page.`,
       }]);
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2190,7 +2190,7 @@ Always reference actual records from the data above when responding. Be specific
     // Call the backend proxy endpoint (Cloudflare Worker handles CORS)
     const response = await fetch("/api/ai/command-center/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ messages: apiMessages, system: systemPrompt + actionContract }),
       // Never leave the chat UI in its loading state if a local Worker or Make
       // scenario stops responding. The Worker itself has a shorter Make timeout.

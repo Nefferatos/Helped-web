@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Search, Star, X, Sparkles, Filter, Trash2, ExternalLink, CheckCircle2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { calculateAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
+import { getMaidAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
 import { toast } from "@/components/ui/sonner";
 import { getClientToken, refreshClientToken } from "@/lib/clientAuth";
 import { buildEmployerLoginPath } from "@/lib/clientNavigation";
@@ -188,7 +188,7 @@ const MaidHoverPopup = ({
   const [pointerSide, setPointerSide] = useState<"left"|"right">("right");
   const [isTouchLayout, setIsTouchLayout] = useState(false);
   const details = useMemo(() => getMaidPopupDetails(maid), [maid]);
-  const age = calculateAge(maid.dateOfBirth);
+  const age = getMaidAge(maid);
   const flagCode = getNationalityCode(maid.nationality);
 
   useEffect(() => {
@@ -365,7 +365,7 @@ const LockedMaidHoverModal = ({
     setPos({ position:"fixed", top, left, width:LOCKED_MODAL_WIDTH, height:fixedHeight, zIndex:9999, visibility:"visible" });
   }, [anchorRect]);
 
-  const age = calculateAge(maid.dateOfBirth);
+  const age = getMaidAge(maid);
   const sp = (maid.skillsPreferences as Record<string, unknown>) || {};
   const agencyContact = (maid.agencyContact as Record<string, unknown>) || {};
   const intro = (maid.introduction as Record<string, unknown>) || {};
@@ -670,7 +670,7 @@ const MaidCard = ({
   if (!isLoggedIn) return <LockedMaidCard maid={maid} loginPath={loginPath} disableHoverModal={disableHoverPopup} />;
 
   const photo = getPrimaryPhoto(maid);
-  const age = calculateAge(maid.dateOfBirth);
+  const age = getMaidAge(maid);
   const category = getMaidCategory(maid);
   const displayLabel = showCategory && category ? category : (maid.nationality || "");
   const schedulePopupClose = () => {
@@ -1723,7 +1723,7 @@ const matchesHeight = (maid: MaidProfile, d: ClientDraft): boolean => {
 
 const matchesAge = (maid: MaidProfile, d: ClientDraft): boolean => {
   if (d.ageNoPreference) return true;
-  const age = calculateAge(maid.dateOfBirth);
+  const age = getMaidAge(maid);
   if (age === null) return true;
   if (d.age21to25 && age >= 21 && age <= 25) return true;
   if (d.age26to30 && age >= 26 && age <= 30) return true;

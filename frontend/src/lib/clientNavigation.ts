@@ -1,5 +1,10 @@
 export const DEFAULT_CLIENT_POST_LOGIN_PATH = "/client/maids/search";
 
+// The site root is the configured Supabase Site URL and avoids deployment
+// failures when a nested callback path is missing from the redirect allow-list.
+export const buildClientPasswordRecoveryUrl = (origin: string) =>
+  new URL("/", origin).toString();
+
 export const buildEmployerLoginPath = (redirectTo?: string) => {
   const target = redirectTo?.trim();
   if (!target) return "/employer-login";

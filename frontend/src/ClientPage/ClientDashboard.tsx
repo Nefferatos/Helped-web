@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { calculateAge, MaidProfile } from "@/lib/maids";
+import { getMaidAge, MaidProfile } from "@/lib/maids";
 import { fetchClientUnreadChatCount } from "@/lib/chat";
 import {
   getStoredClient,
@@ -88,7 +88,7 @@ const MaidCard = ({
   maid: MaidProfile;
   company: CompanyProfileApi | null;
 }) => {
-  const age = calculateAge(maid.dateOfBirth);
+  const age = getMaidAge(maid);
   const photo = getPrimaryPhoto(maid);
   const agencyName = getAgencyName(maid, company);
   const exp = getExperienceBucket(maid);
@@ -586,7 +586,7 @@ const ClientDashboard = () => {
           ) : (
             <div className="grid gap-5">
               {assignments.map(({ directSale, maid }) => {
-                const age = calculateAge(maid.dateOfBirth);
+                const age = getMaidAge(maid);
                 const photo = getPrimaryPhoto(maid);
                 const agencyContact = maid.agencyContact as Record<string, unknown>;
                 const status = getDisplayStatus(directSale.status);

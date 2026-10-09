@@ -12,8 +12,8 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import PublicSiteFooter from "@/components/PublicSiteFooter";
 import { toast } from "@/components/ui/sonner";
-import { getStoredClient, getClientAuthHeaders, getClientToken, type ClientUser } from "@/lib/clientAuth";
-import { calculateAge, MaidProfile } from "@/lib/maids";
+import { getStoredClient, getClientAuthHeaders, getClientToken, refreshClientToken, type ClientUser } from "@/lib/clientAuth";
+import { getMaidAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
 import { syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import culinaryImg from "./assets/culinary-optimized.webp";
@@ -714,8 +714,9 @@ const GLOBAL_STYLES = `
   .nationality-preview { width: 100%; min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: #fff; color: #0b1f25; text-align: left; text-decoration: none; font: inherit; cursor: pointer; appearance: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
   .nationality-preview-photo { width: 100%; overflow: hidden; border-bottom: 1px solid var(--border); background: #f5f7f8; }
   .nationality-preview-photo img { width: 100%; height: auto; display: block; }
-  /* Logged-out cards receive an already blurred, irreversible image from
-     /photo-preview. Do not apply a second CSS blur or expose the source URL. */
+  /* Keep the guest blur in the UI too: Wrangler's local image-transform mock
+     does not support the blur option used by /photo-preview. */
+  .nationality-preview.is-locked .nationality-preview-photo img { filter: blur(8px); transform: scale(1.06); }
   .nationality-preview p { margin: 8px 12px 0; font: 500 13px/1.35 'Inter', sans-serif; }
   .nationality-preview p + p { margin-top: 1px; }
   .nationality-preview p:last-child { margin-bottom: 12px; }
@@ -1149,7 +1150,7 @@ const MaidCardFull = ({
   searchMaidsHref: string;
 }) => {
   const photo = getPrimaryPhoto(maid);
-  const age = calculateAge(maid.dateOfBirth);
+  const age = getMaidAge(maid);
   const flagCode = getNationalityCode(maid.nationality);
   const { bg: typeBg, color: typeColor } = getTypeBadgeStyle(maid.type);
 
@@ -1247,7 +1248,7 @@ const NationalityPreviewPanel = ({
       </div>
       <div className="nationality-preview-grid">
         {maids.slice(0, 7).map(maid => {
-          const age = calculateAge(maid.dateOfBirth);
+          const age = getMaidAge(maid);
           const cardContent = <>
             <div className="nationality-preview-photo">
               <img src={getPrimaryPhoto(maid)} alt={maid.fullName || `${nationality} helper`} loading="lazy" decoding="async" />
@@ -1373,6 +1374,8 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [allPublicMaids, setAllPublicMaids] = useState<MaidProfile[]>([]);
   const [clientUser, setClientUser] = useState<ClientUser | null>(getStoredClient());
   const [isLoading, setIsLoading] = useState(true);
+  const [authToken, setAuthToken] = useState<string | null>(() => getClientToken());
+  const [authReady, setAuthReady] = useState(false);
 
   const [keyword, setKeyword] = useState("");
   const [maidTypes, setMaidTypes] = useState<string[]>([]);
@@ -1382,13 +1385,22 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   const [showSocialRail, setShowSocialRail] = useState(true);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
 
-  const isLoggedIn = !!getClientToken();
+  const isLoggedIn = Boolean(authToken);
   const searchMaidsHref = isLoggedIn ? "/client/maids" : "/search-maids";
   const maidSearchResultsHref = isLoggedIn ? "/client/maids/search" : "/search-maids/results";
 
   useReveal();
 
   const location = useLocation();
+  useEffect(() => {
+    let active = true;
+    void refreshClientToken()
+      .then((token) => { if (active) setAuthToken(token); })
+      .catch(() => { if (active) setAuthToken(null); })
+      .finally(() => { if (active) setAuthReady(true); });
+    return () => { active = false; };
+  }, []);
+
   useEffect(() => {
     if (location.hash === "#services") {
       const el = document.getElementById("services");
@@ -1397,6 +1409,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
   }, [location]);
 
   useEffect(() => {
+    if (!authReady) return;
     const load = async () => {
       try {
         setIsLoading(true);
@@ -1427,7 +1440,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
       }
     };
     void load();
-  }, [isLoggedIn]);
+  }, [authReady, authToken, isLoggedIn]);
 
   useEffect(() => {
     if (!isLoggedIn) return;

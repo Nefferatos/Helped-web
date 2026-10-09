@@ -29,11 +29,41 @@ Frontend (PublicAiReceptionist.tsx) [UNCHANGED]
 Fallback chain: Make.com → Direct AI (Cline/OpenAI) → CF Workers AI
 ```
 
+The public receptionist uses the shared `MAKE_AI_ENGINE_WEBHOOK_URL` gateway
+with `scenario: "receptionist"` first. If it is not configured, the Worker can
+use `MAKE_AI_RECEPTIONIST_WEBHOOK_URL` as a dedicated fallback. The Make
+scenario must reply synchronously with an answer; Make's default `Accepted`
+acknowledgement is not a chat response. Local Vite development proxies this
+route to the Worker so it uses the same Make integration as production.
+
+For helper recommendations, the Worker runs the existing public receptionist
+matching tool before calling Make. It sends only the requested, ranked public
+helper profiles, including recorded work-area ratings and the count/filter
+hints. Make must list those profiles in the supplied order and cite only the
+profile evidence provided. The public receptionist must not receive private
+agency dashboard records; staff-only dashboard assistance belongs behind the
+authenticated agency assistant route.
+
+## Staff Command Center
+
+The agency dashboard uses a separate `POST /api/ai/command-center/chat` route.
+It requires an authenticated agency-admin token. The Worker verifies the
+token, derives the agency scope from the verified admin, loads that agency's
+dashboard totals and workflow status breakdowns, and builds the assistant
+instructions and context server-side. Only public helper profiles are included
+for ranked recommendations; private enquiries, conversations, contracts,
+applicants, and hidden helper profiles are not forwarded to Make.
+Client-provided system prompts and data context are not trusted. Helper matches
+are ranked from recorded work-area ratings and profile evidence; the assistant
+must preserve that order and must not claim an unrecorded rating. The public
+receptionist route remains separate and does not receive staff-only records.
+
 ## 3. Files Changed
 
 | File | Change |
 |------|--------|
 | `functions/api/[[...path]].ts` | Added Make.com webhook types, call function, context builder, modified receptionist handler |
+| `frontend/vite.config.ts` | Routes local receptionist requests through the Worker Make proxy |
 | `.dev.vars` | Added commented Make.com receptionist webhook variables |
 | `.dev.vars.example` | Added Make.com receptionist webhook example variables |
 | `wrangler.toml` | Added documentation for new secret variables |
@@ -139,11 +169,10 @@ MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET=your-long-random-secret
 
 ## 16. Remaining TODOs
 
-- [ ] Create Make.com scenario with Custom Webhook trigger
-- [ ] Configure AI Agent module in Make.com with agency personality
-- [ ] Set up response module to return proper JSON format
-- [ ] Set Worker secrets in production
-- [ ] Test complete flow: React → Worker → Make.com → Worker → React
+- [ ] Verify the deployed Make AI Engine scenario handles `scenario: "receptionist"` with its accuracy policy and returns a synchronous response
+- [ ] If using the dedicated receptionist webhook, set its scenario to run immediately and configure a Webhook Response module returning JSON
+- [x] Configure the Make AI Engine webhook in local and production Worker environments
+- [x] Smoke-test the local React → Worker → Make AI Engine → Worker → React path
 - [ ] Implement human handoff notification (email/WhatsApp to admin)
 - [ ] Add Make.com tools for maid search (HTTP callbacks to Worker)
 - [ ] Add Make.com tools for enquiry creation
@@ -195,7 +224,7 @@ Since Make.com configuration cannot be done from the codebase, you must:
 3. **Add AI Agent module**:
    - Provider: OpenAI (or Anthropic/Groq)
    - Model: gpt-4o-mini (or claude-haiku-4-5)
-   - System prompt: See `make/helped-ai-receptionist.blueprint.json`
+   - System prompt: See `make/rinzin-ai-receptionist-blueprint.json`
    - User message: `{{1.message}}`
 4. **Add JSON response module**:
    - Type: application/json

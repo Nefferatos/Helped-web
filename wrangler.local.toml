@@ -18,6 +18,7 @@ preview_id = "595830971f4f4125975ddcdeb627de67"
 
 [vars]
 STORAGE_BACKEND = "supabase"
+MAID_PREVIEW_SAFE_MODE = "true"
 ANTHROPIC_MODEL = "claude-haiku-4-5"
 CLINE_API_URL = "https://api.cline.bot/api/v1"
 CLINE_MODEL = "openai/gpt-4o-mini"

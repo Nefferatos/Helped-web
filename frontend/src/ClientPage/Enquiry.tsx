@@ -31,7 +31,9 @@ const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
   .enq-root * { box-sizing: border-box; }
-  .enq-root { font-family: 'Inter', sans-serif; color: #000; }
+  .enq-root { width: 100%; min-width: 0; font-family: 'Inter', sans-serif; color: #000; }
+  .enq-root main,
+  .enq-root main > div { width: 100%; min-width: 0; }
 
   /* Readable enquiry content: use a 16px baseline and true black text on
      light surfaces. Light copy is retained only where the background is dark. */
@@ -220,7 +222,7 @@ const GLOBAL_CSS = `
   /* ── Responsive: Steps grid ── */
   .enq-steps-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     margin-bottom: 32px;
   }
@@ -228,10 +230,11 @@ const GLOBAL_CSS = `
   /* ── Responsive: Main content grid ── */
   .enq-main-grid {
     display: grid;
-    grid-template-columns: 340px 1fr;
+    grid-template-columns: 340px minmax(0, 1fr);
     gap: 24px;
     align-items: start;
   }
+  .enq-main-grid > * { min-width: 0; }
 
   /* ── Responsive: Name/Email row ── */
   .enq-name-email-grid {
@@ -274,14 +277,22 @@ const GLOBAL_CSS = `
   /* Mobile-landscape / small tablet: ≤ 768px */
   @media (max-width: 768px) {
     .enq-main-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .enq-main-grid > * {
+      width: 100%;
+      min-width: 0;
+    }
+    .enq-main-grid .enq-card-form,
+    .enq-main-grid .enq-tips-card {
+      max-width: 100%;
     }
     .enq-hero {
       padding: 36px 28px 32px;
       margin-bottom: 20px;
     }
     .enq-steps-grid {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 20px;
     }
@@ -293,7 +304,7 @@ const GLOBAL_CSS = `
       padding: 28px 20px 26px;
     }
     .enq-steps-grid {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       margin-bottom: 16px;
     }

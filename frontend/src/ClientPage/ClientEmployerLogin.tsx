@@ -22,6 +22,7 @@ const ClientEmployerLogin = () => {
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authFeedback, setAuthFeedback] = useState<{ kind: "error" | "success"; message: string } | null>(null);
   const { toast } = useToast();
   const redirectTo = getClientPostLoginPath(searchParams.get("redirectTo"));
 
@@ -108,9 +109,17 @@ const ClientEmployerLogin = () => {
       setConfirmPassword("");
     } catch (error) {
       console.error("Authentication failed:", error);
+      const errorMessage = error instanceof Error ? error.message : "";
+      if (isLogin && /invalid login credentials|invalid credentials/i.test(errorMessage)) {
+        setAuthFeedback({
+          kind: "error",
+          message: "Email or password is incorrect. Try again, or use Forgot password to reset it.",
+        });
+        return;
+      }
       toast({
         title: "Authentication Failed",
-        description: error instanceof Error ? error.message : "Unable to continue",
+        description: errorMessage || "Unable to continue",
         variant: "destructive",
       });
     } finally {
@@ -430,7 +439,23 @@ const ClientEmployerLogin = () => {
           color: #ffffff;
           border-color: rgba(255,255,255,0.28);
         }
-
+        .cel-forgot-password {
+          display: block;
+          width: fit-content;
+          margin: 0 0 0 auto;
+          padding: 0.35rem 0;
+          border: 0;
+          background: transparent;
+          color: #FCD34D;
+          text-align: right;
+        }
+        .cel-forgot-password:hover {
+          background: transparent;
+          color: #ffe58a;
+          border-color: transparent;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
         /* Stagger animation */
         .cel-field:nth-child(1) { animation: cel-rise 0.4s 0.08s both; }
         .cel-field:nth-child(2) { animation: cel-rise 0.4s 0.14s both; }
@@ -458,13 +483,13 @@ const ClientEmployerLogin = () => {
           <div className="cel-tabs">
             <button
               className={`cel-tab${isLogin ? " cel-tab--active" : ""}`}
-              onClick={() => { setIsLogin(true); setConfirmPassword(""); }}
+              onClick={() => { setIsLogin(true); setConfirmPassword(""); setAuthFeedback(null); }}
             >
               Sign In
             </button>
             <button
               className={`cel-tab${!isLogin ? " cel-tab--active" : ""}`}
-              onClick={() => { setIsLogin(false); setConfirmPassword(""); }}
+              onClick={() => { setIsLogin(false); setConfirmPassword(""); setAuthFeedback(null); }}
             >
               Create Account
             </button>
@@ -547,7 +572,7 @@ const ClientEmployerLogin = () => {
                     id="cel-email"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setAuthFeedback(null); }}
                     className="cel-input"
                     placeholder="employer@company.com"
                     required
@@ -561,7 +586,7 @@ const ClientEmployerLogin = () => {
                       id="cel-password"
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => { setPassword(e.target.value); setAuthFeedback(null); }}
                       className={`cel-input${!isLogin && password && password.length < 6 ? " cel-input--error" : ""}`}
                       style={{ paddingRight: "2.75rem" }}
                       placeholder="••••••••"
@@ -608,6 +633,29 @@ const ClientEmployerLogin = () => {
                       <p className="cel-error-msg">Passwords do not match.</p>
                     )}
                   </div>
+                )}
+
+                {isLogin && (
+                  <button
+                    type="button"
+                    className="cel-forgot-password"
+                    onClick={() => navigate("/client/change-password")}
+                  >
+                    Forgot password?
+                  </button>
+                )}
+
+                {authFeedback && (
+                  <p
+                    role={authFeedback.kind === "error" ? "alert" : "status"}
+                    className="mt-3 rounded-lg px-3 py-2 text-sm"
+                    style={{
+                      background: authFeedback.kind === "error" ? "rgba(254,226,226,0.12)" : "rgba(209,250,229,0.12)",
+                      color: authFeedback.kind === "error" ? "#fecaca" : "#bbf7d0",
+                    }}
+                  >
+                    {authFeedback.message}
+                  </p>
                 )}
 
                 <button type="submit" className="cel-submit-btn" disabled={isSubmitting}>

@@ -48,8 +48,6 @@ const includesAny = (source: unknown, needles: string[]) => {
   return needles.some((needle) => value.includes(needle.toLowerCase()));
 };
 
-// Module-level constants — defined once, reused on every request.
-const BLOB_KEYS = new Set(["logo_data_url", "gallery_image_data_urls", "intro_video_data_url"]);
 const maidTier = (m: Record<string, unknown>) =>
   lower(m.status).includes("available") ? 0 :
   lower(m.type).includes("transfer") ? 1 : 2;
@@ -63,6 +61,31 @@ const SKILL_PATTERNS: Record<SkillKey, string[]> = {
   disabled: ["disabled", "disability", "special needs", "wheelchair bound", "physically challenged"],
   general: ["housework", "cleaning", "housekeeping", "general housework", "household chores"],
   pet: ["dog", "cat", "pet", "animal"],
+};
+
+const MAID_ORIGIN_PATTERNS: Record<string, string[]> = {
+  darjeeling: ["darjeeling"],
+  manipur: ["manipur"],
+  sikkim: ["sikkim"],
+  mizoram: ["mizoram"],
+  "arunachal pradesh": ["arunachal pradesh", "arunachal"],
+  assam: ["assam"],
+  punjabi: ["punjabi", "punjab"],
+};
+
+const getMaidOrigin = (maid: Record<string, unknown>) => {
+  const agencyContact = (maid.agencyContact ?? {}) as Record<string, unknown>;
+  const introduction = (maid.introduction ?? {}) as Record<string, unknown>;
+  const skillsPreferences = (maid.skillsPreferences ?? {}) as Record<string, unknown>;
+  return [
+    maid.placeOfBirth,
+    agencyContact.indianMaidCategory,
+    introduction.indianMaidCategory,
+    skillsPreferences.indianMaidCategory,
+  ]
+    .map((value) => text(value).trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
 };
 
 const detectSkills = (message: string): SkillKey[] => {
@@ -97,16 +120,29 @@ const extractRequestedCount = (message: string): number => {
 
 const maidSkillScore = (maid: Record<string, unknown>, skills: SkillKey[]): number => {
   if (skills.length === 0) return 0;
-  const searchTarget = JSON.stringify({
+  const workAreas = (maid.workAreas ?? {}) as Record<string, unknown>;
+  const workAreaText = JSON.stringify(workAreas).toLowerCase();
+  const otherEvidence = JSON.stringify({
     s: maid.skillsPreferences,
-    w: maid.workAreas,
     h: maid.employmentHistory,
     i: maid.introduction,
   }).toLowerCase();
   let score = 0;
   for (const skill of skills) {
+    const matchingRatings = Object.entries(workAreas)
+      .filter(([area]) => SKILL_PATTERNS[skill].some((keyword) => area.toLowerCase().includes(keyword)))
+      .map(([, value]) => {
+        if (!value || typeof value !== "object") return null;
+        const rating = Number((value as Record<string, unknown>).rating);
+        return Number.isFinite(rating) && rating >= 1 && rating <= 5 ? rating : null;
+      })
+      .filter((rating): rating is number => rating !== null);
+    if (matchingRatings.length > 0) {
+      score += 100 + Math.max(...matchingRatings) * 10;
+      continue;
+    }
     for (const kw of SKILL_PATTERNS[skill]) {
-      if (searchTarget.includes(kw)) score += 8;
+      if (otherEvidence.includes(kw) || workAreaText.includes(kw)) score += 8;
     }
   }
   return score;
@@ -123,7 +159,6 @@ const findMaidByName = (
 
 const compactMaid = (maid: Record<string, unknown>) => ({
   id: maid.id,
-  agencyId: maid.agencyId,
   referenceCode: maid.referenceCode,
   fullName: maid.fullName,
   status: maid.status,
@@ -164,6 +199,20 @@ const compactPublicMaid = (maid: Record<string, unknown>) => {
     .sort(([, a], [, b]) => (num(b.rating) ?? 0) - (num(a.rating) ?? 0))
     .map(([area, v]) => `${area}: ${v.evaluation ?? `${v.rating}/5`}`)
     .join("; ") || null;
+  const workAreaRatings = Object.entries(wa)
+    .filter(([, value]) => value && typeof value === "object" && num(value.rating) !== null)
+    .map(([area, value]) => ({
+      area,
+      rating: num(value.rating),
+      evaluation: text(value.evaluation) || null,
+    }));
+  const workExperience = list(maid.employmentHistory)
+    .map((job) => ({
+      country: text(job.country) || null,
+      period: [text(job.from), text(job.to)].filter(Boolean).join(" - ") || null,
+      duties: text(job.duties) || null,
+    }))
+    .filter((job) => job.country || job.period || job.duties);
 
   // Non-poor language skills
   const langSummary = Object.entries(langs)
@@ -176,6 +225,12 @@ const compactPublicMaid = (maid: Record<string, unknown>) => {
     fullName: maid.fullName,
     status: maid.status,
     type: maid.type,
+    placeOfBirth: text(maid.placeOfBirth) || null,
+    indianMaidCategory:
+      text((maid.agencyContact as Record<string, unknown> | undefined)?.indianMaidCategory) ||
+      text((maid.introduction as Record<string, unknown> | undefined)?.indianMaidCategory) ||
+      text((maid.skillsPreferences as Record<string, unknown> | undefined)?.indianMaidCategory) ||
+      null,
     nationality: maid.nationality,
     age: calcAge(maid.dateOfBirth),
     educationLevel: maid.educationLevel,
@@ -186,6 +241,8 @@ const compactPublicMaid = (maid: Record<string, unknown>) => {
     offDaysPerMonth: text(sp.offDaysPerMonth) || null,
     languages: langSummary,
     skillRatings,
+    workAreaRatings,
+    workExperience,
     // Full narrative profile — primary text the AI should read for introductions and skill matching
     profile: text(intro.publicIntro) || text(intro.intro) || null,
   };
@@ -378,25 +435,73 @@ const getEmployerContext = (data: AppDataLike, actor: AiActorContext) => {
   };
 };
 
-const getAgencyContext = (data: AppDataLike, actor: AiActorContext) => {
+const getAgencyContext = (data: AppDataLike, actor: AiActorContext, input: Record<string, unknown>) => {
   const agencyId = actor.agencyId;
-  // Strip large base64 blob fields before passing to the LLM — they serve no purpose
-  // in text generation and can exhaust the context window or hit API payload limits.
-  const companyProfileForAI = Object.fromEntries(
-    Object.entries((data.companyProfile ?? {}) as Record<string, unknown>).filter(([k]) => !BLOB_KEYS.has(k)),
-  );
+  const agencyMaids = list(data.maids).filter((item) => item.agencyId === agencyId);
+  const agencyRequests = list(data.requests).filter((item) => item.agencyId === agencyId);
+  const agencyEnquiries = list(data.enquiries).filter((item) => item.agencyId === agencyId);
+  const agencyMessages = list(data.chatMessages).filter((item) => item.agencyId === agencyId);
+  const agencyContracts = list(data.employmentContracts).filter((item) => item.agencyId === agencyId);
+  const agencyApplications = list(data.ats?.applications).filter((item) => item.agencyId === agencyId);
+  const publicAgencyMaids = agencyMaids.filter((maid) => maid.isPublic);
+  const message = text(input.message);
+  const requestedSkills = detectSkills(message);
+  const requestedCount = extractRequestedCount(message);
+  const availableOnly = /\bavailable\b/i.test(message);
+  const matchingMaids = publicAgencyMaids
+    .filter((maid) => !availableOnly || lower(maid.status).includes("available"))
+    .map((maid) => ({ maid, score: maidSkillScore(maid, requestedSkills) }))
+    .filter(({ score }) => requestedSkills.length === 0 || score > 0)
+    .sort((left, right) =>
+      right.score - left.score ||
+      maidTier(left.maid) - maidTier(right.maid) ||
+      Number(right.maid.id || 0) - Number(left.maid.id || 0),
+    );
+  const namedMaid = findMaidByName(matchingMaids.map(({ maid }) => maid), lower(message));
+  const orderedMaidMatches = namedMaid
+    ? [namedMaid, ...matchingMaids.map(({ maid }) => maid).filter((maid) => maid !== namedMaid)]
+    : matchingMaids.map(({ maid }) => maid);
+  const totalMaidMatches = matchingMaids.length;
+  const sendCount = requestedCount > 0 ? requestedCount : 10;
+  const countBy = (records: Array<Record<string, unknown>>, field: string) =>
+    records.reduce<Record<string, number>>((counts, record) => {
+      const value = text(record[field]) || "Unknown";
+      counts[value] = (counts[value] ?? 0) + 1;
+      return counts;
+    }, {});
   return {
     agency: {
       id: agencyId,
       name: actor.agencyName,
-      companyProfile: companyProfileForAI,
     },
-    requests: list(data.requests).filter((item) => item.agencyId === agencyId).slice(-80),
-    enquiries: list(data.enquiries).slice(-80),
-    maids: list(data.maids).filter((item) => item.agencyId === agencyId).slice(-80).map(compactMaid),
-    messages: list(data.chatMessages).filter((item) => item.agencyId === agencyId).slice(-80),
-    contracts: list(data.employmentContracts).filter((item) => item.agencyId === agencyId).slice(-50),
-    applications: list(data.ats?.applications).filter((item) => item.agencyId === agencyId).slice(-50),
+    dashboardSummary: {
+      maids: agencyMaids.length,
+      publicMaids: publicAgencyMaids.length,
+      availableMaids: agencyMaids.filter((maid) => lower(maid.status).includes("available")).length,
+      enquiries: agencyEnquiries.length,
+      requests: agencyRequests.length,
+      pendingRequests: agencyRequests.filter((item) => lower(item.status) === "pending").length,
+      messages: agencyMessages.length,
+      contracts: agencyContracts.length,
+      applications: agencyApplications.length,
+    },
+    operationalSummary: {
+      requestsByStatus: countBy(agencyRequests, "status"),
+      enquiriesByStatus: countBy(agencyEnquiries, "status"),
+      contractsByStatus: countBy(agencyContracts, "status"),
+      applicationsByStage: countBy(agencyApplications, "stage"),
+    },
+    maidMatches: orderedMaidMatches.slice(0, sendCount).map(compactMaid),
+    maidMatchHints: {
+      requestedSkills,
+      requestedCount,
+      sentCount: Math.min(orderedMaidMatches.length, sendCount),
+      totalInPool: totalMaidMatches,
+      shortfall: requestedCount > 0 && totalMaidMatches < requestedCount
+        ? { asked: requestedCount, available: totalMaidMatches }
+        : null,
+    },
+    maids: publicAgencyMaids.slice(-80).map(compactMaid),
   };
 };
 
@@ -529,6 +634,9 @@ export const runAgentTools = (context: AiToolContext) => {
       .replace(/\bburmese\b/g, "myanmar");
     const NATIONALITY_KEYS = ["filipino", "indonesian", "myanmar", "indian", "bangladeshi", "sri lankan"];
     const requestedNat = NATIONALITY_KEYS.find((n) => msgForNat.includes(n));
+    const requestedOrigin = Object.entries(MAID_ORIGIN_PATTERNS).find(([, aliases]) =>
+      aliases.some((alias) => new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(rawMsg)),
+    )?.[0];
 
     // Detect helper type keywords so "transfer maid" filters the pool correctly
     const TYPE_PATTERNS: Record<string, string[]> = {
@@ -549,14 +657,43 @@ export const runAgentTools = (context: AiToolContext) => {
         lower(text(m.type)).includes(requestedType === "exSingapore" ? "ex-singapore" : requestedType),
       );
     }
+    if (requestedOrigin) {
+      const originAliases = MAID_ORIGIN_PATTERNS[requestedOrigin] ?? [requestedOrigin];
+      maidPool = maidPool.filter((maid) => {
+        const recordedOrigin = getMaidOrigin(maid);
+        return originAliases.some((alias) => recordedOrigin.includes(alias));
+      });
+    }
 
     const requestedSkills = detectSkills(rawMsg);
     if (requestedSkills.length > 0) {
       maidPool = maidPool.filter((m) => maidSkillScore(m, requestedSkills) > 0);
     }
-    const activePool = maidPool;
+    const previousMaidReferences = Array.isArray(input.previousMaidReferences)
+      ? new Set(input.previousMaidReferences.map((reference) => text(reference)))
+      : new Set<string>();
+    const followUpQuestion =
+      /\b(who(?:\s+is|'s)|tell me about|more about|introduce|details?\s+(?:about|for)|what about)\b/i.test(rawMsg);
+    const previousPublicMaids = allPublicMaids.filter((maid) =>
+      previousMaidReferences.has(text(maid.referenceCode)),
+    );
+    const mentionedFirstName = followUpQuestion
+      ? previousPublicMaids.filter((maid) => {
+          const firstName = text(maid.fullName).trim().split(/\s+/)[0];
+          return firstName.length >= 3 && new RegExp(`\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(rawMsg);
+        })
+      : [];
+    const uniqueMentionedFirstNames = [...new Map(
+      mentionedFirstName.map((maid) => [text(maid.referenceCode), maid]),
+    ).values()];
+    const followUpMaid = uniqueMentionedFirstNames.length === 1 ? uniqueMentionedFirstNames[0] : undefined;
+    const activePool = followUpMaid
+      ? [followUpMaid]
+      : uniqueMentionedFirstNames.length > 1
+        ? uniqueMentionedFirstNames
+        : maidPool;
     const requestedCount = extractRequestedCount(rawMsg);
-    const namedMaid = findMaidByName(activePool, rawMsg);
+    const namedMaid = followUpMaid ?? findMaidByName(activePool, rawMsg);
 
     // Sort: skill match score first (desc), then availability tier (asc)
     const rankedPool = activePool
@@ -590,8 +727,14 @@ export const runAgentTools = (context: AiToolContext) => {
         sentCount: sendCount,
         totalInPool: activePool.length,
         requestedSkills,
+        requestedOrigin: requestedOrigin ?? null,
         requestedType,
         namedMaid: namedMaid ? text(namedMaid.fullName) : null,
+        namedMaidReferenceCode: namedMaid ? text(namedMaid.referenceCode) : null,
+        isNamedFollowUp: Boolean(followUpMaid),
+        namedMaidAmbiguous: followUpQuestion && uniqueMentionedFirstNames.length > 1
+          ? uniqueMentionedFirstNames.map((maid) => text(maid.fullName))
+          : [],
         // Honest count flag: if totalInPool < requestedCount, we couldn't fulfil the full request
         shortfall: requestedCount > 0 && activePool.length < requestedCount
           ? { asked: requestedCount, available: activePool.length }
@@ -629,7 +772,7 @@ export const runAgentTools = (context: AiToolContext) => {
   }
 
   if (agentId === "agency_assistant" || agentId === "content_generator") {
-    return getAgencyContext(data, actor);
+    return getAgencyContext(data, actor, input);
   }
 
   if (agentId === "applicant_screening") {

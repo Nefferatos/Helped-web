@@ -17,7 +17,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg group-[.toaster]:w-[calc(100vw-2rem)] group-[.toaster]:max-w-md",
+            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg !box-border !min-w-0 !w-[min(28rem,calc(100vw-2rem))] !max-w-[min(28rem,calc(100vw-2rem))] [overflow-wrap:anywhere]",
+          title: "!min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]",
           success:
             "!border-emerald-200 !bg-gradient-to-r !from-emerald-50 !via-white !to-teal-50 !text-emerald-950 !shadow-xl !shadow-emerald-100/70",
           error:

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
-import { calculateAge, getExperienceBucket, getPrimaryPhoto, getPublicIntro, type MaidProfile } from "@/lib/maids";
+import { getMaidAge, getExperienceBucket, getPrimaryPhoto, getPublicIntro, type MaidProfile } from "@/lib/maids";
 import { fetchAgencyDetails, fetchAgencyMaids, type AgencySummary, type CompanyProfileApi } from "@/lib/agencies";
 import { getClientToken } from "@/lib/clientAuth";
 import "../ClientPage/ClientTheme.css";
@@ -242,7 +242,7 @@ const AgencyDetailsPage = () => {
         ) : (
           <div className="space-y-4">
             {filteredMaids.map((maid) => {
-              const age = calculateAge(maid.dateOfBirth);
+              const age = getMaidAge(maid);
               const photo = getPrimaryPhoto(maid);
               const isAvailable = !maid.status || maid.status === "available";
 

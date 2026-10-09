@@ -22,6 +22,12 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // The public AI receptionist calls Make.com through the Worker so local
+      // development follows the same secure webhook path as production.
+      "/api/ai/receptionist": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       // Google Sheets agency reports live in the Cloudflare Worker, not the
       // legacy Express API. Keep this above the generic "/api" entry so Vite
       // matches the more specific prefix first.

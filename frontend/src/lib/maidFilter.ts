@@ -1,4 +1,4 @@
-import { calculateAge, type MaidProfile } from "@/lib/maids";
+import { getMaidAge, type MaidProfile } from "@/lib/maids";
 
 type SimpleMaidFilters = {
   keyword?: string;
@@ -263,7 +263,7 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
       // ── Age ────────────────────────────────────────────────────────────────
       const ageSpecifics = [f.age21to25, f.age26to30, f.age31to35, f.age36to40, f.age41above];
       if (shouldApplyGroup(f.ageNoPreference, ageSpecifics)) {
-        const age = calculateAge(maid.dateOfBirth);
+        const age = getMaidAge(maid);
         if (!age) return false;
         const match =
           (f.age21to25 && age >= 21 && age <= 25) ||
@@ -486,7 +486,7 @@ export function filterMaids(maids: MaidProfile[], filters: unknown) {
     }
 
     if (f.ageGroup?.trim()) {
-      const age = calculateAge(maid.dateOfBirth);
+      const age = getMaidAge(maid);
       if (!age) return false;
       const [min, max] = f.ageGroup.split("-").map((n) => Number(n));
       if (!Number.isFinite(min) || !Number.isFinite(max)) return false;

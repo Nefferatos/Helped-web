@@ -220,6 +220,9 @@ const AdminIndexRedirect = () => {
 };
 
 const ClientHomeRedirect = () => {
+  const location = useLocation();
+  const isPasswordRecoveryRedirect =
+    new URLSearchParams(location.hash.slice(1)).get("type") === "recovery";
   // Public content should paint immediately. Session restoration can happen in
   // the background and redirect authenticated clients once it resolves.
   const [status, setStatus] = useState<"portal" | "landing">("landing");
@@ -244,6 +247,15 @@ const ClientHomeRedirect = () => {
     };
   }, []);
 
+  if (isPasswordRecoveryRedirect) {
+    return (
+      <Navigate
+        to={{ pathname: "/client/change-password", search: location.search, hash: location.hash }}
+        replace
+      />
+    );
+  }
+
   return status === "portal" ? <Navigate to="/client/home" replace /> : <ClientLandingPage />;
 };
 
@@ -260,6 +272,7 @@ const FloatingAiReceptionist = () => {
   if (
     !ready ||
     pathname === "/client/support-chat" ||
+    pathname === "/client/change-password" ||
     pathname === "/employer-login" ||
     pathname.startsWith("/apply-as-maid")
   ) return null;
@@ -351,7 +364,7 @@ const App = () => {
             <Route path="/agencies" element={withRouteLoader(<AgenciesPage />)} />
             <Route path="/agencies/:id" element={withRouteLoader(<AgencyDetailsPage />)} />
             <Route path="/agencyadmin" element={<AdminIndexRedirect />} />
-            <Route path="/agencyadmin/login" element={<Navigate to="/agency" replace />} />
+            <Route path="/agencyadmin/login" element={withRouteLoader(<AgencyPortal embedded />)} />
             <Route path="/agencyadmin/dashboard" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>)} />
@@ -381,6 +394,7 @@ const App = () => {
             <Route path="/agencyadmin/employment-contracts/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EmploymentContractView /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/employment-contracts/:refCode/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditEmployer /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/tiktok" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiAutomationPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/client/change-password" element={withRouteLoader(<ClientChangePasswordPage />)} />
 
             {/* FIX: ClientPortalLayout is now imported eagerly at the top of this
                 file, so this route renders the layout shell immediately without
@@ -398,7 +412,6 @@ const App = () => {
               <Route path="messages" element={<Navigate to="../support-chat" replace />} />
               <Route path="support-chat" element={withRouteLoader(<ClientSupportChat />)} />
               <Route path="profile" element={withRouteLoader(<ClientProfilePage />)} />
-              <Route path="change-password" element={withRouteLoader(<ClientChangePasswordPage />)} />
               <Route path="history" element={<Navigate to="/client/profile" replace />} />
               {/* Keep existing dashboard route working */}
               <Route path="dashboard" element={withRouteLoader(<ClientDashboard />)} />

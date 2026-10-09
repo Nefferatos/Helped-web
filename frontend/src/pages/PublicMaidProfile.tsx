@@ -10,12 +10,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getStoredClient } from "@/lib/clientAuth";
-import { calculateAge, formatDate, getExperienceBucket, getPublicIntro, MaidProfile } from "@/lib/maids";
+import { formatDate, getExperienceBucket, getMaidAge, getPublicIntro, MaidProfile } from "@/lib/maids";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import { toast } from "@/components/ui/sonner";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import ClientPortalNavbar from "@/ClientPage/ClientPortalNavbar";
-import { hasActiveClientSession, syncClientProfileFromSession } from "@/lib/supabaseAuth";
+import { hasActiveClientSession, primeClientAuth, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 
 interface CompanyProfileApi {
   company_name?: string;
@@ -122,7 +122,7 @@ const ShortlistMaidCard = ({
     Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
       ? maid.photoDataUrls[0]
       : maid.photoDataUrl || "";
-  const age = calculateAge(maid.dateOfBirth);
+  const age = getMaidAge(maid);
   const flagCode = getNationalityCode(maid.nationality);
   const typeColorClass = getMaidTypeBadgeClass(maid.type);
   const experienceBucket = getExperienceBucket(maid);
@@ -606,8 +606,10 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
       if (!refCode) return;
       try {
         setIsLoading(true);
+        const accessToken = await primeClientAuth();
+        const maidHeaders = accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
         const [maidResponse, companyResponse] = await Promise.all([
-          fetch(`/api/maids/${encodeURIComponent(refCode)}`),
+          fetch(`/api/maids/${encodeURIComponent(refCode)}`, { headers: maidHeaders }),
           fetch("/api/company"),
         ]);
         const maidData = (await maidResponse.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };

@@ -31,6 +31,8 @@ export interface MaidProfile {
   status?: string;
   type: string;
   nationality: string;
+  age?: number | null;
+  experienceCount?: number;
   dateOfBirth: string;
   placeOfBirth: string;
   height: number;
@@ -122,7 +124,7 @@ export const getPrimaryPhoto = (maid: MaidProfile) =>
 export const getPublicIntro = (maid: MaidProfile) => String((maid.introduction as Record<string, unknown>)?.publicIntro || "").trim();
 
 export const getExperienceBucket = (maid: MaidProfile) => {
-  const count = Array.isArray(maid.employmentHistory) ? maid.employmentHistory.length : 0;
+  const count = maid.experienceCount ?? (Array.isArray(maid.employmentHistory) ? maid.employmentHistory.length : 0);
   if (count >= 5) return "5+ Years";
   if (count >= 3) return "3-5 Years";
   if (count >= 1) return "1-2 Years";
@@ -158,3 +160,4 @@ export const calculateAge = (dateOfBirth?: string) => {
   return age;
 };
 
+export const getMaidAge = (maid: MaidProfile) => maid.age ?? calculateAge(maid.dateOfBirth);

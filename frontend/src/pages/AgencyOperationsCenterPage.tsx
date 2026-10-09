@@ -26,8 +26,8 @@ const getPositiveEmployerId = (value: string): number | null => {
 
 // One friendly, rounded field style shared by every input on the page — same
 // tokens (background/border/primary) the rest of the app already uses.
-const fieldClass = 'w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-shadow focus:ring-2 focus:ring-primary/40'
-const labelClass = 'mb-1.5 block text-sm font-medium text-muted-foreground'
+const fieldClass = 'w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm text-black placeholder:text-black outline-none transition-shadow focus:ring-2 focus:ring-primary/40'
+const labelClass = 'mb-1.5 block text-sm font-medium text-black'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -61,7 +61,7 @@ function Card({
         </span>
         <div>
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-sm text-black">{description}</p>
         </div>
       </div>
       {children}
@@ -85,10 +85,10 @@ const STATS = [
 // State, handlers, and API calls below are all unchanged.
 const TABS = [
   { key: 'overview' as const, label: 'Overview', icon: ClipboardList },
-  { key: 'matching' as const, label: 'Employer matching', icon: UsersRound },
-  { key: 'contractor' as const, label: 'Contractor tasks', icon: ClipboardList },
-  { key: 'knowledge' as const, label: 'Knowledge library', icon: BookOpen },
-  { key: 'integrations' as const, label: 'Integrations', icon: FolderSync },
+  { key: 'matching' as const, label: 'Match helper', icon: UsersRound },
+  { key: 'contractor' as const, label: 'Placement steps', icon: ClipboardList },
+  { key: 'knowledge' as const, label: 'Staff guide', icon: BookOpen },
+  { key: 'integrations' as const, label: 'Files & uploads', icon: FolderSync },
 ]
 type TabKey = (typeof TABS)[number]['key']
 
@@ -101,6 +101,8 @@ export default function AgencyOperationsCenterPage() {
   const [requirements, setRequirements] = useState<Requirements>({ preferred_nationalities: [], preferred_languages: [] })
   const [matches, setMatches] = useState<MatchCandidate[] | null>(null)
   const [isMatching, setIsMatching] = useState(false)
+  const [placementCandidate, setPlacementCandidate] = useState<MatchCandidate | null>(null)
+  const [startingPlacementId, setStartingPlacementId] = useState<number | null>(null)
   const [knowledge, setKnowledge] = useState({ sourceKey: '', title: '', category: 'SOP', content: '' })
   const [knowledgeQuery, setKnowledgeQuery] = useState('')
   const [snippets, setSnippets] = useState<KnowledgeSnippet[]>([])
@@ -168,7 +170,7 @@ export default function AgencyOperationsCenterPage() {
     setIsMatching(true)
     setMatches(null)
     try {
-      const result = await api<MatchResponse>('/api/match', {
+      const result = await api<MatchResponse>('/api/operations-board/match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employerId: numericEmployerId }),
@@ -180,6 +182,31 @@ export default function AgencyOperationsCenterPage() {
       setNotice(error instanceof Error ? error.message : 'Unable to find matching profiles')
     } finally {
       setIsMatching(false)
+    }
+  }
+
+  const startPlacement = async (candidate: MatchCandidate) => {
+    const numericEmployerId = getPositiveEmployerId(employerId)
+    if (!numericEmployerId) {
+      setNotice('Enter a valid employer number before starting placement steps.')
+      return
+    }
+
+    setStartingPlacementId(candidate.maidId)
+    try {
+      await api('/api/operations-board/placements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maidId: candidate.maidId, employerId: numericEmployerId }),
+      })
+      await loadPlacements()
+      setPlacementCandidate(null)
+      setNotice(`Placement started for ${candidate.maidName}. The checklist is ready for staff updates.`)
+      setActiveTab('contractor')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to start placement')
+    } finally {
+      setStartingPlacementId(null)
     }
   }
 
@@ -240,7 +267,7 @@ export default function AgencyOperationsCenterPage() {
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Operations Center</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Everything for running today's placements, in one place.</p>
+            <p className="mt-1 text-sm text-black">Everything for running today's placements, in one place.</p>
           </div>
           <button onClick={loadPlacements} className={secondaryButton}>
             Refresh
@@ -252,30 +279,39 @@ export default function AgencyOperationsCenterPage() {
         )}
 
         <section className="rounded-[28px] border border-primary/15 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:p-6">
-          <p className="text-sm font-semibold text-primary">Start here</p>
-          <h2 className="mt-1 text-xl font-semibold text-foreground">What would you like to do today?</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Choose a task below. You can come back here anytime to check placement progress.</p>
+          <p className="text-sm font-semibold text-primary">Simple steps</p>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">What do you need to do today?</h2>
+          <p className="mt-1 text-sm text-black">Follow the steps below in order. Each button takes you to the part of the page you need.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <button type="button" onClick={() => setActiveTab('matching')} className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow">
               <UsersRound className="h-5 w-5 text-primary" />
-              <p className="mt-3 font-semibold text-foreground">Find a helper</p>
-              <p className="mt-1 text-xs text-muted-foreground">Save an employer's needs and see suitable profiles.</p>
-              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Start matching <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
+              <p className="mt-3 text-base font-semibold text-foreground">Match a helper</p>
+              <p className="mt-1 text-xs leading-5 text-black">Save the employer's needs and see the best worker matches.</p>
+              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Start here <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
             </button>
             <button type="button" onClick={() => setActiveTab('contractor')} className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow">
               <ClipboardList className="h-5 w-5 text-primary" />
-              <p className="mt-3 font-semibold text-foreground">Manage placement tasks</p>
-              <p className="mt-1 text-xs text-muted-foreground">Mark flight, medical, SIP, and handover milestones complete.</p>
-              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Open task queue <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
+              <p className="mt-3 text-base font-semibold text-foreground">Check placement steps</p>
+              <p className="mt-1 text-xs leading-5 text-black">Mark flight, medical, and handover tasks as complete.</p>
+              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Open checklist <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
             </button>
             <button type="button" onClick={() => setActiveTab('knowledge')} className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow">
               <BookOpen className="h-5 w-5 text-primary" />
-              <p className="mt-3 font-semibold text-foreground">Improve AI answers</p>
-              <p className="mt-1 text-xs text-muted-foreground">Add an approved FAQ or procedure for the receptionist.</p>
-              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Open knowledge library <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
+              <p className="mt-3 text-base font-semibold text-foreground">Read the staff guide</p>
+              <p className="mt-1 text-xs leading-5 text-black">Use approved answers and instructions before replying to staff or clients.</p>
+              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Open guide <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
             </button>
           </div>
         </section>
+
+        <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
+          <p className="font-semibold text-primary">How to use this page</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-black">
+            <li>Look at the overview card to see current placement status.</li>
+            <li>Click “Match helper” when you need to find a good worker for an employer.</li>
+            <li>Use “Placement steps” to update travel, medical, and handover milestones.</li>
+          </ol>
+        </div>
 
         {/* ── KPI strip — always visible, whatever tab is open ────────── */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -283,7 +319,7 @@ export default function AgencyOperationsCenterPage() {
             <div key={key} className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm">
               <Icon className="mx-auto h-5 w-5 text-primary" />
               <p className="mt-2 text-2xl font-semibold text-foreground">{statValues[key]}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+              <p className="mt-0.5 text-xs text-black">{label}</p>
             </div>
           ))}
         </div>
@@ -296,7 +332,7 @@ export default function AgencyOperationsCenterPage() {
               type="button"
               onClick={() => setActiveTab(key)}
               className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
-                activeTab === key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                activeTab === key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-black hover:bg-muted hover:text-black'
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -307,25 +343,25 @@ export default function AgencyOperationsCenterPage() {
 
         {/* ── Overview tab ─────────────────────────────────────────── */}
         {activeTab === 'overview' ? (
-          <Card icon={ClipboardList} title="Placement overview" description="How things are moving right now">
+          <Card icon={ClipboardList} title="Placement overview" description="A simple view of each placement's status">
             {placements.length === 0 ? (
               <div className="rounded-2xl bg-muted p-5 text-sm">
                 <p className="font-medium text-foreground">No active placements yet.</p>
-                <p className="mt-1 text-muted-foreground">Once a candidate is selected and the placement process starts, progress will appear here automatically.</p>
-                <button type="button" onClick={() => setActiveTab('matching')} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">Find a helper for an employer <ArrowRight className="h-4 w-4" /></button>
+                <p className="mt-1 text-black">When a placement begins, its progress will appear here automatically.</p>
+                <button type="button" onClick={() => setActiveTab('matching')} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">Start a new match <ArrowRight className="h-4 w-4" /></button>
               </div>
             ) : (
               <div className="space-y-2">
                 {placements.map((placement) => (
                   <div key={placement.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-muted px-4 py-3 text-sm">
                     <span className="font-medium text-foreground">{placement.maid_reference_code || placement.id}</span>
-                    <span className="text-xs text-muted-foreground">{placement.status}</span>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="text-xs text-black">{placement.status}</span>
+                    <div className="flex items-center gap-3 text-xs text-black">
                       <span className="flex items-center gap-1"><Plane className="h-3.5 w-3.5" />{placement.flight_booked ? 'Booked' : 'Pending'}</span>
                       <span className="flex items-center gap-1"><Stethoscope className="h-3.5 w-3.5" />{placement.medical_completed ? 'Done' : 'Pending'}</span>
                       <span className="flex items-center gap-1"><HeartHandshake className="h-3.5 w-3.5" />{placement.handover_completed ? 'Done' : 'Pending'}</span>
                     </div>
-                    <button type="button" onClick={() => setActiveTab('contractor')} className="text-xs font-semibold text-primary hover:underline">Manage tasks</button>
+                    <button type="button" onClick={() => setActiveTab('contractor')} className="text-xs font-semibold text-primary hover:underline">Update steps</button>
                     {isSamplePlacement(placement) ? <button type="button" onClick={() => void removeSamplePlacement(placement)} disabled={removingPlacementId === placement.id} className="text-xs font-semibold text-rose-700 hover:underline disabled:opacity-50">{removingPlacementId === placement.id ? 'Removing…' : 'Remove sample'}</button> : null}
                   </div>
                 ))}
@@ -339,21 +375,21 @@ export default function AgencyOperationsCenterPage() {
           <Card icon={UsersRound} title="Find a helper for an employer" description="Save the employer's needs, then generate a shortlist for staff review.">
             <form onSubmit={saveRequirements} className="space-y-4">
               <div className="grid gap-2 rounded-2xl bg-muted p-4 text-sm sm:grid-cols-3">
-                <p className="flex gap-2 text-muted-foreground"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span><span><b className="block text-foreground">Choose employer</b>Enter their numeric ID.</span></p>
-                <p className="flex gap-2 text-muted-foreground"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span><span><b className="block text-foreground">Save needs</b>Add preferences below.</span></p>
-                <p className="flex gap-2 text-muted-foreground"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span><span><b className="block text-foreground">Review profiles</b>Check availability before sharing.</span></p>
+                <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span><span><b className="block text-black">Choose employer</b>Enter their numeric ID.</span></p>
+                <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span><span><b className="block text-black">Save needs</b>Add preferences below.</span></p>
+                <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span><span><b className="block text-black">Review profiles</b>Check availability before sharing.</span></p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <Field label="Employer number">
-                    <input value={employerId} onChange={(e) => { setEmployerId(e.target.value); setMatches(null) }} className={fieldClass} inputMode="numeric" pattern="[0-9]*" placeholder="For example: 1042" />
+                    <input value={employerId} onChange={(e) => { setEmployerId(e.target.value); setMatches(null); setPlacementCandidate(null) }} className={fieldClass} inputMode="numeric" pattern="[0-9]*" placeholder="For example: 1042" />
                   </Field>
                 </div>
                 <button type="button" onClick={loadRequirements} className={`${secondaryButton} shrink-0`}>
                   Load saved needs
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">Use the positive number on the employer record, not a code such as EMP-1042.</p>
+              <p className="text-xs text-black">Use the positive number on the employer record, not a code such as EMP-1042.</p>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Service type">
@@ -387,26 +423,43 @@ export default function AgencyOperationsCenterPage() {
                 </button>
               </div>
 
-              <p className="text-xs text-muted-foreground">Save employer needs first. The shortlist uses the saved preferences for this employer.</p>
+              <p className="text-xs text-black">Save employer needs first. The shortlist uses the saved preferences for this employer.</p>
 
               {matches && (
                 <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
                   <p className="flex items-center gap-2 text-sm font-semibold text-foreground"><CheckCircle2 className="h-4 w-4 text-primary" />Suggested profiles</p>
-                  <p className="mt-1 text-xs text-muted-foreground">These are recommendations only. Confirm availability and review the full profile before sharing it.</p>
+                  <p className="mt-1 text-xs text-black">These are recommendations only. Confirm availability and review the full profile before sharing it.</p>
                   {matches.length ? (
                     <div className="mt-3 space-y-2">
                       {matches.map((match) => (
                         <article key={match.maidId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-card p-3 shadow-sm">
                           <div>
                             <p className="font-medium text-foreground">{match.maidName}</p>
-                            <p className="text-xs text-muted-foreground">{match.maidReferenceCode}{match.reasons.length ? ` - ${match.reasons.slice(0, 2).join(' - ')}` : ''}</p>
+                            <p className="text-xs text-black">{match.maidReferenceCode}{match.reasons.length ? ` - ${match.reasons.slice(0, 2).join(' - ')}` : ''}</p>
                           </div>
-                          <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{match.score}% match</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{match.score}% match</span>
+                            <button type="button" onClick={() => setPlacementCandidate(placementCandidate?.maidId === match.maidId ? null : match)} className={secondaryButton}>
+                              Employer chose this helper
+                            </button>
+                          </div>
+                          {placementCandidate?.maidId === match.maidId && (
+                            <div className="w-full rounded-xl border border-primary/20 bg-primary/5 p-4">
+                              <p className="font-semibold text-black">Has the employer confirmed this helper?</p>
+                              <p className="mt-1 text-sm text-black">Only continue after the employer has chosen this profile. This creates the placement record and opens its checklist.</p>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button type="button" onClick={() => void startPlacement(match)} disabled={startingPlacementId === match.maidId} className={primaryButton}>
+                                  {startingPlacementId === match.maidId ? 'Starting placement…' : 'Yes, start placement steps'}
+                                </button>
+                                <button type="button" onClick={() => setPlacementCandidate(null)} disabled={startingPlacementId === match.maidId} className={secondaryButton}>Not yet</button>
+                              </div>
+                            </div>
+                          )}
                         </article>
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-3 rounded-xl bg-card p-3 text-sm text-muted-foreground">No suitable profiles were found for the saved requirements.</p>
+                    <p className="mt-3 rounded-xl bg-card p-3 text-sm text-black">No suitable profiles were found for the saved requirements.</p>
                   )}
                 </div>
               )}
@@ -415,7 +468,7 @@ export default function AgencyOperationsCenterPage() {
         ) : null}
 
         {/* ── Knowledge tab ────────────────────────────────────────── */}
-        {activeTab === 'contractor' ? <ContractorTasksPage /> : null}
+        {activeTab === 'contractor' ? <ContractorTasksPage onPlacementChange={loadPlacements} /> : null}
 
         {activeTab === 'knowledge' ? (
           <Card icon={BookOpen} title="Knowledge library" description="What your receptionist can look up">
@@ -441,7 +494,7 @@ export default function AgencyOperationsCenterPage() {
               <button className={primaryButton}>Index knowledge</button>
 
               <div className="rounded-2xl bg-muted p-4">
-                <span className="mb-2 block text-sm font-medium text-muted-foreground">Search what's already indexed</span>
+                <span className="mb-2 block text-sm font-medium text-black">Search what's already indexed</span>
                 <div className="flex gap-2">
                   <input className={`${fieldClass} bg-card`} placeholder="Search…" value={knowledgeQuery} onChange={(e) => setKnowledgeQuery(e.target.value)} />
                   <button type="button" onClick={searchKnowledge} className="shrink-0 rounded-2xl bg-card px-4 text-primary shadow-sm hover:bg-background">
@@ -454,9 +507,9 @@ export default function AgencyOperationsCenterPage() {
                       <article key={snippet.id} className="rounded-xl bg-card p-3">
                         <div className="flex items-center justify-between gap-2">
                           <b className="text-sm text-foreground">{snippet.title}</b>
-                          <span className="shrink-0 text-xs text-muted-foreground">{snippet.category}</span>
+                          <span className="shrink-0 text-xs text-black">{snippet.category}</span>
                         </div>
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{snippet.content}</p>
+                        <p className="mt-1 line-clamp-2 text-sm text-black">{snippet.content}</p>
                       </article>
                     ))}
                   </div>
@@ -479,8 +532,8 @@ export default function AgencyOperationsCenterPage() {
                     <input className={fieldClass} value={driveFolderKey} onChange={(e) => setDriveFolderKey(e.target.value)} placeholder="Uses your scenario default when blank" />
                   </Field>
                 </div>
-                {driveFile && <p className="text-sm text-muted-foreground">Selected: {driveFile.name} ({Math.ceil(driveFile.size / 1024)} KB)</p>}
-                <p className="text-xs text-muted-foreground">Your document stays private. A short-lived link is sent to Make only for the upload.</p>
+                {driveFile && <p className="text-sm text-black">Selected: {driveFile.name} ({Math.ceil(driveFile.size / 1024)} KB)</p>}
+                <p className="text-xs text-black">Your document stays private. A short-lived link is sent to Make only for the upload.</p>
                 <button className={primaryButton} disabled={driveSyncing}>{driveSyncing ? 'Uploading securely…' : 'Upload to Google Drive'}</button>
               </form>
             </Card>
@@ -505,17 +558,17 @@ export default function AgencyOperationsCenterPage() {
                     </select>
                   </Field>
                 </div>
-                {mediaFile && <p className="text-sm text-muted-foreground">Selected: {mediaFile.name} ({Math.ceil(mediaFile.size / 1024)} KB)</p>}
-                <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">1. Choose a voice note or video. 2. Select its spoken language. 3. Select Transcribe. Files must be 25 MB or smaller.</p>
+                {mediaFile && <p className="text-sm text-black">Selected: {mediaFile.name} ({Math.ceil(mediaFile.size / 1024)} KB)</p>}
+                <p className="rounded-xl bg-muted p-3 text-xs text-black">1. Choose a voice note or video. 2. Select its spoken language. 3. Select Transcribe. Files must be 25 MB or smaller.</p>
                 <button type="button" onClick={() => void transcribe()} disabled={isTranscribing} className={primaryButton}>{isTranscribing ? 'Transcribing...' : 'Transcribe file'}</button>
                 {transcriptResult && (
                   <section aria-live="polite" className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
                     <p className="flex items-center gap-2 text-sm font-semibold text-foreground"><CheckCircle2 className="h-4 w-4 text-primary" />Transcript</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{transcriptResult.fileName}</p>
+                    <p className="mt-1 text-xs text-black">{transcriptResult.fileName}</p>
                     <textarea readOnly value={transcriptResult.transcript} rows={8} className="mt-3 w-full resize-y rounded-xl border border-border bg-card p-3 text-sm leading-6 text-foreground outline-none" aria-label="Transcript output" />
                   </section>
                 )}
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <p className="flex items-center gap-1.5 text-xs text-black">
                   <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                   Media stays private — only a short-lived link is ever shared.
                 </p>

@@ -220,16 +220,6 @@ const navItems = [
     badgeKey: null,
   },
   {
-    label: "AI HR Interviewer",
-    path: adminPath("/ai-hr-interviewer"),
-    icon: Brain,
-    iconBg: "linear-gradient(145deg, #C4B5FD, #7C3AED)",
-    iconShadow: "0 4px 0 #6D28D9, 0 6px 12px rgba(124,58,237,0.45)",
-    iconShadowActive: "0 2px 0 #6D28D9, 0 3px 8px rgba(124,58,237,0.4)",
-    iconColor: "#fff",
-    badgeKey: null,
-  },
-  {
     label: "Chatbot Config",
     path: adminPath("/chatbot-config"),
     icon: Hand,

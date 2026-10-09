@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/components/ui/sonner";
 import { getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { submitHiringRequest } from "@/lib/agencies";
-import { calculateAge, getPrimaryPhoto, getPublicIntro, type MaidProfile } from "@/lib/maids";
+import { getMaidAge, getPrimaryPhoto, getPublicIntro, type MaidProfile } from "@/lib/maids";
 import "../ClientPage/ClientTheme.css";
 
 type HiringFormData = Record<string, string> & {
@@ -183,7 +183,7 @@ const HiringProcessPage = () => {
   const candidateProfiles = useMemo(() => {
     if (!maid) return [];
 
-    const maidAge = calculateAge(maid.dateOfBirth) ?? 31;
+    const maidAge = getMaidAge(maid) ?? 31;
     const maidSkills = getMaidSkills(maid);
     const requestedSkills = getRequestedSkills(formData.duties, maidSkills.length > 0 ? maidSkills : defaultMockSkills);
     const startDateLabel = formData.scheduleStart || "Immediate";

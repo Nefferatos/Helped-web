@@ -48,6 +48,130 @@
   margin-right: 0.5em;
 }
 
+.phone-input-field .phone-country-selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-right: 0.5em;
+}
+
+.phone-input-field .phone-country-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.phone-input-field .phone-country-trigger:focus-visible {
+  outline: 2px solid var(--phone-input-focus-border);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.phone-country-flag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  align-items: center;
+}
+
+.phone-country-flag svg,
+.phone-country-option-flag svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.phone-country-menu {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 12px;
+  background: #fff;
+  color: #17212b;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.24);
+}
+
+.phone-country-search {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 0 0 auto;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  color: #64748b;
+}
+
+.phone-country-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #17212b;
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.phone-country-search input::placeholder {
+  color: #94a3b8;
+}
+
+.phone-country-options {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem;
+}
+
+.phone-country-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.phone-country-option:hover,
+.phone-country-option:focus-visible,
+.phone-country-option[aria-selected="true"] {
+  outline: none;
+  background: #e8f2f3;
+}
+
+.phone-country-option-flag {
+  flex: 0 0 1.5rem;
+}
+
+.phone-country-option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.phone-country-empty {
+  margin: 0;
+  padding: 1rem 0.65rem;
+  color: #64748b;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
 .phone-input-field .PhoneInputCountrySelect:focus + .PhoneInputCountryIcon .PhoneInputInternationalIconGlobe {
   opacity: 1;
 }
