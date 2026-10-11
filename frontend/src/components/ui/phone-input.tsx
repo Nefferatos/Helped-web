@@ -132,7 +132,11 @@ const CountrySelector = ({
         }}
       >
         <span className="phone-country-flag" aria-hidden="true">
-          {SelectedFlag && <SelectedFlag />}
+          {/* The flag is decorative: the country name is exposed through the
+              button's aria-valuetext and the option labels. The flag component
+              still declares `title` as required, so pass it explicitly (empty)
+              rather than leaking a text node into the trigger. */}
+          {SelectedFlag && <SelectedFlag title="" />}
         </span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>

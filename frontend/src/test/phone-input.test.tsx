@@ -46,4 +46,7 @@ describe("PhoneNumberInput", () => {
 
     expect(screen.getByRole("combobox")).toHaveAttribute("aria-valuetext", "Philippines (+63)");
   });
-});
+  // The first spec mounts every country flag (~240 SVGs), which can run past
+  // vitest's 5s default on a loaded machine. Headroom here keeps the suite
+  // deterministic without hiding real failures.
+}, 15_000);

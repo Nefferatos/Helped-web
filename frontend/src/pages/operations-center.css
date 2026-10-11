@@ -1,0 +1,489 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Dashboard — activity transcript skin.
+
+   The dashboard keeps the app's own template: a white surface with near-black
+   text and the palette already used everywhere else (green #0D6E56, amber
+   #B8781E, red #EF4444, muted #6B7280, borders #dde6ea / #eef3f5).
+
+   Every rule is scoped under .oc-* so this file cannot leak into any other
+   screen.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.oc-deck {
+  --oc-surface: #ffffff;
+  --oc-canvas: #fbfdfd;
+  --oc-line: #dde6ea;
+  --oc-line-soft: #eef3f5;
+  /* All copy is near-black: values #000, secondary #111, labels #333. */
+  --oc-ink: #000000;
+  --oc-ink-dim: #111111;
+  --oc-ink-faint: #333333;
+  --oc-teal: #0d6e56;
+  --oc-teal-soft: #e1f5ee;
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid var(--oc-line);
+  border-radius: 16px;
+  padding: 16px;
+  color: var(--oc-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--oc-surface);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Faint teal grid for a little texture — invisible on white unless you look. */
+.oc-deck::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(13, 110, 86, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(13, 110, 86, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  -webkit-mask-image: radial-gradient(circle at 30% 0%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(circle at 30% 0%, #000 0%, transparent 72%);
+}
+
+.oc-deck > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Console shell ────────────────────────────────────────────────────────── */
+
+.oc-deck--console {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 48px);   /* AppLayout <main> pads 24px top and bottom */
+  min-height: 560px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.oc-console__head,
+.oc-console__bar,
+.oc-console__foot {
+  flex-shrink: 0;
+  padding: 13px 16px;
+}
+
+.oc-console__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--oc-line-soft);
+  background: var(--oc-surface);
+}
+
+.oc-console__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--oc-line-soft);
+  background: var(--oc-canvas);
+}
+
+.oc-console__foot {
+  border-top: 1px solid var(--oc-line-soft);
+  background: var(--oc-canvas);
+  color: var(--oc-ink-dim);
+  font-size: 10.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Type ─────────────────────────────────────────────────────────────────── */
+
+.oc-eyebrow {
+  margin: 0;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--oc-ink-faint);
+}
+
+.oc-note {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--oc-ink-dim);
+}
+
+/* Monospaced readouts: every number in the transcript lines up in a column. */
+.oc-readout {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ── Status LEDs ──────────────────────────────────────────────────────────── */
+
+.oc-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.oc-led--pulse {
+  animation: oc-led-pulse 1.9s ease-in-out infinite;
+}
+
+@keyframes oc-led-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.45); opacity: 0.45; }
+}
+
+/* ── Radar dial ───────────────────────────────────────────────────────────── */
+
+.oc-radar {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(13, 110, 86, 0.28);
+  background: radial-gradient(circle, rgba(13, 110, 86, 0.1), transparent 72%);
+}
+
+.oc-radar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(13, 110, 86, 0.42), rgba(13, 110, 86, 0) 26%);
+  animation: oc-radar 4.6s linear infinite;
+}
+
+.oc-radar::after {
+  content: "";
+  position: absolute;
+  inset: 26%;
+  border-radius: 50%;
+  border: 1px solid rgba(13, 110, 86, 0.22);
+}
+
+@keyframes oc-radar {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Chips and controls ───────────────────────────────────────────────────── */
+
+.oc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 99px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 2px 8px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--oc-surface);
+}
+
+.oc-chip--filter {
+  cursor: pointer;
+  background: var(--oc-surface);
+  border-color: var(--oc-line);
+  color: var(--oc-ink-dim);
+  font-size: 9.5px;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.oc-chip--filter:hover {
+  color: var(--oc-ink);
+  background: var(--oc-teal-soft);
+  border-color: rgba(13, 110, 86, 0.35);
+}
+
+.oc-chip--on {
+  background: var(--oc-teal-soft);
+  color: #111111;
+  border-color: rgba(13, 110, 86, 0.45) !important;
+}
+
+.oc-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1 1 190px;
+  max-width: 320px;
+  min-width: 150px;
+  border: 1px solid var(--oc-line);
+  border-radius: 99px;
+  padding: 5px 12px;
+  background: var(--oc-surface);
+  color: var(--oc-ink-faint);
+}
+
+.oc-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--oc-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.oc-search input::placeholder {
+  color: #333333;
+}
+
+.oc-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--oc-line);
+  border-radius: 99px;
+  padding: 5px 11px;
+  background: var(--oc-surface);
+  color: var(--oc-ink-dim);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.oc-iconbtn:hover {
+  color: var(--oc-ink);
+  background: var(--oc-teal-soft);
+  border-color: rgba(13, 110, 86, 0.35);
+}
+
+.oc-iconbtn--on {
+  color: #111111;
+  border-color: rgba(13, 110, 86, 0.45);
+  background: var(--oc-teal-soft);
+}
+
+.oc-arrow {
+  opacity: 0.45;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.oc-log__row:hover .oc-arrow {
+  opacity: 1;
+  transform: translateX(3px);
+}
+
+/* ── The transcript pane ──────────────────────────────────────────────────── */
+
+.oc-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 10px 14px;
+  background: var(--oc-surface);
+  scrollbar-width: thin;
+  scrollbar-color: #cfdde2 transparent;
+}
+
+.oc-log::-webkit-scrollbar {
+  width: 8px;
+}
+
+.oc-log::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: #cfdde2;
+}
+
+/* Day rule: the transcript is grouped by calendar day, newest first. */
+.oc-log__day {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 7px;
+  padding: 5px 8px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #ffffff 62%, rgba(255, 255, 255, 0.72));
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--oc-ink-faint);
+}
+
+.oc-log__day::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--oc-line-soft);
+}
+
+.oc-log__row {
+  display: grid;
+  grid-template-columns: 76px 10px 132px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.oc-log__row:hover {
+  background: #f7fbfa;
+  border-color: rgba(13, 110, 86, 0.2);
+}
+
+.oc-log__time {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--oc-ink-faint);
+}
+
+.oc-log__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  justify-self: center;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.oc-log__source {
+  font-size: 9px;
+  padding: 2px 7px;
+  justify-self: start;
+}
+
+.oc-log__body {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.oc-log__title {
+  display: block;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--oc-ink);
+  line-height: 1.25;
+}
+
+.oc-log__detail {
+  display: block;
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--oc-ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-log__right {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.oc-log__failed {
+  color: #b91c1c;
+}
+
+/* ── Entry states ─────────────────────────────────────────────────────────── */
+
+.oc-log__state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 12px;
+  color: var(--oc-ink-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.oc-log__state strong {
+  color: var(--oc-ink);
+  font-weight: 800;
+}
+
+/* ── Accessibility + small screens ────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-radar::before,
+  .oc-led--pulse {
+    animation: none !important;
+  }
+
+  .oc-log__row:hover .oc-arrow {
+    transform: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .oc-deck--console {
+    height: auto;
+    min-height: 0;
+  }
+
+  .oc-log {
+    max-height: 62vh;
+  }
+
+  .oc-log__row {
+    grid-template-columns: 62px 8px minmax(0, 1fr);
+    grid-template-areas:
+      "time dot source"
+      ".    .   main"
+      ".    .   right";
+    row-gap: 3px;
+    align-items: start;
+  }
+
+  .oc-log__time { grid-area: time; }
+  .oc-log__dot { grid-area: dot; margin-top: 5px; }
+  .oc-log__source { grid-area: source; }
+
+  .oc-log__body {
+    grid-area: main;
+    align-items: flex-start;
+  }
+
+  .oc-log__right {
+    grid-area: right;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .oc-deck {
+    border-radius: 12px;
+  }
+
+  .oc-console__head,
+  .oc-console__bar,
+  .oc-console__foot {
+    padding: 11px 12px;
+  }
+}
+
+
