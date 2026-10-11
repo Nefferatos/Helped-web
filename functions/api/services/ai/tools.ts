@@ -206,7 +206,9 @@ const compactPublicMaid = (maid: Record<string, unknown>) => {
       rating: num(value.rating),
       evaluation: text(value.evaluation) || null,
     }));
-  const workExperience = list(maid.employmentHistory)
+  // employmentHistory arrives as `unknown` on the app-data blob; assert the
+  // array shape so list<T>() can infer and each job can be read by field.
+  const workExperience = list(maid.employmentHistory as Array<Record<string, unknown>>)
     .map((job) => ({
       country: text(job.country) || null,
       period: [text(job.from), text(job.to)].filter(Boolean).join(" - ") || null,
