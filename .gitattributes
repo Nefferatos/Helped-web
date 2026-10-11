@@ -1,3 +1,13 @@
 # Git hooks are executed by sh (even on Windows) — they MUST use LF line endings,
 # otherwise the shebang line ends with a stray CR and the hook fails to run.
 .githooks/* text eol=lf
+
+# Runtime data files are written by the backend with LF line endings. Force LF here so
+# Windows checkouts (core.autocrlf=true) do not expect CRLF and report these files as
+# modified with an empty diff - which makes `git pull` abort with "local changes would
+# be overwritten".
+backend/data/*.json text eol=lf
+
+# This file is maintained with LF; keep the expectation in sync so it does not show
+# up as modified (empty diff) on Windows checkouts.
+.gitattributes text eol=lf
