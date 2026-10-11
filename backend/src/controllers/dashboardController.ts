@@ -150,3 +150,56 @@ export const saveOperationsPlacementNote = async (req: Request, res: Response) =
     return res.status(500).json({ error: 'Unable to save staff note' })
   }
 }
+
+/**
+ * Agency-wide activity transcript.
+ *
+ * public.workflow_events is keyed by (entity_type, entity_id) and carries no
+ * agency column, so every event is attributed to the agency through the entity
+ * it belongs to:
+ *   • placement   → public.placements.agency_id
+ *   • interview   → public.interviews.agency_id
+ *   • application → the writer stores agencyId inside the event payload
+ * Anything that cannot be attributed is dropped rather than returned, because
+ * this endpoint is agency-authenticated.
+ */
+export const getOperationsTranscript = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const requested = Number(req.query.limit ?? 200)
+    const limit = Number.isFinite(requested)
+      ? Math.min(Math.max(Math.trunc(requested), 1), 500)
+      : 200
+
+    const result = await query(sql`
+      SELECT
+        e.id,
+        e.event_type,
+        e.entity_type,
+        e.entity_id,
+        e.actor,
+        e.payload,
+        e.status,
+        e.created_at,
+        p.maid_reference_code AS placement_reference,
+        i.application_id AS interview_application_id
+      FROM public.workflow_events e
+      LEFT JOIN public.placements p
+        ON e.entity_type = 'placement' AND p.id::text = e.entity_id
+      LEFT JOIN public.interviews i
+        ON e.entity_type = 'interview' AND i.id::text = e.entity_id
+      WHERE (e.entity_type = 'placement' AND p.agency_id = ${agencyId})
+         OR (e.entity_type = 'interview' AND i.agency_id = ${agencyId})
+         OR (e.entity_type = 'application' AND e.payload->>'agencyId' = ${String(agencyId)})
+      ORDER BY e.created_at DESC
+      LIMIT ${limit}
+    `)
+
+    const entries = result.rows ?? []
+    return res.json({ entries, count: entries.length, limit })
+  } catch (error) {
+    console.error('Error loading operations transcript:', error)
+    return res.status(500).json({ error: 'Failed to load the activity transcript' })
+  }
+}
+
