@@ -3,11 +3,12 @@ import { getRequestAgencyId } from '../auth'
 import {
   buildAudience,
   generateMarketingCampaign,
-  getCampaignsByAgency,
   type AudienceType,
   type CampaignGoal,
   type CampaignTone,
 } from '../services/directMarketingAiService'
+import { getMarketingCampaign, getMarketingCampaigns } from '../repositories/marketingCampaignRepository'
+import { filterContactsWithMarketingConsent, hasActiveConsent, recordConsent, withdrawConsent } from '../services/consentService'
 import {
   executeOpportunity,
   runAutonomousCampaigns,
@@ -36,11 +37,54 @@ export const getAudienceOptions = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid audience type' })
     }
 
-    const contacts = await buildAudience(audienceType, agencyId)
-    res.status(200).json({ contacts, total: contacts.length })
+    const audience = await buildAudience(audienceType, agencyId)
+    const eligible = await filterContactsWithMarketingConsent(agencyId, audience)
+    const contacts = req.query.manage === 'true'
+      ? await Promise.all(audience.map(async (contact) => ({
+          ...contact,
+          whatsappConsent: await hasActiveConsent(agencyId, contact.phone, 'whatsapp'),
+          emailConsent: await hasActiveConsent(agencyId, contact.email, 'email'),
+        })))
+      : eligible
+    res.status(200).json({ contacts, total: audience.length, eligibleTotal: eligible.length })
   } catch (error) {
     console.error('[directMarketing] getAudienceOptions error:', error)
     res.status(500).json({ error: 'Failed to load audience' })
+  }
+}
+
+export const updateAudienceConsent = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const audienceType = req.body.audienceType as AudienceType
+    const contactId = typeof req.body.contactId === 'string' ? req.body.contactId.trim() : ''
+    const channel = req.body.channel === 'whatsapp' || req.body.channel === 'email' ? req.body.channel : null
+    const consented = req.body.consented === true
+    const source = typeof req.body.source === 'string' ? req.body.source.trim().slice(0, 250) : ''
+    if (!VALID_AUDIENCE.has(audienceType) || !contactId || !channel) {
+      return res.status(400).json({ error: 'Valid audienceType, contactId, and consent channel are required' })
+    }
+    if (consented && source.length < 5) {
+      return res.status(400).json({ error: 'Enter where the explicit opt-in was recorded (at least 5 characters)' })
+    }
+    const contact = (await buildAudience(audienceType, agencyId)).find((item) => item.id === contactId)
+    if (!contact) return res.status(404).json({ error: 'Audience contact not found' })
+    const subject = channel === 'email' ? contact.email : contact.phone
+    if (!subject) return res.status(400).json({ error: `This contact has no ${channel} address` })
+    if (consented) await recordConsent({ agencyId, subject, channel, source })
+    else {
+      // Marketing-level consent is stored against a phone number, so only
+      // clear it when the person opts out of WhatsApp. Email opt-outs stay
+      // scoped to that email address.
+      await withdrawConsent({ agencyId, subject, channel })
+      if (channel === 'whatsapp') {
+        await withdrawConsent({ agencyId, subject, channel: 'marketing' })
+      }
+    }
+    return res.status(200).json({ ok: true, consented })
+  } catch (error) {
+    console.error('[directMarketing] updateAudienceConsent error:', error)
+    return res.status(500).json({ error: 'Failed to update consent' })
   }
 }
 
@@ -55,6 +99,9 @@ export const generateCampaign = async (req: Request, res: Response) => {
       : []
     const audienceType = (req.body.audienceType as AudienceType) ?? 'all_contacts'
     const customNote = typeof req.body.customNote === 'string' ? req.body.customNote.slice(0, 500) : ''
+    const contactIds: string[] | undefined = Array.isArray(req.body.contactIds)
+      ? Array.from(new Set<string>((req.body.contactIds as unknown[]).map((id) => String(id).trim()).filter((id) => id.length > 0)))
+      : undefined
 
     if (!goal || !VALID_GOALS.has(goal)) {
       return res.status(400).json({ error: 'goal is required and must be one of: new_arrivals, re_engage, promotion, holiday, follow_up, custom' })
@@ -75,6 +122,7 @@ export const generateCampaign = async (req: Request, res: Response) => {
       maidReferences,
       audienceType,
       customNote,
+      contactIds,
     })
 
     res.status(200).json({ campaign })
@@ -87,7 +135,7 @@ export const generateCampaign = async (req: Request, res: Response) => {
 export const getCampaigns = async (req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(req)
-    const campaigns = getCampaignsByAgency(agencyId).map((c) => ({
+    const campaigns = (await getMarketingCampaigns(agencyId)).map((c) => ({
       id: c.id,
       goal: c.goal,
       tone: c.tone,
@@ -108,7 +156,7 @@ export const getCampaignById = async (req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(req)
     const { id } = req.params
-    const campaign = getCampaignsByAgency(agencyId).find((c) => c.id === id)
+    const campaign = await getMarketingCampaign(agencyId, id)
     if (!campaign) {
       return res.status(404).json({ error: 'Campaign not found' })
     }

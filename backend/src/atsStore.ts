@@ -1401,7 +1401,11 @@ export const listAtsApplications = async (
   });
 
   let items = data.applications.filter(
-    (application) => application.agencyId === agencyId,
+    (application) =>
+      application.agencyId === agencyId &&
+      // Maid profiles mirrored into ATS are not recruitment applications and
+      // are intentionally hidden by the Applicants List UI.
+      application.source !== "synced_from_maid",
   );
 
   items = items.filter((application) => {

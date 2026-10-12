@@ -2,13 +2,14 @@ import { randomUUID } from 'crypto'
 import {
   buildAudience,
   generateMarketingCampaign,
-  getCampaignsByAgency,
   type CampaignGoal,
   type CampaignTone,
   type AudienceType,
   type MarketingCampaign,
 } from './directMarketingAiService'
 import { getAllMaidsStore, getEnquiriesStore, getDirectSalesStore } from '../store'
+import { getMarketingCampaigns } from '../repositories/marketingCampaignRepository'
+import { filterContactsWithMarketingConsent } from './consentService'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ export interface AdvertisingOpportunity {
   tone: CampaignTone
   audienceType: AudienceType
   maidReferences: string[]
+  contactIds?: string[]
   estimatedReach: number
   priority: 'high' | 'medium' | 'low'
   detectedAt: string
@@ -63,10 +65,10 @@ const detectUpcomingHoliday = (): string | null => {
   return null
 }
 
-const recentGoals = (agencyId: number): Set<CampaignGoal> => {
+const recentGoals = async (agencyId: number): Promise<Set<CampaignGoal>> => {
   const cutoff = Date.now() - DAY_MS
   return new Set(
-    getCampaignsByAgency(agencyId)
+    (await getMarketingCampaigns(agencyId))
       .filter((c) => new Date(c.generatedAt).getTime() > cutoff)
       .map((c) => c.goal),
   )
@@ -76,7 +78,7 @@ const recentGoals = (agencyId: number): Set<CampaignGoal> => {
 
 export const scanForOpportunities = async (agencyId: number): Promise<AutonomousScanResult> => {
   const detectedAt = new Date().toISOString()
-  const alreadyRan = recentGoals(agencyId)
+  const alreadyRan = await recentGoals(agencyId)
   const opportunities: AdvertisingOpportunity[] = []
 
   // ── 1. New helpers added in last 24 h ──────────────────────────────────────
@@ -86,11 +88,12 @@ export const scanForOpportunities = async (agencyId: number): Promise<Autonomous
       .filter((m) => m.agencyId === agencyId)
       .filter((m) => {
         const ts = Date.parse(String(m.createdAt ?? ''))
-        return Number.isFinite(ts) && Date.now() - ts < DAY_MS
+        const age = Date.now() - ts
+        return Number.isFinite(ts) && age >= 0 && age < DAY_MS
       })
 
     if (newMaids.length > 0) {
-      const audience = await buildAudience('all_contacts', agencyId)
+      const audience = await filterContactsWithMarketingConsent(agencyId, await buildAudience('all_contacts', agencyId))
       if (audience.length > 0) {
         opportunities.push({
           id: randomUUID(),
@@ -114,22 +117,27 @@ export const scanForOpportunities = async (agencyId: number): Promise<Autonomous
     const enquiries = await getEnquiriesStore(undefined, agencyId)
     const stale = enquiries.filter((e) => {
       const ts = Date.parse(String(e.createdAt ?? ''))
-      return Number.isFinite(ts) && Date.now() - ts > 3 * DAY_MS
+      const age = Date.now() - ts
+      return !['replied', 'resolved'].includes(String(e.status ?? 'new').toLowerCase())
+        && Number.isFinite(ts) && age >= 3 * DAY_MS
     })
 
     if (stale.length > 0) {
-      const audience = await buildAudience('enquiry_leads', agencyId)
-      if (audience.length > 0) {
+      const audience = await filterContactsWithMarketingConsent(agencyId, await buildAudience('enquiry_leads', agencyId))
+      const staleIds = new Set(stale.map((enquiry) => `enquiry-${enquiry.id}`))
+      const staleAudience = audience.filter((contact) => staleIds.has(contact.id))
+      if (staleAudience.length > 0) {
         opportunities.push({
           id: randomUUID(),
           triggerType: 'stale_enquiries',
           title: `${stale.length} enquir${stale.length > 1 ? 'ies' : 'y'} awaiting follow-up`,
-          reasoning: `${stale.length} enquir${stale.length > 1 ? 'ies have' : 'y has'} had no update in 3+ days. A warm follow-up to ${audience.length} leads could reactivate interest.`,
+          reasoning: `${staleAudience.length} opted-in enquir${staleAudience.length > 1 ? 'ies have' : 'y has'} had no update in 3+ days.`,
           goal: 'follow_up',
           tone: 'warm',
           audienceType: 'enquiry_leads',
           maidReferences: [],
-          estimatedReach: audience.length,
+          contactIds: staleAudience.map((contact) => contact.id),
+          estimatedReach: staleAudience.length,
           priority: 'high',
           detectedAt,
         })
@@ -142,22 +150,26 @@ export const scanForOpportunities = async (agencyId: number): Promise<Autonomous
     const directSales = await getDirectSalesStore(agencyId)
     const cold = directSales.filter((ds) => {
       const ts = Date.parse(String(ds.updatedAt ?? ds.createdAt ?? ''))
-      return Number.isFinite(ts) && Date.now() - ts > 7 * DAY_MS
+      const age = Date.now() - ts
+      return Number.isFinite(ts) && age >= 7 * DAY_MS
     })
 
     if (cold.length > 0) {
-      const audience = await buildAudience('direct_sale_leads', agencyId)
-      if (audience.length > 0) {
+      const audience = await filterContactsWithMarketingConsent(agencyId, await buildAudience('direct_sale_leads', agencyId))
+      const coldIds = new Set(cold.map((lead) => `direct-${lead.id}`))
+      const coldAudience = audience.filter((contact) => coldIds.has(contact.id))
+      if (coldAudience.length > 0) {
         opportunities.push({
           id: randomUUID(),
           triggerType: 'cold_leads',
           title: `${cold.length} cold lead${cold.length > 1 ? 's' : ''} to re-engage`,
-          reasoning: `${cold.length} direct-sale lead${cold.length > 1 ? 's have' : ' has'} been inactive for 7+ days. A casual re-engagement message to ${audience.length} contacts could revive the pipeline.`,
+          reasoning: `${coldAudience.length} opted-in direct-sale lead${coldAudience.length > 1 ? 's have' : ' has'} been inactive for 7+ days.`,
           goal: 're_engage',
           tone: 'casual',
           audienceType: 'direct_sale_leads',
           maidReferences: [],
-          estimatedReach: audience.length,
+          contactIds: coldAudience.map((contact) => contact.id),
+          estimatedReach: coldAudience.length,
           priority: 'medium',
           detectedAt,
         })
@@ -169,7 +181,7 @@ export const scanForOpportunities = async (agencyId: number): Promise<Autonomous
   if (!alreadyRan.has('holiday')) {
     const holidayName = detectUpcomingHoliday()
     if (holidayName) {
-      const audience = await buildAudience('all_contacts', agencyId)
+      const audience = await filterContactsWithMarketingConsent(agencyId, await buildAudience('all_contacts', agencyId))
       if (audience.length > 0) {
         opportunities.push({
           id: randomUUID(),
@@ -208,6 +220,7 @@ export const executeOpportunity = async (
     tone: opportunity.tone,
     maidReferences: opportunity.maidReferences,
     audienceType: opportunity.audienceType,
+    contactIds: opportunity.contactIds,
   })
 }
 

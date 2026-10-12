@@ -4,6 +4,7 @@ import {
   autonomousScan,
   generateCampaign,
   getAudienceOptions,
+  updateAudienceConsent,
   getCampaignById,
   getCampaigns,
 } from '../controllers/directMarketingController'
@@ -14,6 +15,7 @@ const router: Router = express.Router()
 router.use(requireAgencyAuth)
 
 router.get('/audience', getAudienceOptions)
+router.post('/audience/consent', updateAudienceConsent)
 router.post('/generate', generateCampaign)
 router.get('/campaigns', getCampaigns)
 router.get('/campaigns/:id', getCampaignById)

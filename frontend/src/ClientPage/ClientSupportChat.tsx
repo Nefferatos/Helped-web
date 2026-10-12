@@ -536,7 +536,8 @@ const CSS = `
   min-width:20px; min-height:20px; justify-content:center;
 }
 .sc-compose-box {
-  display:flex; align-items:flex-end; gap:8px;
+  display:flex; align-items:center; gap:8px;
+  min-height:58px;
   background:#f3f5f4; border-radius:14px;
   padding:8px 8px 8px 14px; border:1.5px solid transparent;
   transition:border-color .15s, background .15s;
@@ -545,8 +546,8 @@ const CSS = `
 .sc-compose-box textarea {
   flex:1; border:none; outline:none; background:transparent;
   resize:none; font-size:14.5px; color:var(--sc-text);
-  line-height:1.55; min-height:22px; max-height:130px;
-  font-family:inherit; padding:0;
+  line-height:1.5; min-height:22px; max-height:130px;
+  font-family:inherit; padding:0; align-self:center;
 }
 .sc-compose-box textarea::placeholder { color:var(--sc-text3); }
 .sc-send-btn {
@@ -1153,11 +1154,18 @@ const ClientSupportChat = () => {
                 (current.conversationType === "support" || current.agencyId === next.agencyId);
 
               if (isActive) {
-                // Skip if already added optimistically
+                // Replace the matching pending bubble if SSE reaches the page
+                // before the send request returns. Otherwise avoid duplicates.
                 if (optimisticIdsRef.current.has(next.id)) {
                   optimisticIdsRef.current.delete(next.id);
                 } else {
-                  setMessages((prev) => (prev.some((message) => message.id === next.id) ? prev : [...prev, next]));
+                  setMessages((prev) => {
+                    const pending = prev.find((message) =>
+                      message._optimistic && message.senderRole === next.senderRole && message.message === next.message,
+                    );
+                    if (pending) return prev.map((message) => message.id === pending.id ? next : message);
+                    return prev.some((message) => message.id === next.id) ? prev : [...prev, next];
+                  });
                 }
                 // AI reply arrived — hide typing indicator
                 if (next.senderRole === "agency") {
@@ -1214,6 +1222,28 @@ const ClientSupportChat = () => {
     const text = (override ?? draft).trim();
     if (!text || isSending) return;
 
+    const conversation = activeConv;
+    const optimisticId = -Date.now();
+    const optimisticMessage: ChatMessage = {
+      id: optimisticId,
+      clientId: client?.id ?? 0,
+      conversationType: conversation.conversationType,
+      agencyId: conversation.agencyId,
+      agencyName: conversation.agencyName,
+      senderRole: "client",
+      senderName: client?.name || "You",
+      message: text,
+      createdAt: new Date().toISOString(),
+      _optimistic: true,
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setConversations((prev) => prev.map((item) => item.key === conversation.key
+      ? { ...item, lastMessage: text, lastMessageAt: optimisticMessage.createdAt }
+      : item));
+    if (override === undefined || draft.trim() === text) setDraft("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+
     try {
       setIsSending(true);
       const response = await clientFetch(`/api/chats/client?${qs}`, {
@@ -1229,15 +1259,22 @@ const ClientSupportChat = () => {
         throw new Error(data.error || "Failed to send");
       }
 
-      setMessages((prev) => {
-        const next = [...prev, data.message!];
-        lastSigRef.current = JSON.stringify(
-          next.map((message) => [message.id, message.message, message.createdAt, message.senderRole]),
-        );
-        // Track this ID so SSE doesn't double-add it
-        optimisticIdsRef.current.add(data.message!.id);
-        return next;
-      });
+      if (activeConvRef.current.key === conversation.key) {
+        setMessages((prev) => {
+          const withoutPending = prev.filter((message) => message.id !== optimisticId);
+          if (withoutPending.some((message) => message.id === data.message!.id)) {
+            optimisticIdsRef.current.delete(data.message!.id);
+            return withoutPending;
+          }
+          // Track this ID so SSE doesn't add a second copy while the user is here.
+          optimisticIdsRef.current.add(data.message!.id);
+          const next = [...withoutPending, data.message!];
+          lastSigRef.current = JSON.stringify(
+            next.map((message) => [message.id, message.message, message.createdAt, message.senderRole]),
+          );
+          return next;
+        });
+      }
       setConversations((prev) =>
         prev.map((conversation) =>
           conversation.key === activeConv.key
@@ -1249,12 +1286,6 @@ const ClientSupportChat = () => {
             : conversation,
         ),
       );
-      if (override === undefined || draft.trim() === text) {
-        setDraft("");
-      }
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
       void loadConversations(true);
 
       // Trigger bot reply for support conversations
@@ -1285,6 +1316,11 @@ const ClientSupportChat = () => {
         }
       }
     } catch (error) {
+      if (activeConvRef.current.key === conversation.key) {
+        setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
+        setDraft((current) => current || text);
+      }
+      void loadConversations(true);
       toast.error(error instanceof Error ? error.message : "Failed to send");
     } finally {
       setIsSending(false);

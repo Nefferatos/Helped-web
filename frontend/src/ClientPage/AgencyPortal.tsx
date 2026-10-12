@@ -6,7 +6,6 @@ import {
   User,
   Check,
   ArrowRight,
-  Sparkles,
   Shield,
   Eye,
   EyeOff,
@@ -14,11 +13,6 @@ import {
   Building2,
   Zap,
   FileText,
-  Globe,
-  Bot,
-  Megaphone,
-  MessageSquare,
-  BrainCircuit,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import {
@@ -29,7 +23,7 @@ import {
 import { adminPath } from "@/lib/routes";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import OtpInput from "@/components/OtpInput";
-import FindMaidImg from "./assets/maid_agency_logo_81.jpg";
+import AgencyBrandImage from "./assets/maid_agency_logo_81.jpg";
 
 interface AgencyAuthResponse {
   error?: string;
@@ -52,42 +46,21 @@ interface AgencyAuthResponse {
 }
 
 const coreFeatures = [
-  { text: "Publish unlimited maid listings", icon: "📋" },
-  { text: "Upload up to 2 photos per maid", icon: "🖼️" },
-  { text: "Upload 1 introduction video clip per maid", icon: "🎥" },
-  { text: "Auto-generate maid bio-data in PDF format", icon: "📄" },
-  { text: "Manage agency profile & branch addresses", icon: "🏢" },
-  { text: "Auto-fill employment contracts and MOM documents", icon: "✍️" },
-  { text: "Get a customised agency micro-site", icon: "🌐" },
+  { text: "Browse maid profiles", icon: "01" },
+  { text: "Filter by experience, skills and nationality", icon: "02" },
+  { text: "Save and compare shortlisted profiles", icon: "03" },
+  { text: "Submit a maid request to the agency", icon: "04" },
+  { text: "Get ongoing support throughout the process", icon: "05" },
 ];
 
 const aiFeatures = [
-  {
-    icon: BrainCircuit,
-    label: "AI Biodata Autofill",
-    desc: "Instantly populate maid bio-data fields from uploaded documents",
-  },
-  {
-    icon: Bot,
-    label: "AI Agents",
-    desc: "Autonomous agents that handle repetitive admin tasks 24/7",
-  },
-  {
-    icon: Megaphone,
-    label: "AI Marketing",
-    desc: "Auto-generate listing copy and social posts for each maid profile",
-  },
-  {
-    icon: MessageSquare,
-    label: "Messaging",
-    desc: "Built-in employer chat with smart reply suggestions",
-  },
+  { icon: Building2, label: "Rigorously vetted", desc: "Multi-stage screening for trustworthy candidates" },
+  { icon: User, label: "Smart matching", desc: "Find helpers suited to your household needs" },
+  { icon: FileText, label: "Ongoing support", desc: "Continued guidance and after-placement care" },
 ];
 
 const highlights = [
-  { icon: Zap, label: "Fast setup", desc: "Go live the same day you register" },
-  { icon: FileText, label: "Smart documents", desc: "PDF bio-data and MOM forms auto-filled" },
-  { icon: Globe, label: "Your own page", desc: "A dedicated micro-site for your agency" },
+  { icon: FileText, label: "A straightforward process", desc: "Browse, shortlist and send a maid request" },
 ];
 
 type AgencyPortalPageProps = {
@@ -238,7 +211,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
     <div className="ap-root">
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
         :root {
           --teal:        #0E4E5E;
@@ -825,7 +798,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           border-color: rgba(14,78,94,0.1);
           transform: translateX(3px);
         }
-        .ap-benefit-emoji { font-size: 0.88rem; width: 1.1rem; text-align: center; flex-shrink: 0; }
+        .ap-benefit-emoji { font-size: 0.65rem; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--teal); width: 1.7rem; text-align: center; flex-shrink: 0; }
         .ap-benefit-check {
           width: 16px; height: 16px;
           border-radius: 50%;
@@ -866,30 +839,74 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
         }
         .ap-footer a:hover { color: var(--teal); gap: 0.32rem; }
         .ap-footer-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--rule); }
-      `}</style>
 
-      {/* Ambient orbs */}
-      <div className="ap-orb ap-orb-1" />
-      <div className="ap-orb ap-orb-2" />
-      <div className="ap-orb ap-orb-3" />
+        /* Calm, document-led agency portal styling */
+        .ap-root { background: #f3f6f6; }
+        .ap-outer { padding-top: 1.75rem; padding-bottom: 2.5rem; }
+        .ap-card {
+          max-width: 1180px;
+          border-radius: 12px;
+          box-shadow: 0 8px 28px rgba(7,43,53,0.08);
+          animation: none;
+        }
+        .ap-card::before {
+          height: 3px;
+          background: var(--teal);
+          animation: none;
+        }
+        .ap-header {
+          min-height: 72px;
+          height: auto;
+          background: #fff;
+          border-bottom: 1px solid var(--rule-2);
+        }
+        .ap-header-title { color: var(--ink); font: 700 1rem 'Inter', sans-serif; }
+        .ap-header-sub { color: var(--ink-4); letter-spacing: 0.02em; text-transform: none; }
+        .ap-logo-mark { background: var(--teal-pale); border: 1px solid var(--rule); animation: none; }
+        .ap-header-badge {
+          background: var(--teal-pale);
+          border: 1px solid var(--rule);
+          color: var(--teal);
+          box-shadow: none;
+          letter-spacing: 0.01em;
+          text-transform: none;
+        }
+        .ap-alert { background: #f8faf9; }
+        .ap-col { padding: 1.75rem 1.5rem; }
+        .ap-col-1, .ap-col-2, .ap-col-3 { animation: none; }
+        .ap-section-label { letter-spacing: 0.09em; }
+        .ap-ai-card, .ap-highlight, .ap-benefit { transition: border-color 0.15s, background 0.15s; }
+        .ap-ai-card:hover, .ap-highlight:hover, .ap-benefit:hover { transform: none; box-shadow: none; }
+        .ap-ai-card-icon, .ap-highlight-icon { box-shadow: none; }
+        .ap-bheader { background: var(--teal); }
+        .ap-bheader-title { font-family: 'Inter', sans-serif; }
+        .ap-bheader::before, .ap-bheader::after { display: none; animation: none; }
+        .ap-img-wrap::after { display: none; }
+        .ap-img-wrap img { transition: none; }
+        .ap-img-wrap:hover img { transform: none; }
+        .ap-btn { background: var(--teal); box-shadow: none; }
+        .ap-btn::before { display: none; }
+        .ap-btn:hover:not(:disabled) { background: var(--teal-2); box-shadow: none; transform: none; }
+        .ap-footer { background: #f8faf9; }
+        @media (prefers-reduced-motion: reduce) {
+          .ap-root *, .ap-root *::before, .ap-root *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
+      `}</style>
 
       <main className="ap-outer">
         <div className="ap-card">
 
           {/* ── Header ── */}
           <div className="ap-header">
-            <div className="ap-header-texture" />
-            <div className="ap-header-glow" />
             <div className="ap-logo-mark">
               <KeyRound size={16} color="#FCD34D" strokeWidth={1.75} />
             </div>
             <div className="ap-header-text">
-              <p className="ap-header-title">Agency Portal</p>
-              <p className="ap-header-sub">FindMaid Dashboard</p>
+              <p className="ap-header-title">At The Agency</p>
+              <p className="ap-header-sub">(formerly Rinzin Agency Pte. Ltd.)</p>
             </div>
             <div className="ap-header-badge">
-              <Sparkles size={8} strokeWidth={2} />
-              Now launching
+              Agency workspace
             </div>
           </div>
 
@@ -897,7 +914,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
           <div className="ap-alert">
             <span className="ap-alert-pill">Info</span>
             <p>
-              Sign in with your <strong>FindMaid agency account</strong> to access your dashboard, listings, and documents.
+              Sign in with your agency account to manage maid profiles, contracts, enquiries and operations.
             </p>
           </div>
 
@@ -907,8 +924,8 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
             {/* Col 1 — AI features + highlights */}
             <div className="ap-col ap-col-1">
               <div className="ap-section-label">
-                <BrainCircuit size={8} strokeWidth={2.5} />
-                AI-powered tools
+                <Building2 size={8} strokeWidth={2.5} />
+                What you can expect
               </div>
 
               <div className="ap-ai-grid">
@@ -925,7 +942,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
 
               <div className="ap-section-label" style={{ marginTop: "0.25rem" }}>
                 <Zap size={8} strokeWidth={2.5} />
-                Why agencies join
+                Find the right helper
               </div>
 
               <div className="ap-highlights">
@@ -953,7 +970,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
               </div>
 
               <div className="ap-img-wrap">
-                <img src={FindMaidImg} alt="FindMaid" />
+                <img src={AgencyBrandImage} alt="At The Agency" />
               </div>
 
               {pendingVerification ? (
@@ -1082,7 +1099,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
 
                   <div className="ap-ssl">
                     <Shield size={10} color="#8aaab4" strokeWidth={2} />
-                    <span>256-bit SSL encrypted</span>
+                    <span>Secure agency sign-in</span>
                   </div>
                 </form>
               )}
@@ -1093,8 +1110,8 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
             {/* Col 3 — Core platform features */}
             <div className="ap-col ap-col-3">
               <div className="ap-section-label">
-                <Sparkles size={8} strokeWidth={2.5} />
-                Platform features
+                <Building2 size={8} strokeWidth={2.5} />
+                Website features
               </div>
 
               <div className="ap-bheader">
@@ -1102,13 +1119,13 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
                   <Building2 size={15} color="#FCD34D" strokeWidth={1.75} />
                 </div>
                 <div>
-                  <p className="ap-bheader-title">New to FindMaid?</p>
-                  <p className="ap-bheader-sub">Invitation-only during launch</p>
+                  <p className="ap-bheader-title">At The Agency</p>
+                  <p className="ap-bheader-sub">Support for your hiring journey</p>
                 </div>
               </div>
 
               <p className="ap-note">
-                Once your agency is registered, your account unlocks everything below from day one.
+                Explore helpers and connect with the agency when you are ready.
               </p>
 
               <div className="ap-benefits">

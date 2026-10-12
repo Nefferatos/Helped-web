@@ -16,7 +16,6 @@ import {
   AlertCircle,
   Circle,
   Reply,
-  StickyNote,
   Filter,
   CheckSquare,
   Square,
@@ -30,315 +29,88 @@ import {
   Copy,
   ExternalLink,
 } from "lucide-react";
-import { streamSse } from "@/lib/sse";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { readSafeJson } from "@/lib/safeJson";
 
-/* ─── Types ─────────────────────────────────────────────────────────────── */
+/* ─── Quick contact actions ─────────────────────────────────────────────── */
 type Status = "new" | "in_progress" | "replied" | "resolved";
 
 interface EnquiryRecord {
-  id: number;
-  username: string;
-  date: string;
-  email: string;
-  phone: string;
-  message: string;
-  createdAt: string;
-  status?: Status;
-  note?: string;
-  assignedTo?: string;
-  clientId?: number;
-  clientName?: string;
+  id: number; username: string; date: string; email: string; phone: string; message: string; createdAt: string;
+  status?: Status; note?: string; assignedTo?: string; clientId?: number; clientName?: string;
 }
-
-/* ─── Constants ─────────────────────────────────────────────────────────── */
+interface EnqMeta { status?: Status; note?: string; assignedTo?: string }
 const PAGE_SIZE = 20;
-
 const STATUS_CONFIG: Record<Status, { label: string; color: string; bg: string; border: string; icon: typeof Circle }> = {
-  new:         { label: "New",         color: "text-sky-700",     bg: "bg-sky-50",     border: "border-sky-200",     icon: Circle },
-  in_progress: { label: "In Progress", color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",   icon: Clock },
-  replied:     { label: "Replied",     color: "text-violet-700",  bg: "bg-violet-50",  border: "border-violet-200",  icon: Reply },
-  resolved:    { label: "Resolved",    color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: CheckCircle2 },
+  new: { label: "New", color: "text-sky-700", bg: "bg-sky-50", border: "border-sky-200", icon: Circle },
+  in_progress: { label: "In Progress", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", icon: Clock },
+  replied: { label: "Replied", color: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200", icon: Reply },
+  resolved: { label: "Resolved", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: CheckCircle2 },
 };
-
-const FILTER_TABS: { key: "all" | Status; label: string }[] = [
-  { key: "all",         label: "All" },
-  { key: "new",         label: "New" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "replied",     label: "Replied" },
-  { key: "resolved",    label: "Resolved" },
-];
-
+const FILTER_TABS: { key: "all" | Status; label: string }[] = [{ key: "all", label: "All" }, { key: "new", label: "New" }, { key: "resolved", label: "Resolved" }];
 const AVATAR_COLORS = [
-  { bg: "bg-rose-100",    text: "text-rose-700",    ring: "ring-rose-200" },
-  { bg: "bg-violet-100",  text: "text-violet-700",  ring: "ring-violet-200" },
-  { bg: "bg-sky-100",     text: "text-sky-700",     ring: "ring-sky-200" },
-  { bg: "bg-amber-100",   text: "text-amber-700",   ring: "ring-amber-200" },
-  { bg: "bg-teal-100",    text: "text-teal-700",    ring: "ring-teal-200" },
-  { bg: "bg-fuchsia-100", text: "text-fuchsia-700", ring: "ring-fuchsia-200" },
-  { bg: "bg-indigo-100",  text: "text-indigo-700",  ring: "ring-indigo-200" },
-  { bg: "bg-orange-100",  text: "text-orange-700",  ring: "ring-orange-200" },
+  { bg: "bg-rose-100", text: "text-rose-700", ring: "ring-rose-200" }, { bg: "bg-violet-100", text: "text-violet-700", ring: "ring-violet-200" },
+  { bg: "bg-sky-100", text: "text-sky-700", ring: "ring-sky-200" }, { bg: "bg-amber-100", text: "text-amber-700", ring: "ring-amber-200" },
+  { bg: "bg-teal-100", text: "text-teal-700", ring: "ring-teal-200" }, { bg: "bg-fuchsia-100", text: "text-fuchsia-700", ring: "ring-fuchsia-200" },
+  { bg: "bg-indigo-100", text: "text-indigo-700", ring: "ring-indigo-200" }, { bg: "bg-orange-100", text: "text-orange-700", ring: "ring-orange-200" },
 ];
-
-const TOP_BAR_COLORS = [
-  "bg-rose-400","bg-violet-400","bg-sky-400","bg-amber-400",
-  "bg-teal-400","bg-fuchsia-400","bg-indigo-400","bg-orange-400",
-];
-
+const TOP_BAR_COLORS = ["bg-rose-400", "bg-violet-400", "bg-sky-400", "bg-amber-400", "bg-teal-400", "bg-fuchsia-400", "bg-indigo-400", "bg-orange-400"];
 const getAvatarColor = (id: number) => AVATAR_COLORS[id % AVATAR_COLORS.length];
 
-/* ─── Status/note persistence via the enquiries API (shared across admins) ── */
-interface EnqMeta { status?: Status; note?: string; assignedTo?: string }
-
-/** Default the triage fields for records saved before these columns existed. */
-function withStatusDefaults(enqs: EnquiryRecord[]): EnquiryRecord[] {
-  return enqs.map((e) => ({
-    ...e,
-    status: e.status ?? "new",
-    note: e.note ?? "",
-    assignedTo: e.assignedTo ?? "",
-  }));
+function withStatusDefaults(enquiries: EnquiryRecord[]): EnquiryRecord[] {
+  return enquiries.map((enquiry) => ({ ...enquiry, status: enquiry.status ?? "new" }));
 }
 
-/** PATCH an enquiry's triage fields. Returns true on success. */
-async function patchEnquiry(
-  id: number,
-  patch: Partial<EnqMeta>,
-  opts: { silent?: boolean } = {},
-): Promise<boolean> {
+async function patchEnquiry(id: number, patch: Partial<EnqMeta>, options: { silent?: boolean } = {}): Promise<boolean> {
   try {
-    const res = await fetch(`/api/enquiries/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-      body: JSON.stringify(patch),
-    });
-    const d = await readSafeJson<{ error?: string }>(res);
-    if (!res.ok) throw new Error(d.error || "Failed to update enquiry");
+    const response = await fetch(`/api/enquiries/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() }, body: JSON.stringify(patch) });
+    const result = await readSafeJson<{ error?: string }>(response);
+    if (!response.ok) throw new Error(result.error || "Failed to update enquiry");
     return true;
-  } catch (e) {
-    if (!opts.silent) toast.error(e instanceof Error ? e.message : "Failed to save changes");
+  } catch (error) {
+    if (!options.silent) toast.error(error instanceof Error ? error.message : "Failed to save changes");
     return false;
   }
 }
 
-/* ─── Skeleton card ─────────────────────────────────────────────────────── */
 function SkeletonCard() {
-  return (
-    <div className="animate-pulse rounded-2xl border border-gray-100 bg-white p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-2xl bg-gray-100" />
-          <div className="space-y-2">
-            <div className="h-4 w-36 rounded-lg bg-gray-100" />
-            <div className="h-3 w-52 rounded-lg bg-gray-100" />
-          </div>
-        </div>
-        <div className="h-8 w-8 rounded-xl bg-gray-100" />
-      </div>
-      <div className="h-20 rounded-xl bg-gray-50" />
-    </div>
-  );
+  return <div className="animate-pulse rounded-2xl border border-gray-100 bg-white p-5"><div className="mb-4 flex items-center gap-3"><div className="h-12 w-12 rounded-2xl bg-gray-100" /><div className="space-y-2"><div className="h-4 w-36 rounded-lg bg-gray-100" /><div className="h-3 w-52 rounded-lg bg-gray-100" /></div></div><div className="h-20 rounded-xl bg-gray-50" /></div>;
 }
 
-/* ─── Delete confirm button ─────────────────────────────────────────────── */
 function DeleteButton({ onDelete, isBusy }: { onDelete: () => void; isBusy: boolean }) {
   const [confirming, setConfirming] = useState(false);
   const timerRef = useRef<number | null>(null);
-
   const handleClick = () => {
     if (isBusy) return;
-    if (confirming) {
-      if (timerRef.current) window.clearTimeout(timerRef.current);
-      setConfirming(false);
-      onDelete();
-    } else {
-      setConfirming(true);
-      timerRef.current = window.setTimeout(() => setConfirming(false), 2500);
-    }
+    if (confirming) { if (timerRef.current) window.clearTimeout(timerRef.current); setConfirming(false); onDelete(); }
+    else { setConfirming(true); timerRef.current = window.setTimeout(() => setConfirming(false), 2500); }
   };
-
   useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current); }, []);
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={isBusy}
-      title={confirming ? "Click again to confirm delete" : "Delete enquiry"}
-      className={`flex shrink-0 items-center justify-center rounded-xl border-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-default ${
-        confirming
-          ? "h-9 gap-1.5 px-3 border-red-400 bg-red-50 text-red-600 animate-pulse scale-105"
-          : "h-9 w-9 border-transparent bg-gray-100 text-gray-400 hover:border-red-300 hover:bg-red-50 hover:text-red-500 hover:scale-110"
-      }`}
-    >
-      {isBusy ? (
-        <div className="h-4 w-4 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
-      ) : confirming ? (
-        <>
-          <Trash2 className="h-4 w-4" />
-          <span className="text-[12px] font-bold">Confirm?</span>
-        </>
-      ) : (
-        <Trash2 className="h-4 w-4" />
-      )}
-    </button>
-  );
+  return <button type="button" onClick={handleClick} disabled={isBusy} title={confirming ? "Click again to confirm delete" : "Delete enquiry"} className={`flex shrink-0 items-center justify-center rounded-xl border-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-default ${confirming ? "h-9 gap-1.5 px-3 border-red-400 bg-red-50 text-red-600" : "h-9 w-9 border-transparent bg-gray-100 text-gray-400 hover:border-red-300 hover:bg-red-50 hover:text-red-500"}`}>
+    {isBusy ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" /> : confirming ? <><Trash2 className="h-4 w-4" /><span className="text-[12px] font-bold">Confirm?</span></> : <Trash2 className="h-4 w-4" />}
+  </button>;
 }
 
-/* ─── Status badge ──────────────────────────────────────────────────────── */
 function StatusBadge({ status }: { status: Status }) {
-  const cfg = STATUS_CONFIG[status];
-  const Icon = cfg.icon;
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${cfg.color} ${cfg.bg} ${cfg.border}`}>
-      <Icon className="h-3 w-3" />
-      {cfg.label}
-    </span>
-  );
+  const config = STATUS_CONFIG[status]; const Icon = config.icon;
+  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${config.color} ${config.bg} ${config.border}`}><Icon className="h-3 w-3" />{config.label}</span>;
 }
 
-/* ─── Status dropdown ───────────────────────────────────────────────────── */
-function StatusDropdown({
-  status,
-  onChange,
-}: {
-  status: Status;
-  onChange: (s: Status) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
+function StatusDropdown({ status, onChange }: { status: Status; onChange: (status: Status) => void }) {
+  const [open, setOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const closeOnOutsideClick = (event: MouseEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", closeOnOutsideClick); return () => document.removeEventListener("mousedown", closeOnOutsideClick);
   }, []);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold transition-all hover:opacity-80 active:scale-95"
-        style={{ borderColor: "transparent" }}
-      >
-        <StatusBadge status={status} />
-        <ChevronDown className="h-3 w-3 text-gray-400 ml-0.5" />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1.5 z-50 w-44 rounded-2xl border border-gray-100 bg-white shadow-xl shadow-gray-200/60 overflow-hidden">
-          {(Object.keys(STATUS_CONFIG) as Status[]).map((s) => {
-            const cfg = STATUS_CONFIG[s];
-            const Icon = cfg.icon;
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() => { onChange(s); setOpen(false); }}
-                className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-[13px] font-semibold transition-colors hover:bg-gray-50 ${
-                  s === status ? cfg.color + " font-bold" : "text-gray-700"
-                }`}
-              >
-                <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
-                {cfg.label}
-                {s === status && <CheckCircle2 className="h-3.5 w-3.5 ml-auto text-emerald-500" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+  return <div ref={ref} className="relative">
+    <button type="button" onClick={() => setOpen((value) => !value)} className="inline-flex items-center gap-1 rounded-full px-1 py-0.5 text-[11px] font-bold"><StatusBadge status={status} /><ChevronDown className="ml-0.5 h-3 w-3 text-gray-400" /></button>
+    {open && <div className="absolute left-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">{(Object.keys(STATUS_CONFIG) as Status[]).filter((value) => value !== "replied").map((value) => {
+      const config = STATUS_CONFIG[value]; const Icon = config.icon;
+      return <button key={value} type="button" onClick={() => { onChange(value); setOpen(false); }} className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-[13px] font-semibold transition-colors hover:bg-gray-50 ${value === status ? config.color : "text-gray-700"}`}><Icon className={`h-3.5 w-3.5 ${config.color}`} />{config.label}{value === status && <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-emerald-500" />}</button>;
+    })}</div>}
+  </div>;
 }
 
-/* ─── Notes panel ───────────────────────────────────────────────────────── */
-function NotesPanel({
-  note,
-  assignedTo,
-  onSave,
-}: {
-  note: string;
-  assignedTo: string;
-  onSave: (note: string, assignedTo: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [draftNote, setDraftNote] = useState(note);
-  const [draftAssigned, setDraftAssigned] = useState(assignedTo);
-
-  const handleSave = () => {
-    onSave(draftNote, draftAssigned);
-    setOpen(false);
-    toast.success("Note saved");
-  };
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => { setDraftNote(note); setDraftAssigned(assignedTo); setOpen((o) => !o); }}
-        title="Add internal note"
-        className={`flex h-8 w-8 items-center justify-center rounded-xl border-2 transition-all hover:scale-110 ${
-          note
-            ? "border-amber-300 bg-amber-50 text-amber-600"
-            : "border-transparent bg-gray-100 text-gray-400 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-500"
-        }`}
-      >
-        <StickyNote className="h-3.5 w-3.5" />
-      </button>
-      {open && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Edit internal note">
-          <button
-            type="button"
-            aria-label="Close internal note editor"
-            onClick={() => setOpen(false)}
-            className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]"
-          />
-          <div className="relative z-10 max-h-[calc(100dvh-1rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-amber-100 bg-white p-3.5 shadow-2xl shadow-slate-900/20 sm:p-4">
-            <div className="mb-2.5 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-widest text-amber-600">Internal Note</p>
-                <p className="mt-0.5 text-sm font-bold text-slate-900">Keep the team aligned</p>
-              </div>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <textarea
-              autoFocus
-              value={draftNote}
-              onChange={(e) => setDraftNote(e.target.value)}
-              placeholder="e.g. Called client, waiting callback..."
-              rows={3}
-              className="w-full resize-none rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-amber-400 focus:bg-white transition-all"
-            />
-            <div className="mt-2.5 flex items-center gap-2">
-              <User className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <input
-                value={draftAssigned}
-                onChange={(e) => setDraftAssigned(e.target.value)}
-                placeholder="Assigned to..."
-                className="flex-1 rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-amber-400 focus:bg-white transition-all"
-              />
-            </div>
-            <div className="mt-3 flex gap-2">
-              <button type="button" onClick={handleSave} className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 py-2 text-[13px] font-bold text-white shadow-sm shadow-amber-300 hover:brightness-105 transition sm:py-2.5">
-                Save note
-              </button>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-xl border-2 border-slate-200 px-3.5 py-2 text-[13px] font-bold text-slate-600 hover:bg-slate-50 transition-colors sm:px-4 sm:py-2.5">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── Quick contact actions ─────────────────────────────────────────────── */
 function QuickContact({
   email,
   phone,
@@ -403,16 +175,57 @@ function MatchReview({ enq }: { enq: EnquiryRecord }) {
   const [matches, setMatches] = useState<MatchCandidate[] | null>(null);
   const [review, setReview] = useState<MatchReviewData | null>(null);
   const [isMatching, setIsMatching] = useState(false);
+  const [manualMaidOptions, setManualMaidOptions] = useState<Array<{ id: number; maidReferenceCode: string; maidName: string; nationality: string; status: string }>>([]);
+  const [manualMaidReferences, setManualMaidReferences] = useState<string[]>([]);
+  const [manualSearch, setManualSearch] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
+  const [isLoadingManualMaids, setIsLoadingManualMaids] = useState(false);
+  const [manualMaidError, setManualMaidError] = useState("");
+
+  const selectedMatches = useMemo(() => {
+    const manual = manualMaidOptions
+      .filter((maid) => manualMaidReferences.includes(maid.maidReferenceCode))
+      .map((maid) => ({ maidId: maid.id, maidReferenceCode: maid.maidReferenceCode, maidName: maid.maidName, score: 0, reasons: ["Manually selected"] }));
+    return [...(matches ?? []).filter((match) => !manualMaidReferences.includes(match.maidReferenceCode)), ...manual];
+  }, [matches, manualMaidOptions, manualMaidReferences]);
 
   const draft = useMemo(() => {
-    if (!matches?.length) return "";
-    const profileLines = matches.map((match, index) => {
+    if (!selectedMatches.length) return "";
+    const profileLines = selectedMatches.map((match, index) => {
       const profileUrl = window.location.origin + "/maids/" + encodeURIComponent(match.maidReferenceCode);
       return (index + 1) + ". " + match.maidName + " (" + match.maidReferenceCode + ")\n" + profileUrl;
     });
-    const introduction = review?.matchReview?.draftMessage || "Hello " + enq.username + ",\n\nBased on the requirements you shared, our team has shortlisted the following helper profile" + (matches.length === 1 ? "" : "s") + " for your review.";
+    const introduction = review?.matchReview?.draftMessage || "Hello " + enq.username + ",\n\nBased on the requirements you shared, our team has shortlisted the following helper profile" + (selectedMatches.length === 1 ? "" : "s") + " for your review.";
     return introduction + "\n\n" + profileLines.join("\n\n") + "\n\nThese are preliminary recommendations subject to staff review and the candidates' current availability. Please let us know which profile you would like to discuss, or share any additional requirements.\n\nWarm regards,\nAT The Agency";
-  }, [enq.username, matches, review]);
+  }, [enq.username, selectedMatches, review]);
+
+  const openManualMatching = async () => {
+    setManualOpen((open) => !open);
+    if (manualMaidOptions.length || isLoadingManualMaids) return;
+    setIsLoadingManualMaids(true);
+    setManualMaidError("");
+    try {
+      const response = await fetch("/api/maids?visibility=public&page=1&pageSize=500&noPhotos=true", { headers: getAgencyAdminAuthHeaders() });
+      const result = await readSafeJson<{ maids?: Array<{ id?: number; referenceCode?: string; fullName?: string; name?: string; nationality?: string; status?: string; availability?: string }>; error?: string }>(response);
+      if (!response.ok) throw new Error(result.error || "Could not load maid profiles");
+      const options = (result.maids ?? []).flatMap((maid) => {
+        const reference = String(maid.referenceCode ?? "").trim();
+        const name = String(maid.fullName ?? maid.name ?? "").trim();
+        if (!reference || !name) return [];
+        return [{ id: Number(maid.id) || reference.length, maidReferenceCode: reference, maidName: name, nationality: maid.nationality ?? "", status: maid.status ?? maid.availability ?? "Available" }];
+      });
+      setManualMaidOptions(options);
+      if (!options.length) setManualMaidError("No public maid profiles are available to select.");
+    } catch (error) {
+      setManualMaidError(error instanceof Error ? error.message : "Could not load maid profiles");
+    } finally {
+      setIsLoadingManualMaids(false);
+    }
+  };
+
+  const filteredManualMaids = manualMaidOptions.filter((maid) =>
+    `${maid.maidName} ${maid.maidReferenceCode} ${maid.nationality}`.toLowerCase().includes(manualSearch.toLowerCase().trim()),
+  );
 
   const handleMatch = async () => {
     setIsMatching(true);
@@ -449,19 +262,45 @@ function MatchReview({ enq }: { enq: EnquiryRecord }) {
         <Sparkles className={"h-3.5 w-3.5 " + (isMatching ? "animate-spin" : "")} />
         {isMatching ? "Finding matches…" : matches ? "Refresh maid matches" : "Find maid matches"}
       </button>
+      <button type="button" onClick={() => void openManualMatching()} className="ml-2 inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-[12px] font-bold text-slate-800 transition hover:border-violet-300 hover:bg-violet-50">
+        <User className="h-3.5 w-3.5" /> {manualOpen ? "Hide manual matching" : "Match manually"}
+      </button>
 
-      {matches && (
+      {manualOpen && (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3.5">
+          <p className="text-[13px] font-bold text-slate-900">Choose maid profiles</p>
+          <p className="mt-1 text-[12px] text-slate-600">Select one or more profiles to add them to the shortlist. This does not change a maid’s availability.</p>
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input value={manualSearch} onChange={(event) => setManualSearch(event.target.value)} placeholder="Search by name, nationality, or reference" className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] text-slate-900 outline-none focus:border-violet-400" />
+          </div>
+          {isLoadingManualMaids ? <p className="py-5 text-center text-[13px] text-slate-700">Loading maid profiles…</p> : manualMaidError ? <p className="py-4 text-[13px] text-slate-700">{manualMaidError}</p> : (
+            <div className="mt-3 max-h-56 space-y-1 overflow-y-auto">
+              {filteredManualMaids.map((maid) => {
+                const selected = manualMaidReferences.includes(maid.maidReferenceCode);
+                return <label key={maid.maidReferenceCode} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-violet-50">
+                  <input type="checkbox" checked={selected} onChange={() => setManualMaidReferences((current) => selected ? current.filter((reference) => reference !== maid.maidReferenceCode) : [...current, maid.maidReferenceCode])} className="h-4 w-4 accent-violet-600" />
+                  <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-bold text-slate-900">{maid.maidName}</span><span className="block truncate text-[12px] text-slate-700">{maid.maidReferenceCode}{maid.nationality ? ` · ${maid.nationality}` : ""} · {maid.status}</span></span>
+                </label>;
+              })}
+              {!filteredManualMaids.length && <p className="py-4 text-center text-[13px] text-slate-700">No profiles match your search.</p>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {(matches || manualMaidReferences.length > 0) && (
         <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/50 p-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] font-black uppercase tracking-widest text-violet-700">{review?.aiUsed ? "AI shortlist — staff review required" : "Fallback shortlist — staff review required"}</p>
             {draft && <button type="button" onClick={() => void copyDraft()} className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-violet-700"><Copy className="h-3 w-3" /> Copy draft</button>}
           </div>
-          {matches.length ? (
+          {selectedMatches.length ? (
             <div className="mt-2.5 space-y-2">
-              {matches.map((match) => (
+              {selectedMatches.map((match) => (
                 <a key={match.maidId} href={"/maids/" + encodeURIComponent(match.maidReferenceCode)} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-lg border border-white bg-white px-3 py-2.5 hover:border-violet-200">
                   <span className="min-w-0"><span className="block truncate text-[13px] font-bold text-slate-900">{match.maidName}</span><span className="block truncate text-[11px] text-slate-500">{match.maidReferenceCode} · {match.reasons[0]}</span></span>
-                  <span className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-violet-700">{match.score}% <ExternalLink className="h-3 w-3" /></span>
+                  <span className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-violet-700">{match.reasons[0] === "Manually selected" ? "Manual" : `${match.score}%`} <ExternalLink className="h-3 w-3" /></span>
                 </a>
               ))}
               <textarea readOnly value={draft} className="mt-1 min-h-40 w-full resize-y rounded-lg border border-violet-100 bg-white p-3 text-[12px] leading-relaxed text-slate-700 outline-none" aria-label="Draft employer shortlist message" />
@@ -481,7 +320,6 @@ function EnquiryCard({
   onDelete,
   isBusy,
   onStatusChange,
-  onNoteSave,
 }: {
   enq: EnquiryRecord;
   index: number;
@@ -490,7 +328,6 @@ function EnquiryCard({
   onDelete: () => void;
   isBusy: boolean;
   onStatusChange: (id: number, status: Status) => void;
-  onNoteSave: (id: number, note: string, assignedTo: string) => void;
 }) {
   const avatar = getAvatarColor(enq.id);
   const initials =
@@ -543,11 +380,6 @@ function EnquiryCard({
 
           {/* Action buttons */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <NotesPanel
-              note={enq.note ?? ""}
-              assignedTo={enq.assignedTo ?? ""}
-              onSave={(note, assignedTo) => onNoteSave(enq.id, note, assignedTo)}
-            />
             <DeleteButton onDelete={onDelete} isBusy={isBusy} />
           </div>
         </div>
@@ -564,13 +396,6 @@ function EnquiryCard({
         <div className="flex items-center gap-1.5 mb-3">
           <Calendar className="h-3.5 w-3.5 text-amber-500" />
           <span className="text-[12px] font-semibold text-amber-800">{enq.date}</span>
-          {enq.assignedTo && (
-            <>
-              <span className="text-gray-300 mx-1">·</span>
-              <User className="h-3.5 w-3.5 text-gray-400" />
-              <span className="text-[12px] font-semibold text-gray-600">{enq.assignedTo}</span>
-            </>
-          )}
         </div>
 
         {/* Message box */}
@@ -582,18 +407,6 @@ function EnquiryCard({
             {enq.message || <span className="italic text-gray-500 font-normal">No message provided.</span>}
           </p>
         </div>
-
-        <MatchReview enq={enq} />
-
-        {/* Internal note (if exists) */}
-        {enq.note && (
-          <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-            <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-amber-600 mb-1">
-              <StickyNote className="h-3 w-3" /> Internal Note
-            </p>
-            <p className="text-[13px] text-amber-900 leading-relaxed">{enq.note}</p>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -611,126 +424,46 @@ const AdminEnquiry = () => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const enquiriesRef = useRef<EnquiryRecord[]>([]);
-  const searchRef = useRef("");
-
-  useEffect(() => { enquiriesRef.current = enquiries; }, [enquiries]);
-  useEffect(() => { searchRef.current = search; }, [search]);
-
-  /* ── Fetch enquiries ── */
   useEffect(() => {
     const controller = new AbortController();
-    const load = async () => {
+    const loadEnquiries = async () => {
+      setIsLoading(true);
       try {
-        setIsLoading(true);
         const params = new URLSearchParams();
         if (search.trim()) params.set("search", search.trim());
         params.set("pageSize", "500");
-        const response = await fetch(
-          `/api/enquiries?${params.toString()}`,
-          { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal },
-        );
-        const data = await readSafeJson<{ error?: string; enquiries?: EnquiryRecord[] }>(response);
-        if (!response.ok || !data.enquiries)
-          throw new Error(data.error || "Failed to load enquiries");
-        const sorted = [...data.enquiries].sort((a, b) => b.id - a.id);
-        setEnquiries(withStatusDefaults(sorted));
-        setPage(1);
-        setSelectedIds(new Set());
-        // Opening this inbox acknowledges every enquiry currently shown.
-        void fetch("/api/enquiries/mark-viewed", {
-          method: "POST",
-          headers: { ...getAgencyAdminAuthHeaders() },
+        const response = await fetch(`/api/enquiries?${params.toString()}`, {
+          headers: getAgencyAdminAuthHeaders(),
+          signal: controller.signal,
         });
+        const data = await readSafeJson<{ error?: string; enquiries?: EnquiryRecord[] }>(response);
+        if (!response.ok || !data.enquiries) throw new Error(data.error || "Failed to load enquiries");
+        setEnquiries(withStatusDefaults([...data.enquiries].sort((a, b) => b.id - a.id)));
       } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError"))
-          toast.error(error instanceof Error ? error.message : "Failed to load enquiries");
+        if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : "Failed to load enquiries");
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
-    void load();
+    void loadEnquiries();
     return () => controller.abort();
   }, [search]);
 
-  /* ── Real-time stream ── */
-  useEffect(() => {
-    const controller = new AbortController();
-    let lastId = 0;
-    let pollTimer: number | null = null;
-    const computeLocalLastId = () =>
-      enquiriesRef.current.reduce((m, e) => Math.max(m, e.id), 0);
-    const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
-
-    const loadLastId = async () => {
-      try {
-        const res = await fetch("/api/enquiries/last-id", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
-        const d = await readSafeJson<{ lastId?: number; error?: string }>(res);
-        if (res.ok && typeof d.lastId === "number") lastId = Math.max(lastId, d.lastId);
-      } catch { /* ignore */ } finally {
-        lastId = Math.max(lastId, computeLocalLastId());
-      }
-    };
-
-    const run = async () => {
-      await loadLastId();
-      while (!controller.signal.aborted) {
-        try {
-          await streamSse(`/api/enquiries/stream?afterId=${lastId}`, {
-            signal: controller.signal,
-            onEvent: (event) => {
-              if (event.event !== "enquiry" || !event.data) return;
-              const payload = JSON.parse(event.data) as { enquiry?: EnquiryRecord };
-              const next = payload.enquiry;
-              if (!next) return;
-              lastId = Math.max(lastId, next.id);
-              if (searchRef.current.trim()) return;
-              setEnquiries((prev) => {
-                if (prev.some((item) => item.id === next.id)) return prev;
-                const [enriched] = withStatusDefaults([next]);
-                return [...prev, enriched].sort((a, b) => b.id - a.id);
-              });
-            },
-          });
-        } catch (error) {
-          if (controller.signal.aborted) return;
-          if (error instanceof Error && /Stream failed \((404|405)\)/.test(error.message)) {
-            if (pollTimer !== null) return;
-            pollTimer = window.setInterval(async () => {
-              if (controller.signal.aborted || searchRef.current.trim()) return;
-              try {
-                const res = await fetch("/api/enquiries?pageSize=500", { headers: { ...getAgencyAdminAuthHeaders() }, signal: controller.signal });
-                const d = await readSafeJson<{ enquiries?: EnquiryRecord[]; error?: string }>(res);
-                if (res.ok && d.enquiries) {
-                  setEnquiries(withStatusDefaults([...d.enquiries].sort((a, b) => b.id - a.id)));
-                  setPage(1);
-                  lastId = Math.max(lastId, d.enquiries.reduce((m, e) => Math.max(m, e.id), 0));
-                }
-              } catch { /* ignore */ }
-            }, 5000);
-            await sleep(10);
-            continue;
-          }
-          await sleep(1200);
-        }
-      }
-    };
-    void run();
-    return () => {
-      controller.abort();
-      if (pollTimer !== null) window.clearInterval(pollTimer);
-    };
-  }, []);
-
-  /* ── Delete single ── */
   const handleDelete = async (id: number) => {
+    setBusyId(id);
     try {
-      setBusyId(id);
-      const response = await fetch(`/api/enquiries/${id}`, { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } });
-      const data = await readSafeJson<{ error?: string }>(response);
-      if (!response.ok) throw new Error(data.error || "Failed to delete enquiry");
-      setEnquiries((prev) => prev.filter((e) => e.id !== id));
-      setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      const response = await fetch(`/api/enquiries/${id}`, {
+        method: "DELETE",
+        headers: getAgencyAdminAuthHeaders(),
+      });
+      const result = await readSafeJson<{ error?: string }>(response);
+      if (!response.ok) throw new Error(result.error || "Failed to delete enquiry");
+      setEnquiries((current) => current.filter((enquiry) => enquiry.id !== id));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
       toast.success("Enquiry deleted");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete enquiry");
@@ -739,54 +472,39 @@ const AdminEnquiry = () => {
     }
   };
 
-  /* ── Bulk delete ── */
   const handleBulkDelete = async () => {
-    if (selectedIds.size === 0) return;
-    if (!confirmingDelete) { setConfirmingDelete(true); return; }
-    try {
-      setBulkDeleting(true);
-      setConfirmingDelete(false);
-      const ids = Array.from(selectedIds);
-      const res = await fetch("/api/enquiries/bulk", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-        body: JSON.stringify({ ids }),
-      });
-      const d = await readSafeJson<{ deleted?: number; error?: string }>(res);
-      if (!res.ok) throw new Error(d.error ?? "Failed to delete enquiries");
-      const deleted = d.deleted ?? ids.length;
-      setEnquiries((prev) => prev.filter((e) => !selectedIds.has(e.id)));
-      toast.success(`${deleted} enqu${deleted !== 1 ? "iries" : "iry"} deleted`);
-      setSelectedIds(new Set());
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Some enquiries could not be deleted");
-    } finally {
-      setBulkDeleting(false);
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
     }
+    setBulkDeleting(true);
+    const results = await Promise.all(ids.map(async (id) => {
+      try {
+        const response = await fetch(`/api/enquiries/${id}`, { method: "DELETE", headers: getAgencyAdminAuthHeaders() });
+        const result = await readSafeJson<{ error?: string }>(response);
+        return { id, ok: response.ok, error: result.error };
+      } catch (error) {
+        return { id, ok: false, error: error instanceof Error ? error.message : "Delete failed" };
+      }
+    }));
+    const deletedIds = new Set(results.filter((result) => result.ok).map((result) => result.id));
+    const failedCount = results.length - deletedIds.size;
+    setEnquiries((current) => current.filter((enquiry) => !deletedIds.has(enquiry.id)));
+    setSelectedIds((current) => new Set([...current].filter((id) => !deletedIds.has(id))));
+    setConfirmingDelete(false);
+    setBulkDeleting(false);
+    if (deletedIds.size) toast.success(`Deleted ${deletedIds.size} ${deletedIds.size === 1 ? "enquiry" : "enquiries"}`);
+    if (failedCount) toast.error(`${failedCount} ${failedCount === 1 ? "enquiry" : "enquiries"} could not be deleted`);
   };
 
-  /* ── Status change (optimistic, persisted via API) ── */
   const handleStatusChange = async (id: number, status: Status) => {
-    const prevStatus = enquiries.find((e) => e.id === id)?.status ?? "new";
-    setEnquiries((prev) => prev.map((e) => e.id === id ? { ...e, status } : e));
-    const ok = await patchEnquiry(id, { status });
-    if (!ok) {
-      // Revert on failure so the UI reflects the persisted state.
-      setEnquiries((prev) => prev.map((e) => e.id === id ? { ...e, status: prevStatus } : e));
-    }
-  };
-
-  /* ── Note save (optimistic, persisted via API) ── */
-  const handleNoteSave = async (id: number, note: string, assignedTo: string) => {
-    const prev = enquiries.find((e) => e.id === id);
-    setEnquiries((p) => p.map((e) => e.id === id ? { ...e, note, assignedTo } : e));
-    const ok = await patchEnquiry(id, { note, assignedTo });
-    if (ok) {
-      toast.success("Note saved");
-    } else if (prev) {
-      setEnquiries((p) => p.map((e) => e.id === id
-        ? { ...e, note: prev.note ?? "", assignedTo: prev.assignedTo ?? "" }
-        : e));
+    const previousStatus = enquiries.find((enquiry) => enquiry.id === id)?.status ?? "new";
+    setEnquiries((current) => current.map((enquiry) => enquiry.id === id ? { ...enquiry, status } : enquiry));
+    const saved = await patchEnquiry(id, { status });
+    if (!saved) {
+      setEnquiries((current) => current.map((enquiry) => enquiry.id === id ? { ...enquiry, status: previousStatus } : enquiry));
     }
   };
 
@@ -877,7 +595,13 @@ const AdminEnquiry = () => {
 
   /* ── Status counts for filter tabs ── */
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: enquiries.length };
+    const counts: Record<"all" | Status, number> = {
+      all: enquiries.length,
+      new: 0,
+      in_progress: 0,
+      replied: 0,
+      resolved: 0,
+    };
     enquiries.forEach((e) => {
       const s = e.status ?? "new";
       counts[s] = (counts[s] ?? 0) + 1;
@@ -1033,7 +757,7 @@ const AdminEnquiry = () => {
                 {selectedIds.size} selected
               </span>
               <div className="flex items-center gap-2 flex-wrap ml-2">
-                {(Object.keys(STATUS_CONFIG) as Status[]).map((s) => {
+                {(Object.keys(STATUS_CONFIG) as Status[]).filter((s) => s !== "in_progress" && s !== "replied").map((s) => {
                   const cfg = STATUS_CONFIG[s];
                   return (
                     <button
@@ -1147,7 +871,6 @@ const AdminEnquiry = () => {
                       onDelete={() => void handleDelete(enq.id)}
                       isBusy={busyId === enq.id}
                       onStatusChange={handleStatusChange}
-                      onNoteSave={handleNoteSave}
                     />
                   ))}
                 </div>

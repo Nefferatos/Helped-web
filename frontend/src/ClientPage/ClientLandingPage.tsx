@@ -740,7 +740,8 @@ const GLOBAL_STYLES = `
   .nationality-guest-unlock:hover .nationality-guest-unlock-button { background: #fdd96a; }
   @media (max-width: 1180px) { .nationality-preview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   @media (max-width: 800px) { .nationality-preview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  @media (max-width: 520px) { .nationality-panel-header { align-items: flex-start; flex-direction: column; gap: 5px; } .nationality-panel-link { text-align: left; } .nationality-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; } .nationality-guest-unlock { padding: 16px; width: calc(100% - 24px); } .nationality-guest-unlock-title { font-size: 15px; } .nationality-guest-unlock-copy { display: none; } .nationality-guest-unlock-button { min-height: 40px; font-size: 13px; } }
+  .nationality-preview-mobile-extra { display: none; }
+  @media (max-width: 520px) { .nationality-panel-header { align-items: flex-start; flex-direction: column; gap: 5px; } .nationality-panel-link { text-align: left; } .nationality-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; } .nationality-preview-mobile-extra { display: block; } .nationality-guest-unlock { padding: 16px; width: calc(100% - 24px); } .nationality-guest-unlock-title { font-size: 15px; } .nationality-guest-unlock-copy { display: none; } .nationality-guest-unlock-button { min-height: 40px; font-size: 13px; } }
 
   /* ── Pagination ── */
   .pagination-wrap {
@@ -1247,8 +1248,9 @@ const NationalityPreviewPanel = ({
         </Link>
       </div>
       <div className="nationality-preview-grid">
-        {maids.slice(0, 7).map(maid => {
+        {maids.slice(0, 8).map((maid, index) => {
           const age = getMaidAge(maid);
+          const mobileExtraClass = index === 7 ? " nationality-preview-mobile-extra" : "";
           const cardContent = <>
             <div className="nationality-preview-photo">
               <img src={getPrimaryPhoto(maid)} alt={maid.fullName || `${nationality} helper`} loading="lazy" decoding="async" />
@@ -1259,11 +1261,11 @@ const NationalityPreviewPanel = ({
           </>;
           return (
             isLoggedIn ? (
-              <Link key={maid.referenceCode} to={`/maids/${encodeURIComponent(maid.referenceCode)}`} className="nationality-preview" aria-label={`View ${maid.fullName || `${nationality} helper`} profile`}>
+              <Link key={maid.referenceCode} to={`/maids/${encodeURIComponent(maid.referenceCode)}`} className={`nationality-preview${mobileExtraClass}`} aria-label={`View ${maid.fullName || `${nationality} helper`} profile`}>
                 {cardContent}
               </Link>
             ) : (
-              <button key={maid.referenceCode} ref={(element) => { guestCardRefs.current[maid.referenceCode] = element; }} type="button" className="nationality-preview is-locked" onClick={() => openGuestPrompt(maid.referenceCode)} onMouseEnter={() => openGuestPrompt(maid.referenceCode)} onMouseLeave={closeGuestPrompt} onFocus={() => openGuestPrompt(maid.referenceCode)} onBlur={closeGuestPrompt} aria-label="Log in to view this helper's full profile">
+              <button key={maid.referenceCode} ref={(element) => { guestCardRefs.current[maid.referenceCode] = element; }} type="button" className={`nationality-preview is-locked${mobileExtraClass}`} onClick={() => openGuestPrompt(maid.referenceCode)} onMouseEnter={() => openGuestPrompt(maid.referenceCode)} onMouseLeave={closeGuestPrompt} onFocus={() => openGuestPrompt(maid.referenceCode)} onBlur={closeGuestPrompt} aria-label="Log in to view this helper's full profile">
                 {cardContent}
               </button>
             )

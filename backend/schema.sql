@@ -147,6 +147,16 @@ CREATE TABLE IF NOT EXISTS consents (
 );
 CREATE INDEX IF NOT EXISTS idx_consents_active_lookup ON consents (agency_id, subject, channel) WHERE unsubscribed_at IS NULL;
 
+-- Keep the latest generated marketing drafts available across API restarts.
+CREATE TABLE IF NOT EXISTS marketing_campaigns (
+  id UUID PRIMARY KEY,
+  agency_id INTEGER NOT NULL,
+  campaign JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_marketing_campaigns_agency_created
+  ON marketing_campaigns (agency_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS support_tickets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, enquiry_id INTEGER NOT NULL,
   client_id INTEGER, subject TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',

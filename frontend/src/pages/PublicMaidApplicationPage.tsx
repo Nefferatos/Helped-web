@@ -1543,12 +1543,12 @@ const PublicMaidApplicationPage = () => {
                     <label
                       id="terms-label"
                       htmlFor="terms-checkbox"
-                      className={`mt-5 flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-all ${
+                      className={`mt-5 flex cursor-pointer items-center gap-3.5 rounded-lg border p-4 transition-colors ${
                         termsAccepted
-                          ? "border-emerald-500 bg-emerald-50"
+                          ? "border-emerald-300 bg-emerald-50/60"
                           : showTermsAlert
                           ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200"
-                          : "border-slate-200 bg-slate-50 hover:border-emerald-300"
+                          : "border-slate-300 bg-white hover:border-slate-400"
                       }`}
                     >
                       <input
@@ -1565,15 +1565,12 @@ const PublicMaidApplicationPage = () => {
                           }
                           markChanged();
                         }}
-                        className="mt-0.5 h-5 w-5 cursor-pointer rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 shrink-0"
+                        className="h-4 w-4 cursor-pointer rounded-sm border-slate-400 text-emerald-700 focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 shrink-0"
                         aria-required="true"
                       />
-                      <span className="text-sm font-semibold text-slate-900 leading-relaxed">
+                      <span className="text-sm font-medium leading-6 text-slate-800">
                         I confirm that I have read and accept the applicant declaration and consent terms before proceeding.
                       </span>
-                      {termsAccepted && (
-                        <CheckCircle2 className="ml-auto mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
-                      )}
                     </label>
 
                     {showTermsAlert && !termsAccepted && (
@@ -1582,14 +1579,8 @@ const PublicMaidApplicationPage = () => {
                       </div>
                     )}
 
-                    {termsAccepted && !introCompleted && (
-                      <p className="mt-3 text-center text-xs font-semibold text-emerald-700">
-                        ✓ Terms accepted — click <span className="font-bold">Continue</span> below to proceed to Step 1.
-                      </p>
-                    )}
-
                     {introCompleted && (
-                      <p className="mt-3 text-center text-xs font-semibold text-emerald-700">
+                      <p className="mt-2 pl-1 text-left text-xs font-medium text-slate-600" role="status">
                         ✓ Introduction completed — you may navigate freely between all steps.
                       </p>
                     )}

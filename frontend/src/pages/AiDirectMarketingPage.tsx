@@ -70,6 +70,8 @@ type Contact = {
   phone: string;
   email: string;
   source: string;
+  whatsappConsent?: boolean;
+  emailConsent?: boolean;
 };
 type MarketingMessage = {
   contactId: string;
@@ -79,6 +81,7 @@ type MarketingMessage = {
   contactSource: string;
   message: string;
   whatsappLink: string;
+  emailLink: string;
   charCount: number;
   whatsappReady: boolean;
 };
@@ -110,6 +113,7 @@ type AdvertisingOpportunity = {
   tone: CampaignTone;
   audienceType: AudienceType;
   maidReferences: string[];
+  contactIds?: string[];
   estimatedReach: number;
   priority: "high" | "medium" | "low";
   detectedAt: string;
@@ -120,26 +124,6 @@ type ScanResult = {
   agencyId: number;
   opportunities: AdvertisingOpportunity[];
 };
-
-type DispatchCampaignLog = {
-  goal: string;
-  audience: string;
-  totalContacts: number;
-  emailsSent: number;
-  whatsappQueued: number;
-  skipped: number;
-  errors?: string[];
-};
-
-type AutonomousStatus = {
-  scannedAt: string;
-  opportunitiesFound: number;
-  aiUsed?: boolean;
-  model?: string;
-  campaigns: DispatchCampaignLog[];
-  emailsTotal: number;
-  whatsappTotal: number;
-} | null;
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -475,12 +459,17 @@ const MessageCard = ({ msg }: { msg: MarketingMessage }) => {
               rel="noopener noreferrer"
               className="flex h-7 items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
             >
-              <ExternalLink className="h-3 w-3" /> Send
+              <ExternalLink className="h-3 w-3" /> Open WhatsApp draft
             </a>
-          ) : (
+          ) : !msg.emailLink && (
             <span className="flex h-7 items-center rounded-md border border-dashed px-2.5 text-xs text-muted-foreground/60">
-              No phone
+              No consented channel
             </span>
+          )}
+          {msg.emailLink && (
+            <a href={msg.emailLink} className="flex h-7 items-center gap-1.5 rounded-md border border-sky-300 bg-sky-50 px-2.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100">
+              <ExternalLink className="h-3 w-3" /> Email draft
+            </a>
           )}
           <button
             onClick={() => setOpen((o) => !o)}
@@ -627,8 +616,6 @@ export default function AiDirectMarketingPage() {
   const [generatedCampaigns, setGeneratedCampaigns] = useState<
     Record<string, Campaign>
   >({});
-  const [autonomousStatus, setAutonomousStatus] =
-    useState<AutonomousStatus>(null);
 
   // ── History ───────────────────────────────────────────────────────────────
   const [history, setHistory] = useState<CampaignSummary[]>([]);
@@ -644,8 +631,13 @@ export default function AiDirectMarketingPage() {
   const [maids, setMaids] = useState<Maid[]>([]);
   const [maidsLoading, setML] = useState(true);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [allAudienceContacts, setAllAudienceContacts] = useState<Contact[]>([]);
   const [contactsLoading, setCL] = useState(false);
   const [contactsError, setCErr] = useState(false);
+  const [consentManagerOpen, setConsentManagerOpen] = useState(false);
+  const [consentSource, setConsentSource] = useState('');
+  const [consentSearch, setConsentSearch] = useState('');
+  const [consentBusyId, setConsentBusyId] = useState<string | null>(null);
   const [audienceCounts, setCounts] = useState<
     Partial<Record<AudienceType, number>>
   >({});
@@ -688,8 +680,8 @@ export default function AiDirectMarketingPage() {
           headers: getAgencyAdminAuthHeaders(),
         });
         if (!res.ok) return;
-        const d = (await res.json()) as { total?: number };
-        setCounts((prev) => ({ ...prev, [t]: d.total ?? 0 }));
+        const d = (await res.json()) as { eligibleTotal?: number; total?: number };
+        setCounts((prev) => ({ ...prev, [t]: d.eligibleTotal ?? d.total ?? 0 }));
       } catch {
         /* ignore */
       }
@@ -701,22 +693,51 @@ export default function AiDirectMarketingPage() {
     setCErr(false);
     try {
       const res = await fetch(
-        `/api/ai/direct-marketing/audience?type=${type}`,
+        `/api/ai/direct-marketing/audience?type=${type}&manage=true`,
         { headers: getAgencyAdminAuthHeaders() },
       );
       if (!res.ok) {
         setCErr(true);
         return;
       }
-      const d = (await res.json()) as { contacts?: Contact[] };
-      setContacts(d.contacts ?? []);
-      setCounts((prev) => ({ ...prev, [type]: d.contacts?.length ?? 0 }));
+      const d = (await res.json()) as { contacts?: Contact[]; eligibleTotal?: number };
+      const all = d.contacts ?? [];
+      setAllAudienceContacts(all);
+      setContacts(all.filter((contact) => contact.whatsappConsent || contact.emailConsent));
+      setCounts((prev) => ({ ...prev, [type]: d.eligibleTotal ?? all.filter((contact) => contact.whatsappConsent || contact.emailConsent).length }));
     } catch {
       setCErr(true);
     } finally {
       setCL(false);
     }
   }, []);
+
+  const setContactConsent = async (contact: Contact, channel: 'whatsapp' | 'email', consented: boolean) => {
+    if (consented && consentSource.trim().length < 5) {
+      toast.error('Add the source of the documented opt-in before enabling consent.');
+      return;
+    }
+    setConsentBusyId(`${contact.id}-${channel}`);
+    try {
+      const response = await fetch('/api/ai/direct-marketing/audience/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAgencyAdminAuthHeaders() },
+        body: JSON.stringify({ audienceType, contactId: contact.id, channel, consented, source: consentSource.trim() }),
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error || 'Could not update consent');
+      toast.success(consented ? `${channel === 'whatsapp' ? 'WhatsApp' : 'Email'} consent recorded` : 'Marketing consent withdrawn');
+      await loadContacts(audienceType);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update consent');
+    } finally {
+      setConsentBusyId(null);
+    }
+  };
+
+  const filteredConsentContacts = allAudienceContacts.filter((contact) =>
+    `${contact.name} ${contact.phone} ${contact.email}`.toLowerCase().includes(consentSearch.trim().toLowerCase()),
+  );
 
   useEffect(() => {
     void loadContacts(audienceType);
@@ -741,20 +762,7 @@ export default function AiDirectMarketingPage() {
 
   // ── Agent actions ─────────────────────────────────────────────────────────
 
-  const loadStatus = useCallback(async () => {
-    try {
-      const res = await fetch("/api/ai/direct-marketing/autonomous/status", {
-        headers: getAgencyAdminAuthHeaders(),
-      });
-      if (!res.ok) return;
-      const d = (await res.json()) as { lastRun?: AutonomousStatus };
-      setAutonomousStatus(d.lastRun ?? null);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const scan = async () => {
+  const scan = useCallback(async (notify = true) => {
     setScanning(true);
     try {
       const res = await fetch("/api/ai/direct-marketing/autonomous/scan", {
@@ -763,9 +771,9 @@ export default function AiDirectMarketingPage() {
       if (!res.ok) throw new Error(`Scan failed (${res.status})`);
       const data = (await res.json()) as ScanResult;
       setScanResult(data);
-      if (data.opportunities.length === 0) {
+      if (notify && data.opportunities.length === 0) {
         toast.success("All clear — no campaigns needed right now");
-      } else {
+      } else if (notify) {
         toast.success(
           <div className="min-w-0 pr-2">
             <p className="text-sm font-extrabold tracking-tight text-emerald-950">
@@ -783,13 +791,14 @@ export default function AiDirectMarketingPage() {
     } finally {
       setScanning(false);
     }
-  };
+  }, []);
 
-  // Run scan + load status on mount
+  // Scan on entry, then refresh suggestions every 30 minutes while this page is open.
   useEffect(() => {
-    void scan();
-    void loadStatus();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    void scan(false);
+    const intervalId = window.setInterval(() => void scan(false), 30 * 60 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, [scan]);
 
   const generateForOpportunity = async (opp: AdvertisingOpportunity) => {
     setGeneratingFor(opp.id);
@@ -812,7 +821,7 @@ export default function AiDirectMarketingPage() {
         setGeneratedCampaigns((prev) => ({ ...prev, [opp.id]: campaign }));
         await loadHistory();
         toast.success(
-          `${campaign.contactCount} messages generated for "${opp.title}"`,
+          `${campaign.contactCount} consented contacts added to the "${opp.title}" draft`,
         );
       }
     } catch (err) {
@@ -851,7 +860,7 @@ export default function AiDirectMarketingPage() {
       if (!res.ok) throw new Error(d.error ?? `Failed (${res.status})`);
       setManual(d.campaign ?? null);
       await loadHistory();
-      toast.success(`${d.campaign?.contactCount ?? 0} messages generated`);
+      toast.success(`${d.campaign?.contactCount ?? 0} consented contacts added to the draft`);
       setTimeout(
         () =>
           resultsRef.current?.scrollIntoView({
@@ -992,10 +1001,10 @@ export default function AiDirectMarketingPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar className="h-3.5 w-3.5" /> Auto-runs every 30 min
+                    <Calendar className="h-3.5 w-3.5" /> Scans every 30 min while this page is open
                   </span>
                   <Button
-                    onClick={scan}
+                    onClick={() => void scan()}
                     disabled={scanning}
                     size="sm"
                     variant="outline"
@@ -1014,33 +1023,10 @@ export default function AiDirectMarketingPage() {
                   </Button>
                 </div>
               </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                Suggestions refresh every 30 minutes while this page is open. Campaigns are drafts only; staff choose whether to open WhatsApp or email drafts.
+              </div>
 
-              {autonomousStatus && (
-                <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-3 border-b bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-emerald-900">
-                        Last autonomous dispatch
-                      </p>
-                      <p className="text-xs text-emerald-700">
-                        {timeAgo(autonomousStatus.scannedAt)} ·{" "}
-                        {autonomousStatus.emailsTotal} email
-                        {autonomousStatus.emailsTotal !== 1 ? "s" : ""} sent ·{" "}
-                        {autonomousStatus.whatsappTotal} WhatsApp queued
-                      </p>
-                    </div>
-                    <button
-                      onClick={loadStatus}
-                      className="shrink-0 flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {scanning && !scanResult && (
                 <div className="flex flex-col items-center gap-4 rounded-2xl border bg-card py-16 text-center shadow-sm">
@@ -1138,6 +1124,44 @@ export default function AiDirectMarketingPage() {
                       </button>
                     </div>
                   )}
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-950">Marketing consent</p>
+                        <p className="text-xs text-emerald-900">Only contacts with documented opt-in are included. Drafts are never sent automatically.</p>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setConsentManagerOpen((open) => !open)}>
+                        {consentManagerOpen ? 'Hide consent list' : 'Manage consent'}
+                      </Button>
+                    </div>
+                    {consentManagerOpen && (
+                      <div className="mt-3 space-y-3 border-t border-emerald-200 pt-3">
+                        <label className="block text-xs font-semibold text-emerald-950">
+                          Source of the recorded opt-in
+                          <input value={consentSource} onChange={(event) => setConsentSource(event.target.value)} placeholder="e.g. WhatsApp opt-in recorded 12 Oct 2026" className="mt-1 h-9 w-full rounded-lg border border-emerald-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-300" />
+                        </label>
+                        <input value={consentSearch} onChange={(event) => setConsentSearch(event.target.value)} placeholder="Find a contact by name, phone, or email" className="h-9 w-full rounded-lg border border-emerald-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-300" />
+                        <div className="max-h-64 space-y-2 overflow-y-auto">
+                          {filteredConsentContacts.map((contact) => (
+                            <div key={contact.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-100 bg-white p-3">
+                              <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{contact.name}</p><p className="truncate text-xs text-slate-700">{[contact.phone, contact.email].filter(Boolean).join(' · ') || 'No contact details'}</p></div>
+                              <div className="flex flex-wrap gap-2">
+                                {(['whatsapp', 'email'] as const).map((channel) => {
+                                  const allowed = channel === 'whatsapp' ? contact.whatsappConsent : contact.emailConsent;
+                                  const hasAddress = channel === 'whatsapp' ? Boolean(contact.phone) : Boolean(contact.email);
+                                  const busy = consentBusyId === `${contact.id}-${channel}`;
+                                  return <button key={channel} type="button" disabled={!hasAddress || busy} onClick={() => void setContactConsent(contact, channel, !allowed)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${allowed ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-rose-50 hover:text-rose-800' : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50'}`}>
+                                    {busy ? 'Saving…' : `${channel === 'whatsapp' ? 'WhatsApp' : 'Email'}: ${allowed ? 'opted in' : hasAddress ? 'record opt-in' : 'no address'}`}
+                                  </button>;
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                          {!filteredConsentContacts.length && <p className="py-4 text-center text-sm text-slate-700">No contacts in this audience match your search.</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Helpers: collapsed by default since it's optional */}
@@ -1226,7 +1250,7 @@ export default function AiDirectMarketingPage() {
                   <Textarea
                     value={customNote}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="E.g. Mention our June placement fee discount. Focus on elderly care helpers."
+                    placeholder="E.g. Mention an approved placement offer. Focus on helpers with elderly-care experience."
                     rows={3}
                     maxLength={500}
                     className="text-sm"
@@ -1255,7 +1279,7 @@ export default function AiDirectMarketingPage() {
                 <p className="text-sm text-muted-foreground">
                   {contactsLoading
                     ? "Loading contacts…"
-                    : `${contactCount} contact${contactCount !== 1 ? "s" : ""} will receive this campaign`}
+                    : `${contactCount} consented contact${contactCount !== 1 ? "s" : ""} eligible for message drafts`}
                 </p>
                 <Button
                   onClick={generateManual}
@@ -1334,7 +1358,7 @@ export default function AiDirectMarketingPage() {
                         color: "text-emerald-600",
                       },
                       {
-                        label: "Copy Only",
+                        label: "Email only",
                         value: manualCampaign.emailOnlyCount,
                         color: "text-muted-foreground",
                       },

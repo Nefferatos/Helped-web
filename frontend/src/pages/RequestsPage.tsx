@@ -173,7 +173,7 @@ function BottomSheet({
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
+          "fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm transition-opacity duration-300",
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
         )}
         onClick={onClose}
@@ -182,7 +182,7 @@ function BottomSheet({
       {/* Sheet */}
       <div
         className={cn(
-          "fixed bottom-0 z-50 flex flex-col rounded-t-[28px] bg-white shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "fixed bottom-0 z-[61] flex flex-col rounded-t-[28px] bg-white shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
           "w-full max-w-2xl max-h-[72vh] left-1/2 -translate-x-1/2",
           open ? "translate-y-0" : "translate-y-full",
         )}

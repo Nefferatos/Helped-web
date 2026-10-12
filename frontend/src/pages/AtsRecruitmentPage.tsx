@@ -1486,6 +1486,12 @@ const AtsRecruitmentPage = () => {
                   variant="outline"
                   className="border-slate-200 bg-white text-slate-700"
                 >
+                  {applicationsQuery.data?.pageInfo.total ?? applications.length} total applicants
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="border-slate-200 bg-white text-slate-700"
+                >
                   {displayedApplications.length} visible
                 </Badge>
                 {selectedCount > 0 && (

@@ -9,6 +9,7 @@ import {
 } from '../store'
 import { callMakeAiEngine } from './makeAiEngine'
 import { hasActiveConsent } from './consentService'
+import { saveMarketingCampaign } from '../repositories/marketingCampaignRepository'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ export interface MarketingMessage {
   contactSource: string
   message: string
   whatsappLink: string
+  emailLink: string
   charCount: number
   whatsappReady: boolean
 }
@@ -66,16 +68,6 @@ export interface MarketingCampaign {
 }
 
 // ─── In-memory campaign store (last 20 per agency) ────────────────────────────
-
-const campaignsByAgency = new Map<number, MarketingCampaign[]>()
-
-export const saveCampaignToMemory = (campaign: MarketingCampaign) => {
-  const existing = campaignsByAgency.get(campaign.agencyId) ?? []
-  campaignsByAgency.set(campaign.agencyId, [campaign, ...existing].slice(0, 20))
-}
-
-export const getCampaignsByAgency = (agencyId: number): MarketingCampaign[] =>
-  campaignsByAgency.get(agencyId) ?? []
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,8 +103,8 @@ const goalMeta = (goal: CampaignGoal) => ({
     subject: 'Still Looking for a Helper?',
   },
   promotion: {
-    intent: 'announce a special promotion, discounted placement fee, or limited-time offer',
-    hook: 'Special offer — limited slots available!',
+    intent: 'share a promotion that the agency has explicitly described; if no approved promotion details are provided, invite the recipient to ask about current offers without implying a discount or limited availability',
+    hook: 'Ask us about our current placement options.',
     emoji: '🎉',
     subject: 'Special Offer for You',
   },
@@ -188,6 +180,7 @@ FORMAT RULES (strict):
 - End with a CTA that includes {{agencyPhone}}
 - Total: 200-300 characters maximum (count carefully — WhatsApp previews cut off long messages)
 - Singapore context: use $ not S$, "transfer helper" / "new helper"
+- Never invent discounts, limited slots, availability, credentials, or other claims not present in the supplied facts
 - 1-2 relevant emojis only (0 for professional tone)
 - Use {{name}} for client name, {{agencyPhone}} for contact number
 
@@ -200,8 +193,14 @@ const parseAiJson = (text: string): { template: string; subject: string } | null
   if (firstBrace === -1 || lastBrace <= firstBrace) return null
   try {
     const parsed = JSON.parse(text.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>
-    if (typeof parsed.template === 'string' && parsed.template.includes('{{name}}')) {
-      return { template: parsed.template, subject: String(parsed.subject ?? 'Helper Update') }
+    if (
+      typeof parsed.template === 'string'
+      && parsed.template.includes('{{name}}')
+      && parsed.template.includes('{{agencyPhone}}')
+      && parsed.template.length <= 800
+    ) {
+      const subject = String(parsed.subject ?? 'Helper Update').trim().slice(0, 120) || 'Helper Update'
+      return { template: parsed.template, subject }
     }
     return null
   } catch {
@@ -297,11 +296,11 @@ const buildFallbackTemplate = (
   const bodies: Record<CampaignGoal, string> = {
     new_arrivals: maidHighlight
       ? `${emoji}${maidHighlight} ${maids.length > 2 ? 'and more are' : 'is'} now available. Experienced, verified, and ready to start soon.`
-      : `${emoji}We have new verified helpers available now. Let us help you find the perfect match for your family.`,
-    re_engage: `${emoji}We noticed you enquired with us before. We still have excellent helpers available and would love to assist you.`,
-    promotion: `${emoji}Limited slots this month — reduced placement fees for new clients. ${maidHighlight ? `${maidHighlight} available now.` : 'Great helpers ready to start.'}`,
-    holiday: `${emoji}Warmest greetings from ${agencyName}! We have helpers available over the festive season. ${maidHighlight || 'Many profiles to choose from.'}`,
-    follow_up: `${emoji}Just following up on your earlier enquiry. ${maidHighlight ? `${maidHighlight} is still available.` : 'We still have great helpers ready for you.'}`,
+      : `${emoji}We would be happy to share current helper profiles and availability. Let us know what your family needs.`,
+    re_engage: `${emoji}We noticed you enquired with us before. If you are still looking for a helper, we would be happy to assist.`,
+    promotion: `${emoji}Ask us about our current placement options and approved offers. ${maidHighlight ? `${maidHighlight} may be a match for your needs.` : 'We would be happy to discuss your needs.'}`,
+    holiday: `${emoji}Warmest greetings from ${agencyName}! If you need help with a placement, please contact us to discuss current options.`,
+    follow_up: `${emoji}Just following up on your earlier enquiry. ${maidHighlight ? `${maidHighlight} may be a match for your needs.` : 'Please let us know if you still need assistance.'}`,
     custom: `${emoji}${maidHighlight ? `${maidHighlight} — available now.` : `We have excellent domestic helpers available.`} Contact us to find out more.`,
   }
 
@@ -333,11 +332,18 @@ export const buildAudience = async (
 
   const [clients, enquiries, directSales] = await Promise.all([
     includeClients ? getClientsStore() : Promise.resolve([]),
-    includeEnquiries ? getEnquiriesStore(undefined, agencyId) : Promise.resolve([]),
-    includeDirectSales ? getDirectSalesStore(agencyId) : Promise.resolve([]),
+    includeEnquiries || includeClients ? getEnquiriesStore(undefined, agencyId) : Promise.resolve([]),
+    includeDirectSales || includeClients ? getDirectSalesStore(agencyId) : Promise.resolve([]),
   ])
 
-  for (const c of clients) {
+  // Client accounts are shared across the site. Only expose accounts already
+  // linked to this agency through its enquiries or direct-sale records.
+  const agencyClientIds = new Set<number>([
+    ...enquiries.map((enquiry) => enquiry.clientId).filter((id): id is number => Number.isInteger(id)),
+    ...directSales.map((sale) => sale.clientId).filter((id): id is number => Number.isInteger(id)),
+  ])
+
+  for (const c of clients.filter((client) => agencyClientIds.has(client.id))) {
     contacts.push({
       id: `client-${c.id}`,
       name: c.name?.trim() || c.email,
@@ -347,7 +353,7 @@ export const buildAudience = async (
     })
   }
 
-  for (const e of enquiries) {
+  for (const e of includeEnquiries ? enquiries : []) {
     contacts.push({
       id: `enquiry-${e.id}`,
       name: e.clientName?.trim() || e.username?.trim() || e.email,
@@ -358,7 +364,10 @@ export const buildAudience = async (
   }
 
   const seenDirectIds = new Set<number>()
-  for (const ds of directSales) {
+  const latestDirectSales = [...directSales].sort((a, b) =>
+    Date.parse(String(b.updatedAt ?? b.createdAt)) - Date.parse(String(a.updatedAt ?? a.createdAt)),
+  )
+  for (const ds of includeDirectSales ? latestDirectSales : []) {
     if (ds.clientId && seenDirectIds.has(ds.clientId)) continue
     if (ds.clientId) seenDirectIds.add(ds.clientId)
     contacts.push({
@@ -382,6 +391,7 @@ export const generateMarketingCampaign = async (params: {
   maidReferences: string[]
   audienceType: AudienceType
   customNote?: string
+  contactIds?: string[]
 }): Promise<MarketingCampaign> => {
   const [allMaids, companyBundle, audience] = await Promise.all([
     getAllMaidsStore(undefined, 'public'),
@@ -390,7 +400,10 @@ export const generateMarketingCampaign = async (params: {
   ])
   // This is the final gate before a WhatsApp deeplink or email recipient is
   // returned to the UI. No explicit opt-in means no marketing delivery.
-  const contacts = (await Promise.all(audience.map(async (contact) => ({
+  const scopedAudience = params.contactIds !== undefined
+    ? audience.filter((contact) => params.contactIds!.includes(contact.id))
+    : audience
+  const contacts = (await Promise.all(scopedAudience.map(async (contact) => ({
     contact,
     whatsappAllowed: await hasActiveConsent(params.agencyId, contact.phone, 'whatsapp'),
     emailAllowed: await hasActiveConsent(params.agencyId, contact.email, 'email'),
@@ -403,9 +416,9 @@ export const generateMarketingCampaign = async (params: {
     companyProfile?.contact_phone?.trim() ||
     ''
 
-  const selectedMaids = params.maidReferences.length > 0
-    ? allMaids.filter((m) => params.maidReferences.includes(m.referenceCode) && m.isPublic)
-    : allMaids.filter((m) => m.isPublic).slice(0, 3)
+  const selectedMaids = allMaids.filter((m) =>
+    m.agencyId === params.agencyId && m.isPublic && params.maidReferences.includes(m.referenceCode),
+  )
 
   const meta = goalMeta(params.goal)
 
@@ -436,11 +449,8 @@ export const generateMarketingCampaign = async (params: {
   }).catch(() => null)
 
   if (makeResult?.json && typeof makeResult.json.template === 'string') {
-    aiResult = {
-      template: makeResult.json.template,
-      subject: String(makeResult.json.subject ?? 'Helper Update'),
-    }
-    aiUsed = true
+    aiResult = parseAiJson(JSON.stringify(makeResult.json))
+    aiUsed = Boolean(aiResult)
   } else if (makeResult?.text) {
     const parsed = parseAiJson(makeResult.text)
     if (parsed) {
@@ -477,6 +487,9 @@ export const generateMarketingCampaign = async (params: {
       contactSource: contact.source,
       message: personalized,
       whatsappLink: whatsappAllowed ? buildWhatsAppLink(contact.phone, personalized) : '',
+      emailLink: emailAllowed && contact.email
+        ? `mailto:${encodeURIComponent(contact.email).replace(/%40/gi, '@')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(personalized)}`
+        : '',
       charCount: personalized.length,
       whatsappReady: whatsappAllowed,
     }
@@ -501,6 +514,6 @@ export const generateMarketingCampaign = async (params: {
     aiUsed,
   }
 
-  saveCampaignToMemory(campaign)
+  await saveMarketingCampaign(campaign)
   return campaign
 }

@@ -559,7 +559,7 @@ const AgencyReportsPage = () => {
       </Card>
 
       {/* ── Sticky action bar — always reachable, whatever is on screen ── */}
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white/95 backdrop-blur">
+      <div className="sticky bottom-0 z-10 border-t border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-xs text-slate-500">
             {effectiveSectionCount} {effectiveSectionCount === 1 ? "tab" : "tabs"} will be written

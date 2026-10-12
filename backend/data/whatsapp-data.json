@@ -1,6 +1,49 @@
 {
   "conversations": [
     {
+      "id": "f8404d1f-9b1b-4fed-a63d-257c7245e854",
+      "agencyId": 1,
+      "candidateReferenceCode": "324",
+      "candidateId": 165,
+      "candidateName": "asdasd",
+      "phoneNumber": "",
+      "currentStage": "available",
+      "nextStep": "Await the next recruitment update from the agency",
+      "tags": [
+        "New Applicant"
+      ],
+      "unreadRecruiterCount": 0,
+      "unreadApplicantCount": 0,
+      "lastMessageAt": "2026-10-11T07:17:32.936Z",
+      "lastMessagePreview": "",
+      "status": "active",
+      "aiEnabled": true,
+      "documentChecklist": [
+        {
+          "key": "passport",
+          "label": "Passport",
+          "completed": false
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "completed": false
+        },
+        {
+          "key": "certificate",
+          "label": "Training Certificates",
+          "completed": false
+        },
+        {
+          "key": "medical",
+          "label": "Medical Reports",
+          "completed": false
+        }
+      ],
+      "createdAt": "2026-10-11T15:50:04.085Z",
+      "updatedAt": "2026-10-11T15:50:04.085Z"
+    },
+    {
       "id": "ec2202b4-b542-4298-84ff-825b570c1a59",
       "agencyId": 1,
       "candidateReferenceCode": "IND-DAR-SWE-9435",
