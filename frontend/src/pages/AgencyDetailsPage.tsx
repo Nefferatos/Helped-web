@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/components/ui/sonner";
 import { getMaidAge, getExperienceBucket, getPrimaryPhoto, getPublicIntro, type MaidProfile } from "@/lib/maids";
 import { fetchAgencyDetails, fetchAgencyMaids, type AgencySummary, type CompanyProfileApi } from "@/lib/agencies";
+import AgencyReviews from "@/components/AgencyReviews";
+import AgencyGoogleRating from "@/components/AgencyGoogleRating";
 import { getClientToken } from "@/lib/clientAuth";
 import "../ClientPage/ClientTheme.css";
 
@@ -93,6 +95,13 @@ const AgencyDetailsPage = () => {
     );
   }
 
+  // Shared by the Google card and the in-app review funnel's deep link.
+  const agencyAddress =
+    [company?.address_line1, company?.address_line2, company?.postal_code, company?.country]
+      .map((part) => (part ?? "").trim())
+      .filter(Boolean)
+      .join(", ") || agency.location;
+
   return (
     <div className="client-page-theme min-h-screen">
       <div className="container py-8 md:py-12">
@@ -118,7 +127,11 @@ const AgencyDetailsPage = () => {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge variant="secondary">{agency.publicMaidsCount} public maids</Badge>
                     <Badge variant="outline">{agency.availableMaidsCount} available now</Badge>
-                    <Badge variant="outline">{agency.rating.toFixed(1)} rating</Badge>
+                    {agency.reviewCount > 0 ? (
+                      <Badge variant="outline">
+                        {agency.rating.toFixed(1)} rating ({agency.reviewCount})
+                      </Badge>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -170,6 +183,10 @@ const AgencyDetailsPage = () => {
               </Button>
             </CardContent>
           </Card>
+
+          <AgencyGoogleRating agencyName={agency.name} address={agencyAddress} />
+
+          <AgencyReviews agencyId={agency.id} agencyName={agency.name} googleQuery={agencyAddress} />
         </section>
 
         {!isLoggedIn ? (

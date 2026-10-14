@@ -11,6 +11,9 @@ import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
 import PublicSiteFooter from "@/components/PublicSiteFooter";
+import ClientReviewRequest from "@/ClientPage/ClientReviewRequest";
+import ClientRatingPopup from "@/ClientPage/ClientRatingPopup";
+import AgencyReviewsShowcase from "@/components/AgencyReviewsShowcase";
 import { toast } from "@/components/ui/sonner";
 import { getStoredClient, getClientAuthHeaders, getClientToken, refreshClientToken, type ClientUser } from "@/lib/clientAuth";
 import { getMaidAge, MaidProfile } from "@/lib/maids";
@@ -1952,6 +1955,19 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           </div>
         </div>
       </section>
+
+      {/* Social proof — real client reviews, shown to everyone (public and portal).
+          Renders nothing until a review exists, so the page never shows an empty
+          "no reviews yet" block. */}
+      <AgencyReviewsShowcase />
+
+      {/* Review request + office map — a permanent section of the landing page,
+          shown both publicly and inside the employer portal. */}
+      <ClientReviewRequest />
+
+      {/* Gentle "rate us on Google" popup — signed-in clients only, once per
+          client, dismissible. Renders itself through a portal. */}
+      <ClientRatingPopup />
 
       {/* ─────────────────────────────────────────────────────────────────────
           FOOTER
