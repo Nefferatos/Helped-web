@@ -9,6 +9,7 @@ import {
 } from '../services/directMarketingAiService'
 import { getMarketingCampaign, getMarketingCampaigns } from '../repositories/marketingCampaignRepository'
 import { filterContactsWithMarketingConsent, hasActiveConsent, recordConsent, withdrawConsent } from '../services/consentService'
+import { MailConfigurationError, MailDeliveryError, sendMarketingEmail } from '../email'
 import {
   executeOpportunity,
   runAutonomousCampaigns,
@@ -201,5 +202,54 @@ export const autonomousRun = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[directMarketing] autonomousRun error:', error)
     res.status(500).json({ error: 'Autonomous run failed' })
+  }
+}
+
+// ─── Send a campaign message as a real email ──────────────────────────────────
+
+export const sendCampaignEmail = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId.trim() : ''
+    const contactId = typeof req.body?.contactId === 'string' ? req.body.contactId.trim() : ''
+    if (!campaignId || !contactId) {
+      return res.status(400).json({ error: 'campaignId and contactId are required' })
+    }
+
+    const campaign = await getMarketingCampaign(agencyId, campaignId)
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign not found' })
+    }
+
+    const message = campaign.messages.find((item) => item.contactId === contactId)
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found for this campaign' })
+    }
+    if (!message.contactEmail) {
+      return res.status(400).json({ error: 'This contact has no email address' })
+    }
+    // Marketing email must stay behind the recorded opt-in gate.
+    if (!(await hasActiveConsent(agencyId, message.contactEmail, 'email'))) {
+      return res.status(403).json({ error: 'This contact has not opted in to email marketing' })
+    }
+
+    await sendMarketingEmail({
+      toEmail: message.contactEmail,
+      toName: message.contactName,
+      subject: campaign.subject,
+      text: message.message,
+      html: message.html || undefined,
+    })
+
+    return res.status(200).json({ ok: true, to: message.contactEmail })
+  } catch (error) {
+    if (error instanceof MailConfigurationError) {
+      return res.status(503).json({ error: error.message })
+    }
+    if (error instanceof MailDeliveryError) {
+      return res.status(502).json({ error: error.message })
+    }
+    console.error('[directMarketing] sendCampaignEmail error:', error)
+    return res.status(500).json({ error: 'Failed to send email' })
   }
 }

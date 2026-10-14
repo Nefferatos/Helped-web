@@ -69,36 +69,21 @@
           "flow": [
 {
               "id": 6,
-              "module": "http:ActionSendData",
-              "version": 3,
-              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
+              "module": "gmail:ActionSendMessage",
+              "version": 1,
+              "parameters": {},
               "mapper": {
-                "url": "https://api.resend.com/emails",
-                "serializeUrl": false,
-                "method": "post",
-                "headers": [
-                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_RESEND_API_KEY" },
-                  { "name": "Content-Type", "value": "application/json" }
-                ],
-                "qs": [],
-                "bodyType": "raw",
-                "parseResponse": true,
-                "authUser": "",
-                "authPass": "",
-                "timeout": "30",
-                "shareCookies": false,
-                "ca": "",
-                "rejectUnauthorized": true,
-                "followRedirect": true,
-                "useQuerystring": false,
-                "gzip": true,
-                "body": "{\"from\":\"REPLACE_WITH_FROM_EMAIL\",\"to\":[\"{{1.to}}\"],\"subject\":\"{{1.subject}}\",\"text\":\"{{1.message}}\",\"html\":\"{{1.html}}\"}"
+                "to": "{{1.to}}",
+                "subject": "{{1.subject}}",
+                "messageType": "html",
+                "isHtml": true,
+                "htmlContent": "<div style=\"white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111827\">{{1.message}}</div>"
               },
-              "metadata": { "designer": { "x": 450, "y": -200 } }
+              "metadata": { "designer": { "x": 450, "y": -200 }, "restore": { "parameters": {} } }
             }
           ],
           "metadata": {
-            "name": "📧 Email (relay Worker HTML)",
+            "name": "📧 Gmail (send as wow.aisolution@gmail.com)",
             "color": "#4F46E5",
             "conditions": [
               { "a": "{{1.scenario}}", "b": "email_marketing", "o": "text:equal" },

@@ -7,6 +7,7 @@ import {
   updateAudienceConsent,
   getCampaignById,
   getCampaigns,
+  sendCampaignEmail,
 } from '../controllers/directMarketingController'
 import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
 
@@ -19,6 +20,7 @@ router.post('/audience/consent', updateAudienceConsent)
 router.post('/generate', generateCampaign)
 router.get('/campaigns', getCampaigns)
 router.get('/campaigns/:id', getCampaignById)
+router.post('/send-email', sendCampaignEmail)
 
 // Autonomous agent
 router.get('/autonomous/scan', autonomousScan)

@@ -7,14 +7,20 @@ export const saveMarketingCampaign = async (campaign: MarketingCampaign): Promis
     VALUES (${campaign.id}::uuid, ${campaign.agencyId}, ${JSON.stringify(campaign)}::jsonb, ${campaign.generatedAt}::timestamptz)
     ON CONFLICT (id) DO UPDATE SET campaign = EXCLUDED.campaign
   `)
+  // Keep only the newest 20 campaigns for the agency. NOTE: this must use
+  // LIMIT 20 — a plain OFFSET 20 returns no rows when the agency has <= 20
+  // campaigns, which made `id NOT IN (...)` match every row and delete the
+  // campaign that was just inserted (history/summary were always empty).
   await query(sql`
     DELETE FROM marketing_campaigns
     WHERE agency_id = ${campaign.agencyId}
       AND id NOT IN (
-        SELECT id FROM marketing_campaigns
-        WHERE agency_id = ${campaign.agencyId}
-        ORDER BY created_at DESC
-        OFFSET 20
+        SELECT id FROM (
+          SELECT id FROM marketing_campaigns
+          WHERE agency_id = ${campaign.agencyId}
+          ORDER BY created_at DESC
+          LIMIT 20
+        ) AS keep
       )
   `)
 }

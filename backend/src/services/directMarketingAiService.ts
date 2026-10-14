@@ -37,6 +37,18 @@ export interface MarketingContact {
   source: 'client' | 'enquiry' | 'direct_sale'
 }
 
+export interface MarketingMaidRef {
+  referenceCode: string
+  fullName: string
+  nationality: string
+  type: string
+  status: string
+  skill: string
+  hasPhoto: boolean
+  profileUrl: string
+  photoUrl: string
+}
+
 export interface MarketingMessage {
   contactId: string
   contactName: string
@@ -44,6 +56,8 @@ export interface MarketingMessage {
   contactEmail: string
   contactSource: string
   message: string
+  /** Email HTML body (maid cards with photos + profile links). */
+  html: string
   whatsappLink: string
   emailLink: string
   charCount: number
@@ -65,19 +79,13 @@ export interface MarketingCampaign {
   emailOnlyCount: number
   generatedAt: string
   aiUsed: boolean
+  /** Public helpers referenced in the message, with profile + photo links. */
+  maidList: MarketingMaidRef[]
 }
 
 // ─── In-memory campaign store (last 20 per agency) ────────────────────────────
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const firstDefinedEnv = (...keys: string[]): string => {
-  for (const key of keys) {
-    const value = process.env[key]?.trim()
-    if (value) return value
-  }
-  return ''
-}
 
 const buildWhatsAppLink = (phone: string, message: string): string => {
   if (!phone?.trim()) return ''
@@ -87,6 +95,113 @@ const buildWhatsAppLink = (phone: string, message: string): string => {
   if (!hasPlus && digits.length === 9 && digits.startsWith('0')) digits = digits.slice(1)
   if (!hasPlus && digits.length === 8) digits = `65${digits}`
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+}
+
+// ─── Public maid list (embedded in marketing messages) ────────────────────────
+
+const MARKETING_FEATURED_MAID_LIMIT = 3
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+/**
+ * Absolute base URL used for maid profile / photo links inside emails and
+ * WhatsApp text. Configure PUBLIC_SITE_URL (or SITE_URL / APP_BASE_URL).
+ */
+const publicBaseUrl = (): string => {
+  const configured =
+    process.env.PUBLIC_SITE_URL?.trim() ||
+    process.env.SITE_URL?.trim() ||
+    process.env.APP_BASE_URL?.trim() ||
+    ''
+  return (configured || 'https://findmaid.wow-aisolution.workers.dev').replace(/\/+$/, '')
+}
+
+const maidPrimarySkill = (maid: MaidRecord): string =>
+  Object.entries(maid.workAreas ?? {})
+    .filter(([, v]) => (v as Record<string, unknown>)?.experience)
+    .map(([area]) => area)
+    .slice(0, 2)
+    .join(' & ')
+
+const toMarketingMaidRef = (
+  maid: MaidRecord,
+  agencyId: number,
+  baseUrl: string,
+): MarketingMaidRef => {
+  const hasPhoto = Boolean(
+    (Array.isArray(maid.photoDataUrls) && maid.photoDataUrls[0]) || maid.photoDataUrl,
+  )
+  const ref = encodeURIComponent(maid.referenceCode)
+  return {
+    referenceCode: maid.referenceCode,
+    fullName: maid.fullName,
+    nationality: maid.nationality ?? '',
+    type: maid.type ?? '',
+    status: maid.status ?? 'available',
+    skill: maidPrimarySkill(maid),
+    hasPhoto,
+    profileUrl: `${baseUrl}/maids/${ref}`,
+    photoUrl: hasPhoto ? `${baseUrl}/api/maids/${ref}/photo-preview?agencyId=${agencyId}` : '',
+  }
+}
+
+const buildMaidListText = (maids: MarketingMaidRef[]): string => {
+  if (maids.length === 0) return ''
+  const lines = maids.map((maid, index) => {
+    const detail = [maid.nationality, maid.skill].filter(Boolean).join(' · ')
+    return `${index + 1}. ${maid.fullName}${detail ? ` — ${detail}` : ''}\n   ${maid.profileUrl}`
+  })
+  return `\n\nHelpers we recommend:\n\n${lines.join('\n\n')}`
+}
+
+const buildMarketingEmailHtml = (params: {
+  bodyText: string
+  maids: MarketingMaidRef[]
+  agencyName: string
+  agencyPhone: string
+}): string => {
+  const cards = params.maids
+    .map((maid) => {
+      const meta = [maid.nationality, maid.type].filter(Boolean).join(' · ')
+      const photo = maid.photoUrl
+        ? `<img src="${escapeHtml(maid.photoUrl)}" width="88" height="88" alt="${escapeHtml(maid.fullName)}" style="border-radius:10px;object-fit:cover;display:block" />`
+        : ''
+      return `
+        <tr>
+          <td style="vertical-align:top;padding:12px 12px 12px 0;width:100px">${photo}</td>
+          <td style="vertical-align:top;padding:12px 0">
+            <a href="${escapeHtml(maid.profileUrl)}" style="font-weight:700;color:#0f766e;text-decoration:none;font-size:15px">${escapeHtml(maid.fullName)}</a>
+            ${meta ? `<div style="color:#475569;font-size:13px;margin-top:2px">${escapeHtml(meta)}</div>` : ''}
+            ${maid.skill ? `<div style="color:#065f46;font-size:13px;margin-top:2px">Skills: ${escapeHtml(maid.skill)}</div>` : ''}
+            <a href="${escapeHtml(maid.profileUrl)}" style="color:#0369a1;font-size:13px;text-decoration:none">View full profile →</a>
+          </td>
+        </tr>`
+    })
+    .join('')
+
+  const footer = [params.agencyName, params.agencyPhone].filter(Boolean).join(' · ')
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f1f5f9">
+    <div style="max-width:560px;margin:0 auto;padding:24px;background:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#111827">
+      <div style="white-space:pre-wrap">${escapeHtml(params.bodyText)}</div>
+      ${
+        params.maids.length > 0
+          ? `<h3 style="margin:22px 0 4px;font-size:15px;color:#0f766e">Helpers we recommend</h3>
+             <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">${cards}</table>`
+          : ''
+      }
+      <p style="margin:24px 0 0;color:#6b7280;font-size:12px">${escapeHtml(footer)}</p>
+    </div>
+  </body>
+</html>`
 }
 
 const goalMeta = (goal: CampaignGoal) => ({
@@ -204,71 +319,6 @@ const parseAiJson = (text: string): { template: string; subject: string } | null
     }
     return null
   } catch {
-    return null
-  }
-}
-
-const generateWithClaude = async (userPrompt: string): Promise<{ template: string; subject: string } | null> => {
-  const apiKey = firstDefinedEnv('ANTHROPIC_API_KEY', 'CLAUDE_API_KEY')
-  if (!apiKey) return null
-  const model = firstDefinedEnv('ANTHROPIC_MODEL', 'CLAUDE_MODEL') || 'claude-3-5-haiku-latest'
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 14000)
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 600,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    if (!response.ok) return null
-    const data = (await response.json()) as { content?: Array<{ type: string; text?: string }> }
-    const text = data.content?.find((b) => b.type === 'text')?.text?.trim() ?? ''
-    return parseAiJson(text)
-  } catch {
-    clearTimeout(timeout)
-    return null
-  }
-}
-
-const generateWithGroq = async (userPrompt: string): Promise<{ template: string; subject: string } | null> => {
-  const apiKey = firstDefinedEnv('GROQ_API_KEY', 'AI_RECEPTIONIST_API_KEY')
-  if (!apiKey) return null
-  const model = process.env.GROQ_MODEL?.trim() || 'llama-3.3-70b-versatile'
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 14000)
-  try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        temperature: 0.45,
-        max_tokens: 600,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    if (!response.ok) return null
-    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
-    const text = data.choices?.[0]?.message?.content?.trim() ?? ''
-    return parseAiJson(text)
-  } catch {
-    clearTimeout(timeout)
     return null
   }
 }
@@ -419,6 +469,17 @@ export const generateMarketingCampaign = async (params: {
   const selectedMaids = allMaids.filter((m) =>
     m.agencyId === params.agencyId && m.isPublic && params.maidReferences.includes(m.referenceCode),
   )
+  // Feature the chosen helpers, or fall back to the first few public helpers so
+  // every message can carry a real maid list (names + links, plus photos in email).
+  const featuredMaids = selectedMaids.length > 0
+    ? selectedMaids
+    : allMaids
+        .filter((m) => m.agencyId === params.agencyId && m.isPublic)
+        .slice(0, MARKETING_FEATURED_MAID_LIMIT)
+
+  const baseUrl = publicBaseUrl()
+  const maidList = featuredMaids.map((maid) => toMarketingMaidRef(maid, params.agencyId, baseUrl))
+  const maidListText = buildMaidListText(maidList)
 
   const meta = goalMeta(params.goal)
 
@@ -429,8 +490,8 @@ export const generateMarketingCampaign = async (params: {
     `Agency WhatsApp / phone: ${agencyPhone || 'our agency number'}`,
     '',
     'Featured domestic helpers (include 1-2 names and 1 skill each in the message):',
-    selectedMaids.length > 0
-      ? selectedMaids.map(describeMaid).join('\n\n')
+    featuredMaids.length > 0
+      ? featuredMaids.map(describeMaid).join('\n\n')
       : '(No specific helpers provided — write a compelling general availability message)',
     '',
     params.customNote?.trim()
@@ -438,10 +499,11 @@ export const generateMarketingCampaign = async (params: {
       : '',
   ].filter((l) => l !== undefined).join('\n')
 
+  // Make.com is the ONLY AI engine for marketing copy. When the webhook is not
+  // configured or fails, we fall back to the deterministic local template
+  // (buildFallbackTemplate) instead of calling Claude/Groq directly.
   let aiResult: { template: string; subject: string } | null = null
-  let aiUsed = false
 
-  // 1) Make.com is the primary AI engine.
   const makeResult = await callMakeAiEngine({
     scenario: 'marketing',
     systemPrompt: SYSTEM_PROMPT,
@@ -450,34 +512,24 @@ export const generateMarketingCampaign = async (params: {
 
   if (makeResult?.json && typeof makeResult.json.template === 'string') {
     aiResult = parseAiJson(JSON.stringify(makeResult.json))
-    aiUsed = Boolean(aiResult)
   } else if (makeResult?.text) {
-    const parsed = parseAiJson(makeResult.text)
-    if (parsed) {
-      aiResult = parsed
-      aiUsed = true
-    }
+    aiResult = parseAiJson(makeResult.text)
   }
 
-  // 2) Fallback to direct Claude, then Groq.
-  if (!aiResult) {
-    aiResult = await generateWithClaude(userPrompt).catch(() => null)
-    if (aiResult) {
-      aiUsed = true
-    } else {
-      aiResult = await generateWithGroq(userPrompt).catch(() => null)
-      if (aiResult) aiUsed = true
-    }
-  }
+  const aiUsed = Boolean(aiResult)
 
   const template = aiResult?.template
-    ?? buildFallbackTemplate(params.goal, params.tone, selectedMaids, agencyName, agencyPhone)
+    ?? buildFallbackTemplate(params.goal, params.tone, featuredMaids, agencyName, agencyPhone)
   const subject = aiResult?.subject ?? meta.subject
 
   const messages: MarketingMessage[] = contacts.map(({ contact, whatsappAllowed, emailAllowed }) => {
-    const personalized = template
+    const body = template
       .replace(/\{\{name\}\}/g, contact.name || 'there')
       .replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName)
+    // WhatsApp text and the copyable body include the maid list as text+links;
+    // the HTML body (used by the "Send email" button) renders maid cards with
+    // photos and profile links.
+    const message = `${body}${maidListText}`
 
     return {
       contactId: contact.id,
@@ -485,12 +537,13 @@ export const generateMarketingCampaign = async (params: {
       contactPhone: whatsappAllowed ? contact.phone : '',
       contactEmail: emailAllowed ? contact.email : '',
       contactSource: contact.source,
-      message: personalized,
-      whatsappLink: whatsappAllowed ? buildWhatsAppLink(contact.phone, personalized) : '',
+      message,
+      html: buildMarketingEmailHtml({ bodyText: body, maids: maidList, agencyName, agencyPhone }),
+      whatsappLink: whatsappAllowed ? buildWhatsAppLink(contact.phone, message) : '',
       emailLink: emailAllowed && contact.email
-        ? `mailto:${encodeURIComponent(contact.email).replace(/%40/gi, '@')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(personalized)}`
+        ? `mailto:${encodeURIComponent(contact.email).replace(/%40/gi, '@')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`
         : '',
-      charCount: personalized.length,
+      charCount: message.length,
       whatsappReady: whatsappAllowed,
     }
   })
@@ -512,6 +565,7 @@ export const generateMarketingCampaign = async (params: {
     emailOnlyCount: contacts.length - whatsappReadyCount,
     generatedAt: new Date().toISOString(),
     aiUsed,
+    maidList,
   }
 
   await saveMarketingCampaign(campaign)

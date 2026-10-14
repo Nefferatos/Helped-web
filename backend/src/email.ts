@@ -133,6 +133,7 @@ const sendEmailViaResend = async ({
   fromName,
   subject,
   text,
+  html,
 }: {
   toEmail: string
   toName?: string
@@ -140,6 +141,7 @@ const sendEmailViaResend = async ({
   fromName?: string
   subject: string
   text: string
+  html?: string
 }) => {
   const apiKey = getOptionalEnv('RESEND_API_KEY')
   const from = getOptionalEnv('RESEND_FROM')
@@ -159,9 +161,10 @@ const sendEmailViaResend = async ({
     body: JSON.stringify({
       from,
       to: [formatAddress(toEmail, toName)],
-      reply_to: formatAddress(fromEmail, fromName),
+      ...(fromEmail ? { reply_to: formatAddress(fromEmail, fromName) } : {}),
       subject,
       text,
+      ...(html ? { html } : {}),
     }),
     signal: AbortSignal.timeout(parseIntegerEnv('MAIL_SEND_TIMEOUT_MS', 8000)),
   })
@@ -292,11 +295,82 @@ export const sendTellFriendEmail = async ({
     `,
   })
 
-  if (result.rejected.length > 0) {
+  if (Array.isArray(result.rejected) && result.rejected.length > 0) {
     throw new MailDeliveryError('Mail server rejected the recipient', 'RECIPIENT_REJECTED')
   }
 
-  if (result.pending.length > 0) {
+  if (Array.isArray(result.pending) && result.pending.length > 0) {
+    throw new MailDeliveryError('Mail delivery is pending', 'DELIVERY_PENDING')
+  }
+}
+
+type MarketingEmailInput = {
+  toEmail: string
+  toName?: string
+  subject: string
+  text: string
+  html?: string
+  replyToEmail?: string
+  replyToName?: string
+}
+
+/**
+ * Generic transactional send used by AI Marketing ("Send email" on a campaign).
+ * Routes through Resend when configured, otherwise SMTP. Supports an HTML body
+ * so campaign emails can embed maid photos + profile links.
+ */
+export const sendMarketingEmail = async ({
+  toEmail,
+  toName,
+  subject,
+  text,
+  html,
+  replyToEmail,
+  replyToName,
+}: MarketingEmailInput) => {
+  if (!checkEmailRateLimit(toEmail.toLowerCase())) {
+    throw new MailDeliveryError('Too many emails sent. Please try again later.', 'RATE_LIMITED')
+  }
+
+  const normalizedSubject = normalizeHeaderValue(subject, DEFAULT_SUBJECT_LENGTH)
+  const normalizedText = normalizeTextContent(
+    text,
+    parseIntegerEnv('MAIL_MARKETING_MAX_MESSAGE_BYTES', DEFAULT_MAX_MESSAGE_BYTES * 4)
+  )
+  const mailProvider = getOptionalEnv('MAIL_PROVIDER').toLowerCase()
+  const resendConfigured =
+    mailProvider === 'resend' ||
+    Boolean(getOptionalEnv('RESEND_API_KEY') && getOptionalEnv('RESEND_FROM'))
+  const replyTo = replyToEmail ? formatAddress(replyToEmail, replyToName) : ''
+
+  if (resendConfigured) {
+    await sendEmailViaResend({
+      toEmail,
+      toName,
+      fromEmail: replyToEmail || '',
+      fromName: replyToName,
+      subject: normalizedSubject,
+      text: normalizedText,
+      html,
+    })
+    return
+  }
+
+  const transporter = await getTransporter()
+  const fromAddress = process.env.SMTP_FROM?.trim() || getRequiredEnv('SMTP_USER')
+  const result = await transporter.sendMail({
+    from: fromAddress,
+    to: formatAddress(toEmail, toName),
+    ...(replyTo ? { replyTo } : {}),
+    subject: normalizedSubject,
+    text: normalizedText,
+    ...(html ? { html } : {}),
+  })
+
+  if (Array.isArray(result.rejected) && result.rejected.length > 0) {
+    throw new MailDeliveryError('Mail server rejected the recipient', 'RECIPIENT_REJECTED')
+  }
+  if (Array.isArray(result.pending) && result.pending.length > 0) {
     throw new MailDeliveryError('Mail delivery is pending', 'DELIVERY_PENDING')
   }
 }
