@@ -9,6 +9,8 @@ export interface PublicAgencyOption {
   createdAt: string;
   totalMaids: number;
   publicMaids: number;
+  rating?: number;
+  reviewCount?: number;
   isMain?: boolean;
 }
 
@@ -56,6 +58,7 @@ export interface AgencySummary {
   website: string;
   location: string;
   rating: number;
+  reviewCount: number;
   publicMaidsCount: number;
   availableMaidsCount: number;
   previewMaids: MaidProfile[];
@@ -63,6 +66,33 @@ export interface AgencySummary {
   logoUrl?: string;
   about?: string;
   isMain?: boolean;
+}
+
+export interface AgencyReview {
+  id: number;
+  agencyId: number;
+  clientId: number;
+  clientName: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgencyRatingSummary {
+  average: number;
+  count: number;
+  distribution: Record<"1" | "2" | "3" | "4" | "5", number>;
+}
+
+export interface AgencyReviewsResponse {
+  summary: AgencyRatingSummary;
+  reviews: AgencyReview[];
+}
+
+export interface AgencyReviewSubmitResult {
+  review: AgencyReview;
+  summary: AgencyRatingSummary;
 }
 
 const uniqueStrings = (values: Array<string | undefined>) =>
@@ -113,7 +143,14 @@ export const fetchAgencies = async (): Promise<AgencySummary[]> => {
         contactEmail: agency.email || "N/A",
         website: "",
         location: "Singapore",
-        rating: agencyMaids.length > 0 ? 4.8 : 4.5,
+        // A rating only exists once a real review does. Never invent a score —
+        // a badge that appears for every agency is exactly what made the rating
+        // meaningless, so consumers gate on `reviewCount > 0`.
+        rating:
+          typeof agency.rating === "number" && (agency.reviewCount ?? 0) > 0
+            ? agency.rating
+            : 0,
+        reviewCount: typeof agency.reviewCount === "number" ? agency.reviewCount : 0,
         publicMaidsCount: agency.publicMaids,
         availableMaidsCount: agencyMaids.filter((maid) => !maid.status || maid.status === "available").length,
         previewMaids: agencyMaids.slice(0, 3),
@@ -197,4 +234,74 @@ export const submitHiringRequest = async (
   }
 
   return data;
+};
+
+export const fetchAgencyReviews = async (agencyId: number): Promise<AgencyReviewsResponse> => {
+  const response = await fetch(`/api/agencies/${encodeURIComponent(String(agencyId))}/reviews`);
+  const data = (await response.json().catch(() => ({}))) as Partial<AgencyReviewsResponse> & {
+    error?: string;
+  };
+  if (!response.ok || !data.summary) {
+    throw new Error(data.error || "Failed to fetch agency reviews");
+  }
+  return {
+    summary: data.summary,
+    reviews: Array.isArray(data.reviews) ? data.reviews : [],
+  };
+};
+
+export const submitAgencyReview = async (
+  agencyId: number,
+  rating: number,
+  comment: string,
+): Promise<AgencyReviewSubmitResult> => {
+  const client = getStoredClient();
+  if (!client) {
+    throw new Error("Please log in as a client before rating an agency");
+  }
+
+  const response = await fetch(`/api/agencies/${encodeURIComponent(String(agencyId))}/reviews`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getClientAuthHeaders(),
+    },
+    body: JSON.stringify({ rating, comment }),
+  });
+
+  const data = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    review?: AgencyReview;
+    summary?: AgencyRatingSummary;
+  };
+  if (!response.ok || !data.review || !data.summary) {
+    throw new Error(data.error || "Failed to submit review");
+  }
+
+  return { review: data.review, summary: data.summary };
+};
+
+export const deleteAgencyReview = async (
+  agencyId: number,
+  reviewId: number,
+): Promise<AgencyRatingSummary> => {
+  const response = await fetch(
+    `/api/agencies/${encodeURIComponent(String(agencyId))}/reviews/${encodeURIComponent(String(reviewId))}`,
+    {
+      method: "DELETE",
+      headers: {
+        ...getClientAuthHeaders(),
+      },
+    },
+  );
+
+  const data = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    summary?: AgencyRatingSummary;
+  };
+  if (!response.ok || !data.summary) {
+    throw new Error(data.error || "Failed to remove review");
+  }
+
+  return data.summary;
 };

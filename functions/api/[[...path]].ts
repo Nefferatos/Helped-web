@@ -111,6 +111,22 @@ interface TestimonialRecord {
   created_at: string;
 }
 
+/**
+ * A public, Google-Maps-style star rating + written review that a logged-in
+ * client leaves for an agency. One review per client per agency (upserted).
+ */
+interface AgencyReviewRecord {
+  id: number;
+  agencyId: number;
+  clientId: number;
+  clientName: string;
+  /** Whole-star score from 1 to 5. */
+  rating: number;
+  comment: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 type EnquiryStatus = "new" | "in_progress" | "replied" | "resolved";
 
 interface EnquiryRecord {
@@ -453,6 +469,7 @@ interface AppData {
   companyProfile: CompanyProfileRecord;
   momPersonnel: MOMPersonnelRecord[];
   testimonials: TestimonialRecord[];
+  agencyReviews: AgencyReviewRecord[];
   maids: MaidRecord[];
   enquiries: EnquiryRecord[];
   clients: ClientRecord[];
@@ -471,6 +488,7 @@ interface AppData {
   counters: {
     momPersonnel: number;
     testimonials: number;
+    agencyReviews: number;
     maids: number;
     enquiries: number;
     clients: number;
@@ -497,8 +515,8 @@ type Bindings = {
   ANTHROPIC_API_KEY?: string;
   // Legacy alias for ANTHROPIC_API_KEY
   CLAUDE_API_KEY?: string;
-  // Claude model used for marketing copy (and other Anthropic calls that read it).
-  // Defaults to claude-haiku-4-5 when unset — see marketingModel().
+  // Claude model for any remaining direct Anthropic calls. Marketing copy no
+  // longer uses this — it is generated exclusively by the Make.com AI gateway.
   ANTHROPIC_MODEL?: string;
   // ─── Cline / OpenAI-compatible provider ───────────────────────────────────
   // When OPENAI_API_KEY is set, ALL AI features (agents, PDF autofill, marketing,
@@ -693,6 +711,7 @@ const defaultData = (): AppData => ({
   },
   momPersonnel: [],
   testimonials: [],
+  agencyReviews: [],
   maids: [],
   enquiries: [],
   clients: [],
@@ -727,6 +746,7 @@ const defaultData = (): AppData => ({
   counters: {
     momPersonnel: 1,
     testimonials: 1,
+    agencyReviews: 1,
     maids: 1,
     enquiries: 6,
     clients: 1,
@@ -1159,6 +1179,7 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     },
     momPersonnel: raw.momPersonnel ?? defaults.momPersonnel,
     testimonials: raw.testimonials ?? defaults.testimonials,
+    agencyReviews: raw.agencyReviews ?? defaults.agencyReviews,
     maids,
     enquiries,
     clients,
@@ -1223,6 +1244,11 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         raw.counters?.testimonials,
         (raw.testimonials ?? []).map((item) => item.id),
         defaults.counters.testimonials,
+      ),
+      agencyReviews: nextCounter(
+        raw.counters?.agencyReviews,
+        (raw.agencyReviews ?? []).map((item) => item.id),
+        defaults.counters.agencyReviews,
       ),
       maids: nextCounter(
         raw.counters?.maids,
@@ -1556,6 +1582,12 @@ const mergeAppDataWithBase = (
       remoteData.testimonials,
       (item) => String(item.id),
     ),
+    agencyReviews: mergeCollectionWithBase(
+      baseData.agencyReviews,
+      localData.agencyReviews,
+      remoteData.agencyReviews,
+      (item) => String(item.id),
+    ),
     maids: mergeCollectionWithBase(
       baseData.maids,
       localData.maids,
@@ -1644,6 +1676,11 @@ const mergeAppDataWithBase = (
         baseData.counters.testimonials,
         localData.counters.testimonials,
         remoteData.counters.testimonials,
+      ),
+      agencyReviews: Math.max(
+        baseData.counters.agencyReviews,
+        localData.counters.agencyReviews,
+        remoteData.counters.agencyReviews,
       ),
       maids: Math.max(
         baseData.counters.maids,
@@ -5927,6 +5964,42 @@ app.get("/api/diagnostics", requireAgencyAdminAuth, (c) => {
 });
 app.get("/api", (c) => c.json({ message: "Welcome to Helped Cloudflare API" }));
 
+/**
+ * Google-Maps-style rating summary for one agency: the mean whole-star score
+ * (rounded to one decimal) plus a 5→1 star distribution for the bar chart.
+ */
+const buildAgencyRatingSummary = (
+  reviews: AgencyReviewRecord[],
+  agencyId: number,
+) => {
+  const agencyReviews = reviews.filter(
+    (review) => review.agencyId === agencyId,
+  );
+  const count = agencyReviews.length;
+  const total = agencyReviews.reduce(
+    (sum, review) => sum + (Number(review.rating) || 0),
+    0,
+  );
+  const distribution: Record<"1" | "2" | "3" | "4" | "5", number> = {
+    "1": 0,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+  };
+  agencyReviews.forEach((review) => {
+    const star = String(
+      Math.min(5, Math.max(1, Math.round(Number(review.rating) || 0))),
+    ) as "1" | "2" | "3" | "4" | "5";
+    distribution[star] += 1;
+  });
+  return {
+    average: count > 0 ? Math.round((total / count) * 10) / 10 : 0,
+    count,
+    distribution,
+  };
+};
+
 app.get(
   "/api/agencies",
   safeApi(async (c) => {
@@ -5937,6 +6010,7 @@ app.get(
         : 1;
       const agencyMaids = data.maids.filter((maid) => maid.agencyId === agencyId);
       const publicMaids = agencyMaids.filter((maid) => maid.isPublic).length;
+      const rating = buildAgencyRatingSummary(data.agencyReviews, agencyId);
 
       return {
         id: agencyId,
@@ -5945,6 +6019,8 @@ app.get(
         createdAt: admin.createdAt ?? now(),
         totalMaids: agencyMaids.length,
         publicMaids,
+        rating: rating.average,
+        reviewCount: rating.count,
       };
     });
 
@@ -5962,6 +6038,130 @@ app.get(
       });
 
     return c.json({ agencies: uniqueAgencies });
+  }),
+);
+
+// Public: list an agency's reviews with the Google-Maps-style rating summary.
+app.get(
+  "/api/agencies/:agencyId/reviews",
+  safeApi(async (c) => {
+    const agencyId = Number(c.req.param("agencyId"));
+    if (!Number.isInteger(agencyId)) {
+      return c.json({ error: "Valid agency id is required" }, 400);
+    }
+
+    const data = await loadData(c.env, { readOnly: true });
+    const reviews = data.agencyReviews
+      .filter((review) => review.agencyId === agencyId)
+      .sort(
+        (left, right) =>
+          new Date(right.updatedAt ?? right.createdAt).getTime() -
+          new Date(left.updatedAt ?? left.createdAt).getTime(),
+      );
+
+    return c.json({
+      summary: buildAgencyRatingSummary(data.agencyReviews, agencyId),
+      reviews,
+    });
+  }),
+);
+
+// Client: create or update the signed-in client's own review for an agency.
+app.post(
+  "/api/agencies/:agencyId/reviews",
+  requireClientAuth,
+  safeApi(async (c) => {
+    const agencyId = Number(c.req.param("agencyId"));
+    if (!Number.isInteger(agencyId)) {
+      return c.json({ error: "Valid agency id is required" }, 400);
+    }
+
+    const client = c.get("client") as ClientRecord | undefined;
+    if (!client) return c.json({ error: "Unauthorized" }, 401);
+
+    const body = await parseBody<{ rating?: number | string; comment?: string }>(
+      c.req.raw,
+    );
+    const rating = Math.round(Number(body?.rating));
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      return c.json({ error: "Rating must be between 1 and 5 stars" }, 400);
+    }
+    const comment = String(body?.comment ?? "").trim().slice(0, 1000);
+
+    const data = await loadData(c.env);
+    const clientName =
+      toTrimmedString(client.name) ||
+      toTrimmedString(client.company) ||
+      toTrimmedString(client.email) ||
+      "Verified client";
+    const existing = data.agencyReviews.find(
+      (review) => review.agencyId === agencyId && review.clientId === client.id,
+    );
+
+    let review: AgencyReviewRecord;
+    if (existing) {
+      existing.rating = rating;
+      existing.comment = comment;
+      existing.clientName = clientName;
+      existing.updatedAt = now();
+      review = existing;
+    } else {
+      review = {
+        id: data.counters.agencyReviews++,
+        agencyId,
+        clientId: client.id,
+        clientName,
+        rating,
+        comment,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      data.agencyReviews.unshift(review);
+    }
+
+    await saveData(c.env, data);
+    return c.json(
+      {
+        message: "Review saved",
+        review,
+        summary: buildAgencyRatingSummary(data.agencyReviews, agencyId),
+      },
+      existing ? 200 : 201,
+    );
+  }),
+);
+
+// Client: remove the signed-in client's own review.
+app.delete(
+  "/api/agencies/:agencyId/reviews/:reviewId",
+  requireClientAuth,
+  safeApi(async (c) => {
+    const agencyId = Number(c.req.param("agencyId"));
+    const reviewId = Number(c.req.param("reviewId"));
+    if (!Number.isInteger(agencyId) || !Number.isInteger(reviewId)) {
+      return c.json({ error: "Valid agency and review ids are required" }, 400);
+    }
+
+    const client = c.get("client") as ClientRecord | undefined;
+    if (!client) return c.json({ error: "Unauthorized" }, 401);
+
+    const data = await loadData(c.env);
+    const existing = data.agencyReviews.find(
+      (review) => review.id === reviewId && review.agencyId === agencyId,
+    );
+    if (!existing) return c.json({ error: "Review not found" }, 404);
+    if (existing.clientId !== client.id) {
+      return c.json({ error: "You can only remove your own review" }, 403);
+    }
+
+    data.agencyReviews = data.agencyReviews.filter(
+      (review) => review.id !== reviewId,
+    );
+    await saveData(c.env, data);
+    return c.json({
+      message: "Review removed",
+      summary: buildAgencyRatingSummary(data.agencyReviews, agencyId),
+    });
   }),
 );
 
@@ -11600,11 +11800,9 @@ const MARKETING_LOG_KEY = "marketing-last-run.json";
 const MARKETING_CONTACTS_KEY = "marketing-contacts-sent.json";
 const MARKETING_COOLDOWN_MS = 7 * 86_400_000; // 7 days between messages per contact
 
-// Claude model for marketing copy. Configurable via ANTHROPIC_MODEL; short
-// WhatsApp/email blurbs run fine on Haiku, so that's the default.
-const DEFAULT_MARKETING_MODEL = "claude-haiku-4-5";
-const marketingModel = (env: Bindings): string =>
-  env.ANTHROPIC_MODEL?.trim() || DEFAULT_MARKETING_MODEL;
+// Marketing copy is generated exclusively by the Make.com AI gateway; this
+// label is surfaced in the autonomous-run status payload only.
+const MARKETING_ENGINE = "make.com";
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : "send failed");
 
@@ -11648,22 +11846,68 @@ const goalMetaMarketing = (goal: string, agencyName: string) => {
   return meta[goal] ?? { subject: `Update from ${agencyName}`, hook: "We have something we would like to share with you.", emoji: "" };
 };
 
+const extractMakeMarketingTemplate = (value: unknown): string | null => {
+  const direct = extractCommandCenterReply(value);
+  if (direct) return direct;
+  if (value && typeof value === "object") {
+    const template = (value as Record<string, unknown>).template;
+    if (typeof template === "string" && template.trim()) return template.trim();
+  }
+  return null;
+};
+
+// Marketing copy is generated ONLY by the Make.com AI gateway
+// (helped-ai-gateway.blueprint.json, scenario: "marketing"). No direct
+// Claude/Groq call happens here anymore — when Make is unavailable the caller
+// returns its deterministic template instead.
+const callMakeMarketingAiEngine = async (
+  env: Bindings,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<string | null> => {
+  const webhookUrl = env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim();
+  if (!webhookUrl) return null;
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "ai_engine",
+        scenario: "marketing",
+        systemPrompt,
+        userPrompt,
+        context: {},
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return null;
+    const responseBody = (await response.text()).trim();
+    if (!responseBody) return null;
+    let parsed: unknown = responseBody;
+    try {
+      parsed = JSON.parse(responseBody) as unknown;
+    } catch {
+      // Make's AI gateway may return a plain-text answer.
+    }
+    return extractMakeMarketingTemplate(parsed);
+  } catch {
+    return null;
+  }
+};
+
 const generateMarketingTemplate = async (
+  env: Bindings,
   goal: string,
   tone: string,
   agencyName: string,
   agencyPhone: string,
   featuredNames: string[],
-  anthropicApiKey: string | undefined,
-  model: string,
   customNote?: string,
 ): Promise<string> => {
   const meta = goalMetaMarketing(goal, agencyName);
   const emojiPrefix = tone === "professional" ? "" : `${meta.emoji} `;
   const highlight = featuredNames.slice(0, 2).join(" and ");
   const fallback = `Hi {{name}},\n\n${emojiPrefix}${meta.hook}${highlight ? ` Meet ${highlight} — available now.` : ""}\n\nContact us at {{agencyPhone}} — ${agencyName}.`;
-
-  if (!anthropicApiKey) return fallback;
 
   const toneMap: Record<string, string> = {
     warm: "friendly and caring, 1-2 emojis",
@@ -11675,32 +11919,12 @@ const generateMarketingTemplate = async (
   const systemPrompt = `You are a professional client relations specialist for a licensed Singapore domestic helper placement agency. Write ONE polished outreach message. FORMAT: Open with "Dear {{name}}," on its own line, blank line, 2-3 professional sentences that are warm but formal, closing with "Please do not hesitate to contact us at {{agencyPhone}}.", blank line, "Warm regards," then the agency name. Max 320 characters total. Respond with ONLY the message text, nothing else.`;
   const userPrompt = `Goal: ${meta.subject}. Tone: ${toneMap[tone] ?? toneMap.warm}. Agency: ${agencyName}. Phone: ${agencyPhone || "our number"}.${highlight ? ` Available helpers: ${highlight}.` : ""}${customNote?.trim() ? ` Additional instructions from the agency (follow these closely): ${customNote.trim()}` : ""}`;
 
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": anthropicApiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 350,
-        temperature: 0.4,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!res.ok) return fallback;
-    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-    const text = data.content?.find((c) => c.type === "text")?.text?.trim();
-    if (text && text.includes("{{name}}")) return text;
-    if (text) return text.replace(/^Hi there/i, "Hi {{name}}").includes("{{name}}") ? text.replace(/^Hi there/i, "Hi {{name}}") : `Hi {{name}},\n\n${text}\n\nContact us at {{agencyPhone}}.`;
-    return fallback;
-  } catch {
-    return fallback;
+  const text = await callMakeMarketingAiEngine(env, systemPrompt, userPrompt);
+  if (text && text.includes("{{name}}")) return text;
+  if (text && text.trim() && text.trim().toLowerCase() !== "accepted") {
+    return `Hi {{name}},\n\n${text.trim()}\n\nContact us at {{agencyPhone}}.`;
   }
+  return fallback;
 };
 
 const detectMarketingOpportunities = (data: AppData) => {
@@ -11792,13 +12016,12 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
     } catch {}
   }
 
-  const model = marketingModel(env);
   const opportunities = detectMarketingOpportunities(data);
   const result: MarketingDispatchResult = {
     scannedAt,
     opportunitiesFound: opportunities.length,
-    aiUsed: Boolean(env.ANTHROPIC_API_KEY),
-    model,
+    aiUsed: Boolean(env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim()),
+    model: MARKETING_ENGINE,
     campaigns: [],
     emailsTotal: 0,
     whatsappTotal: 0,
@@ -11817,12 +12040,12 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
     if (contacts.length === 0) continue;
 
     const meta = goalMetaMarketing(opp.goal, agencyName);
-    // Generate the campaign copy with Claude ONCE per campaign, then personalise
-    // the {{name}}/{{agencyPhone}} placeholders per contact. Make/Resend just
-    // relay the finished text — Claude, not Groq, writes every message.
+    // Generate the campaign copy via the Make.com AI gateway ONCE per campaign,
+    // then personalise the {{name}}/{{agencyPhone}} placeholders per contact.
+    // Make/Resend relay the finished text — Make.com is the only AI engine.
     const template = await generateMarketingTemplate(
-      opp.goal, opp.tone, agencyName, agencyPhone,
-      featuredMaids.map((m) => m.fullName), env.ANTHROPIC_API_KEY, model,
+      env, opp.goal, opp.tone, agencyName, agencyPhone,
+      featuredMaids.map((m) => m.fullName),
     );
     let emailsSent = 0, whatsappQueued = 0, skipped = 0;
     const errorSet = new Set<string>();
@@ -11984,7 +12207,7 @@ const buildDmCampaign = async (
   const featured = maidRefs.length > 0
     ? data.maids.filter((m) => maidRefs.includes(m.referenceCode))
     : data.maids.filter((m) => m.isPublic).slice(0, 2);
-  const template = await generateMarketingTemplate(goal, tone, agencyName, agencyPhone, featured.map((m) => m.fullName), env.ANTHROPIC_API_KEY, marketingModel(env), customNote);
+  const template = await generateMarketingTemplate(env, goal, tone, agencyName, agencyPhone, featured.map((m) => m.fullName), customNote);
   const meta = goalMetaMarketing(goal, agencyName);
   const contacts = buildDetailedContacts(data, audienceType);
   const messages: DmMessage[] = contacts.map((contact) => {
@@ -12003,7 +12226,7 @@ const buildDmCampaign = async (
     whatsappReadyCount: messages.filter((m) => m.whatsappReady).length,
     emailOnlyCount: messages.filter((m) => !m.whatsappReady && m.contactEmail).length,
     generatedAt: new Date().toISOString(),
-    aiUsed: Boolean(env.ANTHROPIC_API_KEY),
+    aiUsed: Boolean(env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim()),
   };
 };
 

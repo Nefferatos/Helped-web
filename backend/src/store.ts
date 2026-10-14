@@ -65,6 +65,22 @@ export interface TestimonialRecord {
   created_at: string
 }
 
+/**
+ * A public, Google-Maps-style star rating + written review that a logged-in
+ * client leaves for an agency. One review per client per agency (upserted).
+ */
+export interface AgencyReviewRecord {
+  id: number
+  agencyId: number
+  clientId: number
+  clientName: string
+  /** Whole-star score from 1 to 5. */
+  rating: number
+  comment: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface MaidRecord {
   id: number
   agencyId: number
@@ -411,6 +427,7 @@ interface AppData {
   companyProfile: CompanyProfileRecord
   momPersonnel: MOMPersonnelRecord[]
   testimonials: TestimonialRecord[]
+  agencyReviews: AgencyReviewRecord[]
   maids: MaidRecord[]
   enquiries: EnquiryRecord[]
   clients: ClientRecord[]
@@ -431,6 +448,7 @@ interface AppData {
   counters: {
     momPersonnel: number
     testimonials: number
+    agencyReviews: number
     maids: number
     enquiries: number
     clients: number
@@ -740,6 +758,7 @@ const defaultData = (): AppData => ({
   },
   momPersonnel: [],
   testimonials: [],
+  agencyReviews: [],
   maids: [],
   enquiries: [
     {
@@ -828,6 +847,7 @@ const defaultData = (): AppData => ({
   counters: {
     momPersonnel: 1,
     testimonials: 1,
+    agencyReviews: 1,
     maids: 1,
     enquiries: 6,
     clients: 1,
@@ -1594,6 +1614,7 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
     },
     momPersonnel: raw.momPersonnel ?? defaults.momPersonnel,
     testimonials: raw.testimonials ?? defaults.testimonials,
+    agencyReviews: raw.agencyReviews ?? defaults.agencyReviews,
     maids: (raw.maids ?? defaults.maids).map((maid) => {
       const normalizedLanguageSkills = isPlainObject(maid.languageSkills)
         ? Object.fromEntries(
@@ -1809,6 +1830,10 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         raw.counters?.testimonials ??
         ((raw.testimonials?.length ?? 0) + 1 ||
           defaults.counters.testimonials),
+      agencyReviews:
+        raw.counters?.agencyReviews ??
+        ((raw.agencyReviews?.length ?? 0) + 1 ||
+          defaults.counters.agencyReviews),
       maids:
         raw.counters?.maids ??
         ((raw.maids?.length ?? 0) + 1 || defaults.counters.maids),
@@ -1998,6 +2023,110 @@ export const deleteTestimonialStore = async (id: number) => {
   data.testimonials = data.testimonials.filter((item) => item.id !== id)
   await saveData(data)
   return existing
+}
+
+/**
+ * Google-Maps-style rating summary for one agency: the mean whole-star score
+ * (rounded to one decimal) plus a 5→1 star distribution for the bar chart.
+ */
+export const buildAgencyRatingSummary = (
+  reviews: AgencyReviewRecord[],
+  agencyId: number
+) => {
+  const agencyReviews = reviews.filter((review) => review.agencyId === agencyId)
+  const count = agencyReviews.length
+  const total = agencyReviews.reduce(
+    (sum, review) => sum + (Number(review.rating) || 0),
+    0
+  )
+  const distribution: Record<'1' | '2' | '3' | '4' | '5', number> = {
+    '1': 0,
+    '2': 0,
+    '3': 0,
+    '4': 0,
+    '5': 0,
+  }
+  agencyReviews.forEach((review) => {
+    const star = String(
+      Math.min(5, Math.max(1, Math.round(Number(review.rating) || 0)))
+    ) as '1' | '2' | '3' | '4' | '5'
+    distribution[star] += 1
+  })
+  return {
+    average: count > 0 ? Math.round((total / count) * 10) / 10 : 0,
+    count,
+    distribution,
+  }
+}
+
+export const listAgencyReviewsStore = async (agencyId: number) => {
+  const data = await loadData()
+  return data.agencyReviews
+    .filter((review) => review.agencyId === agencyId)
+    .sort(
+      (left, right) =>
+        new Date(right.updatedAt ?? right.createdAt).getTime() -
+        new Date(left.updatedAt ?? left.createdAt).getTime()
+    )
+}
+
+export const upsertAgencyReviewStore = async (input: {
+  agencyId: number
+  clientId: number
+  clientName: string
+  rating: number
+  comment: string
+}) => {
+  const data = await loadData()
+  const existing = data.agencyReviews.find(
+    (review) =>
+      review.agencyId === input.agencyId && review.clientId === input.clientId
+  )
+
+  if (existing) {
+    existing.rating = input.rating
+    existing.comment = input.comment
+    existing.clientName = input.clientName
+    existing.updatedAt = now()
+    await saveData(data)
+    return { review: existing, created: false as const }
+  }
+
+  const review: AgencyReviewRecord = {
+    id: data.counters.agencyReviews++,
+    agencyId: input.agencyId,
+    clientId: input.clientId,
+    clientName: input.clientName,
+    rating: input.rating,
+    comment: input.comment,
+    createdAt: now(),
+    updatedAt: now(),
+  }
+  data.agencyReviews.unshift(review)
+  await saveData(data)
+  return { review, created: true as const }
+}
+
+export const deleteAgencyReviewStore = async (
+  agencyId: number,
+  reviewId: number,
+  clientId: number
+) => {
+  const data = await loadData()
+  const existing = data.agencyReviews.find(
+    (review) => review.id === reviewId && review.agencyId === agencyId
+  )
+  if (!existing) {
+    return { status: 'not_found' as const }
+  }
+  if (existing.clientId !== clientId) {
+    return { status: 'forbidden' as const }
+  }
+  data.agencyReviews = data.agencyReviews.filter(
+    (review) => review.id !== reviewId
+  )
+  await saveData(data)
+  return { status: 'deleted' as const, review: existing }
 }
 
 export const getMaidsStore = async (
@@ -3130,10 +3259,13 @@ export const getAgencySummariesStore = async () => {
   return Array.from(uniqueAgencies.values())
     .map((agency) => {
       const maids = maidsByAgency.get(agency.id) ?? []
+      const rating = buildAgencyRatingSummary(data.agencyReviews, agency.id)
       return {
         ...agency,
         totalMaids: maids.length,
         publicMaids: maids.filter((maid) => maid.isPublic).length,
+        rating: rating.average,
+        reviewCount: rating.count,
       }
     })
     .sort((left, right) => left.name.localeCompare(right.name))

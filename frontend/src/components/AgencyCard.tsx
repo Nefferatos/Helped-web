@@ -57,10 +57,15 @@ const AgencyCard = ({ agency }: Props) => {
             <MapPin className="h-4 w-4" />
             <span>{agency.location}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span>{agency.rating.toFixed(1)} experience score</span>
-          </div>
+          {agency.reviewCount > 0 ? (
+            <div className="flex items-center gap-2">
+              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+              <span>
+                {agency.rating.toFixed(1)} rating ({agency.reviewCount}{" "}
+                {agency.reviewCount === 1 ? "review" : "reviews"})
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {agency.previewMaids.length > 0 ? (
