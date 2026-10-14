@@ -1037,6 +1037,7 @@ npm run secrets:scan           # before committing
 | `docs/TESTING_GUIDE.md` | How to test the platform |
 | `docs/ai-agent-architecture.md`, `docs/ai-receptionist-make-migration.md` | AI architecture + receptionist migration |
 | `docs/WORKFLOW_DESIGN_PRESENTATION.md`, `docs/Helped-Platform-Tutorial-Guide.pptx` | Presentation / training material for the boss and staff |
+| `docs/CHANGES_REPORT_2026-10-14.md` | Change report for the IT review (ratings & reviews, Google review funnel, marketing email delivery, fixes) |
 
 ### 10.2 Glossary
 
