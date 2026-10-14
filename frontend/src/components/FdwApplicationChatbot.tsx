@@ -151,8 +151,8 @@ const FdwApplicationChatbot = ({ initialMode = "apply" }: { initialMode?: Mode }
           <Bot className="h-6 w-6" />
         </span>
         <div className="min-w-0">
-          <h1 className="truncate text-base font-black text-[#0E4E5E]">FDW Application Chatbot</h1>
-          <p className="text-xs text-slate-600">Fill in your details — it&apos;s quick and simple.</p>
+          <h1 className="truncate text-base font-black text-black">FDW Application Chatbot</h1>
+          <p className="text-xs text-black">Fill in your details — it&apos;s quick and simple.</p>
         </div>
       </header>
 
@@ -165,7 +165,7 @@ const FdwApplicationChatbot = ({ initialMode = "apply" }: { initialMode?: Mode }
             className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition ${
               mode === value
                 ? "bg-[#0E4E5E] text-white shadow-sm"
-                : "bg-[#0E4E5E]/10 text-[#0E4E5E] hover:bg-[#0E4E5E]/20"
+                : "bg-[#0E4E5E]/10 text-black hover:bg-[#0E4E5E]/20"
             }`}
           >
             {value === "apply" ? "Apply as FDW" : "Refer a friend"}
@@ -178,7 +178,7 @@ const FdwApplicationChatbot = ({ initialMode = "apply" }: { initialMode?: Mode }
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E0F4F7] text-[#0E4E5E]">
             <Bot className="h-4 w-4" />
           </span>
-          <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-[#F0F9FF] px-4 py-2.5 text-sm leading-6 text-slate-800 ring-1 ring-inset ring-[#0E4E5E]/10">
+          <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-[#F0F9FF] px-4 py-2.5 text-sm leading-6 text-black ring-1 ring-inset ring-[#0E4E5E]/10">
             {INTRO[mode]}
           </p>
         </div>
@@ -186,10 +186,10 @@ const FdwApplicationChatbot = ({ initialMode = "apply" }: { initialMode?: Mode }
         {submitted ? (
           <div className="rounded-2xl border border-[#0E4E5E]/20 bg-[#E0F4F7] px-5 py-6 text-center">
             <CheckCircle2 className="mx-auto h-9 w-9 text-[#0E4E5E]" />
-            <p className="mt-2 text-sm font-bold text-[#0E4E5E]">
+            <p className="mt-2 text-sm font-bold text-black">
               {mode === "apply" ? "Application submitted" : "Referral submitted"}
             </p>
-            <p className="mt-1 text-xs text-slate-700">
+            <p className="mt-1 text-xs text-black">
               {mode === "apply"
                 ? "We've also pre-filled the full application form with your answers."
                 : "Thank you — the agency will follow up if needed."}
@@ -207,7 +207,7 @@ const FdwApplicationChatbot = ({ initialMode = "apply" }: { initialMode?: Mode }
               type="button"
               onClick={restart}
               variant="outline"
-              className="mt-2 w-full border-[#0E4E5E]/30 text-[#0E4E5E] hover:bg-[#0E4E5E]/5"
+              className="mt-2 w-full border-[#0E4E5E]/30 text-black hover:bg-[#0E4E5E]/5"
             >
               <RotateCcw className="mr-2 h-4 w-4" /> Start over
             </Button>
@@ -217,7 +217,7 @@ const FdwApplicationChatbot = ({ initialMode = "apply" }: { initialMode?: Mode }
             <div className="grid gap-4 sm:grid-cols-2">
               {fields.map((field) => (
                 <div key={field.name} className={field.full ? "sm:col-span-2" : undefined}>
-                  <Label htmlFor={`fdw-${field.name}`} className="text-xs font-semibold text-[#0E4E5E]">
+                  <Label htmlFor={`fdw-${field.name}`} className="text-xs font-semibold text-black">
                     {field.label}
                     {field.required && <span className="ml-0.5 text-rose-500">*</span>}
                   </Label>
@@ -244,7 +244,7 @@ const FdwApplicationChatbot = ({ initialMode = "apply" }: { initialMode?: Mode }
               ))}
             </div>
 
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-[#0E4E5E]/20 bg-[#E0F4F7] p-3 text-xs leading-5 text-slate-800">
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-[#0E4E5E]/20 bg-[#E0F4F7] p-3 text-xs leading-5 text-black">
               <input
                 type="checkbox"
                 checked={consent}

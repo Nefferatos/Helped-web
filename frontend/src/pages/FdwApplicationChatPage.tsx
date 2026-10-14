@@ -11,18 +11,18 @@ const FdwApplicationChatPage = () => {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Link
             to="/apply-as-maid"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#0E4E5E] hover:text-[#0b3a47]"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-black hover:text-black"
           >
             <ArrowLeft className="h-4 w-4" /> Back to the full application form
           </Link>
-          <div className="flex items-center gap-2 rounded-full bg-[#FCD34D] px-3 py-1 text-xs font-semibold text-[#3d2800]">
+          <div className="flex items-center gap-2 rounded-full bg-[#FCD34D] px-3 py-1 text-xs font-semibold text-black">
             <Sparkles className="h-3.5 w-3.5" /> AI-assisted
           </div>
         </div>
 
         <header className="mb-6 text-center">
-          <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Apply in a chat</h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+          <h1 className="text-3xl font-black tracking-tight text-black sm:text-4xl">Apply in a chat</h1>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-black">
             Fill in your details in one place — quicker than the full form — and our assistant will register you
             with the agency. You can refer a friend here too.
           </p>
@@ -30,12 +30,12 @@ const FdwApplicationChatPage = () => {
 
         <FdwApplicationChatbot />
 
-        <div className="mx-auto mt-6 flex max-w-2xl items-start gap-3 rounded-2xl border border-[#0E4E5E]/15 bg-white p-4 text-xs leading-6 text-slate-600">
+        <div className="mx-auto mt-6 flex max-w-2xl items-start gap-3 rounded-2xl border border-[#0E4E5E]/15 bg-white p-4 text-xs leading-6 text-black">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#0E4E5E]" />
           <p>
             Your answers are handled securely by the agency. For the detailed biodata form (documents, work
             history, and certifications), use the{" "}
-            <Link to="/apply-as-maid" className="font-semibold text-[#0E4E5E] underline">
+            <Link to="/apply-as-maid" className="font-semibold text-black underline">
               full application form
             </Link>
             .

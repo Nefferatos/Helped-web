@@ -115,7 +115,7 @@ const MaidCard = ({
 
       <div className="flex flex-1 flex-col gap-2 p-3">
         <div>
-          <h3 className="text-sm font font-semibold text-foreground leading-tight">
+          <h3 className="text-sm font-semibold text-foreground leading-tight">
             {maid.fullName}
           </h3>
           <p className="text-[10px] text-muted-foreground">{maid.referenceCode}</p>
@@ -150,7 +150,7 @@ const MaidCard = ({
             asChild
           >
             <Link
-              to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(agencyName)}`}
+              to={`/client/support-chat?type=agency&agencyId=${encodeURIComponent(String(maid.agencyId ?? 1))}&agencyName=${encodeURIComponent(agencyName)}`}
             >
               Chat
             </Link>
@@ -176,12 +176,6 @@ const ClientDashboard = () => {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   useEffect(() => {
-      void hasActiveClientSession().then((active) => {
-        if (!active) {
-          navigate("/employer-login");
-        }
-      });
-
     const loadDashboard = async () => {
       try {
         setIsLoading(true);
@@ -241,6 +235,9 @@ const ClientDashboard = () => {
     void loadDashboard();
 
     const interval = window.setInterval(() => {
+      // Skip polling while the tab is hidden; it resumes on the next tick after
+      // the user returns, instead of burning requests in the background.
+      if (document.hidden) return;
       void fetchClientUnreadChatCount()
         .then((result) => {
           setUnreadChatCount(result.unreadCount);
@@ -441,6 +438,7 @@ const ClientDashboard = () => {
             <select
               value={nationality}
               onChange={(e) => setNationality(e.target.value)}
+              aria-label="Filter by nationality"
               className="h-11 rounded-[18px] border bg-background px-3 text-sm text-foreground"
             >
               {nationalityOptions.map((o) => <option key={o}>{o}</option>)}
@@ -448,6 +446,7 @@ const ClientDashboard = () => {
             <select
               value={maidType}
               onChange={(e) => setMaidType(e.target.value)}
+              aria-label="Filter by maid type"
               className="h-11 rounded-[18px] border bg-background px-3 text-sm text-foreground"
             >
               {maidTypeOptions.map((o) => <option key={o}>{o}</option>)}
@@ -717,7 +716,7 @@ const ClientDashboard = () => {
                         {/* Message agency */}
                         <Button variant="outline" className="w-full rounded-2xl sm:w-auto sm:self-start" asChild>
                           <Link
-                            to={`/client/support-chat?type=agency&agencyId=1&agencyName=${encodeURIComponent(getAgencyName(maid, company))}`}
+                            to={`/client/support-chat?type=agency&agencyId=${encodeURIComponent(String(maid.agencyId ?? 1))}&agencyName=${encodeURIComponent(getAgencyName(maid, company))}`}
                           >
                             <MessageCircle className="mr-2 h-4 w-4" /> Message Agency
                           </Link>

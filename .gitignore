@@ -12,3 +12,4 @@ backend/dist/
 .wrangler/
 .wrangler-dry/
 .claude/settings.local.json
+frontend/.esb-tmp-check/
