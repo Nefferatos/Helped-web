@@ -306,7 +306,9 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   }
 
   const statValues: Record<string, number> = {
-    active: placements.length,
+    active: placements.filter((placement) =>
+      !['COMPLETED', 'CANCELLED', 'WITHDRAWN'].includes(placement.status.trim().toUpperCase()),
+    ).length,
     flight: placements.filter((p) => p.flight_booked).length,
     medical: placements.filter((p) => p.medical_completed).length,
     handover: placements.filter((p) => p.handover_completed).length,
@@ -586,7 +588,23 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
 
         {activeTab === 'knowledge' ? (
           <Card icon={BookOpen} title="Knowledge library" description="What your receptionist can look up">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-black">
+              <p className="font-semibold">How this guide works</p>
+              <p className="mt-1">Add an approved procedure or FAQ, then select <strong>Index knowledge</strong> to make it searchable. Search below to check what was indexed. Loading an example only fills the form; it does not save or index anything.</p>
+            </div>
             <form onSubmit={indexKnowledge} className="space-y-4">
+              <button
+                type="button"
+                onClick={() => setKnowledge({
+                  sourceKey: 'arrival-day-checklist',
+                  title: 'New helper airport arrival checklist',
+                  category: 'SOP',
+                  content: 'Before arrival: confirm the flight details, arrival date and time, employer contact, and agreed pickup arrangements.\n\nOn arrival: confirm the helper has been met by the agreed contact. If the flight is delayed or the pickup plan changes, contact the agency supervisor and employer using the approved contact process.\n\nAfter arrival: record the arrival outcome and any follow-up needed in the agency system. Follow current agency procedures for identity checks, transport, and escalation.',
+                })}
+                className={secondaryButton}
+              >
+                Load example
+              </button>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Source key">
                   <input className={fieldClass} placeholder="e.g. sop-arrival" value={knowledge.sourceKey} onChange={(e) => setKnowledge({ ...knowledge, sourceKey: e.target.value })} />

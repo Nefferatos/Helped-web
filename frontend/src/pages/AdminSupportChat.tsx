@@ -1481,7 +1481,7 @@ const AdminSupportChat = () => {
                 <MetaCard icon={<ShieldAlert className="h-3.5 w-3.5" />} label="Priority">
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <span style={{ fontSize: 9, fontWeight: 900, color: priorityCfg.color }}>â—</span>
+                      <span aria-hidden="true" style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: priorityCfg.color }} />
                     </div>
                     <select
                       value={activeConversation.priority ?? "MEDIUM"}
@@ -1579,7 +1579,7 @@ const AdminSupportChat = () => {
                 style={{ background: "#F8FAFC", border: "1.5px solid #E5E7EB", transition: "all 0.15s" }}>
                 <textarea
                   ref={textareaRef}
-                  placeholder={activeConversation ? `Reply to ${activeConversation.clientName}â€¦` : "Select a conversationâ€¦"}
+                  placeholder={activeConversation ? "Reply to this conversation..." : "Select a conversation..."}
                   value={draft}
                   rows={1}
                   disabled={!activeConversation || isSending}

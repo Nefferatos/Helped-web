@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { createOperationsPlacement, getOperationsBoard, getOperationsTranscript, getWorkflowDashboardMetrics, saveOperationsPlacementNote } from '../controllers/dashboardController'
+import { createOperationsPlacement, getOperationsBoard, getOperationsTranscript, getWorkflowDashboardMetrics, getAutomationMonitor, saveOperationsPlacementNote } from '../controllers/dashboardController'
 import { matchMaids } from '../controllers/matchController'
 import { requireSupabaseAuth } from '../middleware/requireSupabaseAuth'
 import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
@@ -7,6 +7,7 @@ import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
 const router = Router()
 
 router.get('/dashboard', getWorkflowDashboardMetrics)
+router.get('/dashboard/automations', requireAgencyAuth, getAutomationMonitor)
 router.get('/operations-board', requireAgencyAuth, getOperationsBoard)
 router.post('/operations-board/placements', requireAgencyAuth, createOperationsPlacement)
 router.put('/operations-board/placements/:placementId/notes', requireAgencyAuth, saveOperationsPlacementNote)

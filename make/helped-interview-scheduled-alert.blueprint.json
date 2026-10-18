@@ -4,7 +4,7 @@
     "instant": true,
     "version": 1,
     "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": false },
-    "notes": ["Immediate internal alert for a newly scheduled interview. It deliberately does not contact an applicant because the current interview event has no verified participant email. Reconnect Gmail and replace the recipient after import."]
+    "notes": ["Immediate internal alert sent after the website saves the Google Meet URL. The webhook payload includes applicant name and email, interview date, time, format, application and placement references, and the Meet URL. Reconnect Gmail and replace the internal recipient after import."]
   },
   "flow": [
     {
@@ -22,11 +22,11 @@
       "parameters": { "account": "" },
       "mapper": {
         "cc": [], "bcc": [], "from": "", "to": ["wow.aisolution@gmail.com"],
-        "subject": "Interview scheduled - {{1.interview_id}}",
-        "html": "<p><strong>A recruiter scheduled an interview.</strong></p><p><strong>Interview:</strong> {{1.interview_id}}<br><strong>Scheduled:</strong> {{1.scheduled_at}}<br><strong>Application:</strong> {{1.application_id}}<br><strong>Placement:</strong> {{1.placement_id}}</p><p>Open the Operations Center to review the interview and arrange participant communication.</p>",
+        "subject": "Interview scheduled: {{1.candidate_name}} - {{1.scheduled_date}} {{1.scheduled_time}}",
+        "html": "<div style=\"font-family:Arial,sans-serif;color:#172033;max-width:640px\"><h2 style=\"color:#4f46e5;margin-bottom:8px\">Interview scheduled</h2><p>A recruiter scheduled an interview. Details are below.</p><table style=\"border-collapse:collapse;width:100%;background:#f8fafc\"><tr><td style=\"padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold\">Applicant</td><td style=\"padding:10px;border-bottom:1px solid #e2e8f0\">{{1.candidate_name}}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold\">Applicant email</td><td style=\"padding:10px;border-bottom:1px solid #e2e8f0\">{{1.candidate_email}}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold\">Date</td><td style=\"padding:10px;border-bottom:1px solid #e2e8f0\">{{1.scheduled_date}}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold\">Time</td><td style=\"padding:10px;border-bottom:1px solid #e2e8f0\">{{1.scheduled_time}}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold\">Format</td><td style=\"padding:10px;border-bottom:1px solid #e2e8f0\">{{1.interview_mode}}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold\">Google Meet</td><td style=\"padding:10px;border-bottom:1px solid #e2e8f0\"><a href=\"{{1.meeting_url}}\">Join interview</a><br><span>{{1.meeting_url}}</span></td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold\">Interview ID</td><td style=\"padding:10px;border-bottom:1px solid #e2e8f0\">{{1.interview_id}}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold\">Application ID</td><td style=\"padding:10px;border-bottom:1px solid #e2e8f0\">{{1.application_id}}</td></tr><tr><td style=\"padding:10px;font-weight:bold\">Placement ID</td><td style=\"padding:10px\">{{1.placement_id}}</td></tr></table><p>Open the Agency Portal to review the applicant and interview.</p></div>",
         "attachments": []
       },
-      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "Choose your Gmail connection and the internal recipient." }
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "Choose your Gmail connection and replace the placeholder recipient with the staff inbox." }
     },
     {
       "id": 3,

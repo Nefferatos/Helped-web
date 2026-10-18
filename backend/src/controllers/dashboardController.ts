@@ -15,6 +15,21 @@ export const getWorkflowDashboardMetrics = async (_req: Request, res: Response) 
   }
 }
 
+/** Sanitized Make setup status for the agency dashboard. A webhook URL only
+ * proves configuration, not that the scenario is switched on in Make. */
+export const getAutomationMonitor = async (_req: Request, res: Response) => {
+  const workflows = [
+    { id: 'applicant-intake', name: 'Applicant Intake & Screening', env: 'MAKE_WEBHOOK_URL_APPLICANT_INTAKE', mode: 'automatic' },
+    { id: 'placement-alerts', name: 'Placement Milestone Alerts', env: 'MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT', mode: 'automatic' },
+    { id: 'interview-alerts', name: 'Interview Scheduling Alerts', env: 'MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT', mode: 'automatic' },
+    { id: 'arrival-alerts', name: 'Contractor Arrival Alerts', env: 'MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT', mode: 'automatic' },
+  ].map(({ env, ...workflow }) => ({
+    ...workflow,
+    status: process.env[env]?.trim() ? 'active' : 'inactive',
+  }))
+  res.json({ workflows })
+}
+
 /** Placement-centred airport/arrival operations board. */
 export const getOperationsBoard = async (req: Request, res: Response) => {
   try {

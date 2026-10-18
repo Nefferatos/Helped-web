@@ -246,7 +246,35 @@ const compactPublicMaid = (maid: Record<string, unknown>) => {
     workAreaRatings,
     workExperience,
     // Full narrative profile — primary text the AI should read for introductions and skill matching
-    profile: text(intro.publicIntro) || text(intro.intro) || null,
+    // Only include the published introduction; internal notes are not public.
+    profile: text(intro.publicIntro) || null,
+  };
+};
+
+// Give authenticated agency staff a compact view of the complete roster while
+// leaving out direct contact details and other unnecessary sensitive fields.
+const compactAgencyMaid = (maid: Record<string, unknown>) => {
+  const profile = compactPublicMaid(maid);
+  const introduction = (maid.introduction ?? {}) as Record<string, unknown>;
+  return {
+    referenceCode: profile.referenceCode,
+    fullName: profile.fullName,
+    status: profile.status,
+    visibility: maid.isPublic ? "public" : "hidden/internal",
+    type: profile.type,
+    nationality: profile.nationality,
+    placeOfBirth: profile.placeOfBirth,
+    originCategory: profile.indianMaidCategory,
+    educationLevel: profile.educationLevel,
+    expectedSalary: profile.expectedSalary,
+    offDaysPerMonth: profile.offDaysPerMonth,
+    languages: profile.languages,
+    skillRatings: profile.skillRatings,
+    workAreaRatings: profile.workAreaRatings,
+    workExperience: profile.workExperience,
+    profile: profile.profile || (!maid.isPublic ? text(introduction.intro).slice(0, 800) : null),
+    createdAt: text(maid.createdAt) || null,
+    updatedAt: text(maid.updatedAt) || null,
   };
 };
 
@@ -441,16 +469,25 @@ const getAgencyContext = (data: AppDataLike, actor: AiActorContext, input: Recor
   const agencyId = actor.agencyId;
   const agencyMaids = list(data.maids).filter((item) => item.agencyId === agencyId);
   const agencyRequests = list(data.requests).filter((item) => item.agencyId === agencyId);
-  const agencyEnquiries = list(data.enquiries).filter((item) => item.agencyId === agencyId);
+  // The agency inbox and agency reports include legacy/unassigned enquiries
+  // alongside records explicitly assigned to this agency. Mirror that rule so
+  // the AI's enquiry totals and open list match the portal.
+  const agencyEnquiries = list(data.enquiries).filter((item) =>
+    !item.agencyId || Number(item.agencyId) === agencyId,
+  );
   const agencyMessages = list(data.chatMessages).filter((item) => item.agencyId === agencyId);
   const agencyContracts = list(data.employmentContracts).filter((item) => item.agencyId === agencyId);
   const agencyApplications = list(data.ats?.applications).filter((item) => item.agencyId === agencyId);
   const publicAgencyMaids = agencyMaids.filter((maid) => maid.isPublic);
+  const newestAgencyMaids = [...agencyMaids].sort((left, right) =>
+    Date.parse(text(right.updatedAt) || text(right.createdAt) || "") -
+    Date.parse(text(left.updatedAt) || text(left.createdAt) || ""),
+  );
   const message = text(input.message);
   const requestedSkills = detectSkills(message);
   const requestedCount = extractRequestedCount(message);
   const availableOnly = /\bavailable\b/i.test(message);
-  const matchingMaids = publicAgencyMaids
+  const matchingMaids = agencyMaids
     .filter((maid) => !availableOnly || lower(maid.status).includes("available"))
     .map((maid) => ({ maid, score: maidSkillScore(maid, requestedSkills) }))
     .filter(({ score }) => requestedSkills.length === 0 || score > 0)
@@ -471,10 +508,99 @@ const getAgencyContext = (data: AppDataLike, actor: AiActorContext, input: Recor
       counts[value] = (counts[value] ?? 0) + 1;
       return counts;
     }, {});
+  const dateValue = (record: Record<string, unknown>) =>
+    Date.parse(text(record.createdAt) || text(record.updatedAt) || text(record.date) || "") || 0;
+  const newestEnquiries = [...agencyEnquiries].sort((a, b) => dateValue(b) - dateValue(a));
+  const openEnquiries = newestEnquiries.filter((item) =>
+    !["resolved", "replied"].includes(lower(item.status) || "new"),
+  );
+  const recentEnquiryRecords = newestEnquiries.slice(0, 30).map((item) => ({
+    id: item.id,
+    status: text(item.status) || "new",
+    receivedAt: text(item.createdAt) || text(item.date) || null,
+    clientName: text(item.username) || text(item.clientName) || "Anonymous",
+    message: text(item.message).slice(0, 500),
+    staffNote: text(item.note).slice(0, 240) || null,
+    assignedTo: text(item.assignedTo) || null,
+  }));
+  const pendingRequestRecords = [...agencyRequests]
+    .filter((item) => lower(item.status) === "pending")
+    .sort((a, b) => dateValue(b) - dateValue(a))
+    .slice(0, 25)
+    .map((item) => {
+      const sanitizeRequirement = (value: unknown, depth = 0): unknown => {
+        if (depth > 3 || value == null || typeof value === "boolean" || typeof value === "number") return value;
+        if (typeof value === "string") return value.slice(0, 160);
+        if (Array.isArray(value)) return value.slice(0, 10).map((entry) => sanitizeRequirement(entry, depth + 1));
+        if (typeof value !== "object") return undefined;
+        return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+          .filter(([key, entry]) => !/name|email|phone|address|contact|password/i.test(key) && entry != null)
+          .slice(0, 15)
+          .map(([key, entry]) => [key, sanitizeRequirement(entry, depth + 1)]));
+      };
+      const details = item.details && typeof item.details === "object" && !Array.isArray(item.details)
+        ? sanitizeRequirement(item.details)
+        : {};
+      return {
+        id: item.id,
+        status: text(item.status),
+        type: text(item.type),
+        updatedAt: text(item.updatedAt) || text(item.createdAt) || null,
+        requirements: details,
+        maidReferences: Array.isArray(item.maidReferences) ? item.maidReferences.slice(0, 10) : [],
+      };
+    });
+  const profilesByApplication = new Map(
+    list(data.ats?.profiles).map((profile) => [text(profile.applicationId), profile]),
+  );
+  const applicantHighlights = [...agencyApplications]
+    .sort((a, b) => {
+      const aScore = num(data.ats?.scores?.[text(a.id)]?.score) ?? -1;
+      const bScore = num(data.ats?.scores?.[text(b.id)]?.score) ?? -1;
+      return bScore - aScore || dateValue(b) - dateValue(a);
+    })
+    .slice(0, 20)
+    .map((application) => {
+      const profile = profilesByApplication.get(text(application.id)) ?? {};
+      const score = data.ats?.scores?.[text(application.id)];
+      return {
+        id: application.id,
+        applicationCode: text(application.applicationCode) || null,
+        status: text(application.status) || "Unknown",
+        appliedAt: text(application.appliedAt) || null,
+        name: text(profile.fullName) || "Unnamed applicant",
+        nationality: text(profile.nationality) || "Not recorded",
+        yearsOfExperience: num(profile.yearsOfExperience),
+        childcareExperience: num(profile.childcareExperience),
+        newbornCareExperience: num(profile.newbornCareExperience),
+        elderlyCareExperience: num(profile.elderlyCareExperience),
+        languages: Array.isArray(profile.languageSkills) ? profile.languageSkills.slice(0, 8) : [],
+        expectedSalary: num(profile.expectedSalary),
+        availableDate: text(profile.availableDate) || null,
+        score: num(score?.score),
+        scoreCategory: text(score?.category) || null,
+      };
+    });
+  const contractRecords = [...agencyContracts]
+    .sort((a, b) => dateValue(b) - dateValue(a))
+    .slice(0, 25)
+    .map((contract) => ({
+      reference: text(contract.refCode) || text(contract.caseReferenceNumber) || String(contract.id ?? ""),
+      employer: text(contract.employerName),
+      maid: text(contract.maidName),
+      contractDate: text(contract.contractDate) || null,
+      updatedAt: text(contract.updatedAt) || text(contract.createdAt) || null,
+    }));
+  const company = data.companyProfile ?? {};
   return {
     agency: {
       id: agencyId,
       name: actor.agencyName,
+    },
+    agencyProfile: {
+      name: text(company.company_name) || text(company.short_name) || actor.agencyName,
+      about: text(company.about_us).slice(0, 500) || null,
+      website: text(company.contact_website) || null,
     },
     dashboardSummary: {
       maids: agencyMaids.length,
@@ -493,7 +619,7 @@ const getAgencyContext = (data: AppDataLike, actor: AiActorContext, input: Recor
       contractsByStatus: countBy(agencyContracts, "status"),
       applicationsByStage: countBy(agencyApplications, "stage"),
     },
-    maidMatches: orderedMaidMatches.slice(0, sendCount).map(compactMaid),
+    maidMatches: orderedMaidMatches.slice(0, sendCount).map(compactAgencyMaid),
     maidMatchHints: {
       requestedSkills,
       requestedCount,
@@ -503,7 +629,29 @@ const getAgencyContext = (data: AppDataLike, actor: AiActorContext, input: Recor
         ? { asked: requestedCount, available: totalMaidMatches }
         : null,
     },
-    maids: publicAgencyMaids.slice(-80).map(compactMaid),
+    dataCoverage: {
+      enquiries: { total: agencyEnquiries.length, recentIncluded: recentEnquiryRecords.length, openTotal: openEnquiries.length },
+      pendingRequests: { total: agencyRequests.filter((item) => lower(item.status) === "pending").length, included: pendingRequestRecords.length },
+      applicants: { total: agencyApplications.length, included: applicantHighlights.length },
+      contracts: { total: agencyContracts.length, included: contractRecords.length },
+      maidProfiles: {
+        total: agencyMaids.length,
+        included: newestAgencyMaids.length,
+        public: publicAgencyMaids.length,
+        hidden: agencyMaids.length - publicAgencyMaids.length,
+      },
+    },
+    recentEnquiries: recentEnquiryRecords,
+    openEnquiries: openEnquiries.slice(0, 30).map((item) => ({
+      id: item.id,
+      status: text(item.status) || "new",
+      receivedAt: text(item.createdAt) || text(item.date) || null,
+      message: text(item.message).slice(0, 500),
+    })),
+    pendingRequests: pendingRequestRecords,
+    applicantHighlights,
+    contractRecords,
+    maidCatalog: newestAgencyMaids.map(compactAgencyMaid),
   };
 };
 

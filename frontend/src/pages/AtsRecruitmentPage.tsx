@@ -643,6 +643,7 @@ const AtsRecruitmentPage = () => {
     setWorkflowSaving(true);
     let interviewSaved = false;
     let generatedMeetLink: string | undefined;
+    let meetingLinkToSave = interviewMeetingLink.trim();
     try {
       const scheduledDate = interviewDateTime.slice(0, 10);
       const scheduledTime24 = interviewDateTime.slice(11, 16);
@@ -686,36 +687,42 @@ const AtsRecruitmentPage = () => {
         const makeMeetLink = makeResult.meetLink?.trim();
         if (makeMeetLink) {
           generatedMeetLink = makeMeetLink;
+          meetingLinkToSave = makeMeetLink;
           setInterviewMeetingLink(makeMeetLink);
           setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: makeMeetLink });
-          if (scheduleData.interview?.id) {
-            const saveMeetResponse = await fetch(`/api/ai/hr-interview/schedule/${encodeURIComponent(String(scheduleData.interview.id))}/meeting-link`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-              body: JSON.stringify({
-                meetingUrl: makeMeetLink,
-                candidateName: interviewTarget.name,
-                candidateEmail: interviewTarget.email,
-                scheduledDate,
-                scheduledTime,
-                interviewMode,
-              }),
-            });
-            if (!saveMeetResponse.ok) {
-              toast.warning("Invitation was sent, but the Meet link could not be saved to the calendar.");
-            }
-          }
+        }
+      }
+      if (meetingLinkToSave && scheduleData.interview?.id) {
+        const saveMeetResponse = await fetch(`/api/ai/hr-interview/schedule/${encodeURIComponent(String(scheduleData.interview.id))}/meeting-link`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+          body: JSON.stringify({
+            meetingUrl: meetingLinkToSave,
+            candidateName: interviewTarget.name,
+            candidateEmail: interviewTarget.email,
+            scheduledDate,
+            scheduledTime,
+            interviewMode,
+          }),
+        });
+        const alertData = await saveMeetResponse.json().catch(() => ({})) as { error?: string; staffAlertSent?: boolean };
+        if (!saveMeetResponse.ok) {
+          toast.warning("Interview saved, but the Meet link or staff alert could not be saved.");
+        } else if (!alertData.staffAlertSent) {
+          toast.warning("The Meet link was saved, but the staff alert was not sent. Check the Make scenario and run history.");
         }
       }
       setWorkflowActivity({
         tone: "success",
         title: sendApplicantEmail && interviewTarget.email ? "Interview booked and invitation sent" : "Interview schedule saved",
         detail: sendApplicantEmail && interviewTarget.email
-          ? generatedMeetLink
+          ? meetingLinkToSave
             ? `The Google Meet link is ready for ${interviewTarget.name}. Use “Join Google Meet” now, or find it later in Recruiter Calendar.`
             : `Make created the interview workflow for ${interviewTarget.name}. Check the applicant's email and your selected Google Calendar.`
-          : `The interview for ${interviewTarget.name} is saved. You can send the invitation later when the email workflow is ready.`,
-        meetingLink: generatedMeetLink,
+          : meetingLinkToSave
+            ? `The interview for ${interviewTarget.name} is saved with its Google Meet link.`
+            : `The interview for ${interviewTarget.name} is saved. You can send the invitation later when the email workflow is ready.`,
+        meetingLink: meetingLinkToSave || undefined,
       });
       toast.success(sendApplicantEmail && interviewTarget.email ? "Interview scheduled and invitation sent" : "Interview scheduled");
       setInterviewTarget(null);

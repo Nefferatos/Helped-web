@@ -27,7 +27,7 @@
                 "message": "{{1.userPrompt}}\n\nConversation history:\n{{join(map(slice(1.messages; -10); item.role + \": \" + item.content); \"\\n\")}}",
                 "threadId": "{{1.scenario}}",
                 "outputType": "text",
-                "tokenLimit": "80",
+                "tokenLimit": "100",
                 "modelConfig": {
                     "timeout": "",
                     "recursionLimit": "80",

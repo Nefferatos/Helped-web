@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,8 +50,15 @@ const MaidReferralChatbot = () => {
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const conversationRef = useRef<HTMLDivElement>(null);
 
   const currentPrompt = prompts[step];
+
+  useEffect(() => {
+    if (!open) return;
+    const conversation = conversationRef.current;
+    if (conversation) conversation.scrollTo({ top: conversation.scrollHeight, behavior: "smooth" });
+  }, [open, step, submitted]);
 
   const continueChat = () => {
     if (!currentPrompt) return;
@@ -91,7 +98,7 @@ const MaidReferralChatbot = () => {
       {open && (
         <section
           aria-label="Maid referral chatbot"
-          className="referral-chat-enter flex h-[min(560px,calc(100dvh-20rem))] w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[1.75rem] border-2 border-emerald-200 bg-white text-base text-slate-950 shadow-[0_24px_80px_rgba(15,60,45,0.26)]"
+          className="referral-chat-enter flex h-[min(560px,calc(100dvh-14rem))] min-h-[320px] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[1.75rem] border-2 border-emerald-200 bg-white text-base text-slate-950 shadow-[0_24px_80px_rgba(15,60,45,0.26)]"
         >
           <header className="relative flex shrink-0 items-center justify-between overflow-hidden bg-gradient-to-br from-emerald-800 via-emerald-800 to-teal-700 px-5 py-4 text-white">
             <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-12 h-36 w-36 rounded-full border border-white/10" />
@@ -127,7 +134,8 @@ const MaidReferralChatbot = () => {
             </div>
           )}
 
-          <div className="flex-1 space-y-5 overflow-y-auto bg-slate-100 p-5">
+          <div ref={conversationRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#f3f7f6] p-4 sm:p-5">
+            <div className="space-y-4">
             {submitted ? (
               <div className="referral-success-card flex min-h-full flex-col items-center justify-center space-y-4 rounded-2xl bg-emerald-50 p-7 text-center text-emerald-950">
                 <span className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-white shadow-lg">
@@ -143,51 +151,34 @@ const MaidReferralChatbot = () => {
               </div>
             ) : (
               <>
-                <div className="max-w-[92%] rounded-2xl rounded-tl-md border border-emerald-200 border-l-4 border-l-emerald-600 bg-emerald-50 p-4 text-base leading-6 text-slate-950 shadow-sm">
-                  Hello! I can help you refer a maid. This chat is only for maid referrals.
+                <div className="referral-message-in flex items-end gap-2">
+                  <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-emerald-200 bg-white"><img src={referralRobotAvatar} alt="" className="h-full w-full object-cover" /></span>
+                  <div className="max-w-[84%] rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-base leading-6 text-slate-950 shadow-sm">
+                    Hello! I can help you refer a maid. This chat is only for maid referrals.
+                  </div>
                 </div>
 
                 {prompts.slice(0, step).map((prompt) => (
-                  <div key={prompt.field} className="referral-message-in ml-auto max-w-[90%] rounded-2xl rounded-tr-md bg-emerald-700 px-4 py-3 text-base leading-6 text-white shadow-sm">
-                    <span className="mb-0.5 block text-base font-medium text-white">{prompt.question}</span>
-                    <span className="break-words">{draft[prompt.field].trim() || "Skipped"}</span>
-                  </div>
+                  <Fragment key={prompt.field}>
+                    <div className="referral-message-in flex items-end gap-2">
+                      <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-emerald-200 bg-white"><img src={referralRobotAvatar} alt="" className="h-full w-full object-cover" /></span>
+                      <div className="max-w-[82%] rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-base leading-6 text-slate-950 shadow-sm">{prompt.question}</div>
+                    </div>
+                    <div className="referral-message-in flex items-end justify-end gap-2">
+                      <div className="max-w-[82%] break-words rounded-2xl rounded-br-md bg-emerald-800 px-4 py-3 text-base leading-6 text-white shadow-sm">{draft[prompt.field].trim() || "Skipped"}</div>
+                      <span aria-label="You" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-200 text-base font-bold text-emerald-950">Y</span>
+                    </div>
+                  </Fragment>
                 ))}
 
                 {currentPrompt ? (
-                  <div key={currentPrompt.field} className="referral-message-in space-y-4">
-                    <div className="max-w-[92%] rounded-2xl rounded-tl-md border border-emerald-800 bg-emerald-800 p-4 text-base font-medium leading-6 text-white shadow-md">
+                  <div key={currentPrompt.field} className="referral-message-in space-y-3">
+                    <div className="flex items-end gap-2">
+                      <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-emerald-200 bg-white"><img src={referralRobotAvatar} alt="" className="h-full w-full object-cover" /></span>
+                      <div className="max-w-[84%] rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-base font-medium leading-6 text-slate-950 shadow-sm">
                       {currentPrompt.question}
-                      {currentPrompt.optional && <span className="mt-1 block text-base font-normal text-emerald-100">Optional — you can skip this question.</span>}
-                    </div>
-                    {currentPrompt.multiline ? (
-                      <Textarea
-                        value={draft[currentPrompt.field]}
-                        onChange={(event) => setDraft((current) => ({ ...current, [currentPrompt.field]: event.target.value }))}
-                        placeholder={currentPrompt.placeholder}
-                        maxLength={1000}
-                        rows={3}
-                        className="min-h-24 rounded-xl border-2 border-slate-300 bg-white text-base text-slate-950 shadow-sm placeholder:text-slate-700 focus-visible:ring-2 focus-visible:ring-emerald-700"
-                      />
-                    ) : (
-                      <Input
-                        value={draft[currentPrompt.field]}
-                        onChange={(event) => setDraft((current) => ({ ...current, [currentPrompt.field]: event.target.value }))}
-                        placeholder={currentPrompt.placeholder}
-                        maxLength={160}
-                        type={currentPrompt.field === "referrerPhone" || currentPrompt.field === "maidPhone" ? "tel" : "text"}
-                        className="h-12 rounded-xl border-2 border-slate-300 bg-white px-4 text-base text-slate-950 shadow-sm placeholder:text-slate-700 focus-visible:ring-2 focus-visible:ring-emerald-700"
-                      />
-                    )}
-                    <div className="flex justify-end gap-2 pt-1">
-                      {currentPrompt.optional && (
-                        <Button type="button" variant="outline" onClick={() => { setDraft((current) => ({ ...current, [currentPrompt.field]: "" })); setStep((current) => current + 1); }} className="h-11 rounded-xl border-slate-200 px-5 text-base text-slate-900">
-                          Skip
-                        </Button>
-                      )}
-                      <Button type="button" onClick={continueChat} className="h-11 min-w-32 rounded-xl bg-emerald-700 px-5 text-base text-white shadow-sm hover:bg-emerald-800">
-                        Continue
-                      </Button>
+                      {currentPrompt.optional && <span className="mt-1 block text-base font-normal text-slate-700">Optional — you can skip this question.</span>}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -217,7 +208,42 @@ const MaidReferralChatbot = () => {
                 )}
               </>
             )}
+            </div>
           </div>
+          {!submitted && currentPrompt && (
+            <form onSubmit={(event) => { event.preventDefault(); continueChat(); }} className="shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4">
+              <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-slate-50 p-2 shadow-inner focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-100">
+                {currentPrompt.multiline ? (
+                  <Textarea
+                    value={draft[currentPrompt.field]}
+                    onChange={(event) => setDraft((current) => ({ ...current, [currentPrompt.field]: event.target.value }))}
+                    onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); continueChat(); } }}
+                    placeholder={currentPrompt.placeholder}
+                    maxLength={1000}
+                    rows={2}
+                    className="min-h-12 resize-none border-0 bg-transparent text-base text-slate-950 shadow-none placeholder:text-slate-700 focus-visible:ring-0"
+                  />
+                ) : (
+                  <Input
+                    value={draft[currentPrompt.field]}
+                    onChange={(event) => setDraft((current) => ({ ...current, [currentPrompt.field]: event.target.value }))}
+                    placeholder={currentPrompt.placeholder}
+                    maxLength={160}
+                    type={currentPrompt.field === "referrerPhone" || currentPrompt.field === "maidPhone" ? "tel" : "text"}
+                    className="h-11 border-0 bg-transparent px-2 text-base text-slate-950 shadow-none placeholder:text-slate-700 focus-visible:ring-0"
+                  />
+                )}
+                {currentPrompt.optional && (
+                  <Button type="button" variant="ghost" onClick={() => { setDraft((current) => ({ ...current, [currentPrompt.field]: "" })); setStep((current) => current + 1); }} className="h-10 shrink-0 rounded-xl px-3 text-base text-slate-800 hover:bg-slate-200">
+                    Skip
+                  </Button>
+                )}
+                <Button type="submit" aria-label="Send answer" className="h-11 w-11 shrink-0 rounded-xl bg-emerald-700 p-0 text-white hover:bg-emerald-800">
+                  <Send className="h-5 w-5" />
+                </Button>
+              </div>
+            </form>
+          )}
         </section>
       )}
       <div className="relative">
@@ -243,3 +269,4 @@ const MaidReferralChatbot = () => {
 };
 
 export default MaidReferralChatbot;
+

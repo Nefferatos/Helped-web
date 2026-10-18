@@ -74,6 +74,7 @@ const OperationsBoardPage = lazyRoute(() => import("@/pages/OperationsBoardPage"
 const AgencyOperationsCenterPage = lazyRoute(() => import("@/pages/AgencyOperationsCenterPage"));
 const ContractorTasksPage = lazyRoute(() => import("@/pages/ContractorTasksPage"));
 const AgencyReportsPage = lazyRoute(() => import("@/pages/AgencyReportsPage"));
+const WhatsAppBroadcastPage = lazyRoute(() => import("@/pages/WhatsAppBroadcastPage"));
 const PublicMaidApplicationPage = lazyRoute(() => import("@/pages/PublicMaidApplicationPage"));
 const PublicMaidApplicationStatusPage = lazyRoute(() => import("@/pages/PublicMaidApplicationStatusPage"));
 const FdwApplicationChatPage = lazyRoute(() => import("@/pages/FdwApplicationChatPage"));
@@ -379,6 +380,7 @@ const App = () => {
             <Route path="/agencyadmin/enquiry" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AdminEnquiry /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/requests" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/requests/:requestId" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestDetailsPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/whatsapp-broadcast" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><WhatsAppBroadcastPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-agents" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiAgentsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-hr-interviewer" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiHrInterviewerPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-marketing" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiDirectMarketingPage /></AdminShell></ProtectedAdminRoute>)} />

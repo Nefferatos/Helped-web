@@ -35,6 +35,12 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // WhatsApp broadcast uploads relay through the Worker so the Make
+      // webhook URL stays server-side in development and production.
+      "/api/whatsapp-broadcast": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       // FDW application chatbot + Make blueprint events live in the Worker
       // (they need MAKE_WEBHOOK_URL_FDW_CHATBOT + the Google Sheets service
       // account secret). Route to the Worker, not the Express API.

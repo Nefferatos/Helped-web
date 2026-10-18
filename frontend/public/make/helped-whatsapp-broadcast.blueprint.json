@@ -1,0 +1,94 @@
+{
+  "name": "Helped - WhatsApp Broadcast",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 1, "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": {
+          "parameters": {
+            "hook": { "data": { "editable": "true" }, "label": "Helped WhatsApp Broadcast" }
+          }
+        },
+        "notes": "After import, create/select a custom webhook, run the scenario once to learn the payload, then copy its URL into the Cloudflare Worker secret MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL. Payload fields: scenario, message, contacts[] (each has phone and optional name), contactCount, requestedAt, agencyId."
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicFeeder",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "array": "{{1.contacts}}" },
+      "metadata": {
+        "designer": { "x": 300, "y": 0 },
+        "restore": { "expect": { "array": { "mode": "edit" } } },
+        "expect": [
+          {
+            "name": "array",
+            "type": "array",
+            "label": "Contacts",
+            "spec": [
+              { "name": "phone", "type": "text", "label": "Phone (E.164)" },
+              { "name": "name", "type": "text", "label": "Name" }
+            ]
+          }
+        ],
+        "notes": "Iterates through each validated spreadsheet contact. The page sends phone numbers with a leading + and removes duplicate numbers."
+      }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
+      "mapper": {
+        "url": "https://graph.facebook.com/vXX.X/REPLACE_WITH_PHONE_NUMBER_ID/messages",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer REPLACE_WITH_WHATSAPP_CLOUD_API_ACCESS_TOKEN" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authUser": "",
+        "authPass": "",
+        "timeout": "30",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.phone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"{{1.message}}\"}}"
+      },
+      "metadata": {
+        "designer": { "x": 600, "y": 0 },
+        "restore": {},
+        "notes": "Set a current Graph API version, your WhatsApp Business Phone Number ID, and a token with whatsapp_business_messaging permission. For recipients outside the 24-hour customer service window, replace the text payload with an approved WhatsApp message template and map the approved template variables. Configure an error handler on this module to log failed sends and continue with the remaining contacts."
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 10,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com"
+  }
+}

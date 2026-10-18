@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { ClipboardList, FileText, MessageSquareText, RefreshCw, Users, UserRoundSearch } from "lucide-react";
+import { ClipboardList, FileText, MessageSquareText, RefreshCw, Users, UserRoundSearch, Zap } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
@@ -16,6 +16,7 @@ type Employer = { createdAt?: string; updatedAt?: string };
 type RequestCounts = { pending: number; interested: number; direct_hire: number; rejected: number };
 type MetricData = { maids: Maid[]; maidCount: number; applicants: Applicant[]; applicantCount: number; enquiries: Enquiry[]; enquiryCount: number; contracts: Employer[]; requests: RequestCounts };
 type ListPage<T> = { items: T[]; total: number };
+type MonitoredWorkflow = { id: string; name: string; configured: boolean; scenarioStatus: "unknown"; mode: string };
 
 const links = {
   maids: adminPath("/edit-maids"), contracts: adminPath("/employment-contracts"),
@@ -78,6 +79,8 @@ const HomePage = () => {
   const [errors, setErrors] = useState<string[]>([]);
   const [failed, setFailed] = useState<Set<number>>(() => new Set());
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
+  const [automations, setAutomations] = useState<MonitoredWorkflow[]>([]);
+  const [automationUnavailable, setAutomationUnavailable] = useState(false);
   const admin = getStoredAgencyAdmin();
 
   const refresh = useCallback(async (quiet = false) => {
@@ -111,13 +114,28 @@ const HomePage = () => {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/dashboard/automations", apiRequestInit())
+      .then(async (response) => {
+        const payload = await readSafeJson<{ workflows?: MonitoredWorkflow[] }>(response);
+        if (!response.ok) throw new Error("Could not load automation status");
+        if (mounted) { setAutomations(payload.workflows || []); setAutomationUnavailable(false); }
+      })
+      .catch(() => { if (mounted) setAutomationUnavailable(true); });
+    return () => { mounted = false; };
+  }, []);
 
   const chartData = useMemo(() => {
     const months = Array.from({ length: 6 }, (_, index) => {
       const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - (5 - index));
-      return { key: `${date.getFullYear()}-${date.getMonth()}`, month: date.toLocaleDateString([], { month: "short" }), Maids: 0, Applicants: 0, Enquiries: 0, Contracts: 0 };
+      return { key: `${date.getFullYear()}-${date.getMonth()}`, month: date.toLocaleDateString([], { month: "short" }), "Public Maids": 0, "Hidden Maids": 0, Applicants: 0, Enquiries: 0, Contracts: 0 };
     });
-    const groups = [["maids", "Maids"], ["applicants", "Applicants"], ["enquiries", "Enquiries"], ["contracts", "Contracts"]] as const;
+    data.maids.forEach((maid) => {
+      const point = months.find((month) => month.key === monthKey(maid.createdAt));
+      if (point) point[maid.isPublic ? "Public Maids" : "Hidden Maids"] += 1;
+    });
+    const groups = [["applicants", "Applicants"], ["enquiries", "Enquiries"], ["contracts", "Contracts"]] as const;
     groups.forEach(([field, label]) => {
       const records: Array<{ createdAt?: string; appliedAt?: string }> = data[field];
       records.forEach((item) => {
@@ -128,25 +146,25 @@ const HomePage = () => {
     return months;
   }, [data]);
 
-  const hasChartData = chartData.some((month) => month.Maids + month.Applicants + month.Enquiries + month.Contracts > 0);
+  const hasChartData = chartData.some((month) => month["Public Maids"] + month["Hidden Maids"] + month.Applicants + month.Enquiries + month.Contracts > 0);
   // Chart sources are indexes 0..3 (maids, applicants, enquiries, contracts).
   const chartFailed = failed.has(0) || failed.has(1) || failed.has(2) || failed.has(3);
 
   const cards = [
-    { index: 0, title: "Maid profiles", value: data.maidCount, note: `${data.maids.filter((maid) => maid.isPublic).length} visible to clients`, icon: Users, color: "#087F5B", surface: "#E8F8F1", href: links.maids },
-    { index: 3, title: "Employment contracts", value: data.contracts.length, note: "Employer records", icon: FileText, color: "#1D4ED8", surface: "#EAF1FF", href: links.contracts },
-    { index: 2, title: "Enquiries", value: data.enquiryCount, note: `${data.enquiries.filter((item) => !["resolved", "replied"].includes((item.status || "new").toLowerCase())).length} need follow-up`, icon: MessageSquareText, color: "#C2410C", surface: "#FFF2E4", href: links.enquiries },
-    { index: 1, title: "Applicants", value: data.applicantCount, note: `${data.applicants.filter((item) => ["new applicant", "documents submitted"].includes((item.status || "").toLowerCase())).length} new or awaiting documents`, icon: UserRoundSearch, color: "#6D28D9", surface: "#F2ECFF", href: links.applicants },
-    { index: 4, title: "Requests", value: Object.values(data.requests).reduce((total, count) => total + count, 0), note: `${data.requests.pending} awaiting review`, icon: ClipboardList, color: "#0369A1", surface: "#E0F2FE", href: links.requests },
+    { index: 0, title: "Maid profiles", value: data.maidCount, note: `${data.maids.filter((maid) => maid.isPublic).length} visible to clients`, icon: Users, color: "#0F766E", surface: "#CCFBF1", href: links.maids },
+    { index: 3, title: "Employment contracts", value: data.contracts.length, note: "Employer records", icon: FileText, color: "#0E7490", surface: "#CFFAFE", href: links.contracts },
+    { index: 2, title: "Enquiries", value: data.enquiryCount, note: `${data.enquiries.filter((item) => !["resolved", "replied"].includes((item.status || "new").toLowerCase())).length} need follow-up`, icon: MessageSquareText, color: "#0284C7", surface: "#E0F2FE", href: links.enquiries },
+    { index: 1, title: "Applicants", value: data.applicantCount, note: `${data.applicants.filter((item) => ["new applicant", "documents submitted"].includes((item.status || "").toLowerCase())).length} new or awaiting documents`, icon: UserRoundSearch, color: "#2563EB", surface: "#DBEAFE", href: links.applicants },
+    { index: 4, title: "Requests", value: Object.values(data.requests).reduce((total, count) => total + count, 0), note: `${data.requests.pending} awaiting review`, icon: ClipboardList, color: "#155E75", surface: "#CFFAFE", href: links.requests },
   ];
-  // The four trend lines differ by stroke pattern, not colour alone, so
+  // The trend lines differ by stroke pattern, not colour alone, so
   // colour-blind users can still tell them apart.
-  const series: Array<[string, string, string]> = [["Maids", "#0D8A68", ""], ["Contracts", "#2563EB", "6 4"], ["Enquiries", "#D97706", "2 3"], ["Applicants", "#7C3AED", "8 4 2 4"]];
-  const fillId: Record<string, string> = { Maids: "maids", Contracts: "contracts", Enquiries: "enquiries", Applicants: "applicants" };
+  const series: Array<[string, string, string]> = [["Public Maids", "#0F766E", ""], ["Hidden Maids", "#14B8A6", "5 3"], ["Contracts", "#0891B2", "6 4"], ["Enquiries", "#2563EB", "2 3"], ["Applicants", "#4F46E5", "8 4 2 4"]];
+  const fillId: Record<string, string> = { "Public Maids": "public-maids", "Hidden Maids": "hidden-maids", Contracts: "contracts", Enquiries: "enquiries", Applicants: "applicants" };
   // Screen-reader description for the chart (a colour-only graphic otherwise).
   const chartSummary = series
     .map(([label]) => {
-      const key = label as "Maids" | "Contracts" | "Enquiries" | "Applicants";
+      const key = label as "Public Maids" | "Hidden Maids" | "Contracts" | "Enquiries" | "Applicants";
       return `${label} ${chartData.reduce((sum, month) => sum + month[key], 0)}`;
     })
     .join(", ");
@@ -156,8 +174,15 @@ const HomePage = () => {
     <section className="dash-grid" aria-label="Agency analytics">
       {cards.map((card) => <Link key={card.title} to={card.href} className="dash-card" style={{textDecoration:"none",color:"inherit","--card-accent":card.color,"--card-surface":card.surface} as CSSProperties}><div className="dash-card-top"><span className="dash-icon" style={{background:card.surface,color:card.color}}><card.icon size={20}/></span><span className="dash-card-label">{card.title}</span></div>{loading ? <div className="dash-value-loading" aria-hidden /> : <div className="dash-value">{failed.has(card.index) ? "—" : card.value.toLocaleString()}</div>}<div className="dash-note">{card.note}</div></Link>)}
     </section>
+    <section className="dash-automation" aria-labelledby="dash-automation-title">
+      <div className="dash-automation-head"><div><p className="dash-kicker">Agency operations</p><h2 id="dash-automation-title">Workflow Monitor</h2><p>Check the Worker webhook setup for your Make.com scenarios.</p><p className="dash-monitor-note">Scenario on/off status is managed in Make.com and cannot be read from the webhook URL.</p></div><Zap size={22} aria-hidden="true" /></div>
+      {automationUnavailable ? <p className="dash-automation-empty">Automation status is temporarily unavailable. Refresh the dashboard to try again.</p> : <div className="dash-automation-list">{automations.map((workflow) => {
+        const configured = workflow.configured;
+        return <article className="dash-automation-item" key={workflow.id}><span className={`dash-automation-indicator ${configured ? "is-ready" : "is-off"}`} aria-hidden="true"/><div className="dash-automation-name">{workflow.name}<small>{configured ? "Webhook URL is set; check the scenario toggle in Make.com." : "Webhook URL is not configured in the Worker."}</small></div><span className={`dash-automation-status ${configured ? "is-ready" : "is-off"}`}>{configured ? "Webhook set" : "Needs setup"}</span></article>;
+      })}</div>}
+    </section>
     <section className="dash-content">
-      <article className="dash-panel dash-activity-panel"><div className="dash-panel-head"><div><h2>Agency activity</h2><p className="dash-panel-sub">Records added over the last six months</p></div><div className="dash-legend">{[["#0D8A68","Maids"],["#2563EB","Contracts"],["#D97706","Enquiries"],["#7C3AED","Applicants"]].map(([color,label])=><span key={label}><i className="dash-dot" style={{background:color}}/>{label}</span>)}</div></div>{!loading && !hasChartData ? <div className="dash-empty">{chartFailed ? "Activity data could not be loaded. Use Refresh data to try again." : "No records added in the last six months yet. New maids, contracts, enquiries and applicants will show up here."}</div> : <div className="dash-chart" role="img" aria-label={`Agency activity over the last six months — ${chartSummary}`}><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData} margin={{top:8,right:8,left:-22,bottom:0}}><defs>{[["maids","#0D8A68"],["contracts","#2563EB"],["enquiries","#D97706"],["applicants","#7C3AED"]].map(([id,color])=><linearGradient key={id} id={`fill-${id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={.18}/><stop offset="90%" stopColor={color} stopOpacity={0}/></linearGradient>)}</defs><CartesianGrid stroke="#cbd5e1" vertical={false}/><XAxis dataKey="month" tickLine={false} axisLine={false} tick={{fontSize:16,fill:"#000"}}/><YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{fontSize:16,fill:"#000"}}/><Tooltip contentStyle={{borderRadius:12,border:"1px solid #d1d5db",fontSize:16,color:"#000"}}/>{series.map(([label,color,dash])=><Area key={label} type="monotone" dataKey={label} stroke={color} fill={`url(#fill-${fillId[label]})`} strokeWidth={3} strokeDasharray={dash || undefined}/>)}</AreaChart></ResponsiveContainer></div>}</article>
+      <article className="dash-panel dash-activity-panel"><div className="dash-panel-head"><div><h2>Agency activity</h2><p className="dash-panel-sub">Public and hidden maid profiles, plus other records added over the last six months</p></div><div className="dash-legend">{series.map(([label,color])=><span key={label}><i className="dash-dot" style={{background:color}}/>{label}</span>)}</div></div>{!loading && !hasChartData ? <div className="dash-empty">{chartFailed ? "Activity data could not be loaded. Use Refresh data to try again." : "No records added in the last six months yet. New maids, contracts, enquiries and applicants will show up here."}</div> : <div className="dash-chart" role="img" aria-label={`Agency activity over the last six months — ${chartSummary}`}><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData} margin={{top:8,right:8,left:-22,bottom:0}}><defs>{series.map(([label,color])=>{const id=fillId[label];return <linearGradient key={id} id={`fill-${id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={.18}/><stop offset="90%" stopColor={color} stopOpacity={0}/></linearGradient>;})}</defs><CartesianGrid stroke="#cbd5e1" vertical={false}/><XAxis dataKey="month" tickLine={false} axisLine={false} tick={{fontSize:16,fill:"#000"}}/><YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{fontSize:16,fill:"#000"}}/><Tooltip contentStyle={{borderRadius:12,border:"1px solid #d1d5db",fontSize:16,color:"#000"}}/>{series.map(([label,color,dash])=><Area key={label} type="monotone" dataKey={label} stroke={color} fill={`url(#fill-${fillId[label]})`} strokeWidth={3} strokeDasharray={dash || undefined}/>)}</AreaChart></ResponsiveContainer></div>}</article>
     </section>
     <section className="dash-full-operations" aria-label="Full operations workspace">
       <AgencyOperationsCenterPage embedded />

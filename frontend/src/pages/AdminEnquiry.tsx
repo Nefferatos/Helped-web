@@ -314,6 +314,7 @@ function MatchReview({ enq }: { enq: EnquiryRecord }) {
 
 function EnquiryCard({
   enq,
+  displayNumber,
   index,
   selected,
   onSelect,
@@ -322,6 +323,7 @@ function EnquiryCard({
   onStatusChange,
 }: {
   enq: EnquiryRecord;
+  displayNumber: number;
   index: number;
   selected: boolean;
   onSelect: (id: number) => void;
@@ -370,7 +372,7 @@ function EnquiryCard({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-[15px] font-extrabold text-gray-950 truncate leading-tight">{enq.username}</p>
-                <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-black text-indigo-600">#{enq.id}</span>
+                <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-black text-indigo-600">#{displayNumber}</span>
               </div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <StatusDropdown status={status} onChange={(s) => onStatusChange(enq.id, s)} />
@@ -865,6 +867,7 @@ const AdminEnquiry = () => {
                     <EnquiryCard
                       key={enq.id}
                       enq={enq}
+                      displayNumber={filteredEnquiries.length - ((currentPage - 1) * PAGE_SIZE + i)}
                       index={i}
                       selected={selectedIds.has(enq.id)}
                       onSelect={handleSelect}
