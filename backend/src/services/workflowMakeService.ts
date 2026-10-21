@@ -27,12 +27,21 @@ const parseTextResponse = async (response: Response) => {
   }
 }
 
+const redactWebhookUrl = (value: string) => {
+  try {
+    return `${new URL(value).origin}/[redacted]`
+  } catch {
+    return '[redacted]'
+  }
+}
+
 export const sendToMakeWebhook = async (payload: {
   scenario: string
   payload: Record<string, unknown>
   url?: string
 }) => {
   const url = resolveMakeUrl(payload.scenario, payload.url)
+  const loggedUrl = url ? redactWebhookUrl(url) : ''
 
   if (!url) {
     const record = await createWorkflowMakeDeliveryStore({
@@ -65,15 +74,15 @@ export const sendToMakeWebhook = async (payload: {
       body: JSON.stringify(payload.payload),
       signal: controller.signal,
     })
-    const responseBody = await parseTextResponse(response)
+    await parseTextResponse(response)
     const record = await createWorkflowMakeDeliveryStore({
       scenario: payload.scenario,
-      url,
+      url: loggedUrl,
       payload: payload.payload,
       success: response.ok,
       statusCode: response.status,
       durationMs: Date.now() - startedAt,
-      responseBody,
+      responseBody: '',
       error: response.ok ? '' : `HTTP ${response.status}`,
     })
 
@@ -91,7 +100,7 @@ export const sendToMakeWebhook = async (payload: {
 
     const record = await createWorkflowMakeDeliveryStore({
       scenario: payload.scenario,
-      url,
+      url: loggedUrl,
       payload: payload.payload,
       success: false,
       statusCode: null,

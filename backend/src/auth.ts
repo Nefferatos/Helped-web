@@ -137,7 +137,11 @@ export const getAuthenticatedAgencyAdmin = async (
 
 export const getRequestToken = (req: Request) => getBearerToken(req)
 
-export const getRequestAgencyId = async (req: Request, fallback = 1) => {
+export const getRequestAgencyId = async (req: Request, fallback?: number) => {
   const admin = await getAuthenticatedAgencyAdmin(req)
-  return admin?.agencyId ?? req.agencyId ?? fallback
+  const agencyId = admin?.agencyId ?? req.agencyId ?? fallback
+  if (!agencyId) {
+    throw new Error('AGENCY_AUTH_REQUIRED')
+  }
+  return agencyId
 }

@@ -64,6 +64,33 @@ const defaultData = (): WorkflowData => ({
 
 let cache: WorkflowData | null = null
 
+const redactWebhookUrl = (value: unknown) => {
+  if (typeof value !== 'string' || !/^https:\/\/hook\.[^/]+\.make\.com\//i.test(value)) {
+    return value
+  }
+  try {
+    return `${new URL(value).origin}/[redacted]`
+  } catch {
+    return '[redacted]'
+  }
+}
+
+const redactWebhookHistory = (data: WorkflowData): WorkflowData => ({
+  ...data,
+  makeDeliveries: data.makeDeliveries.map((delivery) => ({
+    ...delivery,
+    url: String(redactWebhookUrl(delivery.url) ?? ''),
+  })),
+  automationLogs: data.automationLogs.map((log) => {
+    const payload = log.payload
+    if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'url')) return log
+    return {
+      ...log,
+      payload: { ...payload, url: redactWebhookUrl(payload.url) },
+    }
+  }),
+})
+
 const ensureDataFile = async () => {
   await mkdir(dataDir, { recursive: true })
 
@@ -82,7 +109,7 @@ const loadData = async (): Promise<WorkflowData> => {
   await ensureDataFile()
   const raw = await readFile(dataFile, 'utf8')
   const parsed = JSON.parse(raw) as Partial<WorkflowData>
-  cache = {
+  cache = redactWebhookHistory({
     ...defaultData(),
     ...parsed,
     leads: parsed.leads ?? [],
@@ -98,7 +125,7 @@ const loadData = async (): Promise<WorkflowData> => {
       ...defaultData().counters,
       ...parsed.counters,
     },
-  }
+  })
   await writeFile(dataFile, JSON.stringify(cache, null, 2), 'utf8')
   return cache
 }
@@ -254,6 +281,7 @@ export const createWorkflowMakeDeliveryStore = async (
     id: data.counters.makeDeliveries++,
     createdAt: now(),
     ...payload,
+    url: String(redactWebhookUrl(payload.url) ?? ''),
   }
 
   data.makeDeliveries.unshift(record)

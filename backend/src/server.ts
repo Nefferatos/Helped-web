@@ -59,7 +59,6 @@ const app: Express = express();
 const port = process.env.PORT || 3000;
 const frontendDist = path.resolve(__dirname, "../../frontend/dist");
 const hasFrontendSite = fs.existsSync(frontendDist);
-const uploadsDir = path.resolve(__dirname, "../data/uploads");
 
 const resolveCorsOrigin = () => {
   const configured = process.env.CORS_ORIGIN?.trim();
@@ -92,21 +91,7 @@ app.use(
 // Global JSON + urlencoded for JSON-based routes.
 app.use(express.json({ limit: "120mb" }));
 app.use(express.urlencoded({ extended: true, limit: "120mb" }));
-app.use(
-  "/uploads",
-  (req, res, next) => {
-    // Legacy maid images were public static files. Public previews and original
-    // access are now served through the dedicated /api/maids image endpoints.
-    if (req.path.replace(/\\/g, '/').toLowerCase().startsWith('/maids/')) {
-      return res.status(404).end()
-    }
-    return next()
-  },
-  express.static(uploadsDir, {
-    maxAge: "30d",
-    immutable: true,
-  }),
-);
+app.use("/uploads", (_req, res) => res.status(404).end());
 
 // ─── Health / utility endpoints ───────────────────────────────────────────────
 app.get("/api/health", (_req: Request, res: Response) => {
@@ -185,10 +170,10 @@ app.use("/api", matchingWorkflowRoutes);
 app.use("/api", automationRoutes);
 
 // ─── Employer routes ──────────────────────────────────────────────────────────
-app.use("/api/employers", employerRoutes);
-app.post("/api/employment-contract", saveEmployerContract);
-app.use("/api/employer-contract-files", employerContractFileRoutes);
-app.use("/api/employer-files", employerContractFileRoutes);
+app.use("/api/employers", requireAgencyAuth, employerRoutes);
+app.post("/api/employment-contract", requireAgencyAuth, saveEmployerContract);
+app.use("/api/employer-contract-files", requireAgencyAuth, employerContractFileRoutes);
+app.use("/api/employer-files", requireAgencyAuth, employerContractFileRoutes);
 
 // ─── Public maids ─────────────────────────────────────────────────────────────
 app.get("/api/public-maids", async (_req: Request, res: Response) => {

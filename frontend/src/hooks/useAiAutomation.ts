@@ -94,12 +94,6 @@ interface LeadPayload {
   message: string;
 }
 
-const MAKE_WEBHOOKS = {
-  inquiry_pipeline: import.meta.env.VITE_MAKE_WEBHOOK_URL_INQUIRY_PIPELINE as string | undefined,
-  lead_pipeline: import.meta.env.VITE_MAKE_WEBHOOK_URL_LEAD_PIPELINE as string | undefined,
-  interview_pipeline: import.meta.env.VITE_MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE as string | undefined,
-} as const;
-
 const parseApiError = async (response: Response, fallbackMessage: string) => {
   const data = (await response.json().catch(() => ({}))) as ApiErrorPayload;
   return data.error || fallbackMessage;
@@ -123,40 +117,15 @@ export const triggerMakeScenario = async (
   scenario: "inquiry_pipeline" | "lead_pipeline" | "interview_pipeline",
   payload: Record<string, unknown>,
 ) => {
-  const directWebhookUrl = MAKE_WEBHOOKS[scenario]?.trim();
-  const response = await fetch(
-    directWebhookUrl || "/api/send-to-make",
-    directWebhookUrl
-      ? {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-          // Direct Make webhooks do not pass through /api/send-to-make, so include
-          // the route name here as well. This lets one imported scenario safely
-          // route every website event.
-          body: JSON.stringify({ scenario, ...payload }),
-        }
-      : {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-          body: JSON.stringify({ scenario, payload }),
-        },
-  );
+  const response = await fetch("/api/send-to-make", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+    body: JSON.stringify({ scenario, payload }),
+  });
 
   if (!response.ok) {
     const message = await parseApiError(response, `Failed to trigger ${scenario}`);
     throw new Error(message);
-  }
-
-  if (directWebhookUrl) {
-    return {
-      ok: true,
-      delivery: {
-        id: 0,
-        scenario,
-        success: true,
-        statusCode: response.status,
-      },
-    };
   }
 
   return (await response.json()) as {

@@ -79,10 +79,14 @@ export const sendMessage = async (req: Request, res: Response) => {
 
 export const sendToMake = async (req: Request, res: Response) => {
   try {
+    const scenario = requiredString(req.body.scenario, 'scenario', 100)
+    if (!['inquiry_pipeline', 'lead_pipeline', 'interview_pipeline'].includes(scenario)) {
+      return res.status(400).json({ error: 'Unsupported Make scenario' })
+    }
+
     const result = await sendWorkflowToMake({
-      scenario: requiredString(req.body.scenario, 'scenario', 100),
+      scenario,
       payload: sanitizePayload(req.body.payload),
-      url: optionalString(req.body.url, 1000),
     })
 
     res.status(result.ok ? 200 : 502).json(

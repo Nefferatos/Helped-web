@@ -1,4 +1,7 @@
 node_modules/
+backend/data/app-data.local.json
+backend/data/workflow-data.json
+backend/data/uploads/
 dist/
 .env
 .env.local

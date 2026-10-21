@@ -15,7 +15,7 @@ import {
   ArrowUp, FileText, FileCheck2, Printer, ChevronRight, ChevronLeft,
   Save, Users, Building2, Home, FilePlus2, AlertCircle, Wand2, Lock,
 } from "lucide-react";
-import { downloadMergedEmployerPdf, printMergedEmployerPdf } from "@/lib/employerPdf";
+import { downloadMergedEmployerPdf, openEmployerDocument, printMergedEmployerPdf } from "@/lib/employerPdf";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
 import { getExperienceBucket } from "@/lib/maids";
@@ -304,10 +304,10 @@ const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload,
                 />
                 <Printer className="h-6 w-6 shrink-0 text-emerald-600 stroke-[1.35]" aria-hidden="true" />
                 <FileCheck2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                <a href={u.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-[11px] font-semibold text-sky-700 hover:underline">{u.name}</a>
-                <a href={u.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-0.5 rounded border border-sky-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50">
+                <button type="button" onClick={() => void openEmployerDocument(u).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold text-sky-700 hover:underline">{u.name}</button>
+                <button type="button" onClick={() => void openEmployerDocument(u).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="inline-flex shrink-0 items-center gap-0.5 rounded border border-sky-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50">
                   <Eye className="h-2.5 w-2.5" />View
-                </a>
+                </button>
                 {!readOnly && (
                   <button type="button" onClick={() => removeUpload(i)} className="shrink-0 text-gray-300 hover:text-red-400">
                     <X className="h-3.5 w-3.5" />
@@ -586,7 +586,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
     const load = async () => {
       try {
         setIsLoading(true);
-        const res = await fetch(`/api/employers/${encodeURIComponent(refCode)}`);
+        const res = await fetch(`/api/employers/${encodeURIComponent(refCode)}`, { headers: getAgencyAdminAuthHeaders() });
         const data = (await res.json().catch(() => ({}))) as { employer?: EmployerContractRecord; error?: string };
         if (!res.ok || !data.employer) throw new Error(data.error || "Failed to load employment contract");
         const r = data.employer;

@@ -1,3 +1,5 @@
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
+
 export type EmployerDocumentFile = {
   name: string;
   url: string;
@@ -83,6 +85,41 @@ interface FormData {
 
 const isPdfFile = (file: EmployerDocumentFile) => /\.pdf$/i.test(file.name);
 
+export const getEmployerDocumentUrl = (reference: string) =>
+  reference.startsWith("storage://")
+    ? `/api/employer-files/view?ref=${encodeURIComponent(reference)}`
+    : reference;
+
+export const openEmployerDocument = async (
+  file: EmployerDocumentFile,
+  download = false,
+) => {
+  const url = getEmployerDocumentUrl(file.url);
+  const response = await fetch(url, {
+    headers: url.startsWith("/api/") ? { ...getAgencyAdminAuthHeaders() } : undefined,
+  });
+  if (!response.ok) throw new Error(`Failed to load ${file.name}`);
+
+  const objectUrl = URL.createObjectURL(await response.blob());
+  if (download) {
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    return;
+  }
+
+  const preview = window.open(objectUrl, "_blank", "noopener,noreferrer");
+  if (!preview) {
+    URL.revokeObjectURL(objectUrl);
+    throw new Error("Allow pop-ups to view this document");
+  }
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+};
+
 const getPdfFiles = (files: EmployerDocumentFile[]) => {
   const pdfFiles = files.filter(isPdfFile);
   if (pdfFiles.length === 0) {
@@ -92,7 +129,10 @@ const getPdfFiles = (files: EmployerDocumentFile[]) => {
 };
 
 const fetchPdfBytes = async (file: EmployerDocumentFile) => {
-  const response = await fetch(file.url);
+  const url = getEmployerDocumentUrl(file.url);
+  const response = await fetch(url, {
+    headers: url.startsWith("/api/") ? { ...getAgencyAdminAuthHeaders() } : undefined,
+  });
   if (!response.ok) {
     throw new Error(`Failed to load ${file.name}`);
   }

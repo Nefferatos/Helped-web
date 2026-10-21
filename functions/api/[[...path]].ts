@@ -288,6 +288,7 @@ interface SupportConversationMetadata {
 
 interface EmployerContractRecord {
   id: number;
+  agencyId?: number;
   refCode: string;
   maid: Record<string, unknown>;
   agency: Record<string, unknown>;
@@ -544,6 +545,9 @@ type Bindings = {
   RESEND_FROM?: string;
   DEV_EXPOSE_CONFIRMATION_CODE?: string;
   MAKE_WEBHOOK_URL?: string;
+  MAKE_WEBHOOK_URL_INQUIRY_PIPELINE?: string;
+  MAKE_WEBHOOK_URL_LEAD_PIPELINE?: string;
+  MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?: string;
   // Dedicated Make.com scenario for user-initiated WhatsApp broadcasts.
   // Keep this webhook URL server-side; set with wrangler secret put.
   MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?: string;
@@ -1360,6 +1364,8 @@ type SupabaseStorageConfig = {
   serviceRoleKey: string;
   bucket: string;
 };
+
+const EMPLOYER_CONTRACT_BUCKET = "helped-employer-contracts";
 
 const SUPABASE_APP_DATA_BASE = Symbol("supabaseAppDataBase");
 const SUPABASE_APP_DATA_UPDATED_AT = Symbol("supabaseAppDataUpdatedAt");
@@ -2574,6 +2580,61 @@ const getSupabaseStorageConfig = (
     serviceRoleKey,
     bucket: env.SUPABASE_STORAGE_BUCKET?.trim() || "ats-applications",
   };
+};
+
+const ensurePrivateEmployerContractBucket = async (config: SupabaseStorageConfig) => {
+  const bucketUrl = `${config.baseUrl}/storage/v1/bucket/${encodeURIComponent(EMPLOYER_CONTRACT_BUCKET)}`;
+  let response = await fetch(bucketUrl, {
+    headers: supabaseStorageHeaders(config),
+  });
+
+  if (response.status === 404) {
+    response = await fetch(`${config.baseUrl}/storage/v1/bucket`, {
+      method: "POST",
+      headers: supabaseStorageHeaders(config, { "content-type": "application/json" }),
+      body: JSON.stringify({
+        id: EMPLOYER_CONTRACT_BUCKET,
+        name: EMPLOYER_CONTRACT_BUCKET,
+        public: false,
+        file_size_limit: 52428800,
+        allowed_mime_types: ["application/pdf"],
+      }),
+    });
+    if (!response.ok && response.status !== 409) {
+      throw new Error("Private contract storage bucket could not be created");
+    }
+    response = await fetch(bucketUrl, {
+      headers: supabaseStorageHeaders(config),
+    });
+  }
+
+  if (!response.ok) {
+    throw new Error("Private contract storage bucket could not be verified");
+  }
+
+  const bucketInfo = (await response.json()) as { public?: boolean };
+  if (bucketInfo.public !== false) {
+    throw new Error("Contract storage bucket must be private");
+  }
+};
+
+const employerContractStorageReference = (agencyId: number, key: string) =>
+  `storage://${EMPLOYER_CONTRACT_BUCKET}/contracts/agency-${agencyId}/${key}`;
+
+const parseEmployerContractStorageReference = (reference: string) => {
+  const prefix = `storage://${EMPLOYER_CONTRACT_BUCKET}/`;
+  if (!reference.startsWith(prefix)) return null;
+  const objectPath = reference.slice(prefix.length);
+  const segments = objectPath.split("/");
+  if (
+    segments.length < 3 ||
+    segments.some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    return null;
+  }
+  const agencyMatch = segments[1].match(/^agency-(\d+)$/);
+  if (segments[0] !== "contracts" || !agencyMatch) return null;
+  return { objectPath, agencyId: Number(agencyMatch[1]) };
 };
 
 const ensureSupabaseAppDataRow = async (config: SupabaseAppDataConfig) => {
@@ -7758,9 +7819,14 @@ const compareReferenceCodes = (left: string | undefined, right: string | undefin
 
 app.get(
   "/api/employers",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
+    if (!admin) return c.json({ error: "Unauthorized" }, 401);
     const data = await loadData(c.env);
-    const employers = [...data.employers].sort((left, right) =>
+    const employers = data.employers
+      .filter((item) => (item.agencyId ?? 1) === admin.agencyId)
+      .sort((left, right) =>
       compareReferenceCodes(left.refCode, right.refCode),
     );
     return c.json({ employers });
@@ -7769,11 +7835,16 @@ app.get(
 
 app.get(
   "/api/employers/:refCode",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
+    if (!admin) return c.json({ error: "Unauthorized" }, 401);
     const data = await loadData(c.env);
     const refCode = toTrimmedString(c.req.param("refCode"));
     const employer =
-      data.employers.find((item) => item.refCode === refCode) ?? null;
+      data.employers.find(
+        (item) => item.refCode === refCode && (item.agencyId ?? 1) === admin.agencyId,
+      ) ?? null;
     if (!employer) {
       return c.json({ error: "Employer not found" }, 404);
     }
@@ -7857,6 +7928,7 @@ app.post(
 
     const employerRecord: EmployerContractRecord = {
       id,
+      agencyId: (c.get("agencyAdmin") as AgencyAdminRecord).agencyId,
       refCode,
       maid: maidPayload,
       agency: normalizedAgency,
@@ -8003,33 +8075,49 @@ app.post(
     const formData = await c.req.raw.formData().catch(() => null);
     if (!formData) return c.json({ error: "Multipart form data is required" }, 400);
 
-    await ensureSupabaseStorageBucket(storageConfig);
-
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
+    if (!admin || !Number.isInteger(admin.agencyId)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    await ensurePrivateEmployerContractBucket(storageConfig);
     const category = toTrimmedString(formData.get("category"));
+    if (!category) return c.json({ error: "category is required" }, 400);
     const uploaded: Array<{ name: string; url: string; size: number; category: string }> = [];
     for (const [, value] of formData.entries()) {
       if (!(value instanceof File)) continue;
-      const ext = value.name.split(".").pop() ?? "bin";
-      const key = `contracts/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+      if (value.type !== "application/pdf" || value.size > 52428800) {
+        return c.json({ error: "Only PDF files up to 50MB are allowed" }, 400);
+      }
+      const bytes = await value.arrayBuffer();
+      const header = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 5));
+      if (String.fromCharCode(...header) !== "%PDF-") {
+        return c.json({ error: "Only valid PDF files are allowed" }, 400);
+      }
+      const safeName = sanitizeStoragePathSegment(value.name, "document.pdf");
+      const key = `${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+      const objectPath = `contracts/agency-${admin.agencyId}/${key}`;
       const uploadResp = await fetch(
-        `${storageConfig.baseUrl}/storage/v1/object/${encodeURIComponent(storageConfig.bucket)}/${key}`,
+        `${storageConfig.baseUrl}/storage/v1/object/${encodeURIComponent(EMPLOYER_CONTRACT_BUCKET)}/${objectPath
+          .split("/")
+          .map((segment) => encodeURIComponent(segment))
+          .join("/")}`,
         {
           method: "POST",
           headers: {
             apikey: storageConfig.serviceRoleKey,
             authorization: `Bearer ${storageConfig.serviceRoleKey}`,
-            "content-type": value.type || "application/octet-stream",
-            "x-upsert": "true",
+            "content-type": "application/pdf",
+            "x-upsert": "false",
           },
-          body: await value.arrayBuffer(),
+          body: bytes,
         },
       );
       if (!uploadResp.ok) {
-        throw new Error(`File upload failed: ${await uploadResp.text()}`);
+        throw new Error(`Private contract file upload failed: ${uploadResp.status}`);
       }
       uploaded.push({
         name: value.name,
-        url: buildSupabasePublicFileUrl(storageConfig, key),
+        url: employerContractStorageReference(admin.agencyId, key),
         size: value.size,
         category,
       });
@@ -8061,21 +8149,69 @@ app.get(
   }),
 );
 
+app.get(
+  "/api/employer-files/view",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
+    const reference = c.req.query("ref") ?? "";
+    const parsed = parseEmployerContractStorageReference(reference);
+    if (!admin || !parsed || parsed.agencyId !== admin.agencyId) {
+      return c.json({ error: "File not found" }, 404);
+    }
+
+    const storageConfig = getSupabaseStorageConfig(c.env);
+    if (!storageConfig) {
+      return c.json({ error: "File storage is not configured" }, 503);
+    }
+    await ensurePrivateEmployerContractBucket(storageConfig);
+
+    const response = await fetch(
+      `${storageConfig.baseUrl}/storage/v1/object/${encodeURIComponent(EMPLOYER_CONTRACT_BUCKET)}/${parsed.objectPath
+        .split("/")
+        .map((segment) => encodeURIComponent(segment))
+        .join("/")}`,
+      { headers: supabaseStorageHeaders(storageConfig) },
+    );
+    if (!response.ok) return c.json({ error: "File not found" }, 404);
+
+    return new Response(response.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": "inline",
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store",
+      },
+    });
+  }),
+);
+
 app.delete(
   "/api/employers/:refCode",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
+    if (!admin) return c.json({ error: "Unauthorized" }, 401);
     const data = await loadData(c.env);
     const refCode = toTrimmedString(c.req.param("refCode"));
     const existing =
-      data.employers.find((item) => item.refCode === refCode) ?? null;
+      data.employers.find(
+        (item) => item.refCode === refCode && (item.agencyId ?? 1) === admin.agencyId,
+      ) ?? null;
     if (!existing) {
       return c.json({ error: "Employer not found" }, 404);
     }
 
-    data.employers = data.employers.filter((item) => item.refCode !== refCode);
+    const employerId = existing.id;
+    data.employers = data.employers.filter(
+      (item) => item.id !== employerId,
+    );
     data.employmentContracts = data.employmentContracts.filter(
-      (item) => item.refCode !== refCode && item.employerRefCode !== refCode,
+      (item) =>
+        item.employerId !== employerId &&
+        item.refCode !== refCode &&
+        item.employerRefCode !== refCode,
     );
     await saveData(c.env, data);
     return c.json({ message: "Employer deleted successfully" });
@@ -16584,15 +16720,20 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
 
 app.post("/api/send-to-make", requireAgencyAdminAuth, async (c) => {
   const body = await parseBody<{ scenario?: string; payload?: Record<string, unknown> }>(c.req.raw);
-  const webhookUrl = (
-    body?.scenario === "interview_pipeline"
-      ? c.env.MAKE_HR_EMAIL_WEBHOOK_URL || c.env.MAKE_WEBHOOK_URL
-      : c.env.MAKE_WEBHOOK_URL
-  )?.trim();
-  if (!webhookUrl) return c.json({ error: "Make webhook is not configured" }, 503);
-
   if (!body?.scenario || typeof body.payload !== "object" || body.payload === null) {
     return c.json({ error: "scenario and payload are required" }, 400);
+  }
+
+  const webhookUrl = ({
+    inquiry_pipeline: c.env.MAKE_WEBHOOK_URL_INQUIRY_PIPELINE,
+    lead_pipeline: c.env.MAKE_WEBHOOK_URL_LEAD_PIPELINE,
+    interview_pipeline: c.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE || c.env.MAKE_HR_EMAIL_WEBHOOK_URL,
+  } as Record<string, string | undefined>)[body.scenario]?.trim();
+  if (!webhookUrl) {
+    if (!['inquiry_pipeline', 'lead_pipeline', 'interview_pipeline'].includes(body.scenario)) {
+      return c.json({ error: "Unsupported Make scenario" }, 400);
+    }
+    return c.json({ error: "Make webhook is not configured" }, 503);
   }
 
   const res = await fetch(webhookUrl, {
