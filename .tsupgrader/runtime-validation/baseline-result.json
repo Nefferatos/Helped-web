@@ -1,0 +1,27 @@
+{
+  "planHash": "d59cd11393c8ef9e4b17a9da848b9093b29470638f3d45bd8856ee4b0ddbe7ff",
+  "phase": "baseline",
+  "recordedAtUtc": "2026-10-21T21:19:09.4953470Z",
+  "retryCount": 0,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": false,
+    "setupDurationMs": 8755,
+    "setupFailureOutput": "setup step 0 \u0027npm\u0027 failed (exit=1, timedOut=False)\r\nnpm warn EBADENGINE Unsupported engine {\r\nnpm warn EBADENGINE   package: \u0027undici@7.24.4\u0027,\r\nnpm warn EBADENGINE   required: { node: \u0027\u003E=20.18.1\u0027 },\r\nnpm warn EBADENGINE   current: { node: \u0027v20.18.0\u0027, npm: \u002710.8.2\u0027 }\r\nnpm warn EBADENGINE }\r\nnpm error code EUSAGE\r\nnpm error\r\nnpm error \u0060npm ci\u0060 can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with \u0060npm install\u0060 before continuing.\r\nnpm error\r\nnpm error Missing: zod@4.6.7 from lock file\r\nnpm error Missing: typescript@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-aix-ppc64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-darwin-arm64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-darwin-x64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-freebsd-arm64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-freebsd-x64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-linux-arm@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-linux-arm64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-linux-loong64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-linux-mips64el@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-linux-ppc64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-linux-riscv64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-linux-s390x@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-linux-x64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-netbsd-arm64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-netbsd-x64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-openbsd-arm64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-openbsd-x64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-sunos-x64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-win32-arm64@7.0.2 from lock file\r\nnpm error Missing: @typescript/typescript-win32-x64@7.0.2 from lock file\r\nnpm error\r\nnpm error Clean install a project\r\nnpm error\r\nnpm error Usage:\r\nnpm error npm ci\r\nnpm error\r\nnpm error Options:\r\nnpm error [--install-strategy \u003Choisted|nested|shallow|linked\u003E] [--legacy-bundling]\r\nnpm error [--global-style] [--omit \u003Cdev|optional|peer\u003E [--omit \u003Cdev|optional|peer\u003E ...]]\r\nnpm error [--include \u003Cprod|dev|optional|peer\u003E [--include \u003Cprod|dev|optional|peer\u003E ...]]\r\nnpm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]\r\nnpm error [--no-bin-links] [--no-fund] [--dry-run]\r\nnpm error [-w|--workspace \u003Cworkspace-name\u003E [-w|--workspace \u003Cworkspace-name\u003E ...]]\r\nnpm error [-ws|--workspaces] [--include-workspace-root] [--install-links]\r\nnpm error\r\nnpm error aliases: clean-install, ic, install-clean, isntall-clean\r\nnpm error\r\nnpm error Run \u0022npm help ci\u0022 for more info\r\nnpm error A complete log of this run can be found in: C:\\Users\\jonri\\AppData\\Local\\npm-cache\\_logs\\2026-10-21T21_19_01_712Z-debug-0.log\r\n",
+    "assertions": [],
+    "executions": [
+      {
+        "source": "setup[0]",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "ci"
+        ],
+        "cwd": "C:\\hh\\Helped-web",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      }
+    ]
+  }
+}
